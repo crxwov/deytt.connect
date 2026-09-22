@@ -57,6 +57,10 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 
 - Device-level VPN validation is not available until an Android device or
   emulator is connected.
+- The first Android import exposed a server-side `format=singbox` 404: the
+  `vpn-admin` service user could not read the public Hysteria certificate.
+  Runtime permissions were narrowed to certificate read/traverse only and
+  `vpn-admin.service` was restarted; user retry is pending.
 
 ## Important Changed Files
 
@@ -76,6 +80,9 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - SHA-256: `b66d54a1a81c8899cab5fc885d729f64efc3eae5a198df9093aed54468270bda`.
 - Commit `7574b0b` was pushed to `origin/main` successfully.
+- On `nl-vpn`, `sudo -u nl openssl x509` now validates `server.crt`; the same
+  user still cannot read `auth_pass` or `server.key`, and `vpn-admin.service`
+  is active after restart.
 - `adb devices` found no connected Android device or emulator; tunnel and
   external HTTPS canary are not yet verified.
 
