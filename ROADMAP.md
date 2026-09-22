@@ -52,7 +52,7 @@ The public GitHub repository now contains the first Android MVP commit on
 the app intentionally uses that contract instead of embedding endpoint secrets.
 The rebuilt 0.2.0 debug APK is published as the explicitly non-production
 `v0.2.0-debug` GitHub prerelease.
-The pending 0.2.1 debug build fixes a real-device report: the previous app
+The published 0.2.1 debug prerelease fixes a real-device report: the previous app
 declared success after libbox accepted the configuration, even when no traffic
 could pass through the full-route TUN, and it did not expose imported routes.
 
@@ -187,6 +187,8 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   pass. The profile route test proves that choosing a route updates both
   `route.final` and remote DNS detours while preserving local DNS direct.
   SHA-256: `5e1be10ef43b50de88dd755de423dfcf5aca112f9ae09b62f5c9fc13168cb481`.
+- GitHub prerelease `v0.2.1-debug` publishes the fixed APK. It remains a debug
+  build until the real-device external HTTPS confirmation succeeds.
 
 ## Next Action
 
