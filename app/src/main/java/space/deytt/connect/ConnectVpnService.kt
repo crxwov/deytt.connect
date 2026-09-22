@@ -122,8 +122,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 tempPath = cacheDir.absolutePath
                 fixAndroidStack = Build.VERSION.SDK_INT in 24..25
                 debug = BuildConfig.DEBUG
-                appVersion = "0.1.0"
-                appMarketingVersion = "0.1.0"
+                appVersion = BuildConfig.VERSION_NAME
+                appMarketingVersion = BuildConfig.VERSION_NAME
                 logMaxLines = 300
             }
             Libbox.setup(setup)

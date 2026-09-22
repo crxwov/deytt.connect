@@ -113,7 +113,8 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `./gradlew assembleDebug` passed on 2026-09-22 after the endpoint/UI fix.
 - `./gradlew lintDebug` passed on 2026-09-22 with no lint errors.
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
-- SHA-256: `5640e45f95b2c54c33b9fadea779b645e413e3df586a5398eff07b447281dc07`.
+- APK 0.2.0: `app/build/outputs/apk/debug/app-debug.apk`.
+- SHA-256: `cbceefa6163cad720a7bc6aa55bb672d676f62606ab1055bccb3462209d3dd8a`.
 - Commit `7574b0b` was pushed to `origin/main` successfully.
 - Latest visual refresh commit `9d364d0` was pushed to `origin/main` successfully.
 - `vpn-admin/tests/test_protocols.py`: 34 passed after the WireGuard endpoint
@@ -155,6 +156,12 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Live after the TUN migration: HTTP 200, valid JSON, `tun.address` contains
   `172.19.0.1/30`, no legacy TUN/DNS/TLS/WireGuard fields, one WireGuard
   endpoint, and `vpn-admin.service` is active after restart.
+- Android 0.2.0 clean validation: `assembleDebug` and `lintDebug` pass with
+  repository JDK 17 and Android SDK 35; only existing API deprecations and the
+  expected unstrippable `libbox.so` warning remain.
+- Live after the TUN migration: HTTP 200, valid JSON, `tun.address` contains
+  `172.19.0.1/30`, no legacy TUN/DNS/TLS/WireGuard fields, one WireGuard
+  endpoint, and `vpn-admin.service` is active after restart.
 - Final Android validation: clean `assembleDebug` and `lintDebug` on the
   repository JDK 17/Android SDK; only existing API deprecation warnings and the
   expected unstrippable `libbox.so` packaging warning remain.
@@ -163,7 +170,7 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 
 ## Next Action
 
-Install the new APK on a real Android device, re-import the subscription, and
+Install APK 0.2.0 on a real Android device, re-import the subscription, and
 prove the tunnel with an external HTTPS canary. Device proof remains the only
 unfinished part of this MVP; local build and live JSON validation are complete.
 
