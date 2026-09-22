@@ -24,7 +24,7 @@ object SubscriptionClient {
             instanceFollowRedirects = true
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Cache-Control", "no-cache")
-            setRequestProperty("User-Agent", "deytt-connect/0.1")
+            setRequestProperty("User-Agent", "deytt-connect/0.2.1")
         }
 
         try {

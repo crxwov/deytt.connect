@@ -2,6 +2,7 @@ package space.deytt.connect
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -58,6 +59,7 @@ class MainActivity : Activity() {
     private lateinit var statusPanel: LinearLayout
     private lateinit var connectButton: TextView
     private lateinit var importButton: TextView
+    private lateinit var routeButton: TextView
     private lateinit var disconnectButton: TextView
     private var rawSubscriptionUrl: String? = null
     private var maskedSubscriptionUrl = false
@@ -226,6 +228,11 @@ class MainActivity : Activity() {
         content.addView(importButton, marginParams(match, top = 10))
         importButton.setOnClickListener { importSubscription() }
 
+        routeButton = actionButton("МАРШРУТ: ИМПОРТИРУЙТЕ ПОДПИСКУ", Color.TRANSPARENT, COPY, LINE)
+        routeButton.contentDescription = "Выбор VPN-маршрута"
+        content.addView(routeButton, marginParams(match, top = 10))
+        routeButton.setOnClickListener { selectRoute() }
+
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
         }
@@ -235,7 +242,7 @@ class MainActivity : Activity() {
         actions.addView(disconnectButton, LinearLayout.LayoutParams(dp(122), dp(56)).apply {
             leftMargin = dp(10)
         })
-        content.addView(actions, marginParams(match, top = 20))
+        content.addView(actions, marginParams(match, top = 14))
         connectButton.setOnClickListener { requestOrStartVpn() }
         disconnectButton.setOnClickListener {
             stopService(Intent(this@MainActivity, ConnectVpnService::class.java))
@@ -274,12 +281,13 @@ class MainActivity : Activity() {
                     maskSubscriptionUrl(imported.url)
                     profileReady = true
                     busy = false
+                    updateRouteButton()
                     updateControls()
                     importButton.isEnabled = true
                     renderStatus(
                         "Профиль готов",
                         "${imported.summary.outboundCount} выходов  ·  " +
-                            "${imported.summary.protocols.ifEmpty { setOf("sing-box") }.joinToString()}",
+                            "${ProfileRoutes.options(SubscriptionStore(this).readCurrent().orEmpty()).size} маршрутов",
                     )
                 }
             } catch (error: Exception) {
@@ -364,6 +372,42 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun selectRoute() {
+        val config = SubscriptionStore(this).readCurrent()
+        if (config == null) {
+            renderStatus("Нужна подписка", "Сначала импортируйте профиль.", ConnectionVisualState.ERROR)
+            return
+        }
+        val routes = runCatching { ProfileRoutes.options(config) }.getOrElse { error ->
+            renderStatus("Маршруты недоступны", friendlyError(error, "Импортируйте подписку заново."), ConnectionVisualState.ERROR)
+            return
+        }
+        if (routes.isEmpty()) {
+            renderStatus("Маршруты не найдены", "Импортируйте подписку заново.", ConnectionVisualState.ERROR)
+            return
+        }
+        val selectedTag = ProfileRoutes.selected(config)
+        val selectedIndex = routes.indexOfFirst { it.tag == selectedTag }.coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("Выберите маршрут")
+            .setSingleChoiceItems(routes.map(RouteOption::label).toTypedArray(), selectedIndex) { dialog, which ->
+                val route = routes[which]
+                try {
+                    val updated = ProfileRoutes.select(config, route.tag)
+                    ProfileValidator.validate(updated)
+                    SubscriptionStore(this).saveValidated(updated)
+                    updateRouteButton()
+                    renderStatus("Маршрут выбран", "${route.label}. Теперь можно подключиться.")
+                    dialog.dismiss()
+                } catch (error: Exception) {
+                    renderStatus("Маршрут не сохранён", friendlyError(error, "Импортируйте подписку заново."), ConnectionVisualState.ERROR)
+                    dialog.dismiss()
+                }
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
+    }
+
     private fun renderStatus(
         message: String,
         detail: String? = null,
@@ -438,6 +482,7 @@ class MainActivity : Activity() {
 
     private fun restoreScreenState() {
         profileReady = hasValidStoredProfile()
+        updateRouteButton()
         val state = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
         when (state.getString(ConnectVpnService.STATE_STATUS, null)) {
             "VPN подключён" -> renderStatus("VPN подключён", "Туннель активен", ConnectionVisualState.CONNECTED)
@@ -471,6 +516,19 @@ class MainActivity : Activity() {
         SubscriptionStore(this).readCurrent()?.let {
             runCatching { ProfileValidator.validate(it) }.isSuccess
         } == true
+
+    private fun updateRouteButton() {
+        if (!::routeButton.isInitialized) return
+        val selected = SubscriptionStore(this).readCurrent()
+            ?.let { config -> runCatching { ProfileRoutes.selected(config) }.getOrNull() }
+        val label = selected?.let { tag ->
+            runCatching { ProfileRoutes.options(SubscriptionStore(this).readCurrent().orEmpty()) }
+                .getOrNull()
+                ?.firstOrNull { it.tag == tag }
+                ?.label
+        } ?: "Импортируйте подписку"
+        routeButton.text = "МАРШРУТ: ${label.uppercase()}"
+    }
 
     private fun currentSubscriptionUrl(): String =
         if (maskedSubscriptionUrl) rawSubscriptionUrl.orEmpty()
@@ -515,9 +573,11 @@ class MainActivity : Activity() {
     private fun updateControls() {
         if (!::connectButton.isInitialized) return
         importButton.isEnabled = !busy
+        routeButton.isEnabled = profileReady && !busy && !vpnConnected
         connectButton.isEnabled = profileReady && !busy && !vpnConnected
         disconnectButton.isEnabled = busy || vpnConnected
         importButton.alpha = if (importButton.isEnabled) 1f else 0.55f
+        routeButton.alpha = if (routeButton.isEnabled) 1f else 0.45f
         connectButton.alpha = if (connectButton.isEnabled) 1f else 0.45f
         disconnectButton.alpha = if (disconnectButton.isEnabled) 1f else 0.45f
     }

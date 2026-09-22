@@ -15,8 +15,8 @@ android {
         applicationId = "space.deytt.connect"
         minSdk = 24
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
     }
 
     buildTypes {
@@ -46,4 +46,6 @@ android {
 dependencies {
     // GPL-3.0-or-later shared sing-box engine, pinned for reproducible builds.
     implementation("com.github.singbox-android:libbox:1.14.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }

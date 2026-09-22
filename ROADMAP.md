@@ -34,6 +34,8 @@ and a real APK artifact.
       compatibility preflight, and deploy the server contract fix.
 - [x] 3c. Harden import/service state, token presentation, error recovery, and
       the Android visual hierarchy without adding decorative UI noise.
+- [x] 3d. Add selectable subscription routes and fail-closed tunnel startup:
+      connected status is published only after an HTTPS canary passes through TUN.
 - [ ] 4. Add profile URI parser, fixed DEYTTT mode/country presentation, and
       reconnect/network-change handling.
 - [ ] 5. Add split tunnel, DNS leak protection, kill switch, telemetry-free
@@ -50,6 +52,9 @@ The public GitHub repository now contains the first Android MVP commit on
 the app intentionally uses that contract instead of embedding endpoint secrets.
 The rebuilt 0.2.0 debug APK is published as the explicitly non-production
 `v0.2.0-debug` GitHub prerelease.
+The pending 0.2.1 debug build fixes a real-device report: the previous app
+declared success after libbox accepted the configuration, even when no traffic
+could pass through the full-route TUN, and it did not expose imported routes.
 
 Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
 bootstrapped under `.toolchain/` and are not part of the repository artifact.
@@ -96,11 +101,17 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - The first visual refresh was intentionally too busy. The next UI removes the
   network map, technical labels, build badge, intro block, and verbose footer;
   the status card remains as the single place for useful runtime errors.
+- Real-device report: 0.2.0 showed “VPN connected” with no selectable bypass
+  route and broke all internet traffic. Cause: service success was reported
+  immediately after `startOrReloadService`, which proves config acceptance but
+  not a working transport; full-route TUN had already captured device traffic.
 
 ## Important Changed Files
 
 - `app/`
 - `app/src/main/java/space/deytt/connect/MainActivity.kt`
+- `app/src/main/java/space/deytt/connect/ProfileRoutes.kt`
+- `app/src/test/java/space/deytt/connect/ProfileRoutesTest.kt`
 - `app/src/main/java/space/deytt/connect/NetworkBackdropView.kt` (removed)
 - `README.md`
 - `THIRD-PARTY-NOTICES.md`
@@ -172,12 +183,16 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   clearly labels it as a debug build without device tunnel proof.
 - `adb devices` found no connected Android device or emulator; tunnel and
   external HTTPS canary are not yet verified.
+- Android 0.2.1: `testDebugUnitTest`, `lintDebug`, and clean `assembleDebug`
+  pass. The profile route test proves that choosing a route updates both
+  `route.final` and remote DNS detours while preserving local DNS direct.
+  SHA-256: `5e1be10ef43b50de88dd755de423dfcf5aca112f9ae09b62f5c9fc13168cb481`.
 
 ## Next Action
 
-Install APK 0.2.0 on a real Android device, re-import the subscription, and
-prove the tunnel with an external HTTPS canary. Device proof remains the only
-unfinished part of this MVP; local build and live JSON validation are complete.
+Install APK 0.2.1 on a real Android device, re-import the subscription, select
+a route, and start the VPN. The app now keeps the TUN only after its external
+HTTPS canary passes; device proof remains the only unfinished part of this MVP.
 
 ## Resume Context
 

@@ -33,7 +33,9 @@ import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.SystemProxyStatus
 import io.nekohasekai.libbox.TunOptions
 import io.nekohasekai.libbox.WIFIState
+import java.net.URL
 import java.util.concurrent.Executors
+import javax.net.ssl.HttpsURLConnection
 
 class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface {
     companion object {
@@ -45,6 +47,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         private const val CHANNEL_ID = "vpn"
         private const val NOTIFICATION_ID = 42
         private const val TAG = "deytt-connect"
+        private const val CONNECTIVITY_CANARY = "https://www.gstatic.com/generate_204"
         const val STATE_PREFS = "vpn_state"
         const val STATE_STATUS = "status"
         const val STATE_ERROR = "error"
@@ -103,6 +106,9 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             commandServer = server
             server.start()
             server.startOrReloadService(config, OverrideOptions().apply { autoRedirect = false })
+            publishStatus("Проверяем туннель…", "Проверяю доступ к интернету через выбранный маршрут")
+            updateNotification("Проверяем туннель…")
+            verifyTunnel()
             updateNotification("VPN подключён")
             publishStatus("VPN подключён")
             Log.i(TAG, "VPN service started")
@@ -129,6 +135,42 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             Libbox.setup(setup)
             libboxSetup = true
             Log.i(TAG, "libbox setup complete: basePath=${filesDir.absolutePath}")
+        }
+    }
+
+    /**
+     * `startOrReloadService` only confirms that libbox accepted the config.
+     * Keep Android's full-route TUN only after one request has passed through it.
+     */
+    private fun verifyTunnel() {
+        var lastError: Throwable? = null
+        repeat(2) { attempt ->
+            try {
+                verifyTunnelOnce()
+                return
+            } catch (error: Throwable) {
+                lastError = error
+                if (attempt == 0) Thread.sleep(1_000)
+            }
+        }
+        val detail = lastError?.message?.takeIf { it.isNotBlank() } ?: "неизвестная ошибка"
+        throw IllegalStateException("Трафик через VPN не прошёл проверку: $detail", lastError)
+    }
+
+    private fun verifyTunnelOnce() {
+        val connection = (URL(CONNECTIVITY_CANARY).openConnection() as HttpsURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = 10_000
+            readTimeout = 10_000
+            instanceFollowRedirects = false
+            setRequestProperty("Cache-Control", "no-cache")
+        }
+        try {
+            check(connection.responseCode == 204) {
+                "Проверочный сайт ответил HTTP ${connection.responseCode}"
+            }
+        } finally {
+            connection.disconnect()
         }
     }
 
