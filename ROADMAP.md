@@ -55,7 +55,7 @@ The rebuilt 0.2.0 debug APK is published as the explicitly non-production
 The published 0.2.1 debug prerelease fixes a real-device report: the previous app
 declared success after libbox accepted the configuration, even when no traffic
 could pass through the full-route TUN, and it did not expose imported routes.
-The pending 0.2.2 debug build fixes the next real-device startup blocker without
+The published 0.2.2 debug prerelease fixes the next real-device startup blocker without
 changing the portable subscription: libbox receives an explicit private absolute
 path for its Android cache file at runtime.
 
@@ -202,6 +202,8 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   The cache-file test proves a private absolute path and no persistent mutation
   of routing fields. SHA-256:
   `cd24de955f2d287bf3d4de6369a170f1268105f94724da60d0363e42f4a35983`.
+- GitHub prerelease `v0.2.2-debug` publishes the cache-file startup fix; only
+  real-device tunnel proof remains pending.
 
 ## Next Action
 
