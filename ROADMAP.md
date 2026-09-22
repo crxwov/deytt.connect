@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — Android 0.3.2 is valid; a smaller standalone ARM64 artifact is
-validated and ready for delivery after the phone rejected the universal file
+In progress — Android 0.3.2 now includes a verified smaller ARM64 artifact;
+phone installation and tunnel verification remain
 
 ## Objective
 
@@ -267,11 +267,13 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   the 127,030,992-byte universal APK. Its ZIP, manifest and v2 signature pass;
   SHA-256 is
   `51cbbd13717d6d231aac3aa0b99dbcc54a2eb2fb47e55647fbe7fedd2fc3451c`.
+- Commit `d327f1e` is pushed. The ARM64 APK is attached to
+  `v0.3.2-debug`, and the uploaded asset digest matches the local SHA-256.
 
 ## Next Action
 
-Commit and publish the standalone ARM64 APK, then install it over 0.3.1 and
-repeat connection, DNS, HTTPS, disconnect and reconnect on the phone.
+Install the standalone ARM64 APK over 0.3.1, then repeat connection, DNS,
+HTTPS, disconnect and reconnect on the phone.
 
 ## Resume Context
 
