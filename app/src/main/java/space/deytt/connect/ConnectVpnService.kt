@@ -38,6 +38,9 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     companion object {
         const val ACTION_START = "space.deytt.connect.action.START"
         const val ACTION_STOP = "space.deytt.connect.action.STOP"
+        const val ACTION_STATUS = "space.deytt.connect.action.STATUS"
+        const val EXTRA_STATUS = "status"
+        const val EXTRA_ERROR = "error"
         private const val CHANNEL_ID = "vpn"
         private const val NOTIFICATION_ID = 42
         private const val TAG = "deytt-connect"
@@ -50,13 +53,22 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            publishStatus("VPN отключается…")
             stopTunnel()
             return START_NOT_STICKY
         }
         if (!started) {
             started = true
-            startForegroundCompat("Запуск deytt./connect")
-            executor.execute { startTunnel() }
+            try {
+                startForegroundCompat("Запуск deytt./connect")
+                publishStatus("Запуск VPN…")
+                executor.execute { startTunnel() }
+            } catch (error: Throwable) {
+                Log.e(TAG, "Unable to enter foreground", error)
+                publishFailure(error)
+                started = false
+                stopSelf()
+            }
         }
         return START_STICKY
     }
@@ -70,26 +82,29 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun startTunnel() {
-        val config = SubscriptionStore(this).readCurrent()
-        if (config == null) {
-            fail("Нет сохранённой подписки")
-            return
-        }
         try {
+            val config = SubscriptionStore(this).readCurrent()
+            if (config == null) {
+                fail("Нет сохранённой подписки")
+                return
+            }
             val server = CommandServer(this, this)
             commandServer = server
             server.start()
             server.startOrReloadService(config, OverrideOptions().apply { autoRedirect = false })
             updateNotification("VPN подключён")
+            publishStatus("VPN подключён")
             Log.i(TAG, "VPN service started")
-        } catch (error: Exception) {
+        } catch (error: Throwable) {
             Log.e(TAG, "Unable to start VPN", error)
-            fail(error.message ?: "Не удалось запустить VPN")
+            fail(errorMessage(error, "Не удалось запустить VPN"))
         }
     }
 
     private fun fail(message: String) {
-        updateNotification(message)
+        publishStatus("Ошибка запуска VPN", message)
+        runCatching { updateNotification(message) }
+            .onFailure { Log.w(TAG, "Failed to update error notification", it) }
         tunnel?.close()
         tunnel = null
         commandServer?.close()
@@ -113,7 +128,23 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             @Suppress("DEPRECATION")
             stopForeground(true)
         }
+        publishStatus("VPN отключён")
     }
+
+    private fun publishFailure(error: Throwable) {
+        publishStatus("Ошибка запуска VPN", errorMessage(error, "Не удалось запустить VPN"))
+    }
+
+    private fun publishStatus(status: String, error: String? = null) {
+        val intent = Intent(ACTION_STATUS)
+            .setPackage(packageName)
+            .putExtra(EXTRA_STATUS, status)
+        if (!error.isNullOrBlank()) intent.putExtra(EXTRA_ERROR, error)
+        sendBroadcast(intent)
+    }
+
+    private fun errorMessage(error: Throwable, fallback: String): String =
+        error.message?.takeIf { it.isNotBlank() } ?: "$fallback (${error.javaClass.simpleName})"
 
     private fun startForegroundCompat(text: String) {
         val manager = getSystemService(NotificationManager::class.java)

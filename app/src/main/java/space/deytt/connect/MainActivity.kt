@@ -1,7 +1,11 @@
 package space.deytt.connect
 
+import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.net.VpnService
 import android.os.Bundle
@@ -27,6 +31,16 @@ class MainActivity : Activity() {
     private lateinit var connectButton: Button
     private lateinit var importButton: Button
 
+    private val vpnStatusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != ConnectVpnService.ACTION_STATUS) return
+            val message = intent.getStringExtra(ConnectVpnService.EXTRA_STATUS)
+                ?: return
+            val detail = intent.getStringExtra(ConnectVpnService.EXTRA_ERROR)
+            status.text = if (detail.isNullOrBlank()) message else "$message: $detail"
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         buildView()
@@ -35,6 +49,23 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         executor.shutdownNow()
         super.onDestroy()
+    }
+
+    @SuppressLint("UnspecifiedRegisterReceiverFlag")
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter(ConnectVpnService.ACTION_STATUS)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(vpnStatusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            registerReceiver(vpnStatusReceiver, filter)
+        }
+    }
+
+    override fun onStop() {
+        unregisterReceiver(vpnStatusReceiver)
+        super.onStop()
     }
 
     private fun buildView() {
@@ -157,14 +188,19 @@ class MainActivity : Activity() {
     }
 
     private fun startVpnService() {
-        val intent = Intent(this, ConnectVpnService::class.java)
-            .setAction(ConnectVpnService.ACTION_START)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
+        try {
+            val intent = Intent(this, ConnectVpnService::class.java)
+                .setAction(ConnectVpnService.ACTION_START)
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                startForegroundService(intent)
+            } else {
+                startService(intent)
+            }
+            status.text = "Запускаю VPN…"
+        } catch (error: Throwable) {
+            status.text = error.message?.takeIf { it.isNotBlank() }
+                ?: "Не удалось запустить VPN (${error.javaClass.simpleName})"
         }
-        status.text = "Запускаю VPN…"
     }
 
     private fun matchWidth(height: Int): ViewGroup.LayoutParams =

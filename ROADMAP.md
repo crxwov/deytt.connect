@@ -24,7 +24,8 @@ and a real APK artifact.
 - [x] 1. Create a separate public repository and document GPL/core boundaries.
 - [x] 2. Implement Android project, subscription storage, and profile validator.
 - [~] 3. Integrate libbox with Android TUN and foreground-service lifecycle;
-      local compilation is complete, device runtime proof is pending.
+      local compilation and in-app status/error reporting are complete, device
+      runtime proof is pending.
 - [ ] 4. Add profile URI parser, fixed DEYTTT mode/country presentation, and
       reconnect/network-change handling.
 - [ ] 5. Add split tunnel, DNS leak protection, kill switch, telemetry-free
@@ -78,8 +79,11 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `./gradlew assembleDebug` passed on 2026-09-22.
 - `./gradlew lintDebug` passed on 2026-09-22 with no lint errors.
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
-- SHA-256: `b66d54a1a81c8899cab5fc885d729f64efc3eae5a198df9093aed54468270bda`.
+- SHA-256: `76b49ab2c5a29c7b2f0dde9a0781ec8a6ced61c0a78b2ce7e65159d5a8e3e347`.
 - Commit `7574b0b` was pushed to `origin/main` successfully.
+- The new build broadcasts foreground-service startup, connected, stopped, and
+  native/TUN errors back to the visible activity instead of leaving a permanent
+  `Запускаю VPN…` status.
 - On `nl-vpn`, `sudo -u nl openssl x509` now validates `server.crt`; the same
   user still cannot read `auth_pass` or `server.key`, and `vpn-admin.service`
   is active after restart.
@@ -88,10 +92,10 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 
 ## Next Action
 
-Connect an Android device or emulator, install the debug APK, import an
-authenticated DEYTTT `format=singbox` subscription, and verify VPN startup plus
-an external HTTPS canary. Then add the fixed DEYTTT presentation and reconnect
-behavior before release signing.
+Install the new debug APK on the Android phone, import the already working
+subscription, and capture the resulting status/error. If it reaches connected,
+verify an external HTTPS canary; if not, use the surfaced error for the next
+adapter fix.
 
 ## Resume Context
 
