@@ -74,6 +74,9 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - The next device attempt reached the following parser boundary and exposed the
   deprecated WireGuard outbound schema. The generator now emits the current
   root-level `endpoints` schema and has a focused regression test.
+- The next device attempt reached Hysteria2 TLS parsing and exposed the legacy
+  `tls.sni` field. Sing-box 1.14.1 expects `tls.server_name`; the generator
+  change is covered by the existing sing-box config test.
 - The first visual refresh was intentionally too busy. The next UI removes the
   network map, technical labels, build badge, intro block, and verbose footer;
   the status card remains as the single place for useful runtime errors.
@@ -120,18 +123,23 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - The live config error `outbounds[1].server: unknown field` was fixed by
   moving AmneziaWG to the endpoint schema. The deployed live smoke-test now
   returns no legacy WireGuard outbounds and one endpoint without server fields.
+- The device error `outbounds[1].tls.sni: unknown field` was fixed by switching
+  Hysteria2 and zapret TLS objects to `server_name`; the server change is
+  deployed and the live smoke-test is clean.
 - The second visual pass removes the animated network map and technical copy;
   the APK build and lint pass after the simplification.
+- Live after the TLS migration: HTTP 200, valid JSON, 18 outbounds, zero
+  legacy `tls.sni` outbounds, 13 `tls.server_name` outbounds, one WireGuard
+  endpoint, no inbound sniff fields.
 - `adb devices` found no connected Android device or emulator; tunnel and
   external HTTPS canary are not yet verified.
 
 ## Next Action
 
-Install the replacement APK on the Android phone. Import the already working
-subscription and capture the resulting status/error. If it reaches connected,
-verify an external HTTPS canary; otherwise use the surfaced error for the next
-adapter fix. Do not treat the live JSON smoke-test or local APK build as a
-substitute for device tunnel proof.
+Refresh the subscription in the existing APK and retry the Android tunnel. If
+it reaches connected, verify an external HTTPS canary; otherwise capture the
+next surfaced parser error. Do not treat the live JSON smoke-test or local APK
+build as a substitute for device tunnel proof.
 
 ## Resume Context
 
