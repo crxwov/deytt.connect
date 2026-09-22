@@ -45,6 +45,9 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         private const val CHANNEL_ID = "vpn"
         private const val NOTIFICATION_ID = 42
         private const val TAG = "deytt-connect"
+        const val STATE_PREFS = "vpn_state"
+        const val STATE_STATUS = "status"
+        const val STATE_ERROR = "error"
 
         @Volatile
         private var libboxSetup = false
@@ -59,6 +62,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         if (intent?.action == ACTION_STOP) {
             publishStatus("VPN отключается…")
             stopTunnel()
+            stopSelf()
             return START_NOT_STICKY
         }
         if (!started) {
@@ -71,6 +75,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 Log.e(TAG, "Unable to enter foreground", error)
                 publishFailure(error)
                 started = false
+                stopForegroundCompat()
                 stopSelf()
             }
         }
@@ -92,6 +97,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 fail("Нет сохранённой подписки")
                 return
             }
+            ProfileValidator.validate(config)
             setupLibbox()
             val server = CommandServer(this, this)
             commandServer = server
@@ -135,6 +141,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         commandServer?.close()
         commandServer = null
         started = false
+        stopForegroundCompat()
         stopSelf()
     }
 
@@ -161,6 +168,10 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun publishStatus(status: String, error: String? = null) {
+        getSharedPreferences(STATE_PREFS, MODE_PRIVATE).edit()
+            .putString(STATE_STATUS, status)
+            .putString(STATE_ERROR, error)
+            .apply()
         val intent = Intent(ACTION_STATUS)
             .setPackage(packageName)
             .putExtra(EXTRA_STATUS, status)
@@ -193,7 +204,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         val notification = notificationBuilder
             .setContentTitle("deytt./connect")
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
+            .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(openApp)
             .setOngoing(true)
             .build()
@@ -203,6 +214,20 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             @Suppress("DEPRECATION")
             startForeground(NOTIFICATION_ID, notification)
         }
+    }
+
+    private fun stopForegroundCompat() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } else {
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+        }
+    }
+
+    override fun onRevoke() {
+        stopTunnel()
+        super.onRevoke()
     }
 
     private fun updateNotification(text: String) {

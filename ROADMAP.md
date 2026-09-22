@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress — Android MVP, subscription compatibility and visual refresh
+In progress — Android MVP, sing-box compatibility hardening and product polish
 
 ## Objective
 
@@ -30,6 +30,10 @@ and a real APK artifact.
       runtime proof is pending.
 - [x] 3a. Migrate the server sing-box subscription away from deprecated inbound
       and WireGuard outbound fields; ship a minimal DEYTTT visual refresh.
+- [x] 3b. Remove the remaining deprecated TUN address schema, add client-side
+      compatibility preflight, and deploy the server contract fix.
+- [x] 3c. Harden import/service state, token presentation, error recovery, and
+      the Android visual hierarchy without adding decorative UI noise.
 - [ ] 4. Add profile URI parser, fixed DEYTTT mode/country presentation, and
       reconnect/network-change handling.
 - [ ] 5. Add split tunnel, DNS leak protection, kill switch, telemetry-free
@@ -81,6 +85,12 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - The next device attempt exposed the removed DNS outbound. The backend now
   emits typed HTTPS/local DNS servers and route-level `hijack-dns`; live format
   validation is clean after deployment.
+- The next device attempt exposed the remaining legacy TUN address fields:
+  `inet4_address` must be migrated to the current `address` field. The client
+  also needs to reject stale configs before libbox sees them.
+- The backend now emits `address`, and the client validates TUN/DNS/TLS/WireGuard
+  compatibility before saving or starting a profile. Stale profiles now produce
+  a re-import action instead of a raw libbox parser failure.
 - The first visual refresh was intentionally too busy. The next UI removes the
   network map, technical labels, build badge, intro block, and verbose footer;
   the status card remains as the single place for useful runtime errors.
@@ -132,22 +142,30 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   deployed and the live smoke-test is clean.
 - The second visual pass removes the animated network map and technical copy;
   the APK build and lint pass after the simplification.
+- Current screen still exposes the full subscription token, allows connect
+  while a profile is stale or importing, and loses the last service state when
+  the activity is recreated; this pass masks the token, gates actions, persists
+  service state, and uses a dedicated VPN notification icon.
 - Live after the TLS migration: HTTP 200, valid JSON, 18 outbounds, zero
   legacy `tls.sni` outbounds, 13 `tls.server_name` outbounds, one WireGuard
   endpoint, no inbound sniff fields.
 - Live after the DNS migration: HTTP 200, valid JSON, two inbounds, 17
   outbounds, no DNS outbound or legacy DNS fields, two DNS route rules, and a
   route-level `hijack-dns` rule.
+- Live after the TUN migration: HTTP 200, valid JSON, `tun.address` contains
+  `172.19.0.1/30`, no legacy TUN/DNS/TLS/WireGuard fields, one WireGuard
+  endpoint, and `vpn-admin.service` is active after restart.
+- Final Android validation: clean `assembleDebug` and `lintDebug` on the
+  repository JDK 17/Android SDK; only existing API deprecation warnings and the
+  expected unstrippable `libbox.so` packaging warning remain.
 - `adb devices` found no connected Android device or emulator; tunnel and
   external HTTPS canary are not yet verified.
 
 ## Next Action
 
-Refresh the subscription in the existing APK and retry the Android tunnel. If
-it reaches connected, verify an external HTTPS canary; otherwise capture the
-next surfaced parser error. The APK itself did not need rebuilding for this
-server-only compatibility fix. Do not treat the live JSON smoke-test or local
-APK build as a substitute for device tunnel proof.
+Install the new APK on a real Android device, re-import the subscription, and
+prove the tunnel with an external HTTPS canary. Device proof remains the only
+unfinished part of this MVP; local build and live JSON validation are complete.
 
 ## Resume Context
 

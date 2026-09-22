@@ -55,16 +55,25 @@ class MainActivity : Activity() {
     private lateinit var statusTitle: TextView
     private lateinit var statusDetail: TextView
     private lateinit var statusDot: View
+    private lateinit var statusPanel: LinearLayout
     private lateinit var connectButton: TextView
     private lateinit var importButton: TextView
     private lateinit var disconnectButton: TextView
+    private var rawSubscriptionUrl: String? = null
+    private var maskedSubscriptionUrl = false
+    private var profileReady = false
+    private var vpnConnected = false
+    private var busy = false
 
     private val vpnStatusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action != ConnectVpnService.ACTION_STATUS) return
             val message = intent.getStringExtra(ConnectVpnService.EXTRA_STATUS)
                 ?: return
-            renderStatus(message, intent.getStringExtra(ConnectVpnService.EXTRA_ERROR))
+            renderStatus(
+                message,
+                intent.getStringExtra(ConnectVpnService.EXTRA_ERROR)?.let(::friendlyErrorMessage),
+            )
         }
     }
 
@@ -142,7 +151,7 @@ class MainActivity : Activity() {
         }
         content.addView(subtitle, marginParams(wrap, top = 6))
 
-        val statusPanel = LinearLayout(this).apply {
+        statusPanel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.TOP
             background = rounded(PANEL, dp(20), LINE, dp(1))
@@ -183,18 +192,32 @@ class MainActivity : Activity() {
             setPadding(dp(17), dp(12), dp(17), dp(12))
         }
         urlInput = EditText(this).apply {
-            hint = "Ссылка на подписку"
+            hint = "HTTPS-ссылка на подписку"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true)
             isHorizontalFadingEdgeEnabled = true
             setHorizontallyScrolling(true)
+            contentDescription = "Ссылка на подписку"
             setTextColor(INK)
             setHintTextColor(MUTED)
             textSize = 14f
             letterSpacing = 0.01f
             background = ColorDrawable(Color.TRANSPARENT)
             setPadding(0, 0, 0, 0)
-            setText(getPreferences(0).getString(URL_KEY, "").orEmpty())
+            rawSubscriptionUrl = getPreferences(0).getString(URL_KEY, "")
+                ?.takeIf { it.isNotBlank() }
+            if (rawSubscriptionUrl != null) {
+                maskedSubscriptionUrl = true
+                setText(maskSensitiveUrl(rawSubscriptionUrl.orEmpty()))
+            }
+            setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus) revealSubscriptionUrl()
+                else if (!maskedSubscriptionUrl && !rawSubscriptionUrl.isNullOrBlank() &&
+                    urlInput.text.toString().trim() == rawSubscriptionUrl.orEmpty()
+                ) {
+                    maskSubscriptionUrl(rawSubscriptionUrl.orEmpty())
+                }
+            }
         }
         urlPanel.addView(urlInput, LinearLayout.LayoutParams(match, dp(42)))
         content.addView(urlPanel, marginParams(match, top = 18))
@@ -220,7 +243,7 @@ class MainActivity : Activity() {
         }
 
         val note = TextView(this).apply {
-            text = "Профиль сохраняется автоматически"
+            text = "Профиль сохраняется автоматически · токен скрыт"
             textSize = 11f
             setTextColor(MUTED)
         }
@@ -228,22 +251,30 @@ class MainActivity : Activity() {
 
         setContentView(root)
         root.requestApplyInsets()
-        renderStatus("Готов к настройке", "Импортируйте подписку, затем запустите защищённый туннель.")
+        restoreScreenState()
+        updateControls()
     }
 
     private fun importSubscription() {
-        val rawUrl = urlInput.text.toString().trim()
+        val rawUrl = currentSubscriptionUrl()
         if (rawUrl.isBlank()) {
             renderStatus("Нужна ссылка", "Вставьте HTTPS-ссылку на подписку.", ConnectionVisualState.ERROR)
             return
         }
+        busy = true
+        updateControls()
         importButton.isEnabled = false
         renderStatus("Проверяем профиль", "Загружаю и проверяю конфигурацию…", ConnectionVisualState.CONNECTING)
-        getPreferences(0).edit().putString(URL_KEY, rawUrl).apply()
         executor.execute {
             try {
                 val imported = SubscriptionClient.import(this, rawUrl)
                 runOnUiThread {
+                    getPreferences(0).edit().putString(URL_KEY, imported.url).apply()
+                    rawSubscriptionUrl = imported.url
+                    maskSubscriptionUrl(imported.url)
+                    profileReady = true
+                    busy = false
+                    updateControls()
                     importButton.isEnabled = true
                     renderStatus(
                         "Профиль готов",
@@ -253,10 +284,13 @@ class MainActivity : Activity() {
                 }
             } catch (error: Exception) {
                 runOnUiThread {
+                    busy = false
+                    profileReady = hasValidStoredProfile()
+                    updateControls()
                     importButton.isEnabled = true
                     renderStatus(
                         "Импорт не выполнен",
-                        error.message ?: "Не удалось импортировать подписку.",
+                        friendlyError(error, "Не удалось импортировать подписку."),
                         ConnectionVisualState.ERROR,
                     )
                 }
@@ -265,10 +299,28 @@ class MainActivity : Activity() {
     }
 
     private fun requestOrStartVpn() {
-        if (SubscriptionStore(this).readCurrent() == null) {
+        val config = SubscriptionStore(this).readCurrent()
+        if (config == null) {
+            profileReady = false
+            updateControls()
             renderStatus("Нужна подписка", "Сначала импортируйте профиль.", ConnectionVisualState.ERROR)
             return
         }
+        try {
+            ProfileValidator.validate(config)
+            profileReady = true
+        } catch (error: Exception) {
+            profileReady = false
+            updateControls()
+            renderStatus(
+                "Профиль требует обновления",
+                friendlyError(error, "Импортируйте подписку заново."),
+                ConnectionVisualState.ERROR,
+            )
+            return
+        }
+        busy = true
+        updateControls()
         renderStatus("Ожидаем разрешение", "Android запросит системное разрешение VPN…", ConnectionVisualState.CONNECTING)
         val permissionIntent = VpnService.prepare(this)
         if (permissionIntent != null) {
@@ -285,6 +337,8 @@ class MainActivity : Activity() {
         if (resultCode == RESULT_OK) {
             startVpnService()
         } else {
+            busy = false
+            updateControls()
             renderStatus("Разрешение отклонено", "Без системного разрешения VPN туннель не запускается.", ConnectionVisualState.ERROR)
         }
     }
@@ -300,9 +354,11 @@ class MainActivity : Activity() {
             }
             renderStatus("Подключаемся", "Запускаю защищённый туннель…", ConnectionVisualState.CONNECTING)
         } catch (error: Throwable) {
+            busy = false
+            updateControls()
             renderStatus(
                 "Запуск не выполнен",
-                error.message?.takeIf { it.isNotBlank() } ?: "Не удалось запустить VPN.",
+                friendlyError(error, "Не удалось запустить VPN."),
                 ConnectionVisualState.ERROR,
             )
         }
@@ -322,13 +378,36 @@ class MainActivity : Activity() {
             else -> ConnectionVisualState.IDLE
         }
         statusTitle.text = message
-        statusDetail.text = detail.orEmpty()
-        statusDot.setBackgroundColor(when (state) {
+        statusDetail.text = detail.orEmpty().trim().take(360)
+        val accent = when (state) {
             ConnectionVisualState.CONNECTED -> MINT
             ConnectionVisualState.CONNECTING -> BLUE
             ConnectionVisualState.ERROR -> ERROR
             ConnectionVisualState.IDLE -> MUTED
-        })
+        }
+        statusDot.setBackgroundColor(accent)
+        statusPanel.background = rounded(
+            when (state) {
+                ConnectionVisualState.CONNECTED -> 0xFF102A27.toInt()
+                ConnectionVisualState.ERROR -> 0xFF241722.toInt()
+                else -> PANEL
+            },
+            dp(20),
+            ColorUtils.withAlpha(accent, 0.72f),
+            dp(1),
+        )
+        when (state) {
+            ConnectionVisualState.CONNECTED -> vpnConnected = true
+            ConnectionVisualState.ERROR -> {
+                busy = false
+            }
+            ConnectionVisualState.IDLE -> {
+                if (message.contains("отключ", ignoreCase = true)) vpnConnected = false
+                busy = false
+            }
+            ConnectionVisualState.CONNECTING -> Unit
+        }
+        updateControls()
     }
 
     private fun actionButton(textValue: String, fill: Int, textColor: Int, stroke: Int): TextView = TextView(this).apply {
@@ -341,11 +420,12 @@ class MainActivity : Activity() {
         minHeight = dp(56)
         isClickable = true
         isFocusable = true
-        background = rounded(fill, dp(15), stroke.takeIf { it != Color.TRANSPARENT }, if (stroke == Color.TRANSPARENT) 0 else dp(1))
+        val radius = dp(15)
+        background = rounded(fill, radius, stroke.takeIf { it != Color.TRANSPARENT }, if (stroke == Color.TRANSPARENT) 0 else dp(1))
         foreground = android.graphics.drawable.RippleDrawable(
             ColorStateList.valueOf(Color.argb(42, 255, 255, 255)),
             null,
-            null,
+            rounded(Color.WHITE, radius, null, 0),
         )
         setOnTouchListener { view, event ->
             when (event.actionMasked) {
@@ -354,6 +434,97 @@ class MainActivity : Activity() {
             }
             false
         }
+    }
+
+    private fun restoreScreenState() {
+        profileReady = hasValidStoredProfile()
+        val state = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
+        when (state.getString(ConnectVpnService.STATE_STATUS, null)) {
+            "VPN подключён" -> renderStatus("VPN подключён", "Туннель активен", ConnectionVisualState.CONNECTED)
+            "Ошибка запуска VPN" -> renderStatus(
+                "Ошибка запуска VPN",
+                state.getString(ConnectVpnService.STATE_ERROR, null)
+                    ?.let { friendlyErrorMessage(it) },
+                ConnectionVisualState.ERROR,
+            )
+            else -> {
+                val config = SubscriptionStore(this).readCurrent()
+                if (config == null) {
+                    renderStatus("Готов к настройке", "Импортируйте подписку, затем запустите защищённый туннель.")
+                } else {
+                    val summary = runCatching { ProfileValidator.validate(config) }.getOrNull()
+                    if (summary != null) {
+                        renderStatus("Профиль готов", "${summary.outboundCount} выходов · готов к подключению")
+                    } else {
+                        renderStatus(
+                            "Профиль требует обновления",
+                            "Импортируйте подписку заново для обновления конфигурации.",
+                            ConnectionVisualState.ERROR,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun hasValidStoredProfile(): Boolean =
+        SubscriptionStore(this).readCurrent()?.let {
+            runCatching { ProfileValidator.validate(it) }.isSuccess
+        } == true
+
+    private fun currentSubscriptionUrl(): String =
+        if (maskedSubscriptionUrl) rawSubscriptionUrl.orEmpty()
+        else urlInput.text.toString().trim()
+
+    private fun revealSubscriptionUrl() {
+        if (!maskedSubscriptionUrl) return
+        urlInput.setText(rawSubscriptionUrl.orEmpty())
+        urlInput.setSelection(urlInput.length())
+        maskedSubscriptionUrl = false
+    }
+
+    private fun maskSubscriptionUrl(url: String) {
+        rawSubscriptionUrl = url
+        maskedSubscriptionUrl = true
+        if (::urlInput.isInitialized) {
+            urlInput.clearFocus()
+            urlInput.setText(maskSensitiveUrl(url))
+            urlInput.setSelection(0)
+        }
+    }
+
+    private fun maskSensitiveUrl(url: String): String = url
+        .replace(Regex("(/token/)[^/?#]+"), "$1••••••••")
+        .replace(Regex("([?&](?:token|key|password)=)[^&#]+", RegexOption.IGNORE_CASE), "$1••••••••")
+
+    private fun friendlyError(error: Throwable, fallback: String): String =
+        friendlyErrorMessage(error.message?.takeIf { it.isNotBlank() } ?: fallback)
+
+    private fun friendlyErrorMessage(message: String): String {
+        val normalized = message.replace(Regex("\\s+"), " ").trim()
+        return when {
+            normalized.contains("legacy", ignoreCase = true) ||
+                normalized.contains("inet4_address", ignoreCase = true) ->
+                "Конфигурация устарела. Нажмите «Импортировать подписку» заново."
+            normalized.contains("unknown field", ignoreCase = true) ->
+                "Сервер прислал несовместимую конфигурацию. Повторите импорт подписки."
+            else -> normalized.take(360)
+        }
+    }
+
+    private fun updateControls() {
+        if (!::connectButton.isInitialized) return
+        importButton.isEnabled = !busy
+        connectButton.isEnabled = profileReady && !busy && !vpnConnected
+        disconnectButton.isEnabled = busy || vpnConnected
+        importButton.alpha = if (importButton.isEnabled) 1f else 0.55f
+        connectButton.alpha = if (connectButton.isEnabled) 1f else 0.45f
+        disconnectButton.alpha = if (disconnectButton.isEnabled) 1f else 0.45f
+    }
+
+    private object ColorUtils {
+        fun withAlpha(color: Int, alpha: Float): Int =
+            Color.argb((alpha.coerceIn(0f, 1f) * 255).roundToInt(), Color.red(color), Color.green(color), Color.blue(color))
     }
 
     private fun rounded(fill: Int, radius: Int, strokeColor: Int?, strokeWidth: Int): GradientDrawable =
