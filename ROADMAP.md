@@ -2,8 +2,7 @@
 
 ## Status
 
-In progress — 0.3.0 device parsing exposed an invalid direct DNS detour;
-0.3.1 repair is in progress
+In progress — 0.3.1 direct DNS repair is published; real-device retry remains
 
 ## Objective
 
@@ -240,11 +239,13 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Android 0.3.1 clean validation passes `testDebugUnitTest`, `lintDebug`, and
   `assembleDebug`; its v2 signature verifies. SHA-256:
   `7a649dad7ea82646d849d37ea01bfbf51d0212dbc3189647ab0a9077332aa73f`.
+- Commit `256287b` is pushed. GitHub prerelease `v0.3.1-debug` publishes the
+  replacement APK, and its uploaded asset digest matches the local SHA-256.
 
 ## Next Action
 
-Remove the redundant DNS detour, bump to 0.3.1, run clean validation, publish
-the replacement APK, and repeat the device test.
+Install `v0.3.1-debug` over 0.3.0 and retry connection. Existing saved profiles
+are repaired at runtime, so re-import is optional for this parser fix.
 
 ## Resume Context
 
