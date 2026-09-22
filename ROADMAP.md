@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — Android 0.3.2 platform DNS/interface repair is published;
-real-device verification remains
+In progress — Android 0.3.2 is valid; a smaller standalone ARM64 artifact is
+validated and ready for delivery after the phone rejected the universal file
 
 ## Objective
 
@@ -259,10 +259,18 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   DNS resolution or the external HTTPS canaries on the user's phone.
 - Commit `bdd0596` is pushed. GitHub prerelease `v0.3.2-debug` publishes the
   verified APK, and the uploaded asset digest matches the local SHA-256.
+- Device installer reports the downloaded package as invalid. A fresh download
+  of the release asset passes ZIP integrity, manifest, v2 signature, version,
+  and signer-parity checks against 0.3.1; likely remaining cause is an
+  incomplete large browser download. Publish smaller standalone ABI APKs.
+- ABI splitting produces a standalone ARM64 APK of 31,099,524 bytes instead of
+  the 127,030,992-byte universal APK. Its ZIP, manifest and v2 signature pass;
+  SHA-256 is
+  `51cbbd13717d6d231aac3aa0b99dbcc54a2eb2fb47e55647fbe7fedd2fc3451c`.
 
 ## Next Action
 
-Install Android `v0.3.2-debug` over 0.3.1, update the subscription once, then
+Commit and publish the standalone ARM64 APK, then install it over 0.3.1 and
 repeat connection, DNS, HTTPS, disconnect and reconnect on the phone.
 
 ## Resume Context
