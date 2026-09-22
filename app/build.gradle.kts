@@ -7,6 +7,10 @@ android {
     namespace = "space.deytt.connect"
     compileSdk = 35
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "space.deytt.connect"
         minSdk = 24
@@ -43,4 +47,3 @@ dependencies {
     // GPL-3.0-or-later shared sing-box engine, pinned for reproducible builds.
     implementation("com.github.singbox-android:libbox:1.14.1")
 }
-

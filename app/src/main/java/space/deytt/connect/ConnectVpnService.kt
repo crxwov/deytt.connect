@@ -27,6 +27,7 @@ import io.nekohasekai.libbox.OverrideOptions
 import io.nekohasekai.libbox.PlatformInterface
 import io.nekohasekai.libbox.PlatformUser
 import io.nekohasekai.libbox.RoutePrefixIterator
+import io.nekohasekai.libbox.SetupOptions
 import io.nekohasekai.libbox.ShellSession
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.SystemProxyStatus
@@ -44,6 +45,9 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         private const val CHANNEL_ID = "vpn"
         private const val NOTIFICATION_ID = 42
         private const val TAG = "deytt-connect"
+
+        @Volatile
+        private var libboxSetup = false
     }
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -88,6 +92,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 fail("Нет сохранённой подписки")
                 return
             }
+            setupLibbox()
             val server = CommandServer(this, this)
             commandServer = server
             server.start()
@@ -98,6 +103,26 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         } catch (error: Throwable) {
             Log.e(TAG, "Unable to start VPN", error)
             fail(errorMessage(error, "Не удалось запустить VPN"))
+        }
+    }
+
+    private fun setupLibbox() {
+        if (libboxSetup) return
+        synchronized(ConnectVpnService::class.java) {
+            if (libboxSetup) return
+            val setup = SetupOptions().apply {
+                basePath = filesDir.absolutePath
+                workingPath = filesDir.absolutePath
+                tempPath = cacheDir.absolutePath
+                fixAndroidStack = Build.VERSION.SDK_INT in 24..25
+                debug = BuildConfig.DEBUG
+                appVersion = "0.1.0"
+                appMarketingVersion = "0.1.0"
+                logMaxLines = 300
+            }
+            Libbox.setup(setup)
+            libboxSetup = true
+            Log.i(TAG, "libbox setup complete: basePath=${filesDir.absolutePath}")
         }
     }
 

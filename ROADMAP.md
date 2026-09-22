@@ -79,8 +79,11 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `./gradlew assembleDebug` passed on 2026-09-22.
 - `./gradlew lintDebug` passed on 2026-09-22 with no lint errors.
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
-- SHA-256: `76b49ab2c5a29c7b2f0dde9a0781ec8a6ced61c0a78b2ce7e65159d5a8e3e347`.
+- SHA-256: `c70558814878ddbe3037604ae6d1572c8ac15cd2dbdd1a35a945c96aff6d3964`.
 - Commit `7574b0b` was pushed to `origin/main` successfully.
+- The `command.sock` read-only filesystem failure was traced to missing
+  `Libbox.setup` path initialization; the new build sets writable `basePath`,
+  `workingPath`, and `tempPath` before creating `CommandServer`.
 - The new build broadcasts foreground-service startup, connected, stopped, and
   native/TUN errors back to the visible activity instead of leaving a permanent
   `Запускаю VPN…` status.
