@@ -59,7 +59,8 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   and external HTTPS must be validated separately.
 - The server-side sing-box generator now removes deprecated inbound `sniff`
   fields, emits the equivalent route action, and represents AmneziaWG as a
-  WireGuard endpoint required by libbox 1.14.1.
+  WireGuard endpoint required by libbox 1.14.1. DNS interception now uses the
+  current route `hijack-dns` action and typed DNS servers.
 
 ## Issues and Failed Attempts
 
@@ -77,6 +78,9 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - The next device attempt reached Hysteria2 TLS parsing and exposed the legacy
   `tls.sni` field. Sing-box 1.14.1 expects `tls.server_name`; the generator
   change is covered by the existing sing-box config test.
+- The next device attempt exposed the removed DNS outbound. The backend now
+  emits typed HTTPS/local DNS servers and route-level `hijack-dns`; live format
+  validation is clean after deployment.
 - The first visual refresh was intentionally too busy. The next UI removes the
   network map, technical labels, build badge, intro block, and verbose footer;
   the status card remains as the single place for useful runtime errors.
@@ -131,6 +135,9 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Live after the TLS migration: HTTP 200, valid JSON, 18 outbounds, zero
   legacy `tls.sni` outbounds, 13 `tls.server_name` outbounds, one WireGuard
   endpoint, no inbound sniff fields.
+- Live after the DNS migration: HTTP 200, valid JSON, two inbounds, 17
+  outbounds, no DNS outbound or legacy DNS fields, two DNS route rules, and a
+  route-level `hijack-dns` rule.
 - `adb devices` found no connected Android device or emulator; tunnel and
   external HTTPS canary are not yet verified.
 
@@ -138,8 +145,9 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 
 Refresh the subscription in the existing APK and retry the Android tunnel. If
 it reaches connected, verify an external HTTPS canary; otherwise capture the
-next surfaced parser error. Do not treat the live JSON smoke-test or local APK
-build as a substitute for device tunnel proof.
+next surfaced parser error. The APK itself did not need rebuilding for this
+server-only compatibility fix. Do not treat the live JSON smoke-test or local
+APK build as a substitute for device tunnel proof.
 
 ## Resume Context
 
