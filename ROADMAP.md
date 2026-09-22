@@ -55,6 +55,9 @@ The rebuilt 0.2.0 debug APK is published as the explicitly non-production
 The published 0.2.1 debug prerelease fixes a real-device report: the previous app
 declared success after libbox accepted the configuration, even when no traffic
 could pass through the full-route TUN, and it did not expose imported routes.
+The pending 0.2.2 debug build fixes the next real-device startup blocker without
+changing the portable subscription: libbox receives an explicit private absolute
+path for its Android cache file at runtime.
 
 Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
 bootstrapped under `.toolchain/` and are not part of the repository artifact.
@@ -105,11 +108,17 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   route and broke all internet traffic. Cause: service success was reported
   immediately after `startOrReloadService`, which proves config acceptance but
   not a working transport; full-route TUN had already captured device traffic.
+- Real-device report: 0.2.1 stopped at `initialize cache-file: timeout` before
+  TUN validation. libbox starts a cache service for its platform log writer, but
+  the profile relied on relative `cache.db`; no Android-private cache path was
+  supplied at runtime.
 
 ## Important Changed Files
 
 - `app/`
 - `app/src/main/java/space/deytt/connect/MainActivity.kt`
+- `app/src/main/java/space/deytt/connect/ConnectVpnService.kt`
+- `app/src/main/java/space/deytt/connect/RuntimeProfile.kt`
 - `app/src/main/java/space/deytt/connect/ProfileRoutes.kt`
 - `app/src/test/java/space/deytt/connect/ProfileRoutesTest.kt`
 - `app/src/main/java/space/deytt/connect/NetworkBackdropView.kt` (removed)
@@ -189,12 +198,16 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   SHA-256: `5e1be10ef43b50de88dd755de423dfcf5aca112f9ae09b62f5c9fc13168cb481`.
 - GitHub prerelease `v0.2.1-debug` publishes the fixed APK. It remains a debug
   build until the real-device external HTTPS confirmation succeeds.
+- Android 0.2.2: runtime-profile test, route tests, lint, and clean build pass.
+  The cache-file test proves a private absolute path and no persistent mutation
+  of routing fields. SHA-256:
+  `cd24de955f2d287bf3d4de6369a170f1268105f94724da60d0363e42f4a35983`.
 
 ## Next Action
 
-Install APK 0.2.1 on a real Android device, re-import the subscription, select
-a route, and start the VPN. The app now keeps the TUN only after its external
-HTTPS canary passes; device proof remains the only unfinished part of this MVP.
+Install APK 0.2.2 on a real Android device, re-import the subscription, select
+a route, and start the VPN. Confirm that cache-file startup proceeds to the
+external HTTPS canary; device proof remains the only unfinished MVP step.
 
 ## Resume Context
 

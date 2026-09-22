@@ -34,6 +34,7 @@ import io.nekohasekai.libbox.SystemProxyStatus
 import io.nekohasekai.libbox.TunOptions
 import io.nekohasekai.libbox.WIFIState
 import java.net.URL
+import java.io.File
 import java.util.concurrent.Executors
 import javax.net.ssl.HttpsURLConnection
 
@@ -100,12 +101,13 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 fail("Нет сохранённой подписки")
                 return
             }
-            ProfileValidator.validate(config)
+            val runtimeConfig = runtimeConfig(config)
+            ProfileValidator.validate(runtimeConfig)
             setupLibbox()
             val server = CommandServer(this, this)
             commandServer = server
             server.start()
-            server.startOrReloadService(config, OverrideOptions().apply { autoRedirect = false })
+            server.startOrReloadService(runtimeConfig, OverrideOptions().apply { autoRedirect = false })
             publishStatus("Проверяем туннель…", "Проверяю доступ к интернету через выбранный маршрут")
             updateNotification("Проверяем туннель…")
             verifyTunnel()
@@ -136,6 +138,13 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             libboxSetup = true
             Log.i(TAG, "libbox setup complete: basePath=${filesDir.absolutePath}")
         }
+    }
+
+    private fun runtimeConfig(config: String): String {
+        val directory = File(noBackupFilesDir, "sing-box")
+        check(directory.isDirectory || directory.mkdirs()) { "Не удалось создать локальное хранилище VPN" }
+        check(directory.canWrite()) { "Нет доступа к локальному хранилищу VPN" }
+        return RuntimeProfile.withPrivateCacheFile(config, File(directory, "cache.db").absolutePath)
     }
 
     /**
@@ -282,7 +291,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     override fun getSystemProxyStatus(): SystemProxyStatus? = null
     override fun serviceReload() {
         val config = SubscriptionStore(this).readCurrent() ?: return
-        commandServer?.startOrReloadService(config, OverrideOptions().apply { autoRedirect = false })
+        commandServer?.startOrReloadService(runtimeConfig(config), OverrideOptions().apply { autoRedirect = false })
     }
     override fun serviceStop() = stopTunnel()
     override fun setSystemProxyEnabled(enabled: Boolean) = Unit
