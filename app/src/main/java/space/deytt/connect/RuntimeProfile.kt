@@ -21,6 +21,43 @@ object RuntimeProfile {
         cacheFile.put("path", absoluteCachePath)
         cacheFile.put("store_fakeip", false)
         cacheFile.put("store_dns", false)
+
+        val inbounds = root.optJSONArray("inbounds")
+            ?: throw IllegalArgumentException("В профиле отсутствуют входящие подключения")
+        for (index in 0 until inbounds.length()) {
+            val inbound = inbounds.optJSONObject(index) ?: continue
+            if (inbound.optString("type") == "tun") inbound.put("dns_mode", "hijack")
+        }
+
+        val dns = root.optJSONObject("dns")
+            ?: throw IllegalArgumentException("В профиле отсутствуют настройки DNS")
+        val servers = dns.optJSONArray("servers")
+            ?: throw IllegalArgumentException("В профиле отсутствуют DNS-серверы")
+        var bootstrapFound = false
+        for (index in 0 until servers.length()) {
+            val server = servers.optJSONObject(index) ?: continue
+            if (server.optString("tag") != "local-dns") continue
+            server.put("type", "udp")
+            server.put("server", "1.1.1.1")
+            server.put("server_port", 53)
+            server.put("detour", "direct")
+            server.remove("path")
+            server.remove("tls")
+            bootstrapFound = true
+        }
+        if (!bootstrapFound) {
+            servers.put(
+                JSONObject()
+                    .put("type", "udp")
+                    .put("tag", "local-dns")
+                    .put("server", "1.1.1.1")
+                    .put("server_port", 53)
+                    .put("detour", "direct"),
+            )
+        }
+        val route = root.optJSONObject("route")
+            ?: throw IllegalArgumentException("В профиле отсутствуют правила маршрутизации")
+        route.put("default_domain_resolver", "local-dns")
         return root.toString()
     }
 }

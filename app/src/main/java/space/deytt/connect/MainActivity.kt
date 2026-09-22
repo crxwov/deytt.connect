@@ -27,7 +27,7 @@ import android.widget.TextView
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
-private enum class ConnectionVisualState {
+internal enum class ConnectionVisualState {
     IDLE,
     CONNECTING,
     CONNECTED,
@@ -55,12 +55,10 @@ class MainActivity : Activity() {
     private lateinit var urlInput: EditText
     private lateinit var statusTitle: TextView
     private lateinit var statusDetail: TextView
-    private lateinit var statusDot: View
-    private lateinit var statusPanel: LinearLayout
+    private lateinit var signalDial: SignalDialView
     private lateinit var connectButton: TextView
     private lateinit var importButton: TextView
     private lateinit var routeButton: TextView
-    private lateinit var disconnectButton: TextView
     private var rawSubscriptionUrl: String? = null
     private var maskedSubscriptionUrl = false
     private var profileReady = false
@@ -137,61 +135,90 @@ class MainActivity : Activity() {
             insets
         }
 
-        val brand = TextView(this).apply {
-            text = "deytt./connect"
-            textSize = 29f
-            letterSpacing = -0.04f
-            setTextColor(INK)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        }
-        content.addView(brand)
-
-        val subtitle = TextView(this).apply {
-            text = "VPN для deytt."
-            textSize = 14f
-            setTextColor(COPY)
-        }
-        content.addView(subtitle, marginParams(wrap, top = 6))
-
-        statusPanel = LinearLayout(this).apply {
+        val header = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.TOP
-            background = rounded(PANEL, dp(20), LINE, dp(1))
-            setPadding(dp(17), dp(16), dp(17), dp(16))
+            gravity = Gravity.CENTER_VERTICAL
         }
-        statusDot = View(this).apply {
-            background = rounded(MUTED, dp(99), null, 0)
-        }
-        statusPanel.addView(statusDot, LinearLayout.LayoutParams(dp(9), dp(9)).apply {
-            topMargin = dp(6)
-            rightMargin = dp(12)
-        })
-        val statusCopy = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        statusTitle = TextView(this).apply {
-            textSize = 18f
+        val brand = TextView(this).apply {
+            text = "deytt."
+            textSize = 27f
+            letterSpacing = -0.045f
             setTextColor(INK)
             typeface = Typeface.create("sans-serif", Typeface.BOLD)
         }
-        statusDetail = TextView(this).apply {
-            textSize = 12f
-            setTextColor(COPY)
-            maxLines = 4
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            setLineSpacing(0f, 1.18f)
+        val edition = TextView(this).apply {
+            text = "CONNECT / ANDROID"
+            textSize = 10f
+            letterSpacing = 0.16f
+            setTextColor(MUTED)
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            gravity = Gravity.END
         }
-        statusCopy.addView(statusTitle)
-        statusCopy.addView(statusDetail, LinearLayout.LayoutParams(match, wrap).apply {
-            topMargin = dp(5)
-        })
-        statusPanel.addView(statusCopy, LinearLayout.LayoutParams(0, wrap, 1f))
-        content.addView(statusPanel, marginParams(match, top = 26))
+        header.addView(brand, LinearLayout.LayoutParams(0, wrap, 1f))
+        header.addView(edition)
+        content.addView(header, marginParams(match))
+
+        signalDial = SignalDialView(this)
+        content.addView(signalDial, marginParams(match, dp(222), top = 14))
+
+        statusTitle = TextView(this).apply {
+            textSize = 23f
+            gravity = Gravity.CENTER
+            setTextColor(INK)
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        }
+        content.addView(statusTitle, marginParams(match, top = -8))
+        statusDetail = TextView(this).apply {
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setTextColor(COPY)
+            maxLines = 3
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setLineSpacing(0f, 1.15f)
+            setPadding(dp(10), 0, dp(10), 0)
+        }
+        content.addView(statusDetail, marginParams(match, top = 7))
+
+        routeButton = actionButton("МАРШРУТ  ·  ИМПОРТИРУЙТЕ ПОДПИСКУ", PANEL, COPY, LINE).apply {
+            contentDescription = "Выбор VPN-маршрута"
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(18), 0, dp(18), 0)
+        }
+        content.addView(routeButton, marginParams(match, dp(58), top = 24))
+        routeButton.setOnClickListener { selectRoute() }
+
+        connectButton = actionButton("ПОДКЛЮЧИТЬ", BLUE, Color.WHITE, BLUE)
+        content.addView(connectButton, marginParams(match, dp(58), top = 10))
+        connectButton.setOnClickListener {
+            if (busy || vpnConnected) {
+                startService(
+                    Intent(this@MainActivity, ConnectVpnService::class.java)
+                        .setAction(ConnectVpnService.ACTION_STOP),
+                )
+                renderStatus(
+                    "VPN отключается…",
+                    "Завершаю соединение и освобождаю сетевые ресурсы.",
+                    ConnectionVisualState.CONNECTING,
+                )
+            } else {
+                requestOrStartVpn()
+            }
+        }
+
+        val subscriptionLabel = TextView(this).apply {
+            text = "ПОДПИСКА"
+            textSize = 10f
+            letterSpacing = 0.15f
+            setTextColor(MUTED)
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        }
+        content.addView(subscriptionLabel, marginParams(wrap, top = 30))
 
         val urlPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = rounded(PANEL_RAISED, dp(18), LINE, dp(1))
-            setPadding(dp(17), dp(12), dp(17), dp(12))
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(PANEL_RAISED, dp(15), LINE, dp(1))
+            setPadding(dp(16), 0, dp(8), 0)
         }
         urlInput = EditText(this).apply {
             hint = "HTTPS-ссылка на подписку"
@@ -202,7 +229,7 @@ class MainActivity : Activity() {
             contentDescription = "Ссылка на подписку"
             setTextColor(INK)
             setHintTextColor(MUTED)
-            textSize = 14f
+            textSize = 16f
             letterSpacing = 0.01f
             background = ColorDrawable(Color.TRANSPARENT)
             setPadding(0, 0, 0, 0)
@@ -221,40 +248,22 @@ class MainActivity : Activity() {
                 }
             }
         }
-        urlPanel.addView(urlInput, LinearLayout.LayoutParams(match, dp(42)))
-        content.addView(urlPanel, marginParams(match, top = 18))
-
-        importButton = actionButton("ИМПОРТИРОВАТЬ ПОДПИСКУ", BLUE, Color.WHITE, BLUE)
-        content.addView(importButton, marginParams(match, top = 10))
+        urlPanel.addView(urlInput, LinearLayout.LayoutParams(0, dp(54), 1f))
+        importButton = actionButton("ИМПОРТ", Color.TRANSPARENT, BLUE, Color.TRANSPARENT).apply {
+            textSize = 11f
+            minHeight = dp(44)
+        }
+        urlPanel.addView(importButton, LinearLayout.LayoutParams(dp(94), dp(44)))
+        content.addView(urlPanel, marginParams(match, dp(62), top = 10))
         importButton.setOnClickListener { importSubscription() }
 
-        routeButton = actionButton("МАРШРУТ: ИМПОРТИРУЙТЕ ПОДПИСКУ", Color.TRANSPARENT, COPY, LINE)
-        routeButton.contentDescription = "Выбор VPN-маршрута"
-        content.addView(routeButton, marginParams(match, top = 10))
-        routeButton.setOnClickListener { selectRoute() }
-
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-        connectButton = actionButton("ПОДКЛЮЧИТЬ", BLUE, Color.WHITE, BLUE)
-        disconnectButton = actionButton("ОТКЛЮЧИТЬ", Color.TRANSPARENT, COPY, LINE)
-        actions.addView(connectButton, LinearLayout.LayoutParams(0, dp(56), 1f))
-        actions.addView(disconnectButton, LinearLayout.LayoutParams(dp(122), dp(56)).apply {
-            leftMargin = dp(10)
-        })
-        content.addView(actions, marginParams(match, top = 14))
-        connectButton.setOnClickListener { requestOrStartVpn() }
-        disconnectButton.setOnClickListener {
-            stopService(Intent(this@MainActivity, ConnectVpnService::class.java))
-            renderStatus("VPN отключён", "Соединение остановлено")
-        }
-
         val note = TextView(this).apply {
-            text = "Профиль сохраняется автоматически · токен скрыт"
+            text = "Профиль хранится только на устройстве · токен скрыт"
             textSize = 11f
             setTextColor(MUTED)
+            gravity = Gravity.CENTER
         }
-        content.addView(note, marginParams(wrap, top = 16))
+        content.addView(note, marginParams(match, top = 13))
 
         setContentView(root)
         root.requestApplyInsets()
@@ -423,26 +432,16 @@ class MainActivity : Activity() {
         }
         statusTitle.text = message
         statusDetail.text = detail.orEmpty().trim().take(360)
-        val accent = when (state) {
-            ConnectionVisualState.CONNECTED -> MINT
-            ConnectionVisualState.CONNECTING -> BLUE
-            ConnectionVisualState.ERROR -> ERROR
-            ConnectionVisualState.IDLE -> MUTED
-        }
-        statusDot.setBackgroundColor(accent)
-        statusPanel.background = rounded(
-            when (state) {
-                ConnectionVisualState.CONNECTED -> 0xFF102A27.toInt()
-                ConnectionVisualState.ERROR -> 0xFF241722.toInt()
-                else -> PANEL
-            },
-            dp(20),
-            ColorUtils.withAlpha(accent, 0.72f),
-            dp(1),
-        )
+        statusTitle.setTextColor(if (state == ConnectionVisualState.ERROR) ERROR else INK)
+        statusDetail.setTextColor(if (state == ConnectionVisualState.ERROR) 0xFFD6A6B1.toInt() else COPY)
+        signalDial.setState(state)
         when (state) {
-            ConnectionVisualState.CONNECTED -> vpnConnected = true
+            ConnectionVisualState.CONNECTED -> {
+                vpnConnected = true
+                busy = false
+            }
             ConnectionVisualState.ERROR -> {
+                vpnConnected = false
                 busy = false
             }
             ConnectionVisualState.IDLE -> {
@@ -527,7 +526,7 @@ class MainActivity : Activity() {
                 ?.firstOrNull { it.tag == tag }
                 ?.label
         } ?: "Импортируйте подписку"
-        routeButton.text = "МАРШРУТ: ${label.uppercase()}"
+        routeButton.text = "МАРШРУТ  ·  ${label.uppercase()}   ›"
     }
 
     private fun currentSubscriptionUrl(): String =
@@ -566,6 +565,12 @@ class MainActivity : Activity() {
                 "Конфигурация устарела. Нажмите «Импортировать подписку» заново."
             normalized.contains("unknown field", ignoreCase = true) ->
                 "Сервер прислал несовместимую конфигурацию. Повторите импорт подписки."
+            normalized.contains("initialize cache-file", ignoreCase = true) ||
+                normalized.contains("cache-file", ignoreCase = true) ->
+                "Предыдущий запуск не завершился. Повторите подключение."
+            normalized.contains("unable to resolve host", ignoreCase = true) ||
+                normalized.contains("no address associated", ignoreCase = true) ->
+                "DNS не ответил. Переключите сеть и повторите подключение."
             else -> normalized.take(360)
         }
     }
@@ -574,17 +579,23 @@ class MainActivity : Activity() {
         if (!::connectButton.isInitialized) return
         importButton.isEnabled = !busy
         routeButton.isEnabled = profileReady && !busy && !vpnConnected
-        connectButton.isEnabled = profileReady && !busy && !vpnConnected
-        disconnectButton.isEnabled = busy || vpnConnected
+        connectButton.isEnabled = profileReady || busy || vpnConnected
+        connectButton.text = when {
+            busy -> "ОСТАНОВИТЬ"
+            vpnConnected -> "ОТКЛЮЧИТЬ"
+            else -> "ПОДКЛЮЧИТЬ"
+        }
+        connectButton.background = rounded(
+            if (busy || vpnConnected) PANEL_RAISED else BLUE,
+            dp(15),
+            if (busy || vpnConnected) LINE else BLUE,
+            dp(1),
+        )
+        connectButton.setTextColor(if (busy || vpnConnected) INK else Color.WHITE)
+        importButton.text = if (profileReady) "ОБНОВИТЬ" else "ИМПОРТ"
         importButton.alpha = if (importButton.isEnabled) 1f else 0.55f
         routeButton.alpha = if (routeButton.isEnabled) 1f else 0.45f
         connectButton.alpha = if (connectButton.isEnabled) 1f else 0.45f
-        disconnectButton.alpha = if (disconnectButton.isEnabled) 1f else 0.45f
-    }
-
-    private object ColorUtils {
-        fun withAlpha(color: Int, alpha: Float): Int =
-            Color.argb((alpha.coerceIn(0f, 1f) * 255).roundToInt(), Color.red(color), Color.green(color), Color.blue(color))
     }
 
     private fun rounded(fill: Int, radius: Int, strokeColor: Int?, strokeWidth: Int): GradientDrawable =

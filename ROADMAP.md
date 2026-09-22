@@ -2,7 +2,8 @@
 
 ## Status
 
-In progress — Android MVP prerelease published; device tunnel proof pending
+In progress — 0.3.0 fixes and redesigned UI pass local validation; prerelease
+publication and real-device proof remain
 
 ## Objective
 
@@ -40,6 +41,8 @@ and a real APK artifact.
       reconnect/network-change handling.
 - [ ] 5. Add split tunnel, DNS leak protection, kill switch, telemetry-free
       diagnostics, and user-facing error recovery.
+- [~] 5a. Make DNS bootstrap explicit, close libbox cleanly on every failed
+      canary/start, and redesign the main screen around one connection action.
 - [~] 6. Run real authenticated Android tunnel plus external HTTPS canary,
       build APK, record checksum, commit, push, and publish artifact; source and
       the debug prerelease are published, while device proof remains pending.
@@ -58,6 +61,15 @@ could pass through the full-route TUN, and it did not expose imported routes.
 The published 0.2.2 debug prerelease fixes the next real-device startup blocker without
 changing the portable subscription: libbox receives an explicit private absolute
 path for its Android cache file at runtime.
+Real-device 0.2.2 evidence now shows a DNS-resolution failure on the first
+attempt and `initialize cache-file: timeout` on a later attempt. The failure
+path does not stop the native service before closing its command server, while
+the profile's proxy-hostname resolver depends on DNS detoured through that same
+proxy. Both must be fixed together.
+The pending 0.3.0 build repairs older saved profiles at runtime, supplies a TUN
+DNS fallback, stops libbox before closing its command server on every failure,
+and replaces the stacked-card UI with a connection dial, one primary action,
+compact route control, and secondary subscription editor.
 
 Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
 bootstrapped under `.toolchain/` and are not part of the repository artifact.
@@ -112,6 +124,9 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   TUN validation. libbox starts a cache service for its platform log writer, but
   the profile relied on relative `cache.db`; no Android-private cache path was
   supplied at runtime.
+- Real-device report: 0.2.2 can start the TUN but cannot resolve the HTTPS
+  canary, then leaves libbox's cache service alive because `fail()` skips
+  `closeService()`. The next start can therefore time out opening the cache.
 
 ## Important Changed Files
 
@@ -120,6 +135,7 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `app/src/main/java/space/deytt/connect/ConnectVpnService.kt`
 - `app/src/main/java/space/deytt/connect/RuntimeProfile.kt`
 - `app/src/main/java/space/deytt/connect/ProfileRoutes.kt`
+- `app/src/main/java/space/deytt/connect/SignalDialView.kt`
 - `app/src/test/java/space/deytt/connect/ProfileRoutesTest.kt`
 - `app/src/main/java/space/deytt/connect/NetworkBackdropView.kt` (removed)
 - `README.md`
@@ -204,12 +220,19 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   `cd24de955f2d287bf3d4de6369a170f1268105f94724da60d0363e42f4a35983`.
 - GitHub prerelease `v0.2.2-debug` publishes the cache-file startup fix; only
   real-device tunnel proof remains pending.
+- Android 0.3.0 clean validation: `testDebugUnitTest`, `lintDebug`, and
+  `assembleDebug` pass; the v2 debug signature verifies. Runtime-profile
+  regressions cover both migration of the old local resolver and insertion when
+  it is absent. APK SHA-256:
+  `a3735ff77eebea383bbbcb79863194ab1a3d9f5aa6c4c7049001825692613fe5`.
+  No ADB device is connected, so DNS, cache cleanup, safe areas, and final
+  visual judgment still require the user's phone.
 
 ## Next Action
 
-Install APK 0.2.2 on a real Android device, re-import the subscription, select
-a route, and start the VPN. Confirm that cache-file startup proceeds to the
-external HTTPS canary; device proof remains the only unfinished MVP step.
+Commit and push 0.3.0, publish the verified debug APK as a GitHub prerelease,
+then request a real-device retry of import, route selection, connection, DNS,
+external HTTPS canary, disconnect, and immediate reconnect.
 
 ## Resume Context
 

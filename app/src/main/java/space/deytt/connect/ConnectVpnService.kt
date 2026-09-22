@@ -83,7 +83,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 stopSelf()
             }
         }
-        return START_STICKY
+        return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent): IBinder? = super.onBind(intent)
@@ -187,10 +187,12 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         publishStatus("Ошибка запуска VPN", message)
         runCatching { updateNotification(message) }
             .onFailure { Log.w(TAG, "Failed to update error notification", it) }
-        tunnel?.close()
-        tunnel = null
-        commandServer?.close()
+        runCatching { commandServer?.closeService() }
+            .onFailure { Log.w(TAG, "Failed to close core service after startup error", it) }
+        runCatching { commandServer?.close() }
         commandServer = null
+        runCatching { tunnel?.close() }
+        tunnel = null
         started = false
         stopForegroundCompat()
         stopSelf()
@@ -363,7 +365,14 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 ipv6Routes.forEach { (address, prefix) -> builder.addRoute(address, prefix) }
             }
 
-            stringIterator(options.getDNSServerAddress()).forEach(builder::addDnsServer)
+            val dnsServers = stringIterator(options.getDNSServerAddress())
+            if (dnsServers.isEmpty()) {
+                // Prevent Android from sending DNS outside an older full-route
+                // profile when the engine did not provide a TUN DNS address.
+                builder.addDnsServer("172.19.0.2")
+            } else {
+                dnsServers.forEach(builder::addDnsServer)
+            }
             stringIterator(options.getIncludePackage()).forEach { packageName ->
                 builder.addAllowedApplication(packageName)
             }
