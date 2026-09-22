@@ -40,7 +40,7 @@ object RuntimeProfile {
             server.put("type", "udp")
             server.put("server", "1.1.1.1")
             server.put("server_port", 53)
-            server.put("detour", "direct")
+            server.remove("detour")
             server.remove("path")
             server.remove("tls")
             bootstrapFound = true
@@ -51,8 +51,7 @@ object RuntimeProfile {
                     .put("type", "udp")
                     .put("tag", "local-dns")
                     .put("server", "1.1.1.1")
-                    .put("server_port", 53)
-                    .put("detour", "direct"),
+                    .put("server_port", 53),
             )
         }
         val route = root.optJSONObject("route")

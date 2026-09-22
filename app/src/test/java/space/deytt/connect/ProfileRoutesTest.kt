@@ -1,6 +1,7 @@
 package space.deytt.connect
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Test
 import org.json.JSONObject
 
@@ -15,7 +16,7 @@ class ProfileRoutesTest {
           "endpoints": [{"type": "wireguard", "tag": "vpn основной (amneziawg)"}],
           "dns": {"servers": [
             {"tag": "remote-dns", "detour": "🇪🇺 автоподбор"},
-            {"tag": "local-dns", "detour": "direct"}
+            {"tag": "local-dns"}
           ]},
           "route": {"final": "🇪🇺 автоподбор"}
         }
@@ -39,6 +40,6 @@ class ProfileRoutesTest {
 
         assertEquals("nl • обход 1", ProfileRoutes.selected(selected))
         assertEquals("nl • обход 1", servers.getJSONObject(0).getString("detour"))
-        assertEquals("direct", servers.getJSONObject(1).getString("detour"))
+        assertFalse(servers.getJSONObject(1).has("detour"))
     }
 }

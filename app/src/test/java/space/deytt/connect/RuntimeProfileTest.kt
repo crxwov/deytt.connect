@@ -33,7 +33,7 @@ class RuntimeProfileTest {
         assertEquals("udp", localDns.getString("type"))
         assertEquals("1.1.1.1", localDns.getString("server"))
         assertEquals(53, localDns.getInt("server_port"))
-        assertEquals("direct", localDns.getString("detour"))
+        assertFalse(localDns.has("detour"))
         assertEquals("/data/user/0/space.deytt.connect/no_backup/sing-box/cache.db", cache.getString("path"))
         assertTrue(cache.getBoolean("enabled"))
         assertFalse(cache.getBoolean("store_fakeip"))

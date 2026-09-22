@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — 0.3.0 fixes and redesigned UI are published; real-device proof
-remains
+In progress — 0.3.0 device parsing exposed an invalid direct DNS detour;
+0.3.1 repair is in progress
 
 ## Objective
 
@@ -43,6 +43,8 @@ and a real APK artifact.
       diagnostics, and user-facing error recovery.
 - [~] 5a. Make DNS bootstrap explicit, close libbox cleanly on every failed
       canary/start, and redesign the main screen around one connection action.
+- [~] 5b. Remove `detour: direct` from UDP bootstrap DNS in both fresh and
+      already-saved profiles after the 0.3.0 device parser rejection.
 - [~] 6. Run real authenticated Android tunnel plus external HTTPS canary,
       build APK, record checksum, commit, push, and publish artifact; source and
       the debug prerelease are published, while device proof remains pending.
@@ -70,6 +72,11 @@ The pending 0.3.0 build repairs older saved profiles at runtime, supplies a TUN
 DNS fallback, stops libbox before closing its command server on every failure,
 and replaces the stacked-card UI with a connection dial, one primary action,
 compact route control, and secondary subscription editor.
+Real-device 0.3.0 now reaches DNS startup but libbox rejects the migrated UDP
+resolver because `detour: direct` targets an empty direct outbound. The UDP
+resolver needs no detour; runtime migration must remove the stale field.
+The pending 0.3.1 runtime migration now removes that field from both existing
+`local-dns` entries and newly inserted bootstrap resolvers.
 
 Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
 bootstrapped under `.toolchain/` and are not part of the repository artifact.
@@ -230,12 +237,14 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Commit `7c0c33f` is pushed to `origin/main`. GitHub prerelease
   `v0.3.0-debug` publishes `app-debug.apk`; the release asset digest matches
   the locally verified SHA-256.
+- Android 0.3.1 clean validation passes `testDebugUnitTest`, `lintDebug`, and
+  `assembleDebug`; its v2 signature verifies. SHA-256:
+  `7a649dad7ea82646d849d37ea01bfbf51d0212dbc3189647ab0a9077332aa73f`.
 
 ## Next Action
 
-Install `v0.3.0-debug` on the user's phone and retry import, route selection,
-connection, DNS, external HTTPS canary, disconnect, and immediate reconnect.
-Record the screenshots and exact result before calling the tunnel fixed.
+Remove the redundant DNS detour, bump to 0.3.1, run clean validation, publish
+the replacement APK, and repeat the device test.
 
 ## Resume Context
 
