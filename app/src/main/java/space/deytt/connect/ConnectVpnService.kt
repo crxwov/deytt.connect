@@ -48,7 +48,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         private const val CHANNEL_ID = "vpn"
         private const val NOTIFICATION_ID = 42
         private const val TAG = "deytt-connect"
-        private const val CONNECTIVITY_CANARY = "https://www.gstatic.com/generate_204"
+        private const val TRANSPORT_CANARY = "https://1.1.1.1/cdn-cgi/trace"
+        private const val DNS_CANARY = "https://www.gstatic.com/generate_204"
         const val STATE_PREFS = "vpn_state"
         const val STATE_STATUS = "status"
         const val STATE_ERROR = "error"
@@ -61,6 +62,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     private var commandServer: CommandServer? = null
     private var tunnel: ParcelFileDescriptor? = null
     private var started = false
+    private val networkBridge by lazy { AndroidNetworkBridge(this) }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
@@ -155,7 +157,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         var lastError: Throwable? = null
         repeat(2) { attempt ->
             try {
-                verifyTunnelOnce()
+                verifyTunnelOnce(TRANSPORT_CANARY, 200, "Туннель не передаёт HTTPS-трафик")
+                verifyTunnelOnce(DNS_CANARY, 204, "DNS через VPN не отвечает")
                 return
             } catch (error: Throwable) {
                 lastError = error
@@ -163,11 +166,11 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             }
         }
         val detail = lastError?.message?.takeIf { it.isNotBlank() } ?: "неизвестная ошибка"
-        throw IllegalStateException("Трафик через VPN не прошёл проверку: $detail", lastError)
+        throw IllegalStateException(detail, lastError)
     }
 
-    private fun verifyTunnelOnce() {
-        val connection = (URL(CONNECTIVITY_CANARY).openConnection() as HttpsURLConnection).apply {
+    private fun verifyTunnelOnce(url: String, expectedStatus: Int, failurePrefix: String) {
+        val connection = (URL(url).openConnection() as HttpsURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 10_000
             readTimeout = 10_000
@@ -175,9 +178,11 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             setRequestProperty("Cache-Control", "no-cache")
         }
         try {
-            check(connection.responseCode == 204) {
-                "Проверочный сайт ответил HTTP ${connection.responseCode}"
+            check(connection.responseCode == expectedStatus) {
+                "$failurePrefix: проверочный сайт ответил HTTP ${connection.responseCode}"
             }
+        } catch (error: Throwable) {
+            throw IllegalStateException("$failurePrefix: ${errorMessage(error, "неизвестная ошибка")}", error)
         } finally {
             connection.disconnect()
         }
@@ -310,7 +315,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     override fun cancelNotification(identifier: String, typeID: Int) = Unit
     override fun checkPlatformShell() = Unit
     override fun clearDNSCache() = Unit
-    override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) = Unit
+    override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) =
+        networkBridge.closeDefaultInterfaceMonitor(listener)
     override fun closeNeighborMonitor(listener: NeighborUpdateListener) = Unit
     override fun createBridge(options: BridgeOptions): BridgeSession = error("Android bridge не поддержан в MVP")
     override fun findConnectionOwner(
@@ -321,14 +327,10 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         destinationPort: Int,
     ): ConnectionOwner = error("Поиск владельца соединения ещё не включён")
 
-    override fun getInterfaces(): NetworkInterfaceIterator = object : NetworkInterfaceIterator {
-        override fun hasNext(): Boolean = false
-        override fun next(): io.nekohasekai.libbox.NetworkInterface =
-            throw NoSuchElementException("No interface snapshot")
-    }
+    override fun getInterfaces(): NetworkInterfaceIterator = networkBridge.interfaces()
 
     override fun includeAllNetworks(): Boolean = false
-    override fun localDNSTransport(): LocalDNSTransport? = null
+    override fun localDNSTransport(): LocalDNSTransport = networkBridge.localDnsTransport()
     override fun lookupSFTPServer(): String = error("SFTP не поддержан")
     override fun lookupUser(username: String): PlatformUser = error("Системные пользователи не поддержаны")
     override fun openShellSession(
@@ -365,13 +367,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 ipv6Routes.forEach { (address, prefix) -> builder.addRoute(address, prefix) }
             }
 
-            val dnsServers = stringIterator(options.getDNSServerAddress())
-            if (dnsServers.isEmpty()) {
-                // Prevent Android from sending DNS outside an older full-route
-                // profile when the engine did not provide a TUN DNS address.
-                builder.addDnsServer("172.19.0.2")
-            } else {
-                dnsServers.forEach(builder::addDnsServer)
+            if (options.getDNSMode().getValue() != Libbox.DNSModeDisabled) {
+                stringIterator(options.getDNSServerAddress()).forEach(builder::addDnsServer)
             }
             stringIterator(options.getIncludePackage()).forEach { packageName ->
                 builder.addAllowedApplication(packageName)
@@ -390,7 +387,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     override fun readWIFIState(): WIFIState? = null
     override fun registerMyInterface(name: String) = Unit
     override fun sendNotification(notification: LibboxNotification) = Unit
-    override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) = Unit
+    override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) =
+        networkBridge.startDefaultInterfaceMonitor(listener)
     override fun startNeighborMonitor(listener: NeighborUpdateListener) = Unit
     override fun tailscaleHostname(): String = ""
     override fun underNetworkExtension(): Boolean = false

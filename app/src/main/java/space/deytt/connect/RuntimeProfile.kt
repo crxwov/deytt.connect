@@ -37,9 +37,9 @@ object RuntimeProfile {
         for (index in 0 until servers.length()) {
             val server = servers.optJSONObject(index) ?: continue
             if (server.optString("tag") != "local-dns") continue
-            server.put("type", "udp")
-            server.put("server", "1.1.1.1")
-            server.put("server_port", 53)
+            server.put("type", "local")
+            server.remove("server")
+            server.remove("server_port")
             server.remove("detour")
             server.remove("path")
             server.remove("tls")
@@ -48,10 +48,8 @@ object RuntimeProfile {
         if (!bootstrapFound) {
             servers.put(
                 JSONObject()
-                    .put("type", "udp")
-                    .put("tag", "local-dns")
-                    .put("server", "1.1.1.1")
-                    .put("server_port", 53),
+                    .put("type", "local")
+                    .put("tag", "local-dns"),
             )
         }
         val route = root.optJSONObject("route")

@@ -2,7 +2,8 @@
 
 ## Status
 
-In progress — 0.3.1 direct DNS repair is published; real-device retry remains
+In progress — Android 0.3.2 platform DNS/interface repair is locally validated;
+delivery and real-device verification remain
 
 ## Objective
 
@@ -44,6 +45,9 @@ and a real APK artifact.
       canary/start, and redesign the main screen around one connection action.
 - [~] 5b. Remove `detour: direct` from UDP bootstrap DNS in both fresh and
       already-saved profiles after the 0.3.0 device parser rejection.
+- [x] 5c. Implement the Android local DNS transport, physical-interface
+      snapshot and default-network monitor expected by libbox; split transport
+      and DNS startup canaries.
 - [~] 6. Run real authenticated Android tunnel plus external HTTPS canary,
       build APK, record checksum, commit, push, and publish artifact; source and
       the debug prerelease are published, while device proof remains pending.
@@ -76,6 +80,13 @@ resolver because `detour: direct` targets an empty direct outbound. The UDP
 resolver needs no detour; runtime migration must remove the stale field.
 The pending 0.3.1 runtime migration now removes that field from both existing
 `local-dns` entries and newly inserted bootstrap resolvers.
+Real-device 0.3.1 starts the core but the domain canary still cannot resolve.
+The custom PlatformInterface is incomplete: local DNS is `null`, interfaces
+are empty, and openTun invents a fallback instead of consuming libbox options
+exactly as the official Android client does.
+Android 0.3.2 replaces those stubs with a physical-network resolver, interface
+snapshot and network monitor, restores typed `local-dns`, and consumes TUN DNS
+addresses supplied by libbox without inventing a fallback.
 
 Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
 bootstrapped under `.toolchain/` and are not part of the repository artifact.
@@ -241,11 +252,16 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   `7a649dad7ea82646d849d37ea01bfbf51d0212dbc3189647ab0a9077332aa73f`.
 - Commit `256287b` is pushed. GitHub prerelease `v0.3.1-debug` publishes the
   replacement APK, and its uploaded asset digest matches the local SHA-256.
+- Android 0.3.2 clean validation passes `testDebugUnitTest`, `lintDebug`, and
+  `assembleDebug`; its v2 signature verifies. SHA-256:
+  `79c08179d9ec36c59649418e1f800b8b4a3e2f5cc2e606a8762e39c193b11c29`.
+- No ADB device is connected; the local build cannot prove physical-network
+  DNS resolution or the external HTTPS canaries on the user's phone.
 
 ## Next Action
 
-Install `v0.3.1-debug` over 0.3.0 and retry connection. Existing saved profiles
-are repaired at runtime, so re-import is optional for this parser fix.
+Commit and publish Android 0.3.2, deploy its matching subscription contract,
+then repeat connection, DNS, HTTPS, disconnect and reconnect on the phone.
 
 ## Resume Context
 

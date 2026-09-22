@@ -569,8 +569,13 @@ class MainActivity : Activity() {
                 normalized.contains("cache-file", ignoreCase = true) ->
                 "Предыдущий запуск не завершился. Повторите подключение."
             normalized.contains("unable to resolve host", ignoreCase = true) ||
-                normalized.contains("no address associated", ignoreCase = true) ->
-                "DNS не ответил. Переключите сеть и повторите подключение."
+                normalized.contains("no address associated", ignoreCase = true) ||
+                normalized.contains("DNS через VPN не отвечает", ignoreCase = true) ->
+                "DNS через VPN не ответил. Проверьте сеть или выберите другой маршрут."
+            normalized.contains("Туннель не передаёт HTTPS-трафик", ignoreCase = true) ->
+                "Выбранный маршрут не передаёт трафик. Выберите другой маршрут и повторите подключение."
+            normalized.contains("Нет доступной физической сети", ignoreCase = true) ->
+                "Телефон не подключён к интернету. Включите Wi-Fi или мобильную сеть и повторите подключение."
             else -> normalized.take(360)
         }
     }
