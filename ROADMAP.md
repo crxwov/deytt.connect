@@ -1,0 +1,91 @@
+# Roadmap — deytt./connect Android
+
+## Status
+
+In progress — Android MVP
+
+## Objective
+
+Build an open-source Android client for DEYTTT with a native `VpnService`, a
+shared mature networking core, versioned subscription handling, safe rollback,
+and a real APK artifact.
+
+## Success Criteria
+
+- Public repository contains no credentials, server secrets, or generated
+  signing keys.
+- HTTPS DEYTTT `format=singbox` subscription imports and validates atomically.
+- Android `VpnService` starts the pinned libbox engine with the saved config.
+- Debug APK builds reproducibly from the repository and its checksum is recorded.
+- Real device validation is reported separately from local compilation.
+
+## Stages
+
+- [x] 1. Create a separate public repository and document GPL/core boundaries.
+- [x] 2. Implement Android project, subscription storage, and profile validator.
+- [~] 3. Integrate libbox with Android TUN and foreground-service lifecycle;
+      local compilation is complete, device runtime proof is pending.
+- [ ] 4. Add profile URI parser, fixed DEYTTT mode/country presentation, and
+      reconnect/network-change handling.
+- [ ] 5. Add split tunnel, DNS leak protection, kill switch, telemetry-free
+      diagnostics, and user-facing error recovery.
+- [ ] 6. Run real authenticated Android tunnel plus external HTTPS canary,
+      build APK, record checksum, commit, push, and publish artifact.
+
+## Current State
+
+The GitHub repository was empty. The local project skeleton and first Android
+MVP implementation are now present. The current server exposes a tokenized
+`/sub/token/{token}?format=singbox` contract that returns a sing-box JSON config;
+the app intentionally uses that contract instead of embedding endpoint secrets.
+
+Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
+bootstrapped under `.toolchain/` and are not part of the repository artifact.
+
+## Findings and Decisions
+
+- App source lives in `/home/hackov/Documents/deytt-connect`, separate from the
+  DEYTTT bot/admin repository.
+- The first engine candidate is pinned `libbox` 1.14.1; GPL notices and source
+  availability are part of the release contract.
+- The first app does not pretend that a successful APK build proves a working
+  tunnel. Device permission, VPN service startup, authenticated subscription,
+  and external HTTPS must be validated separately.
+
+## Issues and Failed Attempts
+
+- Device-level VPN validation is not available until an Android device or
+  emulator is connected.
+
+## Important Changed Files
+
+- `app/`
+- `README.md`
+- `THIRD-PARTY-NOTICES.md`
+- `DIFFERENCES.md`
+- `ROADMAP.md`
+
+## Validation and Blockers
+
+- Upstream libbox API and SFA Android integration were inspected.
+- Server subscription route and `format=singbox` behavior were inspected in the
+  existing DEYTTT backend.
+- `./gradlew assembleDebug` passed on 2026-09-22.
+- `./gradlew lintDebug` passed on 2026-09-22 with no lint errors.
+- APK: `app/build/outputs/apk/debug/app-debug.apk`.
+- SHA-256: `b66d54a1a81c8899cab5fc885d729f64efc3eae5a198df9093aed54468270bda`.
+- `adb devices` found no connected Android device or emulator; tunnel and
+  external HTTPS canary are not yet verified.
+
+## Next Action
+
+Connect an Android device or emulator, install the debug APK, import an
+authenticated DEYTTT `format=singbox` subscription, and verify VPN startup plus
+an external HTTPS canary. Then add the fixed DEYTTT presentation and reconnect
+behavior before release signing.
+
+## Resume Context
+
+Continue in this repository, preserve the separate upstream boundary, and do
+not add tokens or `.env` values to fixtures. Treat the APK as unverified until
+an authenticated Android tunnel passes an external HTTPS canary.
