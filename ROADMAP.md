@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — Android 0.3.2 platform DNS/interface repair is locally validated;
-delivery and real-device verification remain
+In progress — Android 0.3.2 platform DNS/interface repair is published;
+real-device verification remains
 
 ## Objective
 
@@ -257,11 +257,13 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   `79c08179d9ec36c59649418e1f800b8b4a3e2f5cc2e606a8762e39c193b11c29`.
 - No ADB device is connected; the local build cannot prove physical-network
   DNS resolution or the external HTTPS canaries on the user's phone.
+- Commit `bdd0596` is pushed. GitHub prerelease `v0.3.2-debug` publishes the
+  verified APK, and the uploaded asset digest matches the local SHA-256.
 
 ## Next Action
 
-Commit and publish Android 0.3.2, deploy its matching subscription contract,
-then repeat connection, DNS, HTTPS, disconnect and reconnect on the phone.
+Install Android `v0.3.2-debug` over 0.3.1, update the subscription once, then
+repeat connection, DNS, HTTPS, disconnect and reconnect on the phone.
 
 ## Resume Context
 
