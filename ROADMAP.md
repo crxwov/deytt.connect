@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — 0.3.0 fixes and redesigned UI pass local validation; prerelease
-publication and real-device proof remain
+In progress — 0.3.0 fixes and redesigned UI are published; real-device proof
+remains
 
 ## Objective
 
@@ -227,12 +227,15 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   `a3735ff77eebea383bbbcb79863194ab1a3d9f5aa6c4c7049001825692613fe5`.
   No ADB device is connected, so DNS, cache cleanup, safe areas, and final
   visual judgment still require the user's phone.
+- Commit `7c0c33f` is pushed to `origin/main`. GitHub prerelease
+  `v0.3.0-debug` publishes `app-debug.apk`; the release asset digest matches
+  the locally verified SHA-256.
 
 ## Next Action
 
-Commit and push 0.3.0, publish the verified debug APK as a GitHub prerelease,
-then request a real-device retry of import, route selection, connection, DNS,
-external HTTPS canary, disconnect, and immediate reconnect.
+Install `v0.3.0-debug` on the user's phone and retry import, route selection,
+connection, DNS, external HTTPS canary, disconnect, and immediate reconnect.
+Record the screenshots and exact result before calling the tunnel fixed.
 
 ## Resume Context
 
