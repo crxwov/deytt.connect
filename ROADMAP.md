@@ -29,8 +29,7 @@ and a real APK artifact.
       local compilation and in-app status/error reporting are complete, device
       runtime proof is pending.
 - [x] 3a. Migrate the server sing-box subscription away from deprecated inbound
-      fields and ship the first DEYTTT visual refresh; backend and APK checks
-      pass, while device tunnel proof remains separate.
+      and WireGuard outbound fields; ship a minimal DEYTTT visual refresh.
 - [ ] 4. Add profile URI parser, fixed DEYTTT mode/country presentation, and
       reconnect/network-change handling.
 - [ ] 5. Add split tunnel, DNS leak protection, kill switch, telemetry-free
@@ -59,7 +58,8 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   tunnel. Device permission, VPN service startup, authenticated subscription,
   and external HTTPS must be validated separately.
 - The server-side sing-box generator now removes deprecated inbound `sniff`
-  fields and emits the equivalent route action required by libbox 1.14.1.
+  fields, emits the equivalent route action, and represents AmneziaWG as a
+  WireGuard endpoint required by libbox 1.14.1.
 
 ## Issues and Failed Attempts
 
@@ -71,12 +71,18 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   `vpn-admin.service` was restarted; the retry then exposed a second issue:
   generated inbounds still used the removed legacy `sniff` field. That server
   contract is now migrated and deployed.
+- The next device attempt reached the following parser boundary and exposed the
+  deprecated WireGuard outbound schema. The generator now emits the current
+  root-level `endpoints` schema and has a focused regression test.
+- The first visual refresh was intentionally too busy. The next UI removes the
+  network map, technical labels, build badge, intro block, and verbose footer;
+  the status card remains as the single place for useful runtime errors.
 
 ## Important Changed Files
 
 - `app/`
 - `app/src/main/java/space/deytt/connect/MainActivity.kt`
-- `app/src/main/java/space/deytt/connect/NetworkBackdropView.kt`
+- `app/src/main/java/space/deytt/connect/NetworkBackdropView.kt` (removed)
 - `README.md`
 - `THIRD-PARTY-NOTICES.md`
 - `DIFFERENCES.md`
@@ -87,13 +93,14 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Upstream libbox API and SFA Android integration were inspected.
 - Server subscription route and `format=singbox` behavior were inspected in the
   existing DEYTTT backend.
-- `./gradlew assembleDebug` passed on 2026-09-22.
+- `./gradlew assembleDebug` passed on 2026-09-22 after the endpoint/UI fix.
 - `./gradlew lintDebug` passed on 2026-09-22 with no lint errors.
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
-- SHA-256: `a7fa99663472f13cc7808cf4edd64d95a46dfbcdd708187f1b0c298732e1850b`.
+- SHA-256: `5640e45f95b2c54c33b9fadea779b645e413e3df586a5398eff07b447281dc07`.
 - Commit `7574b0b` was pushed to `origin/main` successfully.
 - Latest visual refresh commit `9d364d0` was pushed to `origin/main` successfully.
-- `vpn-admin/tests/test_protocols.py`: 33 passed after the sing-box migration.
+- `vpn-admin/tests/test_protocols.py`: 34 passed after the WireGuard endpoint
+  migration.
 - Live server contract after deploy commit `872ecb52`: JSON valid, two inbounds,
   no legacy inbound sniff fields, first route action `sniff`, 18 outbounds.
 - Android build and lint pass after the visual refresh; lint reports warnings
@@ -110,14 +117,19 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - The live config error `inbounds[1]: legacy inbound fields are deprecated` was
   fixed by moving sniffing into route rules. The deployed live smoke-test now
   returns two inbounds, no inbound sniff fields, and a first `sniff` action.
+- The live config error `outbounds[1].server: unknown field` was fixed by
+  moving AmneziaWG to the endpoint schema. The deployed live smoke-test now
+  returns no legacy WireGuard outbounds and one endpoint without server fields.
+- The second visual pass removes the animated network map and technical copy;
+  the APK build and lint pass after the simplification.
 - `adb devices` found no connected Android device or emulator; tunnel and
   external HTTPS canary are not yet verified.
 
 ## Next Action
 
-Install the new debug APK on the Android phone, import the already working
-subscription, and capture the resulting status/error. If it reaches connected,
-verify an external HTTPS canary; if not, use the surfaced error for the next
+Install the replacement APK on the Android phone. Import the already working
+subscription and capture the resulting status/error. If it reaches connected,
+verify an external HTTPS canary; otherwise use the surfaced error for the next
 adapter fix. Do not treat the live JSON smoke-test or local APK build as a
 substitute for device tunnel proof.
 

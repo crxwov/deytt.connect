@@ -18,7 +18,6 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -26,6 +25,13 @@ import android.widget.ScrollView
 import android.widget.TextView
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
+
+private enum class ConnectionVisualState {
+    IDLE,
+    CONNECTING,
+    CONNECTED,
+    ERROR,
+}
 
 class MainActivity : Activity() {
     companion object {
@@ -40,7 +46,6 @@ class MainActivity : Activity() {
         private const val MUTED = 0xFF78869F.toInt()
         private const val LINE = 0xFF2B3954.toInt()
         private const val BLUE = 0xFF7180FF.toInt()
-        private const val BLUE_DEEP = 0xFF96A2FF.toInt()
         private const val MINT = 0xFF68E3B8.toInt()
         private const val ERROR = 0xFFE86F87.toInt()
     }
@@ -50,7 +55,6 @@ class MainActivity : Activity() {
     private lateinit var statusTitle: TextView
     private lateinit var statusDetail: TextView
     private lateinit var statusDot: View
-    private lateinit var stage: NetworkBackdropView
     private lateinit var connectButton: TextView
     private lateinit var importButton: TextView
     private lateinit var disconnectButton: TextView
@@ -105,7 +109,7 @@ class MainActivity : Activity() {
         }
         val content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(18), dp(22), dp(34))
+            setPadding(dp(22), dp(42), dp(22), dp(34))
         }
 
         root.addView(scroll, FrameLayout.LayoutParams(match, match))
@@ -113,120 +117,73 @@ class MainActivity : Activity() {
         root.setOnApplyWindowInsetsListener { _, insets ->
             val top = insets.systemWindowInsetTop
             val bottom = insets.systemWindowInsetBottom
-            content.setPadding(dp(22), top + dp(18), dp(22), bottom + dp(34))
+            content.setPadding(
+                dp(22),
+                (top + dp(18)).coerceAtLeast(dp(42)),
+                dp(22),
+                bottom + dp(34),
+            )
             insets
         }
 
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
         val brand = TextView(this).apply {
             text = "deytt./connect"
-            textSize = 31f
+            textSize = 29f
             letterSpacing = -0.04f
             setTextColor(INK)
             typeface = Typeface.create("sans-serif", Typeface.BOLD)
         }
-        val buildTag = TextView(this).apply {
-            text = "ANDROID / 01"
-            textSize = 9f
-            letterSpacing = 0.12f
-            setTextColor(BLUE_DEEP)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-            gravity = Gravity.CENTER
-            background = rounded(Color.TRANSPARENT, dp(9), BLUE, 1)
-            setPadding(dp(10), dp(7), dp(10), dp(7))
-        }
-        header.addView(brand, LinearLayout.LayoutParams(0, wrap, 1f))
-        header.addView(buildTag, LinearLayout.LayoutParams(wrap, wrap))
-        content.addView(header)
+        content.addView(brand)
 
-        val eyebrow = technicalLabel("PRIVATE NETWORK  /  SYSTEM VPN")
-        content.addView(eyebrow, marginParams(wrap, top = 10))
-
-        val intro = TextView(this).apply {
-            text = "Твой трафик.\nТвоя сеть."
-            textSize = 31f
-            letterSpacing = -0.035f
-            setTextColor(INK)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        }
-        content.addView(intro, marginParams(wrap, top = 16))
-
-        val subintro = TextView(this).apply {
-            text = "DEYTTT Connect собирает защищённый маршрут в один системный туннель — тихо, быстро и без лишнего интерфейса."
+        val subtitle = TextView(this).apply {
+            text = "VPN для deytt."
             textSize = 14f
             setTextColor(COPY)
-            setLineSpacing(0f, 1.28f)
         }
-        content.addView(subintro, marginParams(wrap, top = 12))
+        content.addView(subtitle, marginParams(wrap, top = 6))
 
-        val stageShell = FrameLayout(this).apply {
-            background = rounded(PANEL, dp(24), LINE, dp(1))
-            clipChildren = true
-            clipToPadding = true
-        }
-        stage = NetworkBackdropView(this)
-        stageShell.addView(stage, FrameLayout.LayoutParams(match, dp(220)))
-
-        val stageTop = LinearLayout(this).apply {
+        val statusPanel = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(17), dp(16), dp(17), 0)
-        }
-        val stageLabel = technicalLabel("NETWORK STATUS")
-        stageTop.addView(stageLabel, LinearLayout.LayoutParams(0, wrap, 1f))
-        val coreTag = TextView(this).apply {
-            text = "SING-BOX CORE"
-            textSize = 9f
-            letterSpacing = 0.08f
-            setTextColor(MUTED)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-        }
-        stageTop.addView(coreTag, LinearLayout.LayoutParams(wrap, wrap))
-        stageShell.addView(stageTop, FrameLayout.LayoutParams(match, wrap).apply {
             gravity = Gravity.TOP
+            background = rounded(PANEL, dp(20), LINE, dp(1))
+            setPadding(dp(17), dp(16), dp(17), dp(16))
+        }
+        statusDot = View(this).apply {
+            background = rounded(MUTED, dp(99), null, 0)
+        }
+        statusPanel.addView(statusDot, LinearLayout.LayoutParams(dp(9), dp(9)).apply {
+            topMargin = dp(6)
+            rightMargin = dp(12)
         })
-
-        val stageStatus = LinearLayout(this).apply {
+        val statusCopy = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(dp(24), 0, dp(24), dp(16))
         }
         statusTitle = TextView(this).apply {
             textSize = 18f
             setTextColor(INK)
             typeface = Typeface.create("sans-serif", Typeface.BOLD)
-            gravity = Gravity.CENTER
         }
         statusDetail = TextView(this).apply {
             textSize = 12f
             setTextColor(COPY)
-            gravity = Gravity.CENTER
-            maxLines = 5
+            maxLines = 4
             ellipsize = android.text.TextUtils.TruncateAt.END
             setLineSpacing(0f, 1.18f)
         }
-        stageStatus.addView(statusTitle, LinearLayout.LayoutParams(match, wrap))
-        stageStatus.addView(statusDetail, LinearLayout.LayoutParams(match, wrap).apply {
+        statusCopy.addView(statusTitle)
+        statusCopy.addView(statusDetail, LinearLayout.LayoutParams(match, wrap).apply {
             topMargin = dp(5)
         })
-        stageShell.addView(stageStatus, FrameLayout.LayoutParams(match, wrap).apply {
-            gravity = Gravity.BOTTOM
-        })
-        content.addView(stageShell, marginParams(match, top = 24))
-
-        val subscriptionLabel = technicalLabel("SUBSCRIPTION  /  SECURE CONFIG")
-        content.addView(subscriptionLabel, marginParams(wrap, top = 28))
+        statusPanel.addView(statusCopy, LinearLayout.LayoutParams(0, wrap, 1f))
+        content.addView(statusPanel, marginParams(match, top = 26))
 
         val urlPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = rounded(PANEL_RAISED, dp(18), LINE, dp(1))
-            setPadding(dp(17), dp(15), dp(17), dp(13))
+            setPadding(dp(17), dp(12), dp(17), dp(12))
         }
         urlInput = EditText(this).apply {
-            hint = "https://…/sub/token/…"
+            hint = "Ссылка на подписку"
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true)
             isHorizontalFadingEdgeEnabled = true
@@ -239,48 +196,12 @@ class MainActivity : Activity() {
             setPadding(0, 0, 0, 0)
             setText(getPreferences(0).getString(URL_KEY, "").orEmpty())
         }
-        urlPanel.addView(urlInput, LinearLayout.LayoutParams(match, dp(30)))
-        val urlHint = TextView(this).apply {
-            text = "HTTPS only  ·  конфигурация заменяется атомарно"
-            textSize = 10f
-            setTextColor(MUTED)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
-        }
-        urlPanel.addView(urlHint, LinearLayout.LayoutParams(match, wrap).apply {
-            topMargin = dp(8)
-        })
-        content.addView(urlPanel, marginParams(match, top = 10))
+        urlPanel.addView(urlInput, LinearLayout.LayoutParams(match, dp(42)))
+        content.addView(urlPanel, marginParams(match, top = 18))
 
         importButton = actionButton("ИМПОРТИРОВАТЬ ПОДПИСКУ", BLUE, Color.WHITE, BLUE)
-        content.addView(importButton, marginParams(match, top = 12))
+        content.addView(importButton, marginParams(match, top = 10))
         importButton.setOnClickListener { importSubscription() }
-
-        val statusPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.TOP
-            background = rounded(PANEL, dp(18), LINE, dp(1))
-            setPadding(dp(16), dp(15), dp(16), dp(15))
-        }
-        statusDot = View(this).apply {
-            background = rounded(MUTED, dp(99), null, 0)
-        }
-        statusPanel.addView(statusDot, LinearLayout.LayoutParams(dp(9), dp(9)).apply {
-            topMargin = dp(5)
-            rightMargin = dp(12)
-        })
-        val statusCopy = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        val statusKicker = technicalLabel("LIVE DIAGNOSTIC")
-        statusCopy.addView(statusKicker)
-        statusCopy.addView(TextView(this).apply {
-            text = "Состояние туннеля"
-            textSize = 11f
-            setTextColor(MUTED)
-            setPadding(0, dp(3), 0, 0)
-        })
-        statusPanel.addView(statusCopy, LinearLayout.LayoutParams(0, wrap, 1f))
-        content.addView(statusPanel, marginParams(match, top = 12))
 
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -288,10 +209,10 @@ class MainActivity : Activity() {
         connectButton = actionButton("ПОДКЛЮЧИТЬ", BLUE, Color.WHITE, BLUE)
         disconnectButton = actionButton("ОТКЛЮЧИТЬ", Color.TRANSPARENT, COPY, LINE)
         actions.addView(connectButton, LinearLayout.LayoutParams(0, dp(56), 1f))
-        actions.addView(disconnectButton, LinearLayout.LayoutParams(dp(118), dp(56)).apply {
+        actions.addView(disconnectButton, LinearLayout.LayoutParams(dp(122), dp(56)).apply {
             leftMargin = dp(10)
         })
-        content.addView(actions, marginParams(match, top = 12))
+        content.addView(actions, marginParams(match, top = 20))
         connectButton.setOnClickListener { requestOrStartVpn() }
         disconnectButton.setOnClickListener {
             stopService(Intent(this@MainActivity, ConnectVpnService::class.java))
@@ -299,13 +220,11 @@ class MainActivity : Activity() {
         }
 
         val note = TextView(this).apply {
-            text = "LAST KNOWN GOOD\nПрофиль сохраняется атомарно. Предыдущая рабочая версия остаётся локально для отката."
-            textSize = 10f
+            text = "Профиль сохраняется автоматически"
+            textSize = 11f
             setTextColor(MUTED)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.NORMAL)
-            setLineSpacing(0f, 1.35f)
         }
-        content.addView(note, marginParams(wrap, top = 25))
+        content.addView(note, marginParams(wrap, top = 16))
 
         setContentView(root)
         root.requestApplyInsets()
@@ -410,15 +329,6 @@ class MainActivity : Activity() {
             ConnectionVisualState.ERROR -> ERROR
             ConnectionVisualState.IDLE -> MUTED
         })
-        stage.setState(state)
-    }
-
-    private fun technicalLabel(value: String): TextView = TextView(this).apply {
-        text = value
-        textSize = 9f
-        letterSpacing = 0.12f
-        setTextColor(BLUE_DEEP)
-        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
     }
 
     private fun actionButton(textValue: String, fill: Int, textColor: Int, stroke: Int): TextView = TextView(this).apply {
