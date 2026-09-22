@@ -29,13 +29,14 @@ and a real APK artifact.
       reconnect/network-change handling.
 - [ ] 5. Add split tunnel, DNS leak protection, kill switch, telemetry-free
       diagnostics, and user-facing error recovery.
-- [ ] 6. Run real authenticated Android tunnel plus external HTTPS canary,
-      build APK, record checksum, commit, push, and publish artifact.
+- [~] 6. Run real authenticated Android tunnel plus external HTTPS canary,
+      build APK, record checksum, commit, push, and publish artifact; source is
+      pushed, while device proof remains pending.
 
 ## Current State
 
-The GitHub repository was empty. The local project skeleton and first Android
-MVP implementation are now present. The current server exposes a tokenized
+The public GitHub repository now contains the first Android MVP commit on
+`main`. The current server exposes a tokenized
 `/sub/token/{token}?format=singbox` contract that returns a sing-box JSON config;
 the app intentionally uses that contract instead of embedding endpoint secrets.
 
@@ -74,6 +75,7 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `./gradlew lintDebug` passed on 2026-09-22 with no lint errors.
 - APK: `app/build/outputs/apk/debug/app-debug.apk`.
 - SHA-256: `b66d54a1a81c8899cab5fc885d729f64efc3eae5a198df9093aed54468270bda`.
+- Commit `7574b0b` was pushed to `origin/main` successfully.
 - `adb devices` found no connected Android device or emulator; tunnel and
   external HTTPS canary are not yet verified.
 
