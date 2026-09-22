@@ -2,7 +2,7 @@
 
 ## Status
 
-In progress — Android MVP, sing-box compatibility hardening and product polish
+In progress — Android MVP prerelease published; device tunnel proof pending
 
 ## Objective
 
@@ -39,8 +39,8 @@ and a real APK artifact.
 - [ ] 5. Add split tunnel, DNS leak protection, kill switch, telemetry-free
       diagnostics, and user-facing error recovery.
 - [~] 6. Run real authenticated Android tunnel plus external HTTPS canary,
-      build APK, record checksum, commit, push, and publish artifact; source is
-      pushed, while device proof remains pending.
+      build APK, record checksum, commit, push, and publish artifact; source and
+      the debug prerelease are published, while device proof remains pending.
 
 ## Current State
 
@@ -48,6 +48,8 @@ The public GitHub repository now contains the first Android MVP commit on
 `main`. The current server exposes a tokenized
 `/sub/token/{token}?format=singbox` contract that returns a sing-box JSON config;
 the app intentionally uses that contract instead of embedding endpoint secrets.
+The rebuilt 0.2.0 debug APK is published as the explicitly non-production
+`v0.2.0-debug` GitHub prerelease.
 
 Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
 bootstrapped under `.toolchain/` and are not part of the repository artifact.
@@ -165,6 +167,9 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Final Android validation: clean `assembleDebug` and `lintDebug` on the
   repository JDK 17/Android SDK; only existing API deprecation warnings and the
   expected unstrippable `libbox.so` packaging warning remain.
+- GitHub prerelease `v0.2.0-debug` publishes the verified APK with SHA-256
+  `cbceefa6163cad720a7bc6aa55bb672d676f62606ab1055bccb3462209d3dd8a` and
+  clearly labels it as a debug build without device tunnel proof.
 - `adb devices` found no connected Android device or emulator; tunnel and
   external HTTPS canary are not yet verified.
 
