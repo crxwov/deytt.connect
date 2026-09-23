@@ -71,7 +71,7 @@ class SetupActivity : Activity() {
                 .onSuccess { imported -> runOnUiThread {
                     getSharedPreferences("profile_settings", MODE_PRIVATE).edit { putString("subscription_url", raw) }
                     val config = SubscriptionStore(this).readCurrent().orEmpty()
-                    val routes = RouteCatalog.from(config, imported.awg15Available, imported.awg31Available)
+                    val routes = RouteCatalog.from(config, AwgProfileStore(this@SetupActivity).profiles())
                     routes.firstOrNull()?.let { SelectedRouteStore(this).save(it) }
                     stopService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
                     AwgTunnelController.stop(this, publishStatus = false)

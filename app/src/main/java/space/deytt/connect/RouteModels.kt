@@ -8,6 +8,7 @@ enum class TunnelEngine { LIBBOX, AMNEZIAWG }
 
 enum class RouteProtocol(val title: String, val detail: String) {
     AUTO("Автоподбор", "Приложение выберет лучший доступный маршрут"),
+    RU_DE("RU → DE", "Двойной маршрут через Россию и Германию"),
     VLESS("VLESS", "WebSocket + TLS"),
     TROJAN("Trojan", "WebSocket + TLS"),
     HYSTERIA2("Hysteria 2", "Быстрый QUIC-маршрут"),
@@ -66,9 +67,18 @@ object RouteCatalog {
         "DE" to ("🇩🇪" to "Германия"),
         "RU" to ("🇷🇺" to "Россия"),
         "FI" to ("🇫🇮" to "Финляндия"),
+        "RU-DE" to ("🇷🇺→🇩🇪" to "RU → DE"),
     )
 
     fun from(config: String, awg15: Boolean, awg31: Boolean): List<DeyttRoute> {
+        val legacyProfiles = listOfNotNull(
+            if (awg15) AwgProfile("awg15", "15", "Основной", "AWG", "") else null,
+            if (awg31) AwgProfile("awg31", "31", "Основной", "AWG", "") else null,
+        )
+        return from(config, legacyProfiles)
+    }
+
+    fun from(config: String, awgProfiles: List<AwgProfile>): List<DeyttRoute> {
         val automaticTag = autoTag(config)
         require(automaticTag.isNotBlank()) { "В подписке отсутствует автоподбор" }
         val routes = mutableListOf(
@@ -82,6 +92,7 @@ object RouteCatalog {
                 if (parts.size != 3 || parts[0] != "route") continue
                 val presentation = countries[parts[1]] ?: continue
                 val protocol = when (parts[2]) {
+                    "CHAIN" -> RouteProtocol.RU_DE
                     "VLESS" -> RouteProtocol.VLESS
                     "TROJAN" -> RouteProtocol.TROJAN
                     "HYSTERIA2" -> RouteProtocol.HYSTERIA2
@@ -90,8 +101,17 @@ object RouteCatalog {
                 routes += DeyttRoute(tag, parts[1], presentation.second, presentation.first, protocol, TunnelEngine.LIBBOX, tag)
             }
         }
-        if (awg15) routes += DeyttRoute("awg15", "AWG", "Основной", "◈", RouteProtocol.AWG15, TunnelEngine.AMNEZIAWG)
-        if (awg31) routes += DeyttRoute("awg31", "AWG", "Основной", "◈", RouteProtocol.AWG31, TunnelEngine.AMNEZIAWG)
+        awgProfiles.forEach { profile ->
+            val protocol = if (profile.version == "31") RouteProtocol.AWG31 else RouteProtocol.AWG15
+            routes += DeyttRoute(
+                profile.id,
+                "AWG",
+                profile.label,
+                profile.shortLabel,
+                protocol,
+                TunnelEngine.AMNEZIAWG,
+            )
+        }
         return routes
     }
 

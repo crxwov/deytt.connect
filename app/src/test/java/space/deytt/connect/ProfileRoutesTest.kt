@@ -14,6 +14,7 @@ class ProfileRoutesTest {
             {"type": "vless", "tag": "route:DE:VLESS"},
             {"type": "trojan", "tag": "route:DE:TROJAN"},
             {"type": "hysteria2", "tag": "route:DE:HYSTERIA2"},
+            {"type": "trojan", "tag": "route:RU-DE:CHAIN", "server": "chain.example.com", "server_port": 443},
             {"type": "hysteria2", "tag": "nl • обход 1"},
             {"type": "hysteria2", "tag": "Авито прокси"},
             {"type": "direct", "tag": "direct"}
@@ -60,6 +61,7 @@ class ProfileRoutesTest {
                 RouteProtocol.VLESS,
                 RouteProtocol.TROJAN,
                 RouteProtocol.HYSTERIA2,
+                RouteProtocol.RU_DE,
                 RouteProtocol.AWG15,
                 RouteProtocol.AWG31,
             ),
@@ -71,5 +73,19 @@ class ProfileRoutesTest {
     @Test(expected = IllegalArgumentException::class)
     fun rejectsInternalOutboundSelection() {
         ProfileRoutes.select(config, "Авито прокси")
+    }
+
+    @Test
+    fun exposesEveryAvailableAmneziaServerSeparately() {
+        val profiles = listOf(
+            AwgProfile("awg31:nl", "31", "Нидерланды", "NL", "config"),
+            AwgProfile("awg31:de", "31", "Германия", "DE", "config"),
+        )
+
+        val routes = RouteCatalog.from(config, profiles).filter { it.engine == TunnelEngine.AMNEZIAWG }
+
+        assertEquals(listOf("awg31:nl", "awg31:de"), routes.map(DeyttRoute::id))
+        assertEquals(listOf("Нидерланды", "Германия"), routes.map(DeyttRoute::country))
+        assertEquals(listOf("NL", "DE"), routes.map(DeyttRoute::flag))
     }
 }

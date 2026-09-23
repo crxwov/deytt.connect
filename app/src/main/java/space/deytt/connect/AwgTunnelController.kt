@@ -3,7 +3,6 @@ package space.deytt.connect
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.edit
 import org.amnezia.awg.backend.GoBackend
 import org.amnezia.awg.backend.Tunnel
 import org.amnezia.awg.config.Config
@@ -11,6 +10,7 @@ import java.io.BufferedReader
 import java.io.StringReader
 import java.net.URL
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.HttpsURLConnection
 
 object AwgTunnelController {
@@ -20,12 +20,21 @@ object AwgTunnelController {
     @SuppressLint("StaticFieldLeak")
     private var backend: GoBackend? = null
     private var tunnel: Tunnel? = null
+    private val operation = AtomicLong(0)
+
+    @Volatile
+    private var runtimeRunning = false
+
+    fun isRunning(): Boolean = runtimeRunning
 
     fun start(context: Context, rawConfig: String, name: String) {
-        publish(context, "Запуск AmneziaWG…")
+        val operationId = operation.incrementAndGet()
+        runtimeRunning = true
+        publish(context, VpnPhase.STARTING, "Запуск AmneziaWG…")
         executor.execute {
             try {
                 stopInternal()
+                ensureCurrent(operationId)
                 val parsed = Config.parse(BufferedReader(StringReader(rawConfig)))
                 val nextBackend = GoBackend(context.applicationContext)
                 val nextTunnel = object : Tunnel {
@@ -33,28 +42,37 @@ object AwgTunnelController {
                     override fun onStateChange(newState: Tunnel.State) = Unit
                 }
                 nextBackend.setStatusCallback { connected ->
-                    if (connected) publish(context, "Проверяем туннель…")
+                    if (connected && operation.get() == operationId) {
+                        publish(context, VpnPhase.CHECKING, "Проверяем туннель…")
+                    }
                 }
                 backend = nextBackend
                 tunnel = nextTunnel
                 nextBackend.setState(nextTunnel, Tunnel.State.UP, parsed)
-                verifyTraffic()
-                publish(context, "VPN подключён")
+                verifyTraffic(operationId)
+                ensureCurrent(operationId)
+                publish(context, VpnPhase.CONNECTED, "VPN подключён")
             } catch (error: Throwable) {
                 stopInternal()
-                publish(
-                    context,
-                    "Ошибка запуска VPN",
-                    error.message?.takeIf(String::isNotBlank) ?: "Не удалось запустить AmneziaWG",
-                )
+                if (operation.get() == operationId) {
+                    runtimeRunning = false
+                    publish(
+                        context,
+                        VpnPhase.ERROR,
+                        "Ошибка запуска VPN",
+                        error.message?.takeIf(String::isNotBlank) ?: "Не удалось запустить AmneziaWG",
+                    )
+                }
             }
         }
     }
 
     fun stop(context: Context, publishStatus: Boolean = true) {
+        operation.incrementAndGet()
+        runtimeRunning = false
+        if (publishStatus) publish(context, VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
         executor.execute {
             stopInternal()
-            if (publishStatus) publish(context, "VPN отключён")
         }
     }
 
@@ -68,9 +86,10 @@ object AwgTunnelController {
         }
     }
 
-    private fun verifyTraffic() {
+    private fun verifyTraffic(operationId: Long) {
         var lastError: Throwable? = null
         repeat(3) { attempt ->
+            ensureCurrent(operationId)
             try {
                 val connection = URL("https://www.gstatic.com/generate_204")
                     .openConnection() as HttpsURLConnection
@@ -92,15 +111,16 @@ object AwgTunnelController {
         throw IllegalStateException("Выбранный маршрут не передаёт трафик: ${lastError?.message.orEmpty()}")
     }
 
-    private fun publish(context: Context, status: String, error: String? = null) {
-        context.getSharedPreferences(ConnectVpnService.STATE_PREFS, Context.MODE_PRIVATE)
-            .edit {
-                putString(ConnectVpnService.STATE_STATUS, status)
-                putString(ConnectVpnService.STATE_ERROR, error)
-            }
+    private fun ensureCurrent(operationId: Long) {
+        check(operation.get() == operationId && runtimeRunning) { "Подключение отменено" }
+    }
+
+    private fun publish(context: Context, phase: VpnPhase, status: String, error: String? = null) {
+        VpnStateStore(context).write(phase, status, error)
         val intent = Intent(ConnectVpnService.ACTION_STATUS)
             .setPackage(context.packageName)
             .putExtra(ConnectVpnService.EXTRA_STATUS, status)
+            .putExtra(ConnectVpnService.STATE_PHASE, phase.name)
         if (!error.isNullOrBlank()) intent.putExtra(ConnectVpnService.EXTRA_ERROR, error)
         context.sendBroadcast(intent)
     }

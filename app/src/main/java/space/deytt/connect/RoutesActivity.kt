@@ -3,8 +3,11 @@ package space.deytt.connect
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.TextView
+import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.row
@@ -13,11 +16,13 @@ import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
 
 class RoutesActivity : Activity() {
+    private var latencyGeneration = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val config = SubscriptionStore(this).readCurrent() ?: run { finish(); return }
         val awg = AwgProfileStore(this)
-        val routes = RouteCatalog.from(config, awg.read15() != null, awg.read31() != null)
+        val routes = RouteCatalog.from(config, awg.profiles())
         val root = screen()
         root.addView(header("маршруты", "Куда подключиться", true))
         root.addView(spacer(12, this))
@@ -25,9 +30,12 @@ class RoutesActivity : Activity() {
         root.addView(spacer(24, this))
 
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { auto ->
-            root.addView(row("Автоподбор", "Самый быстрый доступный маршрут", "✦").apply {
-                setOnClickListener { select(auto) }
-            })
+            addMeasuredRow(root, "Автоподбор", "Самый быстрый доступный маршрут", "✦", listOf(auto)) { select(auto) }
+            root.addView(spacer(12, this))
+        }
+
+        routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { chain ->
+            addMeasuredRow(root, "RU → DE", "Двойной маршрут для устойчивого обхода", "↗", listOf(chain)) { select(chain) }
             root.addView(spacer(12, this))
         }
 
@@ -36,11 +44,9 @@ class RoutesActivity : Activity() {
             .forEach { (code, countryRoutes) ->
                 val first = countryRoutes.first()
                 val protocols = countryRoutes.joinToString(" · ") { it.protocol.title }
-                root.addView(row(first.country, protocols, first.flag).apply {
-                    setOnClickListener {
-                        startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", code))
-                    }
-                })
+                addMeasuredRow(root, first.country, protocols, first.flag, countryRoutes) {
+                    startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", code))
+                }
                 root.addView(spacer(12, this))
             }
 
@@ -49,18 +55,63 @@ class RoutesActivity : Activity() {
             root.addView(spacer(10, this))
             root.addView(text("AMNEZIAWG", 12f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply { letterSpacing = .18f })
             root.addView(spacer(10, this))
-            root.addView(row("Защищённый туннель", awgRoutes.joinToString(" · ") { it.protocol.title }, "◈").apply {
-                setOnClickListener {
-                    startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", "AWG"))
-                }
-            })
+            addMeasuredRow(root, "AmneziaWG", awgRoutes.joinToString(" · ") { it.protocol.title }, "◈", awgRoutes) {
+                startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", "AWG"))
+            }
         }
         present(root)
     }
 
+    private fun addMeasuredRow(
+        root: LinearLayout,
+        title: String,
+        subtitle: String,
+        leading: String,
+        routes: List<DeyttRoute>,
+        onClick: () -> Unit,
+    ) {
+        val latency = text("замер…", 13f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply { gravity = Gravity.CENTER }
+        val item = row(title, subtitle, leading, "").apply { setOnClickListener { onClick() } }
+        item.addView(latency, LinearLayout.LayoutParams(dp(72), ViewGroup.LayoutParams.MATCH_PARENT))
+        root.addView(item)
+        measure(routes, latency)
+    }
+
+    private fun measure(routes: List<DeyttRoute>, view: TextView) {
+        val generation = latencyGeneration
+        val config = SubscriptionStore(this).readCurrent() ?: return
+        val awg = AwgProfileStore(this)
+        val values = mutableListOf<Long>()
+        var remaining = routes.size
+        if (remaining == 0) { view.text = "—"; return }
+        routes.forEach { route ->
+            val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) awg.read(route.id) else null
+            val target = RouteLatency.target(config, route, awgConfig)
+            if (target == null) {
+                remaining--
+                if (remaining == 0) view.text = RouteLatency.label(values.minOrNull())
+            } else LatencyExecutor.pool.execute {
+                val measured = RouteLatency.measure(target)
+                runOnUiThread {
+                    if (generation != latencyGeneration || isFinishing || isDestroyed) return@runOnUiThread
+                    if (measured != null) values += measured
+                    remaining--
+                    if (remaining == 0) view.text = RouteLatency.label(values.minOrNull())
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        latencyGeneration++
+        super.onDestroy()
+    }
+
     private fun select(route: DeyttRoute) {
         val config = SubscriptionStore(this).readCurrent() ?: return
-        stopService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+        if (ConnectVpnService.isRunning()) {
+            startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+        }
         AwgTunnelController.stop(this)
         SubscriptionStore(this).saveValidated(ProfileRoutes.select(config, route.configTag))
         SelectedRouteStore(this).save(route)

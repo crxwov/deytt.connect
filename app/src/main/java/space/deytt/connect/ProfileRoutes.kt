@@ -17,7 +17,7 @@ object ProfileRoutes {
         "DE" to Pair("🇩🇪", "Германия"),
         "RU" to Pair("🇷🇺", "Россия"),
         "FI" to Pair("🇫🇮", "Финляндия"),
-        "NL-DE" to Pair("🇳🇱", "Нидерланды → Германия"),
+        "RU-DE" to Pair("🇷🇺→🇩🇪", "RU → DE"),
     )
 
     fun selected(config: String): String = parse(config)

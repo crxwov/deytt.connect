@@ -6,6 +6,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
+import org.json.JSONArray
 
 data class ImportedSubscription(
     val url: String,
@@ -25,21 +26,27 @@ object SubscriptionClient {
         val content = response.body
         val summary = ProfileValidator.validate(content)
         val metadata = SubscriptionMetadata.parse(response.profileTitle, response.userInfo)
-        val awg15 = request(withFormat(baseUrl, "amneziawg"), "text/plain", required = false)?.body
-        val awg31 = request(withFormat(baseUrl, "amneziawg31"), "text/plain", required = false)?.body
+        val awgProfiles = fetchAwgProfiles(baseUrl, "amneziawg", "15") +
+            fetchAwgProfiles(baseUrl, "amneziawg31", "31")
         // Validate every response before replacing any part of the last-known-good bundle.
-        AwgProfileStore.validate(awg15)
-        AwgProfileStore.validate(awg31)
+        awgProfiles.forEach { AwgProfileStore.validate(it.config) }
         SubscriptionStore(context).saveValidated(content)
         SubscriptionMetadataStore(context).save(metadata)
-        AwgProfileStore(context).save(awg15, awg31)
-        return ImportedSubscription(url, summary, metadata, awg15 != null, awg31 != null)
+        AwgProfileStore(context).save(awgProfiles)
+        return ImportedSubscription(
+            url,
+            summary,
+            metadata,
+            awgProfiles.any { it.version == "15" },
+            awgProfiles.any { it.version == "31" },
+        )
     }
 
     private data class Response(
         val body: String,
         val profileTitle: String?,
         val userInfo: String?,
+        val awgServers: String?,
     )
 
     private fun request(url: String, accept: String, required: Boolean): Response? {
@@ -63,6 +70,7 @@ object SubscriptionClient {
                 body = connection.inputStream.use(::readLimitedUtf8),
                 profileTitle = connection.getHeaderField("Profile-Title"),
                 userInfo = connection.getHeaderField("Subscription-Userinfo"),
+                awgServers = connection.getHeaderField("X-Deytt-Awg-Servers"),
             )
         } finally {
             connection.disconnect()
@@ -90,6 +98,35 @@ object SubscriptionClient {
         .appendQueryParameter("format", format)
         .build()
         .toString()
+
+    private fun fetchAwgProfiles(baseUrl: String, format: String, version: String): List<AwgProfile> {
+        val first = request(withFormat(baseUrl, format), "text/plain", required = false) ?: return emptyList()
+        val servers = runCatching { JSONArray(first.awgServers ?: "[]") }.getOrNull()
+        if (servers == null || servers.length() == 0) {
+            return listOf(AwgProfile("awg$version", version, "Основной", "AWG", first.body))
+        }
+        return buildList {
+            for (index in 0 until servers.length()) {
+                val server = servers.optJSONObject(index) ?: continue
+                val id = server.optString("id").trim()
+                if (id.isBlank()) continue
+                val url = withFormat(baseUrl, format).toUri().buildUpon()
+                    .appendQueryParameter("server_id", id)
+                    .build()
+                    .toString()
+                val response = request(url, "text/plain", required = true) ?: continue
+                add(
+                    AwgProfile(
+                        id = "awg$version:$id",
+                        version = version,
+                        label = server.optString("label", id),
+                        shortLabel = server.optString("short_label", id.uppercase()),
+                        config = response.body,
+                    ),
+                )
+            }
+        }
+    }
 
     private fun readLimitedUtf8(stream: InputStream): String {
         val output = ByteArrayOutputStream()

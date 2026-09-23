@@ -2,6 +2,7 @@ package space.deytt.connect
 
 import android.app.Activity
 import android.animation.ObjectAnimator
+import android.animation.AnimatorSet
 import android.animation.StateListAnimator
 import android.graphics.Color
 import android.graphics.Typeface
@@ -16,18 +17,19 @@ import android.widget.TextView
 
 object DeyttUi {
     const val BG = 0xFF070C16.toInt()
-    const val SURFACE = 0xFF101A2C.toInt()
-    const val LINE = 0xFF273653.toInt()
-    const val TEXT = 0xFFF5F7FF.toInt()
-    const val MUTED = 0xFF8997B3.toInt()
+    const val SURFACE = 0xFF0E182A.toInt()
+    const val SURFACE_2 = 0xFF111D32.toInt()
+    const val LINE = 0xFF2B3954.toInt()
+    const val TEXT = 0xFFF3F6FF.toInt()
+    const val MUTED = 0xFF8795AD.toInt()
     const val BLUE = 0xFF7180FF.toInt()
     const val MINT = 0xFF4ED7A6.toInt()
     const val CORAL = 0xFFFF6B86.toInt()
 
     fun Activity.screen(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp(24), dp(22), dp(24), dp(28))
-        setBackgroundColor(BG)
+        setPadding(dp(22), dp(18), dp(22), dp(30))
+        background = SignalBackdropDrawable()
         fitsSystemWindows = true
     }
 
@@ -41,29 +43,37 @@ object DeyttUi {
                 isFocusable = true
                 setOnClickListener { finish() }
             })
-            addView(text(kicker.uppercase(), 12f, MUTED, Typeface.BOLD).apply { letterSpacing = .18f })
-            addView(text(title, 32f, TEXT, Typeface.BOLD).apply { setPadding(0, dp(8), 0, dp(8)) })
+            if (kicker.isNotBlank()) addView(text(kicker.uppercase(), 11f, MUTED, Typeface.BOLD).apply { letterSpacing = .16f })
+            addView(text(title, 34f, TEXT, Typeface.BOLD).apply { letterSpacing = -.035f; setPadding(0, dp(7), 0, dp(8)) })
         }
+
+    fun Activity.brandHeader(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        addView(text("deytt.", 29f, TEXT, Typeface.BOLD).apply { letterSpacing = -.045f })
+        addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
+        addView(text("●  сеть готова", 11f, MINT, Typeface.BOLD).apply { letterSpacing = .06f })
+    }
 
     fun Activity.text(value: String, size: Float, color: Int = TEXT, style: Int = Typeface.NORMAL): TextView =
         TextView(this).apply {
             text = value
             textSize = size
             setTextColor(color)
-            typeface = Typeface.create("sans", style)
+            typeface = Typeface.create("sans-serif", style)
             includeFontPadding = false
         }
 
-    fun Activity.button(label: String, secondary: Boolean = false): TextView = text(label, 17f, if (secondary) TEXT else Color.WHITE, Typeface.BOLD).apply {
+    fun Activity.button(label: String, secondary: Boolean = false): TextView = text(label, 16f, if (secondary) TEXT else Color.WHITE, Typeface.BOLD).apply {
         gravity = Gravity.CENTER
         setPadding(dp(18), dp(18), dp(18), dp(18))
-        background = rounded(if (secondary) SURFACE else BLUE, 18f, if (secondary) LINE else BLUE)
+        background = rounded(if (secondary) SURFACE_2 else BLUE, 18f, if (secondary) LINE else BLUE)
         isClickable = true
         isFocusable = true
         val target = this
         stateListAnimator = StateListAnimator().apply {
-            addState(intArrayOf(android.R.attr.state_pressed), ObjectAnimator.ofFloat(target, "alpha", 1f, .78f).setDuration(90))
-            addState(intArrayOf(), ObjectAnimator.ofFloat(target, "alpha", .78f, 1f).setDuration(130))
+            addState(intArrayOf(android.R.attr.state_pressed), scaleAnimator(target, .975f, 110))
+            addState(intArrayOf(), scaleAnimator(target, 1f, 140))
         }
     }
 
@@ -77,11 +87,11 @@ object DeyttUi {
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, dp(18), 0, dp(18))
+            setPadding(dp(4), dp(17), dp(4), dp(17))
             background = GradientDrawable().apply {
-                setColor(Color.TRANSPARENT)
+                setColor(SURFACE)
                 setStroke(dp(1), LINE)
-                cornerRadius = dp(2).toFloat()
+                cornerRadius = dp(18).toFloat()
             }
             addView(text(leading, 25f).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(58), ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(LinearLayout(this@row).apply {
@@ -93,10 +103,25 @@ object DeyttUi {
                     setPadding(0, dp(5), 0, 0); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
                 })
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(text(trailing, 22f, MUTED).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(42), ViewGroup.LayoutParams.WRAP_CONTENT))
+            if (trailing.isNotBlank()) {
+                addView(text(trailing, 22f, MUTED).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(42), ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
             isClickable = interactive
             isFocusable = interactive
+            val target = this
+            if (interactive) stateListAnimator = StateListAnimator().apply {
+                addState(intArrayOf(android.R.attr.state_pressed), ObjectAnimator.ofFloat(target, "alpha", 1f, .76f).setDuration(90))
+                addState(intArrayOf(), ObjectAnimator.ofFloat(target, "alpha", .76f, 1f).setDuration(130))
+            }
         }
+
+    private fun scaleAnimator(target: View, scale: Float, duration: Long): AnimatorSet = AnimatorSet().apply {
+        playTogether(
+            ObjectAnimator.ofFloat(target, "scaleX", scale),
+            ObjectAnimator.ofFloat(target, "scaleY", scale),
+        )
+        this.duration = duration
+    }
 
     fun spacer(height: Int, activity: Activity): Space = Space(activity).apply {
         layoutParams = LinearLayout.LayoutParams(1, activity.dp(height))

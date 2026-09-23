@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — Android 0.5.0 is published with the 12/12 backend baseline;
-physical-phone proof for the five protocol families remains pending
+In progress — Android 0.6.0 reliability, route/latency, and premium visual pass
+is active after physical-phone feedback on 0.5.0
 
 ## Objective
 
@@ -21,6 +21,13 @@ and a real APK artifact.
 - Real device validation is reported separately from local compilation.
 - The app presents the DEYTTT visual language with clear connected, starting, and
   error states without exposing subscription tokens in the primary status UI.
+- Connection actions recover from stale persisted state without clearing app data
+  or re-importing the subscription.
+- The route catalog exposes the first-party RU+DE bypass and selectable regional
+  AmneziaWG profiles supplied by the subscription contract.
+- Users can measure and compare route latency without starting a full VPN tunnel.
+- The primary Android surfaces match the restrained premium visual language of
+  deytt.space and contain no platform/build-label clutter.
 
 ## Stages
 
@@ -60,6 +67,11 @@ and a real APK artifact.
       leaking arbitrary internal outbound labels.
 - [~] 10. Validate all states at phone widths, publish an ARM64 build, and keep
       the task open until a real external HTTPS request passes on the phone.
+- [x] 11. Repair the connection state machine, add route/AWG latency and RU+DE
+      selection, and replace the 0.5.0 UI with the deytt.space visual system.
+- [~] 12. Run focused lifecycle/catalog/latency tests, clean build/lint, visual
+      inspection, physical-phone tunnel checks, then commit, push, publish and
+      deliver any required backend contract update.
 
 ## Current State
 
@@ -118,6 +130,13 @@ by libbox; official AmneziaWG Android sources are pinned as a submodule and
 compiled into the same APK for AWG 1.5/3.1. Import validates every payload
 before replacing the last-known-good profile bundle.
 
+Physical-phone feedback on 0.5.0 reports stale actions that recover only after
+clearing app data/re-importing, no visible RU+DE bypass, no latency measurement,
+no regional AmneziaWG choice, and excessive platform/build copy. Inspection
+shows that `MainActivity.toggleTunnel()` derives control flow from persisted,
+localized status text rather than actual engine state; a dead service with a
+stale `VPN подключён` value therefore turns every tap into a no-op stop path.
+
 Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
 bootstrapped under `.toolchain/` and are not part of the repository artifact.
 
@@ -153,8 +172,26 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Manual countries are urltest groups, not direct raw endpoints. This preserves
   failover among profiles inside the chosen country and keeps implementation
   names out of the product contract.
+- Treat runtime state as typed data owned by the active engine. Persisted display
+  text is restoration copy only and must never decide whether a tap starts or
+  stops a tunnel.
+- Route latency is an explicit user request and must have bounded concurrency,
+  cancellation-safe UI updates, and clear unavailable/error states; a successful
+  TCP/HTTPS probe is not tunnel proof.
+- The 0.6.0 design direction is an ink/graphite field, warm white typography,
+  restrained electric blue, fine network-line structure, and one strong central
+  connection object. Remove `connect`, `android`, build, and implementation copy
+  from the primary hierarchy.
 
 ## Issues and Failed Attempts
+
+- The first 0.6.0 Gradle run inherited unsupported system Java 26.0.2.1. All
+  successful validation uses the repository-local JDK 17 toolchain.
+- The clean validation process was interrupted after tests/packaging, so the
+  scoped Gradle validation was rerun to completion instead of trusting partial
+  output.
+- No ADB device is connected. Visual/device interaction and authenticated
+  tunnel proof remain pending and are not inferred from local tests.
 
 - Device-level VPN validation is not available until an Android device or
   emulator is connected.
@@ -208,6 +245,12 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `app/src/main/java/space/deytt/connect/ProtocolActivity.kt`
 - `app/src/main/java/space/deytt/connect/ProfileActivity.kt`
 - `app/src/main/java/space/deytt/connect/AwgTunnelController.kt`
+- `app/src/main/java/space/deytt/connect/AwgProfileStore.kt`
+- `app/src/main/java/space/deytt/connect/SubscriptionClient.kt`
+- `app/src/main/java/space/deytt/connect/VpnRuntimeState.kt`
+- `app/src/main/java/space/deytt/connect/RouteLatency.kt`
+- `app/src/main/java/space/deytt/connect/ConnectionOrbView.kt`
+- `app/src/main/java/space/deytt/connect/SignalBackdropDrawable.kt`
 - `awg-tunnel/`
 - `third_party/amneziawg-android` (pinned Git submodule)
 - `app/src/main/java/space/deytt/connect/SignalDialView.kt` (removed)
@@ -370,15 +413,23 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   download matches SHA-256
   `c454f3ab3d95310f7a180247a76e2da9b4b55bb05eb52b3fe1573a40cb3dbfe1`,
   passes ZIP integrity, and verifies with APK Signature Scheme v2.
+- Android 0.6.0 passes 15 unit tests, `lintDebug`, and `assembleDebug` (107
+  tasks). The ARM64 APK is 35,889,923 bytes, passes ZIP integrity and v2
+  signature verification, and has SHA-256
+  `f414982d23784fc9433ce4d115b1dd0714c1852eb3ab4602f5f1b3433fdf8328`.
 
 ## Next Action
 
-Install `v0.5.0-debug` on the physical phone, re-import the subscription, and
-collect external HTTPS proof for auto-pick, all displayed regional protocols,
-and both embedded AmneziaWG generations.
+Commit and push 0.6.0, publish the verified ARM64 APK, then install it on a
+physical phone and test stale-state recovery, every route family, latency,
+network switching, and external HTTPS canaries.
 
 ## Resume Context
 
 Continue in this repository, preserve the separate upstream boundary, and do
-not add tokens or `.env` values to fixtures. Treat the APK as unverified until
-an authenticated Android tunnel passes an external HTTPS canary.
+not add tokens or `.env` values to fixtures. The 0.5.0 baseline is published;
+0.6.0 implementation and local validation are complete: 15 unit tests pass,
+lint/build pass, and the ARM64 APK is ZIP-valid and v2-signed with SHA-256
+`f414982d23784fc9433ce4d115b1dd0714c1852eb3ab4602f5f1b3433fdf8328`.
+Treat latency probes as diagnostics and the APK as unverified until
+authenticated Android tunnels pass external HTTPS canaries on a physical phone.

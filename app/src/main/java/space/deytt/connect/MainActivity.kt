@@ -14,11 +14,10 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import space.deytt.connect.DeyttUi.button
+import space.deytt.connect.DeyttUi.brandHeader
 import space.deytt.connect.DeyttUi.dp
-import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.row
-import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
@@ -26,16 +25,23 @@ import space.deytt.connect.DeyttUi.text
 class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var detailText: TextView
-    private lateinit var power: TextView
+    private lateinit var orb: ConnectionOrbView
     private lateinit var action: TextView
     private lateinit var routeRow: LinearLayout
+    private lateinit var latencyText: TextView
     private var pendingRoute: SelectedRoute? = null
+    private var latencyGeneration = 0
 
     private val statusReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) = renderStatus(
-            intent?.getStringExtra(ConnectVpnService.EXTRA_STATUS),
-            intent?.getStringExtra(ConnectVpnService.EXTRA_ERROR),
-        )
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val phase = intent?.getStringExtra(ConnectVpnService.STATE_PHASE)
+                ?.let { runCatching { VpnPhase.valueOf(it) }.getOrNull() }
+            renderStatus(
+                phase,
+                intent?.getStringExtra(ConnectVpnService.EXTRA_STATUS),
+                intent?.getStringExtra(ConnectVpnService.EXTRA_ERROR),
+            )
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,6 +61,7 @@ class MainActivity : Activity() {
         ContextCompat.registerReceiver(this, statusReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         renderStoredState()
         rebuildRouteRow()
+        measureSelectedRoute()
     }
 
     override fun onStop() {
@@ -64,27 +71,25 @@ class MainActivity : Activity() {
 
     private fun buildScreen() {
         val root = screen()
-        root.addView(header("connect / android", "deytt."))
-        root.addView(spacer(42, this))
+        root.addView(brandHeader())
+        root.addView(spacer(20, this))
 
-        power = text("●", 74f, DeyttUi.BLUE).apply {
-            gravity = Gravity.CENTER
-            background = rounded(0xFF151529.toInt(), 68f, DeyttUi.LINE)
+        orb = ConnectionOrbView(this)
+        root.addView(orb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(210)))
+        statusText = text("VPN отключён", 31f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            gravity = Gravity.CENTER; letterSpacing = -.035f
         }
-        root.addView(power, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(172)))
-        root.addView(spacer(26, this))
-        statusText = text("VPN отключён", 30f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply { gravity = Gravity.CENTER }
-        detailText = text("Можно подключаться", 15f, DeyttUi.MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(10), 0, 0) }
+        detailText = text("Готов к подключению", 14f, DeyttUi.MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(9), 0, 0) }
         root.addView(statusText)
         root.addView(detailText)
-        root.addView(spacer(32, this))
+        root.addView(spacer(30, this))
 
         routeRow = LinearLayout(this)
         root.addView(routeRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(spacer(14, this))
-        action = button("ПОДКЛЮЧИТЬ").apply { setOnClickListener { toggleTunnel() } }
+        action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
         root.addView(action)
-        root.addView(spacer(28, this))
+        root.addView(spacer(18, this))
         root.addView(row("Подписка", "Трафик, срок и обновление", "◎").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
         })
@@ -97,16 +102,29 @@ class MainActivity : Activity() {
         if (!::routeRow.isInitialized) return
         val selected = SelectedRouteStore(this).read()
         routeRow.removeAllViews()
-        routeRow.addView(row(selected.title, selected.subtitle, if (selected.engine == TunnelEngine.AMNEZIAWG) "◈" else "↗").apply {
+        latencyText = text("—", 13f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply {
+            gravity = Gravity.CENTER
+        }
+        val item = row(selected.title, selected.subtitle, if (selected.engine == TunnelEngine.AMNEZIAWG) "◈" else "↗", "").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, RoutesActivity::class.java)) }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        item.addView(latencyText, LinearLayout.LayoutParams(dp(72), ViewGroup.LayoutParams.MATCH_PARENT))
+        routeRow.addView(item, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
     private fun toggleTunnel() {
-        val current = currentStatus()
-        if (current == "VPN подключён" || current.contains("Запуск") || current.contains("Проверяем")) {
-            stopService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
-            AwgTunnelController.stop(this)
+        val saved = VpnStateStore(this).read()
+        val decision = VpnControlDecision.decide(
+            saved.phase,
+            ConnectVpnService.isRunning(),
+            AwgTunnelController.isRunning(),
+        )
+        if (decision == VpnControlAction.STOP) {
+            if (ConnectVpnService.isRunning()) {
+                startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+            }
+            AwgTunnelController.stop(this, publishStatus = !ConnectVpnService.isRunning())
+            renderStatus(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE, null)
             return
         }
         pendingRoute = SelectedRouteStore(this).read()
@@ -123,11 +141,13 @@ class MainActivity : Activity() {
     private fun startSelectedTunnel() {
         val route = pendingRoute ?: SelectedRouteStore(this).read()
         if (route.engine == TunnelEngine.AMNEZIAWG) {
-            stopService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+            if (ConnectVpnService.isRunning()) {
+                startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+            }
             val store = AwgProfileStore(this)
-            val config = if (route.id == "awg31") store.read31() else store.read15()
+            val config = store.read(route.id)
             if (config == null) {
-                renderStatus("Ошибка запуска VPN", "Обновите подписку: профиль ${route.subtitle} отсутствует")
+                renderStatus(VpnPhase.ERROR, "Ошибка запуска VPN", "Обновите подписку: профиль ${route.subtitle} отсутствует")
                 return
             }
             AwgTunnelController.start(this, config, route.id)
@@ -139,26 +159,48 @@ class MainActivity : Activity() {
     }
 
     private fun renderStoredState() {
-        val prefs = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
-        renderStatus(prefs.getString(ConnectVpnService.STATE_STATUS, "VPN отключён"), prefs.getString(ConnectVpnService.STATE_ERROR, null))
+        val snapshot = VpnStateStore(this).reconcile(
+            ConnectVpnService.isRunning(),
+            AwgTunnelController.isRunning(),
+        )
+        renderStatus(snapshot.phase, snapshot.title, snapshot.detail)
     }
 
-    private fun currentStatus(): String = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
-        .getString(ConnectVpnService.STATE_STATUS, "VPN отключён") ?: "VPN отключён"
-
-    private fun renderStatus(status: String?, error: String?) {
+    private fun renderStatus(phase: VpnPhase?, status: String?, error: String?) {
         if (!::statusText.isInitialized) return
         val value = status ?: "VPN отключён"
+        val currentPhase = phase ?: VpnPhase.IDLE
         statusText.text = value
         detailText.text = error ?: when (value) {
             "VPN подключён" -> "Трафик защищён"
-            "VPN отключён" -> "Можно подключаться"
+            "VPN отключён" -> "Готов к подключению"
             else -> "Проверяем доступ к интернету"
         }
-        val failed = value.startsWith("Ошибка")
-        val connected = value == "VPN подключён"
-        power.setTextColor(if (failed) DeyttUi.CORAL else if (connected) DeyttUi.MINT else DeyttUi.BLUE)
-        action.text = if (connected || value.contains("Запуск") || value.contains("Проверяем")) "ОТКЛЮЧИТЬ" else "ПОДКЛЮЧИТЬ"
+        orb.setPhase(currentPhase)
+        action.text = if (currentPhase in setOf(VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.CONNECTED)) "Отключить" else "Подключить"
+    }
+
+    private fun measureSelectedRoute() {
+        if (!::latencyText.isInitialized) return
+        val generation = ++latencyGeneration
+        val selected = SelectedRouteStore(this).read()
+        val config = SubscriptionStore(this).readCurrent() ?: return
+        val awg = AwgProfileStore(this)
+        val route = RouteCatalog.from(config, awg.profiles())
+            .firstOrNull { it.id == selected.id } ?: return
+        val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) awg.read(route.id) else null
+        val target = RouteLatency.target(config, route, awgConfig)
+        latencyText.text = "замер…"
+        if (target == null) {
+            latencyText.text = "—"
+            return
+        }
+        LatencyExecutor.pool.execute {
+            val label = RouteLatency.label(RouteLatency.measure(target))
+            runOnUiThread {
+                if (generation == latencyGeneration && !isFinishing && !isDestroyed) latencyText.text = label
+            }
+        }
     }
 
     companion object { private const val VPN_PERMISSION_REQUEST = 701 }
