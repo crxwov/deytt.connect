@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — 0.4.0 candidate replaces raw manual outbounds with resilient
-country groups and ships the new onboarding/catalog/dashboard UI; phone proof pending
+In progress — the 0.5.0 all-protocol, multi-screen candidate builds locally;
+backend 12/12 proof is complete, release publication and phone proof are pending
 
 ## Objective
 
@@ -56,7 +56,7 @@ and a real APK artifact.
 - [x] 8. Replace the single-screen MVP with explicit subscription onboarding,
       import progress/success feedback, route catalog and connection dashboard.
 - [x] 9. Add stable product metadata for owner, expiry and traffic; present the
-      fixed DEYTT route set and separate AmneziaWG 1.5/3.1 actions without
+      fixed DEYTT route set and embedded AmneziaWG 1.5/3.1 actions without
       leaking arbitrary internal outbound labels.
 - [~] 10. Validate all states at phone widths, publish an ARM64 build, and keep
       the task open until a real external HTTPS request passes on the phone.
@@ -107,6 +107,16 @@ The 0.4.0 candidate now accepts only `urltest` auto-pick and versioned
 standard-WireGuard endpoint stay hidden. Subscription headers populate the
 owner/title, accumulated traffic and expiry card. AmneziaWG 1.5 and 3.1 are
 shown separately and open the existing versioned first-party import flow.
+Phone feedback invalidates the 0.4.0 product solution: NL/RU/DE country groups
+do not pass traffic, only Finland and auto-pick work; the catalog contains only
+Hysteria; AmneziaWG opens another application; and conditional blocks inside
+one Activity are not the requested multi-screen user flow. The next version
+must not reuse that information architecture.
+Android 0.5.0 replaces it with separate setup, home, route, protocol, and
+subscription Activities. Stable VLESS, Trojan, and Hysteria 2 tags are consumed
+by libbox; official AmneziaWG Android sources are pinned as a submodule and
+compiled into the same APK for AWG 1.5/3.1. Import validates every payload
+before replacing the last-known-good profile bundle.
 
 Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
 bootstrapped under `.toolchain/` and are not part of the repository artifact.
@@ -115,6 +125,16 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 
 - App source lives in `/home/hackov/Documents/deytt-connect`, separate from the
   DEYTTT bot/admin repository.
+- Replace the rejected single-surface UI with real Android destinations:
+  setup/import, home, country routes, protocol choice, and subscription info.
+  The visual system uses an ink background, signal-blue actions, compact type,
+  and one route-spine motif instead of stacked rounded cards.
+- One app will own two internal engines: pinned libbox for VLESS, Trojan, and
+  Hysteria 2, plus the official Apache-2.0 AmneziaWG Android tunnel module for
+  AWG 1.5/3.1. Amnezia Box itself only exposes standard WireGuard and therefore
+  cannot preserve AWG 3.1 obfuscation parameters.
+- The first-party route contract will expose stable tags per country/protocol
+  and only advertise configurations actually present for the subscriber.
 - The first engine candidate is pinned `libbox` 1.14.1; GPL notices and source
   availability are part of the release contract.
 - The first app does not pretend that a successful APK build proves a working
@@ -181,7 +201,16 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `app/src/main/java/space/deytt/connect/ConnectVpnService.kt`
 - `app/src/main/java/space/deytt/connect/RuntimeProfile.kt`
 - `app/src/main/java/space/deytt/connect/ProfileRoutes.kt`
-- `app/src/main/java/space/deytt/connect/SignalDialView.kt`
+- `app/src/main/java/space/deytt/connect/RouteModels.kt`
+- `app/src/main/java/space/deytt/connect/DeyttUi.kt`
+- `app/src/main/java/space/deytt/connect/SetupActivity.kt`
+- `app/src/main/java/space/deytt/connect/RoutesActivity.kt`
+- `app/src/main/java/space/deytt/connect/ProtocolActivity.kt`
+- `app/src/main/java/space/deytt/connect/ProfileActivity.kt`
+- `app/src/main/java/space/deytt/connect/AwgTunnelController.kt`
+- `awg-tunnel/`
+- `third_party/amneziawg-android` (pinned Git submodule)
+- `app/src/main/java/space/deytt/connect/SignalDialView.kt` (removed)
 - `app/src/test/java/space/deytt/connect/ProfileRoutesTest.kt`
 - `app/src/main/java/space/deytt/connect/NetworkBackdropView.kt` (removed)
 - `README.md`
@@ -326,11 +355,21 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   was restarted, is active, and `/health` returned `{"status":"ok"}`.
 - No ADB device is connected; visual safe-area review and real manual-country
   HTTPS proof remain pending on the user's phone.
+- Android 0.5.0 passes `testDebugUnitTest`, `lintDebug`, and `assembleDebug`
+  (107 tasks). The ARM64 APK passes ZIP integrity and v2 signature checks and
+  contains `libbox.so`, `libwg-go.so`, and `libwg-quick.so`. Current SHA-256:
+  `c454f3ab3d95310f7a180247a76e2da9b4b55bb05eb52b3fe1573a40cb3dbfe1`.
+- Production backend commits through `5859988` are deployed. A serial fleet
+  check passed all 12 concrete sing-box VLESS/Trojan/Hysteria routes through a
+  local SOCKS client and external HTTPS 204; the independent Happ fleet remains
+  14/14. `vpn-admin.service` is active and `/health` is clean.
+- Repository-local Git identity is now `crxwov` with the verified GitHub
+  no-reply address, so the next commit is attributed to the repository owner.
 
 ## Next Action
 
-Deploy the country-group subscription contract, publish the 0.4.0 ARM64 APK,
-then re-import on the phone and prove auto-pick plus each displayed country.
+Commit and push Android 0.5.0, publish the verified ARM64 prerelease, and collect
+real-phone proof for every displayed protocol.
 
 ## Resume Context
 

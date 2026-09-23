@@ -13,3 +13,15 @@ The corresponding source and license notices must remain available to users of
 any binary distributed from this repository. DEYTTT is an independent project
 and is not affiliated with, endorsed by, or an official SagerNet application.
 
+## AmneziaWG Android tunnel
+
+The app vendors the official `amnezia-vpn/amneziawg-android` repository as a
+pinned Git submodule and compiles its `tunnel` sources and native userspace
+backend. The Android tunnel module is distributed under Apache License 2.0;
+its nested native dependencies retain their own upstream notices.
+
+- Upstream: <https://github.com/amnezia-vpn/amneziawg-android>
+- Protocol backend: <https://github.com/amnezia-vpn/amneziawg-go>
+- License: Apache License 2.0 (Android tunnel module)
+
+DEYTTT is an independent project and is not an official Amnezia application.

@@ -1,34 +1,41 @@
 # deytt./connect
 
-Открытый Android-клиент DEYTTT: единый UI поверх системного `VpnService` и
-общего sing-box core.
+Открытый Android-клиент DEYTTT: одно приложение для VLESS, Trojan, Hysteria 2,
+AmneziaWG 1.5 и AmneziaWG 3.1.
 
 Репозиторий: <https://github.com/crxwov/deytt.connect>
 
-## Текущий MVP
+## Возможности
 
 - принимает HTTPS-ссылку DEYTTT на подписку;
-- переводит её в серверный формат `?format=singbox`;
+- загружает sing-box и доступные AmneziaWG-профили одной подписки;
 - проверяет наличие TUN, маршрута и сетевого outbound;
 - сохраняет профиль атомарно и оставляет предыдущую рабочую копию;
-- запускает настоящий Android `VpnService` через `libbox`;
+- запускает `libbox` для VLESS/Trojan/Hysteria 2 и официальный userspace
+  AmneziaWG tunnel-модуль для AWG 1.5/3.1;
+- разделяет импорт, главный экран, страны, протоколы и данные подписки на
+  самостоятельные экраны;
 - предлагает маршрут до запуска и подтверждает соединение внешней HTTPS-проверкой;
 - останавливает сетевое ядро при любой ошибке, чтобы следующий запуск не
   блокировался занятым cache-file.
 
 На этом этапе не заявляются split-tunnel UI, kill switch, импорт сырых
-`vless://`/`trojan://`/`hy2://` ссылок, AmneziaWG 3.1 и production-ready
-reconnect после смены сети. Это следующие этапы, а не скрытый fallback.
+`vless://`/`trojan://`/`hy2://` ссылок и production-ready reconnect после
+смены сети. Это следующие этапы, а не скрытый fallback.
 
 ## Сборка
 
-Нужны JDK 17, Android SDK с platform 35 и доступ к Maven Central/JitPack:
+Нужны JDK 17, Android SDK platform 35, NDK 26.1, CMake 3.22.1 и рекурсивно
+загруженные submodules:
 
 ```bash
+git submodule update --init --recursive
 ./gradlew assembleDebug
 ```
 
-APK появится в `app/build/outputs/apk/debug/app-debug.apk`.
+ARM64 APK появится в
+`app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`; рядом Gradle создаст
+варианты для ARMv7, x86_64 и универсальную сборку.
 
 Перед публикацией необходимо проверить лицензионный пакет GPL-компонентов,
 подписывать релиз собственным ключом вне репозитория и приложить checksum.

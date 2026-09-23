@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
 import android.util.Log
+import androidx.core.content.edit
 import io.nekohasekai.libbox.BridgeOptions
 import io.nekohasekai.libbox.BridgeSession
 import io.nekohasekai.libbox.CommandServer
@@ -212,13 +213,10 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         runCatching { tunnel?.close() }
         tunnel = null
         started = false
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        if (SelectedRouteStore(this).read().engine == TunnelEngine.LIBBOX) {
+            publishStatus("VPN отключён")
         }
-        publishStatus("VPN отключён")
     }
 
     private fun publishFailure(error: Throwable) {
@@ -226,10 +224,10 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun publishStatus(status: String, error: String? = null) {
-        getSharedPreferences(STATE_PREFS, MODE_PRIVATE).edit()
-            .putString(STATE_STATUS, status)
-            .putString(STATE_ERROR, error)
-            .apply()
+        getSharedPreferences(STATE_PREFS, MODE_PRIVATE).edit {
+            putString(STATE_STATUS, status)
+            putString(STATE_ERROR, error)
+        }
         val intent = Intent(ACTION_STATUS)
             .setPackage(packageName)
             .putExtra(EXTRA_STATUS, status)
@@ -275,12 +273,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun stopForegroundCompat() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
     }
 
     override fun onRevoke() {

@@ -1,908 +1,165 @@
 package space.deytt.connect
 
-import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.res.ColorStateList
-import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.ColorDrawable
-import android.graphics.drawable.GradientDrawable
 import android.net.VpnService
+import android.os.Build
 import android.os.Bundle
-import android.text.InputType
 import android.view.Gravity
-import android.view.MotionEvent
-import android.view.View
 import android.view.ViewGroup
-import android.widget.EditText
-import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.ScrollView
 import android.widget.TextView
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.concurrent.Executors
-import kotlin.math.roundToInt
-
-internal enum class ConnectionVisualState {
-    IDLE,
-    CONNECTING,
-    CONNECTED,
-    ERROR,
-}
+import androidx.core.content.ContextCompat
+import space.deytt.connect.DeyttUi.button
+import space.deytt.connect.DeyttUi.dp
+import space.deytt.connect.DeyttUi.header
+import space.deytt.connect.DeyttUi.present
+import space.deytt.connect.DeyttUi.row
+import space.deytt.connect.DeyttUi.rounded
+import space.deytt.connect.DeyttUi.screen
+import space.deytt.connect.DeyttUi.spacer
+import space.deytt.connect.DeyttUi.text
 
 class MainActivity : Activity() {
-    companion object {
-        private const val VPN_PERMISSION_REQUEST = 1001
-        private const val URL_KEY = "subscription_url"
+    private lateinit var statusText: TextView
+    private lateinit var detailText: TextView
+    private lateinit var power: TextView
+    private lateinit var action: TextView
+    private lateinit var routeRow: LinearLayout
+    private var pendingRoute: SelectedRoute? = null
 
-        private const val CANVAS = 0xFF070C16.toInt()
-        private const val PANEL = 0xFF0E182A.toInt()
-        private const val PANEL_RAISED = 0xFF111D32.toInt()
-        private const val INK = 0xFFF3F6FF.toInt()
-        private const val COPY = 0xFFAFBBD0.toInt()
-        private const val MUTED = 0xFF78869F.toInt()
-        private const val LINE = 0xFF2B3954.toInt()
-        private const val BLUE = 0xFF7180FF.toInt()
-        private const val MINT = 0xFF68E3B8.toInt()
-        private const val ERROR = 0xFFE86F87.toInt()
-    }
-
-    private val executor = Executors.newSingleThreadExecutor()
-    private lateinit var urlInput: EditText
-    private lateinit var statusTitle: TextView
-    private lateinit var statusDetail: TextView
-    private lateinit var signalDial: SignalDialView
-    private lateinit var connectButton: TextView
-    private lateinit var importButton: TextView
-    private lateinit var routeButton: TextView
-    private lateinit var onboardingIntro: LinearLayout
-    private lateinit var accountPanel: LinearLayout
-    private lateinit var accountTitle: TextView
-    private lateinit var trafficValue: TextView
-    private lateinit var expiryValue: TextView
-    private lateinit var trafficProgress: ProgressBar
-    private var rawSubscriptionUrl: String? = null
-    private var maskedSubscriptionUrl = false
-    private var profileReady = false
-    private var vpnConnected = false
-    private var busy = false
-    private var importSuccessMoment = false
-
-    private val vpnStatusReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != ConnectVpnService.ACTION_STATUS) return
-            val message = intent.getStringExtra(ConnectVpnService.EXTRA_STATUS)
-                ?: return
-            renderStatus(
-                message,
-                intent.getStringExtra(ConnectVpnService.EXTRA_ERROR)?.let(::friendlyErrorMessage),
-            )
-        }
+    private val statusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) = renderStatus(
+            intent?.getStringExtra(ConnectVpnService.EXTRA_STATUS),
+            intent?.getStringExtra(ConnectVpnService.EXTRA_ERROR),
+        )
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.statusBarColor = CANVAS
-        window.navigationBarColor = CANVAS
-        window.decorView.systemUiVisibility = 0
-        buildView()
+        if (SubscriptionStore(this).readCurrent() == null) {
+            startActivity(Intent(this, SetupActivity::class.java))
+            finish()
+            return
+        }
+        buildScreen()
     }
 
-    override fun onDestroy() {
-        executor.shutdownNow()
-        super.onDestroy()
-    }
-
-    @SuppressLint("UnspecifiedRegisterReceiverFlag")
     override fun onStart() {
         super.onStart()
+        if (!::statusText.isInitialized) return
         val filter = IntentFilter(ConnectVpnService.ACTION_STATUS)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(vpnStatusReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("DEPRECATION")
-            registerReceiver(vpnStatusReceiver, filter)
-        }
+        ContextCompat.registerReceiver(this, statusReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        renderStoredState()
+        rebuildRouteRow()
     }
 
     override fun onStop() {
-        unregisterReceiver(vpnStatusReceiver)
+        if (::statusText.isInitialized) runCatching { unregisterReceiver(statusReceiver) }
         super.onStop()
     }
 
-    private fun buildView() {
-        val root = FrameLayout(this).apply {
-            setBackgroundColor(CANVAS)
-        }
-        val scroll = ScrollView(this).apply {
-            clipToPadding = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            isFillViewport = true
-        }
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(42), dp(22), dp(34))
-        }
+    private fun buildScreen() {
+        val root = screen()
+        root.addView(header("connect / android", "deytt."))
+        root.addView(spacer(42, this))
 
-        root.addView(scroll, FrameLayout.LayoutParams(match, match))
-        scroll.addView(content, ViewGroup.LayoutParams(match, wrap))
-        root.setOnApplyWindowInsetsListener { _, insets ->
-            val top = insets.systemWindowInsetTop
-            val bottom = insets.systemWindowInsetBottom
-            content.setPadding(
-                dp(22),
-                (top + dp(18)).coerceAtLeast(dp(42)),
-                dp(22),
-                bottom + dp(34),
-            )
-            insets
-        }
-
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        val brand = TextView(this).apply {
-            text = "deytt."
-            textSize = 27f
-            letterSpacing = -0.045f
-            setTextColor(INK)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        }
-        val edition = TextView(this).apply {
-            text = "CONNECT / ANDROID"
-            textSize = 10f
-            letterSpacing = 0.16f
-            setTextColor(MUTED)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-            gravity = Gravity.END
-        }
-        header.addView(brand, LinearLayout.LayoutParams(0, wrap, 1f))
-        header.addView(edition)
-        content.addView(header, marginParams(match))
-
-        onboardingIntro = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(54), 0, dp(18))
-            addView(TextView(this@MainActivity).apply {
-                text = "ОДИН РАЗ — И ГОТОВО"
-                textSize = 10f
-                letterSpacing = 0.16f
-                setTextColor(BLUE)
-                typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-            })
-            addView(TextView(this@MainActivity).apply {
-                text = "Добавьте свою\nподписку deytt."
-                textSize = 32f
-                setLineSpacing(0f, 0.94f)
-                letterSpacing = -0.035f
-                setTextColor(INK)
-                typeface = Typeface.create("sans-serif", Typeface.BOLD)
-            }, marginParams(match, top = 12))
-            addView(TextView(this@MainActivity).apply {
-                text = "Проверим профиль, сохраним его на устройстве и покажем только рабочие маршруты."
-                textSize = 15f
-                setLineSpacing(0f, 1.22f)
-                setTextColor(COPY)
-            }, marginParams(match, top = 16))
-        }
-        content.addView(onboardingIntro, marginParams(match))
-
-        signalDial = SignalDialView(this)
-        content.addView(signalDial, marginParams(match, dp(222), top = 14))
-
-        statusTitle = TextView(this).apply {
-            textSize = 23f
+        power = text("●", 74f, DeyttUi.BLUE).apply {
             gravity = Gravity.CENTER
-            setTextColor(INK)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            background = rounded(0xFF151529.toInt(), 68f, DeyttUi.LINE)
         }
-        content.addView(statusTitle, marginParams(match, top = -8))
-        statusDetail = TextView(this).apply {
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setTextColor(COPY)
-            maxLines = 3
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            setLineSpacing(0f, 1.15f)
-            setPadding(dp(10), 0, dp(10), 0)
-        }
-        content.addView(statusDetail, marginParams(match, top = 7))
+        root.addView(power, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(172)))
+        root.addView(spacer(26, this))
+        statusText = text("VPN отключён", 30f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply { gravity = Gravity.CENTER }
+        detailText = text("Можно подключаться", 15f, DeyttUi.MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(10), 0, 0) }
+        root.addView(statusText)
+        root.addView(detailText)
+        root.addView(spacer(32, this))
 
-        routeButton = actionButton("МАРШРУТ  ·  ИМПОРТИРУЙТЕ ПОДПИСКУ", PANEL, COPY, LINE).apply {
-            contentDescription = "Выбор VPN-маршрута"
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(18), 0, dp(18), 0)
-        }
-        content.addView(routeButton, marginParams(match, dp(58), top = 24))
-        routeButton.setOnClickListener { selectRoute() }
-
-        connectButton = actionButton("ПОДКЛЮЧИТЬ", BLUE, Color.WHITE, BLUE)
-        content.addView(connectButton, marginParams(match, dp(58), top = 10))
-        connectButton.setOnClickListener {
-            if (busy || vpnConnected) {
-                startService(
-                    Intent(this@MainActivity, ConnectVpnService::class.java)
-                        .setAction(ConnectVpnService.ACTION_STOP),
-                )
-                renderStatus(
-                    "VPN отключается…",
-                    "Завершаю соединение и освобождаю сетевые ресурсы.",
-                    ConnectionVisualState.CONNECTING,
-                )
-            } else {
-                requestOrStartVpn()
-            }
-        }
-
-        accountPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            background = rounded(PANEL, dp(18), LINE, dp(1))
-            setPadding(dp(18), dp(17), dp(18), dp(16))
-        }
-        val accountHeader = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        accountTitle = TextView(this).apply {
-            textSize = 14f
-            setTextColor(INK)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        }
-        val activeLabel = TextView(this).apply {
-            text = "●  АКТИВНА"
-            textSize = 9f
-            letterSpacing = 0.09f
-            setTextColor(MINT)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-        }
-        accountHeader.addView(accountTitle, LinearLayout.LayoutParams(0, wrap, 1f))
-        accountHeader.addView(activeLabel)
-        accountPanel.addView(accountHeader)
-        val metrics = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        trafficValue = metricBlock(metrics, "ТРАФИК")
-        expiryValue = metricBlock(metrics, "ДЕЙСТВУЕТ ДО")
-        accountPanel.addView(metrics, marginParams(match, top = 16))
-        trafficProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 1000
-            progressTintList = ColorStateList.valueOf(BLUE)
-            progressBackgroundTintList = ColorStateList.valueOf(LINE)
-        }
-        accountPanel.addView(trafficProgress, marginParams(match, dp(3), top = 14))
-        content.addView(accountPanel, marginParams(match, top = 14))
-
-        val subscriptionLabel = TextView(this).apply {
-            text = "ПОДПИСКА"
-            textSize = 10f
-            letterSpacing = 0.15f
-            setTextColor(MUTED)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-        }
-        content.addView(subscriptionLabel, marginParams(wrap, top = 30))
-
-        val urlPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            background = rounded(PANEL_RAISED, dp(15), LINE, dp(1))
-            setPadding(dp(16), 0, dp(8), 0)
-        }
-        urlInput = EditText(this).apply {
-            hint = "HTTPS-ссылка на подписку"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            setSingleLine(true)
-            isHorizontalFadingEdgeEnabled = true
-            setHorizontallyScrolling(true)
-            contentDescription = "Ссылка на подписку"
-            setTextColor(INK)
-            setHintTextColor(MUTED)
-            textSize = 16f
-            letterSpacing = 0.01f
-            background = ColorDrawable(Color.TRANSPARENT)
-            setPadding(0, 0, 0, 0)
-            rawSubscriptionUrl = getPreferences(0).getString(URL_KEY, "")
-                ?.takeIf { it.isNotBlank() }
-            if (rawSubscriptionUrl != null) {
-                maskedSubscriptionUrl = true
-                setText(maskSensitiveUrl(rawSubscriptionUrl.orEmpty()))
-            }
-            setOnFocusChangeListener { _, hasFocus ->
-                if (hasFocus) revealSubscriptionUrl()
-                else if (!maskedSubscriptionUrl && !rawSubscriptionUrl.isNullOrBlank() &&
-                    urlInput.text.toString().trim() == rawSubscriptionUrl.orEmpty()
-                ) {
-                    maskSubscriptionUrl(rawSubscriptionUrl.orEmpty())
-                }
-            }
-        }
-        urlPanel.addView(urlInput, LinearLayout.LayoutParams(0, dp(54), 1f))
-        importButton = actionButton("ИМПОРТ", Color.TRANSPARENT, BLUE, Color.TRANSPARENT).apply {
-            textSize = 11f
-            minHeight = dp(44)
-        }
-        urlPanel.addView(importButton, LinearLayout.LayoutParams(dp(94), dp(44)))
-        content.addView(urlPanel, marginParams(match, dp(62), top = 10))
-        importButton.setOnClickListener { importSubscription() }
-
-        val note = TextView(this).apply {
-            text = "Профиль хранится только на устройстве · токен скрыт"
-            textSize = 11f
-            setTextColor(MUTED)
-            gravity = Gravity.CENTER
-        }
-        content.addView(note, marginParams(match, top = 13))
-
-        setContentView(root)
-        root.requestApplyInsets()
-        restoreScreenState()
-        updateControls()
+        routeRow = LinearLayout(this)
+        root.addView(routeRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        root.addView(spacer(14, this))
+        action = button("ПОДКЛЮЧИТЬ").apply { setOnClickListener { toggleTunnel() } }
+        root.addView(action)
+        root.addView(spacer(28, this))
+        root.addView(row("Подписка", "Трафик, срок и обновление", "◎").apply {
+            setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
+        })
+        present(root)
+        rebuildRouteRow()
+        renderStoredState()
     }
 
-    private fun importSubscription() {
-        val rawUrl = currentSubscriptionUrl()
-        if (rawUrl.isBlank()) {
-            renderStatus("Нужна ссылка", "Вставьте HTTPS-ссылку на подписку.", ConnectionVisualState.ERROR)
-            return
-        }
-        busy = true
-        updateControls()
-        importButton.isEnabled = false
-        renderStatus("Проверяем профиль", "Загружаю и проверяю конфигурацию…", ConnectionVisualState.CONNECTING)
-        executor.execute {
-            try {
-                val imported = SubscriptionClient.import(this, rawUrl)
-                runOnUiThread {
-                    getPreferences(0).edit().putString(URL_KEY, imported.url).apply()
-                    rawSubscriptionUrl = imported.url
-                    maskSubscriptionUrl(imported.url)
-                    profileReady = true
-                    busy = false
-                    importSuccessMoment = true
-                    updateSubscriptionSummary(imported.metadata)
-                    updateRouteButton()
-                    updateControls()
-                    importButton.isEnabled = true
-                    signalDial.alpha = 0f
-                    signalDial.scaleX = 0.94f
-                    signalDial.scaleY = 0.94f
-                    signalDial.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260L).start()
-                    importButton.postDelayed({
-                        importSuccessMoment = false
-                        updateControls()
-                    }, 900L)
-                    renderStatus(
-                        "Профиль готов",
-                        "Маршруты обновлены · можно подключаться",
-                    )
-                }
-            } catch (error: Exception) {
-                runOnUiThread {
-                    busy = false
-                    profileReady = hasValidStoredProfile()
-                    updateControls()
-                    importButton.isEnabled = true
-                    renderStatus(
-                        "Импорт не выполнен",
-                        friendlyError(error, "Не удалось импортировать подписку."),
-                        ConnectionVisualState.ERROR,
-                    )
-                }
-            }
-        }
+    private fun rebuildRouteRow() {
+        if (!::routeRow.isInitialized) return
+        val selected = SelectedRouteStore(this).read()
+        routeRow.removeAllViews()
+        routeRow.addView(row(selected.title, selected.subtitle, if (selected.engine == TunnelEngine.AMNEZIAWG) "◈" else "↗").apply {
+            setOnClickListener { startActivity(Intent(this@MainActivity, RoutesActivity::class.java)) }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
-    private fun requestOrStartVpn() {
-        val config = SubscriptionStore(this).readCurrent()
-        if (config == null) {
-            profileReady = false
-            updateControls()
-            renderStatus("Нужна подписка", "Сначала импортируйте профиль.", ConnectionVisualState.ERROR)
+    private fun toggleTunnel() {
+        val current = currentStatus()
+        if (current == "VPN подключён" || current.contains("Запуск") || current.contains("Проверяем")) {
+            stopService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+            AwgTunnelController.stop(this)
             return
         }
-        try {
-            ProfileValidator.validate(config)
-            profileReady = true
-        } catch (error: Exception) {
-            profileReady = false
-            updateControls()
-            renderStatus(
-                "Профиль требует обновления",
-                friendlyError(error, "Импортируйте подписку заново."),
-                ConnectionVisualState.ERROR,
-            )
-            return
-        }
-        busy = true
-        updateControls()
-        renderStatus("Ожидаем разрешение", "Android запросит системное разрешение VPN…", ConnectionVisualState.CONNECTING)
-        val permissionIntent = VpnService.prepare(this)
-        if (permissionIntent != null) {
-            startActivityForResult(permissionIntent, VPN_PERMISSION_REQUEST)
-        } else {
-            startVpnService()
-        }
+        pendingRoute = SelectedRouteStore(this).read()
+        val permission = VpnService.prepare(this)
+        if (permission != null) startActivityForResult(permission, VPN_PERMISSION_REQUEST) else startSelectedTunnel()
     }
 
-    @Deprecated("Android activity result API is sufficient for the MVP")
+    @Deprecated("Android VPN permission API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != VPN_PERMISSION_REQUEST) return
-        if (resultCode == RESULT_OK) {
-            startVpnService()
+        if (requestCode == VPN_PERMISSION_REQUEST && resultCode == RESULT_OK) startSelectedTunnel()
+    }
+
+    private fun startSelectedTunnel() {
+        val route = pendingRoute ?: SelectedRouteStore(this).read()
+        if (route.engine == TunnelEngine.AMNEZIAWG) {
+            stopService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+            val store = AwgProfileStore(this)
+            val config = if (route.id == "awg31") store.read31() else store.read15()
+            if (config == null) {
+                renderStatus("Ошибка запуска VPN", "Обновите подписку: профиль ${route.subtitle} отсутствует")
+                return
+            }
+            AwgTunnelController.start(this, config, route.id)
         } else {
-            busy = false
-            updateControls()
-            renderStatus("Разрешение отклонено", "Без системного разрешения VPN туннель не запускается.", ConnectionVisualState.ERROR)
+            AwgTunnelController.stop(this, publishStatus = false)
+            val intent = Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
         }
     }
 
-    private fun startVpnService() {
-        try {
-            val intent = Intent(this, ConnectVpnService::class.java)
-                .setAction(ConnectVpnService.ACTION_START)
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
-            renderStatus("Подключаемся", "Запускаю защищённый туннель…", ConnectionVisualState.CONNECTING)
-        } catch (error: Throwable) {
-            busy = false
-            updateControls()
-            renderStatus(
-                "Запуск не выполнен",
-                friendlyError(error, "Не удалось запустить VPN."),
-                ConnectionVisualState.ERROR,
-            )
-        }
+    private fun renderStoredState() {
+        val prefs = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
+        renderStatus(prefs.getString(ConnectVpnService.STATE_STATUS, "VPN отключён"), prefs.getString(ConnectVpnService.STATE_ERROR, null))
     }
 
-    private fun selectRoute() {
-        val config = SubscriptionStore(this).readCurrent()
-        if (config == null) {
-            renderStatus("Нужна подписка", "Сначала импортируйте профиль.", ConnectionVisualState.ERROR)
-            return
+    private fun currentStatus(): String = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
+        .getString(ConnectVpnService.STATE_STATUS, "VPN отключён") ?: "VPN отключён"
+
+    private fun renderStatus(status: String?, error: String?) {
+        if (!::statusText.isInitialized) return
+        val value = status ?: "VPN отключён"
+        statusText.text = value
+        detailText.text = error ?: when (value) {
+            "VPN подключён" -> "Трафик защищён"
+            "VPN отключён" -> "Можно подключаться"
+            else -> "Проверяем доступ к интернету"
         }
-        val routes = runCatching { ProfileRoutes.options(config) }.getOrElse { error ->
-            renderStatus("Маршруты недоступны", friendlyError(error, "Импортируйте подписку заново."), ConnectionVisualState.ERROR)
-            return
-        }
-        if (routes.isEmpty()) {
-            renderStatus("Маршруты не найдены", "Импортируйте подписку заново.", ConnectionVisualState.ERROR)
-            return
-        }
-        val selectedTag = ProfileRoutes.selected(config)
-        showRouteSheet(config, routes, selectedTag)
+        val failed = value.startsWith("Ошибка")
+        val connected = value == "VPN подключён"
+        power.setTextColor(if (failed) DeyttUi.CORAL else if (connected) DeyttUi.MINT else DeyttUi.BLUE)
+        action.text = if (connected || value.contains("Запуск") || value.contains("Проверяем")) "ОТКЛЮЧИТЬ" else "ПОДКЛЮЧИТЬ"
     }
 
-    private fun showRouteSheet(config: String, routes: List<RouteOption>, selectedTag: String) {
-        val dialog = Dialog(this)
-        val sheet = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(20), dp(22), dp(28))
-            background = rounded(PANEL_RAISED, dp(26), LINE, dp(1))
-        }
-        val handle = View(this).apply { background = rounded(LINE, dp(2), null, 0) }
-        sheet.addView(handle, LinearLayout.LayoutParams(dp(42), dp(4)).apply { gravity = Gravity.CENTER_HORIZONTAL })
-        sheet.addView(TextView(this).apply {
-            text = "Маршрут"
-            textSize = 26f
-            letterSpacing = -0.025f
-            setTextColor(INK)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        }, marginParams(match, top = 22))
-        sheet.addView(TextView(this).apply {
-            text = "Выбирайте страну, а рабочий узел внутри неё приложение найдёт само."
-            textSize = 14f
-            setLineSpacing(0f, 1.18f)
-            setTextColor(COPY)
-        }, marginParams(match, top = 6))
-
-        routes.forEach { route ->
-            val selected = route.tag == selectedTag
-            val row = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(16), dp(13), dp(14), dp(13))
-                background = rounded(
-                    if (selected) 0xFF182440.toInt() else PANEL,
-                    dp(18),
-                    if (selected) BLUE else LINE,
-                    dp(1),
-                )
-                isClickable = true
-                isFocusable = true
-                contentDescription = "Маршрут ${route.label}. ${route.detail}"
-            }
-            row.addView(TextView(this).apply {
-                text = route.flag
-                textSize = 25f
-                gravity = Gravity.CENTER
-            }, LinearLayout.LayoutParams(dp(46), dp(46)))
-            val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-            copy.addView(TextView(this).apply {
-                text = route.label
-                textSize = 16f
-                setTextColor(INK)
-                typeface = Typeface.create("sans-serif", Typeface.BOLD)
-            })
-            copy.addView(TextView(this).apply {
-                text = route.detail
-                textSize = 11f
-                setTextColor(if (route.recommended) MINT else MUTED)
-            }, marginParams(match, top = 3))
-            row.addView(copy, LinearLayout.LayoutParams(0, wrap, 1f).apply { marginStart = dp(8) })
-            row.addView(TextView(this).apply {
-                text = if (selected) "✓" else "›"
-                textSize = 19f
-                setTextColor(if (selected) MINT else COPY)
-                gravity = Gravity.CENTER
-            }, LinearLayout.LayoutParams(dp(34), dp(42)))
-            row.setOnClickListener {
-                try {
-                    val updated = ProfileRoutes.select(config, route.tag)
-                    ProfileValidator.validate(updated)
-                    SubscriptionStore(this).saveValidated(updated)
-                    updateRouteButton()
-                    renderStatus("Маршрут выбран", "${route.flag} ${route.label} · проверим при подключении")
-                } catch (error: Exception) {
-                    renderStatus("Маршрут не сохранён", friendlyError(error, "Обновите подписку."), ConnectionVisualState.ERROR)
-                } finally {
-                    dialog.dismiss()
-                }
-            }
-            sheet.addView(row, marginParams(match, top = 10))
-        }
-        sheet.addView(TextView(this).apply {
-            text = "AMNEZIAWG 1.5 / 3.1"
-            textSize = 10f
-            letterSpacing = 0.12f
-            setTextColor(MUTED)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-        }, marginParams(match, top = 24))
-        sheet.addView(TextView(this).apply {
-            text = "Отдельный протокол: откроется безопасный импорт в AmneziaVPN."
-            textSize = 12f
-            setLineSpacing(0f, 1.15f)
-            setTextColor(COPY)
-        }, marginParams(match, top = 7))
-        listOf("3.1" to "31", "1.5" to "15").forEach { (label, version) ->
-            val action = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(16), 0, dp(14), 0)
-                background = rounded(PANEL, dp(15), LINE, dp(1))
-                isClickable = true
-                isFocusable = true
-                contentDescription = "Импортировать AmneziaWG $label"
-                setOnClickListener {
-                    val url = amneziaImportUrl(version)
-                    if (url == null) {
-                        renderStatus("Импорт недоступен", "Обновите ссылку подписки.", ConnectionVisualState.ERROR)
-                    } else {
-                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
-                    }
-                    dialog.dismiss()
-                }
-            }
-            action.addView(TextView(this).apply {
-                text = "◈"
-                textSize = 18f
-                setTextColor(BLUE)
-            }, LinearLayout.LayoutParams(dp(34), wrap))
-            action.addView(TextView(this).apply {
-                text = "AmneziaWG $label"
-                textSize = 14f
-                setTextColor(INK)
-                typeface = Typeface.create("sans-serif", Typeface.BOLD)
-            }, LinearLayout.LayoutParams(0, wrap, 1f))
-            action.addView(TextView(this).apply {
-                text = "›"
-                textSize = 18f
-                setTextColor(COPY)
-            })
-            sheet.addView(action, marginParams(match, dp(50), top = 9))
-        }
-
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            addView(sheet, ViewGroup.LayoutParams(match, wrap))
-        }
-        dialog.setContentView(scroll)
-        dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            attributes = attributes.apply { dimAmount = 0.72f }
-            setLayout(match, wrap)
-            setGravity(Gravity.BOTTOM)
-        }
-        dialog.setOnShowListener { dialog.window?.setLayout(match, wrap) }
-        dialog.show()
-    }
-
-    private fun amneziaImportUrl(version: String): String? {
-        val source = rawSubscriptionUrl?.takeIf { it.isNotBlank() } ?: return null
-        val uri = android.net.Uri.parse(source)
-        val path = uri.path.orEmpty()
-        if (!path.contains("/sub/token/")) return null
-        return uri.buildUpon()
-            .path(path.replace("/sub/token/", "/amnezia/token/"))
-            .clearQuery()
-            .appendQueryParameter("version", version)
-            .build()
-            .toString()
-    }
-
-    private fun renderStatus(
-        message: String,
-        detail: String? = null,
-        forcedState: ConnectionVisualState? = null,
-    ) {
-        if (!::statusTitle.isInitialized) return
-        val normalized = message.lowercase()
-        val state = forcedState ?: when {
-            normalized.contains("ошиб") || normalized.contains("не выполн") || normalized.contains("отклон") -> ConnectionVisualState.ERROR
-            normalized.contains("подключён") || normalized.contains("подключено") -> ConnectionVisualState.CONNECTED
-            normalized.contains("запуска") || normalized.contains("подключаем") || normalized.contains("ожидаем") || normalized.contains("проверяем") -> ConnectionVisualState.CONNECTING
-            else -> ConnectionVisualState.IDLE
-        }
-        statusTitle.text = message
-        statusDetail.text = detail.orEmpty().trim().take(360)
-        statusTitle.setTextColor(if (state == ConnectionVisualState.ERROR) ERROR else INK)
-        statusDetail.setTextColor(if (state == ConnectionVisualState.ERROR) 0xFFD6A6B1.toInt() else COPY)
-        signalDial.setState(state)
-        when (state) {
-            ConnectionVisualState.CONNECTED -> {
-                vpnConnected = true
-                busy = false
-            }
-            ConnectionVisualState.ERROR -> {
-                vpnConnected = false
-                busy = false
-            }
-            ConnectionVisualState.IDLE -> {
-                if (message.contains("отключ", ignoreCase = true)) vpnConnected = false
-                busy = false
-            }
-            ConnectionVisualState.CONNECTING -> Unit
-        }
-        updateControls()
-    }
-
-    private fun actionButton(textValue: String, fill: Int, textColor: Int, stroke: Int): TextView = TextView(this).apply {
-        text = textValue
-        textSize = 12f
-        letterSpacing = 0.08f
-        gravity = Gravity.CENTER
-        setTextColor(textColor)
-        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-        minHeight = dp(56)
-        isClickable = true
-        isFocusable = true
-        val radius = dp(15)
-        background = rounded(fill, radius, stroke.takeIf { it != Color.TRANSPARENT }, if (stroke == Color.TRANSPARENT) 0 else dp(1))
-        foreground = android.graphics.drawable.RippleDrawable(
-            ColorStateList.valueOf(Color.argb(42, 255, 255, 255)),
-            null,
-            rounded(Color.WHITE, radius, null, 0),
-        )
-        setOnTouchListener { view, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> view.animate().scaleX(0.975f).scaleY(0.975f).setDuration(110L).start()
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> view.animate().scaleX(1f).scaleY(1f).setDuration(150L).start()
-            }
-            false
-        }
-    }
-
-    private fun restoreScreenState() {
-        profileReady = hasValidStoredProfile()
-        updateSubscriptionSummary(SubscriptionMetadataStore(this).read())
-        updateRouteButton()
-        val state = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
-        when (state.getString(ConnectVpnService.STATE_STATUS, null)) {
-            "VPN подключён" -> renderStatus("VPN подключён", "Туннель активен", ConnectionVisualState.CONNECTED)
-            "Ошибка запуска VPN" -> renderStatus(
-                "Ошибка запуска VPN",
-                state.getString(ConnectVpnService.STATE_ERROR, null)
-                    ?.let { friendlyErrorMessage(it) },
-                ConnectionVisualState.ERROR,
-            )
-            else -> {
-                val config = SubscriptionStore(this).readCurrent()
-                if (config == null) {
-                    renderStatus("Готов к настройке", "Импортируйте подписку, затем запустите защищённый туннель.")
-                } else {
-                    val summary = runCatching { ProfileValidator.validate(config) }.getOrNull()
-                    if (summary != null) {
-                        renderStatus("Профиль готов", "${summary.outboundCount} выходов · готов к подключению")
-                    } else {
-                        renderStatus(
-                            "Профиль требует обновления",
-                            "Импортируйте подписку заново для обновления конфигурации.",
-                            ConnectionVisualState.ERROR,
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    private fun hasValidStoredProfile(): Boolean =
-        SubscriptionStore(this).readCurrent()?.let {
-            runCatching { ProfileValidator.validate(it) }.isSuccess
-        } == true
-
-    private fun updateRouteButton() {
-        if (!::routeButton.isInitialized) return
-        val selected = SubscriptionStore(this).readCurrent()
-            ?.let { config -> runCatching { ProfileRoutes.selected(config) }.getOrNull() }
-        val label = selected?.let { tag ->
-            runCatching { ProfileRoutes.options(SubscriptionStore(this).readCurrent().orEmpty()) }
-                .getOrNull()
-                ?.firstOrNull { it.tag == tag }
-                ?.label
-        } ?: "Импортируйте подписку"
-        routeButton.text = "МАРШРУТ  ·  ${label.uppercase()}   ›"
-    }
-
-    private fun currentSubscriptionUrl(): String =
-        if (maskedSubscriptionUrl) rawSubscriptionUrl.orEmpty()
-        else urlInput.text.toString().trim()
-
-    private fun revealSubscriptionUrl() {
-        if (!maskedSubscriptionUrl) return
-        urlInput.setText(rawSubscriptionUrl.orEmpty())
-        urlInput.setSelection(urlInput.length())
-        maskedSubscriptionUrl = false
-    }
-
-    private fun maskSubscriptionUrl(url: String) {
-        rawSubscriptionUrl = url
-        maskedSubscriptionUrl = true
-        if (::urlInput.isInitialized) {
-            urlInput.clearFocus()
-            urlInput.setText(maskSensitiveUrl(url))
-            urlInput.setSelection(0)
-        }
-    }
-
-    private fun maskSensitiveUrl(url: String): String = url
-        .replace(Regex("(/token/)[^/?#]+"), "$1••••••••")
-        .replace(Regex("([?&](?:token|key|password)=)[^&#]+", RegexOption.IGNORE_CASE), "$1••••••••")
-
-    private fun friendlyError(error: Throwable, fallback: String): String =
-        friendlyErrorMessage(error.message?.takeIf { it.isNotBlank() } ?: fallback)
-
-    private fun friendlyErrorMessage(message: String): String {
-        val normalized = message.replace(Regex("\\s+"), " ").trim()
-        return when {
-            normalized.contains("legacy", ignoreCase = true) ||
-                normalized.contains("inet4_address", ignoreCase = true) ->
-                "Конфигурация устарела. Нажмите «Импортировать подписку» заново."
-            normalized.contains("unknown field", ignoreCase = true) ->
-                "Сервер прислал несовместимую конфигурацию. Повторите импорт подписки."
-            normalized.contains("initialize cache-file", ignoreCase = true) ||
-                normalized.contains("cache-file", ignoreCase = true) ->
-                "Предыдущий запуск не завершился. Повторите подключение."
-            normalized.contains("unable to resolve host", ignoreCase = true) ||
-                normalized.contains("no address associated", ignoreCase = true) ||
-                normalized.contains("DNS через VPN не отвечает", ignoreCase = true) ->
-                "DNS через VPN не ответил. Проверьте сеть или выберите другой маршрут."
-            normalized.contains("Туннель не передаёт HTTPS-трафик", ignoreCase = true) ->
-                "Выбранный маршрут не передаёт трафик. Выберите другой маршрут и повторите подключение."
-            normalized.contains("Нет доступной физической сети", ignoreCase = true) ->
-                "Телефон не подключён к интернету. Включите Wi-Fi или мобильную сеть и повторите подключение."
-            else -> normalized.take(360)
-        }
-    }
-
-    private fun updateControls() {
-        if (!::connectButton.isInitialized) return
-        importButton.isEnabled = !busy
-        routeButton.isEnabled = profileReady && !busy && !vpnConnected
-        connectButton.isEnabled = profileReady || busy || vpnConnected
-        connectButton.text = when {
-            busy -> "ОСТАНОВИТЬ"
-            vpnConnected -> "ОТКЛЮЧИТЬ"
-            else -> "ПОДКЛЮЧИТЬ"
-        }
-        connectButton.background = rounded(
-            if (busy || vpnConnected) PANEL_RAISED else BLUE,
-            dp(15),
-            if (busy || vpnConnected) LINE else BLUE,
-            dp(1),
-        )
-        connectButton.setTextColor(if (busy || vpnConnected) INK else Color.WHITE)
-        importButton.text = when {
-            importSuccessMoment -> "✓  ДОБАВЛЕНО"
-            busy -> "ПРОВЕРЯЕМ…"
-            profileReady -> "ОБНОВИТЬ"
-            else -> "ДОБАВИТЬ"
-        }
-        importButton.alpha = if (importButton.isEnabled) 1f else 0.55f
-        routeButton.alpha = if (routeButton.isEnabled) 1f else 0.45f
-        connectButton.alpha = if (connectButton.isEnabled) 1f else 0.45f
-        val dashboardVisibility = if (profileReady) View.VISIBLE else View.GONE
-        onboardingIntro.visibility = if (profileReady) View.GONE else View.VISIBLE
-        signalDial.visibility = dashboardVisibility
-        routeButton.visibility = dashboardVisibility
-        connectButton.visibility = dashboardVisibility
-        accountPanel.visibility = dashboardVisibility
-        statusTitle.gravity = if (profileReady) Gravity.CENTER else Gravity.START
-        statusDetail.gravity = if (profileReady) Gravity.CENTER else Gravity.START
-        statusDetail.setPadding(if (profileReady) dp(10) else 0, 0, if (profileReady) dp(10) else 0, 0)
-    }
-
-    private fun metricBlock(parent: LinearLayout, label: String): TextView {
-        val block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        block.addView(TextView(this).apply {
-            text = label
-            textSize = 9f
-            letterSpacing = 0.12f
-            setTextColor(MUTED)
-            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-        })
-        val value = TextView(this).apply {
-            textSize = 15f
-            setTextColor(INK)
-            typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        }
-        block.addView(value, marginParams(match, top = 5))
-        parent.addView(block, LinearLayout.LayoutParams(0, wrap, 1f))
-        return value
-    }
-
-    private fun updateSubscriptionSummary(metadata: SubscriptionMetadata) {
-        if (!::accountTitle.isInitialized) return
-        accountTitle.text = metadata.title.removePrefix("deytt · ").ifBlank { "deytt" }
-        trafficValue.text = if (metadata.totalBytes > 0) {
-            "${formatBytes(metadata.usedBytes)} / ${formatBytes(metadata.totalBytes)}"
-        } else {
-            "${formatBytes(metadata.usedBytes)} · безлимит"
-        }
-        expiryValue.text = metadata.expiresAtSeconds?.let { seconds ->
-            SimpleDateFormat("d MMM yyyy", Locale("ru")).format(Date(seconds * 1000))
-        } ?: "без срока"
-        trafficProgress.progress = if (metadata.totalBytes > 0) {
-            ((metadata.usedBytes.coerceAtMost(metadata.totalBytes) * 1000) / metadata.totalBytes).toInt()
-        } else {
-            0
-        }
-        trafficProgress.visibility = if (metadata.totalBytes > 0) View.VISIBLE else View.GONE
-    }
-
-    private fun formatBytes(bytes: Long): String {
-        val gib = bytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
-        return if (gib >= 0.1) String.format(Locale("ru"), "%.1f ГБ", gib) else {
-            val mib = bytes.toDouble() / (1024.0 * 1024.0)
-            String.format(Locale("ru"), "%.0f МБ", mib)
-        }
-    }
-
-    private fun rounded(fill: Int, radius: Int, strokeColor: Int?, strokeWidth: Int): GradientDrawable =
-        GradientDrawable().apply {
-            setColor(fill)
-            cornerRadius = radius.toFloat()
-            if (strokeColor != null && strokeWidth > 0) setStroke(strokeWidth, strokeColor)
-        }
-
-    private fun marginParams(width: Int, height: Int = wrap, top: Int = 0): LinearLayout.LayoutParams =
-        LinearLayout.LayoutParams(width, height).apply { topMargin = dp(top) }
-
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
-
-    private val match: Int get() = ViewGroup.LayoutParams.MATCH_PARENT
-    private val wrap: Int get() = ViewGroup.LayoutParams.WRAP_CONTENT
+    companion object { private const val VPN_PERMISSION_REQUEST = 701 }
 }

@@ -30,7 +30,6 @@ object ProfileRoutes {
         val result = mutableListOf<RouteOption>()
         for (index in 0 until source.length()) {
             val outbound = source.optJSONObject(index) ?: continue
-            if (outbound.optString("type") != "urltest") continue
             val tag = outbound.optString("tag").trim()
             when {
                 tag.contains("автоподбор", ignoreCase = true) -> result += RouteOption(
@@ -40,14 +39,14 @@ object ProfileRoutes {
                     detail = "Самый быстрый доступный маршрут",
                     recommended = true,
                 )
-                tag.startsWith(ROUTE_PREFIX) -> {
+                tag.startsWith(ROUTE_PREFIX) && tag.count { it == ':' } == 1 -> {
                     val code = tag.removePrefix(ROUTE_PREFIX).uppercase()
                     val presentation = countryPresentation[code] ?: continue
                     result += RouteOption(
                         tag = tag,
                         label = presentation.second,
                         flag = presentation.first,
-                        detail = "Автовыбор рабочего узла · Hysteria 2",
+                        detail = "VLESS · Trojan · Hysteria 2",
                     )
                 }
             }
@@ -56,8 +55,16 @@ object ProfileRoutes {
     }
 
     fun select(config: String, tag: String): String {
-        require(options(config).any { it.tag == tag }) { "Выбранный маршрут отсутствует в подписке" }
         val root = parse(config)
+        val outbounds = root.optJSONArray("outbounds")
+        val publicTag = tag.contains("автоподбор", ignoreCase = true) ||
+            (tag.startsWith(ROUTE_PREFIX) && tag.count { it == ':' } in 1..2)
+        val exists = publicTag && outbounds != null && (0 until outbounds.length()).any {
+            outbounds.optJSONObject(it)?.optString("tag") == tag
+        }
+        require(exists) {
+            "Выбранный маршрут отсутствует в подписке"
+        }
         root.getJSONObject("route").put("final", tag)
         root.optJSONObject("dns")?.optJSONArray("servers")?.let { servers ->
             for (index in 0 until servers.length()) {

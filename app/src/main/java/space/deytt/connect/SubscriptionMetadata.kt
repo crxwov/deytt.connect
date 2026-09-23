@@ -1,6 +1,7 @@
 package space.deytt.connect
 
 import android.content.Context
+import androidx.core.content.edit
 
 data class SubscriptionMetadata(
     val title: String = "deytt",
@@ -32,15 +33,13 @@ class SubscriptionMetadataStore(context: Context) {
     private val preferences = context.getSharedPreferences("subscription_metadata", Context.MODE_PRIVATE)
 
     fun save(metadata: SubscriptionMetadata) {
-        preferences.edit()
-            .putString("title", metadata.title)
-            .putLong("upload", metadata.uploadBytes)
-            .putLong("download", metadata.downloadBytes)
-            .putLong("total", metadata.totalBytes)
-            .apply {
-                metadata.expiresAtSeconds?.let { putLong("expire", it) } ?: remove("expire")
-            }
-            .apply()
+        preferences.edit {
+            putString("title", metadata.title)
+            putLong("upload", metadata.uploadBytes)
+            putLong("download", metadata.downloadBytes)
+            putLong("total", metadata.totalBytes)
+            metadata.expiresAtSeconds?.let { putLong("expire", it) } ?: remove("expire")
+        }
     }
 
     fun read(): SubscriptionMetadata = SubscriptionMetadata(

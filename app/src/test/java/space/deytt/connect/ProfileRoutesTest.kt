@@ -11,6 +11,9 @@ class ProfileRoutesTest {
           "outbounds": [
             {"type": "urltest", "tag": "🇪🇺 автоподбор"},
             {"type": "urltest", "tag": "route:DE", "outbounds": ["de • обход 1"]},
+            {"type": "vless", "tag": "route:DE:VLESS"},
+            {"type": "trojan", "tag": "route:DE:TROJAN"},
+            {"type": "hysteria2", "tag": "route:DE:HYSTERIA2"},
             {"type": "hysteria2", "tag": "nl • обход 1"},
             {"type": "hysteria2", "tag": "Авито прокси"},
             {"type": "direct", "tag": "direct"}
@@ -45,6 +48,24 @@ class ProfileRoutesTest {
         assertEquals("route:DE", ProfileRoutes.selected(selected))
         assertEquals("route:DE", servers.getJSONObject(0).getString("detour"))
         assertFalse(servers.getJSONObject(1).has("detour"))
+    }
+
+    @Test
+    fun exposesEveryFirstPartyProtocolWithoutInternalNames() {
+        val routes = RouteCatalog.from(config, awg15 = true, awg31 = true)
+
+        assertEquals(
+            listOf(
+                RouteProtocol.AUTO,
+                RouteProtocol.VLESS,
+                RouteProtocol.TROJAN,
+                RouteProtocol.HYSTERIA2,
+                RouteProtocol.AWG15,
+                RouteProtocol.AWG31,
+            ),
+            routes.map(DeyttRoute::protocol),
+        )
+        assertFalse(routes.any { it.id.contains("Авито") || it.id.contains("vpn основной") })
     }
 
     @Test(expected = IllegalArgumentException::class)
