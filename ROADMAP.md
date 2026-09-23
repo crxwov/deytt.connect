@@ -555,21 +555,23 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   `1380fe32e97a2515b8fdeea8645ee919be6625123218b0528abb41e1acc990db`.
 - The complete bot suite passes: `228 passed, 15 subtests passed`. The local
   `adb` binary is present, but no device or emulator is attached.
+- Commit `9e25c83` is pushed to `origin/main`. GitHub prerelease `v0.8.0-debug`
+  publishes the standalone ARM64 APK; the remote asset digest matches
+  `3cc9ff495ed7d64506ca09ae9384c06c4ed4d3f10f9490b818d47cdd75b538f8`.
 - No ADB device or emulator is connected. Real AWG 3.1 traffic, the system
   notification, route latency, deep-link import, and GitHub update flow remain
   unverified on hardware.
 
 ## Next Action
 
-Review `git diff --check` and the scoped Android/bot diff, commit and push both
-repositories. Then pull and restart only the bot component using the existing
-deployment procedure; no server subscription deploy is justified. Publish a
-debug prerelease only after the final diff review, and keep hardware AWG,
-foreground-notification, deep-link, visual, and update-flow validation open.
+Run physical-device acceptance for authenticated import, AWG 1.5/3.1 traffic,
+foreground notifications, safe-area visuals, deep-link handoff, update flow,
+and external HTTPS canaries. Keep the published artifact explicitly debug
+until that hardware evidence exists.
 
 ## Resume Context
 
-Candidate 0.8.0 changes are present locally but not yet committed or released.
+Candidate 0.8.0 is committed, pushed, and published as `v0.8.0-debug`.
 The absolute JDK 17/SDK/NDK/CMake toolchains are present and all local Android
 checks pass; the earlier SDK-location failure is no longer a blocker. The
 upstream AWG submodule is clean and the build overlay is parent-owned. No
