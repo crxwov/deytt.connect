@@ -2,15 +2,19 @@ package space.deytt.connect
 
 import java.net.HttpURLConnection
 import java.net.URL
+import org.json.JSONArray
 import org.json.JSONObject
 
 data class ReleaseInfo(val tag: String, val pageUrl: String, val apkUrl: String?)
 
 object UpdateChecker {
-    private const val LATEST_RELEASE_URL = "https://api.github.com/repos/crxwov/deytt.connect/releases/latest"
+    // GitHub's /releases/latest deliberately excludes prereleases. The public
+    // Android channel is currently debug-prerelease based, so inspect the
+    // ordered release list instead and ignore only drafts.
+    private const val RELEASES_URL = "https://api.github.com/repos/crxwov/deytt.connect/releases?per_page=20"
 
     fun latest(): ReleaseInfo {
-        val connection = (URL(LATEST_RELEASE_URL).openConnection() as HttpURLConnection).apply {
+        val connection = (URL(RELEASES_URL).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8_000
             readTimeout = 8_000
             setRequestProperty("Accept", "application/vnd.github+json")
@@ -18,7 +22,11 @@ object UpdateChecker {
         }
         return try {
             check(connection.responseCode in 200..299) { "GitHub ответил HTTP ${connection.responseCode}" }
-            val json = JSONObject(connection.inputStream.bufferedReader().use { it.readText() })
+            val releases = JSONArray(connection.inputStream.bufferedReader().use { it.readText() })
+            val json = (0 until releases.length())
+                .mapNotNull { releases.optJSONObject(it) }
+                .firstOrNull { !it.optBoolean("draft", true) }
+                ?: error("GitHub не вернул опубликованных релизов")
             val assets = json.optJSONArray("assets")
             val apk = (0 until (assets?.length() ?: 0))
                 .mapNotNull { assets?.optJSONObject(it) }

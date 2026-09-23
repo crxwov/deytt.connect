@@ -1,11 +1,11 @@
 {
     "schema_version": 2,
-    "commit": "3765f091aa38ced35676212dc57a6e4ca06938e8",
-    "indexed_at": "2026-09-23T14:23:59Z",
+    "commit": "589bf4d13fd9f1ca1065fecab7808903da91b833",
+    "indexed_at": "2026-09-23T14:26:19Z",
     "project": "deytt-connect",
     "nodes": 5074,
     "edges": 16806,
     "original_size": 11468800,
-    "compressed_size": 1498980,
+    "compressed_size": 1498895,
     "compression_level": 3
 }
