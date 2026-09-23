@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — the 0.5.0 all-protocol, multi-screen candidate builds locally;
-backend 12/12 proof is complete, release publication and phone proof are pending
+In progress — Android 0.5.0 is published with the 12/12 backend baseline;
+physical-phone proof for the five protocol families remains pending
 
 ## Objective
 
@@ -365,11 +365,17 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   14/14. `vpn-admin.service` is active and `/health` is clean.
 - Repository-local Git identity is now `crxwov` with the verified GitHub
   no-reply address, so the next commit is attributed to the repository owner.
+- Commit `52c21a5` is pushed to `main` and GitHub attributes it to `crxwov`.
+  Prerelease `v0.5.0-debug` publishes the standalone ARM64 APK; a fresh release
+  download matches SHA-256
+  `c454f3ab3d95310f7a180247a76e2da9b4b55bb05eb52b3fe1573a40cb3dbfe1`,
+  passes ZIP integrity, and verifies with APK Signature Scheme v2.
 
 ## Next Action
 
-Commit and push Android 0.5.0, publish the verified ARM64 prerelease, and collect
-real-phone proof for every displayed protocol.
+Install `v0.5.0-debug` on the physical phone, re-import the subscription, and
+collect external HTTPS proof for auto-pick, all displayed regional protocols,
+and both embedded AmneziaWG generations.
 
 ## Resume Context
 
