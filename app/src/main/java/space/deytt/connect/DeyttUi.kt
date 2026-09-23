@@ -4,10 +4,12 @@ import android.app.Activity
 import android.animation.ObjectAnimator
 import android.animation.AnimatorSet
 import android.animation.StateListAnimator
+import android.animation.ValueAnimator
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -15,6 +17,8 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 object DeyttUi {
     const val BG = 0xFF080B12.toInt()
@@ -32,7 +36,16 @@ object DeyttUi {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(20), dp(18), dp(20), dp(28))
         background = if (withBackdrop) SignalBackdropDrawable() else ColorDrawable(BG)
-        fitsSystemWindows = true
+        fitsSystemWindows = false
+        clipToPadding = false
+        ViewCompat.setOnApplyWindowInsetsListener(this) { view, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
+            )
+            view.setPadding(dp(20), dp(18) + bars.top, dp(20), dp(28) + bars.bottom)
+            insets
+        }
+        ViewCompat.requestApplyInsets(this)
     }
 
     fun Activity.header(kicker: String, title: String, back: Boolean = false): LinearLayout =
@@ -78,11 +91,22 @@ object DeyttUi {
         background = rounded(if (secondary) SURFACE_2 else BLUE, 14f, if (secondary) LINE else BLUE)
         isClickable = true
         isFocusable = true
-        val target = this
-        stateListAnimator = StateListAnimator().apply {
-            addState(intArrayOf(android.R.attr.state_pressed), scaleAnimator(target, .975f, 110))
-            addState(intArrayOf(), scaleAnimator(target, 1f, 140))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
+            val target = this
+            stateListAnimator = StateListAnimator().apply {
+                addState(intArrayOf(android.R.attr.state_pressed), scaleAnimator(target, .975f, 110))
+                addState(intArrayOf(), scaleAnimator(target, 1f, 140))
+            }
         }
+    }
+
+    fun Activity.actionLabel(label: String = "проверить"): TextView = text(label, 12f, BLUE, Typeface.BOLD).apply {
+        gravity = Gravity.CENTER
+        minHeight = dp(40)
+        setPadding(dp(10), dp(8), dp(10), dp(8))
+        background = rounded(SURFACE_2, 11f, SURFACE_2)
+        isClickable = true
+        isFocusable = true
     }
 
     fun Activity.row(
@@ -95,19 +119,22 @@ object DeyttUi {
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12), dp(12), dp(10), dp(12))
+            setPadding(dp(16), dp(13), dp(12), dp(13))
             background = GradientDrawable().apply {
                 setColor(SURFACE)
-                setStroke(dp(1), LINE)
                 cornerRadius = dp(13).toFloat()
             }
-            addView(text(leading, 12f, BLUE, Typeface.BOLD).apply {
-                gravity = Gravity.CENTER
-                letterSpacing = .04f
-                background = rounded(SURFACE_2, 9f, LINE)
-                minWidth = dp(38)
-                minHeight = dp(38)
-            }, LinearLayout.LayoutParams(dp(42), dp(42)))
+            if (leading.isNotBlank()) {
+                addView(text(leading, 12f, BLUE, Typeface.BOLD).apply {
+                    gravity = Gravity.CENTER
+                    letterSpacing = .04f
+                    background = rounded(SURFACE_2, 9f, SURFACE_2)
+                    minWidth = dp(38)
+                    minHeight = dp(38)
+                }, LinearLayout.LayoutParams(dp(42), dp(42)).apply {
+                    rightMargin = dp(12)
+                })
+            }
             addView(LinearLayout(this@row).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(text(title, 16f, TEXT, Typeface.BOLD).apply {
@@ -122,10 +149,12 @@ object DeyttUi {
             }
             isClickable = interactive
             isFocusable = interactive
-            val target = this
-            if (interactive) stateListAnimator = StateListAnimator().apply {
-                addState(intArrayOf(android.R.attr.state_pressed), ObjectAnimator.ofFloat(target, "alpha", 1f, .76f).setDuration(90))
-                addState(intArrayOf(), ObjectAnimator.ofFloat(target, "alpha", .76f, 1f).setDuration(130))
+            if (interactive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
+                val target = this
+                stateListAnimator = StateListAnimator().apply {
+                    addState(intArrayOf(android.R.attr.state_pressed), ObjectAnimator.ofFloat(target, "alpha", 1f, .76f).setDuration(90))
+                    addState(intArrayOf(), ObjectAnimator.ofFloat(target, "alpha", .76f, 1f).setDuration(130))
+                }
             }
         }
 
@@ -148,7 +177,7 @@ object DeyttUi {
 
     fun Activity.note(value: String, accent: Int = MUTED): TextView = text(value, 13f, accent).apply {
         setPadding(dp(14), dp(13), dp(14), dp(13))
-        background = rounded(SURFACE_2, 11f, LINE)
+        background = rounded(SURFACE_2, 11f, SURFACE_2)
     }
 
     fun Activity.rounded(fill: Int, radius: Float, stroke: Int = fill): GradientDrawable =
@@ -159,6 +188,8 @@ object DeyttUi {
     fun Activity.present(content: LinearLayout) {
         setContentView(ScrollView(this).apply {
             isFillViewport = true
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             setBackgroundColor(BG)
             addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         })

@@ -3,17 +3,16 @@ package space.deytt.connect
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import space.deytt.connect.DeyttUi.header
+import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
-import space.deytt.connect.DeyttUi.text
 import space.deytt.connect.DeyttUi.note
 
 class ProtocolActivity : Activity() {
@@ -31,7 +30,7 @@ class ProtocolActivity : Activity() {
         val root = screen()
         root.addView(header("протокол", title, true))
         root.addView(spacer(10, this))
-        root.addView(note(if (code == "AWG") "Выберите сервер и версию AmneziaWG. Задержка измеряется до каждой доступной точки." else "Выберите способ подключения для этого направления. Задержка измеряется до каждой точки."))
+        root.addView(note(if (code == "AWG") "Выберите сервер и версию AmneziaWG. Проверяйте задержку у каждой точки вручную." else "Выберите способ подключения для этого направления. Проверяйте задержку вручную."))
         root.addView(spacer(12, this))
         val globe = RouteGlobeView(this)
         globe.focus(if (code == "AWG") "AUTO" else code, animate = false)
@@ -49,34 +48,46 @@ class ProtocolActivity : Activity() {
             }
             val rowTitle = if (route.engine == TunnelEngine.AMNEZIAWG) route.country else route.protocol.title
             val rowDetail = if (route.engine == TunnelEngine.AMNEZIAWG) "${route.protocol.title} · ${route.protocol.detail}" else route.protocol.detail
-            val latency = text("замер…", 13f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply { gravity = Gravity.CENTER }
+            val latency = actionLabel("проверить")
             val item = row(rowTitle, rowDetail, mark, "").apply {
                 setOnClickListener {
                     if (selecting) return@setOnClickListener
                     selecting = true
                     globe.focus(if (route.engine == TunnelEngine.AMNEZIAWG) route.id.uppercase() else route.countryCode)
-                    postDelayed({ if (!isFinishing) select(route) }, 160L)
+                    select(route)
                 }
             }
-            item.addView(latency, LinearLayout.LayoutParams(dp(72), ViewGroup.LayoutParams.MATCH_PARENT))
+            latency.setOnClickListener { measure(route, latency) }
+            item.addView(latency, LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT))
             root.addView(item)
-            measure(route, latency)
             root.addView(spacer(12, this))
         }
         present(root)
     }
 
     private fun measure(route: DeyttRoute, view: android.widget.TextView) {
-        val generation = latencyGeneration
+        val generation = ++latencyGeneration
         val config = SubscriptionStore(this).readCurrent() ?: return
         val awg = AwgProfileStore(this)
         val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) awg.read(route.id) else null
         val target = RouteLatency.target(config, route, awgConfig)
-        if (target == null) { view.text = "—"; return }
+        view.text = "проверяю…"
+        view.isEnabled = false
+        view.alpha = .65f
+        if (target == null) {
+            view.text = "нет ответа"
+            view.isEnabled = true
+            view.alpha = 1f
+            return
+        }
         LatencyExecutor.pool.execute {
             val label = RouteLatency.label(RouteLatency.measure(target))
             runOnUiThread {
-                if (generation == latencyGeneration && !isFinishing && !isDestroyed) view.text = label
+                if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
+                    view.text = label
+                    view.isEnabled = true
+                    view.alpha = 1f
+                }
             }
         }
     }

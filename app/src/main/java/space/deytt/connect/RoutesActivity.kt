@@ -7,6 +7,7 @@ import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
+import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.present
@@ -29,7 +30,7 @@ class RoutesActivity : Activity() {
         val root = screen()
         root.addView(header("маршруты", "Выберите направление", true))
         root.addView(spacer(10, this))
-        root.addView(note("Проверяем задержку до каждого направления до запуска. Ваш выбор можно сменить в любой момент."))
+        root.addView(note("Проверка задержки запускается вручную. Она показывает доступность точки, а не заменяет проверку соединения."))
         root.addView(spacer(12, this))
         globe = RouteGlobeView(this)
         globe.focus("AUTO", animate = false)
@@ -91,34 +92,40 @@ class RoutesActivity : Activity() {
         routes: List<DeyttRoute>,
         onClick: () -> Unit,
     ) {
-        val latency = text("замер…", 13f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply { gravity = Gravity.CENTER }
+        val latency = actionLabel("проверить")
         val item = row(title, subtitle, leading, "").apply { setOnClickListener { onClick() } }
-        item.addView(latency, LinearLayout.LayoutParams(dp(72), ViewGroup.LayoutParams.MATCH_PARENT))
+        latency.setOnClickListener { measure(routes, latency) }
+        item.addView(latency, LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(item)
-        measure(routes, latency)
     }
 
     private fun measure(routes: List<DeyttRoute>, view: TextView) {
-        val generation = latencyGeneration
+        val generation = ++latencyGeneration
         val config = SubscriptionStore(this).readCurrent() ?: return
         val awg = AwgProfileStore(this)
-        val values = mutableListOf<Long>()
-        var remaining = routes.size
-        if (remaining == 0) { view.text = "—"; return }
-        routes.forEach { route ->
-            val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) awg.read(route.id) else null
-            val target = RouteLatency.target(config, route, awgConfig)
-            if (target == null) {
-                remaining--
-                if (remaining == 0) view.text = RouteLatency.label(values.minOrNull())
-            } else LatencyExecutor.pool.execute {
-                val measured = RouteLatency.measure(target)
-                runOnUiThread {
-                    if (generation != latencyGeneration || isFinishing || isDestroyed) return@runOnUiThread
-                    if (measured != null) values += measured
-                    remaining--
-                    if (remaining == 0) view.text = RouteLatency.label(values.minOrNull())
-                }
+        val route = routes.firstOrNull()
+        if (route == null) {
+            view.text = "нет ответа"
+            return
+        }
+        val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) awg.read(route.id) else null
+        val target = RouteLatency.target(config, route, awgConfig)
+        view.text = "проверяю…"
+        view.isEnabled = false
+        view.alpha = .65f
+        if (target == null) {
+            view.text = "нет ответа"
+            view.isEnabled = true
+            view.alpha = 1f
+            return
+        }
+        LatencyExecutor.pool.execute {
+            val label = RouteLatency.label(RouteLatency.measure(target))
+            runOnUiThread {
+                if (generation != latencyGeneration || isFinishing || isDestroyed) return@runOnUiThread
+                view.text = label
+                view.isEnabled = true
+                view.alpha = 1f
             }
         }
     }

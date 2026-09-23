@@ -7,6 +7,8 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
+import android.graphics.Typeface
+import android.os.Build
 import android.view.View
 import android.view.animation.DecelerateInterpolator
 
@@ -23,6 +25,11 @@ class RouteGlobeView(context: Context) : View(context) {
         strokeWidth = density * 1.1f
     }
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = density * 9f
+        typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
     private val route = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeWidth = density * 1.5f
@@ -41,7 +48,6 @@ class RouteGlobeView(context: Context) : View(context) {
     init {
         contentDescription = "Глобус маршрутов"
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
-        setLayerType(View.LAYER_TYPE_SOFTWARE, null)
     }
 
     fun focus(code: String, animate: Boolean = true) {
@@ -59,7 +65,7 @@ class RouteGlobeView(context: Context) : View(context) {
             else -> 0f
         }
         animator?.cancel()
-        if (!animate) {
+        if (!animate || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled())) {
             rotation = target
             invalidate()
             return
@@ -89,9 +95,7 @@ class RouteGlobeView(context: Context) : View(context) {
         val accent = if (selectedCode == "AUTO") DeyttUi.BLUE else DeyttUi.MINT
 
         fill.color = Color.argb(22, Color.red(accent), Color.green(accent), Color.blue(accent))
-        fill.setShadowLayer(radius * .18f, 0f, radius * .05f, Color.argb(42, Color.red(accent), Color.green(accent), Color.blue(accent)))
         canvas.drawCircle(cx, cy, radius, fill)
-        fill.clearShadowLayer()
 
         line.color = Color.argb(92, 139, 157, 197)
         canvas.drawCircle(cx, cy, radius, line)
@@ -110,7 +114,9 @@ class RouteGlobeView(context: Context) : View(context) {
         }
         val origin = Point(cx - radius * .74f, cy + radius * .62f, "HOME")
         route.color = Color.argb(105, Color.red(accent), Color.green(accent), Color.blue(accent))
-        if (selectedCode != "AUTO") {
+        if (selectedCode == "AUTO") {
+            visible.forEach { point -> drawRoute(canvas, origin, point, alpha = 52) }
+        } else {
             visible.firstOrNull { it.code == selectedCode }?.let { drawRoute(canvas, origin, it) }
             if (selectedCode == "RU-DE") {
                 visible.firstOrNull { it.code == "RU" }?.let { drawRoute(canvas, origin, it) }
@@ -128,16 +134,21 @@ class RouteGlobeView(context: Context) : View(context) {
                 line.strokeWidth = density
                 canvas.drawCircle(point.x, point.y, density * 8f, line)
             }
+            label.color = if (isSelected) accent else Color.argb(170, 178, 190, 216)
+            canvas.drawText(point.code, point.x, point.y - density * 8f, label)
         }
         fill.color = DeyttUi.TEXT
         canvas.drawCircle(origin.x, origin.y, density * 3f, fill)
+        label.color = DeyttUi.TEXT
+        canvas.drawText("вы", origin.x, origin.y + density * 17f, label)
     }
 
-    private fun drawRoute(canvas: Canvas, from: Point, to: Point) {
+    private fun drawRoute(canvas: Canvas, from: Point, to: Point, alpha: Int = 105) {
         val path = Path()
         path.moveTo(from.x, from.y)
         val midX = (from.x + to.x) * .5f
         val lift = minOf(width, height) * .18f
+        route.alpha = alpha
         path.quadTo(midX, minOf(from.y, to.y) - lift, to.x, to.y)
         canvas.drawPath(path, route)
     }

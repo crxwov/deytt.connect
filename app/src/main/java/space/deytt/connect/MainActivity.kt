@@ -16,6 +16,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import space.deytt.connect.DeyttUi.button
+import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.brandHeader
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.present
@@ -74,7 +75,6 @@ class MainActivity : Activity() {
         ContextCompat.registerReceiver(this, statusReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         renderStoredState()
         rebuildRouteRow()
-        measureSelectedRoute()
     }
 
     override fun onStop() {
@@ -112,11 +112,11 @@ class MainActivity : Activity() {
             }
         root.addView(spacer(24, this))
         root.addView(sectionLabel("быстрый доступ"))
-        root.addView(row("Подписка", "Срок, трафик и обновление", "URL").apply {
+        root.addView(row("Подписка", "Срок, трафик и обновление", "↗").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
         })
         root.addView(spacer(12, this))
-        root.addView(row("Настройки", "Обновления и локальные данные", "CFG").apply {
+        root.addView(row("Настройки", "Обновления и локальные данные", "⚙").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         })
         present(root)
@@ -126,15 +126,16 @@ class MainActivity : Activity() {
 
     private fun rebuildRouteRow() {
         if (!::routeRow.isInitialized) return
+        latencyGeneration++
         val selected = SelectedRouteStore(this).read()
         routeRow.removeAllViews()
-        latencyText = text("—", 13f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply {
-            gravity = Gravity.CENTER
+        latencyText = actionLabel("проверить").apply {
+            setOnClickListener { measureSelectedRoute() }
         }
-        val item = row(selected.title, selected.subtitle, if (selected.engine == TunnelEngine.AMNEZIAWG) "AWG" else "ROUTE", "").apply {
+        val item = row(selected.title, selected.subtitle, "•", "").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, RoutesActivity::class.java)) }
         }
-        item.addView(latencyText, LinearLayout.LayoutParams(dp(72), ViewGroup.LayoutParams.MATCH_PARENT))
+        item.addView(latencyText, LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT))
         routeRow.addView(item, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
@@ -232,11 +233,16 @@ class MainActivity : Activity() {
     private fun renderStatus(phase: VpnPhase?, status: String?, error: String?) {
         if (!::statusText.isInitialized) return
         val value = status ?: "Соединение выключено"
+        val displayValue = when (value) {
+            "VPN подключён" -> "Подключено"
+            "VPN отключён" -> "Соединение выключено"
+            else -> value
+        }
         val currentPhase = phase ?: VpnPhase.IDLE
-        statusText.text = value
-        detailText.text = error ?: when (value) {
-            "Подключено", "VPN подключён" -> "Соединение активно"
-            "Соединение выключено", "VPN отключён" -> "Готово к подключению"
+        statusText.text = displayValue
+        detailText.text = error ?: when (displayValue) {
+            "Подключено" -> "Соединение активно"
+            "Соединение выключено" -> "Готово к подключению"
             else -> "Проверяем доступ к интернету"
         }
         orb.setPhase(currentPhase)
@@ -253,15 +259,23 @@ class MainActivity : Activity() {
             .firstOrNull { it.id == selected.id } ?: return
         val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) awg.read(route.id) else null
         val target = RouteLatency.target(config, route, awgConfig)
-        latencyText.text = "замер…"
+        latencyText.text = "проверяю…"
+        latencyText.isEnabled = false
+        latencyText.alpha = .65f
         if (target == null) {
-            latencyText.text = "—"
+            latencyText.text = "нет ответа"
+            latencyText.isEnabled = true
+            latencyText.alpha = 1f
             return
         }
         LatencyExecutor.pool.execute {
             val label = RouteLatency.label(RouteLatency.measure(target))
             runOnUiThread {
-                if (generation == latencyGeneration && !isFinishing && !isDestroyed) latencyText.text = label
+                if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
+                    latencyText.text = label
+                    latencyText.isEnabled = true
+                    latencyText.alpha = 1f
+                }
             }
         }
     }

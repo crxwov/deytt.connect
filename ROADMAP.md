@@ -2,8 +2,12 @@
 
 ## Status
 
-In progress — repair subscription import degradation and finish the Android
-product-surface redesign after 0.7 feedback
+In progress — repair subscription import/data-plane diagnostics, make both
+foreground engines platform-correct, and finish the Android product-surface
+redesign after 0.7 feedback. Current candidate is 0.8.0; local Android
+validation is complete with the repository-local JDK 17/Android SDK
+toolchains. Hardware validation remains open because no device or emulator is
+attached.
 
 ## Objective
 
@@ -35,6 +39,11 @@ and a real APK artifact.
   picker, and reports a useful failure instead of silently hiding the family.
 - Subscription import tolerates transient gateway resets and explains a final
   failure without exposing the token.
+- Optional AWG failures preserve the required subscription and last-known-good
+  profiles per server; a failed server is never silently represented as a
+  healthy route.
+- The latency action is explicitly an endpoint probe, is user-triggered, and
+  never claims to prove a selected tunnel.
 
 ## Stages
 
@@ -87,17 +96,32 @@ and a real APK artifact.
 - [~] 13b. Replace the generic stacked-card presentation on setup, home, route,
       protocol, profile, and settings surfaces with a restrained native design
       system and intentional motion/accessibility states.
-- [ ] 14. Add account/subscription purchase and bot handoff flows, app update
-      checks, split tunneling, geo controls, and a settings surface.
-- [ ] 15. Audit all user copy/repository docs, remove implementation leakage,
+- [~] 13c. Harden URL/error redaction, optional AWG partial-import semantics,
+      and manual route probes; distinguish endpoint latency from full-tunnel
+      canary results.
+- [~] 13d. Move AWG foreground ownership into the embedded VpnService and
+      verify the Android 14 foreground-service manifest/type contract. The
+      implementation now uses a reproducible Gradle overlay over the clean
+      upstream submodule; device verification remains open.
+- [~] 14. Add account/subscription purchase and bot handoff flows, app update
+      checks, split tunneling, geo controls, and a settings surface. Update
+      checking, the existing deep-link handoff, and honest disabled surfaces
+      are implemented; split/geo remain deferred.
+- [~] 15. Audit all user copy/repository docs, remove implementation leakage,
       add release/download documentation, and complete real-device acceptance.
 
 ## Current State
 
-The active work is the Android-only import/UI repair. Optional AWG failures no
-longer abort the required sing-box import; the shared native visual primitives
-and six primary activities have been refreshed. No backend contract or server
-deployment change is part of this stage.
+The active work is the Android import/data-plane/UI repair plus the narrow bot
+handoff label/deep-link change. Optional AWG failures no longer abort the
+required sing-box import; failed optional gateway requests preserve the last
+known-good family and never report a fabricated server count. Subscription
+errors are sanitized, duplicate safe query parameters survive normalization,
+and route latency is manual endpoint diagnostics only. JVM-safe URL
+normalization now covers the `format=hysteria` input shape without depending on
+mocked Android `Uri` methods. No server subscription contract change was
+demonstrated or made. The bot's full local suite passes after the existing
+deep-link handoff was extended to the requested multi-subscription wording.
 
 The public GitHub repository now contains the first Android MVP commit on
 `main`. The current server exposes a tokenized
@@ -218,6 +242,14 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   engine switch; the wait fails closed with a user-visible error rather than
   starting the next engine after a fixed timeout. Redirect following is also
   disabled for bearer subscription URLs.
+- Current route latency uses `/system/bin/ping` or a direct TCP connect to the
+  endpoint before any tunnel is started. This explains why RU→DE can report a
+  latency while the later full-route HTTPS canary times out; the two signals
+  must be presented and tested as different measurements.
+- The current AWG module's nested `GoBackend.VpnService` starts without
+  `startForeground`, while the app-owned notification helper is only a
+  manager post. The service must own an ongoing notification and be started as
+  a foreground service before AWG acceptance can be claimed.
 - Luna's final pass found no remaining compile or engine-switch P0/P1. The
   embedded upstream AWG `GoBackend.VpnService` still owns the actual VPN
   lifecycle, while the app now keeps a separate connected notification for AWG
@@ -229,11 +261,27 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   временно недоступен” even when the required sing-box profile is valid. The
   repair keeps the core import usable, retains the last-known-good AWG family,
   and exposes the degraded state as an explicit warning.
+- The Android update checker now accepts only HTTPS GitHub release pages and
+  never renders raw transport errors. Existing bot contracts expose the
+  subscription URL, so the handoff uses the already-supported
+  `deytt.connect://import?url=...` scheme with percent-encoding; no new server
+  API was invented.
+- The upstream AWG submodule stays clean. `awg-tunnel` generates one
+  app-owned `GoBackend.java` overlay at build time, adds the real nested
+  `VpnService` foreground notification, and declares its Android 14 service
+  type in the library manifest.
 
 ## Issues and Failed Attempts
 
 - The first 0.6.0 Gradle run inherited unsupported system Java 26.0.2.1. All
   successful validation uses the repository-local JDK 17 toolchain.
+- The first 0.8.0 AWG overlay build used an unavailable Android source-set
+  exclude API and then exposed an implicit generated-source dependency during
+  lint. The build now compiles a generated mirror of the clean upstream Java
+  tree and declares the preparation task for all consuming module tasks.
+- The first 0.8.0 JVM import tests exposed Android `Uri` calls in URL
+  canonicalization. The client now uses `java.net.URI` and encoded query
+  helpers, while keeping HTTPS/host/redirect policy unchanged.
 - The clean validation process was interrupted after tests/packaging, so the
   scoped Gradle validation was rerun to completion instead of trusting partial
   output.
@@ -300,7 +348,6 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `app/src/main/java/space/deytt/connect/RouteLatency.kt`
 - `app/src/main/java/space/deytt/connect/ConnectionOrbView.kt`
 - `app/src/main/java/space/deytt/connect/SignalBackdropDrawable.kt`
-- `app/src/main/java/space/deytt/connect/NotificationStatus.kt`
 - `app/src/main/java/space/deytt/connect/RouteGlobeView.kt`
 - `app/src/main/java/space/deytt/connect/SettingsActivity.kt`
 - `app/src/main/java/space/deytt/connect/SubscriptionErrorText.kt`
@@ -308,7 +355,11 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `app/src/main/java/space/deytt/connect/SubscriptionRetryPolicy.kt`
 - `app/src/main/java/space/deytt/connect/ReleaseVersion.kt`
 - `app/src/main/java/space/deytt/connect/UpdateChecker.kt`
+- `app/src/main/java/space/deytt/connect/SubscriptionRetryPolicy.kt`
+- `app/src/test/java/space/deytt/connect/SubscriptionClientTest.kt`
 - `awg-tunnel/`
+- `awg-tunnel/build.gradle.kts`
+- `awg-tunnel/src/main/AndroidManifest.xml`
 - `third_party/amneziawg-android` (pinned Git submodule)
 - `app/src/main/java/space/deytt/connect/SignalDialView.kt` (removed)
 - `app/src/test/java/space/deytt/connect/ProfileRoutesTest.kt`
@@ -317,6 +368,11 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `THIRD-PARTY-NOTICES.md`
 - `DIFFERENCES.md`
 - `ROADMAP.md`
+- `/home/hackov/Documents/Projects/uebot/keyboards/keys.py`
+- `/home/hackov/Documents/Projects/uebot/handlers/_keys/callbacks/manage.py`
+- `/home/hackov/Documents/Projects/uebot/handlers/_keys/callbacks/who_connected.py`
+- `/home/hackov/Documents/Projects/uebot/locales/_catalogs/flow.py`
+- `/home/hackov/Documents/Projects/uebot/locales/_catalogs/{ru,en,uk,kk}.py`
 
 ## Validation and Blockers
 
@@ -489,29 +545,35 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   prerelease `v0.7.0-debug` publishes the ARM64 APK with the same SHA-256 and
   explicitly keeps real-device AWG/tunnel proof pending; the downloaded asset
   was rechecked for SHA-256 and ZIP integrity.
+- Android 0.8.0 local validation uses absolute repository toolchains
+  `.toolchain/jdk17` and `.toolchain/android-sdk` with `--no-daemon`: 38 unit
+  tests pass, `lintDebug` passes, and `assembleDebug` passes after compiling
+  the generated AWG foreground-service overlay and all native ABIs.
+- ARM64 APK SHA-256 is
+  `3cc9ff495ed7d64506ca09ae9384c06c4ed4d3f10f9490b818d47cdd75b538f8`;
+  universal APK SHA-256 is
+  `1380fe32e97a2515b8fdeea8645ee919be6625123218b0528abb41e1acc990db`.
+- The complete bot suite passes: `228 passed, 15 subtests passed`. The local
+  `adb` binary is present, but no device or emulator is attached.
 - No ADB device or emulator is connected. Real AWG 3.1 traffic, the system
   notification, route latency, deep-link import, and GitHub update flow remain
   unverified on hardware.
 
 ## Next Action
 
-Commit and push the validated Android changes. A real device is still required
-to verify authenticated import, engine switching, AWG 1.5/3.1 traffic, the
-connected notification, route latency, deep-link handoff, and update checking.
-Only after that can Stage 13 be marked complete and Stage 14 begin.
+Review `git diff --check` and the scoped Android/bot diff, commit and push both
+repositories. Then pull and restart only the bot component using the existing
+deployment procedure; no server subscription deploy is justified. Publish a
+debug prerelease only after the final diff review, and keep hardware AWG,
+foreground-notification, deep-link, visual, and update-flow validation open.
 
 ## Resume Context
 
-The 0.7.1 debug prerelease is published at GitHub tag `v0.7.1-debug` with the
-validated ARM64 APK. Production AWG 3.1 is enabled for NL/DE/FI/RU.
-Do not read or print production tokens or secrets; use mocked authenticated
-responses for client tests and a real phone for the final tunnel/notification
-check. The optional-AWG import repair and coordinated UI pass are now validated
-locally: 23 unit tests, `lintDebug`, and `assembleDebug` pass with JDK 17; the
-ARM64 APK is ZIP-valid with SHA-256
-`d522611f9f7ac15806bd2efe3af97a19952626d8e356a6fdd84108134755743a`.
-The first daemon-backed Gradle invocation was interrupted, then the same full
-command passed with `--no-daemon`. No Android device or emulator is attached,
-so authenticated import, AWG traffic, notification, and visual QA remain open.
-The uploaded GitHub asset was downloaded again and matched the same hash and
-ZIP integrity.
+Candidate 0.8.0 changes are present locally but not yet committed or released.
+The absolute JDK 17/SDK/NDK/CMake toolchains are present and all local Android
+checks pass; the earlier SDK-location failure is no longer a blocker. The
+upstream AWG submodule is clean and the build overlay is parent-owned. No
+Android device or emulator is attached, so authenticated import, AWG traffic,
+foreground notification, visual safe-area QA, deep-link launch, and update
+installation remain open. Do not read or print production tokens or secrets;
+use mocked HTTP responses for client tests.

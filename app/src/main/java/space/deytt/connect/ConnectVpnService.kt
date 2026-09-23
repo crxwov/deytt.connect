@@ -49,7 +49,9 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         private const val CHANNEL_ID = "vpn"
         private const val NOTIFICATION_ID = 42
         private const val TAG = "deytt-connect"
-        private const val TRANSPORT_CANARY = "https://1.1.1.1/cdn-cgi/trace"
+        // A hostname-backed HTTPS probe avoids treating a TLS handshake to a
+        // bare CDN IP as a route failure. DNS is checked separately below.
+        private const val TRANSPORT_CANARY = "https://www.cloudflare.com/cdn-cgi/trace"
         private const val DNS_CANARY = "https://www.gstatic.com/generate_204"
         const val STATE_PREFS = "vpn_state"
         const val STATE_STATUS = "status"
@@ -129,7 +131,6 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             ensureCurrent(operationId)
             updateNotification("Подключено")
             publishStatus(VpnPhase.CONNECTED, "Подключено")
-            NotificationStatus.showConnected(this)
             Log.i(TAG, "VPN service started")
         } catch (error: Throwable) {
             Log.e(TAG, "Unable to start VPN", error)
@@ -186,7 +187,9 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 if (attempt < 2) Thread.sleep(1_500)
             }
         }
-        val detail = lastError?.message?.takeIf { it.isNotBlank() } ?: "неизвестная ошибка"
+        val detail = lastError?.message
+            ?.takeIf { it.contains("проверочный сайт ответил HTTP") || it.contains("не отвечает") || it.contains("не завершилась") }
+            ?: "Проверка соединения не прошла"
         throw IllegalStateException(detail, lastError)
     }
 
@@ -203,7 +206,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 "$failurePrefix: проверочный сайт ответил HTTP ${connection.responseCode}"
             }
         } catch (error: Throwable) {
-            throw IllegalStateException("$failurePrefix: ${errorMessage(error, "неизвестная ошибка")}", error)
+            throw IllegalStateException("$failurePrefix: ${safeNetworkFailure(error)}", error)
         } finally {
             connection.disconnect()
         }
@@ -226,7 +229,6 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun stopTunnel() {
-        NotificationStatus.clear(this)
         if (!started && commandServer == null && tunnel == null) {
             runtimeRunning = false
             VpnStateStore(this).write(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
@@ -261,7 +263,37 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun errorMessage(error: Throwable, fallback: String): String =
-        error.message?.takeIf { it.isNotBlank() } ?: "$fallback (${error.javaClass.simpleName})"
+        when {
+            error.message.orEmpty().contains("проверочный сайт ответил HTTP") -> error.message.orEmpty()
+            error.message.orEmpty().contains("DNS через соединение не отвечает") -> error.message.orEmpty()
+            error.message.orEmpty().contains("Проверка соединения не прошла") -> error.message.orEmpty()
+            errorChainContains(error, "timeout") || errorChainContains(error, "timed out") ->
+                "Проверка соединения не завершилась вовремя. Проверьте выбранный маршрут и повторите попытку."
+            errorChainContains(error, "unexpected end of stream") ||
+                errorChainContains(error, "connection reset") ||
+                errorChainContains(error, "broken pipe") ->
+                "Соединение оборвалось во время проверки. Повторите попытку."
+            else -> fallback
+        }
+
+    private fun safeNetworkFailure(error: Throwable): String = when {
+        errorChainContains(error, "timeout") || errorChainContains(error, "timed out") ->
+            "проверка не завершилась вовремя"
+        errorChainContains(error, "unexpected end of stream") ||
+            errorChainContains(error, "connection reset") ||
+            errorChainContains(error, "broken pipe") ->
+            "соединение оборвалось во время проверки"
+        else -> "не удалось выполнить HTTPS-проверку"
+    }
+
+    private fun errorChainContains(error: Throwable, needle: String): Boolean {
+        var current: Throwable? = error
+        repeat(8) {
+            if (current?.message.orEmpty().contains(needle, ignoreCase = true)) return true
+            current = current?.cause
+        }
+        return false
+    }
 
     private fun startForegroundCompat(text: String) {
         val manager = getSystemService(NotificationManager::class.java)

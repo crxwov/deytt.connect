@@ -3,9 +3,16 @@ package space.deytt.connect
 import java.net.HttpURLConnection
 import java.net.URL
 import org.json.JSONArray
-import org.json.JSONObject
 
 data class ReleaseInfo(val tag: String, val pageUrl: String, val apkUrl: String?)
+
+internal object ReleaseUrlPolicy {
+    fun isOfficialPage(raw: String): Boolean = runCatching {
+        val url = URL(raw)
+        url.protocol.equals("https", ignoreCase = true) &&
+            url.host.equals("github.com", ignoreCase = true)
+    }.getOrDefault(false)
+}
 
 object UpdateChecker {
     // GitHub's /releases/latest deliberately excludes prereleases. The public
@@ -27,15 +34,17 @@ object UpdateChecker {
                 .mapNotNull { releases.optJSONObject(it) }
                 .firstOrNull { !it.optBoolean("draft", true) }
                 ?: error("GitHub не вернул опубликованных релизов")
+            val pageUrl = json.optString("html_url")
+            check(ReleaseUrlPolicy.isOfficialPage(pageUrl)) { "GitHub вернул неподтверждённую ссылку на релиз" }
             val assets = json.optJSONArray("assets")
             val apk = (0 until (assets?.length() ?: 0))
                 .mapNotNull { assets?.optJSONObject(it) }
                 .firstOrNull { it.optString("name").endsWith(".apk") }
                 ?.optString("browser_download_url")
-                ?.takeIf(String::isNotBlank)
+                ?.takeIf { it.startsWith("https://github.com/", ignoreCase = true) }
             ReleaseInfo(
                 tag = json.optString("tag_name").ifBlank { "unknown" },
-                pageUrl = json.optString("html_url"),
+                pageUrl = pageUrl,
                 apkUrl = apk,
             )
         } finally {

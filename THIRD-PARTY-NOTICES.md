@@ -19,6 +19,10 @@ The app vendors the official `amnezia-vpn/amneziawg-android` repository as a
 pinned Git submodule and compiles its `tunnel` sources and native userspace
 backend. The Android tunnel module is distributed under Apache License 2.0;
 its nested native dependencies retain their own upstream notices.
+The build keeps the upstream submodule unchanged and generates a small
+DEYTTT-owned source overlay for the Android foreground-service lifecycle;
+the original Apache-2.0 copyright and license header are retained in the
+generated source.
 
 - Upstream: <https://github.com/amnezia-vpn/amneziawg-android>
 - Protocol backend: <https://github.com/amnezia-vpn/amneziawg-go>

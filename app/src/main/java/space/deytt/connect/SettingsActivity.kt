@@ -32,7 +32,7 @@ class SettingsActivity : Activity() {
         root.addView(note("Версия ${BuildConfig.VERSION_NAME}\nОбновления загружаются только из официального репозитория."))
         root.addView(spacer(24, this))
         root.addView(sectionLabel("обновления"))
-        updateButton = button("ПРОВЕРИТЬ ОБНОВЛЕНИЯ").apply {
+        updateButton = button("Проверить обновления").apply {
             setOnClickListener { if (latest == null) checkForUpdate() else openLatest() }
         }
         root.addView(updateButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -41,6 +41,9 @@ class SettingsActivity : Activity() {
         root.addView(spacer(26, this))
         root.addView(sectionLabel("приватность"))
         root.addView(note("Ссылка на подписку и ключи хранятся только локально. Приложение принимает только ссылки DEYTTT."))
+        root.addView(spacer(24, this))
+        root.addView(sectionLabel("в разработке"))
+        root.addView(note("Раздельные маршруты и геонастройки появятся после готового контракта и тестов. Сейчас переключателей нет, чтобы не создавать ложных ожиданий."))
         present(root)
     }
 
@@ -58,23 +61,25 @@ class SettingsActivity : Activity() {
                         status.text = "Установлена последняя версия."
                     } else {
                         latest = release
-                        status.text = "Доступна ${release.tag}. Откройте страницу релиза и скачайте APK."
-                        updateButton.text = "ОТКРЫТЬ РЕЛИЗ"
+                        status.text = "Доступна ${release.tag}. Откройте официальный релиз и проверьте APK перед установкой."
+                        updateButton.text = "Открыть официальный релиз"
                     }
                 }}
                 .onFailure { error -> runOnUiThread {
                     latest = null
                     updateButton.isEnabled = true
                     updateButton.alpha = 1f
-                    updateButton.text = "ПРОВЕРИТЬ ОБНОВЛЕНИЯ"
-                    status.text = "Не удалось проверить обновление: ${error.message ?: "нет соединения"}"
+                    updateButton.text = "Проверить обновления"
+                    status.text = "Не удалось проверить официальный релиз. Повторите попытку позже."
                 }}
         }
     }
 
     private fun openLatest() {
-        latest?.pageUrl?.takeIf(String::isNotBlank)?.let {
+        latest?.pageUrl?.takeIf(ReleaseUrlPolicy::isOfficialPage)?.let {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
+        } ?: run {
+            status.text = "Ссылка на релиз не прошла проверку."
         }
     }
 

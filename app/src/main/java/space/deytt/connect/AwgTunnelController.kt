@@ -62,7 +62,6 @@ object AwgTunnelController {
                 verifyTraffic(operationId)
                 ensureCurrent(operationId)
                 publish(context, VpnPhase.CONNECTED, "Подключено")
-                NotificationStatus.showConnected(context, persistent = true)
             } catch (error: Throwable) {
                 stopInternal()
                 if (operation.get() == operationId) {
@@ -83,7 +82,6 @@ object AwgTunnelController {
         val operationId = operation.incrementAndGet()
         runtimeRunning = false
         stopping = true
-        NotificationStatus.clear(context)
         if (publishStatus) publish(context, VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
         executor.execute {
             try {
@@ -133,7 +131,19 @@ object AwgTunnelController {
                 if (attempt < 2) Thread.sleep(1_500)
             }
         }
-        throw IllegalStateException("Выбранный маршрут не передаёт трафик: ${lastError?.message.orEmpty()}")
+        throw IllegalStateException(
+            when {
+                lastError != null && errorChainContains(lastError!!, "timeout") ->
+                    "Проверка соединения не завершилась вовремя. Проверьте выбранный сервер и повторите попытку."
+                lastError != null && (
+                    errorChainContains(lastError!!, "unexpected end of stream") ||
+                        errorChainContains(lastError!!, "connection reset") ||
+                        errorChainContains(lastError!!, "broken pipe")
+                    ) -> "Соединение оборвалось во время проверки. Повторите попытку."
+                else -> "Выбранный сервер не прошёл проверку HTTPS-трафика"
+            },
+            lastError,
+        )
     }
 
     private fun ensureCurrent(operationId: Long) {
@@ -161,6 +171,23 @@ object AwgTunnelController {
             BackendException.Reason.AWG_QUICK_CONFIG_ERROR_CODE -> "Ядро AmneziaWG отклонило конфигурацию"
             BackendException.Reason.UNKNOWN_KERNEL_MODULE_NAME -> "Ядро AmneziaWG недоступно на этом устройстве"
         }
-        else -> error.message?.takeIf(String::isNotBlank) ?: "Не удалось запустить AmneziaWG"
+        else -> when {
+            errorChainContains(error, "timeout") || errorChainContains(error, "timed out") ->
+                "Проверка соединения не завершилась вовремя. Проверьте выбранный сервер и повторите попытку."
+            errorChainContains(error, "unexpected end of stream") ||
+                errorChainContains(error, "connection reset") ||
+                errorChainContains(error, "broken pipe") ->
+                "Соединение оборвалось во время проверки. Повторите попытку."
+            else -> "Не удалось запустить AmneziaWG"
+        }
+    }
+
+    private fun errorChainContains(error: Throwable, needle: String): Boolean {
+        var current: Throwable? = error
+        repeat(8) {
+            if (current?.message.orEmpty().contains(needle, ignoreCase = true)) return true
+            current = current?.cause
+        }
+        return false
     }
 }
