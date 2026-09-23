@@ -24,7 +24,7 @@ val prepareDeyttAwgBackend by tasks.registering {
         var patched = source
         patched = patched.replace(
             "import android.content.Context;\nimport android.content.Intent;\nimport android.os.Build;",
-            "import android.app.Notification;\nimport android.app.NotificationChannel;\nimport android.app.NotificationManager;\nimport android.app.PendingIntent;\nimport android.content.Context;\nimport android.content.Intent;\nimport android.content.pm.ServiceInfo;\nimport android.os.Build;",
+            "import android.app.Notification;\nimport android.app.NotificationChannel;\nimport android.app.NotificationManager;\nimport android.app.PendingIntent;\nimport android.content.ComponentName;\nimport android.content.Context;\nimport android.content.Intent;\nimport android.content.pm.ServiceInfo;\nimport android.graphics.drawable.Icon;\nimport android.os.Build;",
         )
         patched = patched.replace(
             "                context.startService(new Intent(context, VpnService.class));",
@@ -59,6 +59,14 @@ val prepareDeyttAwgBackend by tasks.registering {
                     FOREGROUND_NOTIFICATION_ID,
                     launchIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            final Intent disconnectIntent = new Intent("space.deytt.connect.action.DISCONNECT_AWG");
+            disconnectIntent.setComponent(new ComponentName(
+                    getPackageName(), "space.deytt.connect.AwgDisconnectReceiver"));
+            final PendingIntent disconnect = PendingIntent.getBroadcast(
+                    this,
+                    FOREGROUND_NOTIFICATION_ID + 1,
+                    disconnectIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             final CharSequence appLabel = getApplicationInfo().loadLabel(getPackageManager());
             final Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     ? new Notification.Builder(this, FOREGROUND_CHANNEL_ID)
@@ -67,7 +75,12 @@ val prepareDeyttAwgBackend by tasks.registering {
                     .setContentTitle(appLabel)
                     .setContentText("Соединение активно")
                     .setCategory(Notification.CATEGORY_SERVICE)
-                    .setOngoing(true);
+                    .setOngoing(true)
+                    .setOnlyAlertOnce(true)
+                    .addAction(new Notification.Action.Builder(
+                            Icon.createWithResource(this, getApplicationInfo().icon),
+                            "Отключить",
+                            disconnect).build());
             if (contentIntent != null)
                 builder.setContentIntent(contentIntent);
             final Notification notification = builder.build();

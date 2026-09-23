@@ -320,7 +320,7 @@ object SubscriptionClient {
                     }
                 }
             }
-            if (servers != null && servers.length() > 0 && profiles.isEmpty()) {
+            if (servers != null && servers.length() > 0 && profiles.isEmpty() && failedIds.isEmpty()) {
                 throw IOException("Сервер не вернул ни одного профиля AmneziaWG")
             }
             if (profiles.isEmpty() && failedIds.isNotEmpty()) {

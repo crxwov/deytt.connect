@@ -5,6 +5,7 @@ import android.animation.ObjectAnimator
 import android.animation.AnimatorSet
 import android.animation.StateListAnimator
 import android.animation.ValueAnimator
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
@@ -13,6 +14,7 @@ import android.os.Build
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Space
@@ -186,12 +188,81 @@ object DeyttUi {
     fun Activity.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
     fun Activity.present(content: LinearLayout) {
-        setContentView(ScrollView(this).apply {
+        val navigation = bottomNavigation() ?: run {
+            setContentView(ScrollView(this).apply {
+                isFillViewport = true
+                clipToPadding = false
+                overScrollMode = View.OVER_SCROLL_NEVER
+                setBackgroundColor(BG)
+                addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            })
+            return
+        }
+        val scroll = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
             overScrollMode = View.OVER_SCROLL_NEVER
             setBackgroundColor(BG)
             addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        })
+        }
+        val shell = FrameLayout(this).apply {
+            setBackgroundColor(BG)
+            addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(navigation, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(76), Gravity.BOTTOM))
+            ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+                val bars = insets.getInsets(
+                    WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout(),
+                )
+                val navigationHeight = dp(76) + bars.bottom
+                navigation.layoutParams = (navigation.layoutParams as FrameLayout.LayoutParams).apply {
+                    height = navigationHeight
+                }
+                scroll.setPadding(0, 0, 0, navigationHeight)
+                insets
+            }
+            ViewCompat.requestApplyInsets(this)
+        }
+        setContentView(shell)
+    }
+
+    private fun Activity.bottomNavigation(): LinearLayout? {
+        val current = when (this) {
+            is MainActivity -> 0
+            is RoutesActivity, is ProtocolActivity -> 1
+            is ProfileActivity -> 2
+            is SettingsActivity -> 3
+            else -> return null
+        }
+        val destinations = listOf(
+            "главная" to MainActivity::class.java,
+            "локации" to RoutesActivity::class.java,
+            "профиль" to ProfileActivity::class.java,
+            "настройки" to SettingsActivity::class.java,
+        )
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(8), dp(8), dp(8), 0)
+            background = rounded(SURFACE, 18f, SURFACE)
+            contentDescription = "Основная навигация"
+            destinations.forEachIndexed { index, (label, destination) ->
+                val selected = index == current
+                addView(text(label, 12f, if (selected) TEXT else MUTED, Typeface.BOLD).apply {
+                    gravity = Gravity.CENTER
+                    minHeight = dp(48)
+                    setPadding(dp(4), dp(6), dp(4), dp(6))
+                    background = rounded(if (selected) SURFACE_2 else Color.TRANSPARENT, 12f, Color.TRANSPARENT)
+                    isClickable = !selected
+                    isFocusable = !selected
+                    contentDescription = label
+                    if (!selected) setOnClickListener {
+                        startActivity(Intent(this@bottomNavigation, destination).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+                    }
+                }, LinearLayout.LayoutParams(0, dp(56), 1f).apply {
+                    marginStart = dp(3)
+                    marginEnd = dp(3)
+                })
+            }
+        }
     }
 }

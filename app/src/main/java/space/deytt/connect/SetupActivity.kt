@@ -5,6 +5,8 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Build
 import android.text.InputType
+import android.text.method.PasswordTransformationMethod
+import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -13,6 +15,7 @@ import android.widget.TextView
 import androidx.core.content.edit
 import java.util.concurrent.Executors
 import space.deytt.connect.DeyttUi.button
+import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.note
@@ -45,16 +48,31 @@ class SetupActivity : Activity() {
             setTextColor(DeyttUi.TEXT)
             textSize = 16f
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+            transformationMethod = PasswordTransformationMethod.getInstance()
             setSingleLine(true)
-            contentDescription = "Ссылка на подписку"
+            contentDescription = "Ссылка на подписку, скрытая"
             minHeight = dp(58)
             setPadding(dp(18), dp(18), dp(18), dp(18))
             background = rounded(DeyttUi.SURFACE_2, 13f, DeyttUi.LINE)
             setText(incomingUrl ?: getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_url", ""))
         }
         root.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        val revealLink = actionLabel("показать ссылку").apply {
+            contentDescription = "Показать или скрыть ссылку на подписку"
+            setOnClickListener {
+                val cursor = input.selectionStart.coerceAtLeast(0)
+                val hidden = input.transformationMethod != null
+                input.transformationMethod = if (hidden) null else PasswordTransformationMethod.getInstance()
+                contentDescription = if (hidden) "Скрыть ссылку на подписку" else "Показать ссылку на подписку"
+                text = if (hidden) "скрыть ссылку" else "показать ссылку"
+                input.setSelection(cursor.coerceAtMost(input.length()))
+            }
+        }
+        root.addView(revealLink, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.END
+        })
         root.addView(spacer(14, this))
-        importButton = button(if (updating) "ОБНОВИТЬ" else "ДОБАВИТЬ").apply { setOnClickListener { importProfile() } }
+        importButton = button(if (updating) "обновить" else "добавить").apply { setOnClickListener { importProfile() } }
         root.addView(importButton)
         state = note("", DeyttUi.MUTED).apply {
             visibility = View.GONE

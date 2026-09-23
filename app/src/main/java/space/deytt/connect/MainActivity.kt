@@ -200,7 +200,6 @@ class MainActivity : Activity() {
             }
             AwgTunnelController.start(this, config, route.id)
         } else {
-            AwgTunnelController.stop(this, publishStatus = false)
             val intent = Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
         }

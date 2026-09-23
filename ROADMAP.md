@@ -561,17 +561,35 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - No ADB device or emulator is connected. Real AWG 3.1 traffic, the system
   notification, route latency, deep-link import, and GitHub update flow remain
   unverified on hardware.
+- Second strict audit pass: removed the final AWG-to-libbox async stop race,
+  kept an all-failed advertised AWG server set as an explicit partial result,
+  removed stale libbox foreground notifications on repeated stop, and added
+  service-owned disconnect actions to both engine notifications. Main product
+  surfaces now share a fixed bottom navigation shell with navigation-bar insets;
+  subscription URLs are hidden by default with an explicit reveal action.
+- Candidate 0.8.1 local checks pass with the repository absolute toolchains:
+  `testDebugUnitTest`, `lintDebug`, and `assembleDebug`; the full bot suite is
+  `228 passed, 15 subtests passed`, and the full `vpn-admin` suite is
+  `217 passed, 1 warning, 7 subtests passed`.
+- Candidate 0.8.1 ARM64 APK is v2-signed, versionCode 15/versionName 0.8.1,
+  SHA-256 `070c0503e6f764d8b7a1a325e81f5c5022768881615a18cae81fb8a8286db50d`;
+  universal APK SHA-256 is
+  `4425eb3c3d0906cdd95c9d768571e1e1986c7639c3b6afe9fecc67d1a8ac30de`.
+- The local SDK has platform/build tools/NDK/CMake and `adb`, but no emulator
+  binary or configured AVD is present; no device proof is claimed.
 
 ## Next Action
 
-Run physical-device acceptance for authenticated import, AWG 1.5/3.1 traffic,
+Publish candidate 0.8.1-debug only after the final diff review, then run
+physical-device acceptance for authenticated import, AWG 1.5/3.1 traffic,
 foreground notifications, safe-area visuals, deep-link handoff, update flow,
 and external HTTPS canaries. Keep the published artifact explicitly debug
 until that hardware evidence exists.
 
 ## Resume Context
 
-Candidate 0.8.0 is committed, pushed, and published as `v0.8.0-debug`.
+Candidate 0.8.1 contains the second strict audit fixes and is ready for final
+diff review and debug prerelease publication.
 The absolute JDK 17/SDK/NDK/CMake toolchains are present and all local Android
 checks pass; the earlier SDK-location failure is no longer a blocker. The
 upstream AWG submodule is clean and the build overlay is parent-owned. No

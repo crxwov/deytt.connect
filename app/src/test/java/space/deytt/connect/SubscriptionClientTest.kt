@@ -110,6 +110,30 @@ class SubscriptionClientTest {
     }
 
     @Test
+    fun allAdvertisedAwgServersRemainAVisiblePartialFailure() {
+        val result = SubscriptionClient.fetchAwgProfilesForTest(
+            "https://deytt.space/sub/token",
+            "amneziawg31",
+            "31",
+            FakeTransport(
+                SubscriptionClient.SubscriptionHttpResponse(
+                    200,
+                    awgServers = "[{\"id\":\"nl\",\"label\":\"Нидерланды\"}]",
+                ),
+                SubscriptionClient.SubscriptionHttpResponse(502),
+                SubscriptionClient.SubscriptionHttpResponse(502),
+                SubscriptionClient.SubscriptionHttpResponse(502),
+            ),
+        )
+
+        assertEquals(SubscriptionClient.AwgFetchState.PARTIAL_FAILURE, result.state)
+        assertTrue(result.profiles.isEmpty())
+        assertEquals(setOf("nl"), result.failedIds)
+        assertTrue(result.warning.orEmpty().contains("1 сервер"))
+        assertFalse(result.warning.orEmpty().contains("IP"))
+    }
+
+    @Test
     fun missingOptionalAwgEndpointIsExplicitAndNonDestructive() {
         val result = SubscriptionClient.fetchAwgProfilesForTest(
             "https://deytt.space/sub/token",

@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.graphics.drawable.Icon
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
@@ -231,6 +232,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     private fun stopTunnel() {
         if (!started && commandServer == null && tunnel == null) {
             runtimeRunning = false
+            stopForeground(STOP_FOREGROUND_REMOVE)
             VpnStateStore(this).write(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
             return
         }
@@ -308,6 +310,12 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val disconnect = PendingIntent.getService(
+            this,
+            NOTIFICATION_ID + 1,
+            Intent(this, ConnectVpnService::class.java).setAction(ACTION_STOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val notificationBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -320,6 +328,14 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(openApp)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(this, R.drawable.ic_stat_vpn),
+                    "Отключить",
+                    disconnect,
+                ).build(),
+            )
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED)
