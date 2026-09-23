@@ -3,7 +3,7 @@
 ## Status
 
 In progress — Android 0.6.0 reliability, route/latency, and premium visual pass
-is active after physical-phone feedback on 0.5.0
+is published; physical-phone acceptance remains
 
 ## Objective
 
@@ -417,12 +417,14 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   tasks). The ARM64 APK is 35,889,923 bytes, passes ZIP integrity and v2
   signature verification, and has SHA-256
   `f414982d23784fc9433ce4d115b1dd0714c1852eb3ab4602f5f1b3433fdf8328`.
+- Commit `eeb4667` is pushed to `main`. GitHub prerelease `v0.6.0-debug`
+  publishes the ARM64 APK; GitHub and a fresh download report the same SHA-256,
+  and the downloaded archive passes ZIP integrity verification.
 
 ## Next Action
 
-Commit and push 0.6.0, publish the verified ARM64 APK, then install it on a
-physical phone and test stale-state recovery, every route family, latency,
-network switching, and external HTTPS canaries.
+Install 0.6.0 on a physical phone and test stale-state recovery, every route
+family, latency, network switching, and external HTTPS canaries.
 
 ## Resume Context
 
