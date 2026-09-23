@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — Android 0.3.3 corrected transport canary is locally validated;
-delivery and phone verification remain
+In progress — Android 0.3.3 corrected transport canary is published;
+phone verification remains
 
 ## Objective
 
@@ -281,10 +281,15 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   `aea7be2b8814840ee03a9e3c9c3de5b6574cb3101fba691434bdb5bc0ae5518b`.
 - A combined clean test/lint/assemble invocation hit a transient parallel APK
   splitter failure without a cause; clean test/lint followed by assemble passes.
+- Commit `b1c549d` is pushed. GitHub prerelease `v0.3.3-debug` publishes the
+  standalone ARM64 APK, and its uploaded digest matches the local SHA-256.
+- The release creation upload reserved its default asset name without exposing
+  the asset; a second explicit-name upload completed successfully and is the
+  canonical download for this build.
 
 ## Next Action
 
-Commit and publish Android 0.3.3 ARM64, then repeat connection, DNS, HTTPS,
+Install Android 0.3.3 ARM64 over 0.3.2, then repeat connection, DNS, HTTPS,
 disconnect and reconnect on the phone.
 
 ## Resume Context
