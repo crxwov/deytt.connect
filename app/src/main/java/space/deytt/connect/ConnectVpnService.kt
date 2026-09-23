@@ -155,21 +155,21 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
      */
     private fun verifyTunnel() {
         var lastError: Throwable? = null
-        repeat(2) { attempt ->
+        repeat(3) { attempt ->
             try {
-                verifyTunnelOnce(TRANSPORT_CANARY, 200, "Туннель не передаёт HTTPS-трафик")
+                verifyTunnelOnce(TRANSPORT_CANARY, null, "Туннель не передаёт HTTPS-трафик")
                 verifyTunnelOnce(DNS_CANARY, 204, "DNS через VPN не отвечает")
                 return
             } catch (error: Throwable) {
                 lastError = error
-                if (attempt == 0) Thread.sleep(1_000)
+                if (attempt < 2) Thread.sleep(1_500)
             }
         }
         val detail = lastError?.message?.takeIf { it.isNotBlank() } ?: "неизвестная ошибка"
         throw IllegalStateException(detail, lastError)
     }
 
-    private fun verifyTunnelOnce(url: String, expectedStatus: Int, failurePrefix: String) {
+    private fun verifyTunnelOnce(url: String, expectedStatus: Int?, failurePrefix: String) {
         val connection = (URL(url).openConnection() as HttpsURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 10_000
@@ -178,7 +178,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             setRequestProperty("Cache-Control", "no-cache")
         }
         try {
-            check(connection.responseCode == expectedStatus) {
+            check(TunnelCanary.acceptsHttpResponse(connection.responseCode, expectedStatus)) {
                 "$failurePrefix: проверочный сайт ответил HTTP ${connection.responseCode}"
             }
         } catch (error: Throwable) {

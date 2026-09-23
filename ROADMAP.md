@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — Android 0.3.2 now includes a verified smaller ARM64 artifact;
-phone installation and tunnel verification remain
+In progress — Android 0.3.3 corrected transport canary is locally validated;
+delivery and phone verification remain
 
 ## Objective
 
@@ -269,11 +269,23 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   `51cbbd13717d6d231aac3aa0b99dbcc54a2eb2fb47e55647fbe7fedd2fc3451c`.
 - Commit `d327f1e` is pushed. The ARM64 APK is attached to
   `v0.3.2-debug`, and the uploaded asset digest matches the local SHA-256.
+- Real-device 0.3.2 reaches the transport canary on the auto-pick route, but the
+  UI reports it as unavailable. The IP-based Cloudflare probe incorrectly
+  requires HTTP 200 even though any HTTP response proves TLS transport; accept
+  all valid HTTP statuses and keep exact 204 only for the DNS canary.
+- Android 0.3.3 adds focused status tests, accepts HTTP 100-599 for the
+  transport-only probe, preserves exact 204 for the hostname/DNS probe, and
+  allows three attempts for cold URLTest startup.
+- Android 0.3.3 clean unit/lint validation and a subsequent assemble pass; the
+  ARM64 APK archive, manifest and v2 signature verify. SHA-256:
+  `aea7be2b8814840ee03a9e3c9c3de5b6574cb3101fba691434bdb5bc0ae5518b`.
+- A combined clean test/lint/assemble invocation hit a transient parallel APK
+  splitter failure without a cause; clean test/lint followed by assemble passes.
 
 ## Next Action
 
-Install the standalone ARM64 APK over 0.3.1, then repeat connection, DNS,
-HTTPS, disconnect and reconnect on the phone.
+Commit and publish Android 0.3.3 ARM64, then repeat connection, DNS, HTTPS,
+disconnect and reconnect on the phone.
 
 ## Resume Context
 
