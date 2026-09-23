@@ -613,11 +613,13 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   and Android 14 `SYSTEM_EXEMPTED` foreground startup. Physical OEM behavior,
   authenticated import, AWG traffic, and the external HTTPS canary remain
   unverified without a device.
+- Commit `9530ab4` is pushed to `origin/main`. GitHub prerelease
+  `v0.8.2-debug` publishes `app-arm64-v8a-debug.apk`; the remote asset digest
+  matches the local SHA-256 `c35c0675f95e4a0e8bc5a5a7442117927d904c3cc1016dcc6e424c2eed56a991`.
 
 ## Next Action
 
-Commit and publish the verified `v0.8.2-debug`, then run physical-device
-acceptance: authenticated
+Run physical-device acceptance for the published `v0.8.2-debug`: authenticated
 import, AWG 1.5/3.1 traffic,
 foreground notifications, safe-area visuals, deep-link handoff, update flow,
 and external HTTPS canaries. Keep the published artifact explicitly debug
@@ -626,8 +628,9 @@ until that hardware evidence exists.
 ## Resume Context
 
 Candidate 0.8.2 contains the notification durability, AWG manifest-first import,
-and restrained-row visual fixes; local validation is complete and the artifact
-is ready to commit and publish.
+and restrained-row visual fixes; local validation is complete, commit `9530ab4`
+is pushed, and `v0.8.2-debug` is published. No Android device or emulator is
+attached, so hardware acceptance remains open.
 The absolute JDK 17/SDK/NDK/CMake toolchains are present and all local Android
 checks pass; the earlier SDK-location failure is no longer a blocker. The
 upstream AWG submodule is clean and the build overlay is parent-owned. No
