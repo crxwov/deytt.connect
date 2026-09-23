@@ -12,8 +12,10 @@ import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
+import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
+import space.deytt.connect.DeyttUi.note
 
 class RoutesActivity : Activity() {
     private var latencyGeneration = 0
@@ -25,21 +27,22 @@ class RoutesActivity : Activity() {
         val awg = AwgProfileStore(this)
         val routes = RouteCatalog.from(config, awg.profiles())
         val root = screen()
-        root.addView(header("маршруты", "Куда подключиться", true))
-        root.addView(spacer(12, this))
-        root.addView(text("Сначала выберите направление, затем протокол.", 15f, DeyttUi.MUTED))
+        root.addView(header("маршруты", "Выберите направление", true))
+        root.addView(spacer(10, this))
+        root.addView(note("Проверяем задержку до каждого направления до запуска. Ваш выбор можно сменить в любой момент."))
         root.addView(spacer(12, this))
         globe = RouteGlobeView(this)
         globe.focus("AUTO", animate = false)
         root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(190)))
-        root.addView(text("точка на карте — выбранное направление", 12f, DeyttUi.MUTED).apply {
+        root.addView(text("точка на карте — выбранное направление", 11f, DeyttUi.MUTED).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(2), 0, 0)
         })
         root.addView(spacer(18, this))
+        root.addView(sectionLabel("быстрый выбор"))
 
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { auto ->
-            addMeasuredRow(root, "Автоподбор", "Самый быстрый доступный маршрут", "✦", listOf(auto)) {
+            addMeasuredRow(root, "Автоподбор", "Самый быстрый доступный маршрут", "AUTO", listOf(auto)) {
                 globe.focus("AUTO")
                 select(auto)
             }
@@ -47,19 +50,21 @@ class RoutesActivity : Activity() {
         }
 
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { chain ->
-            addMeasuredRow(root, "RU → DE", "Двойной маршрут для устойчивого обхода", "↗", listOf(chain)) {
+            addMeasuredRow(root, "RU → DE", "Двойной маршрут для устойчивого обхода", "RU", listOf(chain)) {
                 globe.focus("RU-DE")
                 select(chain)
             }
             root.addView(spacer(12, this))
         }
 
+        root.addView(spacer(10, this))
+        root.addView(sectionLabel("направления"))
         routes.filter { it.countryCode in setOf("NL", "DE", "RU", "FI") }
             .groupBy { it.countryCode }
             .forEach { (code, countryRoutes) ->
                 val first = countryRoutes.first()
                 val protocols = countryRoutes.joinToString(" · ") { it.protocol.title }
-                addMeasuredRow(root, first.country, protocols, first.flag, countryRoutes) {
+                addMeasuredRow(root, first.country, protocols, code, countryRoutes) {
                     globe.focus(code)
                     startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", code))
                 }
@@ -69,9 +74,8 @@ class RoutesActivity : Activity() {
         val awgRoutes = routes.filter { it.engine == TunnelEngine.AMNEZIAWG }
         if (awgRoutes.isNotEmpty()) {
             root.addView(spacer(10, this))
-            root.addView(text("AMNEZIAWG", 12f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply { letterSpacing = .18f })
-            root.addView(spacer(10, this))
-            addMeasuredRow(root, "AmneziaWG", awgRoutes.joinToString(" · ") { it.protocol.title }, "◈", awgRoutes) {
+            root.addView(sectionLabel("amneziawg"))
+            addMeasuredRow(root, "AmneziaWG", awgRoutes.joinToString(" · ") { it.protocol.title }, "AWG", awgRoutes) {
                 globe.focus("AUTO")
                 startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", "AWG"))
             }

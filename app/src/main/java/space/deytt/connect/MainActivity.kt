@@ -21,8 +21,10 @@ import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
+import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
+import space.deytt.connect.DeyttUi.note
 
 class MainActivity : Activity() {
     private lateinit var statusText: TextView
@@ -81,31 +83,40 @@ class MainActivity : Activity() {
     }
 
     private fun buildScreen() {
-        val root = screen()
+        val root = screen(withBackdrop = true)
         root.addView(brandHeader())
-        root.addView(spacer(20, this))
+        root.addView(spacer(30, this))
+        root.addView(sectionLabel("состояние соединения"))
 
         orb = ConnectionOrbView(this)
-        root.addView(orb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(210)))
-        statusText = text("Соединение выключено", 31f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+        root.addView(orb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(176)))
+        statusText = text("Соединение выключено", 29f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
             gravity = Gravity.CENTER; letterSpacing = -.035f
         }
-        detailText = text("Готов к подключению", 14f, DeyttUi.MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(9), 0, 0) }
+        detailText = text("Готово к подключению", 13f, DeyttUi.MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(7), 0, 0) }
         root.addView(statusText)
         root.addView(detailText)
-        root.addView(spacer(30, this))
-
-        routeRow = LinearLayout(this)
-        root.addView(routeRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        root.addView(spacer(14, this))
+        root.addView(spacer(22, this))
         action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
         root.addView(action)
-        root.addView(spacer(18, this))
-        root.addView(row("Подписка", "Трафик, срок и обновление", "◎").apply {
+        root.addView(spacer(22, this))
+
+        root.addView(sectionLabel("текущий маршрут"))
+        routeRow = LinearLayout(this)
+        root.addView(routeRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_warning", null)
+            ?.takeIf(String::isNotBlank)
+            ?.let { warning ->
+                root.addView(spacer(12, this))
+                root.addView(note(warning, DeyttUi.AMBER))
+            }
+        root.addView(spacer(24, this))
+        root.addView(sectionLabel("быстрый доступ"))
+        root.addView(row("Подписка", "Срок, трафик и обновление", "URL").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
         })
         root.addView(spacer(12, this))
-        root.addView(row("Настройки", "Обновления и приватность", "⌘").apply {
+        root.addView(row("Настройки", "Обновления и локальные данные", "CFG").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         })
         present(root)
@@ -120,7 +131,7 @@ class MainActivity : Activity() {
         latencyText = text("—", 13f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply {
             gravity = Gravity.CENTER
         }
-        val item = row(selected.title, selected.subtitle, if (selected.engine == TunnelEngine.AMNEZIAWG) "◈" else "↗", "").apply {
+        val item = row(selected.title, selected.subtitle, if (selected.engine == TunnelEngine.AMNEZIAWG) "AWG" else "ROUTE", "").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, RoutesActivity::class.java)) }
         }
         item.addView(latencyText, LinearLayout.LayoutParams(dp(72), ViewGroup.LayoutParams.MATCH_PARENT))

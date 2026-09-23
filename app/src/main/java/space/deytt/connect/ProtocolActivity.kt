@@ -11,8 +11,10 @@ import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
+import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
+import space.deytt.connect.DeyttUi.note
 
 class ProtocolActivity : Activity() {
     private var latencyGeneration = 0
@@ -25,24 +27,25 @@ class ProtocolActivity : Activity() {
         val awg = AwgProfileStore(this)
         val routes = RouteCatalog.from(config, awg.profiles())
             .filter { it.countryCode == code }
-        val title = if (code == "AWG") "AmneziaWG" else routes.firstOrNull()?.let { "${it.flag} ${it.country}" } ?: "Протокол"
+        val title = if (code == "AWG") "AmneziaWG" else routes.firstOrNull()?.country ?: "Протокол"
         val root = screen()
         root.addView(header("протокол", title, true))
-        root.addView(spacer(12, this))
-        root.addView(text(if (code == "AWG") "Выберите сервер и версию протокола." else "Выберите способ подключения для этого направления.", 15f, DeyttUi.MUTED))
+        root.addView(spacer(10, this))
+        root.addView(note(if (code == "AWG") "Выберите сервер и версию AmneziaWG. Задержка измеряется до каждой доступной точки." else "Выберите способ подключения для этого направления. Задержка измеряется до каждой точки."))
         root.addView(spacer(12, this))
         val globe = RouteGlobeView(this)
         globe.focus(if (code == "AWG") "AUTO" else code, animate = false)
         root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(170)))
-        root.addView(spacer(12, this))
+        root.addView(spacer(10, this))
+        root.addView(sectionLabel("доступные варианты"))
         routes.forEach { route ->
-            val mark = if (route.engine == TunnelEngine.AMNEZIAWG) route.flag else when (route.protocol) {
+            val mark = if (route.engine == TunnelEngine.AMNEZIAWG) route.protocol.title else when (route.protocol) {
                 RouteProtocol.VLESS -> "V"
                 RouteProtocol.TROJAN -> "T"
                 RouteProtocol.HYSTERIA2 -> "H"
                 RouteProtocol.AWG15 -> "1.5"
                 RouteProtocol.AWG31 -> "3.1"
-                else -> "✦"
+                else -> "AUTO"
             }
             val rowTitle = if (route.engine == TunnelEngine.AMNEZIAWG) route.country else route.protocol.title
             val rowDetail = if (route.engine == TunnelEngine.AMNEZIAWG) "${route.protocol.title} · ${route.protocol.detail}" else route.protocol.detail

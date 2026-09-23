@@ -6,6 +6,7 @@ import android.animation.AnimatorSet
 import android.animation.StateListAnimator
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
@@ -16,35 +17,36 @@ import android.widget.Space
 import android.widget.TextView
 
 object DeyttUi {
-    const val BG = 0xFF070C16.toInt()
-    const val SURFACE = 0xFF0E182A.toInt()
-    const val SURFACE_2 = 0xFF111D32.toInt()
-    const val LINE = 0xFF2B3954.toInt()
-    const val TEXT = 0xFFF3F6FF.toInt()
-    const val MUTED = 0xFF8795AD.toInt()
-    const val BLUE = 0xFF7180FF.toInt()
-    const val MINT = 0xFF4ED7A6.toInt()
-    const val CORAL = 0xFFFF6B86.toInt()
+    const val BG = 0xFF080B12.toInt()
+    const val SURFACE = 0xFF10151F.toInt()
+    const val SURFACE_2 = 0xFF151C29.toInt()
+    const val LINE = 0xFF273249.toInt()
+    const val TEXT = 0xFFF4F6FA.toInt()
+    const val MUTED = 0xFF8E9AAC.toInt()
+    const val BLUE = 0xFF8B96FF.toInt()
+    const val MINT = 0xFF58DEB0.toInt()
+    const val CORAL = 0xFFFF718B.toInt()
+    const val AMBER = 0xFFFFC46B.toInt()
 
-    fun Activity.screen(): LinearLayout = LinearLayout(this).apply {
+    fun Activity.screen(withBackdrop: Boolean = false): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp(22), dp(18), dp(22), dp(30))
-        background = SignalBackdropDrawable()
+        setPadding(dp(20), dp(18), dp(20), dp(28))
+        background = if (withBackdrop) SignalBackdropDrawable() else ColorDrawable(BG)
         fitsSystemWindows = true
     }
 
     fun Activity.header(kicker: String, title: String, back: Boolean = false): LinearLayout =
         LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            if (back) addView(text("‹  назад", 15f, MUTED, Typeface.BOLD).apply {
-                setPadding(0, dp(4), 0, dp(20))
+            if (back) addView(text("Назад", 15f, MUTED, Typeface.BOLD).apply {
+                setPadding(0, dp(2), 0, dp(18))
                 contentDescription = "Назад"
                 isClickable = true
                 isFocusable = true
                 setOnClickListener { finish() }
             })
-            if (kicker.isNotBlank()) addView(text(kicker.uppercase(), 11f, MUTED, Typeface.BOLD).apply { letterSpacing = .16f })
-            addView(text(title, 34f, TEXT, Typeface.BOLD).apply { letterSpacing = -.035f; setPadding(0, dp(7), 0, dp(8)) })
+            if (kicker.isNotBlank()) addView(text(kicker.uppercase(), 10f, MUTED, Typeface.BOLD).apply { letterSpacing = .18f })
+            addView(text(title, 31f, TEXT, Typeface.BOLD).apply { letterSpacing = -.04f; setPadding(0, dp(6), 0, dp(6)) })
         }
 
     fun Activity.brandHeader(): LinearLayout = LinearLayout(this).apply {
@@ -54,7 +56,7 @@ object DeyttUi {
             gravity = Gravity.CENTER
             letterSpacing = .02f
             background = rounded(Color.WHITE, 11f, Color.WHITE)
-            setPadding(dp(14), dp(9), dp(14), dp(9))
+            setPadding(dp(13), dp(8), dp(13), dp(8))
             contentDescription = "Логотип deytt.connect"
         })
         addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
@@ -71,8 +73,9 @@ object DeyttUi {
 
     fun Activity.button(label: String, secondary: Boolean = false): TextView = text(label, 16f, if (secondary) TEXT else Color.WHITE, Typeface.BOLD).apply {
         gravity = Gravity.CENTER
-        setPadding(dp(18), dp(18), dp(18), dp(18))
-        background = rounded(if (secondary) SURFACE_2 else BLUE, 18f, if (secondary) LINE else BLUE)
+        minHeight = dp(56)
+        setPadding(dp(18), dp(14), dp(18), dp(14))
+        background = rounded(if (secondary) SURFACE_2 else BLUE, 14f, if (secondary) LINE else BLUE)
         isClickable = true
         isFocusable = true
         val target = this
@@ -92,24 +95,30 @@ object DeyttUi {
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(4), dp(17), dp(4), dp(17))
+            setPadding(dp(12), dp(12), dp(10), dp(12))
             background = GradientDrawable().apply {
                 setColor(SURFACE)
                 setStroke(dp(1), LINE)
-                cornerRadius = dp(18).toFloat()
+                cornerRadius = dp(13).toFloat()
             }
-            addView(text(leading, 25f).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(58), ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(text(leading, 12f, BLUE, Typeface.BOLD).apply {
+                gravity = Gravity.CENTER
+                letterSpacing = .04f
+                background = rounded(SURFACE_2, 9f, LINE)
+                minWidth = dp(38)
+                minHeight = dp(38)
+            }, LinearLayout.LayoutParams(dp(42), dp(42)))
             addView(LinearLayout(this@row).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(text(title, 17f, TEXT, Typeface.BOLD).apply {
+                addView(text(title, 16f, TEXT, Typeface.BOLD).apply {
                     maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
                 })
-                addView(text(subtitle, 13f, MUTED).apply {
-                    setPadding(0, dp(5), 0, 0); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
+                addView(text(subtitle, 12f, MUTED).apply {
+                    setPadding(0, dp(4), 0, 0); maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END
                 })
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             if (trailing.isNotBlank()) {
-                addView(text(trailing, 22f, MUTED).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(42), ViewGroup.LayoutParams.WRAP_CONTENT))
+                addView(text(trailing, 16f, MUTED).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(34), ViewGroup.LayoutParams.WRAP_CONTENT))
             }
             isClickable = interactive
             isFocusable = interactive
@@ -130,6 +139,16 @@ object DeyttUi {
 
     fun spacer(height: Int, activity: Activity): Space = Space(activity).apply {
         layoutParams = LinearLayout.LayoutParams(1, activity.dp(height))
+    }
+
+    fun Activity.sectionLabel(value: String): TextView = text(value.uppercase(), 10f, MUTED, Typeface.BOLD).apply {
+        letterSpacing = .16f
+        setPadding(0, dp(4), 0, dp(9))
+    }
+
+    fun Activity.note(value: String, accent: Int = MUTED): TextView = text(value, 13f, accent).apply {
+        setPadding(dp(14), dp(13), dp(14), dp(13))
+        background = rounded(SURFACE_2, 11f, LINE)
     }
 
     fun Activity.rounded(fill: Int, radius: Float, stroke: Int = fill): GradientDrawable =

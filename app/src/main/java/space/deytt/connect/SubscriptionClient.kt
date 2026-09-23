@@ -14,6 +14,7 @@ data class ImportedSubscription(
     val metadata: SubscriptionMetadata,
     val awg15Available: Boolean,
     val awg31Available: Boolean,
+    val warnings: List<String> = emptyList(),
 )
 
 object SubscriptionClient {
@@ -26,19 +27,38 @@ object SubscriptionClient {
         val content = response.body
         val summary = ProfileValidator.validate(content)
         val metadata = SubscriptionMetadata.parse(response.profileTitle, response.userInfo)
-        val awgProfiles = fetchAwgProfiles(baseUrl, "amneziawg", "15") +
-            fetchAwgProfiles(baseUrl, "amneziawg31", "31")
-        // Validate every response before replacing any part of the last-known-good bundle.
+        val awgStore = AwgProfileStore(context)
+        val previousAwgProfiles = awgStore.profiles()
+        val awgResults = listOf(
+            fetchAwgProfiles(baseUrl, "amneziawg", "15"),
+            fetchAwgProfiles(baseUrl, "amneziawg31", "31"),
+        )
+        // An optional AWG endpoint must not make a valid core subscription unusable.
+        // Keep a last-known-good family when its gateway is temporarily failing.
+        val awgProfiles = awgResults.flatMap { result ->
+            val previousFamily = previousAwgProfiles.filter { it.version == result.version }
+            when (result.state) {
+                AwgFetchState.TRANSIENT_FAILURE -> previousAwgProfiles.filter { it.version == result.version }
+                AwgFetchState.PARTIAL_FAILURE -> {
+                    val stale = previousFamily.filter { profile ->
+                        result.failedIds.contains(profile.id.substringAfter(':', profile.id))
+                    }
+                    (result.profiles + stale).distinctBy(AwgProfile::id)
+                }
+                else -> result.profiles
+            }
+        }
         awgProfiles.forEach { AwgProfileStore.validate(it.config) }
         SubscriptionStore(context).saveValidated(content)
         SubscriptionMetadataStore(context).save(metadata)
-        AwgProfileStore(context).save(awgProfiles)
+        awgStore.save(awgProfiles)
         return ImportedSubscription(
-            url,
+            baseUrl,
             summary,
             metadata,
             awgProfiles.any { it.version == "15" },
             awgProfiles.any { it.version == "31" },
+            warnings = awgResults.mapNotNull { it.warning },
         )
     }
 
@@ -47,6 +67,16 @@ object SubscriptionClient {
         val profileTitle: String?,
         val userInfo: String?,
         val awgServers: String?,
+    )
+
+    private enum class AwgFetchState { AVAILABLE, NOT_AVAILABLE, PARTIAL_FAILURE, TRANSIENT_FAILURE }
+
+    private data class AwgFetchResult(
+        val version: String,
+        val profiles: List<AwgProfile>,
+        val state: AwgFetchState,
+        val warning: String? = null,
+        val failedIds: Set<String> = emptySet(),
     )
 
     private fun request(url: String, accept: String, required: Boolean): Response? {
@@ -119,7 +149,7 @@ object SubscriptionClient {
 
         val builder = uri.buildUpon().clearQuery()
         for (name in uri.queryParameterNames) {
-            if (name != "format") {
+            if (!name.equals("format", ignoreCase = true) && !name.equals("server_id", ignoreCase = true)) {
                 builder.appendQueryParameter(name, uri.getQueryParameter(name).orEmpty())
             }
         }
@@ -132,33 +162,96 @@ object SubscriptionClient {
         .build()
         .toString()
 
-    private fun fetchAwgProfiles(baseUrl: String, format: String, version: String): List<AwgProfile> {
-        val first = request(withFormat(baseUrl, format), "text/plain", required = false) ?: return emptyList()
-        val servers = runCatching { JSONArray(first.awgServers ?: "[]") }.getOrNull()
-        if (servers == null || servers.length() == 0) {
-            return listOf(AwgProfile("awg$version", version, "Основной", "AWG", first.body))
-        }
-        return buildList {
-            for (index in 0 until servers.length()) {
-                val server = servers.optJSONObject(index) ?: continue
-                val id = server.optString("id").trim()
-                if (id.isBlank()) continue
-                val url = withFormat(baseUrl, format).toUri().buildUpon()
-                    .appendQueryParameter("server_id", id)
-                    .build()
-                    .toString()
-                val response = request(url, "text/plain", required = true) ?: continue
-                add(
-                    AwgProfile(
-                        id = "awg$version:$id",
-                        version = version,
-                        label = server.optString("label", id),
-                        shortLabel = server.optString("short_label", id.uppercase()),
-                        config = response.body,
-                    ),
-                )
+    private fun fetchAwgProfiles(baseUrl: String, format: String, version: String): AwgFetchResult {
+        return try {
+            val first = request(withFormat(baseUrl, format), "text/plain", required = false)
+                ?: return AwgFetchResult(version, emptyList(), AwgFetchState.NOT_AVAILABLE)
+            val servers = runCatching { JSONArray(first.awgServers ?: "[]") }.getOrNull()
+            val failedIds = mutableSetOf<String>()
+            var failedRequestsAreTransient = true
+            val profiles = if (servers == null || servers.length() == 0) {
+                listOf(AwgProfile("awg$version", version, "Основной", "AWG", first.body)).also {
+                    it.forEach { profile -> AwgProfileStore.validate(profile.config) }
+                }
+            } else {
+                buildList {
+                    for (index in 0 until servers.length()) {
+                        val server = servers.optJSONObject(index) ?: continue
+                        val id = server.optString("id").trim()
+                        if (id.isBlank()) continue
+                        val url = withFormat(baseUrl, format).toUri().buildUpon()
+                            .appendQueryParameter("server_id", id)
+                            .build()
+                            .toString()
+                        try {
+                            val response = request(url, "text/plain", required = true)
+                            if (response == null) {
+                                failedIds += id
+                                failedRequestsAreTransient = false
+                            } else {
+                                val profile = AwgProfile(
+                                    id = "awg$version:$id",
+                                    version = version,
+                                    label = server.optString("label", id),
+                                    shortLabel = server.optString("short_label", id.uppercase()),
+                                    config = response.body,
+                                )
+                                AwgProfileStore.validate(profile.config)
+                                add(profile)
+                            }
+                        } catch (error: Exception) {
+                            failedIds += id
+                            if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) != true) {
+                                failedRequestsAreTransient = false
+                            }
+                        }
+                    }
+                }
             }
+            if (servers != null && servers.length() > 0 && profiles.isEmpty()) {
+                throw IOException("Сервер не вернул ни одного профиля AmneziaWG")
+            }
+            if (profiles.isEmpty() && failedIds.isNotEmpty()) {
+                AwgFetchResult(
+                    version = version,
+                    profiles = emptyList(),
+                    state = AwgFetchState.PARTIAL_FAILURE,
+                    warning = awgWarning(version, failedIds.size, temporary = failedRequestsAreTransient),
+                    failedIds = failedIds,
+                )
+            } else if (failedIds.isNotEmpty()) {
+                AwgFetchResult(
+                    version = version,
+                    profiles = profiles,
+                    state = AwgFetchState.PARTIAL_FAILURE,
+                    warning = awgWarning(version, failedIds.size, temporary = failedRequestsAreTransient),
+                    failedIds = failedIds,
+                )
+            } else {
+                AwgFetchResult(version, profiles, AwgFetchState.AVAILABLE)
+            }
+        } catch (error: Exception) {
+            AwgFetchResult(
+                version = version,
+                profiles = emptyList(),
+                state = AwgFetchState.TRANSIENT_FAILURE,
+                warning = awgWarning(version, error),
+            )
         }
+    }
+
+    private fun awgWarning(version: String, failedCount: Int, temporary: Boolean): String {
+        val name = "AmneziaWG ${if (version == "31") "3.1" else "1.5"}"
+        return if (temporary) {
+            "$name: $failedCount ${if (failedCount == 1) "сервер" else "сервера"} временно недоступ${if (failedCount == 1) "ен" else "ны"}. Остальные добавлены."
+        } else {
+            "$name пока не обновился. Основная подписка добавлена, повторите обновление позже."
+        }
+    }
+
+    private fun awgWarning(version: String, error: Exception): String {
+        val temporary = (error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) == true
+        return awgWarning(version, 1, temporary)
     }
 
     private fun readLimitedUtf8(stream: InputStream): String {

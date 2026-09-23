@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — Android 0.7 reliability, AWG/notification recovery, and product
-surface redesign are active after 0.6.0 feedback
+In progress — repair subscription import degradation and finish the Android
+product-surface redesign after 0.7 feedback
 
 ## Objective
 
@@ -81,12 +81,23 @@ and a real APK artifact.
       deliver any required backend contract update.
 - [~] 13. Repair AWG 3.1 lifecycle/selection and connection notifications; make subscription
       import retry transient 502/stream failures; refresh the primary mobile UI.
+- [~] 13a. Keep core subscription import usable when optional AWG endpoints return
+      transient gateway errors; preserve last-known-good AWG families and show a
+      precise non-blocking warning.
+- [~] 13b. Replace the generic stacked-card presentation on setup, home, route,
+      protocol, profile, and settings surfaces with a restrained native design
+      system and intentional motion/accessibility states.
 - [ ] 14. Add account/subscription purchase and bot handoff flows, app update
       checks, split tunneling, geo controls, and a settings surface.
 - [ ] 15. Audit all user copy/repository docs, remove implementation leakage,
       add release/download documentation, and complete real-device acceptance.
 
 ## Current State
+
+The active work is the Android-only import/UI repair. Optional AWG failures no
+longer abort the required sing-box import; the shared native visual primitives
+and six primary activities have been refreshed. No backend contract or server
+deployment change is part of this stage.
 
 The public GitHub repository now contains the first Android MVP commit on
 `main`. The current server exposes a tokenized
@@ -213,6 +224,11 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   and clears it on stop. This is a user-visible notification, not a claim that
   the upstream service itself is a foreground service; verify both behaviors on
   a device before calling the release complete.
+- The current import path still treats optional AmneziaWG 1.5/3.1 fetches as a
+  hard failure. A 502 from one family therefore surfaces as “сервер подписки
+  временно недоступен” even when the required sing-box profile is valid. The
+  repair keeps the core import usable, retains the last-known-good AWG family,
+  and exposes the degraded state as an explicit warning.
 
 ## Issues and Failed Attempts
 
@@ -479,16 +495,20 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 
 ## Next Action
 
-Finish Stage 13 with the repository Android SDK available, then run unit tests,
-lint, and an ARM64 debug build. Install it on a real device and verify import,
-engine switching, AWG 1.5/3.1 server choice, the connected notification, route
-latency, deep-link handoff, and update checking. Only after that can Stage 13
-be marked complete and Stage 14 product integrations begin.
+Commit and push the validated Android changes. A real device is still required
+to verify authenticated import, engine switching, AWG 1.5/3.1 traffic, the
+connected notification, route latency, deep-link handoff, and update checking.
+Only after that can Stage 13 be marked complete and Stage 14 begin.
 
 ## Resume Context
 
-The 0.6.0 implementation is published, and the 0.7 changes are uncommitted.
-Production AWG 3.1 is enabled for NL/DE/FI/RU. Do not read or print production
-tokens or secrets; use mocked authenticated responses for client tests and a
-real phone for the final tunnel/notification check. Before delivery, inspect the
-remaining Luna audit result and resolve any compile/API concern it identifies.
+The 0.7 baseline is published. Production AWG 3.1 is enabled for NL/DE/FI/RU.
+Do not read or print production tokens or secrets; use mocked authenticated
+responses for client tests and a real phone for the final tunnel/notification
+check. The optional-AWG import repair and coordinated UI pass are now validated
+locally: 23 unit tests, `lintDebug`, and `assembleDebug` pass with JDK 17; the
+ARM64 APK is ZIP-valid with SHA-256
+`e6ec51007a9de73fa51541232858eec3b379a9de4707959a4a101622c9659197`.
+The first daemon-backed Gradle invocation was interrupted, then the same full
+command passed with `--no-daemon`. No Android device or emulator is attached,
+so authenticated import, AWG traffic, notification, and visual QA remain open.

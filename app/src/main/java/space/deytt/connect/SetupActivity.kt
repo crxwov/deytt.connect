@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Build
 import android.text.InputType
+import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -14,9 +15,11 @@ import java.util.concurrent.Executors
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
+import space.deytt.connect.DeyttUi.note
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.screen
+import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
 
@@ -30,12 +33,11 @@ class SetupActivity : Activity() {
         super.onCreate(savedInstanceState)
         val updating = SubscriptionStore(this).readCurrent() != null
         val root = screen()
-        root.addView(header("шаг 1 из 1", if (updating) "Обновить подписку" else "Добавить подписку", updating))
+        root.addView(header("добавить источник", if (updating) "Обновить подписку" else "Подключить подписку", updating))
+        root.addView(spacer(12, this))
+        root.addView(note("Одна ссылка добавит доступные направления и способы подключения. Ссылка хранится только на этом устройстве."))
         root.addView(spacer(24, this))
-        root.addView(text("Одна ссылка добавит доступные страны и все протоколы. Токен хранится только на устройстве.", 16f, DeyttUi.MUTED))
-        root.addView(spacer(28, this))
-        root.addView(text("Ссылка на подписку", 13f, DeyttUi.MUTED, android.graphics.Typeface.BOLD))
-        root.addView(spacer(8, this))
+        root.addView(sectionLabel("ссылка на подписку"))
         val incomingUrl = intent.getStringExtra(EXTRA_SUBSCRIPTION_URL)
         input = EditText(this).apply {
             hint = "https://deytt.space/sub/token/…"
@@ -45,39 +47,59 @@ class SetupActivity : Activity() {
             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             setSingleLine(true)
             contentDescription = "Ссылка на подписку"
+            minHeight = dp(58)
             setPadding(dp(18), dp(18), dp(18), dp(18))
-            background = rounded(DeyttUi.SURFACE, 16f, DeyttUi.LINE)
+            background = rounded(DeyttUi.SURFACE_2, 13f, DeyttUi.LINE)
             setText(incomingUrl ?: getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_url", ""))
         }
         root.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(spacer(14, this))
         importButton = button(if (updating) "ОБНОВИТЬ" else "ДОБАВИТЬ").apply { setOnClickListener { importProfile() } }
         root.addView(importButton)
-        state = text("", 15f, DeyttUi.MUTED).apply { setPadding(0, dp(22), 0, 0) }
+        state = note("", DeyttUi.MUTED).apply {
+            visibility = View.GONE
+            setPadding(dp(14), dp(13), dp(14), dp(13))
+        }
         root.addView(state)
         present(root)
     }
 
     private fun importProfile() {
         val raw = input.text.toString().trim()
-        if (raw.isBlank()) { state.text = "Вставьте ссылку на подписку"; return }
+        if (raw.isBlank()) {
+            state.visibility = View.VISIBLE
+            state.setTextColor(DeyttUi.CORAL)
+            state.text = "Вставьте ссылку на подписку"
+            return
+        }
         input.isEnabled = false
         importButton.isEnabled = false
         importButton.alpha = .65f
+        state.visibility = View.VISIBLE
         state.setTextColor(DeyttUi.BLUE)
-        state.text = "↻  Получаем маршруты…"
+        state.text = "Получаем маршруты…"
         state.announceForAccessibility(state.text)
         executor.execute {
             runCatching { SubscriptionClient.import(this, raw) }
                 .onSuccess { imported -> runOnUiThread {
-                    getSharedPreferences("profile_settings", MODE_PRIVATE).edit { putString("subscription_url", raw) }
+                    getSharedPreferences("profile_settings", MODE_PRIVATE).edit {
+                        putString("subscription_url", imported.url)
+                        if (imported.warnings.isEmpty()) remove("subscription_warning")
+                        else putString("subscription_warning", imported.warnings.joinToString("\n"))
+                    }
                     val config = SubscriptionStore(this).readCurrent().orEmpty()
                     val routes = RouteCatalog.from(config, AwgProfileStore(this@SetupActivity).profiles())
                     routes.firstOrNull()?.let { SelectedRouteStore(this).save(it) }
                     stopService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
                     AwgTunnelController.stop(this, publishStatus = false)
-                    state.setTextColor(DeyttUi.MINT)
-                    state.text = getString(R.string.import_complete, routes.size)
+                    state.setTextColor(if (imported.warnings.isEmpty()) DeyttUi.MINT else DeyttUi.AMBER)
+                    state.text = buildString {
+                        append(getString(R.string.import_complete, routes.size))
+                        if (imported.warnings.isNotEmpty()) {
+                            append("\n\n")
+                            append(imported.warnings.joinToString("\n"))
+                        }
+                    }
                     state.announceForAccessibility(state.text)
                     getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE).edit {
                         putString(ConnectVpnService.STATE_STATUS, VpnStateStore.IDLE_TITLE)
