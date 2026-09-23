@@ -502,8 +502,8 @@ Only after that can Stage 13 be marked complete and Stage 14 begin.
 
 ## Resume Context
 
-The 0.7.1 debug candidate is ready for publication. Production AWG 3.1 is
-enabled for NL/DE/FI/RU.
+The 0.7.1 debug prerelease is published at GitHub tag `v0.7.1-debug` with the
+validated ARM64 APK. Production AWG 3.1 is enabled for NL/DE/FI/RU.
 Do not read or print production tokens or secrets; use mocked authenticated
 responses for client tests and a real phone for the final tunnel/notification
 check. The optional-AWG import repair and coordinated UI pass are now validated
@@ -513,3 +513,5 @@ ARM64 APK is ZIP-valid with SHA-256
 The first daemon-backed Gradle invocation was interrupted, then the same full
 command passed with `--no-daemon`. No Android device or emulator is attached,
 so authenticated import, AWG traffic, notification, and visual QA remain open.
+The uploaded GitHub asset was downloaded again and matched the same hash and
+ZIP integrity.
