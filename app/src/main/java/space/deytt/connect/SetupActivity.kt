@@ -36,6 +36,7 @@ class SetupActivity : Activity() {
         root.addView(spacer(28, this))
         root.addView(text("Ссылка на подписку", 13f, DeyttUi.MUTED, android.graphics.Typeface.BOLD))
         root.addView(spacer(8, this))
+        val incomingUrl = intent.getStringExtra(EXTRA_SUBSCRIPTION_URL)
         input = EditText(this).apply {
             hint = "https://deytt.space/sub/token/…"
             setHintTextColor(DeyttUi.MUTED)
@@ -46,7 +47,7 @@ class SetupActivity : Activity() {
             contentDescription = "Ссылка на подписку"
             setPadding(dp(18), dp(18), dp(18), dp(18))
             background = rounded(DeyttUi.SURFACE, 16f, DeyttUi.LINE)
-            setText(getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_url", ""))
+            setText(incomingUrl ?: getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_url", ""))
         }
         root.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(spacer(14, this))
@@ -79,7 +80,7 @@ class SetupActivity : Activity() {
                     state.text = getString(R.string.import_complete, routes.size)
                     state.announceForAccessibility(state.text)
                     getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE).edit {
-                        putString(ConnectVpnService.STATE_STATUS, "VPN отключён")
+                        putString(ConnectVpnService.STATE_STATUS, VpnStateStore.IDLE_TITLE)
                         remove(ConnectVpnService.STATE_ERROR)
                     }
                     state.animate().alpha(1f).setDuration(220).withEndAction {
@@ -90,7 +91,7 @@ class SetupActivity : Activity() {
                 }}
                 .onFailure { error -> runOnUiThread {
                     state.setTextColor(DeyttUi.CORAL)
-                    state.text = error.message ?: "Не удалось обновить подписку"
+                    state.text = SubscriptionErrorText.userMessage(error)
                     state.announceForAccessibility(state.text)
                     input.isEnabled = true; importButton.isEnabled = true; importButton.alpha = 1f
                 }}
@@ -106,5 +107,9 @@ class SetupActivity : Activity() {
         } else {
             overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
         }
+    }
+
+    companion object {
+        const val EXTRA_SUBSCRIPTION_URL = "subscription_url"
     }
 }

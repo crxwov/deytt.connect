@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — Android 0.6.0 reliability, route/latency, and premium visual pass
-is published; physical-phone acceptance remains
+In progress — Android 0.7 reliability, AWG/notification recovery, and product
+surface redesign are active after 0.6.0 feedback
 
 ## Objective
 
@@ -28,6 +28,13 @@ and a real APK artifact.
 - Users can measure and compare route latency without starting a full VPN tunnel.
 - The primary Android surfaces match the restrained premium visual language of
   deytt.space and contain no platform/build-label clutter.
+- A connected tunnel produces a clear Android connection notification for both
+  libbox and embedded AmneziaWG engines; the real VPN service remains the
+  owner of foreground lifecycle.
+- AWG 3.1 imports all advertised regional profiles, exposes a clear server
+  picker, and reports a useful failure instead of silently hiding the family.
+- Subscription import tolerates transient gateway resets and explains a final
+  failure without exposing the token.
 
 ## Stages
 
@@ -72,6 +79,12 @@ and a real APK artifact.
 - [~] 12. Run focused lifecycle/catalog/latency tests, clean build/lint, visual
       inspection, physical-phone tunnel checks, then commit, push, publish and
       deliver any required backend contract update.
+- [~] 13. Repair AWG 3.1 lifecycle/selection and connection notifications; make subscription
+      import retry transient 502/stream failures; refresh the primary mobile UI.
+- [ ] 14. Add account/subscription purchase and bot handoff flows, app update
+      checks, split tunneling, geo controls, and a settings surface.
+- [ ] 15. Audit all user copy/repository docs, remove implementation leakage,
+      add release/download documentation, and complete real-device acceptance.
 
 ## Current State
 
@@ -182,6 +195,24 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   restrained electric blue, fine network-line structure, and one strong central
   connection object. Remove `connect`, `android`, build, and implementation copy
   from the primary hierarchy.
+- The 0.7 design direction keeps one signature device: a quiet star/signal field
+  behind a white `./c` mark and a route globe only on the location surface.
+  Liquid-metal, particle, CRT, and orbit effects are references, not a license
+  to animate every control or copy third-party code without license review.
+- Commerce, bot authentication, update delivery, split tunneling, and geo rules
+  are separate product capabilities. They must be introduced behind explicit
+  contracts and tests rather than coupled to the tunnel toggle.
+- The Luna audit found that an asynchronous AWG stop cannot be represented by
+  `runtimeRunning` alone. A separate stopping state is now awaited before an
+  engine switch; the wait fails closed with a user-visible error rather than
+  starting the next engine after a fixed timeout. Redirect following is also
+  disabled for bearer subscription URLs.
+- Luna's final pass found no remaining compile or engine-switch P0/P1. The
+  embedded upstream AWG `GoBackend.VpnService` still owns the actual VPN
+  lifecycle, while the app now keeps a separate connected notification for AWG
+  and clears it on stop. This is a user-visible notification, not a claim that
+  the upstream service itself is a foreground service; verify both behaviors on
+  a device before calling the release complete.
 
 ## Issues and Failed Attempts
 
@@ -192,6 +223,8 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   output.
 - No ADB device is connected. Visual/device interaction and authenticated
   tunnel proof remain pending and are not inferred from local tests.
+- Production confirms AWG 3.1 is enabled with four catalog entries (NL, DE, FI,
+  RU); a user token is still required for authenticated payload verification.
 
 - Device-level VPN validation is not available until an Android device or
   emulator is connected.
@@ -251,6 +284,14 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - `app/src/main/java/space/deytt/connect/RouteLatency.kt`
 - `app/src/main/java/space/deytt/connect/ConnectionOrbView.kt`
 - `app/src/main/java/space/deytt/connect/SignalBackdropDrawable.kt`
+- `app/src/main/java/space/deytt/connect/NotificationStatus.kt`
+- `app/src/main/java/space/deytt/connect/RouteGlobeView.kt`
+- `app/src/main/java/space/deytt/connect/SettingsActivity.kt`
+- `app/src/main/java/space/deytt/connect/SubscriptionErrorText.kt`
+- `app/src/main/java/space/deytt/connect/SubscriptionHostPolicy.kt`
+- `app/src/main/java/space/deytt/connect/SubscriptionRetryPolicy.kt`
+- `app/src/main/java/space/deytt/connect/ReleaseVersion.kt`
+- `app/src/main/java/space/deytt/connect/UpdateChecker.kt`
 - `awg-tunnel/`
 - `third_party/amneziawg-android` (pinned Git submodule)
 - `app/src/main/java/space/deytt/connect/SignalDialView.kt` (removed)
@@ -420,18 +461,30 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Commit `eeb4667` is pushed to `main`. GitHub prerelease `v0.6.0-debug`
   publishes the ARM64 APK; GitHub and a fresh download report the same SHA-256,
   and the downloaded archive passes ZIP integrity verification.
+- Android 0.7 first compile exposed two Kotlin issues: the missing
+  `TUNNEL_MISSING_CONFIG` branch and a trailing-lambda call with a non-function
+  last parameter. Both are fixed. With repository JDK 17 and the local Android
+  SDK, `testDebugUnitTest`, `lintDebug`, and `assembleDebug` now pass (107
+  tasks). `git diff --check` and manifest XML parsing also pass.
+- Android unit report contains 23 tests with zero failures. ARM64 debug APK is
+  ZIP-valid, verifies with APK Signature Scheme v2, and has SHA-256
+  `c9a1e50152a50ec394845a2c608bfb1b7e5a7ae5ae960969d60c6f1ec35ee088`.
+- No ADB device or emulator is connected. Real AWG 3.1 traffic, the system
+  notification, route latency, deep-link import, and GitHub update flow remain
+  unverified on hardware.
 
 ## Next Action
 
-Install 0.6.0 on a physical phone and test stale-state recovery, every route
-family, latency, network switching, and external HTTPS canaries.
+Finish Stage 13 with the repository Android SDK available, then run unit tests,
+lint, and an ARM64 debug build. Install it on a real device and verify import,
+engine switching, AWG 1.5/3.1 server choice, the connected notification, route
+latency, deep-link handoff, and update checking. Only after that can Stage 13
+be marked complete and Stage 14 product integrations begin.
 
 ## Resume Context
 
-Continue in this repository, preserve the separate upstream boundary, and do
-not add tokens or `.env` values to fixtures. The 0.5.0 baseline is published;
-0.6.0 implementation and local validation are complete: 15 unit tests pass,
-lint/build pass, and the ARM64 APK is ZIP-valid and v2-signed with SHA-256
-`f414982d23784fc9433ce4d115b1dd0714c1852eb3ab4602f5f1b3433fdf8328`.
-Treat latency probes as diagnostics and the APK as unverified until
-authenticated Android tunnels pass external HTTPS canaries on a physical phone.
+The 0.6.0 implementation is published, and the 0.7 changes are uncommitted.
+Production AWG 3.1 is enabled for NL/DE/FI/RU. Do not read or print production
+tokens or secrets; use mocked authenticated responses for client tests and a
+real phone for the final tunnel/notification check. Before delivery, inspect the
+remaining Luna audit result and resolve any compile/API concern it identifies.

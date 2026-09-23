@@ -16,6 +16,7 @@ import space.deytt.connect.DeyttUi.text
 
 class ProtocolActivity : Activity() {
     private var latencyGeneration = 0
+    private var selecting = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -28,8 +29,12 @@ class ProtocolActivity : Activity() {
         val root = screen()
         root.addView(header("протокол", title, true))
         root.addView(spacer(12, this))
-        root.addView(text("Можно сменить в любой момент. Активным остаётся только один туннель.", 15f, DeyttUi.MUTED))
-        root.addView(spacer(24, this))
+        root.addView(text(if (code == "AWG") "Выберите сервер и версию протокола." else "Выберите способ подключения для этого направления.", 15f, DeyttUi.MUTED))
+        root.addView(spacer(12, this))
+        val globe = RouteGlobeView(this)
+        globe.focus(if (code == "AWG") "AUTO" else code, animate = false)
+        root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(170)))
+        root.addView(spacer(12, this))
         routes.forEach { route ->
             val mark = if (route.engine == TunnelEngine.AMNEZIAWG) route.flag else when (route.protocol) {
                 RouteProtocol.VLESS -> "V"
@@ -43,7 +48,12 @@ class ProtocolActivity : Activity() {
             val rowDetail = if (route.engine == TunnelEngine.AMNEZIAWG) "${route.protocol.title} · ${route.protocol.detail}" else route.protocol.detail
             val latency = text("замер…", 13f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply { gravity = Gravity.CENTER }
             val item = row(rowTitle, rowDetail, mark, "").apply {
-                setOnClickListener { select(route) }
+                setOnClickListener {
+                    if (selecting) return@setOnClickListener
+                    selecting = true
+                    globe.focus(if (route.engine == TunnelEngine.AMNEZIAWG) route.id.uppercase() else route.countryCode)
+                    postDelayed({ if (!isFinishing) select(route) }, 160L)
+                }
             }
             item.addView(latency, LinearLayout.LayoutParams(dp(72), ViewGroup.LayoutParams.MATCH_PARENT))
             root.addView(item)

@@ -66,10 +66,10 @@ class VpnStateStore(private val context: Context) {
     }
 
     companion object {
-        const val IDLE_TITLE = "VPN отключён"
+        const val IDLE_TITLE = "Соединение выключено"
 
         private fun phaseFromLegacyTitle(title: String): VpnPhase = when {
-            title == "VPN подключён" -> VpnPhase.CONNECTED
+            title == "VPN подключён" || title == "Подключено" -> VpnPhase.CONNECTED
             title.contains("Запуск") -> VpnPhase.STARTING
             title.contains("Проверяем") -> VpnPhase.CHECKING
             title.contains("отключ", ignoreCase = true) && title != IDLE_TITLE -> VpnPhase.STOPPING

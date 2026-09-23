@@ -3,6 +3,7 @@ package space.deytt.connect
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
+import org.amnezia.awg.backend.BackendException
 import org.amnezia.awg.backend.GoBackend
 import org.amnezia.awg.backend.Tunnel
 import org.amnezia.awg.config.Config
@@ -20,20 +21,28 @@ object AwgTunnelController {
     @SuppressLint("StaticFieldLeak")
     private var backend: GoBackend? = null
     private var tunnel: Tunnel? = null
+    @SuppressLint("StaticFieldLeak")
+    private var appContext: Context? = null
     private val operation = AtomicLong(0)
 
     @Volatile
     private var runtimeRunning = false
 
+    @Volatile
+    private var stopping = false
+
     fun isRunning(): Boolean = runtimeRunning
+    fun isStopping(): Boolean = stopping
 
     fun start(context: Context, rawConfig: String, name: String) {
         val operationId = operation.incrementAndGet()
         runtimeRunning = true
+        stopping = true
         publish(context, VpnPhase.STARTING, "Запуск AmneziaWG…")
         executor.execute {
             try {
                 stopInternal()
+                if (operation.get() == operationId) stopping = false
                 ensureCurrent(operationId)
                 val parsed = Config.parse(BufferedReader(StringReader(rawConfig)))
                 val nextBackend = GoBackend(context.applicationContext)
@@ -48,19 +57,22 @@ object AwgTunnelController {
                 }
                 backend = nextBackend
                 tunnel = nextTunnel
+                appContext = context.applicationContext
                 nextBackend.setState(nextTunnel, Tunnel.State.UP, parsed)
                 verifyTraffic(operationId)
                 ensureCurrent(operationId)
-                publish(context, VpnPhase.CONNECTED, "VPN подключён")
+                publish(context, VpnPhase.CONNECTED, "Подключено")
+                NotificationStatus.showConnected(context, persistent = true)
             } catch (error: Throwable) {
                 stopInternal()
                 if (operation.get() == operationId) {
                     runtimeRunning = false
+                    stopping = false
                     publish(
                         context,
                         VpnPhase.ERROR,
-                        "Ошибка запуска VPN",
-                        error.message?.takeIf(String::isNotBlank) ?: "Не удалось запустить AmneziaWG",
+                        "Ошибка запуска соединения",
+                        describeError(error),
                     )
                 }
             }
@@ -68,11 +80,17 @@ object AwgTunnelController {
     }
 
     fun stop(context: Context, publishStatus: Boolean = true) {
-        operation.incrementAndGet()
+        val operationId = operation.incrementAndGet()
         runtimeRunning = false
+        stopping = true
+        NotificationStatus.clear(context)
         if (publishStatus) publish(context, VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
         executor.execute {
-            stopInternal()
+            try {
+                stopInternal()
+            } finally {
+                if (operation.get() == operationId) stopping = false
+            }
         }
     }
 
@@ -81,9 +99,16 @@ object AwgTunnelController {
         val currentTunnel = tunnel
         backend = null
         tunnel = null
-        if (currentBackend != null && currentTunnel != null) {
-            runCatching { currentBackend.setState(currentTunnel, Tunnel.State.DOWN, null) }
+        runCatching {
+            if (currentBackend != null && currentTunnel != null) currentBackend.setState(currentTunnel, Tunnel.State.DOWN, null)
         }
+        // GoBackend leaves its nested VpnService alive when activation failed
+        // before a native handle was created. Stop it explicitly so the next
+        // selection cannot inherit a stale service/future from the previous one.
+        appContext?.let { context ->
+            runCatching { context.stopService(Intent(context, GoBackend.VpnService::class.java)) }
+        }
+        appContext = null
     }
 
     private fun verifyTraffic(operationId: Long) {
@@ -123,5 +148,19 @@ object AwgTunnelController {
             .putExtra(ConnectVpnService.STATE_PHASE, phase.name)
         if (!error.isNullOrBlank()) intent.putExtra(ConnectVpnService.EXTRA_ERROR, error)
         context.sendBroadcast(intent)
+    }
+
+    private fun describeError(error: Throwable): String = when (error) {
+        is BackendException -> when (error.reason) {
+            BackendException.Reason.VPN_NOT_AUTHORIZED -> "Android не дал разрешение на системное соединение"
+            BackendException.Reason.UNABLE_TO_START_VPN -> "Android не запустил системную службу AmneziaWG"
+            BackendException.Reason.TUN_CREATION_ERROR -> "Android не создал сетевой интерфейс"
+            BackendException.Reason.DNS_RESOLUTION_FAILURE -> "Не удалось разрешить адрес сервера"
+            BackendException.Reason.TUNNEL_MISSING_CONFIG -> "Профиль AmneziaWG не найден или повреждён"
+            BackendException.Reason.GO_ACTIVATION_ERROR_CODE -> "Ядро AmneziaWG отклонило конфигурацию: код ${error.getFormat().firstOrNull() ?: "неизвестен"}"
+            BackendException.Reason.AWG_QUICK_CONFIG_ERROR_CODE -> "Ядро AmneziaWG отклонило конфигурацию"
+            BackendException.Reason.UNKNOWN_KERNEL_MODULE_NAME -> "Ядро AmneziaWG недоступно на этом устройстве"
+        }
+        else -> error.message?.takeIf(String::isNotBlank) ?: "Не удалось запустить AmneziaWG"
     }
 }

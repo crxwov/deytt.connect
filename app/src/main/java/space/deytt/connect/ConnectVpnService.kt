@@ -75,7 +75,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             operation.incrementAndGet()
-            publishStatus(VpnPhase.STOPPING, "VPN отключается…")
+            publishStatus(VpnPhase.STOPPING, "Отключаем соединение…")
             stopTunnel()
             stopSelf()
             return START_NOT_STICKY
@@ -86,7 +86,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             val operationId = operation.incrementAndGet()
             try {
                 startForegroundCompat("Запуск deytt./connect")
-                publishStatus(VpnPhase.STARTING, "Запуск VPN…")
+                publishStatus(VpnPhase.STARTING, "Запускаем соединение…")
                 executor.execute { startTunnel(operationId) }
             } catch (error: Throwable) {
                 Log.e(TAG, "Unable to enter foreground", error)
@@ -127,13 +127,14 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             updateNotification("Проверяем туннель…")
             verifyTunnel()
             ensureCurrent(operationId)
-            updateNotification("VPN подключён")
-            publishStatus(VpnPhase.CONNECTED, "VPN подключён")
+            updateNotification("Подключено")
+            publishStatus(VpnPhase.CONNECTED, "Подключено")
+            NotificationStatus.showConnected(this)
             Log.i(TAG, "VPN service started")
         } catch (error: Throwable) {
             Log.e(TAG, "Unable to start VPN", error)
             if (operation.get() == operationId) {
-                fail(errorMessage(error, "Не удалось запустить VPN"))
+                fail(errorMessage(error, "Не удалось запустить соединение"))
             }
         }
     }
@@ -164,8 +165,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
 
     private fun runtimeConfig(config: String): String {
         val directory = File(noBackupFilesDir, "sing-box")
-        check(directory.isDirectory || directory.mkdirs()) { "Не удалось создать локальное хранилище VPN" }
-        check(directory.canWrite()) { "Нет доступа к локальному хранилищу VPN" }
+        check(directory.isDirectory || directory.mkdirs()) { "Не удалось создать локальное хранилище соединения" }
+        check(directory.canWrite()) { "Нет доступа к локальному хранилищу соединения" }
         return RuntimeProfile.withPrivateCacheFile(config, File(directory, "cache.db").absolutePath)
     }
 
@@ -178,7 +179,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         repeat(3) { attempt ->
             try {
                 verifyTunnelOnce(TRANSPORT_CANARY, null, "Туннель не передаёт HTTPS-трафик")
-                verifyTunnelOnce(DNS_CANARY, 204, "DNS через VPN не отвечает")
+                verifyTunnelOnce(DNS_CANARY, 204, "DNS через соединение не отвечает")
                 return
             } catch (error: Throwable) {
                 lastError = error
@@ -209,7 +210,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun fail(message: String) {
-        publishStatus(VpnPhase.ERROR, "Ошибка запуска VPN", message)
+        publishStatus(VpnPhase.ERROR, "Ошибка запуска соединения", message)
         runCatching { updateNotification(message) }
             .onFailure { Log.w(TAG, "Failed to update error notification", it) }
         runCatching { commandServer?.closeService() }
@@ -225,6 +226,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun stopTunnel() {
+        NotificationStatus.clear(this)
         if (!started && commandServer == null && tunnel == null) {
             runtimeRunning = false
             VpnStateStore(this).write(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
@@ -245,7 +247,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun publishFailure(error: Throwable) {
-        publishStatus(VpnPhase.ERROR, "Ошибка запуска VPN", errorMessage(error, "Не удалось запустить VPN"))
+        publishStatus(VpnPhase.ERROR, "Ошибка запуска соединения", errorMessage(error, "Не удалось запустить соединение"))
     }
 
     private fun publishStatus(phase: VpnPhase, status: String, error: String? = null) {
@@ -265,7 +267,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
-                NotificationChannel(CHANNEL_ID, "VPN", NotificationManager.IMPORTANCE_LOW),
+                NotificationChannel(CHANNEL_ID, "deytt./connect", NotificationManager.IMPORTANCE_LOW),
             )
         }
         val openApp = PendingIntent.getActivity(

@@ -1,6 +1,7 @@
 package space.deytt.connect
 
 import android.app.Activity
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -8,6 +9,7 @@ import android.content.IntentFilter
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
+import android.content.pm.PackageManager
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -46,12 +48,21 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        intent?.data?.let { data ->
+            val incomingUrl = data.getQueryParameter("url") ?: data.getQueryParameter("subscription")
+            if (!incomingUrl.isNullOrBlank()) {
+                startActivity(Intent(this, SetupActivity::class.java).putExtra(SetupActivity.EXTRA_SUBSCRIPTION_URL, incomingUrl))
+                finish()
+                return
+            }
+        }
         if (SubscriptionStore(this).readCurrent() == null) {
             startActivity(Intent(this, SetupActivity::class.java))
             finish()
             return
         }
         buildScreen()
+        requestNotificationPermissionIfNeeded()
     }
 
     override fun onStart() {
@@ -76,7 +87,7 @@ class MainActivity : Activity() {
 
         orb = ConnectionOrbView(this)
         root.addView(orb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(210)))
-        statusText = text("VPN отключён", 31f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+        statusText = text("Соединение выключено", 31f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
             gravity = Gravity.CENTER; letterSpacing = -.035f
         }
         detailText = text("Готов к подключению", 14f, DeyttUi.MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(9), 0, 0) }
@@ -92,6 +103,10 @@ class MainActivity : Activity() {
         root.addView(spacer(18, this))
         root.addView(row("Подписка", "Трафик, срок и обновление", "◎").apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
+        })
+        root.addView(spacer(12, this))
+        root.addView(row("Настройки", "Обновления и приватность", "⌘").apply {
+            setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
         })
         present(root)
         rebuildRouteRow()
@@ -132,6 +147,14 @@ class MainActivity : Activity() {
         if (permission != null) startActivityForResult(permission, VPN_PERMISSION_REQUEST) else startSelectedTunnel()
     }
 
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFICATION_REQUEST)
+        }
+    }
+
     @Deprecated("Android VPN permission API")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -140,14 +163,27 @@ class MainActivity : Activity() {
 
     private fun startSelectedTunnel() {
         val route = pendingRoute ?: SelectedRouteStore(this).read()
+        val libboxRunning = ConnectVpnService.isRunning()
+        val awgRunning = AwgTunnelController.isRunning()
+        if (libboxRunning) {
+            startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+        }
+        if (awgRunning) {
+            AwgTunnelController.stop(this, publishStatus = false)
+        }
+        if (libboxRunning || awgRunning || AwgTunnelController.isStopping()) {
+            awaitEnginesStopped(action = { startSelectedTunnelAfterStop(route) })
+            return
+        }
+        startSelectedTunnelAfterStop(route)
+    }
+
+    private fun startSelectedTunnelAfterStop(route: SelectedRoute) {
         if (route.engine == TunnelEngine.AMNEZIAWG) {
-            if (ConnectVpnService.isRunning()) {
-                startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
-            }
             val store = AwgProfileStore(this)
             val config = store.read(route.id)
             if (config == null) {
-                renderStatus(VpnPhase.ERROR, "Ошибка запуска VPN", "Обновите подписку: профиль ${route.subtitle} отсутствует")
+                renderStatus(VpnPhase.ERROR, "Ошибка запуска соединения", "Обновите подписку: профиль ${route.subtitle} отсутствует")
                 return
             }
             AwgTunnelController.start(this, config, route.id)
@@ -156,6 +192,22 @@ class MainActivity : Activity() {
             val intent = Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
         }
+    }
+
+    private fun awaitEnginesStopped(action: () -> Unit, attempt: Int = 0) {
+        if (isFinishing || isDestroyed) return
+        if (!ConnectVpnService.isRunning() &&
+            !AwgTunnelController.isRunning() &&
+            !AwgTunnelController.isStopping()
+        ) {
+            action()
+            return
+        }
+        if (attempt >= 100) {
+            renderStatus(VpnPhase.ERROR, "Не удалось завершить предыдущее соединение", "Попробуйте отключить его ещё раз")
+            return
+        }
+        window.decorView.postDelayed({ awaitEnginesStopped(action, attempt + 1) }, 50L)
     }
 
     private fun renderStoredState() {
@@ -168,12 +220,12 @@ class MainActivity : Activity() {
 
     private fun renderStatus(phase: VpnPhase?, status: String?, error: String?) {
         if (!::statusText.isInitialized) return
-        val value = status ?: "VPN отключён"
+        val value = status ?: "Соединение выключено"
         val currentPhase = phase ?: VpnPhase.IDLE
         statusText.text = value
         detailText.text = error ?: when (value) {
-            "VPN подключён" -> "Трафик защищён"
-            "VPN отключён" -> "Готов к подключению"
+            "Подключено", "VPN подключён" -> "Соединение активно"
+            "Соединение выключено", "VPN отключён" -> "Готово к подключению"
             else -> "Проверяем доступ к интернету"
         }
         orb.setPhase(currentPhase)
@@ -203,5 +255,8 @@ class MainActivity : Activity() {
         }
     }
 
-    companion object { private const val VPN_PERMISSION_REQUEST = 701 }
+    companion object {
+        private const val VPN_PERMISSION_REQUEST = 701
+        private const val NOTIFICATION_REQUEST = 702
+    }
 }

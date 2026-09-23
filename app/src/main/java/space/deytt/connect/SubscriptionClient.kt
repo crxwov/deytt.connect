@@ -50,21 +50,51 @@ object SubscriptionClient {
     )
 
     private fun request(url: String, accept: String, required: Boolean): Response? {
+        var lastError: IOException? = null
+        repeat(SubscriptionRetryPolicy.MAX_ATTEMPTS) { attempt ->
+            try {
+                return requestOnce(url, accept, required)
+            } catch (error: IOException) {
+                lastError = error
+                if (attempt < SubscriptionRetryPolicy.MAX_ATTEMPTS - 1 && SubscriptionRetryPolicy.shouldRetry(error)) {
+                    Thread.sleep(SubscriptionRetryPolicy.delayMillis(attempt))
+                } else {
+                    throw error
+                }
+            }
+        }
+        throw lastError ?: IOException("Не удалось получить подписку")
+    }
+
+    private fun requestOnce(url: String, accept: String, required: Boolean): Response? {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15_000
             readTimeout = 20_000
-            instanceFollowRedirects = true
+            // A subscription URL is a bearer token. Do not let the HTTP stack
+            // silently forward it to an untrusted host.
+            instanceFollowRedirects = false
             setRequestProperty("Accept", accept)
             setRequestProperty("Cache-Control", "no-cache")
+            setRequestProperty("Connection", "close")
             setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
         }
 
         try {
             val responseCode = connection.responseCode
             if (!required && responseCode == 404) return null
+            if (responseCode in 300..399) {
+                throw SubscriptionHttpFailure(
+                    responseCode,
+                    "Сервер подписки вернул недопустимое перенаправление",
+                )
+            }
             if (responseCode !in 200..299) {
-                throw IOException("Сервер подписки ответил HTTP $responseCode")
+                val detail = when (responseCode) {
+                    502, 503, 504 -> "Сервер подписки временно недоступен (HTTP $responseCode)"
+                    else -> "Сервер подписки ответил HTTP $responseCode"
+                }
+                throw SubscriptionHttpFailure(responseCode, detail)
             }
             return Response(
                 body = connection.inputStream.use(::readLimitedUtf8),
@@ -83,6 +113,9 @@ object SubscriptionClient {
             "Для защиты токена нужна HTTPS-ссылка на подписку"
         }
         require(!uri.host.isNullOrBlank()) { "Укажите полную HTTPS-ссылку на подписку" }
+        require(SubscriptionHostPolicy.isAllowed(uri.host)) {
+            "Ссылка должна вести на официальный домен deytt.space"
+        }
 
         val builder = uri.buildUpon().clearQuery()
         for (name in uri.queryParameterNames) {

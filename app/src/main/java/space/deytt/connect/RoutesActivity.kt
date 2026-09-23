@@ -17,6 +17,7 @@ import space.deytt.connect.DeyttUi.text
 
 class RoutesActivity : Activity() {
     private var latencyGeneration = 0
+    private lateinit var globe: RouteGlobeView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,15 +28,29 @@ class RoutesActivity : Activity() {
         root.addView(header("маршруты", "Куда подключиться", true))
         root.addView(spacer(12, this))
         root.addView(text("Сначала выберите направление, затем протокол.", 15f, DeyttUi.MUTED))
-        root.addView(spacer(24, this))
+        root.addView(spacer(12, this))
+        globe = RouteGlobeView(this)
+        globe.focus("AUTO", animate = false)
+        root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(190)))
+        root.addView(text("точка на карте — выбранное направление", 12f, DeyttUi.MUTED).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(2), 0, 0)
+        })
+        root.addView(spacer(18, this))
 
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { auto ->
-            addMeasuredRow(root, "Автоподбор", "Самый быстрый доступный маршрут", "✦", listOf(auto)) { select(auto) }
+            addMeasuredRow(root, "Автоподбор", "Самый быстрый доступный маршрут", "✦", listOf(auto)) {
+                globe.focus("AUTO")
+                select(auto)
+            }
             root.addView(spacer(12, this))
         }
 
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { chain ->
-            addMeasuredRow(root, "RU → DE", "Двойной маршрут для устойчивого обхода", "↗", listOf(chain)) { select(chain) }
+            addMeasuredRow(root, "RU → DE", "Двойной маршрут для устойчивого обхода", "↗", listOf(chain)) {
+                globe.focus("RU-DE")
+                select(chain)
+            }
             root.addView(spacer(12, this))
         }
 
@@ -45,6 +60,7 @@ class RoutesActivity : Activity() {
                 val first = countryRoutes.first()
                 val protocols = countryRoutes.joinToString(" · ") { it.protocol.title }
                 addMeasuredRow(root, first.country, protocols, first.flag, countryRoutes) {
+                    globe.focus(code)
                     startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", code))
                 }
                 root.addView(spacer(12, this))
@@ -56,6 +72,7 @@ class RoutesActivity : Activity() {
             root.addView(text("AMNEZIAWG", 12f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply { letterSpacing = .18f })
             root.addView(spacer(10, this))
             addMeasuredRow(root, "AmneziaWG", awgRoutes.joinToString(" · ") { it.protocol.title }, "◈", awgRoutes) {
+                globe.focus("AUTO")
                 startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", "AWG"))
             }
         }
@@ -113,7 +130,9 @@ class RoutesActivity : Activity() {
             startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
         }
         AwgTunnelController.stop(this)
-        SubscriptionStore(this).saveValidated(ProfileRoutes.select(config, route.configTag))
+        if (route.engine == TunnelEngine.LIBBOX) {
+            SubscriptionStore(this).saveValidated(ProfileRoutes.select(config, route.configTag))
+        }
         SelectedRouteStore(this).save(route)
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
         finish()

@@ -14,7 +14,7 @@ class ConnectionOrbView(context: Context) : View(context) {
     private var glow: RadialGradient? = null
 
     init {
-        contentDescription = "Состояние VPN"
+        contentDescription = "Состояние соединения"
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
     }
 

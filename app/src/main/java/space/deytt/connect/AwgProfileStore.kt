@@ -102,13 +102,32 @@ class AwgProfileStore(context: Context) {
 
     companion object {
         fun validate(content: String?) {
-            if (content.isNullOrBlank()) return
-            require(content.contains("[Interface]") && content.contains("[Peer]")) {
+            val raw = content?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException(
+                "Сервер вернул пустой профиль AmneziaWG"
+            )
+            require(raw.contains("[Interface]") && raw.contains("[Peer]")) {
                 "Сервер вернул повреждённый профиль AmneziaWG"
             }
             try {
-                Config.parse(BufferedReader(StringReader(content)))
+                val parsed = Config.parse(BufferedReader(StringReader(raw)))
+                check(parsed.getInterface().getAddresses().isNotEmpty()) {
+                    "В профиле AmneziaWG отсутствует адрес интерфейса"
+                }
+                check(parsed.getPeers().isNotEmpty()) {
+                    "В профиле AmneziaWG отсутствует сервер"
+                }
+                check(parsed.getPeers().all { peer ->
+                    peer.getEndpoint().isPresent && peer.getAllowedIps().isNotEmpty()
+                }) {
+                    "В профиле AmneziaWG отсутствует endpoint или маршрут"
+                }
+                check(parsed.getPeers().any { peer ->
+                    peer.getAllowedIps().any { allowed -> allowed.getMask() == 0 }
+                }) {
+                    "В профиле AmneziaWG отсутствует маршрут по умолчанию"
+                }
             } catch (error: Exception) {
+                if (error is IllegalStateException) throw error
                 throw IllegalArgumentException("Сервер вернул несовместимый профиль AmneziaWG", error)
             }
         }

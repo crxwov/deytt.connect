@@ -50,9 +50,14 @@ object DeyttUi {
     fun Activity.brandHeader(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(text("deytt.", 29f, TEXT, Typeface.BOLD).apply { letterSpacing = -.045f })
+        addView(text("./c", 20f, Color.BLACK, Typeface.BOLD).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = .02f
+            background = rounded(Color.WHITE, 11f, Color.WHITE)
+            setPadding(dp(14), dp(9), dp(14), dp(9))
+            contentDescription = "Логотип deytt.connect"
+        })
         addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
-        addView(text("●  сеть готова", 11f, MINT, Typeface.BOLD).apply { letterSpacing = .06f })
     }
 
     fun Activity.text(value: String, size: Float, color: Int = TEXT, style: Int = Typeface.NORMAL): TextView =
