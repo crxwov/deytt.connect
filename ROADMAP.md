@@ -469,6 +469,9 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Android unit report contains 23 tests with zero failures. ARM64 debug APK is
   ZIP-valid, verifies with APK Signature Scheme v2, and has SHA-256
   `c9a1e50152a50ec394845a2c608bfb1b7e5a7ae5ae960969d60c6f1ec35ee088`.
+- Commit `28501da` is pushed to `origin/main`. GitHub prerelease
+  `v0.7.0-debug` publishes the ARM64 APK with the same SHA-256 and explicitly
+  keeps real-device AWG/tunnel proof pending.
 - No ADB device or emulator is connected. Real AWG 3.1 traffic, the system
   notification, route latency, deep-link import, and GitHub update flow remain
   unverified on hardware.
