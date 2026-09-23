@@ -10,6 +10,7 @@ import java.net.URL
 data class ImportedSubscription(
     val url: String,
     val summary: ProfileSummary,
+    val metadata: SubscriptionMetadata,
 )
 
 object SubscriptionClient {
@@ -24,7 +25,7 @@ object SubscriptionClient {
             instanceFollowRedirects = true
             setRequestProperty("Accept", "application/json")
             setRequestProperty("Cache-Control", "no-cache")
-            setRequestProperty("User-Agent", "deytt-connect/0.2.2")
+            setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
         }
 
         try {
@@ -34,8 +35,13 @@ object SubscriptionClient {
             }
             val content = connection.inputStream.use(::readLimitedUtf8)
             val summary = ProfileValidator.validate(content)
+            val metadata = SubscriptionMetadata.parse(
+                connection.getHeaderField("Profile-Title"),
+                connection.getHeaderField("Subscription-Userinfo"),
+            )
             SubscriptionStore(context).saveValidated(content)
-            return ImportedSubscription(url, summary)
+            SubscriptionMetadataStore(context).save(metadata)
+            return ImportedSubscription(url, summary, metadata)
         } finally {
             connection.disconnect()
         }

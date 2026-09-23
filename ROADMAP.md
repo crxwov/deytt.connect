@@ -2,8 +2,8 @@
 
 ## Status
 
-In progress — Android 0.3.3 corrected transport canary is published;
-phone verification remains
+In progress — 0.4.0 candidate replaces raw manual outbounds with resilient
+country groups and ships the new onboarding/catalog/dashboard UI; phone proof pending
 
 ## Objective
 
@@ -51,6 +51,15 @@ and a real APK artifact.
 - [~] 6. Run real authenticated Android tunnel plus external HTTPS canary,
       build APK, record checksum, commit, push, and publish artifact; source and
       the debug prerelease are published, while device proof remains pending.
+- [~] 7. Audit the complete Android VPN lifecycle against maintained open-source
+      clients and repair the data plane instead of changing only canary copy.
+- [x] 8. Replace the single-screen MVP with explicit subscription onboarding,
+      import progress/success feedback, route catalog and connection dashboard.
+- [x] 9. Add stable product metadata for owner, expiry and traffic; present the
+      fixed DEYTT route set and separate AmneziaWG 1.5/3.1 actions without
+      leaking arbitrary internal outbound labels.
+- [~] 10. Validate all states at phone widths, publish an ARM64 build, and keep
+      the task open until a real external HTTPS request passes on the phone.
 
 ## Current State
 
@@ -87,6 +96,17 @@ exactly as the official Android client does.
 Android 0.3.2 replaces those stubs with a physical-network resolver, interface
 snapshot and network monitor, restores typed `local-dns`, and consumes TUN DNS
 addresses supplied by libbox without inventing a fallback.
+Real-device 0.3.3 proves that auto-pick establishes a working full tunnel and
+passes traffic. Manual choices still fail because the MVP derives its picker
+from every raw sing-box outbound/endpoint, exposing internal, test and
+composition-only tags as if they were supported user routes. The next release
+must use an explicit first-party route catalog and keep internal graph nodes
+out of the UI.
+The 0.4.0 candidate now accepts only `urltest` auto-pick and versioned
+`route:<country>` groups as user routes. Raw outbounds and the misleading
+standard-WireGuard endpoint stay hidden. Subscription headers populate the
+owner/title, accumulated traffic and expiry card. AmneziaWG 1.5 and 3.1 are
+shown separately and open the existing versioned first-party import flow.
 
 Local JDK 17, Android API 35, build-tools 35.0.0, and Gradle 8.11.1 are
 bootstrapped under `.toolchain/` and are not part of the repository artifact.
@@ -100,10 +120,19 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - The first app does not pretend that a successful APK build proves a working
   tunnel. Device permission, VPN service startup, authenticated subscription,
   and external HTTPS must be validated separately.
+- The working auto-pick is now the data-plane baseline. Do not modify TUN/DNS
+  behavior without a focused regression; repair manual selection at the
+  catalog/selector boundary first.
+- Raw outbound tags are implementation details, not a product API. The client
+  must only present versioned, explicitly selectable DEYTT routes and must not
+  infer labels such as `VPN основной` or `Авито прокси` from engine config.
 - The server-side sing-box generator now removes deprecated inbound `sniff`
   fields, emits the equivalent route action, and represents AmneziaWG as a
   WireGuard endpoint required by libbox 1.14.1. DNS interception now uses the
   current route `hijack-dns` action and typed DNS servers.
+- Manual countries are urltest groups, not direct raw endpoints. This preserves
+  failover among profiles inside the chosen country and keeps implementation
+  names out of the product contract.
 
 ## Issues and Failed Attempts
 
@@ -286,11 +315,16 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - The release creation upload reserved its default asset name without exposing
   the asset; a second explicit-name upload completed successfully and is the
   canonical download for this build.
+- Android 0.4.0 unit tests pass 9/9, lint has zero errors (14 warnings), and all
+  debug ABI APKs build. ARM64 SHA-256:
+  `0a2a7ebffa25e725b89981d28ae59506b4df21818a040a26cd2d291609a62a01`.
+- No ADB device is connected; visual safe-area review and real manual-country
+  HTTPS proof remain pending on the user's phone.
 
 ## Next Action
 
-Install Android 0.3.3 ARM64 over 0.3.2, then repeat connection, DNS, HTTPS,
-disconnect and reconnect on the phone.
+Deploy the country-group subscription contract, publish the 0.4.0 ARM64 APK,
+then re-import on the phone and prove auto-pick plus each displayed country.
 
 ## Resume Context
 

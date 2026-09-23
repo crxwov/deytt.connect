@@ -2,7 +2,7 @@ package space.deytt.connect
 
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.AlertDialog
+import android.app.Dialog
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -22,8 +22,12 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
@@ -59,11 +63,18 @@ class MainActivity : Activity() {
     private lateinit var connectButton: TextView
     private lateinit var importButton: TextView
     private lateinit var routeButton: TextView
+    private lateinit var onboardingIntro: LinearLayout
+    private lateinit var accountPanel: LinearLayout
+    private lateinit var accountTitle: TextView
+    private lateinit var trafficValue: TextView
+    private lateinit var expiryValue: TextView
+    private lateinit var trafficProgress: ProgressBar
     private var rawSubscriptionUrl: String? = null
     private var maskedSubscriptionUrl = false
     private var profileReady = false
     private var vpnConnected = false
     private var busy = false
+    private var importSuccessMoment = false
 
     private val vpnStatusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -158,6 +169,33 @@ class MainActivity : Activity() {
         header.addView(edition)
         content.addView(header, marginParams(match))
 
+        onboardingIntro = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(54), 0, dp(18))
+            addView(TextView(this@MainActivity).apply {
+                text = "ОДИН РАЗ — И ГОТОВО"
+                textSize = 10f
+                letterSpacing = 0.16f
+                setTextColor(BLUE)
+                typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+            })
+            addView(TextView(this@MainActivity).apply {
+                text = "Добавьте свою\nподписку deytt."
+                textSize = 32f
+                setLineSpacing(0f, 0.94f)
+                letterSpacing = -0.035f
+                setTextColor(INK)
+                typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            }, marginParams(match, top = 12))
+            addView(TextView(this@MainActivity).apply {
+                text = "Проверим профиль, сохраним его на устройстве и покажем только рабочие маршруты."
+                textSize = 15f
+                setLineSpacing(0f, 1.22f)
+                setTextColor(COPY)
+            }, marginParams(match, top = 16))
+        }
+        content.addView(onboardingIntro, marginParams(match))
+
         signalDial = SignalDialView(this)
         content.addView(signalDial, marginParams(match, dp(222), top = 14))
 
@@ -204,6 +242,45 @@ class MainActivity : Activity() {
                 requestOrStartVpn()
             }
         }
+
+        accountPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            background = rounded(PANEL, dp(18), LINE, dp(1))
+            setPadding(dp(18), dp(17), dp(18), dp(16))
+        }
+        val accountHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        accountTitle = TextView(this).apply {
+            textSize = 14f
+            setTextColor(INK)
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        }
+        val activeLabel = TextView(this).apply {
+            text = "●  АКТИВНА"
+            textSize = 9f
+            letterSpacing = 0.09f
+            setTextColor(MINT)
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        }
+        accountHeader.addView(accountTitle, LinearLayout.LayoutParams(0, wrap, 1f))
+        accountHeader.addView(activeLabel)
+        accountPanel.addView(accountHeader)
+        val metrics = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        trafficValue = metricBlock(metrics, "ТРАФИК")
+        expiryValue = metricBlock(metrics, "ДЕЙСТВУЕТ ДО")
+        accountPanel.addView(metrics, marginParams(match, top = 16))
+        trafficProgress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 1000
+            progressTintList = ColorStateList.valueOf(BLUE)
+            progressBackgroundTintList = ColorStateList.valueOf(LINE)
+        }
+        accountPanel.addView(trafficProgress, marginParams(match, dp(3), top = 14))
+        content.addView(accountPanel, marginParams(match, top = 14))
 
         val subscriptionLabel = TextView(this).apply {
             text = "ПОДПИСКА"
@@ -290,13 +367,22 @@ class MainActivity : Activity() {
                     maskSubscriptionUrl(imported.url)
                     profileReady = true
                     busy = false
+                    importSuccessMoment = true
+                    updateSubscriptionSummary(imported.metadata)
                     updateRouteButton()
                     updateControls()
                     importButton.isEnabled = true
+                    signalDial.alpha = 0f
+                    signalDial.scaleX = 0.94f
+                    signalDial.scaleY = 0.94f
+                    signalDial.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260L).start()
+                    importButton.postDelayed({
+                        importSuccessMoment = false
+                        updateControls()
+                    }, 900L)
                     renderStatus(
                         "Профиль готов",
-                        "${imported.summary.outboundCount} выходов  ·  " +
-                            "${ProfileRoutes.options(SubscriptionStore(this).readCurrent().orEmpty()).size} маршрутов",
+                        "Маршруты обновлены · можно подключаться",
                     )
                 }
             } catch (error: Exception) {
@@ -396,25 +482,166 @@ class MainActivity : Activity() {
             return
         }
         val selectedTag = ProfileRoutes.selected(config)
-        val selectedIndex = routes.indexOfFirst { it.tag == selectedTag }.coerceAtLeast(0)
-        AlertDialog.Builder(this)
-            .setTitle("Выберите маршрут")
-            .setSingleChoiceItems(routes.map(RouteOption::label).toTypedArray(), selectedIndex) { dialog, which ->
-                val route = routes[which]
+        showRouteSheet(config, routes, selectedTag)
+    }
+
+    private fun showRouteSheet(config: String, routes: List<RouteOption>, selectedTag: String) {
+        val dialog = Dialog(this)
+        val sheet = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(20), dp(22), dp(28))
+            background = rounded(PANEL_RAISED, dp(26), LINE, dp(1))
+        }
+        val handle = View(this).apply { background = rounded(LINE, dp(2), null, 0) }
+        sheet.addView(handle, LinearLayout.LayoutParams(dp(42), dp(4)).apply { gravity = Gravity.CENTER_HORIZONTAL })
+        sheet.addView(TextView(this).apply {
+            text = "Маршрут"
+            textSize = 26f
+            letterSpacing = -0.025f
+            setTextColor(INK)
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        }, marginParams(match, top = 22))
+        sheet.addView(TextView(this).apply {
+            text = "Выбирайте страну, а рабочий узел внутри неё приложение найдёт само."
+            textSize = 14f
+            setLineSpacing(0f, 1.18f)
+            setTextColor(COPY)
+        }, marginParams(match, top = 6))
+
+        routes.forEach { route ->
+            val selected = route.tag == selectedTag
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(16), dp(13), dp(14), dp(13))
+                background = rounded(
+                    if (selected) 0xFF182440.toInt() else PANEL,
+                    dp(18),
+                    if (selected) BLUE else LINE,
+                    dp(1),
+                )
+                isClickable = true
+                isFocusable = true
+                contentDescription = "Маршрут ${route.label}. ${route.detail}"
+            }
+            row.addView(TextView(this).apply {
+                text = route.flag
+                textSize = 25f
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(dp(46), dp(46)))
+            val copy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            copy.addView(TextView(this).apply {
+                text = route.label
+                textSize = 16f
+                setTextColor(INK)
+                typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            })
+            copy.addView(TextView(this).apply {
+                text = route.detail
+                textSize = 11f
+                setTextColor(if (route.recommended) MINT else MUTED)
+            }, marginParams(match, top = 3))
+            row.addView(copy, LinearLayout.LayoutParams(0, wrap, 1f).apply { marginStart = dp(8) })
+            row.addView(TextView(this).apply {
+                text = if (selected) "✓" else "›"
+                textSize = 19f
+                setTextColor(if (selected) MINT else COPY)
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(dp(34), dp(42)))
+            row.setOnClickListener {
                 try {
                     val updated = ProfileRoutes.select(config, route.tag)
                     ProfileValidator.validate(updated)
                     SubscriptionStore(this).saveValidated(updated)
                     updateRouteButton()
-                    renderStatus("Маршрут выбран", "${route.label}. Теперь можно подключиться.")
-                    dialog.dismiss()
+                    renderStatus("Маршрут выбран", "${route.flag} ${route.label} · проверим при подключении")
                 } catch (error: Exception) {
-                    renderStatus("Маршрут не сохранён", friendlyError(error, "Импортируйте подписку заново."), ConnectionVisualState.ERROR)
+                    renderStatus("Маршрут не сохранён", friendlyError(error, "Обновите подписку."), ConnectionVisualState.ERROR)
+                } finally {
                     dialog.dismiss()
                 }
             }
-            .setNegativeButton("Отмена", null)
-            .show()
+            sheet.addView(row, marginParams(match, top = 10))
+        }
+        sheet.addView(TextView(this).apply {
+            text = "AMNEZIAWG 1.5 / 3.1"
+            textSize = 10f
+            letterSpacing = 0.12f
+            setTextColor(MUTED)
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        }, marginParams(match, top = 24))
+        sheet.addView(TextView(this).apply {
+            text = "Отдельный протокол: откроется безопасный импорт в AmneziaVPN."
+            textSize = 12f
+            setLineSpacing(0f, 1.15f)
+            setTextColor(COPY)
+        }, marginParams(match, top = 7))
+        listOf("3.1" to "31", "1.5" to "15").forEach { (label, version) ->
+            val action = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(16), 0, dp(14), 0)
+                background = rounded(PANEL, dp(15), LINE, dp(1))
+                isClickable = true
+                isFocusable = true
+                contentDescription = "Импортировать AmneziaWG $label"
+                setOnClickListener {
+                    val url = amneziaImportUrl(version)
+                    if (url == null) {
+                        renderStatus("Импорт недоступен", "Обновите ссылку подписки.", ConnectionVisualState.ERROR)
+                    } else {
+                        startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                    }
+                    dialog.dismiss()
+                }
+            }
+            action.addView(TextView(this).apply {
+                text = "◈"
+                textSize = 18f
+                setTextColor(BLUE)
+            }, LinearLayout.LayoutParams(dp(34), wrap))
+            action.addView(TextView(this).apply {
+                text = "AmneziaWG $label"
+                textSize = 14f
+                setTextColor(INK)
+                typeface = Typeface.create("sans-serif", Typeface.BOLD)
+            }, LinearLayout.LayoutParams(0, wrap, 1f))
+            action.addView(TextView(this).apply {
+                text = "›"
+                textSize = 18f
+                setTextColor(COPY)
+            })
+            sheet.addView(action, marginParams(match, dp(50), top = 9))
+        }
+
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(sheet, ViewGroup.LayoutParams(match, wrap))
+        }
+        dialog.setContentView(scroll)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            attributes = attributes.apply { dimAmount = 0.72f }
+            setLayout(match, wrap)
+            setGravity(Gravity.BOTTOM)
+        }
+        dialog.setOnShowListener { dialog.window?.setLayout(match, wrap) }
+        dialog.show()
+    }
+
+    private fun amneziaImportUrl(version: String): String? {
+        val source = rawSubscriptionUrl?.takeIf { it.isNotBlank() } ?: return null
+        val uri = android.net.Uri.parse(source)
+        val path = uri.path.orEmpty()
+        if (!path.contains("/sub/token/")) return null
+        return uri.buildUpon()
+            .path(path.replace("/sub/token/", "/amnezia/token/"))
+            .clearQuery()
+            .appendQueryParameter("version", version)
+            .build()
+            .toString()
     }
 
     private fun renderStatus(
@@ -481,6 +708,7 @@ class MainActivity : Activity() {
 
     private fun restoreScreenState() {
         profileReady = hasValidStoredProfile()
+        updateSubscriptionSummary(SubscriptionMetadataStore(this).read())
         updateRouteButton()
         val state = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
         when (state.getString(ConnectVpnService.STATE_STATUS, null)) {
@@ -597,10 +825,70 @@ class MainActivity : Activity() {
             dp(1),
         )
         connectButton.setTextColor(if (busy || vpnConnected) INK else Color.WHITE)
-        importButton.text = if (profileReady) "ОБНОВИТЬ" else "ИМПОРТ"
+        importButton.text = when {
+            importSuccessMoment -> "✓  ДОБАВЛЕНО"
+            busy -> "ПРОВЕРЯЕМ…"
+            profileReady -> "ОБНОВИТЬ"
+            else -> "ДОБАВИТЬ"
+        }
         importButton.alpha = if (importButton.isEnabled) 1f else 0.55f
         routeButton.alpha = if (routeButton.isEnabled) 1f else 0.45f
         connectButton.alpha = if (connectButton.isEnabled) 1f else 0.45f
+        val dashboardVisibility = if (profileReady) View.VISIBLE else View.GONE
+        onboardingIntro.visibility = if (profileReady) View.GONE else View.VISIBLE
+        signalDial.visibility = dashboardVisibility
+        routeButton.visibility = dashboardVisibility
+        connectButton.visibility = dashboardVisibility
+        accountPanel.visibility = dashboardVisibility
+        statusTitle.gravity = if (profileReady) Gravity.CENTER else Gravity.START
+        statusDetail.gravity = if (profileReady) Gravity.CENTER else Gravity.START
+        statusDetail.setPadding(if (profileReady) dp(10) else 0, 0, if (profileReady) dp(10) else 0, 0)
+    }
+
+    private fun metricBlock(parent: LinearLayout, label: String): TextView {
+        val block = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        block.addView(TextView(this).apply {
+            text = label
+            textSize = 9f
+            letterSpacing = 0.12f
+            setTextColor(MUTED)
+            typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+        })
+        val value = TextView(this).apply {
+            textSize = 15f
+            setTextColor(INK)
+            typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        }
+        block.addView(value, marginParams(match, top = 5))
+        parent.addView(block, LinearLayout.LayoutParams(0, wrap, 1f))
+        return value
+    }
+
+    private fun updateSubscriptionSummary(metadata: SubscriptionMetadata) {
+        if (!::accountTitle.isInitialized) return
+        accountTitle.text = metadata.title.removePrefix("deytt · ").ifBlank { "deytt" }
+        trafficValue.text = if (metadata.totalBytes > 0) {
+            "${formatBytes(metadata.usedBytes)} / ${formatBytes(metadata.totalBytes)}"
+        } else {
+            "${formatBytes(metadata.usedBytes)} · безлимит"
+        }
+        expiryValue.text = metadata.expiresAtSeconds?.let { seconds ->
+            SimpleDateFormat("d MMM yyyy", Locale("ru")).format(Date(seconds * 1000))
+        } ?: "без срока"
+        trafficProgress.progress = if (metadata.totalBytes > 0) {
+            ((metadata.usedBytes.coerceAtMost(metadata.totalBytes) * 1000) / metadata.totalBytes).toInt()
+        } else {
+            0
+        }
+        trafficProgress.visibility = if (metadata.totalBytes > 0) View.VISIBLE else View.GONE
+    }
+
+    private fun formatBytes(bytes: Long): String {
+        val gib = bytes.toDouble() / (1024.0 * 1024.0 * 1024.0)
+        return if (gib >= 0.1) String.format(Locale("ru"), "%.1f ГБ", gib) else {
+            val mib = bytes.toDouble() / (1024.0 * 1024.0)
+            String.format(Locale("ru"), "%.0f МБ", mib)
+        }
     }
 
     private fun rounded(fill: Int, radius: Int, strokeColor: Int?, strokeWidth: Int): GradientDrawable =

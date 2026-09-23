@@ -10,7 +10,9 @@ class ProfileRoutesTest {
         {
           "outbounds": [
             {"type": "urltest", "tag": "🇪🇺 автоподбор"},
+            {"type": "urltest", "tag": "route:DE", "outbounds": ["de • обход 1"]},
             {"type": "hysteria2", "tag": "nl • обход 1"},
+            {"type": "hysteria2", "tag": "Авито прокси"},
             {"type": "direct", "tag": "direct"}
           ],
           "endpoints": [{"type": "wireguard", "tag": "vpn основной (amneziawg)"}],
@@ -23,23 +25,30 @@ class ProfileRoutesTest {
     """.trimIndent()
 
     @Test
-    fun listsOnlyUsableRoutes() {
+    fun listsOnlyExplicitUserRoutes() {
         val routes = ProfileRoutes.options(config)
 
         assertEquals(
-            listOf("🇪🇺 автоподбор", "nl • обход 1", "vpn основной (amneziawg)"),
+            listOf("🇪🇺 автоподбор", "route:DE"),
             routes.map(RouteOption::tag),
         )
         assertEquals("Автоподбор", routes.first().label)
+        assertEquals("Германия", routes[1].label)
+        assertEquals("🇩🇪", routes[1].flag)
     }
 
     @Test
     fun changesDefaultRouteAndRemoteDnsDetour() {
-        val selected = ProfileRoutes.select(config, "nl • обход 1")
+        val selected = ProfileRoutes.select(config, "route:DE")
         val servers = JSONObject(selected).getJSONObject("dns").getJSONArray("servers")
 
-        assertEquals("nl • обход 1", ProfileRoutes.selected(selected))
-        assertEquals("nl • обход 1", servers.getJSONObject(0).getString("detour"))
+        assertEquals("route:DE", ProfileRoutes.selected(selected))
+        assertEquals("route:DE", servers.getJSONObject(0).getString("detour"))
         assertFalse(servers.getJSONObject(1).has("detour"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun rejectsInternalOutboundSelection() {
+        ProfileRoutes.select(config, "Авито прокси")
     }
 }

@@ -1,15 +1,24 @@
 package space.deytt.connect
 
-import org.json.JSONArray
 import org.json.JSONObject
 
 data class RouteOption(
     val tag: String,
     val label: String,
+    val flag: String,
+    val detail: String,
+    val recommended: Boolean = false,
 )
 
 object ProfileRoutes {
-    private val networkTypes = setOf("hysteria2", "vless", "trojan", "shadowsocks", "tuic")
+    private const val ROUTE_PREFIX = "route:"
+    private val countryPresentation = mapOf(
+        "NL" to Pair("🇳🇱", "Нидерланды"),
+        "DE" to Pair("🇩🇪", "Германия"),
+        "RU" to Pair("🇷🇺", "Россия"),
+        "FI" to Pair("🇫🇮", "Финляндия"),
+        "NL-DE" to Pair("🇳🇱", "Нидерланды → Германия"),
+    )
 
     fun selected(config: String): String = parse(config)
         .getJSONObject("route")
@@ -17,10 +26,33 @@ object ProfileRoutes {
 
     fun options(config: String): List<RouteOption> {
         val root = parse(config)
-        val result = linkedMapOf<String, RouteOption>()
-        collectOutbounds(root.optJSONArray("outbounds"), result)
-        collectOutbounds(root.optJSONArray("endpoints"), result)
-        return result.values.toList()
+        val source = root.optJSONArray("outbounds") ?: return emptyList()
+        val result = mutableListOf<RouteOption>()
+        for (index in 0 until source.length()) {
+            val outbound = source.optJSONObject(index) ?: continue
+            if (outbound.optString("type") != "urltest") continue
+            val tag = outbound.optString("tag").trim()
+            when {
+                tag.contains("автоподбор", ignoreCase = true) -> result += RouteOption(
+                    tag = tag,
+                    label = "Автоподбор",
+                    flag = "✦",
+                    detail = "Самый быстрый доступный маршрут",
+                    recommended = true,
+                )
+                tag.startsWith(ROUTE_PREFIX) -> {
+                    val code = tag.removePrefix(ROUTE_PREFIX).uppercase()
+                    val presentation = countryPresentation[code] ?: continue
+                    result += RouteOption(
+                        tag = tag,
+                        label = presentation.second,
+                        flag = presentation.first,
+                        detail = "Автовыбор рабочего узла · Hysteria 2",
+                    )
+                }
+            }
+        }
+        return result.distinctBy(RouteOption::tag)
     }
 
     fun select(config: String, tag: String): String {
@@ -37,26 +69,10 @@ object ProfileRoutes {
         return root.toString()
     }
 
-    private fun collectOutbounds(source: JSONArray?, result: MutableMap<String, RouteOption>) {
-        if (source == null) return
-        for (index in 0 until source.length()) {
-            val outbound = source.optJSONObject(index) ?: continue
-            val type = outbound.optString("type").lowercase()
-            val tag = outbound.optString("tag").trim()
-            if (tag.isBlank() || type !in networkTypes + setOf("urltest", "selector", "wireguard")) continue
-            result.putIfAbsent(tag, RouteOption(tag, presentableLabel(tag)))
-        }
-    }
-
     private fun parse(config: String): JSONObject = try {
         JSONObject(config)
     } catch (error: Exception) {
         throw IllegalArgumentException("Сохранённый профиль повреждён", error)
     }
 
-    private fun presentableLabel(tag: String): String = when {
-        tag.contains("автоподбор", ignoreCase = true) -> "Автоподбор"
-        tag.equals("nl+de", ignoreCase = true) -> "NL + DE"
-        else -> tag.replaceFirstChar { char -> char.titlecase() }
-    }
 }
