@@ -25,7 +25,7 @@ class ProfileActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val metadata = SubscriptionMetadataStore(this).read()
-        val root = screen()
+        val root = screen(withBackdrop = true)
         root.addView(header("подписка", metadata.title, true))
         root.addView(spacer(10, this))
         root.addView(note("Данные обновляются вместе со ссылкой. Сам токен не показываем на экране."))

@@ -78,14 +78,15 @@ class ProfileRoutesTest {
     @Test
     fun exposesEveryAvailableAmneziaServerSeparately() {
         val profiles = listOf(
-            AwgProfile("awg31:nl", "31", "Нидерланды", "NL", "config"),
-            AwgProfile("awg31:de", "31", "Германия", "DE", "config"),
+            AwgProfile("awg15:nl", "15", "Нидерланды", "NL", "valid-awg15"),
+            AwgProfile("awg31:de", "31", "Германия", "DE", "valid-awg31"),
         )
 
         val routes = RouteCatalog.from(config, profiles).filter { it.engine == TunnelEngine.AMNEZIAWG }
 
-        assertEquals(listOf("awg31:nl", "awg31:de"), routes.map(DeyttRoute::id))
+        assertEquals(listOf("awg15:nl", "awg31:de"), routes.map(DeyttRoute::id))
         assertEquals(listOf("Нидерланды", "Германия"), routes.map(DeyttRoute::country))
         assertEquals(listOf("NL", "DE"), routes.map(DeyttRoute::flag))
+        assertEquals(listOf(RouteProtocol.AWG15, RouteProtocol.AWG31), routes.map(DeyttRoute::protocol))
     }
 }

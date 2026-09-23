@@ -44,6 +44,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     companion object {
         const val ACTION_START = "space.deytt.connect.action.START"
         const val ACTION_STOP = "space.deytt.connect.action.STOP"
+        const val ACTION_RESTORE_NOTIFICATION = "space.deytt.connect.action.RESTORE_NOTIFICATION"
         const val ACTION_STATUS = "space.deytt.connect.action.STATUS"
         const val EXTRA_STATUS = "status"
         const val EXTRA_ERROR = "error"
@@ -72,10 +73,15 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     private var commandServer: CommandServer? = null
     private var tunnel: ParcelFileDescriptor? = null
     private var started = false
+    private var notificationText = "Запуск deytt./connect"
     private val operation = AtomicLong(0)
     private val networkBridge by lazy { AndroidNetworkBridge(this) }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_RESTORE_NOTIFICATION) {
+            if (started && runtimeRunning) startForegroundCompat(notificationText)
+            return START_NOT_STICKY
+        }
         if (intent?.action == ACTION_STOP) {
             operation.incrementAndGet()
             publishStatus(VpnPhase.STOPPING, "Отключаем соединение…")
@@ -298,6 +304,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     }
 
     private fun startForegroundCompat(text: String) {
+        notificationText = text
         val manager = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             manager.createNotificationChannel(
@@ -316,6 +323,12 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             Intent(this, ConnectVpnService::class.java).setAction(ACTION_STOP),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val restore = PendingIntent.getService(
+            this,
+            NOTIFICATION_ID + 2,
+            Intent(this, ConnectVpnService::class.java).setAction(ACTION_RESTORE_NOTIFICATION),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
         val notificationBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder(this, CHANNEL_ID)
         } else {
@@ -328,6 +341,9 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             .setSmallIcon(R.drawable.ic_stat_vpn)
             .setContentIntent(openApp)
             .setOngoing(true)
+            .setAutoCancel(false)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setDeleteIntent(restore)
             .setOnlyAlertOnce(true)
             .addAction(
                 Notification.Action.Builder(
@@ -337,6 +353,20 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                 ).build(),
             )
             .build()
+        // Keep the foreground indicator visible until the explicit disconnect
+        // action or service stop. setOngoing protects the normal path; the
+        // NO_CLEAR flag covers OEM notification shade implementations that
+        // otherwise expose a swipe affordance for VPN services.
+        notification.flags = notification.flags or Notification.FLAG_NO_CLEAR
+        check(notification.flags and Notification.FLAG_ONGOING_EVENT != 0) {
+            "Foreground notification must be ongoing"
+        }
+        check(notification.flags and Notification.FLAG_AUTO_CANCEL == 0) {
+            "Foreground notification must not auto-cancel"
+        }
+        check(!ForegroundNotificationContract.isUserClearable(notification.flags)) {
+            "Foreground notification must not be user-clearable"
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(NOTIFICATION_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED)
         } else {

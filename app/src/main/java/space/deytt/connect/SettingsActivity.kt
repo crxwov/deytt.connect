@@ -26,7 +26,7 @@ class SettingsActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val root = screen()
+        val root = screen(withBackdrop = true)
         root.addView(header("настройки", "deytt./connect", true))
         root.addView(spacer(10, this))
         root.addView(note("Версия ${BuildConfig.VERSION_NAME}\nОбновления загружаются только из официального репозитория."))

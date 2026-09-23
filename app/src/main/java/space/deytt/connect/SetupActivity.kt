@@ -35,7 +35,7 @@ class SetupActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val updating = SubscriptionStore(this).readCurrent() != null
-        val root = screen()
+        val root = screen(withBackdrop = true)
         root.addView(header("добавить источник", if (updating) "Обновить подписку" else "Подключить подписку", updating))
         root.addView(spacer(12, this))
         root.addView(note("Одна ссылка добавит доступные направления и способы подключения. Ссылка хранится только на этом устройстве."))

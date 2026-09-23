@@ -21,12 +21,13 @@ import android.widget.Space
 import android.widget.TextView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import kotlin.math.roundToInt
 
 object DeyttUi {
-    const val BG = 0xFF080B12.toInt()
-    const val SURFACE = 0xFF10151F.toInt()
-    const val SURFACE_2 = 0xFF151C29.toInt()
-    const val LINE = 0xFF273249.toInt()
+    const val BG = 0xFF070A10.toInt()
+    const val SURFACE = 0xFF111722.toInt()
+    const val SURFACE_2 = 0xFF171F2D.toInt()
+    const val LINE = 0xFF253147.toInt()
     const val TEXT = 0xFFF4F6FA.toInt()
     const val MUTED = 0xFF8E9AAC.toInt()
     const val BLUE = 0xFF8B96FF.toInt()
@@ -36,7 +37,8 @@ object DeyttUi {
 
     fun Activity.screen(withBackdrop: Boolean = false): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(dp(20), dp(18), dp(20), dp(28))
+        val gutter = contentGutter()
+        setPadding(gutter, dp(14), gutter, dp(28))
         background = if (withBackdrop) SignalBackdropDrawable() else ColorDrawable(BG)
         fitsSystemWindows = false
         clipToPadding = false
@@ -44,7 +46,7 @@ object DeyttUi {
             val bars = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout(),
             )
-            view.setPadding(dp(20), dp(18) + bars.top, dp(20), dp(28) + bars.bottom)
+            view.setPadding(gutter, dp(14) + bars.top, gutter, dp(28) + bars.bottom)
             insets
         }
         ViewCompat.requestApplyInsets(this)
@@ -53,15 +55,19 @@ object DeyttUi {
     fun Activity.header(kicker: String, title: String, back: Boolean = false): LinearLayout =
         LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            if (back) addView(text("Назад", 15f, MUTED, Typeface.BOLD).apply {
-                setPadding(0, dp(2), 0, dp(18))
+            if (back) addView(LinearLayout(this@header).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = dp(48)
                 contentDescription = "Назад"
                 isClickable = true
                 isFocusable = true
                 setOnClickListener { finish() }
-            })
+                addView(text("‹", 28f, TEXT).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(34), dp(48)))
+                addView(text("назад", 13f, MUTED, Typeface.BOLD).apply { gravity = Gravity.CENTER_VERTICAL })
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(52)))
             if (kicker.isNotBlank()) addView(text(kicker.uppercase(), 10f, MUTED, Typeface.BOLD).apply { letterSpacing = .18f })
-            addView(text(title, 31f, TEXT, Typeface.BOLD).apply { letterSpacing = -.04f; setPadding(0, dp(6), 0, dp(6)) })
+            addView(text(title, 27f, TEXT, Typeface.BOLD).apply { letterSpacing = -.045f; setPadding(0, dp(8), 0, dp(6)) })
         }
 
     fun Activity.brandHeader(): LinearLayout = LinearLayout(this).apply {
@@ -90,7 +96,7 @@ object DeyttUi {
         gravity = Gravity.CENTER
         minHeight = dp(56)
         setPadding(dp(18), dp(14), dp(18), dp(14))
-        background = rounded(if (secondary) SURFACE_2 else BLUE, 14f, if (secondary) LINE else BLUE)
+        background = rounded(if (secondary) SURFACE_2 else BLUE, 15f, Color.TRANSPARENT)
         isClickable = true
         isFocusable = true
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
@@ -117,20 +123,20 @@ object DeyttUi {
         leading: String,
         trailing: String = "›",
         interactive: Boolean = true,
+        emphasis: Boolean = false,
     ): LinearLayout =
         LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(16), dp(13), dp(12), dp(13))
-            background = GradientDrawable().apply {
-                setColor(SURFACE)
-                cornerRadius = dp(13).toFloat()
-            }
+            minimumHeight = dp(68)
+            setPadding(if (emphasis) dp(15) else dp(3), dp(11), if (emphasis) dp(12) else dp(3), dp(11))
+            background = if (emphasis) rounded(SURFACE, 16f, Color.TRANSPARENT) else ColorDrawable(Color.TRANSPARENT)
+            elevation = 0f
             if (leading.isNotBlank()) {
                 addView(text(leading, 12f, BLUE, Typeface.BOLD).apply {
                     gravity = Gravity.CENTER
                     letterSpacing = .04f
-                    background = rounded(SURFACE_2, 9f, SURFACE_2)
+                    background = rounded(if (emphasis) SURFACE_2 else Color.TRANSPARENT, 10f, Color.TRANSPARENT)
                     minWidth = dp(38)
                     minHeight = dp(38)
                 }, LinearLayout.LayoutParams(dp(42), dp(42)).apply {
@@ -147,7 +153,7 @@ object DeyttUi {
                 })
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             if (trailing.isNotBlank()) {
-                addView(text(trailing, 16f, MUTED).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(34), ViewGroup.LayoutParams.WRAP_CONTENT))
+                addView(text(trailing, 13f, if (emphasis) MUTED else BLUE, Typeface.BOLD).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(74), ViewGroup.LayoutParams.WRAP_CONTENT))
             }
             isClickable = interactive
             isFocusable = interactive
@@ -178,14 +184,20 @@ object DeyttUi {
     }
 
     fun Activity.note(value: String, accent: Int = MUTED): TextView = text(value, 13f, accent).apply {
-        setPadding(dp(14), dp(13), dp(14), dp(13))
-        background = rounded(SURFACE_2, 11f, SURFACE_2)
+        setPadding(dp(16), dp(14), dp(16), dp(14))
+        setLineSpacing(dp(3).toFloat(), 1f)
+        background = rounded(SURFACE_2, 15f, SURFACE_2)
     }
 
     fun Activity.rounded(fill: Int, radius: Float, stroke: Int = fill): GradientDrawable =
         GradientDrawable().apply { setColor(fill); cornerRadius = dp(radius.toInt()).toFloat(); setStroke(dp(1), stroke) }
 
     fun Activity.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
+
+    private fun Activity.contentGutter(): Int =
+        dp((resources.displayMetrics.widthPixels / resources.displayMetrics.density * .055f)
+            .roundToInt()
+            .coerceIn(18, 26))
 
     fun Activity.present(content: LinearLayout) {
         val navigation = bottomNavigation() ?: run {
@@ -242,8 +254,9 @@ object DeyttUi {
         return LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(8), dp(8), dp(8), 0)
-            background = rounded(SURFACE, 18f, SURFACE)
+            setPadding(dp(8), dp(7), dp(8), 0)
+            background = rounded(SURFACE_2, 22f, SURFACE_2)
+            elevation = dp(4).toFloat()
             contentDescription = "Основная навигация"
             destinations.forEachIndexed { index, (label, destination) ->
                 val selected = index == current
@@ -251,7 +264,7 @@ object DeyttUi {
                     gravity = Gravity.CENTER
                     minHeight = dp(48)
                     setPadding(dp(4), dp(6), dp(4), dp(6))
-                    background = rounded(if (selected) SURFACE_2 else Color.TRANSPARENT, 12f, Color.TRANSPARENT)
+                    background = rounded(if (selected) SURFACE else Color.TRANSPARENT, 14f, Color.TRANSPARENT)
                     isClickable = !selected
                     isFocusable = !selected
                     contentDescription = label

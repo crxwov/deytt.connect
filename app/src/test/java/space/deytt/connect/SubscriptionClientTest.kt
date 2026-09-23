@@ -110,6 +110,70 @@ class SubscriptionClientTest {
     }
 
     @Test
+    fun keepsManifestConfigWhenPerServerFetchFails() {
+        AwgProfileStore.validate(VALID_AWG31_CONFIG)
+        val result = SubscriptionClient.fetchAwgProfilesForTest(
+            "https://deytt.space/sub/token",
+            "amneziawg31",
+            "31",
+            FakeTransport(
+                SubscriptionClient.SubscriptionHttpResponse(
+                    200,
+                    body = VALID_AWG31_CONFIG,
+                    awgServers = """
+                        [{"id":"nl","label":"Нидерланды","short_label":"NL"},
+                         {"id":"de","label":"Германия","short_label":"DE"}]
+                    """.trimIndent(),
+                ),
+                SubscriptionClient.SubscriptionHttpResponse(502),
+                SubscriptionClient.SubscriptionHttpResponse(502),
+                SubscriptionClient.SubscriptionHttpResponse(502),
+            ),
+        )
+
+        assertEquals(SubscriptionClient.AwgFetchState.PARTIAL_FAILURE, result.state)
+        assertEquals(listOf("awg31:nl"), result.profiles.map(AwgProfile::id))
+        assertEquals(setOf("de"), result.failedIds)
+        assertTrue(result.warning.orEmpty().contains("Доступные точки добавлены"))
+    }
+
+    @Test
+    fun validAwg15And31FamiliesImportOneAdvertisedServerEach() {
+        AwgProfileStore.validate(VALID_AWG31_CONFIG)
+        val awg15 = SubscriptionClient.fetchAwgProfilesForTest(
+            "https://deytt.space/sub/token",
+            "amneziawg",
+            "15",
+            FakeTransport(
+                SubscriptionClient.SubscriptionHttpResponse(
+                    200,
+                    body = VALID_AWG_CONFIG,
+                    awgServers = "[{\"id\":\"nl\",\"label\":\"Нидерланды\",\"short_label\":\"NL\"}]",
+                ),
+            ),
+        )
+        val awg31 = SubscriptionClient.fetchAwgProfilesForTest(
+            "https://deytt.space/sub/token",
+            "amneziawg31",
+            "31",
+            FakeTransport(
+                SubscriptionClient.SubscriptionHttpResponse(
+                    200,
+                    body = VALID_AWG31_CONFIG,
+                    awgServers = "[{\"id\":\"de\",\"label\":\"Германия\",\"short_label\":\"DE\"}]",
+                ),
+            ),
+        )
+
+        assertEquals(SubscriptionClient.AwgFetchState.AVAILABLE, awg15.state)
+        assertEquals(SubscriptionClient.AwgFetchState.AVAILABLE, awg31.state)
+        assertEquals("awg15:nl", awg15.profiles.single().id)
+        assertEquals("awg31:de", awg31.profiles.single().id)
+        AwgProfileStore.validate(awg15.profiles.single().config)
+        AwgProfileStore.validate(awg31.profiles.single().config)
+    }
+
+    @Test
     fun allAdvertisedAwgServersRemainAVisiblePartialFailure() {
         val result = SubscriptionClient.fetchAwgProfilesForTest(
             "https://deytt.space/sub/token",
@@ -185,6 +249,24 @@ class SubscriptionClientTest {
             [Peer]
             AllowedIPs = 0.0.0.0/0, ::0/0
             Endpoint = awg.example.com:51820
+            PersistentKeepalive = 25
+            PublicKey = vBN7qyUTb5lJtWYJ8LhbPio1Z4RcyBPGnqFBGn6O6Qg=
+        """
+
+        const val VALID_AWG31_CONFIG = """
+            [Interface]
+            Address = 192.0.2.3/32
+            DNS = 192.0.2.0
+            PrivateKey = TFlmmEUC7V7VtiDYLKsbP5rySTKLIZq1yn8lMqK83wo=
+            Jc = 1
+            Jmin = 10
+            Jmax = 20
+            HeaderProtectionKey = TFlmmEUC7V7VtiDYLKsbP5rySTKLIZq1yn8lMqK83wo=
+            RandomTrailers = on
+            DisableCookies = off
+            [Peer]
+            AllowedIPs = 0.0.0.0/0, ::0/0
+            Endpoint = awg.example.com:51823
             PersistentKeepalive = 25
             PublicKey = vBN7qyUTb5lJtWYJ8LhbPio1Z4RcyBPGnqFBGn6O6Qg=
         """

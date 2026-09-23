@@ -11,7 +11,7 @@ import android.graphics.drawable.Drawable
 class SignalBackdropDrawable : Drawable() {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.argb(28, 113, 128, 255)
+        color = Color.argb(18, 113, 128, 255)
         strokeWidth = 1f
     }
     private val star = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
@@ -36,7 +36,7 @@ class SignalBackdropDrawable : Drawable() {
     override fun draw(canvas: Canvas) {
         canvas.drawColor(DeyttUi.BG)
         canvas.drawRect(bounds, paint)
-        val step = (bounds.width() / 8f).coerceAtLeast(44f)
+        val step = (bounds.width() / 3.2f).coerceAtLeast(140f)
         var x = -step
         while (x < bounds.width() + step) {
             canvas.drawLine(x, 0f, x + bounds.height() * .24f, bounds.height().toFloat(), line)

@@ -85,12 +85,12 @@ class MainActivity : Activity() {
     private fun buildScreen() {
         val root = screen(withBackdrop = true)
         root.addView(brandHeader())
-        root.addView(spacer(30, this))
+        root.addView(spacer(22, this))
         root.addView(sectionLabel("состояние соединения"))
 
         orb = ConnectionOrbView(this)
-        root.addView(orb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(176)))
-        statusText = text("Соединение выключено", 29f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+        root.addView(orb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(154)))
+        statusText = text("Соединение выключено", 24f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
             gravity = Gravity.CENTER; letterSpacing = -.035f
         }
         detailText = text("Готово к подключению", 13f, DeyttUi.MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(7), 0, 0) }
@@ -132,7 +132,7 @@ class MainActivity : Activity() {
         latencyText = actionLabel("проверить").apply {
             setOnClickListener { measureSelectedRoute() }
         }
-        val item = row(selected.title, selected.subtitle, "•", "").apply {
+        val item = row(selected.title, selected.subtitle, "•", "", emphasis = true).apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, RoutesActivity::class.java)) }
         }
         item.addView(latencyText, LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT))

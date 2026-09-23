@@ -2,12 +2,9 @@
 
 ## Status
 
-In progress — repair subscription import/data-plane diagnostics, make both
-foreground engines platform-correct, and finish the Android product-surface
-redesign after 0.7 feedback. Current candidate is 0.8.0; local Android
-validation is complete with the repository-local JDK 17/Android SDK
-toolchains. Hardware validation remains open because no device or emulator is
-attached.
+In progress — implementation and local validation for the 0.8.2 blocking-fix
+pass are complete. Hardware validation remains open because no device or
+emulator is attached.
 
 ## Objective
 
@@ -88,18 +85,18 @@ and a real APK artifact.
 - [~] 12. Run focused lifecycle/catalog/latency tests, clean build/lint, visual
       inspection, physical-phone tunnel checks, then commit, push, publish and
       deliver any required backend contract update.
-- [~] 13. Repair AWG 3.1 lifecycle/selection and connection notifications; make subscription
+- [x] 13. Repair AWG 3.1 lifecycle/selection and connection notifications; make subscription
       import retry transient 502/stream failures; refresh the primary mobile UI.
-- [~] 13a. Keep core subscription import usable when optional AWG endpoints return
+- [x] 13a. Keep core subscription import usable when optional AWG endpoints return
       transient gateway errors; preserve last-known-good AWG families and show a
       precise non-blocking warning.
-- [~] 13b. Replace the generic stacked-card presentation on setup, home, route,
+- [x] 13b. Replace the generic stacked-card presentation on setup, home, route,
       protocol, profile, and settings surfaces with a restrained native design
       system and intentional motion/accessibility states.
-- [~] 13c. Harden URL/error redaction, optional AWG partial-import semantics,
+- [x] 13c. Harden URL/error redaction, optional AWG partial-import semantics,
       and manual route probes; distinguish endpoint latency from full-tunnel
       canary results.
-- [~] 13d. Move AWG foreground ownership into the embedded VpnService and
+- [x] 13d. Move AWG foreground ownership into the embedded VpnService and
       verify the Android 14 foreground-service manifest/type contract. The
       implementation now uses a reproducible Gradle overlay over the clean
       upstream submodule; device verification remains open.
@@ -112,7 +109,25 @@ and a real APK artifact.
 
 ## Current State
 
-The active work is the Android import/data-plane/UI repair plus the narrow bot
+Blocking feedback on 2026-09-23 invalidated the previous static acceptance:
+the user could still dismiss the foreground notification, AWG could disappear
+from the actual route catalog, and the native UI still read as a stacked-card
+MVP. The implementation fix is now complete locally in candidate 0.8.2.
+The first proven AWG defect is in `SubscriptionClient.fetchAwgProfiles`: when
+the server returns a valid default config together with its server manifest,
+the client discards that config and performs another request for the first
+server. If all per-server requests fail, both AWG families are hidden even
+though the initial response was usable. This pass keeps the selected initial
+config, renders an explicit unavailable state, and verifies both AWG families
+with valid mock configs.
+
+Notification work will keep foreground ownership in the active backend service,
+set the ongoing/non-auto-cancel flags explicitly, and use a delete-intent
+restore path while the service is still active. A device remains required to
+verify OEM/System UI behavior; the build cannot prove that an OEM will never
+allow dismissal.
+
+The active work was the Android import/data-plane/UI repair plus the narrow bot
 handoff label/deep-link change. Optional AWG failures no longer abort the
 required sing-box import; failed optional gateway requests preserve the last
 known-good family and never report a fabricated server count. Subscription
@@ -256,11 +271,10 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   and clears it on stop. This is a user-visible notification, not a claim that
   the upstream service itself is a foreground service; verify both behaviors on
   a device before calling the release complete.
-- The current import path still treats optional AmneziaWG 1.5/3.1 fetches as a
-  hard failure. A 502 from one family therefore surfaces as “сервер подписки
-  временно недоступен” even when the required sing-box profile is valid. The
-  repair keeps the core import usable, retains the last-known-good AWG family,
-  and exposes the degraded state as an explicit warning.
+- The previous import path treated optional AmneziaWG 1.5/3.1 fetches as a
+  hard failure. The 0.8.2 repair keeps the core import usable, retains the
+  valid first manifest response and last-known-good AWG family, and exposes a
+  degraded state as an explicit warning.
 - The Android update checker now accepts only HTTPS GitHub release pages and
   never renders raw transport errors. Existing bot contracts expose the
   subscription URL, so the handoff uses the already-supported
@@ -270,6 +284,16 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   app-owned `GoBackend.java` overlay at build time, adds the real nested
   `VpnService` foreground notification, and declares its Android 14 service
   type in the library manifest.
+- AWG manifest-first parsing now retains the valid first response as a profile
+  before probing additional advertised servers; a transient per-server 502 or
+  stream reset therefore degrades the family instead of hiding it.
+- Both app-owned and embedded AWG notifications explicitly set
+  `FLAG_NO_CLEAR`, `FLAG_ONGOING_EVENT`, non-auto-cancel behavior, and a
+  service-owned restore/disconnect action. This remains subject to OEM device
+  verification.
+- The primary row primitive no longer renders every secondary action as a
+  bordered elevated card. Only the current route is emphasized; other rows use
+  transparent rhythm, tighter gutters, and the existing signal backdrop.
 
 ## Issues and Failed Attempts
 
@@ -577,10 +601,23 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
   `4425eb3c3d0906cdd95c9d768571e1e1986c7639c3b6afe9fecc67d1a8ac30de`.
 - The local SDK has platform/build tools/NDK/CMake and `adb`, but no emulator
   binary or configured AVD is present; no device proof is claimed.
+- Android 0.8.2 local validation passes `testDebugUnitTest`, `lintDebug`, and
+  `assembleDebug` (102 actionable tasks); the report contains 38 tests with
+  zero failures/errors. `git diff --check` passes.
+- The 0.8.2 ARM64 APK is versionCode 16/versionName 0.8.2, contains the
+  `libwg-go.so`, `libwg-quick.so`, and `libwg.so` AWG libraries, and its merged
+  manifest contains both VPN services plus `AwgDisconnectReceiver`. SHA-256:
+  `c35c0675f95e4a0e8bc5a5a7442117927d904c3cc1016dcc6e424c2eed56a991`.
+- The generated AWG Java overlay contains `setOngoing(true)`,
+  `setAutoCancel(false)`, `FLAG_NO_CLEAR`, an explicit delete/restore intent,
+  and Android 14 `SYSTEM_EXEMPTED` foreground startup. Physical OEM behavior,
+  authenticated import, AWG traffic, and the external HTTPS canary remain
+  unverified without a device.
 
 ## Next Action
 
-Run physical-device acceptance for the published `v0.8.1-debug`: authenticated
+Commit and publish the verified `v0.8.2-debug`, then run physical-device
+acceptance: authenticated
 import, AWG 1.5/3.1 traffic,
 foreground notifications, safe-area visuals, deep-link handoff, update flow,
 and external HTTPS canaries. Keep the published artifact explicitly debug
@@ -588,8 +625,9 @@ until that hardware evidence exists.
 
 ## Resume Context
 
-Candidate 0.8.1 contains the second strict audit fixes and is committed, pushed,
-and published as `v0.8.1-debug`.
+Candidate 0.8.2 contains the notification durability, AWG manifest-first import,
+and restrained-row visual fixes; local validation is complete and the artifact
+is ready to commit and publish.
 The absolute JDK 17/SDK/NDK/CMake toolchains are present and all local Android
 checks pass; the earlier SDK-location failure is no longer a blocker. The
 upstream AWG submodule is clean and the build overlay is parent-owned. No

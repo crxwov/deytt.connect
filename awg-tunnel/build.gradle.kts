@@ -67,6 +67,14 @@ val prepareDeyttAwgBackend by tasks.registering {
                     FOREGROUND_NOTIFICATION_ID + 1,
                     disconnectIntent,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            final Intent restoreIntent = new Intent("space.deytt.connect.action.RESTORE_AWG_NOTIFICATION");
+            restoreIntent.setComponent(new ComponentName(
+                    getPackageName(), "space.deytt.connect.AwgDisconnectReceiver"));
+            final PendingIntent restore = PendingIntent.getBroadcast(
+                    this,
+                    FOREGROUND_NOTIFICATION_ID + 2,
+                    restoreIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             final CharSequence appLabel = getApplicationInfo().loadLabel(getPackageManager());
             final Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     ? new Notification.Builder(this, FOREGROUND_CHANNEL_ID)
@@ -76,6 +84,8 @@ val prepareDeyttAwgBackend by tasks.registering {
                     .setContentText("Соединение активно")
                     .setCategory(Notification.CATEGORY_SERVICE)
                     .setOngoing(true)
+                    .setAutoCancel(false)
+                    .setDeleteIntent(restore)
                     .setOnlyAlertOnce(true)
                     .addAction(new Notification.Action.Builder(
                             Icon.createWithResource(this, getApplicationInfo().icon),
@@ -84,6 +94,11 @@ val prepareDeyttAwgBackend by tasks.registering {
             if (contentIntent != null)
                 builder.setContentIntent(contentIntent);
             final Notification notification = builder.build();
+            notification.flags |= Notification.FLAG_NO_CLEAR;
+            if ((notification.flags & Notification.FLAG_ONGOING_EVENT) == 0)
+                throw new IllegalStateException("AWG foreground notification must be ongoing");
+            if ((notification.flags & Notification.FLAG_AUTO_CANCEL) != 0)
+                throw new IllegalStateException("AWG foreground notification must not auto-cancel");
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
                 startForeground(
                         FOREGROUND_NOTIFICATION_ID,
@@ -106,13 +121,14 @@ tasks.withType<JavaCompile>().configureEach {
     dependsOn(prepareDeyttAwgBackend)
 }
 
-// AGP also consumes this source directory for annotation extraction and lint;
-// make that dependency explicit for every producer/consumer task while
-// leaving clean free to remove the generated mirror.
-tasks.configureEach {
-    if (name != "prepareDeyttAwgBackend" && name != "clean") {
-        dependsOn(prepareDeyttAwgBackend)
-    }
+// AGP's annotation extraction reads the generated source directly and must
+// be ordered after the mirror is produced. Matching only these consumers is
+// important: broad task wiring makes native clean tasks depend on generation
+// and creates a clean/prepare cycle.
+tasks.matching { task ->
+    task.name.startsWith("extract") && task.name.endsWith("Annotations")
+}.configureEach {
+    dependsOn(prepareDeyttAwgBackend)
 }
 
 android {

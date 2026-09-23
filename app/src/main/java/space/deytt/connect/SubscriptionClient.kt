@@ -289,6 +289,22 @@ object SubscriptionClient {
                         val server = servers.optJSONObject(index) ?: continue
                         val id = server.optString("id").trim()
                         if (id.isBlank()) continue
+                        // The manifest response is itself a valid config for the
+                        // first advertised server. Keep it as the authoritative
+                        // fallback instead of throwing it away and requiring a
+                        // second request that can independently fail with 502/EOF.
+                        if (index == 0 && runCatching {
+                                val profile = AwgProfile(
+                                    id = "awg$version:$id",
+                                    version = version,
+                                    label = server.optString("label", id),
+                                    shortLabel = server.optString("short_label", id.uppercase()),
+                                    config = first.body,
+                                )
+                                AwgProfileStore.validate(profile.config)
+                                add(profile)
+                            }.isSuccess
+                        ) continue
                         val url = appendQueryParameter(withFormat(baseUrl, format), "server_id", id)
                         try {
                             val response = request(
@@ -328,7 +344,7 @@ object SubscriptionClient {
                     version = version,
                     profiles = emptyList(),
                     state = AwgFetchState.PARTIAL_FAILURE,
-                    warning = awgWarning(version, failedIds.size, temporary = failedRequestsAreTransient),
+                    warning = awgWarning(version, failedIds.size, availableCount = 0, temporary = failedRequestsAreTransient),
                     failedIds = failedIds,
                 )
             } else if (failedIds.isNotEmpty()) {
@@ -336,7 +352,7 @@ object SubscriptionClient {
                     version = version,
                     profiles = profiles,
                     state = AwgFetchState.PARTIAL_FAILURE,
-                    warning = awgWarning(version, failedIds.size, temporary = failedRequestsAreTransient),
+                    warning = awgWarning(version, failedIds.size, availableCount = profiles.size, temporary = failedRequestsAreTransient),
                     failedIds = failedIds,
                 )
             } else {
@@ -352,12 +368,20 @@ object SubscriptionClient {
         }
     }
 
-    private fun awgWarning(version: String, failedCount: Int, temporary: Boolean): String {
+    private fun awgWarning(version: String, failedCount: Int, availableCount: Int, temporary: Boolean): String {
         val name = "AmneziaWG ${if (version == "31") "3.1" else "1.5"}"
         return if (temporary) {
-            "$name: $failedCount ${if (failedCount == 1) "сервер" else "сервера"} временно недоступ${if (failedCount == 1) "ен" else "ны"}. Остальные добавлены."
+            if (availableCount == 0) {
+                "$name: $failedCount ${if (failedCount == 1) "сервер" else "сервера"} временно недоступ${if (failedCount == 1) "ен" else "ны"}. Доступных точек нет, обновите подписку позже."
+            } else {
+                "$name: $failedCount ${if (failedCount == 1) "сервер" else "сервера"} временно недоступ${if (failedCount == 1) "ен" else "ны"}. Доступные точки добавлены."
+            }
         } else {
-            "$name пока не обновился. Основная подписка добавлена, повторите обновление позже."
+            if (availableCount == 0) {
+                "$name пока недоступен. Основная подписка добавлена, повторите обновление позже."
+            } else {
+                "$name: часть точек не обновилась. Доступные точки добавлены, повторите позже."
+            }
         }
     }
 

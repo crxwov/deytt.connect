@@ -7,6 +7,7 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.actionLabel
+import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.row
@@ -22,12 +23,20 @@ class ProtocolActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val code = intent.getStringExtra("country") ?: run { finish(); return }
+        val requestedVersion = intent.getStringExtra("version")
         val config = SubscriptionStore(this).readCurrent() ?: run { finish(); return }
         val awg = AwgProfileStore(this)
         val routes = RouteCatalog.from(config, awg.profiles())
-            .filter { it.countryCode == code }
-        val title = if (code == "AWG") "AmneziaWG" else routes.firstOrNull()?.country ?: "Протокол"
-        val root = screen()
+            .filter { route ->
+                route.countryCode == code &&
+                    (requestedVersion == null ||
+                        (requestedVersion == "15" && route.protocol == RouteProtocol.AWG15) ||
+                        (requestedVersion == "31" && route.protocol == RouteProtocol.AWG31))
+            }
+        val title = if (code == "AWG") {
+            requestedVersion?.let { "AmneziaWG ${if (it == "31") "3.1" else "1.5"}" } ?: "AmneziaWG"
+        } else routes.firstOrNull()?.country ?: "Протокол"
+        val root = screen(withBackdrop = true)
         root.addView(header("протокол", title, true))
         root.addView(spacer(10, this))
         root.addView(note(if (code == "AWG") "Выберите сервер и версию AmneziaWG. Проверяйте задержку у каждой точки вручную." else "Выберите способ подключения для этого направления. Проверяйте задержку вручную."))
@@ -37,6 +46,13 @@ class ProtocolActivity : Activity() {
         root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(170)))
         root.addView(spacer(10, this))
         root.addView(sectionLabel("доступные варианты"))
+        if (routes.isEmpty()) {
+            root.addView(note("Профили этой версии пока не загружены. Обновите подписку и попробуйте ещё раз."))
+            root.addView(spacer(14, this))
+            root.addView(button("обновить подписку").apply {
+                setOnClickListener { startActivity(Intent(this@ProtocolActivity, SetupActivity::class.java)) }
+            })
+        }
         routes.forEach { route ->
             val mark = if (route.engine == TunnelEngine.AMNEZIAWG) route.protocol.title else when (route.protocol) {
                 RouteProtocol.VLESS -> "V"

@@ -27,7 +27,7 @@ class RoutesActivity : Activity() {
         val config = SubscriptionStore(this).readCurrent() ?: run { finish(); return }
         val awg = AwgProfileStore(this)
         val routes = RouteCatalog.from(config, awg.profiles())
-        val root = screen()
+        val root = screen(withBackdrop = true)
         root.addView(header("маршруты", "Выберите направление", true))
         root.addView(spacer(10, this))
         root.addView(note("Проверка задержки запускается вручную. Она показывает доступность точки, а не заменяет проверку соединения."))
@@ -72,14 +72,41 @@ class RoutesActivity : Activity() {
                 root.addView(spacer(12, this))
             }
 
-        val awgRoutes = routes.filter { it.engine == TunnelEngine.AMNEZIAWG }
-        if (awgRoutes.isNotEmpty()) {
-            root.addView(spacer(10, this))
-            root.addView(sectionLabel("amneziawg"))
-            addMeasuredRow(root, "AmneziaWG", awgRoutes.joinToString(" · ") { it.protocol.title }, "AWG", awgRoutes) {
-                globe.focus("AUTO")
-                startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", "AWG"))
+        root.addView(spacer(10, this))
+        root.addView(sectionLabel("amneziawg"))
+        listOf("15" to "AmneziaWG 1.5", "31" to "AmneziaWG 3.1").forEach { (version, title) ->
+            val familyRoutes = routes.filter {
+                it.engine == TunnelEngine.AMNEZIAWG &&
+                    ((version == "15" && it.protocol == RouteProtocol.AWG15) ||
+                        (version == "31" && it.protocol == RouteProtocol.AWG31))
             }
+            val displayVersion = if (version == "15") "1.5" else "3.1"
+            val item = if (familyRoutes.isEmpty()) {
+                row(title, "Профили не загружены · обновите подписку", displayVersion, "обновить").apply {
+                    alpha = .78f
+                    setOnClickListener {
+                        startActivity(Intent(this@RoutesActivity, SetupActivity::class.java))
+                    }
+                }
+            } else {
+                row(
+                    title,
+                    "${familyRoutes.size} ${if (familyRoutes.size == 1) "сервер" else "сервера"} · выбрать точку и проверить",
+                    displayVersion,
+                    "открыть",
+                ).apply {
+                    setOnClickListener {
+                        globe.focus(familyRoutes.first().id.uppercase())
+                        startActivity(
+                            Intent(this@RoutesActivity, ProtocolActivity::class.java)
+                                .putExtra("country", "AWG")
+                                .putExtra("version", version),
+                        )
+                    }
+                }
+            }
+            root.addView(item)
+            root.addView(spacer(12, this))
         }
         present(root)
     }
