@@ -318,6 +318,12 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 - Android 0.4.0 unit tests pass 9/9, lint has zero errors (14 warnings), and all
   debug ABI APKs build. ARM64 SHA-256:
   `0a2a7ebffa25e725b89981d28ae59506b4df21818a040a26cd2d291609a62a01`.
+- Commit `97d79f6` is pushed to `main`. GitHub prerelease
+  `v0.4.0-debug` publishes the standalone ARM64 APK, and GitHub reports the
+  same SHA-256 digest as the locally verified artifact.
+- Backend commit `4809b927` is pulled on production. The route generator was
+  backed up and synchronized into the separate runtime, `vpn-admin.service`
+  was restarted, is active, and `/health` returned `{"status":"ok"}`.
 - No ADB device is connected; visual safe-area review and real manual-country
   HTTPS proof remain pending on the user's phone.
 
