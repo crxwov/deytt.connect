@@ -580,16 +580,16 @@ bootstrapped under `.toolchain/` and are not part of the repository artifact.
 
 ## Next Action
 
-Publish candidate 0.8.1-debug only after the final diff review, then run
-physical-device acceptance for authenticated import, AWG 1.5/3.1 traffic,
+Run physical-device acceptance for the published `v0.8.1-debug`: authenticated
+import, AWG 1.5/3.1 traffic,
 foreground notifications, safe-area visuals, deep-link handoff, update flow,
 and external HTTPS canaries. Keep the published artifact explicitly debug
 until that hardware evidence exists.
 
 ## Resume Context
 
-Candidate 0.8.1 contains the second strict audit fixes and is ready for final
-diff review and debug prerelease publication.
+Candidate 0.8.1 contains the second strict audit fixes and is committed, pushed,
+and published as `v0.8.1-debug`.
 The absolute JDK 17/SDK/NDK/CMake toolchains are present and all local Android
 checks pass; the earlier SDK-location failure is no longer a blocker. The
 upstream AWG submodule is clean and the build overlay is parent-owned. No
