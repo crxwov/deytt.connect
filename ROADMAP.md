@@ -502,13 +502,14 @@ Only after that can Stage 13 be marked complete and Stage 14 begin.
 
 ## Resume Context
 
-The 0.7 baseline is published. Production AWG 3.1 is enabled for NL/DE/FI/RU.
+The 0.7.1 debug candidate is ready for publication. Production AWG 3.1 is
+enabled for NL/DE/FI/RU.
 Do not read or print production tokens or secrets; use mocked authenticated
 responses for client tests and a real phone for the final tunnel/notification
 check. The optional-AWG import repair and coordinated UI pass are now validated
 locally: 23 unit tests, `lintDebug`, and `assembleDebug` pass with JDK 17; the
 ARM64 APK is ZIP-valid with SHA-256
-`e6ec51007a9de73fa51541232858eec3b379a9de4707959a4a101622c9659197`.
+`d522611f9f7ac15806bd2efe3af97a19952626d8e356a6fdd84108134755743a`.
 The first daemon-backed Gradle invocation was interrupted, then the same full
 command passed with `--no-daemon`. No Android device or emulator is attached,
 so authenticated import, AWG traffic, notification, and visual QA remain open.
