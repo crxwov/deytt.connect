@@ -6,7 +6,7 @@ Rework the Android client's visual system and major screen layouts to a cohesive
 
 ## Status
 
-Completed: visual implementation and physical-device review passed. Commit and push on `main` are the next mandatory delivery steps; this client-only UI change has no server service to deploy or restart.
+Completed: visual implementation and physical-device review passed. Commit `4747be5` is on `origin/main`; this client-only UI change has no server service to deploy or restart.
 
 ## Success Criteria
 
@@ -25,11 +25,11 @@ Completed: visual implementation and physical-device review passed. Commit and p
 - [x] 3. Implement the redesign in focused groups, retaining behavior and accessibility.
 - [x] 4. Repeat physical-device build/install/launch/screenshot/review cycles until the primary screens feel coherent.
 - [x] 5. Run final build and focused regression checks; capture and record final screen evidence.
-- [~] 6. Review diff, record final Roadmap state, commit and push; assess deployment applicability.
+- [x] 6. Review diff, record final Roadmap state, commit and push; assess deployment applicability.
 
 ## Current State
 
-The Android repository is `/home/hackov/Documents/deytt-connect`, branch `main`. Baseline `0.8.2` and five implementation iterations were built and reviewed on the physical A001 phone. Final APK builds successfully and is installed. Final iteration 5 screenshots cover home, Routes, and Germany protocol; prior iteration 2 covers profile/settings/setup (the saved subscription URL remains masked). The home AUTO probe's loading/result states were captured (74 ms). The app uses the website atlas renderer and Natural Earth data from bundled assets in a network-blocked local WebView. Map loading, home/network view, country focus, mobile accessibility label, one-finger rotation, and route-list scrolling were verified on-device. Multi-touch zoom is implemented by the shared renderer but ADB's input interface cannot generate a two-pointer gesture, so it was not independently verified. Connected VPN/import-error states were not forced because that would change device/network or saved-subscription state. Repository has no server-side service target for this client-only redesign. Both repositories were indexed in codebase-memory with non-persistent Android refresh; `detect_changes` is unavailable.
+The Android repository is `/home/hackov/Documents/deytt-connect`, branch `main`. Baseline `0.8.2` and five implementation iterations were built and reviewed on the physical A001 phone. Final APK builds successfully and is installed. Final iteration 5 screenshots cover home, Routes, and Germany protocol; prior iteration 2 covers profile/settings/setup (the saved subscription URL remains masked). The home AUTO probe's loading/result states were captured (74 ms). The app uses the website atlas renderer and Natural Earth data from bundled assets in a network-blocked local WebView. Map loading, home/network view, country focus, mobile accessibility label, one-finger rotation, and route-list scrolling were verified on-device. Multi-touch zoom is implemented by the shared renderer but ADB's input interface cannot generate a two-pointer gesture, so it was not independently verified. Connected VPN/import-error states were not forced because that would change device/network or saved-subscription state. Commit `4747be5` is pushed to `origin/main`. Repository has no server-side service target for this client-only redesign. Both repositories were indexed in codebase-memory with non-persistent Android refresh; `detect_changes` is unavailable.
 
 ## Findings and Decisions
 
@@ -76,9 +76,9 @@ The Android repository is `/home/hackov/Documents/deytt-connect`, branch `main`.
 - [x] Final iteration 5 home, Routes, and Germany protocol screenshots visually reviewed; accessibility tree reports the mobile route-map description, and no stale loading status remains.
 - [x] Profile/settings/setup screenshots from iteration 2 remain valid; the setup screenshot contains only a masked subscription link.
 - [x] `git diff --check` passed; final source diff reviewed. `detect_changes` is not available; refreshed the codebase-memory index without persisting a generated artifact.
-- [ ] Commit changes on `main` and push to `origin/main`.
+- [x] Commit changes on `main` and push to `origin/main` (`4747be5`, `Полный редизайн Android-клиента`).
 - [x] Server deploy/restart applicability assessed: no server-side service consumes this Android UI code.
 
 ## Next Action and Resume Context
 
-Commit and push the reviewed Android redesign plus this Roadmap on `main`. Do not deploy/restart a server for this client-only change. If the push fails, record the failure and stop without improvising.
+None. Implementation, physical-device QA, commit, and push are complete. Server deploy/restart is not applicable to this client-only change.
