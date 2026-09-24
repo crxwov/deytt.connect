@@ -22,7 +22,7 @@ Restore AmneziaWG profile imports and redesign the Android client with a coheren
 
 ## Current State
 
-Implementation and physical-device validation are complete; the Roadmap is recorded before the required commit/push. Repository: `/home/hackov/Documents/deytt-connect`, branch `main`. A001 (1080×2392) is left on MainActivity, VPN disconnected, Auto route selected. Version 0.8.2 debug is installed. Keep unrelated `.agents/` untracked.
+Implementation and physical-device validation are complete. Android changes were committed as `e392941` and pushed to `origin/main`. Repository: `/home/hackov/Documents/deytt-connect`, branch `main`. A001 (1080×2392) is left on MainActivity, VPN disconnected, Auto route selected. Version 0.8.2 debug is installed. Keep unrelated `.agents/` untracked.
 
 ## Findings and Decisions
 
@@ -52,7 +52,7 @@ Implementation and physical-device validation are complete; the Roadmap is recor
 - Diagnostic `:app:testDebugUnitTest` passed for safe retry/error summaries. The final visual-only iteration was rebuilt and exercised on device.
 - Screenshots: `/tmp/deytt-final-home-installed.png`, `/tmp/deytt-final-routes-top.png`, `/tmp/deytt-final-routes-bottom.png`, `/tmp/deytt-final-protocol-awg15-rest.png`, `/tmp/deytt-final-protocol-awg31.png`, `/tmp/deytt-final-settings.png`.
 - Profile and setup screens inherit the shared theme but were not captured in order to avoid exposing personal usage/subscription data.
-- No blocking visual or functional issue remains from the requested review. Final Git whitespace/diff review and Android commit/push are the next delivery actions.
+- No blocking visual or functional issue remains from the requested review. Final Git whitespace review passed; Android commit `e392941` is pushed. Server pull/restart does not apply to this Android-only change.
 
 ## Issues and Failed Attempts
 
@@ -61,4 +61,4 @@ Implementation and physical-device validation are complete; the Roadmap is recor
 
 ## Next Action and Resume Context
 
-Commit the reviewed Android changes and Roadmap to `main`, push to `origin/main`, and verify the result. Do not stage `.agents/`. Server pull/reload is inapplicable to this Android-only commit; the backend header-buffer fix is already deployed.
+No further implementation action. This Roadmap update records the verified Android push. Do not stage `.agents/`. Server pull/reload is inapplicable to the Android client; the backend header-buffer fix is already deployed.
