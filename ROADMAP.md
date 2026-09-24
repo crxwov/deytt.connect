@@ -3,8 +3,8 @@
 ## Status
 
 In progress — implementation and local validation for the 0.8.2 blocking-fix
-pass are complete. Hardware validation remains open because no device or
-emulator is attached.
+pass are complete. Hardware validation remains open; a physical phone is now
+attached for acceptance, while no emulator is attached.
 
 ## Objective
 
@@ -629,12 +629,41 @@ until that hardware evidence exists.
 
 Candidate 0.8.2 contains the notification durability, AWG manifest-first import,
 and restrained-row visual fixes; local validation is complete, commit `9530ab4`
-is pushed, and `v0.8.2-debug` is published. No Android device or emulator is
-attached, so hardware acceptance remains open.
+is pushed, and `v0.8.2-debug` is published. An Android phone is now visible to
+ADB, but hardware acceptance remains open and no emulator is attached.
 The absolute JDK 17/SDK/NDK/CMake toolchains are present and all local Android
 checks pass; the earlier SDK-location failure is no longer a blocker. The
-upstream AWG submodule is clean and the build overlay is parent-owned. No
-Android device or emulator is attached, so authenticated import, AWG traffic,
-foreground notification, visual safe-area QA, deep-link launch, and update
-installation remain open. Do not read or print production tokens or secrets;
-use mocked HTTP responses for client tests.
+upstream AWG submodule is clean and the build overlay is parent-owned.
+Authenticated import, AWG traffic, foreground notification, visual safe-area
+QA, deep-link launch, and update installation remain open. Do not read or print
+production tokens or secrets; use mocked HTTP responses for client tests.
+
+## Tooling Setup — 2026-09-24
+
+Status: Completed.
+
+### Objective
+
+Install/verify Google's Android CLI and Android Skills for Codex, plus OpenAI's
+`test-android-apps` plugin for emulator QA.
+
+### Current State
+
+- Google Android CLI is already installed: `android --version` returns
+  `1.0.16406183`; `/home/hackov/.local/bin` is on PATH.
+- All 24 Android Skills in this project are already registered for Codex by
+  `android skills list --agent=codex --project=.`.
+- `adb` sees the connected physical phone as `device`; no emulator is attached.
+- `test-android-apps@openai-curated` is installed and enabled (plugin bundle
+  `11c74d6b`). The installed `android-emulator-qa` skill file was verified.
+- The remote Codex catalog route returned EOF and a GitHub marketplace checkout
+  initially failed while the disk was full; installation succeeded from the
+  already available official local Codex marketplace after space was freed.
+- No user files or caches were removed; app source/build files were not changed.
+  This Roadmap records the completed tooling setup.
+
+### Next Action / Resume Context
+
+Tooling setup is complete. Continue the app's main Roadmap with physical-phone
+acceptance; the connected phone is ADB-ready, while emulator QA still requires
+an emulator to be attached or started.
