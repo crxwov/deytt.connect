@@ -35,36 +35,36 @@ class SetupActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val updating = SubscriptionStore(this).readCurrent() != null
-        val root = screen(withBackdrop = true)
+        val root = screen()
         root.addView(header("добавить источник", if (updating) "Обновить подписку" else "Подключить подписку", updating))
-        root.addView(spacer(12, this))
-        root.addView(note("Одна ссылка добавит доступные направления и способы подключения. Ссылка хранится только на этом устройстве."))
-        root.addView(spacer(24, this))
+        root.addView(spacer(8, this))
+        root.addView(note("Добавьте ссылку DEYTTT, чтобы загрузить доступные направления. Она хранится только на этом устройстве.", DeyttUi.MUTED))
+        root.addView(spacer(19, this))
         root.addView(sectionLabel("ссылка на подписку"))
         val incomingUrl = intent.getStringExtra(EXTRA_SUBSCRIPTION_URL)
         input = EditText(this).apply {
             hint = "https://deytt.space/sub/token/…"
             setHintTextColor(DeyttUi.MUTED)
             setTextColor(DeyttUi.TEXT)
-            textSize = 16f
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            transformationMethod = PasswordTransformationMethod.getInstance()
+            textSize = 15f
             setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
             contentDescription = "Ссылка на подписку, скрытая"
-            minHeight = dp(58)
-            setPadding(dp(18), dp(18), dp(18), dp(18))
-            background = rounded(DeyttUi.SURFACE_2, 13f, DeyttUi.LINE)
+            minHeight = dp(56)
+            setPadding(dp(16), dp(16), dp(16), dp(16))
+            background = rounded(DeyttUi.SURFACE_2, 12f, DeyttUi.LINE)
             setText(incomingUrl ?: getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_url", ""))
+            transformationMethod = PasswordTransformationMethod.getInstance()
         }
         root.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        val revealLink = actionLabel("показать ссылку").apply {
+        val revealLink = actionLabel("показать").apply {
             contentDescription = "Показать или скрыть ссылку на подписку"
             setOnClickListener {
                 val cursor = input.selectionStart.coerceAtLeast(0)
-                val hidden = input.transformationMethod != null
+                val hidden = input.transformationMethod is PasswordTransformationMethod
                 input.transformationMethod = if (hidden) null else PasswordTransformationMethod.getInstance()
                 contentDescription = if (hidden) "Скрыть ссылку на подписку" else "Показать ссылку на подписку"
-                text = if (hidden) "скрыть ссылку" else "показать ссылку"
+                text = if (hidden) "скрыть" else "показать"
                 input.setSelection(cursor.coerceAtMost(input.length()))
             }
         }
@@ -72,7 +72,7 @@ class SetupActivity : Activity() {
             gravity = Gravity.END
         })
         root.addView(spacer(14, this))
-        importButton = button(if (updating) "обновить" else "добавить").apply { setOnClickListener { importProfile() } }
+        importButton = button(if (updating) "Обновить подписку" else "Добавить подписку").apply { setOnClickListener { importProfile() } }
         root.addView(importButton)
         state = note("", DeyttUi.MUTED).apply {
             visibility = View.GONE

@@ -27,39 +27,35 @@ class RoutesActivity : Activity() {
         val config = SubscriptionStore(this).readCurrent() ?: run { finish(); return }
         val awg = AwgProfileStore(this)
         val routes = RouteCatalog.from(config, awg.profiles())
-        val root = screen(withBackdrop = true)
-        root.addView(header("маршруты", "Выберите направление", true))
-        root.addView(spacer(10, this))
-        root.addView(note("Проверка задержки запускается вручную. Она показывает доступность точки, а не заменяет проверку соединения."))
-        root.addView(spacer(12, this))
-        globe = RouteGlobeView(this)
-        globe.focus("AUTO", animate = false)
-        root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(190)))
-        root.addView(text("точка на карте — выбранное направление", 11f, DeyttUi.MUTED).apply {
+        val root = screen()
+        root.addView(header("маршруты", "Выберите выход"))
+        root.addView(spacer(2, this))
+        globe = RouteGlobeView(this).apply {
+            focus(SelectedRouteStore(this@RoutesActivity).read().id, animate = false)
+        }
+        root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(262)))
+        root.addView(text("Задержку можно проверить вручную у каждой точки.", 12f, DeyttUi.MUTED).apply {
             gravity = Gravity.CENTER
-            setPadding(0, dp(2), 0, 0)
+            setPadding(0, dp(4), 0, dp(16))
         })
-        root.addView(spacer(18, this))
-        root.addView(sectionLabel("быстрый выбор"))
+        root.addView(sectionLabel("маршруты"))
 
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { auto ->
-            addMeasuredRow(root, "Автоподбор", "Самый быстрый доступный маршрут", "AUTO", listOf(auto)) {
+            addMeasuredRow(root, "Автоподбор", "Доступный выход выбирается автоматически", "AUTO", listOf(auto), emphasis = true) {
                 globe.focus("AUTO")
                 select(auto)
             }
-            root.addView(spacer(12, this))
         }
 
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { chain ->
-            addMeasuredRow(root, "RU → DE", "Двойной маршрут для устойчивого обхода", "RU", listOf(chain)) {
+            addMeasuredRow(root, "Россия → Германия", "Два этапа · Санкт-Петербург → Франкфурт", "2×", listOf(chain)) {
                 globe.focus("RU-DE")
                 select(chain)
             }
-            root.addView(spacer(12, this))
         }
 
-        root.addView(spacer(10, this))
-        root.addView(sectionLabel("направления"))
+        root.addView(spacer(17, this))
+        root.addView(sectionLabel("по стране"))
         routes.filter { it.countryCode in setOf("NL", "DE", "RU", "FI") }
             .groupBy { it.countryCode }
             .forEach { (code, countryRoutes) ->
@@ -69,11 +65,10 @@ class RoutesActivity : Activity() {
                     globe.focus(code)
                     startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", code))
                 }
-                root.addView(spacer(12, this))
             }
 
-        root.addView(spacer(10, this))
-        root.addView(sectionLabel("amneziawg"))
+        root.addView(spacer(15, this))
+        root.addView(sectionLabel("AmneziaWG"))
         listOf("15" to "AmneziaWG 1.5", "31" to "AmneziaWG 3.1").forEach { (version, title) ->
             val familyRoutes = routes.filter {
                 it.engine == TunnelEngine.AMNEZIAWG &&
@@ -106,7 +101,6 @@ class RoutesActivity : Activity() {
                 }
             }
             root.addView(item)
-            root.addView(spacer(12, this))
         }
         present(root)
     }
@@ -117,10 +111,11 @@ class RoutesActivity : Activity() {
         subtitle: String,
         leading: String,
         routes: List<DeyttRoute>,
+        emphasis: Boolean = false,
         onClick: () -> Unit,
     ) {
         val latency = actionLabel("проверить")
-        val item = row(title, subtitle, leading, "").apply { setOnClickListener { onClick() } }
+        val item = row(title, subtitle, leading, "", emphasis = emphasis).apply { setOnClickListener { onClick() } }
         latency.setOnClickListener { measure(routes, latency) }
         item.addView(latency, LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT))
         root.addView(item)

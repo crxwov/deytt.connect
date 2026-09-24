@@ -2,9 +2,12 @@ package space.deytt.connect
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.os.Bundle
-import android.graphics.Typeface
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import java.text.DateFormat
@@ -19,43 +22,63 @@ import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
-import space.deytt.connect.DeyttUi.note
 
 class ProfileActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val metadata = SubscriptionMetadataStore(this).read()
-        val root = screen(withBackdrop = true)
-        root.addView(header("подписка", metadata.title, true))
-        root.addView(spacer(10, this))
-        root.addView(note("Данные обновляются вместе со ссылкой. Сам токен не показываем на экране."))
-        root.addView(spacer(22, this))
-        root.addView(sectionLabel("статус тарифа"))
+        val root = screen()
+        root.addView(header("аккаунт", "Профиль"))
+        root.addView(spacer(17, this))
+
+        root.addView(sectionLabel("подписка"))
+        val usage = if (metadata.totalBytes > 0) {
+            "${formatBytes(metadata.usedBytes)} из ${formatBytes(metadata.totalBytes)}"
+        } else {
+            "${formatBytes(metadata.usedBytes)} использовано"
+        }
+        val fraction = if (metadata.totalBytes > 0) {
+            (metadata.usedBytes.toDouble() / metadata.totalBytes).toFloat().coerceIn(0f, 1f)
+        } else 0f
         root.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(14), dp(15), dp(14), dp(15))
-            background = rounded(DeyttUi.SURFACE, 15f, DeyttUi.SURFACE)
-            addView(metric("использовано", formatBytes(metadata.usedBytes)), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(metric("лимит", if (metadata.totalBytes > 0) formatBytes(metadata.totalBytes) else "без ограничений"), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(metric("до", metadata.expiresAtSeconds?.let { formatDate(it) } ?: "без срока"), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(17), dp(17), dp(17), dp(16))
+            background = rounded(DeyttUi.SURFACE, 15f, DeyttUi.LINE)
+            addView(text(metadata.title, 18f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            })
+            addView(text("Трафик", 12f, DeyttUi.MUTED).apply { setPadding(0, dp(19), 0, dp(5)) })
+            addView(text(usage, 15f, DeyttUi.TEXT, android.graphics.Typeface.BOLD))
+            if (metadata.totalBytes > 0) {
+                addView(UsageMeterView(this@ProfileActivity, fraction),
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(7)).apply { topMargin = dp(11) })
+            }
+            addView(LinearLayout(this@ProfileActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(21), 0, 0)
+                addView(LinearLayout(this@ProfileActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(text("ЛИМИТ", 9f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply { letterSpacing = .07f })
+                    addView(text(if (metadata.totalBytes > 0) formatBytes(metadata.totalBytes) else "Без лимита", 13f, DeyttUi.TEXT, android.graphics.Typeface.BOLD)
+                        .apply { setPadding(0, dp(5), 0, 0); maxLines = 1 })
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(LinearLayout(this@ProfileActivity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(text("ДЕЙСТВУЕТ ДО", 9f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply { letterSpacing = .07f })
+                    addView(text(metadata.expiresAtSeconds?.let { formatDate(it) } ?: "Без срока", 13f, DeyttUi.TEXT, android.graphics.Typeface.BOLD)
+                        .apply { setPadding(0, dp(5), 0, 0); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END })
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            })
         })
-        root.addView(spacer(28, this))
+        root.addView(spacer(17, this))
         root.addView(button("Обновить подписку").apply {
             setOnClickListener { startActivity(Intent(this@ProfileActivity, SetupActivity::class.java)) }
         })
-        root.addView(spacer(18, this))
-        root.addView(text("Профиль и токен хранятся только на этом устройстве.", 13f, DeyttUi.MUTED))
+        root.addView(spacer(16, this))
+        root.addView(text("Ссылка и ключи остаются на этом устройстве.", 12f, DeyttUi.MUTED))
         present(root)
-    }
-
-    private fun metric(label: String, value: String): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(text(value, 15f, DeyttUi.TEXT, Typeface.BOLD).apply {
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-        })
-        addView(text(label, 11f, DeyttUi.MUTED).apply { setPadding(0, dp(5), 0, 0) })
     }
 
     private fun formatBytes(value: Long): String {
@@ -67,6 +90,23 @@ class ProfileActivity : Activity() {
         return if (unit == 0) "${amount.toLong()} ${units[unit]}" else String.format(Locale.US, "%.1f %s", amount, units[unit])
     }
 
-    private fun formatDate(seconds: Long): String = DateFormat.getDateInstance(DateFormat.LONG, Locale("ru"))
+    private fun formatDate(seconds: Long): String = DateFormat.getDateInstance(DateFormat.MEDIUM, Locale("ru"))
         .format(Date(seconds * 1000))
+}
+
+private class UsageMeterView(context: android.content.Context, private val fraction: Float) : View(context) {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val height = height.toFloat()
+        val track = RectF(0f, 0f, width.toFloat(), height)
+        paint.color = DeyttUi.SURFACE_2
+        canvas.drawRoundRect(track, height / 2, height / 2, paint)
+        if (fraction > 0f) {
+            track.right = (width * fraction).coerceAtLeast(height)
+            paint.color = DeyttUi.MINT
+            canvas.drawRoundRect(track, height / 2, height / 2, paint)
+        }
+    }
 }

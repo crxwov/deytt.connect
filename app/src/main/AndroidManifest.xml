@@ -31,7 +31,10 @@
                 <data android:scheme="deytt.connect" android:host="import" />
             </intent-filter>
         </activity>
-        <activity android:name=".SetupActivity" android:exported="false" />
+        <activity
+            android:name=".SetupActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
         <activity android:name=".RoutesActivity" android:exported="false" />
         <activity android:name=".ProtocolActivity" android:exported="false" />
         <activity android:name=".ProfileActivity" android:exported="false" />

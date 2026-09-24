@@ -1,155 +1,179 @@
 package space.deytt.connect
 
-import android.animation.ValueAnimator
 import android.content.Context
-import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Path
-import android.graphics.RectF
-import android.graphics.Typeface
-import android.os.Build
+import android.net.Uri
+import android.view.MotionEvent
 import android.view.View
-import android.view.animation.DecelerateInterpolator
+import android.view.ViewConfiguration
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
+import java.io.ByteArrayInputStream
 
-/**
- * A small, deliberately quiet route globe. It gives the location picker a
- * spatial anchor without pulling a map SDK or running an always-on animation.
- */
-class RouteGlobeView(context: Context) : View(context) {
-    private data class Point(val x: Float, val y: Float, val code: String)
-    private val density = resources.displayMetrics.density
-
-    private val line = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = density * 1.1f
-    }
-    private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = density * 9f
-        typeface = Typeface.create("sans-serif", Typeface.BOLD)
-        textAlign = Paint.Align.CENTER
-    }
-    private val route = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        style = Paint.Style.STROKE
-        strokeWidth = density * 1.5f
-        strokeCap = Paint.Cap.ROUND
-    }
-    private val points = listOf(
-        Point(.64f, .33f, "NL"),
-        Point(.58f, .35f, "DE"),
-        Point(.47f, .39f, "RU"),
-        Point(.61f, .23f, "FI"),
-    )
-    private var selectedCode = "AUTO"
-    private var rotation = 0f
-    private var animator: ValueAnimator? = null
+/** Offline Android host for the same interactive network atlas used on deytt.space. */
+class RouteGlobeView(context: Context) : FrameLayout(context) {
+    private var selectedRoute = "auto"
+    private var pageLoaded = false
+    private var touchStartX = 0f
+    private var touchStartY = 0f
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private val atlas: WebView
 
     init {
-        contentDescription = "Глобус маршрутов"
-        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES
+        clipChildren = false
+        clipToPadding = false
+        setBackgroundColor(Color.TRANSPARENT)
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+
+        atlas = WebView(context).apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+            contentDescription = mapDescription(selectedRoute)
+            settings.apply {
+                javaScriptEnabled = true
+                javaScriptCanOpenWindowsAutomatically = false
+                setSupportMultipleWindows(false)
+                setSupportZoom(false)
+                builtInZoomControls = false
+                displayZoomControls = false
+                textZoom = 100
+                domStorageEnabled = false
+                allowFileAccess = false
+                allowContentAccess = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            }
+            webViewClient = object : WebViewClient() {
+                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest): WebResourceResponse =
+                    localResponse(request.url)
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    pageLoaded = true
+                    applySelectedRoute()
+                }
+            }
+            setOnTouchListener { view, event ->
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        touchStartX = event.x
+                        touchStartY = event.y
+                    }
+                    MotionEvent.ACTION_POINTER_DOWN -> view.parent?.requestDisallowInterceptTouchEvent(true)
+                    MotionEvent.ACTION_MOVE -> {
+                        val dx = kotlin.math.abs(event.x - touchStartX)
+                        val dy = kotlin.math.abs(event.y - touchStartY)
+                        if (dx > touchSlop && dx > dy) {
+                            view.parent?.requestDisallowInterceptTouchEvent(true)
+                        } else if (dy > touchSlop) {
+                            view.parent?.requestDisallowInterceptTouchEvent(false)
+                        }
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
+                        view.parent?.requestDisallowInterceptTouchEvent(false)
+                }
+                false
+            }
+        }
+        addView(atlas, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        atlas.loadUrl("https://appassets.androidplatform.net/map/index.html")
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun focus(code: String, animate: Boolean = true) {
-        val normalized = code.uppercase().substringAfterLast(':').let { candidate ->
-            if (candidate in setOf("NL", "DE", "RU", "FI", "RU-DE", "AUTO")) candidate else "AUTO"
+        val normalized = code.uppercase().substringAfterLast(':')
+        selectedRoute = when {
+            normalized in setOf("RU-DE", "RU_DE") -> "ru-de"
+            normalized.contains("NL") -> "nl"
+            normalized.contains("DE") -> "de"
+            normalized.contains("FI") -> "fi"
+            normalized.contains("RU") -> "ru"
+            else -> "auto"
         }
-        selectedCode = normalized
-        contentDescription = if (normalized == "AUTO") "Глобус маршрутов, автоподбор" else "Глобус маршрутов, $normalized"
-        val target = when (normalized) {
-            "NL" -> 10f
-            "DE" -> 18f
-            "RU" -> 34f
-            "FI" -> 2f
-            "RU-DE" -> 26f
-            else -> 0f
-        }
-        animator?.cancel()
-        if (!animate || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled())) {
-            rotation = target
-            invalidate()
-            return
-        }
-        animator = ValueAnimator.ofFloat(rotation, target).apply {
-            duration = 260L
-            interpolator = DecelerateInterpolator()
-            addUpdateListener {
-                rotation = it.animatedValue as Float
-                invalidate()
-            }
-            start()
-        }
+        applySelectedRoute()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        atlas.onResume()
     }
 
     override fun onDetachedFromWindow() {
-        animator?.cancel()
-        animator = null
+        atlas.onPause()
         super.onDetachedFromWindow()
     }
 
-    override fun onDraw(canvas: Canvas) {
-        super.onDraw(canvas)
-        val cx = width * .5f
-        val cy = height * .52f
-        val radius = minOf(width, height) * .38f
-        val accent = if (selectedCode == "AUTO") DeyttUi.BLUE else DeyttUi.MINT
-
-        fill.color = Color.argb(22, Color.red(accent), Color.green(accent), Color.blue(accent))
-        canvas.drawCircle(cx, cy, radius, fill)
-
-        line.color = Color.argb(92, 139, 157, 197)
-        canvas.drawCircle(cx, cy, radius, line)
-        line.color = Color.argb(44, 139, 157, 197)
-        canvas.drawOval(RectF(cx - radius * .42f, cy - radius, cx + radius * .42f, cy + radius), line)
-        canvas.drawOval(RectF(cx - radius * .78f, cy - radius, cx + radius * .78f, cy + radius), line)
-        canvas.drawOval(RectF(cx - radius, cy - radius * .45f, cx + radius, cy + radius * .45f), line)
-        canvas.drawOval(RectF(cx - radius, cy - radius * .78f, cx + radius, cy + radius * .78f), line)
-
-        val visible = points.map { point ->
-            val longitude = (point.x - .5f) * 2f
-            val shift = (rotation / 34f).coerceIn(-1f, 1f) * radius * .22f
-            val x = cx + longitude * radius * .86f + shift
-            val y = cy + (point.y - .5f) * radius * 1.7f
-            Point(x, y, point.code)
-        }
-        val origin = Point(cx - radius * .74f, cy + radius * .62f, "HOME")
-        route.color = Color.argb(105, Color.red(accent), Color.green(accent), Color.blue(accent))
-        if (selectedCode == "AUTO") {
-            visible.forEach { point -> drawRoute(canvas, origin, point, alpha = 52) }
-        } else {
-            visible.firstOrNull { it.code == selectedCode }?.let { drawRoute(canvas, origin, it) }
-            if (selectedCode == "RU-DE") {
-                visible.firstOrNull { it.code == "RU" }?.let { drawRoute(canvas, origin, it) }
-                val ru = visible.firstOrNull { it.code == "RU" }
-                val de = visible.firstOrNull { it.code == "DE" }
-                if (ru != null && de != null) drawRoute(canvas, ru, de)
-            }
-        }
-        visible.forEach { point ->
-            val isSelected = point.code == selectedCode || (selectedCode == "RU-DE" && point.code == "DE")
-            fill.color = if (isSelected) accent else Color.argb(180, 178, 190, 216)
-            canvas.drawCircle(point.x, point.y, if (isSelected) density * 4.2f else density * 2.4f, fill)
-            if (isSelected) {
-                line.color = Color.argb(95, Color.red(accent), Color.green(accent), Color.blue(accent))
-                line.strokeWidth = density
-                canvas.drawCircle(point.x, point.y, density * 8f, line)
-            }
-            label.color = if (isSelected) accent else Color.argb(170, 178, 190, 216)
-            canvas.drawText(point.code, point.x, point.y - density * 8f, label)
-        }
-        fill.color = DeyttUi.TEXT
-        canvas.drawCircle(origin.x, origin.y, density * 3f, fill)
-        label.color = DeyttUi.TEXT
-        canvas.drawText("вы", origin.x, origin.y + density * 17f, label)
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility == View.VISIBLE) atlas.onResume() else atlas.onPause()
     }
 
-    private fun drawRoute(canvas: Canvas, from: Point, to: Point, alpha: Int = 105) {
-        val path = Path()
-        path.moveTo(from.x, from.y)
-        val midX = (from.x + to.x) * .5f
-        val lift = minOf(width, height) * .18f
-        route.alpha = alpha
-        path.quadTo(midX, minOf(from.y, to.y) - lift, to.x, to.y)
-        canvas.drawPath(path, route)
+    private fun applySelectedRoute() {
+        val route = selectedRoute
+        atlas.contentDescription = mapDescription(route)
+        if (!pageLoaded) return
+        atlas.evaluateJavascript(
+            "window.deyttSetMapRoute && window.deyttSetMapRoute('$route')",
+            null,
+        )
+    }
+
+    private fun mapDescription(route: String): String {
+        val destination = when (route) {
+            "nl" -> "выбрана точка Амстердам, Нидерланды"
+            "de" -> "выбрана точка Франкфурт, Германия"
+            "fi" -> "выбрана точка Хельсинки, Финляндия"
+            "ru" -> "выбрана точка Санкт-Петербург, Россия"
+            "ru-de" -> "показан двойной маршрут Санкт-Петербург — Франкфурт"
+            else -> "показаны точки Амстердам, Франкфурт, Хельсинки и Санкт-Петербург"
+        }
+        return "Карта сети DEYTT; $destination. Поворот — свайпом, масштаб — жестом двумя пальцами."
+    }
+
+    private fun localResponse(uri: Uri): WebResourceResponse {
+        if (uri.scheme != "https" || uri.host != ASSET_HOST) return blockedResponse()
+        val assetPath = when (uri.path) {
+            "/map/index.html" -> "route-map/index.html"
+            "/map/atlas-init.js" -> "route-map/atlas-init.js"
+            "/map/network-atlas.js" -> "route-map/network-atlas.js"
+            "/map/network-atlas.css" -> "route-map/network-atlas.css"
+            "/map/world-land.json" -> "world-land.json"
+            else -> return blockedResponse()
+        }
+        val assetName = assetPath.substringAfterLast('/')
+        val mimeType = when {
+            assetName.endsWith(".html") -> "text/html"
+            assetName.endsWith(".js") -> "application/javascript"
+            assetName.endsWith(".css") -> "text/css"
+            else -> "application/json"
+        }
+        return runCatching {
+            WebResourceResponse(
+                mimeType,
+                "UTF-8",
+                200,
+                "OK",
+                mapOf("Cache-Control" to "public, max-age=31536000"),
+                context.assets.open(assetPath),
+            )
+        }.getOrElse { blockedResponse() }
+    }
+
+    private fun blockedResponse() = WebResourceResponse(
+        "text/plain",
+        "UTF-8",
+        403,
+        "Blocked",
+        emptyMap(),
+        ByteArrayInputStream(ByteArray(0)),
+    )
+
+    companion object {
+        private const val ASSET_HOST = "appassets.androidplatform.net"
     }
 }

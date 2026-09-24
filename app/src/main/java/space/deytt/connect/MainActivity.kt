@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.content.pm.PackageManager
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -30,7 +31,8 @@ import space.deytt.connect.DeyttUi.note
 class MainActivity : Activity() {
     private lateinit var statusText: TextView
     private lateinit var detailText: TextView
-    private lateinit var orb: ConnectionOrbView
+    private lateinit var statusDot: View
+    private lateinit var globe: RouteGlobeView
     private lateinit var action: TextView
     private lateinit var routeRow: LinearLayout
     private lateinit var latencyText: TextView
@@ -83,23 +85,42 @@ class MainActivity : Activity() {
     }
 
     private fun buildScreen() {
-        val root = screen(withBackdrop = true)
+        val root = screen()
         root.addView(brandHeader())
-        root.addView(spacer(22, this))
-        root.addView(sectionLabel("состояние соединения"))
+        root.addView(spacer(12, this))
 
-        orb = ConnectionOrbView(this)
-        root.addView(orb, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(154)))
-        statusText = text("Соединение выключено", 24f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
-            gravity = Gravity.CENTER; letterSpacing = -.035f
+        globe = RouteGlobeView(this).apply {
+            focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
         }
-        detailText = text("Готово к подключению", 13f, DeyttUi.MUTED).apply { gravity = Gravity.CENTER; setPadding(0, dp(7), 0, 0) }
-        root.addView(statusText)
+        root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(222)))
+
+        val statusLine = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+        }
+        statusDot = View(this).apply {
+            contentDescription = "Состояние соединения"
+            background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(DeyttUi.MUTED)
+            }
+        }
+        statusLine.addView(statusDot, LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginEnd = dp(10) })
+        statusText = text("Соединение выключено", 22f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = -.02f
+        }
+        statusLine.addView(statusText)
+        root.addView(statusLine)
+        detailText = text("Готово к подключению", 13f, DeyttUi.MUTED).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(7), 0, 0)
+        }
         root.addView(detailText)
-        root.addView(spacer(22, this))
+        root.addView(spacer(17, this))
         action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
         root.addView(action)
-        root.addView(spacer(22, this))
+        root.addView(spacer(19, this))
 
         root.addView(sectionLabel("текущий маршрут"))
         routeRow = LinearLayout(this)
@@ -108,17 +129,11 @@ class MainActivity : Activity() {
             ?.takeIf(String::isNotBlank)
             ?.let { warning ->
                 root.addView(spacer(12, this))
-                root.addView(note(warning, DeyttUi.AMBER))
+                val compactWarning = if (warning.contains("AmneziaWG 1.5") && warning.contains("AmneziaWG 3.1")) {
+                    "Профили AmneziaWG 1.5 и 3.1 не загружены. Обновите подписку."
+                } else warning
+                root.addView(note(compactWarning, DeyttUi.AMBER))
             }
-        root.addView(spacer(24, this))
-        root.addView(sectionLabel("быстрый доступ"))
-        root.addView(row("Подписка", "Срок, трафик и обновление", "↗").apply {
-            setOnClickListener { startActivity(Intent(this@MainActivity, ProfileActivity::class.java)) }
-        })
-        root.addView(spacer(12, this))
-        root.addView(row("Настройки", "Обновления и локальные данные", "⚙").apply {
-            setOnClickListener { startActivity(Intent(this@MainActivity, SettingsActivity::class.java)) }
-        })
         present(root)
         rebuildRouteRow()
         renderStoredState()
@@ -128,6 +143,7 @@ class MainActivity : Activity() {
         if (!::routeRow.isInitialized) return
         latencyGeneration++
         val selected = SelectedRouteStore(this).read()
+        if (::globe.isInitialized) globe.focus(selected.id, animate = false)
         routeRow.removeAllViews()
         latencyText = actionLabel("проверить").apply {
             setOnClickListener { measureSelectedRoute() }
@@ -244,7 +260,19 @@ class MainActivity : Activity() {
             "Соединение выключено" -> "Готово к подключению"
             else -> "Проверяем доступ к интернету"
         }
-        orb.setPhase(currentPhase)
+        if (::statusDot.isInitialized) {
+            val color = when (currentPhase) {
+                VpnPhase.CONNECTED -> DeyttUi.MINT
+                VpnPhase.ERROR -> DeyttUi.CORAL
+                VpnPhase.STARTING, VpnPhase.CHECKING -> DeyttUi.SKY
+                else -> DeyttUi.MUTED
+            }
+            statusDot.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(color)
+            }
+            statusDot.contentDescription = displayValue
+        }
         action.text = if (currentPhase in setOf(VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.CONNECTED)) "Отключить" else "Подключить"
     }
 

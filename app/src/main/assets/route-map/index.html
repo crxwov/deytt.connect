@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self';">
+  <title>Карта сети DEYTT</title>
+  <link rel="stylesheet" href="network-atlas.css">
+  <script defer src="network-atlas.js"></script>
+  <script defer src="atlas-init.js"></script>
+</head>
+<body>
+  <main class="network-atlas" data-atlas-status="loading" data-atlas-variant="showcase">
+    <div class="network-atlas__canvas-wrap">
+      <canvas tabindex="0" role="img" aria-label="Интерактивная карта сети DEYTT. Точки подключения в Амстердаме, Франкфурте, Хельсинки и Санкт-Петербурге."></canvas>
+      <span class="network-atlas__loader" data-atlas-status role="status" aria-live="polite">Загружаю карту</span>
+      <span class="network-atlas__tooltip" data-atlas-tooltip hidden></span>
+      <span class="network-atlas__hint" aria-hidden="true">потяните · два пальца — масштаб</span>
+    </div>
+  </main>
+</body>
+</html>
