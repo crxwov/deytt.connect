@@ -6,7 +6,7 @@ Translate the actual deytt.space visual identity into a polished native Android 
 
 ## Status
 
-Completed: redesign and physical-device QA are complete. Commit and push to `main` are the remaining delivery actions. No server-side service consumes this Android-only change.
+Completed: redesign and physical-device QA are complete. Commit `d022ad8` is pushed to `origin/main`. No server-side service consumes this Android-only change.
 
 ## Success Criteria
 
@@ -61,4 +61,4 @@ Repository: `/home/hackov/Documents/deytt-connect`, branch `main`. Physical devi
 
 ## Next Action and Resume Context
 
-Commit only the Roadmap, Android source/assets, and bundled fonts; leave `.agents/` untouched. Push `main`. Do not pull/restart a server for this client-only change.
+None. `d022ad8` is on `origin/main`; `.agents/` remains untouched and untracked. Server pull/restart is not applicable to this client-only change.
