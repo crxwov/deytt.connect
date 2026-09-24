@@ -57,6 +57,7 @@ dependencies {
     implementation("com.github.singbox-android:libbox:1.14.1")
     implementation(project(":awg-tunnel"))
     implementation("androidx.core:core-ktx:1.15.0")
+    implementation("androidx.viewpager2:viewpager2:1.1.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

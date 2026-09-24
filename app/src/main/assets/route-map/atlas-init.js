@@ -2,6 +2,7 @@
   const root = document.querySelector(".network-atlas");
   document.documentElement.dataset.theme = "dark";
   window.deyttMapRoute = "auto";
+  window.deyttMapUserLocation = null;
   window.deyttSetMapRoute = function (route) {
     window.deyttMapRoute = route;
     if (window.deyttMapAtlas) {
@@ -14,6 +15,20 @@
     if (!window.deyttMapAtlas) return;
     window.deyttMapAtlas.animateTraffic = Boolean(enabled);
     window.deyttMapAtlas.start();
+  };
+  window.deyttSetMapUserLocation = function (latitude, longitude, details) {
+    window.deyttMapUserLocation = { latitude: latitude, longitude: longitude, details: details || {} };
+    if (window.deyttMapAtlas) {
+      window.deyttMapAtlas.setUserLocation(latitude, longitude, details || {});
+    }
+  };
+  window.deyttClearMapUserLocation = function () {
+    window.deyttMapUserLocation = null;
+    if (window.deyttMapAtlas) {
+      window.deyttMapAtlas.userLocation = null;
+      window.deyttMapAtlas.staticDirty = true;
+      window.deyttMapAtlas.start();
+    }
   };
 
   window.DeyttAtlas.create(root, {
@@ -30,6 +45,10 @@
       status.setAttribute("aria-hidden", "true");
     }
     window.deyttSetMapRoute(window.deyttMapRoute);
+    if (window.deyttMapUserLocation) {
+      const location = window.deyttMapUserLocation;
+      window.deyttMapAtlas.setUserLocation(location.latitude, location.longitude, location.details);
+    }
   }).catch(function () {
     const status = root.querySelector("[data-atlas-status]");
     if (status) {

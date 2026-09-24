@@ -13,10 +13,12 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import java.io.ByteArrayInputStream
+import org.json.JSONObject
 
 /** Offline Android host for the same interactive network atlas used on deytt.space. */
 class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var selectedRoute = "auto"
+    private var networkLocation: IpNetworkLocation? = null
     private var pageLoaded = false
     private var trafficEnabled = false
     private var touchStartX = 0f
@@ -58,6 +60,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                     pageLoaded = true
                     applySelectedRoute()
                     applyTrafficState()
+                    applyUserLocation()
                 }
             }
             setOnTouchListener { view, event ->
@@ -70,9 +73,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                     MotionEvent.ACTION_MOVE -> {
                         val dx = kotlin.math.abs(event.x - touchStartX)
                         val dy = kotlin.math.abs(event.y - touchStartY)
-                        if (dx > touchSlop && dx > dy) {
-                            view.parent?.requestDisallowInterceptTouchEvent(true)
-                        } else if (dy > touchSlop) {
+                        if (dy > touchSlop && dy > dx) {
                             view.parent?.requestDisallowInterceptTouchEvent(false)
                         }
                     }
@@ -104,6 +105,12 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (trafficEnabled == enabled) return
         trafficEnabled = enabled
         applyTrafficState()
+    }
+
+    internal fun setUserLocation(location: IpNetworkLocation?) {
+        networkLocation = location
+        atlas.contentDescription = mapDescription(selectedRoute)
+        applyUserLocation()
     }
 
     override fun onAttachedToWindow() {
@@ -139,6 +146,23 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         )
     }
 
+    private fun applyUserLocation() {
+        if (!pageLoaded) return
+        val location = networkLocation
+        if (location == null) {
+            atlas.evaluateJavascript("window.deyttClearMapUserLocation && window.deyttClearMapUserLocation()", null)
+            return
+        }
+        val details = JSONObject()
+            .put("city", location.city.take(80))
+            .put("country", location.countryCode.take(3))
+            .toString()
+        atlas.evaluateJavascript(
+            "window.deyttSetMapUserLocation && window.deyttSetMapUserLocation(${location.latitude},${location.longitude},$details)",
+            null,
+        )
+    }
+
     private fun mapDescription(route: String): String {
         val destination = when (route) {
             "nl" -> "выбрана точка Амстердам, Нидерланды"
@@ -148,7 +172,8 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             "ru-de" -> "показан двойной маршрут Санкт-Петербург — Франкфурт"
             else -> "показаны точки Амстердам, Франкфурт, Хельсинки и Санкт-Петербург"
         }
-        return "Карта сети DEYTT; $destination. Поворот — свайпом, масштаб — жестом двумя пальцами."
+        val origin = networkLocation?.let { " Точка входа — ${it.placeLabel}, приблизительно по IP; адрес IP не сохраняется." }.orEmpty()
+        return "Карта сети DEYTT; $destination.$origin Поворот и масштаб — жестами двумя пальцами. Горизонтальный свайп переключает вкладку."
     }
 
     private fun localResponse(uri: Uri): WebResourceResponse {

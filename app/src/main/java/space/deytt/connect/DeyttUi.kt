@@ -20,6 +20,7 @@ import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.RippleDrawable
 import android.os.Build
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -37,6 +38,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 object DeyttUi {
     const val BG = 0xFF080B12.toInt()
@@ -124,14 +126,21 @@ object DeyttUi {
     fun Activity.brandHeader(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(text("deytt.", 21f, TEXT, Typeface.BOLD).apply {
-            letterSpacing = -.035f
-            typeface = typeface(FontFamily.UNBOUNDED, 700)
-            contentDescription = "deytt."
+        addView(text("./c", 12f, Color.BLACK, Typeface.BOLD).apply {
+            gravity = Gravity.CENTER
+            typeface = typeface(FontFamily.JETBRAINS_MONO, 700)
+            background = rounded(Color.WHITE, 10f, Color.WHITE)
+            contentDescription = "логотип ./c"
+        }, LinearLayout.LayoutParams(dp(38), dp(38)))
+        addView(text("deytt.connect", 15f, TEXT, Typeface.BOLD).apply {
+            setPadding(dp(10), 0, 0, 0)
+            letterSpacing = -.02f
         })
         addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
         addView(mono("PRIVATE  ·  ON DEVICE", 8f, MUTED, 600))
     }
+
+    fun starfieldBackground(context: Context): Drawable = NetworkAtmosphereDrawable(context)
 
     fun Activity.text(value: String, size: Float, color: Int = TEXT, style: Int = Typeface.NORMAL): TextView =
         TextView(this).apply {
@@ -310,6 +319,121 @@ object DeyttUi {
         dp((resources.displayMetrics.widthPixels / resources.displayMetrics.density * .055f)
             .roundToInt()
             .coerceIn(18, 24))
+
+    class PrimaryNavigationBar(
+        private val activity: Activity,
+        initialPage: Int,
+        private val onSelect: (Int) -> Unit,
+    ) : FrameLayout(activity) {
+        private data class Entry(
+            val label: String,
+            val glyph: NavGlyph,
+            val shell: FrameLayout,
+            val title: TextView,
+            val item: LinearLayout,
+        )
+
+        private val entries = mutableListOf<Entry>()
+        private val indicator = View(activity).apply {
+            background = activity.rounded(BLUE, 2f, Color.TRANSPARENT)
+            isClickable = false
+            isFocusable = false
+        }
+        private var pagePosition = initialPage.coerceIn(0, 3).toFloat()
+        private var selectedPage = -1
+
+        init {
+            setBackgroundColor(SURFACE)
+            elevation = activity.dp(12).toFloat()
+            contentDescription = "Основная навигация"
+            val labels = listOf("Главная", "Маршруты", "Профиль", "Настройки")
+            val glyphs = listOf(NavGlyph.HOME, NavGlyph.MAP, NavGlyph.PROFILE, NavGlyph.SETTINGS)
+            val row = LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                setPadding(activity.dp(8), activity.dp(2), activity.dp(8), 0)
+            }
+            labels.forEachIndexed { index, label ->
+                val title = activity.text(label, 10f, MUTED).apply {
+                    gravity = Gravity.CENTER
+                    setPadding(0, activity.dp(4), 0, 0)
+                }
+                val shell = FrameLayout(activity).apply {
+                    addView(NavGlyphView(activity, glyphs[index], MUTED),
+                        LayoutParams(activity.dp(20), activity.dp(20), Gravity.CENTER))
+                }
+                val item = LinearLayout(activity).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER
+                    minimumHeight = activity.dp(56)
+                    isClickable = true
+                    isFocusable = true
+                    setOnClickListener { onSelect(index) }
+                    foreground = activity.ripple(17f)
+                    addView(shell, LinearLayout.LayoutParams(activity.dp(38), activity.dp(29)))
+                    addView(title)
+                }
+                entries += Entry(label, glyphs[index], shell, title, item)
+                row.addView(item, LinearLayout.LayoutParams(0, activity.dp(64), 1f))
+            }
+            addView(row, LayoutParams(LayoutParams.MATCH_PARENT, activity.dp(66), Gravity.TOP))
+            addView(indicator, LayoutParams(activity.dp(18), activity.dp(2), Gravity.TOP or Gravity.START).apply {
+                topMargin = activity.dp(62)
+            })
+            addView(View(activity).apply {
+                setBackgroundColor(LINE)
+                alpha = .55f
+                isClickable = false
+            }, LayoutParams(LayoutParams.MATCH_PARENT, activity.dp(1), Gravity.TOP))
+            setSelectedPage(initialPage)
+            post { updateIndicator() }
+        }
+
+        fun setSystemBottomInset(inset: Int) {
+            setPadding(0, 0, 0, inset.coerceAtLeast(0))
+        }
+
+        fun setPageOffset(position: Int, offset: Float) {
+            pagePosition = (position + offset).coerceIn(0f, 3f)
+            setSelectedPage((pagePosition + .5f).toInt().coerceIn(0, 3))
+            updateIndicator()
+        }
+
+        fun setSelectedPage(index: Int) {
+            val next = index.coerceIn(0, 3)
+            if (selectedPage == next) return
+            selectedPage = next
+            entries.forEachIndexed { position, entry ->
+                val selected = position == selectedPage
+                entry.item.isSelected = selected
+                entry.item.contentDescription = if (selected) "${entry.label}, выбран" else entry.label
+                entry.shell.background = if (selected) activity.rounded(SELECTED, 14f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
+                entry.shell.removeAllViews()
+                entry.shell.addView(NavGlyphView(activity, entry.glyph, if (selected) SKY else MUTED),
+                    LayoutParams(activity.dp(20), activity.dp(20), Gravity.CENTER))
+                entry.title.setTextColor(if (selected) TEXT else MUTED)
+                entry.title.setTypeface(null, if (selected) Typeface.BOLD else Typeface.NORMAL)
+            }
+        }
+
+        private fun updateIndicator() {
+            if (width <= 0) return
+            val cellWidth = width / 4f
+            indicator.translationX = (cellWidth * (pagePosition + .5f) - indicator.width / 2f)
+        }
+
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            super.onSizeChanged(w, h, oldw, oldh)
+            updateIndicator()
+        }
+    }
+
+    fun setStarfieldMotion(root: View, active: Boolean, reducedMotion: Boolean = false) {
+        (root.background as? NetworkAtmosphereDrawable)?.setMotionEnabled(active && !reducedMotion)
+        if (root is ViewGroup) {
+            for (index in 0 until root.childCount) setStarfieldMotion(root.getChildAt(index), active, reducedMotion)
+        }
+    }
 
     fun Activity.present(content: LinearLayout, anchoredAction: View? = null) {
         val navigation = bottomNavigation()
@@ -694,39 +818,122 @@ private class PageSwipeFrame(
 }
 
 private class NetworkAtmosphereDrawable(context: Context) : Drawable() {
+    private data class Star(
+        val x: Float,
+        val y: Float,
+        val radius: Float,
+        val alpha: Int,
+        val phase: Float,
+        val period: Float,
+        val flare: Boolean,
+        val tint: Int,
+    )
+
     private val density = context.resources.displayMetrics.density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val upperPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val lowerPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val starPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val flarePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = density * .55f
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val stars = Array(64) { index ->
+        val random = java.util.Random(0x44D7L + index * 7919L)
+        Star(
+            x = random.nextFloat(),
+            y = random.nextFloat(),
+            radius = (.45f + random.nextFloat() * 1.15f) * density,
+            alpha = 35 + random.nextInt(100),
+            phase = random.nextFloat() * (Math.PI * 2).toFloat(),
+            period = 5.5f + random.nextFloat() * 9f,
+            flare = index % 19 == 4,
+            tint = if (index % 11 == 0) DeyttUi.SKY else Color.WHITE,
+        )
+    }
     private var drawableAlpha = 255
+    private var motionEnabled = false
+    private var upperGlow: android.graphics.Shader? = null
+    private var lowerGlow: android.graphics.Shader? = null
+    private var colorFilter: ColorFilter? = null
+    private val tick: Runnable = object : Runnable {
+        override fun run() {
+            if (motionEnabled) {
+                invalidateSelf()
+                scheduleSelf(this, SystemClock.uptimeMillis() + 16L)
+            }
+        }
+    }
+
+    fun setMotionEnabled(enabled: Boolean) {
+        val systemAllowsMotion = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
+        val shouldRun = enabled && systemAllowsMotion
+        if (motionEnabled == shouldRun) return
+        motionEnabled = shouldRun
+        if (shouldRun) scheduleSelf(tick, SystemClock.uptimeMillis() + 16L) else unscheduleSelf(tick)
+        invalidateSelf()
+    }
+
+    override fun onBoundsChange(bounds: android.graphics.Rect) {
+        if (bounds.isEmpty) {
+            upperGlow = null
+            lowerGlow = null
+            return
+        }
+        upperGlow = android.graphics.RadialGradient(
+            bounds.left + bounds.width() * .78f,
+            bounds.top + bounds.height() * .12f,
+            bounds.width() * .92f,
+            intArrayOf(0x282B43A5, 0x10214270, 0x00080B12),
+            floatArrayOf(0f, .48f, 1f),
+            android.graphics.Shader.TileMode.CLAMP,
+        )
+        lowerGlow = android.graphics.RadialGradient(
+            bounds.left + bounds.width() * .04f,
+            bounds.top + bounds.height() * .72f,
+            bounds.width() * .78f,
+            intArrayOf(0x142B8A82, 0x00080B12),
+            null,
+            android.graphics.Shader.TileMode.CLAMP,
+        )
+    }
 
     override fun draw(canvas: Canvas) {
         canvas.drawColor(DeyttUi.BG)
         val area = bounds
         if (area.isEmpty) return
-        val glowRadius = area.width() * .92f
-        paint.shader = android.graphics.RadialGradient(
-            area.left + area.width() * .82f,
-            area.top + area.height() * .12f,
-            glowRadius,
-            intArrayOf(0x252B43A5, 0x10214270, 0x00080B12),
-            floatArrayOf(0f, .48f, 1f),
-            android.graphics.Shader.TileMode.CLAMP,
-        )
-        paint.alpha = drawableAlpha
-        canvas.drawRect(area, paint)
-        paint.shader = android.graphics.RadialGradient(
-            area.left + area.width() * .04f,
-            area.top + area.height() * .68f,
-            area.width() * .76f,
-            intArrayOf(0x142B8A82, 0x00080B12),
-            null,
-            android.graphics.Shader.TileMode.CLAMP,
-        )
-        canvas.drawRect(area, paint)
-        paint.shader = null
+        upperPaint.shader = upperGlow
+        upperPaint.alpha = drawableAlpha
+        upperPaint.colorFilter = colorFilter
+        canvas.drawRect(area, upperPaint)
+        lowerPaint.shader = lowerGlow
+        lowerPaint.alpha = drawableAlpha
+        lowerPaint.colorFilter = colorFilter
+        canvas.drawRect(area, lowerPaint)
+
+        val seconds = if (motionEnabled) SystemClock.uptimeMillis() / 1000f else 0f
+        stars.forEach { star ->
+            val twinkle = if (motionEnabled) .34f + .66f * ((sin(seconds * (6.2831855f / star.period) + star.phase) + 1f) * .5f) else .74f
+            val alpha = (star.alpha * twinkle * drawableAlpha / 255f).toInt().coerceIn(0, 255)
+            val x = area.left + area.width() * star.x
+            val y = area.top + area.height() * star.y
+            starPaint.color = star.tint
+            starPaint.alpha = alpha
+            starPaint.colorFilter = colorFilter
+            canvas.drawCircle(x, y, star.radius, starPaint)
+            if (star.flare) {
+                flarePaint.color = star.tint
+                flarePaint.alpha = (alpha * .56f).toInt()
+                flarePaint.colorFilter = colorFilter
+                val reach = star.radius * 3.2f
+                canvas.drawLine(x - reach, y, x + reach, y, flarePaint)
+                canvas.drawLine(x, y - reach, x, y + reach, flarePaint)
+            }
+        }
     }
 
     override fun setAlpha(alpha: Int) { drawableAlpha = alpha.coerceIn(0, 255); invalidateSelf() }
-    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter; invalidateSelf() }
+    override fun setColorFilter(colorFilter: ColorFilter?) { this.colorFilter = colorFilter; invalidateSelf() }
     @Deprecated("Deprecated in Android")
     override fun getOpacity(): Int = PixelFormat.OPAQUE
 }
