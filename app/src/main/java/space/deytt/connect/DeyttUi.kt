@@ -25,6 +25,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.VelocityTracker
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -381,7 +382,9 @@ object DeyttUi {
                 })
             }
         }
-        val shell = PageSwipeFrame(this) { delta -> navigateTopLevel(topLevelIndex() + delta) }.apply {
+        val shell = PageSwipeFrame(this, scroll, topLevelIndex()) { delta ->
+            navigateTopLevel(topLevelIndex() + delta)
+        }.apply {
             setBackgroundColor(BG)
             addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             navFrame.setBackgroundColor(SURFACE)
@@ -530,64 +533,148 @@ private fun Activity.navigateTopLevel(index: Int) {
 
 private const val PAGE_SWIPE_BLOCK_TAG = "deytt-page-swipe-block"
 
-private class PageSwipeFrame(context: Context, private val onNavigate: (Int) -> Unit) : FrameLayout(context) {
+private class PageSwipeFrame(
+    context: Context,
+    private val swipeContent: View,
+    private val currentPage: Int,
+    private val onNavigate: (Int) -> Unit,
+) : FrameLayout(context) {
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val edgeWidth = 28f * resources.displayMetrics.density
-    private val swipeDistance = 72f * resources.displayMetrics.density
+    private val density = resources.displayMetrics.density
+    private var velocityTracker: VelocityTracker? = null
+    private var settleAnimator: ValueAnimator? = null
     private var startX = 0f
     private var startY = 0f
+    private var dragOriginX = 0f
     private var candidate = false
     private var intercepted = false
+    private var skipNextTouchMove = false
 
     init {
         isClickable = true
     }
 
+    override fun onWindowFocusChanged(hasWindowFocus: Boolean) {
+        super.onWindowFocusChanged(hasWindowFocus)
+        if (hasWindowFocus && !intercepted) resetSwipeOffset()
+    }
+
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility == View.VISIBLE && !intercepted) resetSwipeOffset()
+    }
+
     override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                settleAnimator?.cancel()
+                settleAnimator = null
+                velocityTracker?.recycle()
+                velocityTracker = VelocityTracker.obtain().also { it.addMovement(event) }
                 startX = event.x
                 startY = event.y
+                dragOriginX = swipeContent.translationX
                 candidate = event.x > edgeWidth && event.x < width - edgeWidth && !blocksSwipeAt(event.x, event.y)
                 intercepted = false
+                skipNextTouchMove = false
             }
-            MotionEvent.ACTION_MOVE -> if (candidate) {
-                val dx = event.x - startX
-                val dy = event.y - startY
-                if (kotlin.math.abs(dx) > touchSlop && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.35f) {
-                    intercepted = true
-                    parent?.requestDisallowInterceptTouchEvent(true)
-                    return true
+            MotionEvent.ACTION_MOVE -> {
+                velocityTracker?.addMovement(event)
+                if (candidate) {
+                    val dx = event.x - startX
+                    val dy = event.y - startY
+                    if (kotlin.math.abs(dx) > touchSlop && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.35f) {
+                        intercepted = true
+                        skipNextTouchMove = true
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                        return true
+                    }
+                    if (kotlin.math.abs(dy) > touchSlop) candidate = false
                 }
-                if (kotlin.math.abs(dy) > touchSlop) candidate = false
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> candidate = false
+            MotionEvent.ACTION_POINTER_DOWN -> candidate = false
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> finishTracking()
         }
         return super.onInterceptTouchEvent(event)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (intercepted) {
-            when (event.actionMasked) {
-                MotionEvent.ACTION_MOVE -> return true
-                MotionEvent.ACTION_UP -> {
-                    val dx = event.x - startX
-                    if (kotlin.math.abs(dx) >= swipeDistance) onNavigate(if (dx < 0f) 1 else -1)
-                    intercepted = false
-                    candidate = false
-                    parent?.requestDisallowInterceptTouchEvent(false)
-                    return true
+        if (!intercepted) return super.onTouchEvent(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                if (skipNextTouchMove) {
+                    skipNextTouchMove = false
+                } else {
+                    velocityTracker?.addMovement(event)
                 }
-                MotionEvent.ACTION_CANCEL -> {
-                    intercepted = false
-                    candidate = false
-                    parent?.requestDisallowInterceptTouchEvent(false)
-                    return true
-                }
-                else -> return true
+                val dx = event.x - startX
+                val step = if (dx < 0f) 1 else -1
+                val targetExists = currentPage + step in 0..3
+                val resistance = if (targetExists) 1f else 0.18f
+                val limit = width * 0.88f
+                swipeContent.translationX = dragOriginX + (dx * resistance).coerceIn(-limit, limit)
+                return true
             }
+            MotionEvent.ACTION_UP -> {
+                velocityTracker?.addMovement(event)
+                velocityTracker?.computeCurrentVelocity(1000)
+                val dx = event.x - startX
+                val direction = if (dx < 0f) 1 else -1
+                val targetExists = currentPage + direction in 0..3
+                val distance = kotlin.math.abs(dx)
+                val velocityX = velocityTracker?.xVelocity ?: 0f
+                val threshold = maxOf(24f * density, width * 0.06f)
+                val flingDistance = maxOf(18f * density, touchSlop * 1.5f)
+                val fling = distance >= flingDistance &&
+                    kotlin.math.sign(velocityX) == kotlin.math.sign(dx) &&
+                    kotlin.math.abs(velocityX) >= 650f * density
+                if (targetExists && (distance >= threshold || fling)) {
+                    finishTracking()
+                    onNavigate(direction)
+                } else {
+                    finishTracking()
+                    settleContentBack()
+                }
+                return true
+            }
+            MotionEvent.ACTION_CANCEL, MotionEvent.ACTION_POINTER_DOWN -> {
+                finishTracking()
+                settleContentBack()
+                return true
+            }
+            else -> return true
         }
-        return super.onTouchEvent(event)
+    }
+
+    private fun settleContentBack() {
+        val start = swipeContent.translationX
+        if (start == 0f) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled()) {
+            swipeContent.translationX = 0f
+            return
+        }
+        settleAnimator = ValueAnimator.ofFloat(start, 0f).apply {
+            duration = 150L
+            interpolator = PathInterpolator(.22f, 1f, .36f, 1f)
+            addUpdateListener { swipeContent.translationX = it.animatedValue as Float }
+            start()
+        }
+    }
+
+    private fun resetSwipeOffset() {
+        settleAnimator?.cancel()
+        settleAnimator = null
+        swipeContent.translationX = 0f
+    }
+
+    private fun finishTracking() {
+        velocityTracker?.recycle()
+        velocityTracker = null
+        candidate = false
+        intercepted = false
+        skipNextTouchMove = false
+        parent?.requestDisallowInterceptTouchEvent(false)
     }
 
     private fun blocksSwipeAt(x: Float, y: Float): Boolean = blocksSwipeIn(this, x, y, inspectSelf = false)
