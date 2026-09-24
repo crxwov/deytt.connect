@@ -387,10 +387,11 @@ object SubscriptionClient {
 
     private fun awgWarning(version: String, error: Exception): String {
         val name = "AmneziaWG ${if (version == "31") "3.1" else "1.5"}"
+        val reason = SubscriptionRetryPolicy.safeFailureSummary(error)
         return if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) == true) {
-            "$name: дополнительные профили временно недоступны. Основная подписка добавлена, повторите обновление позже."
+            "$name: дополнительные профили временно недоступны ($reason). Основная подписка добавлена, обновите её позже."
         } else {
-            "$name не удалось обновить. Основная подписка добавлена, повторите обновление позже."
+            "$name не удалось обновить ($reason). Основная подписка добавлена, повторите попытку позже."
         }
     }
 

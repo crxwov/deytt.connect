@@ -103,7 +103,7 @@ class ProtocolActivity : Activity() {
                 chosenRoute = choice
                 routeItems.forEach { (candidate, row) ->
                     val selected = candidate.id == choice?.id
-                    row.background = if (selected) rounded(0xFFF0F2FF.toInt(), 15f, 0xFFD8DDFC.toInt()) else ColorDrawable(Color.TRANSPARENT)
+                    row.background = if (selected) rounded(DeyttUi.SELECTED, 15f, DeyttUi.SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
                     val title = if (candidate.engine == TunnelEngine.AMNEZIAWG) candidate.country else candidate.protocol.title
                     val detail = if (candidate.engine == TunnelEngine.AMNEZIAWG) "${candidate.protocol.title} · ${candidate.protocol.detail}" else candidate.protocol.detail
                     row.contentDescription = "$title, $detail${if (selected) ", выбран" else ""}"
@@ -123,16 +123,16 @@ class ProtocolActivity : Activity() {
                     else -> DeyttUi.BLUE
                 }
                 val badgeFill = when (route.protocol) {
-                    RouteProtocol.TROJAN -> 0xFFEAF7F2.toInt()
-                    RouteProtocol.HYSTERIA2 -> 0xFFEAF5FA.toInt()
-                    else -> 0xFFF0F1FF.toInt()
+                    RouteProtocol.TROJAN -> DeyttUi.MINT_SURFACE
+                    RouteProtocol.HYSTERIA2 -> DeyttUi.SKY_SURFACE
+                    else -> DeyttUi.BLUE_SURFACE
                 }
                 val item = LinearLayout(this).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = android.view.Gravity.CENTER_VERTICAL
                     minimumHeight = dp(78)
                     setPadding(dp(12), dp(9), dp(12), dp(9))
-                    background = if (selected) rounded(0xFFF0F2FF.toInt(), 15f, 0xFFD8DDFC.toInt()) else ColorDrawable(Color.TRANSPARENT)
+                    background = if (selected) rounded(DeyttUi.SELECTED, 15f, DeyttUi.SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
                     contentDescription = "$rowTitle, $rowDetail${if (selected) ", выбран" else ""}"
                     isClickable = true
                     isFocusable = true
@@ -196,8 +196,8 @@ class ProtocolActivity : Activity() {
                         item.animate()
                             .alpha(1f)
                             .translationY(0f)
-                            .setStartDelay(index * 48L)
-                            .setDuration(360L)
+                            .setStartDelay(index * 24L)
+                            .setDuration(240L)
                             .setInterpolator(PathInterpolator(.22f, 1f, .36f, 1f))
                             .start()
                     }

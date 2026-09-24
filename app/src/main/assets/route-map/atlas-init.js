@@ -1,6 +1,6 @@
 (function () {
   const root = document.querySelector(".network-atlas");
-  document.documentElement.dataset.theme = "light";
+  document.documentElement.dataset.theme = "dark";
   window.deyttMapRoute = "auto";
   window.deyttSetMapRoute = function (route) {
     window.deyttMapRoute = route;

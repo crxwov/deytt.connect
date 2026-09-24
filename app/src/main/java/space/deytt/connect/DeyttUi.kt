@@ -7,6 +7,7 @@ import android.animation.StateListAnimator
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.ColorFilter
@@ -17,9 +18,12 @@ import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.RippleDrawable
 import android.os.Build
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
@@ -27,26 +31,32 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
+import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import kotlin.math.roundToInt
 
 object DeyttUi {
-    const val BG = 0xFFF2F4FA.toInt()
-    const val SURFACE = 0xFFFFFFFF.toInt()
-    const val SURFACE_2 = 0xFFE9EDF7.toInt()
-    const val LINE = 0xFFD9DFEF.toInt()
-    const val TEXT = 0xFF101426.toInt()
-    const val MUTED = 0xFF606B83.toInt()
-    const val BLUE = 0xFF6674FF.toInt()
-    const val BLUE_DEEP = 0xFF4655ED.toInt()
-    const val SKY = 0xFF168DB8.toInt()
-    const val MINT = 0xFF078A69.toInt()
-    const val CORAL = 0xFFCF4658.toInt()
-    const val AMBER = 0xFF9A5A00.toInt()
-    const val MAP_SURFACE = 0xFFEAF0FA.toInt()
-    const val MAP_LINE = 0xFFDCE4F2.toInt()
+    const val BG = 0xFF080B12.toInt()
+    const val SURFACE = 0xFF111823.toInt()
+    const val SURFACE_2 = 0xFF192331.toInt()
+    const val LINE = 0xFF283548.toInt()
+    const val TEXT = 0xFFF2F5FC.toInt()
+    const val MUTED = 0xFF9AA8BC.toInt()
+    const val BLUE = 0xFF8494FF.toInt()
+    const val BLUE_DEEP = 0xFF5D6CF0.toInt()
+    const val SKY = 0xFF6BDDF2.toInt()
+    const val MINT = 0xFF63E0B4.toInt()
+    const val CORAL = 0xFFFF8295.toInt()
+    const val AMBER = 0xFFFFC76E.toInt()
+    const val MAP_SURFACE = 0xFF0C1420.toInt()
+    const val MAP_LINE = 0xFF27384A.toInt()
+    const val SELECTED = 0xFF1C2940.toInt()
+    const val SELECTED_LINE = 0xFF435A87.toInt()
+    const val BLUE_SURFACE = 0xFF242C4A.toInt()
+    const val SKY_SURFACE = 0xFF1B303D.toInt()
+    const val MINT_SURFACE = 0xFF18342E.toInt()
 
     private enum class FontFamily(val asset: String, val fallback: String) {
         INTER_TIGHT("fonts/inter-tight-variable.ttf", "sans-serif"),
@@ -60,7 +70,7 @@ object DeyttUi {
         orientation = LinearLayout.VERTICAL
         val gutter = contentGutter()
         setPadding(gutter, 0, gutter, dp(22))
-        background = if (withBackdrop) PaperDitherDrawable(this@screen) else ColorDrawable(BG)
+        background = if (withBackdrop) NetworkAtmosphereDrawable(this@screen) else ColorDrawable(BG)
         fitsSystemWindows = false
         clipToPadding = false
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -71,8 +81,8 @@ object DeyttUi {
             window.isNavigationBarContrastEnforced = false
         }
         WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = true
-            isAppearanceLightNavigationBars = true
+            isAppearanceLightStatusBars = false
+            isAppearanceLightNavigationBars = false
         }
     }
 
@@ -104,9 +114,9 @@ object DeyttUi {
                 })
             }
             addView(text(title, 24f, TEXT, Typeface.BOLD).apply {
-                letterSpacing = -.025f
-                typeface = typeface(FontFamily.UNBOUNDED, 650)
-                setPadding(0, dp(5), 0, dp(5))
+                letterSpacing = -.035f
+                typeface = typeface(FontFamily.INTER_TIGHT, 760)
+                setPadding(0, dp(5), 0, dp(7))
             })
         }
 
@@ -119,7 +129,7 @@ object DeyttUi {
             contentDescription = "deytt."
         })
         addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
-        addView(mono("VPN / NETWORK", 9f, MUTED, 600))
+        addView(mono("PRIVATE  ·  ON DEVICE", 8f, MUTED, 600))
     }
 
     fun Activity.text(value: String, size: Float, color: Int = TEXT, style: Int = Typeface.NORMAL): TextView =
@@ -151,11 +161,19 @@ object DeyttUi {
         background = rounded(MAP_SURFACE, 24f, MAP_LINE)
         clipToOutline = true
         addView(map, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        addView(mono("04 ЛОКАЦИИ", 8f, 0xFF596985.toInt(), 600).apply {
-            setPadding(dp(9), dp(6), dp(9), dp(6))
-            background = rounded(0xDFFFFFFF.toInt(), 7f, 0xFFDCE3F0.toInt())
+        addView(mono("СЕТЬ  /  04 УЗЛА", 8f, 0xFFB3C5E2.toInt(), 600).apply {
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            background = rounded(0xD9111823.toInt(), 8f, 0xFF35475F.toInt())
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(24), Gravity.BOTTOM or Gravity.END).apply {
+        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(27), Gravity.TOP or Gravity.START).apply {
+            leftMargin = dp(12)
+            topMargin = dp(12)
+        })
+        addView(mono("EUROPE  ·  PRIVATE", 7.5f, 0xFF90A2BC.toInt(), 560).apply {
+            setPadding(dp(10), dp(7), dp(10), dp(7))
+            background = rounded(0xB90A101A.toInt(), 8f, 0xFF2A394C.toInt())
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(27), Gravity.BOTTOM or Gravity.END).apply {
             rightMargin = dp(12)
             bottomMargin = dp(10)
         })
@@ -166,14 +184,15 @@ object DeyttUi {
             gravity = Gravity.CENTER
             minHeight = dp(54)
             setPadding(dp(18), dp(13), dp(18), dp(13))
-            background = if (secondary) rounded(SURFACE_2, 15f, LINE) else GradientDrawable(
+            background = if (secondary) rounded(SURFACE_2, 17f, LINE) else GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(BLUE, BLUE_DEEP),
-            ).apply { cornerRadius = dp(16).toFloat() }
-            elevation = if (secondary) 0f else dp(2).toFloat()
+            ).apply { cornerRadius = dp(17).toFloat() }
+            elevation = if (secondary) 0f else dp(5).toFloat()
             isClickable = true
             isFocusable = true
             contentDescription = label
+            foreground = ripple(17f)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
                 val target = this
                 stateListAnimator = StateListAnimator().apply {
@@ -189,7 +208,7 @@ object DeyttUi {
             minHeight = dp(38)
             minWidth = dp(54)
             setPadding(dp(7), dp(7), dp(7), dp(7))
-            background = rounded(0xFFF2F4FF.toInt(), 11f, 0xFFDDE2F7.toInt())
+            background = rounded(0xFF18243A.toInt(), 11f, 0xFF344B71.toInt())
             isClickable = true
             isFocusable = true
             contentDescription = "Проверить задержку"
@@ -207,12 +226,12 @@ object DeyttUi {
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = dp(64)
         setPadding(if (emphasis) dp(12) else dp(2), dp(9), if (emphasis) dp(10) else dp(2), dp(9))
-        background = if (emphasis) rounded(0xFFF0F1FF.toInt(), 14f, 0xFFD7DCF9.toInt()) else ColorDrawable(Color.TRANSPARENT)
+        background = if (emphasis) rounded(SELECTED, 15f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
         if (leading.isNotBlank()) {
             addView(text(leading, 11f, SKY, Typeface.BOLD).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .025f
-                background = rounded(SURFACE_2, 11f, LINE)
+                background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f, if (emphasis) 0xFF3F5985.toInt() else LINE)
                 minWidth = dp(38)
                 minHeight = dp(38)
                 maxLines = 1
@@ -240,6 +259,7 @@ object DeyttUi {
         }
         isClickable = interactive
         isFocusable = interactive
+        if (interactive) foreground = ripple(if (emphasis) 15f else 12f)
         if (interactive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
             val target = this
             stateListAnimator = StateListAnimator().apply {
@@ -268,7 +288,7 @@ object DeyttUi {
     fun Activity.note(value: String, accent: Int = MUTED): TextView = text(value, 13f, accent).apply {
         setPadding(dp(14), dp(13), dp(14), dp(13))
         setLineSpacing(dp(3).toFloat(), 1f)
-        background = rounded(SURFACE_2, 12f, LINE)
+        background = rounded(SURFACE_2, 14f, LINE)
     }
 
     fun Activity.rounded(fill: Int, radius: Float, stroke: Int = fill): GradientDrawable = GradientDrawable().apply {
@@ -276,6 +296,12 @@ object DeyttUi {
         cornerRadius = dp(radius.toInt()).toFloat()
         setStroke(dp(1), stroke)
     }
+
+    private fun Activity.ripple(radius: Float): RippleDrawable = RippleDrawable(
+        ColorStateList.valueOf(0x3B8EA2FF),
+        null,
+        rounded(Color.WHITE, radius, Color.WHITE),
+    )
 
     fun Activity.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
 
@@ -290,14 +316,14 @@ object DeyttUi {
             isFillViewport = true
             clipToPadding = true
             overScrollMode = View.OVER_SCROLL_NEVER
-            setBackgroundColor(BG)
+            setBackgroundColor(Color.TRANSPARENT)
             addView(content, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         if (navigation == null) {
             if (anchoredAction != null) {
                 val actionHeight = dp(78)
                 val actionFrame = FrameLayout(this).apply {
-                    setBackgroundColor(BG)
+                    setBackgroundColor(SURFACE)
                     addView(anchoredAction, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54), Gravity.CENTER).apply {
                         leftMargin = contentGutter()
                         rightMargin = contentGutter()
@@ -348,20 +374,25 @@ object DeyttUi {
         val actionHeight = if (anchoredAction == null) 0 else dp(78)
         val actionFrame = anchoredAction?.let { action ->
             FrameLayout(this).apply {
-                setBackgroundColor(BG)
+                setBackgroundColor(SURFACE)
                 addView(action, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54), Gravity.CENTER).apply {
                     leftMargin = contentGutter()
                     rightMargin = contentGutter()
                 })
             }
         }
-        val shell = FrameLayout(this).apply {
+        val shell = PageSwipeFrame(this) { delta -> navigateTopLevel(topLevelIndex() + delta) }.apply {
             setBackgroundColor(BG)
             addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             navFrame.setBackgroundColor(SURFACE)
+            navFrame.elevation = dp(12).toFloat()
+            navFrame.tag = PAGE_SWIPE_BLOCK_TAG
             addView(navFrame, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(66), Gravity.BOTTOM))
             navFrame.addView(navigation, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(66), Gravity.BOTTOM))
-            actionFrame?.let { addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, actionHeight, Gravity.BOTTOM)) }
+            actionFrame?.let {
+                it.tag = PAGE_SWIPE_BLOCK_TAG
+                addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, actionHeight, Gravity.BOTTOM))
+            }
             ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
                 val bars = insets.getInsets(
                     WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout(),
@@ -391,6 +422,7 @@ object DeyttUi {
     }
 
     private fun Activity.animateContentIn(content: View) {
+        if (this is MainActivity || this is RoutesActivity || this is ProfileActivity || this is SettingsActivity) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled()) return
         content.alpha = 0f
         content.translationY = dp(8).toFloat()
@@ -403,13 +435,8 @@ object DeyttUi {
     }
 
     private fun Activity.bottomNavigation(): LinearLayout? {
-        val current = when (this) {
-            is MainActivity -> 0
-            is RoutesActivity -> 1
-            is ProfileActivity -> 2
-            is SettingsActivity -> 3
-            else -> return null
-        }
+        val current = topLevelIndex()
+        if (current < 0) return null
         val destinations = listOf(
             Triple("Главная", MainActivity::class.java, NavGlyph.HOME),
             Triple("Маршруты", RoutesActivity::class.java, NavGlyph.MAP),
@@ -430,11 +457,36 @@ object DeyttUi {
                     isClickable = !selected
                     isFocusable = true
                     contentDescription = if (selected) "$label, выбран" else label
-                    if (!selected) setOnClickListener {
-                        startActivity(Intent(this@bottomNavigation, destination).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+                    if (!selected) {
+                        setOnClickListener { navigateTopLevel(index) }
+                        foreground = ripple(17f)
                     }
-                    addView(NavGlyphView(this@bottomNavigation, glyph, if (selected) BLUE_DEEP else MUTED),
-                        LinearLayout.LayoutParams(dp(19), dp(19)))
+                    val icon = FrameLayout(this@bottomNavigation).apply {
+                        background = rounded(
+                            if (selected) 0xFF222F49.toInt() else Color.TRANSPARENT,
+                            14f,
+                            if (selected) 0xFF344867.toInt() else Color.TRANSPARENT,
+                        )
+                        addView(NavGlyphView(this@bottomNavigation, glyph, if (selected) SKY else MUTED),
+                            FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER))
+                    }
+                    addView(icon, LinearLayout.LayoutParams(dp(38), dp(29)))
+                    val motionEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
+                    if (selected && motionEnabled) {
+                        icon.alpha = .72f
+                        icon.scaleX = .88f
+                        icon.scaleY = .88f
+                        icon.post {
+                            icon.animate()
+                                .alpha(1f)
+                                .scaleX(1f)
+                                .scaleY(1f)
+                                .setStartDelay(45L)
+                                .setDuration(240L)
+                                .setInterpolator(PathInterpolator(.22f, 1f, .36f, 1f))
+                                .start()
+                        }
+                    }
                     addView(text(label, 10f, if (selected) TEXT else MUTED, if (selected) Typeface.BOLD else Typeface.NORMAL).apply {
                         gravity = Gravity.CENTER
                         setPadding(0, dp(4), 0, 0)
@@ -444,36 +496,146 @@ object DeyttUi {
                     }, LinearLayout.LayoutParams(dp(16), dp(2)).apply { topMargin = dp(3) })
                 }
                 addView(item, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-            }
         }
+    }
 }
 
-private class PaperDitherDrawable(context: Context) : Drawable() {
+private fun Activity.topLevelIndex(): Int = when (this) {
+    is MainActivity -> 0
+    is RoutesActivity -> 1
+    is ProfileActivity -> 2
+    is SettingsActivity -> 3
+    else -> -1
+}
+
+private fun Activity.navigateTopLevel(index: Int) {
+    val current = topLevelIndex()
+    val destination = when (index) {
+        0 -> MainActivity::class.java
+        1 -> RoutesActivity::class.java
+        2 -> ProfileActivity::class.java
+        3 -> SettingsActivity::class.java
+        else -> return
+    }
+    if (index == current) return
+    startActivity(Intent(this, destination).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled()) {
+        overridePendingTransition(0, 0)
+    } else if (index > current) {
+        overridePendingTransition(R.anim.page_enter_from_right, R.anim.page_exit_to_left)
+    } else {
+        overridePendingTransition(R.anim.page_enter_from_left, R.anim.page_exit_to_right)
+    }
+}
+
+private const val PAGE_SWIPE_BLOCK_TAG = "deytt-page-swipe-block"
+
+private class PageSwipeFrame(context: Context, private val onNavigate: (Int) -> Unit) : FrameLayout(context) {
+    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private val edgeWidth = 28f * resources.displayMetrics.density
+    private val swipeDistance = 72f * resources.displayMetrics.density
+    private var startX = 0f
+    private var startY = 0f
+    private var candidate = false
+    private var intercepted = false
+
+    init {
+        isClickable = true
+    }
+
+    override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                startX = event.x
+                startY = event.y
+                candidate = event.x > edgeWidth && event.x < width - edgeWidth && !blocksSwipeAt(event.x, event.y)
+                intercepted = false
+            }
+            MotionEvent.ACTION_MOVE -> if (candidate) {
+                val dx = event.x - startX
+                val dy = event.y - startY
+                if (kotlin.math.abs(dx) > touchSlop && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.35f) {
+                    intercepted = true
+                    parent?.requestDisallowInterceptTouchEvent(true)
+                    return true
+                }
+                if (kotlin.math.abs(dy) > touchSlop) candidate = false
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> candidate = false
+        }
+        return super.onInterceptTouchEvent(event)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (intercepted) {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_MOVE -> return true
+                MotionEvent.ACTION_UP -> {
+                    val dx = event.x - startX
+                    if (kotlin.math.abs(dx) >= swipeDistance) onNavigate(if (dx < 0f) 1 else -1)
+                    intercepted = false
+                    candidate = false
+                    parent?.requestDisallowInterceptTouchEvent(false)
+                    return true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    intercepted = false
+                    candidate = false
+                    parent?.requestDisallowInterceptTouchEvent(false)
+                    return true
+                }
+                else -> return true
+            }
+        }
+        return super.onTouchEvent(event)
+    }
+
+    private fun blocksSwipeAt(x: Float, y: Float): Boolean = blocksSwipeIn(this, x, y, inspectSelf = false)
+
+    private fun blocksSwipeIn(view: View, x: Float, y: Float, inspectSelf: Boolean = true): Boolean {
+        if (x < 0f || y < 0f || x >= view.width || y >= view.height || view.visibility != View.VISIBLE) return false
+        if (inspectSelf && (view.tag == PAGE_SWIPE_BLOCK_TAG || view is WebView)) return true
+        if (view is ViewGroup) {
+            for (index in view.childCount - 1 downTo 0) {
+                val child = view.getChildAt(index)
+                val scrollOffset = if (view is ScrollView) view.scrollY else 0
+                if (blocksSwipeIn(child, x - child.left, y - child.top + scrollOffset)) return true
+            }
+        }
+        return false
+    }
+}
+
+private class NetworkAtmosphereDrawable(context: Context) : Drawable() {
     private val density = context.resources.displayMetrics.density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = DeyttUi.BLUE }
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
     private var drawableAlpha = 255
 
     override fun draw(canvas: Canvas) {
         canvas.drawColor(DeyttUi.BG)
         val area = bounds
-        val centerX = area.left + area.width() * .5f
-        val centerY = area.top + area.height() * .18f
-        val radiusX = area.width() * .9f
-        val radiusY = area.width() * 1.05f
-        val step = (14f * density).coerceAtLeast(1f)
-        var y = area.top + 7f * density
-        while (y < area.bottom) {
-            var x = area.left + 7f * density
-            while (x < area.right) {
-                val dx = (x - centerX) / radiusX
-                val dy = (y - centerY) / radiusY
-                val falloff = (1f - kotlin.math.sqrt(dx * dx + dy * dy)).coerceIn(0f, 1f)
-                paint.alpha = (falloff * 25f).roundToInt() * drawableAlpha / 255
-                if (paint.alpha > 0) canvas.drawCircle(x, y, .65f * density, paint)
-                x += step
-            }
-            y += step
-        }
+        if (area.isEmpty) return
+        val glowRadius = area.width() * .92f
+        paint.shader = android.graphics.RadialGradient(
+            area.left + area.width() * .82f,
+            area.top + area.height() * .12f,
+            glowRadius,
+            intArrayOf(0x252B43A5, 0x10214270, 0x00080B12),
+            floatArrayOf(0f, .48f, 1f),
+            android.graphics.Shader.TileMode.CLAMP,
+        )
+        paint.alpha = drawableAlpha
+        canvas.drawRect(area, paint)
+        paint.shader = android.graphics.RadialGradient(
+            area.left + area.width() * .04f,
+            area.top + area.height() * .68f,
+            area.width() * .76f,
+            intArrayOf(0x142B8A82, 0x00080B12),
+            null,
+            android.graphics.Shader.TileMode.CLAMP,
+        )
+        canvas.drawRect(area, paint)
+        paint.shader = null
     }
 
     override fun setAlpha(alpha: Int) { drawableAlpha = alpha.coerceIn(0, 255); invalidateSelf() }

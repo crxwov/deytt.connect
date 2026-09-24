@@ -22,6 +22,7 @@ import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.brandHeader
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.present
+import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.sectionLabel
@@ -91,17 +92,23 @@ class MainActivity : Activity() {
     private fun buildScreen() {
         val root = screen(withBackdrop = true)
         root.addView(brandHeader())
-        root.addView(spacer(10, this))
+        root.addView(spacer(14, this))
 
         globe = RouteGlobeView(this).apply {
             focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
         }
-        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(276)))
-        root.addView(spacer(13, this))
+        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(236)))
+        root.addView(spacer(18, this))
 
+        val connectionPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(17), dp(15), dp(17), dp(16))
+            background = rounded(DeyttUi.SURFACE, 20f, DeyttUi.LINE)
+        }
+        connectionPanel.addView(sectionLabel("состояние соединения"))
         val statusLine = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.START
+            gravity = Gravity.CENTER_VERTICAL
         }
         statusDot = View(this).apply {
             contentDescription = "Состояние соединения"
@@ -110,24 +117,26 @@ class MainActivity : Activity() {
                 setColor(DeyttUi.MUTED)
             }
         }
-        statusLine.addView(statusDot, LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginEnd = dp(9) })
-        root.addView(sectionLabel("состояние соединения"))
-        statusText = text("Не подключено", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+        statusLine.addView(statusDot, LinearLayout.LayoutParams(dp(9), dp(9)).apply { marginEnd = dp(11) })
+        statusText = text("Не подключено", 26f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
             gravity = Gravity.START
-            letterSpacing = -.03f
+            letterSpacing = -.035f
             maxLines = 2
         }
         statusLine.addView(statusText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        root.addView(statusLine)
+        connectionPanel.addView(statusLine)
         detailText = text("Готово к подключению", 12f, DeyttUi.MUTED).apply {
             gravity = Gravity.START
-            setPadding(dp(17), dp(4), 0, 0)
+            setPadding(dp(20), dp(5), 0, 0)
         }
-        root.addView(detailText)
-        root.addView(spacer(13, this))
+        connectionPanel.addView(detailText)
         action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
-        root.addView(spacer(12, this))
+        connectionPanel.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)).apply {
+            topMargin = dp(16)
+        })
+        root.addView(connectionPanel)
 
+        root.addView(spacer(20, this))
         root.addView(sectionLabel("текущий маршрут"))
         routeRow = LinearLayout(this)
         root.addView(routeRow, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
@@ -140,7 +149,7 @@ class MainActivity : Activity() {
                 } else warning
                 root.addView(note(compactWarning, DeyttUi.AMBER))
             }
-        present(root, action)
+        present(root)
         rebuildRouteRow()
         renderStoredState()
     }

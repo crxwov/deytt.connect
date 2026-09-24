@@ -3,6 +3,7 @@ package space.deytt.connect
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -10,6 +11,7 @@ import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.present
+import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.sectionLabel
@@ -34,13 +36,14 @@ class RoutesActivity : Activity() {
         globe = RouteGlobeView(this).apply {
             focus(selectedId, animate = false)
         }
-        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(214)))
-        root.addView(spacer(14, this))
+        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(194)))
+        root.addView(spacer(16, this))
         root.addView(sectionLabel("выходы · задержка"))
+        val exitGroup = routeGroup()
 
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { auto ->
             addMeasuredRow(
-                root,
+                exitGroup,
                 "Автоподбор",
                 "Доступная точка выбирается автоматически",
                 "AUTO",
@@ -54,7 +57,7 @@ class RoutesActivity : Activity() {
 
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { chain ->
             addMeasuredRow(
-                root,
+                exitGroup,
                 "Россия → Германия",
                 "2 этапа · Санкт-Петербург → Франкфурт",
                 "2×",
@@ -65,22 +68,26 @@ class RoutesActivity : Activity() {
                 select(chain)
             }
         }
+        root.addView(exitGroup)
 
-        root.addView(spacer(14, this))
+        root.addView(spacer(18, this))
         root.addView(sectionLabel("по стране"))
+        val countryGroup = routeGroup()
         routes.filter { it.countryCode in setOf("NL", "DE", "RU", "FI") }
             .groupBy { it.countryCode }
             .forEach { (code, countryRoutes) ->
                 val first = countryRoutes.first()
                 val protocols = countryRoutes.joinToString(" · ") { it.protocol.title }
-                addMeasuredRow(root, first.country, protocols, code, countryRoutes, emphasis = countryRoutes.any { it.id == selectedId }) {
+                addMeasuredRow(countryGroup, first.country, protocols, code, countryRoutes, emphasis = countryRoutes.any { it.id == selectedId }) {
                     globe.focus(code)
                     startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", code))
                 }
             }
+        root.addView(countryGroup)
 
-        root.addView(spacer(14, this))
+        root.addView(spacer(18, this))
         root.addView(sectionLabel("AmneziaWG"))
+        val awgGroup = routeGroup()
         listOf("15" to "AmneziaWG 1.5", "31" to "AmneziaWG 3.1").forEach { (version, title) ->
             val familyRoutes = routes.filter {
                 it.engine == TunnelEngine.AMNEZIAWG &&
@@ -113,9 +120,27 @@ class RoutesActivity : Activity() {
                     }
                 }
             }
-            root.addView(item)
+            appendToGroup(awgGroup, item)
         }
+        root.addView(awgGroup)
         present(root)
+    }
+
+    private fun routeGroup() = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = this@RoutesActivity.rounded(DeyttUi.SURFACE, 20f, DeyttUi.LINE)
+        clipToOutline = true
+    }
+
+    private fun appendToGroup(group: LinearLayout, item: View) {
+        if (group.childCount > 0) {
+            group.addView(View(this).apply { setBackgroundColor(DeyttUi.LINE) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply {
+                    leftMargin = dp(54)
+                    rightMargin = dp(16)
+                })
+        }
+        group.addView(item)
     }
 
     private fun addMeasuredRow(
@@ -131,7 +156,7 @@ class RoutesActivity : Activity() {
         val item = row(title, subtitle, leading, "", emphasis = emphasis).apply { setOnClickListener { onClick() } }
         latency.setOnClickListener { measure(routes, latency) }
         item.addView(latency, LinearLayout.LayoutParams(dp(68), dp(40)))
-        root.addView(item)
+        appendToGroup(root, item)
     }
 
     private fun measure(routes: List<DeyttRoute>, view: TextView) {
