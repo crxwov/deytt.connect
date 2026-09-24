@@ -21,7 +21,7 @@ Make top-level horizontal navigation respond continuously to the finger, then se
 
 ## Current State
 
-Completed. Repository: /home/hackov/Documents/deytt-connect, branch main; prior redesign is already pushed (2aa05b7). Finger-tracked swipe with a 24dp commit threshold is built and verified on physical A001. Keep VPN disconnected and Auto selected. Preserve unrelated untracked .agents/.
+Completed and pushed as `e6a0a5a` on `main`. Repository: /home/hackov/Documents/deytt-connect. Finger-tracked swipe with a 24dp commit threshold is built and verified on physical A001. Keep VPN disconnected and Auto selected. Preserve unrelated untracked .agents/.
 
 ## Findings and Decisions
 
@@ -51,4 +51,4 @@ Completed. Repository: /home/hackov/Documents/deytt-connect, branch main; prior 
 
 ## Next Action and Resume Context
 
-Verified final state; changes are ready to commit and push to main. No server pull or service restart applies to this Android-only refinement; the associated backend fix was deployed in the earlier task.
+No remaining implementation action. No server pull or service restart applies to this Android-only refinement; the associated backend fix was deployed in the earlier task.
