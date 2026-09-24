@@ -33,16 +33,18 @@ class SettingsActivity : Activity() {
         updateButton = button("Проверить обновления").apply {
             setOnClickListener { if (latest == null) checkForUpdate() else openLatest() }
         }
-        root.addView(updateButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         status = text("Готово проверить официальный релиз.", 12f, DeyttUi.MUTED).apply { setPadding(dp(2), dp(10), 0, 0) }
         root.addView(status)
-        root.addView(spacer(24, this))
+        root.addView(spacer(20, this))
         root.addView(sectionLabel("приватность"))
         root.addView(note("Ссылка и ключи хранятся локально. Принимаются только ссылки DEYTTT.\nГеография Natural Earth 1:110m работает офлайн.", DeyttUi.TEXT))
-        root.addView(spacer(24, this))
-        root.addView(sectionLabel("в разработке"))
-        root.addView(note("Раздельные маршруты и геонастройки появятся после готового контракта и тестирования. Сейчас переключателей нет.", DeyttUi.MUTED))
-        present(root)
+        root.addView(spacer(20, this))
+        root.addView(sectionLabel("дальше"))
+        root.addView(text("Раздельные маршруты и геонастройки появятся после готового контракта и тестирования.", 13f, DeyttUi.MUTED).apply {
+            setPadding(dp(1), 0, dp(2), 0)
+            setLineSpacing(dp(2).toFloat(), 1f)
+        })
+        present(root, updateButton)
     }
 
     private fun checkForUpdate() {

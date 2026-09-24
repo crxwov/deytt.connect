@@ -1,5 +1,6 @@
 package space.deytt.connect
 
+import android.animation.ValueAnimator
 import android.app.Activity
 import android.Manifest
 import android.content.BroadcastReceiver
@@ -27,6 +28,7 @@ import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
 import space.deytt.connect.DeyttUi.note
+import space.deytt.connect.DeyttUi.mapPanel
 
 class MainActivity : Activity() {
     private lateinit var statusText: TextView
@@ -38,6 +40,7 @@ class MainActivity : Activity() {
     private lateinit var latencyText: TextView
     private var pendingRoute: SelectedRoute? = null
     private var latencyGeneration = 0
+    private var renderedPhase: VpnPhase? = null
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -81,22 +84,24 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         if (::statusText.isInitialized) runCatching { unregisterReceiver(statusReceiver) }
+        if (::globe.isInitialized) globe.setTrafficEnabled(false)
         super.onStop()
     }
 
     private fun buildScreen() {
-        val root = screen()
+        val root = screen(withBackdrop = true)
         root.addView(brandHeader())
-        root.addView(spacer(12, this))
+        root.addView(spacer(10, this))
 
         globe = RouteGlobeView(this).apply {
             focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
         }
-        root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(222)))
+        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(276)))
+        root.addView(spacer(13, this))
 
         val statusLine = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
+            gravity = Gravity.START
         }
         statusDot = View(this).apply {
             contentDescription = "Состояние соединения"
@@ -105,22 +110,23 @@ class MainActivity : Activity() {
                 setColor(DeyttUi.MUTED)
             }
         }
-        statusLine.addView(statusDot, LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginEnd = dp(10) })
-        statusText = text("Соединение выключено", 22f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
-            gravity = Gravity.CENTER
-            letterSpacing = -.02f
+        statusLine.addView(statusDot, LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginEnd = dp(9) })
+        root.addView(sectionLabel("состояние соединения"))
+        statusText = text("Не подключено", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            gravity = Gravity.START
+            letterSpacing = -.03f
+            maxLines = 2
         }
-        statusLine.addView(statusText)
+        statusLine.addView(statusText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         root.addView(statusLine)
-        detailText = text("Готово к подключению", 13f, DeyttUi.MUTED).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, dp(7), 0, 0)
+        detailText = text("Готово к подключению", 12f, DeyttUi.MUTED).apply {
+            gravity = Gravity.START
+            setPadding(dp(17), dp(4), 0, 0)
         }
         root.addView(detailText)
-        root.addView(spacer(17, this))
+        root.addView(spacer(13, this))
         action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
-        root.addView(action)
-        root.addView(spacer(19, this))
+        root.addView(spacer(12, this))
 
         root.addView(sectionLabel("текущий маршрут"))
         routeRow = LinearLayout(this)
@@ -134,7 +140,7 @@ class MainActivity : Activity() {
                 } else warning
                 root.addView(note(compactWarning, DeyttUi.AMBER))
             }
-        present(root)
+        present(root, action)
         rebuildRouteRow()
         renderStoredState()
     }
@@ -145,13 +151,13 @@ class MainActivity : Activity() {
         val selected = SelectedRouteStore(this).read()
         if (::globe.isInitialized) globe.focus(selected.id, animate = false)
         routeRow.removeAllViews()
-        latencyText = actionLabel("проверить").apply {
+        latencyText = actionLabel().apply {
             setOnClickListener { measureSelectedRoute() }
         }
         val item = row(selected.title, selected.subtitle, "•", "", emphasis = true).apply {
             setOnClickListener { startActivity(Intent(this@MainActivity, RoutesActivity::class.java)) }
         }
-        item.addView(latencyText, LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT))
+        item.addView(latencyText, LinearLayout.LayoutParams(dp(68), dp(40)))
         routeRow.addView(item, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
     }
 
@@ -250,15 +256,23 @@ class MainActivity : Activity() {
         val value = status ?: "Соединение выключено"
         val displayValue = when (value) {
             "VPN подключён" -> "Подключено"
-            "VPN отключён" -> "Соединение выключено"
+            "VPN отключён", "Соединение выключено" -> "Не подключено"
             else -> value
         }
         val currentPhase = phase ?: VpnPhase.IDLE
+        val phaseChanged = renderedPhase != null && renderedPhase != currentPhase
+        renderedPhase = currentPhase
         statusText.text = displayValue
         detailText.text = error ?: when (displayValue) {
             "Подключено" -> "Соединение активно"
-            "Соединение выключено" -> "Готово к подключению"
+            "Не подключено" -> "Готово к подключению"
             else -> "Проверяем доступ к интернету"
+        }
+        val animationsEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
+        if (phaseChanged && animationsEnabled) {
+            statusText.alpha = .72f
+            statusText.translationY = dp(4).toFloat()
+            statusText.animate().alpha(1f).translationY(0f).setDuration(210L).start()
         }
         if (::statusDot.isInitialized) {
             val color = when (currentPhase) {
@@ -272,8 +286,14 @@ class MainActivity : Activity() {
                 setColor(color)
             }
             statusDot.contentDescription = displayValue
+            if (phaseChanged && animationsEnabled) {
+                statusDot.scaleX = .7f
+                statusDot.scaleY = .7f
+                statusDot.animate().scaleX(1f).scaleY(1f).setDuration(300L).start()
+            }
         }
         action.text = if (currentPhase in setOf(VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.CONNECTED)) "Отключить" else "Подключить"
+        if (::globe.isInitialized) globe.setTrafficEnabled(currentPhase == VpnPhase.CONNECTED)
     }
 
     private fun measureSelectedRoute() {
@@ -293,6 +313,8 @@ class MainActivity : Activity() {
             latencyText.text = "нет ответа"
             latencyText.isEnabled = true
             latencyText.alpha = 1f
+            latencyText.textSize = 8.5f
+            latencyText.setTextColor(DeyttUi.CORAL)
             return
         }
         LatencyExecutor.pool.execute {
@@ -302,6 +324,9 @@ class MainActivity : Activity() {
                     latencyText.text = label
                     latencyText.isEnabled = true
                     latencyText.alpha = 1f
+                    latencyText.textSize = 9f
+                    latencyText.setTextColor(if (label.contains("мс", ignoreCase = true)) DeyttUi.MINT else DeyttUi.CORAL)
+                    latencyText.contentDescription = "Задержка маршрута ${selected.title}: $label"
                 }
             }
         }

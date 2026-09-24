@@ -18,6 +18,7 @@ import java.io.ByteArrayInputStream
 class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var selectedRoute = "auto"
     private var pageLoaded = false
+    private var trafficEnabled = false
     private var touchStartX = 0f
     private var touchStartY = 0f
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
@@ -56,6 +57,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                 override fun onPageFinished(view: WebView?, url: String?) {
                     pageLoaded = true
                     applySelectedRoute()
+                    applyTrafficState()
                 }
             }
             setOnTouchListener { view, event ->
@@ -98,6 +100,12 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         applySelectedRoute()
     }
 
+    fun setTrafficEnabled(enabled: Boolean) {
+        if (trafficEnabled == enabled) return
+        trafficEnabled = enabled
+        applyTrafficState()
+    }
+
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         atlas.onResume()
@@ -119,6 +127,14 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (!pageLoaded) return
         atlas.evaluateJavascript(
             "window.deyttSetMapRoute && window.deyttSetMapRoute('$route')",
+            null,
+        )
+    }
+
+    private fun applyTrafficState() {
+        if (!pageLoaded) return
+        atlas.evaluateJavascript(
+            "window.deyttSetMapTraffic && window.deyttSetMapTraffic($trafficEnabled)",
             null,
         )
     }

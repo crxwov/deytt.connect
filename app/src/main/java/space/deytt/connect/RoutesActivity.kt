@@ -3,7 +3,6 @@ package space.deytt.connect
 import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
-import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -17,6 +16,7 @@ import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
 import space.deytt.connect.DeyttUi.note
+import space.deytt.connect.DeyttUi.mapPanel
 
 class RoutesActivity : Activity() {
     private var latencyGeneration = 0
@@ -27,47 +27,59 @@ class RoutesActivity : Activity() {
         val config = SubscriptionStore(this).readCurrent() ?: run { finish(); return }
         val awg = AwgProfileStore(this)
         val routes = RouteCatalog.from(config, awg.profiles())
-        val root = screen()
-        root.addView(header("маршруты", "Выберите выход"))
-        root.addView(spacer(2, this))
+        val selectedId = SelectedRouteStore(this).read().id
+        val root = screen(withBackdrop = true)
+        root.addView(header("deytt. network", "Маршруты"))
+        root.addView(spacer(4, this))
         globe = RouteGlobeView(this).apply {
-            focus(SelectedRouteStore(this@RoutesActivity).read().id, animate = false)
+            focus(selectedId, animate = false)
         }
-        root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(262)))
-        root.addView(text("Задержку можно проверить вручную у каждой точки.", 12f, DeyttUi.MUTED).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, dp(4), 0, dp(16))
-        })
-        root.addView(sectionLabel("маршруты"))
+        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(214)))
+        root.addView(spacer(14, this))
+        root.addView(sectionLabel("выходы · задержка"))
 
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { auto ->
-            addMeasuredRow(root, "Автоподбор", "Доступный выход выбирается автоматически", "AUTO", listOf(auto), emphasis = true) {
+            addMeasuredRow(
+                root,
+                "Автоподбор",
+                "Доступная точка выбирается автоматически",
+                "AUTO",
+                listOf(auto),
+                emphasis = selectedId == auto.id,
+            ) {
                 globe.focus("AUTO")
                 select(auto)
             }
         }
 
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { chain ->
-            addMeasuredRow(root, "Россия → Германия", "Два этапа · Санкт-Петербург → Франкфурт", "2×", listOf(chain)) {
+            addMeasuredRow(
+                root,
+                "Россия → Германия",
+                "2 этапа · Санкт-Петербург → Франкфурт",
+                "2×",
+                listOf(chain),
+                emphasis = selectedId == chain.id,
+            ) {
                 globe.focus("RU-DE")
                 select(chain)
             }
         }
 
-        root.addView(spacer(17, this))
+        root.addView(spacer(14, this))
         root.addView(sectionLabel("по стране"))
         routes.filter { it.countryCode in setOf("NL", "DE", "RU", "FI") }
             .groupBy { it.countryCode }
             .forEach { (code, countryRoutes) ->
                 val first = countryRoutes.first()
                 val protocols = countryRoutes.joinToString(" · ") { it.protocol.title }
-                addMeasuredRow(root, first.country, protocols, code, countryRoutes) {
+                addMeasuredRow(root, first.country, protocols, code, countryRoutes, emphasis = countryRoutes.any { it.id == selectedId }) {
                     globe.focus(code)
                     startActivity(Intent(this@RoutesActivity, ProtocolActivity::class.java).putExtra("country", code))
                 }
             }
 
-        root.addView(spacer(15, this))
+        root.addView(spacer(14, this))
         root.addView(sectionLabel("AmneziaWG"))
         listOf("15" to "AmneziaWG 1.5", "31" to "AmneziaWG 3.1").forEach { (version, title) ->
             val familyRoutes = routes.filter {
@@ -86,9 +98,10 @@ class RoutesActivity : Activity() {
             } else {
                 row(
                     title,
-                    "${familyRoutes.size} ${if (familyRoutes.size == 1) "сервер" else "сервера"} · выбрать точку и проверить",
+                    "${familyRoutes.size} ${if (familyRoutes.size == 1) "сервер" else "сервера"} · выбрать точку",
                     displayVersion,
                     "открыть",
+                    emphasis = familyRoutes.any { it.id == selectedId },
                 ).apply {
                     setOnClickListener {
                         globe.focus(familyRoutes.first().id.uppercase())
@@ -114,10 +127,10 @@ class RoutesActivity : Activity() {
         emphasis: Boolean = false,
         onClick: () -> Unit,
     ) {
-        val latency = actionLabel("проверить")
+        val latency = actionLabel()
         val item = row(title, subtitle, leading, "", emphasis = emphasis).apply { setOnClickListener { onClick() } }
         latency.setOnClickListener { measure(routes, latency) }
-        item.addView(latency, LinearLayout.LayoutParams(dp(92), ViewGroup.LayoutParams.WRAP_CONTENT))
+        item.addView(latency, LinearLayout.LayoutParams(dp(68), dp(40)))
         root.addView(item)
     }
 
@@ -128,6 +141,8 @@ class RoutesActivity : Activity() {
         val route = routes.firstOrNull()
         if (route == null) {
             view.text = "нет ответа"
+            view.textSize = 8.5f
+            view.setTextColor(DeyttUi.CORAL)
             return
         }
         val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) awg.read(route.id) else null
@@ -139,6 +154,8 @@ class RoutesActivity : Activity() {
             view.text = "нет ответа"
             view.isEnabled = true
             view.alpha = 1f
+            view.textSize = 8.5f
+            view.setTextColor(DeyttUi.CORAL)
             return
         }
         LatencyExecutor.pool.execute {
@@ -148,6 +165,9 @@ class RoutesActivity : Activity() {
                 view.text = label
                 view.isEnabled = true
                 view.alpha = 1f
+                view.textSize = 9f
+                view.setTextColor(if (label.contains("мс", ignoreCase = true)) DeyttUi.MINT else DeyttUi.CORAL)
+                view.contentDescription = "Задержка маршрута $title: $label"
             }
         }
     }

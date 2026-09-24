@@ -73,13 +73,12 @@ class SetupActivity : Activity() {
         })
         root.addView(spacer(14, this))
         importButton = button(if (updating) "Обновить подписку" else "Добавить подписку").apply { setOnClickListener { importProfile() } }
-        root.addView(importButton)
         state = note("", DeyttUi.MUTED).apply {
             visibility = View.GONE
             setPadding(dp(14), dp(13), dp(14), dp(13))
         }
         root.addView(state)
-        present(root)
+        present(root, importButton)
     }
 
     private fun importProfile() {

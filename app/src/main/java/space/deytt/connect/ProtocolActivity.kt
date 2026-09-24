@@ -1,21 +1,30 @@
 package space.deytt.connect
 
 import android.app.Activity
+import android.animation.ValueAnimator
 import android.content.Intent
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.TextView
+import android.view.animation.PathInterpolator
+import android.os.Build
 import space.deytt.connect.DeyttUi.header
-import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
+import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.present
-import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
 import space.deytt.connect.DeyttUi.note
+import space.deytt.connect.DeyttUi.mapPanel
+import space.deytt.connect.DeyttUi.rounded
 
 class ProtocolActivity : Activity() {
     private var latencyGeneration = 0
@@ -38,47 +47,167 @@ class ProtocolActivity : Activity() {
             requestedVersion?.let { "AmneziaWG ${if (it == "31") "3.1" else "1.5"}" } ?: "AmneziaWG"
         } else routes.firstOrNull()?.country ?: "Протокол"
         val root = screen()
+        val selectedId = SelectedRouteStore(this).read().id
         root.addView(header(if (code == "AWG") "AmneziaWG" else "маршрут", title, true))
-        root.addView(spacer(2, this))
+        root.addView(spacer(5, this))
         val globe = RouteGlobeView(this)
         globe.focus(if (code == "AWG") "AUTO" else code, animate = false)
-        root.addView(globe, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(218)))
-        root.addView(text("Выберите способ подключения. Проверка задержки запускается отдельно.", 12f, DeyttUi.MUTED).apply {
-            gravity = android.view.Gravity.CENTER
-            setPadding(dp(6), 0, dp(6), dp(16))
-        })
-        root.addView(sectionLabel(if (code == "AWG") "серверы и версии" else "способы подключения"))
+        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(232)))
+        root.addView(spacer(15, this))
+        root.addView(sectionLabel(if (code == "AWG") "серверы · задержка" else "выберите узел · измерить пинг"))
+        var anchoredAction: TextView? = null
         if (routes.isEmpty()) {
             root.addView(note("Профили этой версии пока не загружены. Обновите подписку, чтобы загрузить серверы.", DeyttUi.AMBER))
-            root.addView(button("обновить подписку").apply {
+            anchoredAction = button("Обновить подписку").apply {
                 setOnClickListener { startActivity(Intent(this@ProtocolActivity, SetupActivity::class.java)) }
-            })
-        }
-        routes.forEach { route ->
-            val mark = if (route.engine == TunnelEngine.AMNEZIAWG) route.protocol.title else when (route.protocol) {
-                RouteProtocol.VLESS -> "VL"
-                RouteProtocol.TROJAN -> "TR"
-                RouteProtocol.HYSTERIA2 -> "H2"
-                RouteProtocol.AWG15 -> "1.5"
-                RouteProtocol.AWG31 -> "3.1"
-                else -> "AUTO"
             }
-            val rowTitle = if (route.engine == TunnelEngine.AMNEZIAWG) route.country else route.protocol.title
-            val rowDetail = if (route.engine == TunnelEngine.AMNEZIAWG) "${route.protocol.title} · ${route.protocol.detail}" else route.protocol.detail
-            val latency = actionLabel("проверить")
-            val item = row(rowTitle, rowDetail, mark, "").apply {
+        } else {
+            var chosenRoute = routes.firstOrNull { it.id == selectedId }
+            val routeItems = mutableListOf<Pair<DeyttRoute, LinearLayout>>()
+            val chooseAction = button(chosenRoute?.let { "Использовать ${it.protocol.title}" } ?: "Выберите протокол").apply {
+                isEnabled = chosenRoute != null
+                contentDescription = text
                 setOnClickListener {
+                    val route = chosenRoute ?: return@setOnClickListener
                     if (selecting) return@setOnClickListener
                     selecting = true
-                    globe.focus(if (route.engine == TunnelEngine.AMNEZIAWG) route.id.uppercase() else route.countryCode)
+                    isEnabled = false
                     select(route)
                 }
             }
-            latency.setOnClickListener { measure(route, latency) }
-            item.addView(latency, LinearLayout.LayoutParams(dp(86), ViewGroup.LayoutParams.WRAP_CONTENT))
-            root.addView(item)
+
+            fun styleChooseAction(enabled: Boolean) {
+                chooseAction.isEnabled = enabled
+                chooseAction.alpha = 1f
+                if (enabled) {
+                    chooseAction.background = GradientDrawable(
+                        GradientDrawable.Orientation.TL_BR,
+                        intArrayOf(DeyttUi.BLUE, DeyttUi.BLUE_DEEP),
+                    ).apply { cornerRadius = dp(16).toFloat() }
+                    chooseAction.setTextColor(Color.WHITE)
+                    chooseAction.elevation = dp(2).toFloat()
+                } else {
+                    chooseAction.background = rounded(DeyttUi.SURFACE_2, 16f, DeyttUi.LINE)
+                    chooseAction.setTextColor(DeyttUi.MUTED)
+                    chooseAction.elevation = 0f
+                }
+            }
+            styleChooseAction(chosenRoute != null)
+
+            val routeList = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                background = rounded(DeyttUi.SURFACE, 20f, DeyttUi.LINE)
+            }
+
+            fun renderChoice(choice: DeyttRoute?) {
+                chosenRoute = choice
+                routeItems.forEach { (candidate, row) ->
+                    val selected = candidate.id == choice?.id
+                    row.background = if (selected) rounded(0xFFF0F2FF.toInt(), 15f, 0xFFD8DDFC.toInt()) else ColorDrawable(Color.TRANSPARENT)
+                    val title = if (candidate.engine == TunnelEngine.AMNEZIAWG) candidate.country else candidate.protocol.title
+                    val detail = if (candidate.engine == TunnelEngine.AMNEZIAWG) "${candidate.protocol.title} · ${candidate.protocol.detail}" else candidate.protocol.detail
+                    row.contentDescription = "$title, $detail${if (selected) ", выбран" else ""}"
+                }
+                chooseAction.text = choice?.let { "Использовать ${it.protocol.title}" } ?: "Выберите протокол"
+                chooseAction.contentDescription = chooseAction.text
+                styleChooseAction(choice != null)
+            }
+
+            routes.forEachIndexed { index, route ->
+                val rowTitle = if (route.engine == TunnelEngine.AMNEZIAWG) route.country else route.protocol.title
+                val rowDetail = if (route.engine == TunnelEngine.AMNEZIAWG) "${route.protocol.title} · ${route.protocol.detail}" else route.protocol.detail
+                val selected = route.id == chosenRoute?.id
+                val accent = when (route.protocol) {
+                    RouteProtocol.TROJAN -> DeyttUi.MINT
+                    RouteProtocol.HYSTERIA2 -> DeyttUi.SKY
+                    else -> DeyttUi.BLUE
+                }
+                val badgeFill = when (route.protocol) {
+                    RouteProtocol.TROJAN -> 0xFFEAF7F2.toInt()
+                    RouteProtocol.HYSTERIA2 -> 0xFFEAF5FA.toInt()
+                    else -> 0xFFF0F1FF.toInt()
+                }
+                val item = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    minimumHeight = dp(78)
+                    setPadding(dp(12), dp(9), dp(12), dp(9))
+                    background = if (selected) rounded(0xFFF0F2FF.toInt(), 15f, 0xFFD8DDFC.toInt()) else ColorDrawable(Color.TRANSPARENT)
+                    contentDescription = "$rowTitle, $rowDetail${if (selected) ", выбран" else ""}"
+                    isClickable = true
+                    isFocusable = true
+
+                    addView(mono("%02d".format(index + 1), 9f, accent, 650).apply {
+                        gravity = android.view.Gravity.CENTER
+                        background = rounded(badgeFill, 12f, badgeFill)
+                    }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
+
+                    addView(LinearLayout(this@ProtocolActivity).apply {
+                        orientation = LinearLayout.VERTICAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        addView(text(rowTitle, 16f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+                            maxLines = 1
+                            ellipsize = android.text.TextUtils.TruncateAt.END
+                        })
+                        addView(mono(rowDetail.uppercase(), 8f, DeyttUi.MUTED, 540).apply {
+                            setPadding(0, dp(4), 0, 0)
+                            maxLines = 1
+                            ellipsize = android.text.TextUtils.TruncateAt.END
+                        })
+                    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+                    val latency = mono("пинг", 8f, DeyttUi.SKY, 650).apply {
+                        gravity = android.view.Gravity.CENTER
+                        minHeight = dp(40)
+                        setPadding(dp(9), dp(8), dp(9), dp(8))
+                        background = rounded(DeyttUi.SURFACE_2, 12f, DeyttUi.LINE)
+                        contentDescription = "Проверить задержку маршрута $rowTitle"
+                        isClickable = true
+                        isFocusable = true
+                    }
+                    latency.setOnClickListener { measure(route, latency) }
+                    addView(latency, LinearLayout.LayoutParams(dp(68), dp(40)).apply { marginStart = dp(8) })
+
+                    setOnClickListener {
+                        if (selecting) return@setOnClickListener
+                        renderChoice(route)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
+                            animate().cancel()
+                            scaleX = .985f
+                            scaleY = .985f
+                            animate().scaleX(1f).scaleY(1f).setDuration(180L).start()
+                        }
+                        globe.focus(if (route.engine == TunnelEngine.AMNEZIAWG) route.id.uppercase() else route.countryCode)
+                    }
+                }
+                routeItems += route to item
+                routeList.addView(item)
+                if (index < routes.lastIndex) {
+                    routeList.addView(View(this).apply { setBackgroundColor(DeyttUi.LINE) },
+                        LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply {
+                            leftMargin = dp(64)
+                            rightMargin = dp(16)
+                        })
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
+                    item.alpha = 0f
+                    item.translationY = dp(8).toFloat()
+                    item.post {
+                        item.animate()
+                            .alpha(1f)
+                            .translationY(0f)
+                            .setStartDelay(index * 48L)
+                            .setDuration(360L)
+                            .setInterpolator(PathInterpolator(.22f, 1f, .36f, 1f))
+                            .start()
+                    }
+                }
+            }
+            renderChoice(chosenRoute)
+            root.addView(routeList)
+            anchoredAction = chooseAction
         }
-        present(root)
+        present(root, anchoredAction)
     }
 
     private fun measure(route: DeyttRoute, view: android.widget.TextView) {
@@ -103,6 +232,9 @@ class ProtocolActivity : Activity() {
                     view.text = label
                     view.isEnabled = true
                     view.alpha = 1f
+                    view.textSize = 9f
+                    view.setTextColor(if (label.contains("мс", ignoreCase = true)) DeyttUi.MINT else DeyttUi.CORAL)
+                    view.contentDescription = "Задержка маршрута ${route.country}: $label"
                 }
             }
         }

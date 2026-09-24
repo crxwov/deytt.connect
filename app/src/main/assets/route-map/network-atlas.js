@@ -773,9 +773,12 @@
         this.drawSphere(colors);
         context.save();
         context.beginPath();
-        context.arc(this.width / 2, this.height / 2, this.radius * this.zoom - .5, 0, TAU);
-        context.clip();
-        this.drawBorders(colors);
+        const clipRadius = this.radius * this.zoom - .5;
+        if (clipRadius > 0) {
+          context.arc(this.width / 2, this.height / 2, clipRadius, 0, TAU);
+          context.clip();
+          this.drawBorders(colors);
+        }
         context.restore();
       } finally {
         this.context = liveContext;

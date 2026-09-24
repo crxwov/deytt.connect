@@ -1,5 +1,6 @@
 (function () {
   const root = document.querySelector(".network-atlas");
+  document.documentElement.dataset.theme = "light";
   window.deyttMapRoute = "auto";
   window.deyttSetMapRoute = function (route) {
     window.deyttMapRoute = route;
@@ -8,6 +9,11 @@
       window.deyttMapAtlas.showcaseFocused = route !== "auto";
       window.deyttMapAtlas.start();
     }
+  };
+  window.deyttSetMapTraffic = function (enabled) {
+    if (!window.deyttMapAtlas) return;
+    window.deyttMapAtlas.animateTraffic = Boolean(enabled);
+    window.deyttMapAtlas.start();
   };
 
   window.DeyttAtlas.create(root, {
