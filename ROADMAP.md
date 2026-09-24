@@ -28,7 +28,7 @@ Deliver a cohesive native Android experience with genuinely continuous top-level
 
 ## Current State
 
-Task is ready for delivery on `/home/hackov/Documents/deytt-connect`, branch `main`, based on completed and pushed swipe commit `99d9034`. Do not stage or edit user-owned untracked `.agents/`. Physical A001 (`0022935AM001077`, 1080×2392, 120Hz) has the final clean debug APK installed. Normal launch shows the real idle VPN state. Reduced-motion is off; map origin is enabled. Final screenshots/UI trees are in `/tmp/final2-{home,routes,profile,settings}.{png,xml}`; final Home route swipe and return are verified.
+Implementation commit `0e1dcb7` is pushed to `origin/main`. Do not stage or edit user-owned untracked `.agents/`. Physical A001 (`0022935AM001077`, 1080×2392, 120Hz) has the final clean debug APK installed. Normal launch shows the real idle VPN state. Reduced-motion is off; map origin is enabled. Final screenshots/UI trees are in `/tmp/final2-{home,routes,profile,settings}.{png,xml}`; final Home route swipe and return are verified.
 
 ## Findings and Decisions
 
@@ -84,4 +84,4 @@ Task is ready for delivery on `/home/hackov/Documents/deytt-connect`, branch `ma
 
 ## Next Action and Resume Context
 
-Final state recorded after two clean A001 installs, four-tab screenshots, swipe/reversal, profile-footer visual fix, idle-state and crash-log checks, and `git diff --check`. Next: inspect the complete source diff and working tree, stage only project changes (exclude `.agents/`), commit on `main`, then push `origin/main`. Do not perform server pull/deploy or restart: no server/service files changed.
+Completed. Two clean A001 installs, four-tab screenshots, swipe/reversal, profile-footer visual fix, idle-state and crash-log checks, full diff review, and `git diff --check` passed. Implementation is committed and pushed on `main`; server pull/deploy and service restart are not applicable because no server/service files changed.
