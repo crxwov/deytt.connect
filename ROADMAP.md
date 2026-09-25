@@ -1,5 +1,7 @@
 # Roadmap — DEYTT Connect account and globe refinement
 
+Status: Completed
+
 ## Objective and Success Criteria
 Deliver a cohesive Android experience for globe routing, diagnostics, account linking, profile/subscription actions, and Telegram identity while preserving tunnel, subscription, and backend contracts.
 
@@ -11,7 +13,7 @@ Success: the globe focuses on real route locations, starts without fictitious tr
 - [x] 3. Implement route cards, flags/protocol marks, automatic and gesture-triggered diagnostics, profile purchase/extension entry points, refined settings, and language selection. RU/EN labels, IP-derived city names, and route diagnostics are verified on A001.
 - [x] 4. Implement Telegram bot pairing and authenticated Android profile bootstrap using expiring one-time challenges; add scoped tests. Client flow uses the Projects API, Android test/lint/assemble passed, backend focused tests passed.
 - [x] 5. Iterate build/install/run/screenshots on A001 after each group. Final RU/EN Home, Routes, Profile, and Settings captures reviewed; map, safe-area, flags, pings, CTAs, and settings labels are consistent.
-- [ ] 6. Review diffs, update both Roadmaps, validate, commit, push, pull affected backend services, restart and verify them.
+- [x] 6. Review diffs, update both Roadmaps, validate, commit, push, pull affected backend services, restart and verify them. Android commit `92e5546` and backend commit `3c00a98` are pushed; server pull/scoped sync completed, and `vpn-admin.service` plus `uebot.service` are active with API `/health` returning `{"status":"ok"}`.
 
 ## Current State
 - Android app is separate repo /home/hackov/Documents/deytt-connect, branch main; preserve its user-owned untracked .agents/.
@@ -46,6 +48,7 @@ Success: the globe focuses on real route locations, starts without fictitious tr
 ## Validation and Blockers
 - A001 detected, unlocked, and interactive. Baseline and ExteraGram audit complete. Latest `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` passed; APK installed via `adb install -r`; all four screens reviewed in RU/EN. Final captures: `/tmp/deytt-home-final-ru-r5.png`, `/tmp/deytt-routes-final-ru-r5.png`, `/tmp/deytt-profile-final-ru-r5.png`, `/tmp/deytt-settings-final-ru-r5.png`, with matching `*-en-r5.png` files. JS syntax and `git diff --check` passed. ARM64 artifact: `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
 - Backend pairing implementation is in the separate Projects repository; API and bot focused tests passed.
+- Server deployment reached `3c00a981`; seven API/bot files were synced after a clean fast-forward, both affected services restarted successfully, and `/health` returned `{"status":"ok"}` after Uvicorn opened its listener. The first immediate probe raced service readiness; the later check succeeded without code changes.
 
 ## Next Action and Resume Context
-- Review scoped diffs; commit and push Android and backend task files plus Roadmaps, excluding generated indexes and pre-existing `.agents/`. Then run the separately tracked server pull, scoped backup/sync, restart the two affected services, and verify API health.
+- Android visual QA, focused builds/tests, commits, pushes, scoped backend deployment, service restart, and API health verification are complete. Live Telegram account pairing and an active tunnel were not exercised.
