@@ -848,7 +848,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             setLineSpacing(host.dp(2).toFloat(), 1f)
         }
         sheet.addView(status)
-        val openBot = host.button("Открыть Telegram", secondary = true)
+        val openBot = host.button("Открыть бота и нажать Start", secondary = true)
         sheet.addView(openBot, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48),
         ).apply { topMargin = host.dp(13) })
@@ -866,7 +866,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             codeField.visibility = if (step == 1) View.VISIBLE else View.GONE
             openBot.visibility = if (step == 1) View.VISIBLE else View.GONE
             primary.text = when (step) {
-                0 -> "Продолжить"
+                0 -> "Получить код"
                 1 -> "Подтвердить код"
                 else -> "Готово"
             }
@@ -877,7 +877,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             }
             detail.text = when (step) {
                 0 -> "Укажи Telegram username. Бот подтвердит вход одноразовым кодом и подключит существующие профили."
-                1 -> "Нажми Start у бота. Код появится в Telegram и действует 5 минут."
+                1 -> "Проверь личный чат с ./c. Если кода нет, открой бота кнопкой ниже и нажми Start."
                 else -> ""
             }
         }
@@ -911,8 +911,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                                 botUrl = it.botUrl
                                 setStep(1)
                                 status.setTextColor(BLUE)
-                                status.text = "Ссылка действует 5 минут. Код отправит бот после нажатия Start."
-                                openBotLink()
+                                status.text = "Проверь Telegram: код действует 5 минут. Если сообщения нет, открой бота кнопкой ниже и нажми Start."
                             }.onFailure {
                                 primary.text = "Продолжить"
                                 status.setTextColor(DeyttUi.CORAL)

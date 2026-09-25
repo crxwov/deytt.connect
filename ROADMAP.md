@@ -1,54 +1,37 @@
-# Roadmap — DEYTT Connect account and globe refinement
-
-Status: Completed
+# Roadmap — Telegram pairing and map activity release
 
 ## Objective and Success Criteria
-Deliver a cohesive Android experience for globe routing, diagnostics, account linking, profile/subscription actions, and Telegram identity while preserving tunnel, subscription, and backend contracts.
-
-Success: the globe focuses on real route locations, starts without fictitious traffic, shows only consented ephemeral IP location, and animates only a selected/active route; app swipe and globe gestures do not conflict; routes, pings, icons, profile, subscription actions, and edge-to-edge surfaces are consistent; Telegram linking imports the authenticated user's existing profiles over a short-lived secure flow; physical-device screenshots and focused checks pass.
+Deliver the current Android UI and the pairing/map fixes as a versioned GitHub debug prerelease. Pair requests must not launch Telegram automatically; known Telegram chats receive the code directly; the explicit `/start` button remains a fallback. Traffic particles must follow recent device-wide RX/TX while the Android VPN transport is active and survive map gestures.
 
 ## Stages
-- [x] 1. Audit current physical UI, ExteraGram references, Android architecture, and bot/API contracts. Result: four A001 baseline screens, ExteraGram profile/settings interaction cues, verified API contract, and one-time Telegram pairing design.
-- [x] 2. Implement globe state/gesture/consent model and visual system. The focused atlas, route/traffic semantics, and status-bar starfield now share a coherent viewport; verified on A001.
-- [x] 3. Implement route cards, flags/protocol marks, automatic and gesture-triggered diagnostics, profile purchase/extension entry points, refined settings, and language selection. RU/EN labels, IP-derived city names, and route diagnostics are verified on A001.
-- [x] 4. Implement Telegram bot pairing and authenticated Android profile bootstrap using expiring one-time challenges; add scoped tests. Client flow uses the Projects API, Android test/lint/assemble passed, backend focused tests passed.
-- [x] 5. Iterate build/install/run/screenshots on A001 after each group. Final RU/EN Home, Routes, Profile, and Settings captures reviewed; map, safe-area, flags, pings, CTAs, and settings labels are consistent.
-- [x] 6. Review diffs, update both Roadmaps, validate, commit, push, pull affected backend services, restart and verify them. Android commit `92e5546` and backend commit `3c00a98` are pushed; server pull/scoped sync completed, and `vpn-admin.service` plus `uebot.service` are active with API `/health` returning `{"status":"ok"}`.
+- [x] 1. Trace pairing, service sampling, and map animation; confirm username submission was opening the bot and UID-only sampling used a 1.4 s visibility window.
+- [x] 2. Remove automatic Telegram launch and retain an explicit manual `/start` action with clear code instructions.
+- [x] 3. Sample device RX/TX only while the Android VPN transport is active, extend the visibility grace to 3.5 s, and add deterministic activity-window tests.
+- [x] 4. Build, lint, and run Android unit tests: `BUILD SUCCESSFUL`; 53 tests, 0 failures/errors.
+- [x] 5. Physical A001 QA on v0.8.2-debug: reconnected the stored RU→DE route, confirmed VPN transport, rotated map without switching tabs, and observed moving particles. Pairing with synthetic `@codexqa260926` stayed in-app and exposed only the manual bot button; no live code was sent. Four focused map swipes: 628 frames, 3 janky frames (0.48%), p95 25 ms.
+- [x] 6. Build v0.8.3-debug (versionCode 17), install on A001, verify `ВЕРСИЯ 0.8.3`, reconnect the stored RU→DE route, pan the map with particles visible, and verify APK v2 signature. ARM64 APK SHA-256: `0f30c18e53095cbccd56428144cb5b40e221ced20992d1f05dc76cdf8b8902b3`.
+- [ ] 7. Commit and push Android and backend changes; pull backend changes on production, restart the API service, and verify health.
+- [ ] 8. Publish the verified ARM64 APK as GitHub prerelease `v0.8.3-debug` and confirm the uploaded asset digest.
 
 ## Current State
-- Android app is separate repo /home/hackov/Documents/deytt-connect, branch main; preserve its user-owned untracked .agents/.
-- Server/control-plane repo is /home/hackov/Documents/Projects, branch main; preserve all existing untracked skills, indexes, roadmaps, and artifacts.
-- A001 (`0022935AM001077`) is attached via adb and unlocked. Latest screenshot after inset fix: /tmp/deytt-home-final-v6.png; previous settings/pairing screenshots: /tmp/deytt-settings-final-v6.png, /tmp/deytt-pair-dialog-v4.png. Baseline screenshots: /tmp/deytt-baseline-home.png, /tmp/deytt-baseline-routes.png, /tmp/deytt-baseline-profile.png, /tmp/deytt-baseline-settings.png. ExteraGram settings screenshot: /tmp/exteragram-settings-tab.png.
-- Code graph confirms native ViewPager2 screens and a WebView atlas. The atlas uses configured locations, renders a static selected route while disconnected, and keeps IP-derived coordinates in memory only; camera zoom is user-controlled. App chrome shows Telegram identity when linked and a `./c` fallback otherwise.
-- A001 previously showed stale Connected without VPN transport. Runtime state reconciliation now prevents that stale value from controlling connect/disconnect behavior or map traffic; no tunnel was started in this task.
-- First English device pass exposed mixed-language map labels and traffic units, Russian route-ping labels, and `RouteLatencyResult(...)` leaking into ping buttons. RU/EN formatting and map translation were added; route ping rendering was corrected to display the measured minimum milliseconds.
-- Latest RU/EN device pass verified all four main screens and automatic route pings. English Amnezia counts, idle map label leaders, primary CTA color, selected-route focus, four-flag Auto icon, Amnezia heading, and residual RU/EN labels were refined. IP-derived Russian cities now render in Cyrillic. The settings diagnostic action was shortened to avoid truncation.
-- After reinstall, Home showed that the selected Germany route still rendered as Auto: persisted IDs use `route:DE:VLESS`, while globe focus parsed only the final `VLESS` token. Route token parsing and regression cases for NL/DE/FI/RU/RU+DE/Auto are now included in the next build.
-- Route-ID parsing is now validated on A001: Germany focuses only Ufa and Frankfurt, and a static direct route appears without animated traffic. The first rendering reused the download pink/orange palette while disconnected, so idle selected routes now use a quieter cyan/teal stroke; final visual review is pending.
-- English screenshot review found one untranslated Amnezia section heading and the auto-pick icon still used a generic globe despite the user's request for flags. The heading is localized and auto-pick now uses a compact four-flag mark for NL/DE/FI/RU. Later review localized `Ufa` and shortened the settings row action; the final RU/EN screenshots show both fixes.
-- `test-android-apps` has no callable tool in the installed-tool registry; validation uses the physical A001 through adb and Gradle tests/lint.
-- Backend already provides `/api/tg/me`, `/api/tg/keys`, and hashed Telegram Mini App sessions. `/api/tg/keys` returns the current `happ.sub_url`; importing it through `SubscriptionClient` retrieves the sing-box subscription and AmneziaWG 1.5/3.1 profiles.
-- Stage 2 first group is implemented: the atlas removes idle mesh routes, shows only configured locations, focuses the server cluster, draws selected routes as static lines, and only animates when UID bytes increase while Android reports a VPN transport. Map touch ownership now blocks ViewPager interception. IP coordinates are memory-only; legacy persisted coordinates are cleared and first-run consent defaults off.
-- `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` passed with repository `.toolchain/jdk17` and `.toolchain/android-sdk`. An initial build using system Java 27 failed in Kotlin version parsing; no files were changed for that failure.
-- The latest arm64 APK installed over existing data and all four screens were inspected on A001 in RU and EN. No tunnel was started and no Telegram message was triggered.
+- Android repo: `/home/hackov/Documents/deytt-connect`, `main`; the working tree contains the task edits plus unrelated existing `.agents/`, `.codebase-memory/`, and completed Roadmap artifacts. Stage only named task files.
+- Backend repo: `/home/hackov/Documents/Projects`; use its active Roadmap and scoped `--mobile-pair-after-pull` deploy procedure.
+- A001 serial `0022935AM001077` remains connected by ADB. Do not clear app data or test with a real Telegram username/code.
+- GitHub currently has `v0.8.2-debug` only; current `main` contains later redesign commits. The next release is `v0.8.3-debug` and must include the current ARM64 APK.
 
 ## Findings and Decisions
-- Telegram usernames alone do not authenticate a user; pairing must prove control of the Telegram account via a bot deep-link/one-time challenge.
-- The app must not store IP-derived location coordinates or city. Store at most the user's consent choice; keep approved coarse location in memory for the session.
-- No actual bot message, key reset, payment, or VPN tunnel will be triggered during validation.
-- Keep route and profile data contracts unchanged unless the authenticated pairing endpoint requires a narrow addition.
+- Bot API delivery requires a previously known unique numeric chat ID; usernames only route requests. Failed/ambiguous delivery leaves the challenge available for the user's explicit `/start` fallback.
+- `TrafficStats.getUidRxBytes(Process.myUid())` misses other apps routed through Android's VPN; use total counters only while the VPN transport is active.
+- The release remains explicitly a debug prerelease, even though the tunnel was verified on the physical phone.
 
 ## Issues and Failed Attempts
-- The first ExteraGram screenshot showed the physical lock screen; the user unlocked the device and the profile/settings pages were inspected without opening chats. Device is now awake for A001 validation.
-
-## Important Files
-- Expected Android: MainActivity.kt, RouteGlobeView.kt, TopLevelPages.kt, DeyttUi.kt, profile/account stores, map JavaScript assets.
-- Expected backend: bot handler/DB, vpn-admin router/session repository, focused tests.
+- Package reinstall stopped the non-sticky VPN service; the stored RU→DE profile reconnected successfully without clearing data.
+- `test-android-apps` is installed as a vendored QA skill but exposes no dedicated callable MCP tool in this session; its adb UI-tree/screenshot procedure and performance `gfxinfo` workflow were used on the physical phone.
 
 ## Validation and Blockers
-- A001 detected, unlocked, and interactive. Baseline and ExteraGram audit complete. Latest `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` passed; APK installed via `adb install -r`; all four screens reviewed in RU/EN. Final captures: `/tmp/deytt-home-final-ru-r5.png`, `/tmp/deytt-routes-final-ru-r5.png`, `/tmp/deytt-profile-final-ru-r5.png`, `/tmp/deytt-settings-final-ru-r5.png`, with matching `*-en-r5.png` files. JS syntax and `git diff --check` passed. ARM64 artifact: `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
-- Backend pairing implementation is in the separate Projects repository; API and bot focused tests passed.
-- Server deployment reached `3c00a981`; seven API/bot files were synced after a clean fast-forward, both affected services restarted successfully, and `/health` returned `{"status":"ok"}` after Uvicorn opened its listener. The first immediate probe raced service readiness; the later check succeeded without code changes.
+- Android v0.8.3: `testDebugUnitTest`, `lintDebug`, and `assembleDebug` passed; 53 tests, 0 failures/errors. ARM64 APK versionCode 17/versionName 0.8.3; v2 signature verified.
+- Physical A001 (`0022935AM001077`): final APK installed; RU→DE tunnel reconnected and `VPN CONNECTED` confirmed; pan gesture left Home selected and traffic dots visible.
+- Backend `tests/test_mobile_pair.py`: 5 passed. Release publication and production API deployment remain pending.
 
 ## Next Action and Resume Context
-- Android visual QA, focused builds/tests, commits, pushes, scoped backend deployment, service restart, and API health verification are complete. Live Telegram account pairing and an active tunnel were not exercised.
+Local validation, v0.8.3 device install/route reconnect, and APK signature checks pass. Commit/push both repos, deploy the API change through the scoped server procedure, verify health, and publish the ARM64 GitHub prerelease.

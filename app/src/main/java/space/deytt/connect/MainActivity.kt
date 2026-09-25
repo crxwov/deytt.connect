@@ -21,7 +21,6 @@ import android.graphics.BitmapFactory
 import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
-import android.os.Process
 import android.os.SystemClock
 import android.net.TrafficStats
 import android.view.Gravity
@@ -86,32 +85,22 @@ class MainActivity : Activity() {
     private var accountGeneration = 0
     private val connectionProgressHandler = Handler(Looper.getMainLooper())
     private val trafficSampleHandler = Handler(Looper.getMainLooper())
-    private var previousUidRxBytes = -1L
-    private var previousUidTxBytes = -1L
-    private var trafficVisibleUntilElapsed = 0L
+    private val mapTrafficActivity = TrafficActivityWindow(TRAFFIC_VISIBILITY_WINDOW_MS)
     private val trafficSample = object : Runnable {
         override fun run() {
             if (!shouldSampleMapTraffic()) {
-                previousUidRxBytes = -1L
-                previousUidTxBytes = -1L
-                trafficVisibleUntilElapsed = 0L
+                mapTrafficActivity.reset()
                 if (::globe.isInitialized) globe.setTrafficEnabled(false)
                 return
             }
-            val rx = TrafficStats.getUidRxBytes(Process.myUid())
-            val tx = TrafficStats.getUidTxBytes(Process.myUid())
-            if (rx >= 0L && tx >= 0L) {
-                if (previousUidRxBytes >= 0L && previousUidTxBytes >= 0L &&
-                    (rx > previousUidRxBytes || tx > previousUidTxBytes)
-                ) {
-                    trafficVisibleUntilElapsed = SystemClock.elapsedRealtime() + TRAFFIC_VISIBILITY_WINDOW_MS
-                }
-                previousUidRxBytes = rx
-                previousUidTxBytes = tx
-            }
-            if (::globe.isInitialized) {
-                globe.setTrafficEnabled(SystemClock.elapsedRealtime() < trafficVisibleUntilElapsed)
-            }
+            // UID counters omit other apps routed through Android's system VPN.
+            // Device totals are sampled only while the VPN transport is active.
+            val trafficActive = mapTrafficActivity.observe(
+                TrafficStats.getTotalRxBytes(),
+                TrafficStats.getTotalTxBytes(),
+                SystemClock.elapsedRealtime(),
+            )
+            if (::globe.isInitialized) globe.setTrafficEnabled(trafficActive)
             trafficSampleHandler.postDelayed(this, TRAFFIC_SAMPLE_INTERVAL_MS)
         }
     }
@@ -1172,9 +1161,7 @@ class MainActivity : Activity() {
 
     private fun updateMapTrafficSampling() {
         trafficSampleHandler.removeCallbacks(trafficSample)
-        previousUidRxBytes = -1L
-        previousUidTxBytes = -1L
-        trafficVisibleUntilElapsed = 0L
+        mapTrafficActivity.reset()
         if (shouldSampleMapTraffic()) trafficSampleHandler.post(trafficSample)
         else if (::globe.isInitialized) globe.setTrafficEnabled(false)
     }
@@ -1453,7 +1440,7 @@ class MainActivity : Activity() {
         private const val KEY_CONNECTION_STARTED_ELAPSED = "connection_started_elapsed"
         private const val CONNECTION_PROGRESS_INTERVAL_MS = 1_000L
         private const val TRAFFIC_SAMPLE_INTERVAL_MS = 700L
-        private const val TRAFFIC_VISIBILITY_WINDOW_MS = 1_400L
+        private const val TRAFFIC_VISIBILITY_WINDOW_MS = 3_500L
     }
 }
 
