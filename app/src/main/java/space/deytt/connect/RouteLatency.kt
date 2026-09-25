@@ -40,6 +40,14 @@ object RouteLatency {
         }.getOrNull()
     }
 
+    fun measureTcp(target: LatencyTarget, timeoutMillis: Int = RouteProxyProbe.TIMEOUT_MILLIS): Long? {
+        val started = System.nanoTime()
+        return runCatching {
+            Socket().use { it.connect(InetSocketAddress(target.host, target.port), timeoutMillis) }
+            (System.nanoTime() - started) / 1_000_000
+        }.getOrNull()
+    }
+
     fun label(milliseconds: Long?): String = milliseconds?.let { "${it} мс" } ?: "нет ответа"
 
     private fun resolve(

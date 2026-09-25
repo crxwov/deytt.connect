@@ -53,8 +53,8 @@ object DeyttUi {
     const val MINT = 0xFF63E0B4.toInt()
     const val CORAL = 0xFFFF8295.toInt()
     const val AMBER = 0xFFFFC76E.toInt()
-    const val MAP_SURFACE = 0xFF0C1420.toInt()
-    const val MAP_LINE = 0xFF27384A.toInt()
+    const val MAP_SURFACE = 0xFF0A1018.toInt()
+    const val MAP_LINE = 0xFF202B38.toInt()
     const val SELECTED = 0xFF1C2940.toInt()
     const val SELECTED_LINE = 0xFF435A87.toInt()
     const val BLUE_SURFACE = 0xFF242C4A.toInt()
@@ -68,6 +68,9 @@ object DeyttUi {
     }
 
     private val typefaceCache = mutableMapOf<String, Typeface>()
+
+    private fun Activity.prefersReducedMotion(): Boolean =
+        getSharedPreferences("profile_settings", Context.MODE_PRIVATE).getBoolean("reduced_motion", false)
 
     fun Activity.screen(withBackdrop: Boolean = false): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -116,9 +119,9 @@ object DeyttUi {
                     setPadding(0, dp(5), 0, 0)
                 })
             }
-            addView(text(title, 24f, TEXT, Typeface.BOLD).apply {
+            addView(text(title, 23f, TEXT).apply {
                 letterSpacing = -.035f
-                typeface = typeface(FontFamily.INTER_TIGHT, 760)
+                typeface = typeface(FontFamily.INTER_TIGHT, 650)
                 setPadding(0, dp(5), 0, dp(7))
             })
         }
@@ -126,14 +129,16 @@ object DeyttUi {
     fun Activity.brandHeader(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(text("./c", 12f, Color.BLACK, Typeface.BOLD).apply {
+        addView(text("./c", 18f, TEXT).apply {
             gravity = Gravity.CENTER
-            typeface = typeface(FontFamily.JETBRAINS_MONO, 700)
-            background = rounded(Color.WHITE, 10f, Color.WHITE)
+            includeFontPadding = false
+            letterSpacing = -.09f
+            typeface = typeface(FontFamily.JETBRAINS_MONO, 520)
             contentDescription = "логотип ./c"
-        }, LinearLayout.LayoutParams(dp(38), dp(38)))
-        addView(text("deytt.connect", 15f, TEXT, Typeface.BOLD).apply {
-            setPadding(dp(10), 0, 0, 0)
+        }, LinearLayout.LayoutParams(dp(39), dp(34)))
+        addView(text("deytt.connect", 15f, TEXT).apply {
+            typeface = typeface(FontFamily.INTER_TIGHT, 580)
+            setPadding(dp(5), 0, 0, 0)
             letterSpacing = -.02f
         })
         addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
@@ -147,7 +152,7 @@ object DeyttUi {
             text = value
             textSize = size
             setTextColor(color)
-            typeface = typeface(FontFamily.INTER_TIGHT, if (style == Typeface.BOLD) 720 else 470)
+            typeface = typeface(FontFamily.INTER_TIGHT, if (style == Typeface.BOLD) 650 else 470)
             includeFontPadding = false
         }
 
@@ -171,39 +176,24 @@ object DeyttUi {
         background = rounded(MAP_SURFACE, 24f, MAP_LINE)
         clipToOutline = true
         addView(map, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        addView(mono("СЕТЬ  /  04 УЗЛА", 8f, 0xFFB3C5E2.toInt(), 600).apply {
-            setPadding(dp(10), dp(7), dp(10), dp(7))
-            background = rounded(0xD9111823.toInt(), 8f, 0xFF35475F.toInt())
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(27), Gravity.TOP or Gravity.START).apply {
-            leftMargin = dp(12)
-            topMargin = dp(12)
-        })
-        addView(mono("EUROPE  ·  PRIVATE", 7.5f, 0xFF90A2BC.toInt(), 560).apply {
-            setPadding(dp(10), dp(7), dp(10), dp(7))
-            background = rounded(0xB90A101A.toInt(), 8f, 0xFF2A394C.toInt())
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(27), Gravity.BOTTOM or Gravity.END).apply {
-            rightMargin = dp(12)
-            bottomMargin = dp(10)
-        })
     }
 
     fun Activity.button(label: String, secondary: Boolean = false): TextView =
-        text(label, 15f, if (secondary) TEXT else Color.WHITE, Typeface.BOLD).apply {
+        text(label, 14f, if (secondary) TEXT else Color.WHITE, Typeface.BOLD).apply {
+            typeface = typeface(FontFamily.INTER_TIGHT, if (secondary) 560 else 620)
             gravity = Gravity.CENTER
-            minHeight = dp(54)
-            setPadding(dp(18), dp(13), dp(18), dp(13))
+            minHeight = dp(52)
+            setPadding(dp(18), dp(12), dp(18), dp(12))
             background = if (secondary) rounded(SURFACE_2, 17f, LINE) else GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
                 intArrayOf(BLUE, BLUE_DEEP),
-            ).apply { cornerRadius = dp(17).toFloat() }
-            elevation = if (secondary) 0f else dp(5).toFloat()
+            ).apply { cornerRadius = dp(15).toFloat() }
+            elevation = if (secondary) 0f else dp(2).toFloat()
             isClickable = true
             isFocusable = true
             contentDescription = label
             foreground = ripple(17f)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled() && !prefersReducedMotion()) {
                 val target = this
                 stateListAnimator = StateListAnimator().apply {
                     addState(intArrayOf(android.R.attr.state_pressed), scaleAnimator(target, .98f, 100))
@@ -238,7 +228,9 @@ object DeyttUi {
         setPadding(if (emphasis) dp(12) else dp(2), dp(9), if (emphasis) dp(10) else dp(2), dp(9))
         background = if (emphasis) rounded(SELECTED, 15f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
         if (leading.isNotBlank()) {
-            addView(text(leading, 11f, SKY, Typeface.BOLD).apply {
+            val isCountryFlag = leading.any { it.code in 0xD800..0xDBFF }
+            addView(text(leading, if (isCountryFlag) 20f else 11f, if (isCountryFlag) TEXT else SKY,
+                if (isCountryFlag) Typeface.NORMAL else Typeface.BOLD).apply {
                 gravity = Gravity.CENTER
                 letterSpacing = .025f
                 background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f, if (emphasis) 0xFF3F5985.toInt() else LINE)
@@ -270,7 +262,7 @@ object DeyttUi {
         isClickable = interactive
         isFocusable = interactive
         if (interactive) foreground = ripple(if (emphasis) 15f else 12f)
-        if (interactive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
+        if (interactive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled() && !prefersReducedMotion()) {
             val target = this
             stateListAnimator = StateListAnimator().apply {
                 addState(intArrayOf(android.R.attr.state_pressed), ObjectAnimator.ofFloat(target, "alpha", 1f, .76f).setDuration(90))
@@ -418,8 +410,9 @@ object DeyttUi {
 
         private fun updateIndicator() {
             if (width <= 0) return
-            val cellWidth = width / 4f
-            indicator.translationX = (cellWidth * (pagePosition + .5f) - indicator.width / 2f)
+            val horizontalInset = activity.dp(8).toFloat()
+            val cellWidth = (width - horizontalInset * 2f) / 4f
+            indicator.translationX = horizontalInset + cellWidth * (pagePosition + .5f) - indicator.width / 2f
         }
 
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

@@ -208,7 +208,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                     countryGroup,
                     first.country,
                     protocols,
-                    code,
+                    first.flag,
                     countryRoutes,
                     countryRoutes.any { it.id == selectedId },
                 ) {
@@ -404,6 +404,35 @@ internal class PrimaryPages(private val host: MainActivity) {
         })
         root.addView(spacer(20, host))
         root.addView(host.sectionLabel("подключение"))
+        val probeMethod = RouteProbePreferences.method(host)
+        val probeRow = host.row(
+            "Проверка маршрута",
+            "Via Proxy · Double · 10 с · ${probeMethod.title}",
+            "↻",
+            "настроить",
+        ).apply {
+            val details = getChildAt(1) as? LinearLayout
+            val summary = details?.getChildAt(1) as? TextView
+            setOnClickListener {
+                val methods = RouteProbeMethod.values()
+                AlertDialog.Builder(host)
+                    .setTitle("Метод проверки через прокси")
+                    .setSingleChoiceItems(
+                        arrayOf("HEAD · короткий запрос", "GET · запрос с ответом"),
+                        methods.indexOf(RouteProbePreferences.method(host)),
+                    ) { dialog, which ->
+                        methods.getOrNull(which)?.let { method ->
+                            RouteProbePreferences.saveMethod(host, method)
+                            summary?.text = "Via Proxy · Double · 10 с · ${method.title}"
+                            contentDescription = "Проверка маршрута: Via Proxy, Double, тайм-аут 10 секунд, метод ${method.title}"
+                        }
+                        dialog.dismiss()
+                    }
+                    .setNegativeButton("Закрыть", null)
+                .show()
+            }
+        }
+        root.addView(probeRow)
         root.addView(host.row("Настройки VPN Android", "Системные разрешения и блокировка", "↗", "открыть").apply {
             setOnClickListener {
                 runCatching { host.startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) }

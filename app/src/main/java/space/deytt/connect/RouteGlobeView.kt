@@ -11,6 +11,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.JavascriptInterface
 import android.widget.FrameLayout
 import java.io.ByteArrayInputStream
 import org.json.JSONObject
@@ -25,6 +26,16 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var touchStartY = 0f
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val atlas: WebView
+    var onMapNodeTapped: ((String) -> Unit)? = null
+
+    private val nodeTapBridge = object {
+        @JavascriptInterface
+        fun onNodeTap(code: String) {
+            val node = code.lowercase()
+            if (node !in setOf("nl", "de", "fi", "ru", "user")) return
+            post { onMapNodeTapped?.invoke(node) }
+        }
+    }
 
     init {
         clipChildren = false
@@ -52,7 +63,11 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                 allowContentAccess = false
                 mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             }
+            addJavascriptInterface(nodeTapBridge, "DeyttAtlasBridge")
             webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean =
+                    request.url.scheme != "https" || request.url.host != ASSET_HOST
+
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest): WebResourceResponse =
                     localResponse(request.url)
 
@@ -173,7 +188,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             else -> "показаны точки Амстердам, Франкфурт, Хельсинки и Санкт-Петербург"
         }
         val origin = networkLocation?.let { " Точка входа — ${it.placeLabel}, приблизительно по IP; адрес IP не сохраняется." }.orEmpty()
-        return "Карта сети DEYTT; $destination.$origin Поворот и масштаб — жестами двумя пальцами. Горизонтальный свайп переключает вкладку."
+        return "Карта сети DEYTT; $destination.$origin Нажмите точку, чтобы выбрать выход и протокол. Поворот и масштаб — жестами двумя пальцами. Горизонтальный свайп переключает вкладку."
     }
 
     private fun localResponse(uri: Uri): WebResourceResponse {

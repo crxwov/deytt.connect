@@ -3,6 +3,11 @@
   document.documentElement.dataset.theme = "dark";
   window.deyttMapRoute = "auto";
   window.deyttMapUserLocation = null;
+  window.deyttMapNodeTapped = function (key) {
+    if (window.DeyttAtlasBridge && typeof window.DeyttAtlasBridge.onNodeTap === "function") {
+      window.DeyttAtlasBridge.onNodeTap(String(key || ""));
+    }
+  };
   window.deyttSetMapRoute = function (route) {
     window.deyttMapRoute = route;
     if (window.deyttMapAtlas) {

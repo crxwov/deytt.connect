@@ -2,17 +2,23 @@ package space.deytt.connect
 
 import android.app.Activity
 import android.animation.ValueAnimator
+import android.app.AlertDialog
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.net.VpnService
 import android.view.View
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.view.animation.PathInterpolator
 import android.os.Build
+import androidx.core.content.ContextCompat
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
@@ -29,6 +35,88 @@ import space.deytt.connect.DeyttUi.rounded
 class ProtocolActivity : Activity() {
     private var latencyGeneration = 0
     private var selecting = false
+    private var pendingProbeRequestId: String? = null
+    private var pendingProbeAuthorizationAction: (() -> Unit)? = null
+    private var chooseButton: TextView? = null
+    private var compareButton: TextView? = null
+    private val latencyViews = mutableMapOf<String, TextView>()
+    private val routeProbeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val event = intent ?: return
+            if (event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID) != pendingProbeRequestId) return
+            val tag = event.getStringExtra(RouteProbeClient.EXTRA_ROUTE_TAG).orEmpty()
+            val view = latencyViews[tag]
+            val elapsed = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
+            val error = event.getStringExtra(RouteProbeClient.EXTRA_ERROR)
+            if (view != null) {
+                when {
+                    elapsed >= 0L -> {
+                        view.text = "$elapsed мс"
+                        view.setTextColor(DeyttUi.MINT)
+                        view.contentDescription = "Задержка через proxy ${view.tag}: $elapsed миллисекунд"
+                    }
+                    !error.isNullOrBlank() -> {
+                        view.text = if (error.contains("10 с")) "тайм-аут" else "нет ответа"
+                        view.setTextColor(DeyttUi.CORAL)
+                        view.contentDescription = "Проверка через прокси: $error"
+                    }
+                }
+                view.isEnabled = true
+                view.alpha = 1f
+            } else if (!error.isNullOrBlank() && tag.isBlank()) {
+                AlertDialog.Builder(this@ProtocolActivity)
+                    .setMessage(error)
+                    .setPositiveButton("Понятно", null)
+                    .show()
+            }
+            if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
+                pendingProbeRequestId = null
+                compareButton?.apply {
+                    text = "Сравнить протоколы"
+                    isEnabled = true
+                    alpha = 1f
+                }
+                chooseButton?.isEnabled = !selecting
+            }
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(
+            this,
+            routeProbeReceiver,
+            IntentFilter(RouteProbeClient.ACTION_RESULT),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+    }
+
+    @Deprecated("Android VPN permission API")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != ROUTE_PROBE_PERMISSION_REQUEST) return
+        val action = pendingProbeAuthorizationAction
+        pendingProbeAuthorizationAction = null
+        if (resultCode == RESULT_OK && !isFinishing && !isDestroyed) action?.invoke()
+    }
+
+    override fun onStop() {
+        if (pendingProbeRequestId != null && ConnectVpnService.isRouteProbeRunning()) {
+            runCatching {
+                startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_CANCEL_ROUTE_PROBE))
+            }
+            pendingProbeRequestId = null
+            latencyViews.values.forEach { view ->
+                view.text = "пинг"
+                view.isEnabled = true
+                view.alpha = 1f
+            }
+            compareButton?.apply { text = "Сравнить протоколы"; isEnabled = true; alpha = 1f }
+            chooseButton?.isEnabled = !selecting
+        }
+        runCatching { unregisterReceiver(routeProbeReceiver) }
+        super.onStop()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,10 +139,29 @@ class ProtocolActivity : Activity() {
         root.addView(header(if (code == "AWG") "AmneziaWG" else "маршрут", title, true))
         root.addView(spacer(5, this))
         val globe = RouteGlobeView(this)
+        globe.onMapNodeTapped = { node ->
+            if (node == "user") {
+                AlertDialog.Builder(this)
+                    .setMessage("Точка входа показывает приблизительный регион этого устройства; выбрать её как VPN-выход нельзя.")
+                    .setPositiveButton("Понятно", null)
+                    .show()
+            } else {
+                val tappedCountry = when (node) {
+                    "nl" -> "NL"
+                    "de" -> "DE"
+                    "fi" -> "FI"
+                    "ru" -> "RU"
+                    else -> null
+                }
+                if (tappedCountry != null && tappedCountry != code) {
+                    startActivity(Intent(this, ProtocolActivity::class.java).putExtra("country", tappedCountry))
+                }
+            }
+        }
         globe.focus(if (code == "AWG") "AUTO" else code, animate = false)
         root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(232)))
         root.addView(spacer(15, this))
-        root.addView(sectionLabel(if (code == "AWG") "серверы · задержка" else "выберите узел · измерить пинг"))
+        root.addView(sectionLabel(if (code == "AWG") "серверы · tcp-проверка" else "выход · via proxy"))
         var anchoredAction: TextView? = null
         if (routes.isEmpty()) {
             root.addView(note("Профили этой версии пока не загружены. Обновите подписку, чтобы загрузить серверы.", DeyttUi.AMBER))
@@ -64,6 +171,15 @@ class ProtocolActivity : Activity() {
         } else {
             var chosenRoute = routes.firstOrNull { it.id == selectedId }
             val routeItems = mutableListOf<Pair<DeyttRoute, LinearLayout>>()
+            val probeRoutes = routes.filter { it.engine == TunnelEngine.LIBBOX }
+            if (probeRoutes.size > 1) {
+                compareButton = button("Сравнить протоколы", secondary = true).apply {
+                    textSize = 13f
+                    setOnClickListener { compareProtocols(probeRoutes) }
+                }
+                root.addView(compareButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)))
+                root.addView(spacer(9, this))
+            }
             val chooseAction = button(chosenRoute?.let { "Использовать ${it.protocol.title}" } ?: "Выберите протокол").apply {
                 isEnabled = chosenRoute != null
                 contentDescription = text
@@ -75,6 +191,7 @@ class ProtocolActivity : Activity() {
                     select(route)
                 }
             }
+            chooseButton = chooseAction
 
             fun styleChooseAction(enabled: Boolean) {
                 chooseAction.isEnabled = enabled
@@ -165,13 +282,15 @@ class ProtocolActivity : Activity() {
                         isClickable = true
                         isFocusable = true
                     }
+                    latency.tag = route.id
+                    latencyViews[if (route.engine == TunnelEngine.LIBBOX) route.configTag else route.id] = latency
                     latency.setOnClickListener { measure(route, latency) }
                     addView(latency, LinearLayout.LayoutParams(dp(68), dp(40)).apply { marginStart = dp(8) })
 
                     setOnClickListener {
                         if (selecting) return@setOnClickListener
                         renderChoice(route)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && motionEnabled()) {
                             animate().cancel()
                             scaleX = .985f
                             scaleY = .985f
@@ -189,7 +308,7 @@ class ProtocolActivity : Activity() {
                             rightMargin = dp(16)
                         })
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled()) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && motionEnabled()) {
                     item.alpha = 0f
                     item.translationY = dp(8).toFloat()
                     item.post {
@@ -210,33 +329,155 @@ class ProtocolActivity : Activity() {
         present(root, anchoredAction)
     }
 
-    private fun measure(route: DeyttRoute, view: android.widget.TextView) {
+    private fun motionEnabled(): Boolean =
+        (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()) &&
+            !getSharedPreferences("profile_settings", MODE_PRIVATE).getBoolean("reduced_motion", false)
+
+    private fun requestProbeAuthorization(afterGrant: () -> Unit): Boolean {
+        val permission = VpnService.prepare(this) ?: return false
+        AlertDialog.Builder(this)
+            .setTitle("Разрешить диагностику?")
+            .setMessage("Android попросит системное разрешение VPN для проверки маршрутов. Проверка использует временный локальный прокси и не запускает VPN-туннель.")
+            .setNegativeButton("Отмена", null)
+            .setPositiveButton("Продолжить") { _, _ ->
+                pendingProbeAuthorizationAction = afterGrant
+                startActivityForResult(permission, ROUTE_PROBE_PERMISSION_REQUEST)
+            }
+            .show()
+        return true
+    }
+
+    private fun compareProtocols(routes: List<DeyttRoute>) {
+        if (ConnectVpnService.isRouteProbeRunning()) return
+        if (ConnectVpnService.isRunning() || AwgTunnelController.isRunning()) {
+            AlertDialog.Builder(this)
+                .setMessage("Отключите VPN, чтобы сравнить отдельные выходы. Проверка активного маршрута остаётся доступна у его строки.")
+                .setPositiveButton("Понятно", null)
+                .show()
+            return
+        }
+        val config = SubscriptionStore(this).readCurrent() ?: return
+        val candidates = routes.filter { it.engine == TunnelEngine.LIBBOX && it.configTag.isNotBlank() }
+        if (candidates.size < 2) return
+        if (requestProbeAuthorization { compareProtocols(routes) }) return
+        val method = RouteProbePreferences.method(this)
+        candidates.forEach { route ->
+            latencyViews[route.configTag]?.apply {
+                text = "проверка…"
+                isEnabled = false
+                alpha = .68f
+                setTextColor(DeyttUi.SKY)
+            }
+        }
+        compareButton?.apply {
+            text = "Сравниваю…"
+            isEnabled = false
+            alpha = .7f
+        }
+        chooseButton?.isEnabled = false
+        try {
+            pendingProbeRequestId = RouteProbeClient.start(
+                this,
+                config,
+                candidates.map(DeyttRoute::configTag),
+                method,
+            )
+        } catch (_: Throwable) {
+            candidates.forEach { route ->
+                latencyViews[route.configTag]?.apply { text = "нет ответа"; isEnabled = true; alpha = 1f }
+            }
+            compareButton?.apply { text = "Сравнить протоколы"; isEnabled = true; alpha = 1f }
+            chooseButton?.isEnabled = !selecting
+            AlertDialog.Builder(this)
+                .setMessage("Не удалось запустить проверку маршрутов.")
+                .setPositiveButton("Понятно", null)
+                .show()
+        }
+    }
+
+    private fun measure(route: DeyttRoute, view: TextView) {
+        if (ConnectVpnService.isRouteProbeRunning()) return
         val generation = ++latencyGeneration
         val config = SubscriptionStore(this).readCurrent() ?: return
-        val awg = AwgProfileStore(this)
-        val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) awg.read(route.id) else null
-        val target = RouteLatency.target(config, route, awgConfig)
-        view.text = "проверяю…"
+        val selected = SelectedRouteStore(this).read()
+        val active = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
+        val method = RouteProbePreferences.method(this)
+        if (!active && route.engine == TunnelEngine.LIBBOX && requestProbeAuthorization { measure(route, view) }) return
+        view.text = "проверка…"
         view.isEnabled = false
         view.alpha = .65f
-        if (target == null) {
+
+        if (active && route.id != selected.id) {
+            view.text = "отключите VPN"
+            view.isEnabled = true
+            view.alpha = 1f
+            view.contentDescription = "Чтобы проверить другой выход, сначала отключите текущий VPN"
+            return
+        }
+
+        if (active && route.engine == TunnelEngine.LIBBOX &&
+            !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName)
+        ) {
             view.text = "нет ответа"
             view.isEnabled = true
             view.alpha = 1f
+            view.contentDescription = "Туннель исключает приложение из маршрута, поэтому измерение не запущено"
             return
         }
-        LatencyExecutor.pool.execute {
-            val label = RouteLatency.label(RouteLatency.measure(target))
-            runOnUiThread {
-                if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
-                    view.text = label
-                    view.isEnabled = true
-                    view.alpha = 1f
-                    view.textSize = 9f
-                    view.setTextColor(if (label.contains("мс", ignoreCase = true)) DeyttUi.MINT else DeyttUi.CORAL)
-                    view.contentDescription = "Задержка маршрута ${route.country}: $label"
+
+        if (active || route.engine == TunnelEngine.AMNEZIAWG) {
+            val target = if (!active && route.engine == TunnelEngine.AMNEZIAWG) {
+                RouteLatency.target(config, route, AwgProfileStore(this).read(route.id))
+            } else null
+            if (!active && target == null) {
+                view.text = "нет ответа"
+                view.isEnabled = true
+                view.alpha = 1f
+                view.contentDescription = "Не удалось определить сервер AmneziaWG для TCP-проверки"
+                return
+            }
+            LatencyExecutor.pool.execute {
+                val elapsed = if (active) {
+                    runCatching { RouteProxyProbe.measureThroughSystemVpn(method) }.getOrNull()
+                } else {
+                    target?.let { RouteLatency.measureTcp(it) }
+                }
+                runOnUiThread {
+                    if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
+                        view.text = elapsed?.let { "$it мс" } ?: "нет ответа"
+                        view.isEnabled = true
+                        view.alpha = 1f
+                        view.textSize = 9f
+                        view.setTextColor(if (elapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
+                        view.contentDescription = when {
+                            elapsed == null -> "Проверка маршрута не ответила за 10 секунд"
+                            route.engine == TunnelEngine.AMNEZIAWG && !active ->
+                                "TCP-подключение до сервера AmneziaWG заняло $elapsed миллисекунд; HTTPS через прокси не проверялся"
+                            else -> "Два HTTPS-запроса ${method.wireValue} через активный VPN заняли $elapsed миллисекунд"
+                        }
+                    }
                 }
             }
+            return
+        }
+
+        try {
+            pendingProbeRequestId = RouteProbeClient.start(this, config, listOf(route.configTag), method)
+            view.text = "proxy…"
+            view.isEnabled = true
+            view.alpha = 1f
+            view.setTextColor(DeyttUi.SKY)
+            view.contentDescription = "Два HTTPS-запроса ${method.wireValue} через выбранный выход, тайм-аут 10 секунд"
+            compareButton?.apply { text = "Проверяю…"; isEnabled = false; alpha = .7f }
+            chooseButton?.isEnabled = false
+        } catch (_: Throwable) {
+            view.text = "ошибка"
+            view.isEnabled = true
+            view.alpha = 1f
+            view.setTextColor(DeyttUi.CORAL)
+            view.contentDescription = "Не удалось запустить проверку через прокси"
+            compareButton?.apply { text = "Сравнить протоколы"; isEnabled = true; alpha = 1f }
+            chooseButton?.isEnabled = !selecting
         }
     }
 
@@ -246,6 +487,29 @@ class ProtocolActivity : Activity() {
     }
 
     private fun select(route: DeyttRoute) {
+        if (ConnectVpnService.isRunning() || AwgTunnelController.isRunning()) {
+            fun resumeSelection() {
+                selecting = false
+                chooseButton?.isEnabled = true
+            }
+            val confirmation = AlertDialog.Builder(this)
+                .setTitle("Сменить VPN-выход?")
+                .setMessage("Текущее соединение остановится. После выбора запустите подключение снова, чтобы применить новый маршрут.")
+                .setNegativeButton("Оставить подключение") { _, _ -> resumeSelection() }
+                .setPositiveButton("Остановить и сменить") { _, _ -> applySelection(route) }
+                .create()
+            confirmation.setOnCancelListener { resumeSelection() }
+            confirmation.show()
+            return
+        }
+        applySelection(route)
+    }
+
+    private fun applySelection(route: DeyttRoute) {
+        if (ConnectVpnService.isRouteProbeRunning()) {
+            startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_CANCEL_ROUTE_PROBE))
+            pendingProbeRequestId = null
+        }
         if (ConnectVpnService.isRunning()) {
             startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
         }
@@ -257,5 +521,9 @@ class ProtocolActivity : Activity() {
         SelectedRouteStore(this).save(route)
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
         finish()
+    }
+
+    private companion object {
+        const val ROUTE_PROBE_PERMISSION_REQUEST = 704
     }
 }

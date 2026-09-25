@@ -7,6 +7,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.graphics.drawable.Icon
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
@@ -44,6 +46,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     companion object {
         const val ACTION_START = "space.deytt.connect.action.START"
         const val ACTION_STOP = "space.deytt.connect.action.STOP"
+        const val ACTION_ROUTE_PROBE = "space.deytt.connect.action.ROUTE_PROBE"
+        const val ACTION_CANCEL_ROUTE_PROBE = "space.deytt.connect.action.CANCEL_ROUTE_PROBE"
         const val ACTION_RESTORE_NOTIFICATION = "space.deytt.connect.action.RESTORE_NOTIFICATION"
         const val ACTION_STATUS = "space.deytt.connect.action.STATUS"
         const val EXTRA_STATUS = "status"
@@ -66,23 +70,57 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         @Volatile
         private var runtimeRunning = false
 
+        @Volatile
+        private var routeProbeRunning = false
+
         fun isRunning(): Boolean = runtimeRunning
+        fun isRouteProbeRunning(): Boolean = routeProbeRunning
     }
 
     private val executor = Executors.newSingleThreadExecutor()
     private var commandServer: CommandServer? = null
     private var tunnel: ParcelFileDescriptor? = null
     private var started = false
+    private var routeProbeOnly = false
     private var notificationText = "Запуск deytt./connect"
     private val operation = AtomicLong(0)
     private val networkBridge by lazy { AndroidNetworkBridge(this) }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_RESTORE_NOTIFICATION) {
-            if (started && runtimeRunning) startForegroundCompat(notificationText)
+            if (started && (runtimeRunning || routeProbeOnly)) startForegroundCompat(notificationText)
+            return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_ROUTE_PROBE) {
+            if (!started && !runtimeRunning) {
+                try {
+                    startForegroundCompat("Подготавливаем проверку маршрутов")
+                } catch (error: Throwable) {
+                    Log.e(TAG, "Unable to enter foreground for route probe", error)
+                    sendRouteProbeResult(
+                        intent.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty(),
+                        "",
+                        null,
+                        "Не удалось запустить системный сервис проверки маршрутов",
+                        complete = true,
+                    )
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
+            }
+            beginRouteProbe(intent, startId)
+            return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_CANCEL_ROUTE_PROBE) {
+            if (routeProbeOnly) cancelRouteProbe(startId)
+            else if (!started) stopSelf(startId)
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_STOP) {
+            if (routeProbeOnly) {
+                cancelRouteProbe(startId)
+                return START_NOT_STICKY
+            }
             operation.incrementAndGet()
             publishStatus(VpnPhase.STOPPING, "Отключаем соединение…")
             stopTunnel()
@@ -112,9 +150,197 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
 
     override fun onDestroy() {
         operation.incrementAndGet()
-        stopTunnel()
+        if (routeProbeOnly) closeRouteProbeCore() else stopTunnel()
         executor.shutdownNow()
         super.onDestroy()
+    }
+
+    private fun beginRouteProbe(intent: Intent, startId: Int) {
+        val requestId = intent.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty()
+        val config = intent.getStringExtra("config")
+        val routeTags = intent.getStringArrayListExtra("route_tags").orEmpty()
+        val method = runCatching {
+            RouteProbeMethod.valueOf(intent.getStringExtra("method") ?: RouteProbeMethod.HEAD.name)
+        }.getOrDefault(RouteProbeMethod.HEAD)
+        if (started || runtimeRunning) {
+            sendRouteProbeResult(requestId, "", null, "Сначала отключите активный VPN", complete = true)
+            return
+        }
+        if (AwgTunnelController.isRunning()) {
+            sendRouteProbeResult(requestId, "", null, "Сначала отключите активный VPN", complete = true)
+            stopSelf(startId)
+            return
+        }
+        if (isUpstreamVpnActive()) {
+            sendRouteProbeResult(requestId, "", null, "Отключите VPN другого приложения для точного замера", complete = true)
+            stopSelf(startId)
+            return
+        }
+        if (requestId.isBlank() || config.isNullOrBlank() || routeTags.isEmpty()) {
+            sendRouteProbeResult(requestId, "", null, "Не удалось подготовить проверку", complete = true)
+            stopSelf(startId)
+            return
+        }
+
+        started = true
+        routeProbeOnly = true
+        runtimeRunning = false
+        routeProbeRunning = true
+        val operationId = operation.incrementAndGet()
+        try {
+            startForegroundCompat("Проверяем маршрут через прокси…")
+            executor.execute { runRouteProbe(requestId, config, routeTags, method, operationId, startId) }
+        } catch (error: Throwable) {
+            sendRouteProbeResult(requestId, "", null, "Не удалось запустить проверку", complete = true)
+            closeRouteProbeCore()
+            started = false
+            routeProbeOnly = false
+            routeProbeRunning = false
+            stopForegroundCompat()
+            stopSelf(startId)
+        }
+    }
+
+    private fun runRouteProbe(
+        requestId: String,
+        config: String,
+        routeTags: List<String>,
+        method: RouteProbeMethod,
+        operationId: Long,
+        startId: Int,
+    ) {
+        var stage = "profile validation"
+        try {
+            ProfileValidator.validate(config)
+            stage = "loopback proxy setup"
+            val session = RouteProxyProbe.newSession()
+            stage = "libbox setup"
+            setupLibbox()
+            stage = "command server start"
+            val server = CommandServer(this, this)
+            commandServer = server
+            server.start()
+            routeTags.forEach { tag ->
+                if (operation.get() != operationId || !routeProbeOnly) return@forEach
+                var routeStage = "route config"
+                try {
+                    val probeConfig = session.configuration(config, tag)
+                    routeStage = "route reload"
+                    server.startOrReloadService(
+                        runtimeConfig(probeConfig),
+                        OverrideOptions().apply { autoRedirect = false },
+                    )
+                    if (operation.get() != operationId || !routeProbeOnly) return@forEach
+                    routeStage = "HTTP proxy probe"
+                    val elapsed = RouteProxyProbe.measureProxy(session, method)
+                    sendRouteProbeResult(requestId, tag, elapsed, null)
+                } catch (error: Throwable) {
+                    Log.w(TAG, "Route proxy probe failed at $routeStage (${probeFailureKind(error)})")
+                    sendRouteProbeResult(requestId, tag, null, routeProbeError(error))
+                }
+            }
+        } catch (error: Throwable) {
+            Log.w(TAG, "Route proxy probe failed at $stage (${probeFailureKind(error)})")
+            routeTags.forEach { tag ->
+                sendRouteProbeResult(requestId, tag, null, routeProbeError(error))
+            }
+        } finally {
+            sendRouteProbeResult(requestId, "", null, null, complete = true)
+            closeRouteProbeCore()
+            started = false
+            runtimeRunning = false
+            routeProbeOnly = false
+            routeProbeRunning = false
+            stopForegroundCompat()
+            stopSelf(startId)
+        }
+    }
+
+    private fun cancelRouteProbe(startId: Int) {
+        operation.incrementAndGet()
+        routeProbeRunning = false
+        closeRouteProbeCore()
+        started = false
+        routeProbeOnly = false
+        stopForegroundCompat()
+        stopSelf(startId)
+    }
+
+    private fun closeRouteProbeCore() {
+        runCatching { commandServer?.closeService() }
+        runCatching { commandServer?.close() }
+        commandServer = null
+        runCatching { tunnel?.close() }
+        tunnel = null
+    }
+
+    private fun sendRouteProbeResult(
+        requestId: String,
+        routeTag: String,
+        milliseconds: Long?,
+        error: String?,
+        complete: Boolean = false,
+    ) {
+        val intent = Intent(RouteProbeClient.ACTION_RESULT)
+            .setPackage(packageName)
+            .putExtra(RouteProbeClient.EXTRA_REQUEST_ID, requestId)
+            .putExtra(RouteProbeClient.EXTRA_ROUTE_TAG, routeTag)
+            .putExtra(RouteProbeClient.EXTRA_COMPLETE, complete)
+        if (milliseconds != null) intent.putExtra(RouteProbeClient.EXTRA_MILLISECONDS, milliseconds)
+        if (!error.isNullOrBlank()) intent.putExtra(RouteProbeClient.EXTRA_ERROR, error)
+        sendBroadcast(intent)
+    }
+
+    private fun routeProbeError(error: Throwable): String = when {
+        error.message.orEmpty().contains("timeout", ignoreCase = true) ||
+            error.message.orEmpty().contains("времен", ignoreCase = true) -> "тайм-аут · 10 с"
+        error.message.orEmpty().startsWith("Локальный прокси ответил HTTP") ->
+            error.message.orEmpty().substringAfter("ответил ")
+        errorChainContains(error, "TLS hostname verification failed") -> "ошибка проверки TLS-сертификата"
+        error.message.orEmpty().startsWith("Проверочный сервер ответил HTTP") ->
+            error.message.orEmpty().substringAfter("ответил ")
+        else -> "маршрут не ответил"
+    }
+
+    private fun causeClassChain(error: Throwable): String {
+        val classes = mutableListOf<String>()
+        var current: Throwable? = error
+        repeat(8) {
+            val failure = current ?: return@repeat
+            classes += failure.javaClass.simpleName
+            current = failure.cause
+        }
+        return classes.distinct().joinToString("→")
+    }
+
+    private fun probeFailureKind(error: Throwable): String {
+        val messages = buildString {
+            var current: Throwable? = error
+            repeat(8) {
+                val failure = current
+                if (failure != null) {
+                    failure.message?.let { append(it.lowercase()).append(' ') }
+                    current = failure.cause
+                }
+            }
+        }
+        return when {
+            "connection refused" in messages || "econnrefused" in messages -> "connection refused"
+            "proxy authentication" in messages || "http 407" in messages -> "proxy authentication rejected"
+            "unexpected end of stream" in messages -> "proxy closed the stream"
+            "unable to resolve host" in messages || "unknownhostexception" in messages -> "DNS lookup failed"
+            "timeout" in messages || "timed out" in messages -> "timed out"
+            "connection reset" in messages || "broken pipe" in messages -> "connection reset"
+            "ssl" in messages || "handshake" in messages -> "TLS handshake failed"
+            else -> causeClassChain(error)
+        }
+    }
+
+    private fun isUpstreamVpnActive(): Boolean {
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        val activeNetwork = connectivity.activeNetwork ?: return false
+        return connectivity.getNetworkCapabilities(activeNetwork)
+            ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
     }
 
     private fun startTunnel(operationId: Long) {
@@ -317,10 +543,12 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val stopAction = if (routeProbeOnly) ACTION_CANCEL_ROUTE_PROBE else ACTION_STOP
+        val stopTitle = if (routeProbeOnly) "Отменить проверку" else "Отключить"
         val disconnect = PendingIntent.getService(
             this,
             NOTIFICATION_ID + 1,
-            Intent(this, ConnectVpnService::class.java).setAction(ACTION_STOP),
+            Intent(this, ConnectVpnService::class.java).setAction(stopAction),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val restore = PendingIntent.getService(
@@ -348,7 +576,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             .addAction(
                 Notification.Action.Builder(
                     Icon.createWithResource(this, R.drawable.ic_stat_vpn),
-                    "Отключить",
+                    stopTitle,
                     disconnect,
                 ).build(),
             )
@@ -396,7 +624,14 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         val config = SubscriptionStore(this).readCurrent() ?: return
         commandServer?.startOrReloadService(runtimeConfig(config), OverrideOptions().apply { autoRedirect = false })
     }
-    override fun serviceStop() = stopTunnel()
+    override fun serviceStop() {
+        if (routeProbeOnly) {
+            runCatching { tunnel?.close() }
+            tunnel = null
+            return
+        }
+        stopTunnel()
+    }
     override fun setSystemProxyEnabled(enabled: Boolean) = Unit
     override fun triggerNativeCrash() = Unit
     override fun writeDebugMessage(message: String) {
@@ -439,6 +674,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     ): ShellSession = error("Shell не поддержан")
 
     override fun openTun(options: TunOptions): Int {
+        check(!routeProbeOnly) { "Проверка маршрута не должна создавать Android TUN" }
         check(prepare(this) == null) { "Нет разрешения Android VPN" }
         val builder = Builder().setSession("deytt./connect").setMtu(options.getMTU())
 

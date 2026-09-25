@@ -311,9 +311,17 @@
       this.canvas.addEventListener("pointerleave", () => {
         if (!this.dragging) this.setHovered(null);
       });
-      this.canvas.addEventListener("click", () => {
-        if (!this.selectOnTap) return;
-        if (!this.hovered || this.hovered === "user") return;
+      this.canvas.addEventListener("click", (event) => {
+        const box = this.canvas.getBoundingClientRect();
+        const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
+        // Touch clears hover during pointerup, so resolve the tap from its
+        // coordinates instead of relying on the last mouse-hovered node.
+        this.updateHover(pointer);
+        if (this.hovered && typeof window.deyttMapNodeTapped === "function") {
+          window.deyttMapNodeTapped(this.hovered);
+          return;
+        }
+        if (!this.selectOnTap || !this.hovered || this.hovered === "user") return;
         this.setRoute(this.hovered === "ru" && this.route === "de" ? "ru-de" : this.hovered);
       });
       this.canvas.addEventListener("keydown", (event) => {
@@ -405,11 +413,11 @@
       };
       const dark = document.documentElement.dataset.theme === "dark";
       return dark ? {
-        sphereLight: "#121f3d", sphereMid: "#0a1428", sphereShade: "#060e1d", sphereEdge: "rgba(140,163,255,.58)", atmosphere: "rgba(104,130,255,.26)", atmosphereSoft: "rgba(104,130,255,.12)", rimLight: "rgba(160,180,255,.38)",
-        grid: "rgba(143,166,220,.11)", land: "rgba(178,199,250,.62)", landDim: "rgba(131,155,212,.32)", landHot: "rgba(122,232,255,1)",
-        border: "rgba(168,191,242,.36)", borderHot: "rgba(133,234,255,.95)", borderGlow: "rgba(133,234,255,.7)", route: "#7d8dff", routeHot: "#7ce4ff",
+        sphereLight: "#101827", sphereMid: "#0b121d", sphereShade: "#070c13", sphereEdge: "rgba(140,163,255,.38)", atmosphere: "rgba(104,130,255,.16)", atmosphereSoft: "rgba(104,130,255,.07)", rimLight: "rgba(160,180,255,.26)",
+        grid: "rgba(143,166,220,.08)", land: "rgba(178,199,250,.48)", landDim: "rgba(131,155,212,.25)", landHot: "rgba(122,232,255,1)",
+        border: "rgba(168,191,242,.26)", borderHot: "rgba(133,234,255,.88)", borderGlow: "rgba(133,234,255,.58)", route: "#7888e6", routeHot: "#7ce4ff",
         download: "#f04d9e", downloadHot: "#ffc857", upload: "#73e0b5", uploadHot: "#c2f7df",
-        node: "#f7f9ff", nodeCore: "#73e0b5", label: "#f5f7ff", labelMuted: "#9daac4", labelBg: "rgba(7,15,31,.86)"
+        node: "#f7f9ff", nodeCore: "#73e0b5", label: "#f5f7ff", labelMuted: "#9daac4", labelBg: "rgba(8,12,19,.94)"
       } : {
         /* Light theme: a saturated blue marble. The light panel needs contrast,
          * not another pale surface — deep ocean, crisp white coastlines and
