@@ -6,7 +6,7 @@ Refine the Android client's visual identity and interaction quality, with a rest
 
 ## Status
 
-Completed. Implementation and validation passed; the recorded client changes are ready for the required `main` commit and push.
+Completed. Implementation and validation passed. Commit `024b000df9fa830052967b3596442ff7b176a402` is on `main` and matches `origin/main`.
 
 ## Success Criteria
 
@@ -23,11 +23,11 @@ Completed. Implementation and validation passed; the recorded client changes are
 - [x] 1. Inspect app instructions, current physical-device baseline, UI architecture, route catalog, and diagnostic/API contracts. Result: four-screen A001 baseline, map touch gap, route-selection effects, direct-only latency implementation, Happ probe settings, and embedded libbox APIs are understood. Depends on project index and existing Roadmap.
 - [x] 2. Shape the refined visual system and implement scoped UI, map-selection, and diagnostic improvements. Depends on 1. Implemented the lighter `./c` mark and font weights; map labels cleared; globe taps bridged to a native route sheet; country flags; corrected inset-aware nav indicator; loopback-only authenticated sing-box probe config; GET/HEAD Double request flow with 10s deadline; comparison UI; TUN guard and active-VPN safeguards. Added an Android consent flow after the real device exposed the VpnService foreground-start requirement.
 - [x] 3. Build, run focused checks, install on A001, and verify the final visuals plus map/probe flows. Depends on 2. Unit tests, lint, and debug APK build pass. On A001, map-node selection opens the native route sheet; one-tap protocol comparison returns HTTPS proxy results. VPN remained off and the probe service exited.
-- [x] 4. Review diff and record final evidence. Depends on 3. Final source changes, tests, device results, and scope were reviewed; only the repository delivery commands remain.
+- [x] 4. Review diff, record final evidence, and deliver the client changes. Depends on 3. Commit `024b000df9fa830052967b3596442ff7b176a402` is pushed to `origin/main`.
 
 ## Current State
 
-Task resumed from inspection on A001 at baseline commit `0ef6a06`. Implementation, device verification, and final diff review are complete. Untracked user-owned `.agents/` remains untouched. This is client-only work; no server deployment is required.
+Task resumed from inspection on A001 at baseline commit `0ef6a06`. Implementation, device verification, final diff review, commit, and push are complete. Untracked user-owned `.agents/` remains untouched. This is client-only work; no server deployment is required.
 
 ## Findings and Decisions
 
@@ -59,7 +59,8 @@ Task resumed from inspection on A001 at baseline commit `0ef6a06`. Implementatio
 - A001: updated APK installed and launched; map-node route sheet, protocol comparison screen, and results were inspected. Last sample: VLESS 540 ms, Trojan 377 ms, Hysteria 2 346 ms. These are transient measurements.
 - After comparison, `active_vpn_transport=false` and no `ConnectVpnService` instance remained. The probe uses the loopback HTTP proxy; no device TUN was opened.
 - `git diff --check` passed. A physical interaction test of the GET/HEAD preference menu was not performed; its default HEAD setting is visible and its change handler is covered by source review.
+- `main` and `origin/main` both resolve to `024b000df9fa830052967b3596442ff7b176a402`.
 
 ## Next Action and Resume Context
 
-Commit and push the reviewed client changes to `main`. This client-only change has no server pull/deploy or service restart step.
+No further action. No server pull/deploy or service restart applies to this client-only change.
