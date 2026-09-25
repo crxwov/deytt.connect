@@ -7,6 +7,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 data class LatencyTarget(val host: String, val port: Int)
+data class RouteLatencyResult(val milliseconds: Long, val method: String)
 
 object RouteLatency {
     private val pingTime = Regex("time[=<]([0-9.]+)\\s*ms", RegexOption.IGNORE_CASE)
@@ -22,7 +23,10 @@ object RouteLatency {
         return resolve(byTag, route.configTag, mutableSetOf())
     }
 
-    fun measure(target: LatencyTarget, timeoutMillis: Int = 2_500): Long? {
+    fun measure(target: LatencyTarget, timeoutMillis: Int = 2_500): Long? =
+        measureDetailed(target, timeoutMillis)?.milliseconds
+
+    fun measureDetailed(target: LatencyTarget, timeoutMillis: Int = 2_500): RouteLatencyResult? {
         val ping = runCatching {
             val process = ProcessBuilder(
                 "/system/bin/ping", "-c", "1", "-W", "2", target.host,
@@ -31,13 +35,8 @@ object RouteLatency {
             process.waitFor()
             pingTime.find(output)?.groupValues?.get(1)?.toDoubleOrNull()?.toLong()
         }.getOrNull()
-        if (ping != null) return ping
-
-        val started = System.nanoTime()
-        return runCatching {
-            Socket().use { it.connect(InetSocketAddress(target.host, target.port), timeoutMillis) }
-            (System.nanoTime() - started) / 1_000_000
-        }.getOrNull()
+        if (ping != null) return RouteLatencyResult(ping, "ICMP")
+        return measureTcp(target, timeoutMillis)?.let { RouteLatencyResult(it, "TCP") }
     }
 
     fun measureTcp(target: LatencyTarget, timeoutMillis: Int = RouteProxyProbe.TIMEOUT_MILLIS): Long? {

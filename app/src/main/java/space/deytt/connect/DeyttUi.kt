@@ -29,11 +29,13 @@ import android.view.ViewGroup
 import android.view.VelocityTracker
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.Space
 import android.widget.TextView
 import android.webkit.WebView
+import space.deytt.connect.AppLanguage.uiCopy
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -103,7 +105,7 @@ object DeyttUi {
                     minimumHeight = dp(48)
                     isClickable = true
                     isFocusable = true
-                    contentDescription = "Назад"
+                    contentDescription = uiCopy("Назад")
                     setOnClickListener { finish() }
                     addView(text("‹", 30f, TEXT).apply {
                         gravity = Gravity.CENTER
@@ -114,7 +116,7 @@ object DeyttUi {
                 addView(backAction, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(48)))
             }
             if (kicker.isNotBlank()) {
-                addView(text(kicker.uppercase(), 10f, SKY, Typeface.BOLD).apply {
+                addView(text(uiCopy(kicker).uppercase(), 10f, SKY, Typeface.BOLD).apply {
                     letterSpacing = .13f
                     setPadding(0, dp(5), 0, 0)
                 })
@@ -129,27 +131,45 @@ object DeyttUi {
     fun Activity.brandHeader(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        addView(text("./c", 18f, TEXT).apply {
+        val avatar = FrameLayout(this@brandHeader).apply {
+            tag = "telegram-avatar-container"
+            background = rounded(SURFACE_2, 50f, LINE)
+            clipToOutline = true
+            contentDescription = uiCopy("Аватар Telegram")
+        }
+        avatar.addView(text("•", 18f, SKY, Typeface.BOLD).apply {
+            tag = "telegram-avatar-fallback"
             gravity = Gravity.CENTER
             includeFontPadding = false
-            letterSpacing = -.09f
-            typeface = typeface(FontFamily.JETBRAINS_MONO, 520)
-            contentDescription = "логотип ./c"
-        }, LinearLayout.LayoutParams(dp(39), dp(34)))
-        addView(text("deytt.connect", 15f, TEXT).apply {
+        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        avatar.addView(ImageView(this@brandHeader).apply {
+            tag = "telegram-avatar-image"
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            visibility = View.GONE
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(SURFACE_2)
+            }
+            clipToOutline = true
+        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        addView(avatar, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(9) })
+        addView(text("./c · без аккаунта", 14f, TEXT).apply {
+            tag = "telegram-account-name"
             typeface = typeface(FontFamily.INTER_TIGHT, 580)
-            setPadding(dp(5), 0, 0, 0)
             letterSpacing = -.02f
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
         })
         addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
-        addView(mono("PRIVATE  ·  ON DEVICE", 8f, MUTED, 600))
+        addView(mono(uiCopy("ЧАСТНО · НА УСТРОЙСТВЕ"), 8f, MUTED, 600))
     }
 
-    fun starfieldBackground(context: Context): Drawable = NetworkAtmosphereDrawable(context)
+    fun starfieldBackground(context: Context, referenceHeightPx: Int? = null): Drawable =
+        NetworkAtmosphereDrawable(context, referenceHeightPx?.takeIf { it > 0 })
 
     fun Activity.text(value: String, size: Float, color: Int = TEXT, style: Int = Typeface.NORMAL): TextView =
         TextView(this).apply {
-            text = value
+            text = uiCopy(value)
             textSize = size
             setTextColor(color)
             typeface = typeface(FontFamily.INTER_TIGHT, if (style == Typeface.BOLD) 650 else 470)
@@ -179,19 +199,19 @@ object DeyttUi {
     }
 
     fun Activity.button(label: String, secondary: Boolean = false): TextView =
-        text(label, 14f, if (secondary) TEXT else Color.WHITE, Typeface.BOLD).apply {
+        text(label, 14f, if (secondary) TEXT else BG, Typeface.BOLD).apply {
             typeface = typeface(FontFamily.INTER_TIGHT, if (secondary) 560 else 620)
             gravity = Gravity.CENTER
             minHeight = dp(52)
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = if (secondary) rounded(SURFACE_2, 17f, LINE) else GradientDrawable(
+            background = if (secondary) rounded(SURFACE_2, 15f, LINE) else GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(BLUE, BLUE_DEEP),
+                intArrayOf(SKY, MINT),
             ).apply { cornerRadius = dp(15).toFloat() }
             elevation = if (secondary) 0f else dp(2).toFloat()
             isClickable = true
             isFocusable = true
-            contentDescription = label
+            contentDescription = uiCopy(label)
             foreground = ripple(17f)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled() && !prefersReducedMotion()) {
                 val target = this
@@ -211,7 +231,7 @@ object DeyttUi {
             background = rounded(0xFF18243A.toInt(), 11f, 0xFF344B71.toInt())
             isClickable = true
             isFocusable = true
-            contentDescription = "Проверить задержку"
+            contentDescription = uiCopy("Проверить задержку")
         }
 
     fun Activity.row(
@@ -228,16 +248,24 @@ object DeyttUi {
         setPadding(if (emphasis) dp(12) else dp(2), dp(9), if (emphasis) dp(10) else dp(2), dp(9))
         background = if (emphasis) rounded(SELECTED, 15f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
         if (leading.isNotBlank()) {
-            val isCountryFlag = leading.any { it.code in 0xD800..0xDBFF }
-            addView(text(leading, if (isCountryFlag) 20f else 11f, if (isCountryFlag) TEXT else SKY,
-                if (isCountryFlag) Typeface.NORMAL else Typeface.BOLD).apply {
-                gravity = Gravity.CENTER
-                letterSpacing = .025f
-                background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f, if (emphasis) 0xFF3F5985.toInt() else LINE)
-                minWidth = dp(38)
-                minHeight = dp(38)
-                maxLines = 1
-            }, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
+            val icon = when (leading) {
+                "AWG_MARK" -> awgMark(emphasis)
+                "ROUTE_AUTO" -> routeAutoMark(emphasis)
+                "ROUTE_RU_DE" -> routePairMark(emphasis)
+                else -> {
+                val isCountryFlag = leading.any { it.code in 0xD800..0xDBFF }
+                text(leading, if (isCountryFlag) 20f else 11f, if (isCountryFlag) TEXT else SKY,
+                    if (isCountryFlag) Typeface.NORMAL else Typeface.BOLD).apply {
+                    gravity = Gravity.CENTER
+                    letterSpacing = .025f
+                    background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f, if (emphasis) 0xFF3F5985.toInt() else LINE)
+                    minWidth = dp(38)
+                    minHeight = dp(38)
+                    maxLines = 1
+                }
+                }
+            }
+            addView(icon, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
         }
         addView(LinearLayout(this@row).apply {
             orientation = LinearLayout.VERTICAL
@@ -268,6 +296,76 @@ object DeyttUi {
                 addState(intArrayOf(android.R.attr.state_pressed), ObjectAnimator.ofFloat(target, "alpha", 1f, .76f).setDuration(90))
                 addState(intArrayOf(), ObjectAnimator.ofFloat(target, "alpha", .76f, 1f).setDuration(130))
             }
+        }
+    }
+
+    private fun Activity.awgMark(emphasis: Boolean): FrameLayout {
+        val context = this
+        return FrameLayout(context).apply {
+            background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f,
+                if (emphasis) 0xFF3F5985.toInt() else LINE)
+            contentDescription = "Значок AmneziaWG"
+            addView(AmneziaMarkView(context), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+        }
+    }
+
+    private fun Activity.routePairMark(emphasis: Boolean): FrameLayout {
+        val context = this
+        return FrameLayout(context).apply {
+            background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f,
+                if (emphasis) 0xFF3F5985.toInt() else LINE)
+            contentDescription = "Маршрут через Россию и Германию"
+            addView(text("🇷🇺", 14f, TEXT).apply { gravity = Gravity.CENTER },
+                FrameLayout.LayoutParams(dp(25), dp(26), Gravity.CENTER_VERTICAL or Gravity.START))
+            addView(text("🇩🇪", 14f, TEXT).apply { gravity = Gravity.CENTER },
+                FrameLayout.LayoutParams(dp(25), dp(26), Gravity.CENTER_VERTICAL or Gravity.END))
+        }
+    }
+
+    private fun Activity.routeAutoMark(emphasis: Boolean): FrameLayout = FrameLayout(this).apply {
+        background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f,
+            if (emphasis) 0xFF3F5985.toInt() else LINE)
+        contentDescription = uiCopy("Автоподбор: Нидерланды, Германия, Финляндия, Россия")
+        listOf("🇳🇱", "🇩🇪", "🇫🇮", "🇷🇺").forEachIndexed { index, flag ->
+            val placementGravity = when (index) {
+                0 -> Gravity.TOP or Gravity.START
+                1 -> Gravity.TOP or Gravity.END
+                2 -> Gravity.BOTTOM or Gravity.START
+                else -> Gravity.BOTTOM or Gravity.END
+            }
+            addView(text(flag, 10f, TEXT).apply { this.gravity = Gravity.CENTER },
+                FrameLayout.LayoutParams(dp(20), dp(20), placementGravity))
+        }
+    }
+
+    private class AmneziaMarkView(context: Context) : View(context) {
+        private val scale = resources.displayMetrics.density
+        private val outline = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = DeyttUi.SKY
+            strokeWidth = 2.1f * scale
+            style = Paint.Style.STROKE
+            strokeCap = Paint.Cap.ROUND
+            strokeJoin = Paint.Join.ROUND
+        }
+        private val accent = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = DeyttUi.MINT
+            style = Paint.Style.FILL
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val unit = minOf(width, height) / 24f
+            val centerX = width / 2f
+            val centerY = height / 2f
+            val mark = Path().apply {
+                moveTo(centerX - 7f * unit, centerY + 7f * unit)
+                lineTo(centerX, centerY - 8f * unit)
+                lineTo(centerX + 7f * unit, centerY + 7f * unit)
+                moveTo(centerX - 4f * unit, centerY + 1.5f * unit)
+                lineTo(centerX + 4f * unit, centerY + 1.5f * unit)
+            }
+            canvas.drawPath(mark, outline)
+            canvas.drawCircle(centerX, centerY + 7f * unit, 1.25f * unit, accent)
         }
     }
 
@@ -337,8 +435,9 @@ object DeyttUi {
         init {
             setBackgroundColor(SURFACE)
             elevation = activity.dp(12).toFloat()
-            contentDescription = "Основная навигация"
+            contentDescription = activity.uiCopy("Основная навигация")
             val labels = listOf("Главная", "Маршруты", "Профиль", "Настройки")
+                .map { activity.uiCopy(it) }
             val glyphs = listOf(NavGlyph.HOME, NavGlyph.MAP, NavGlyph.PROFILE, NavGlyph.SETTINGS)
             val row = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -398,7 +497,7 @@ object DeyttUi {
             entries.forEachIndexed { position, entry ->
                 val selected = position == selectedPage
                 entry.item.isSelected = selected
-                entry.item.contentDescription = if (selected) "${entry.label}, выбран" else entry.label
+                entry.item.contentDescription = if (selected) "${entry.label}, ${activity.uiCopy("выбран")}" else entry.label
                 entry.shell.background = if (selected) activity.rounded(SELECTED, 14f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
                 entry.shell.removeAllViews()
                 entry.shell.addView(NavGlyphView(activity, entry.glyph, if (selected) SKY else MUTED),
@@ -810,7 +909,7 @@ private class PageSwipeFrame(
     }
 }
 
-private class NetworkAtmosphereDrawable(context: Context) : Drawable() {
+private class NetworkAtmosphereDrawable(context: Context, private val referenceHeightPx: Int? = null) : Drawable() {
     private data class Star(
         val x: Float,
         val y: Float,
@@ -873,9 +972,10 @@ private class NetworkAtmosphereDrawable(context: Context) : Drawable() {
             lowerGlow = null
             return
         }
+        val atmosphereHeight = (referenceHeightPx ?: bounds.height()).toFloat()
         upperGlow = android.graphics.RadialGradient(
             bounds.left + bounds.width() * .78f,
-            bounds.top + bounds.height() * .12f,
+            bounds.top + atmosphereHeight * .12f,
             bounds.width() * .92f,
             intArrayOf(0x282B43A5, 0x10214270, 0x00080B12),
             floatArrayOf(0f, .48f, 1f),
@@ -883,7 +983,7 @@ private class NetworkAtmosphereDrawable(context: Context) : Drawable() {
         )
         lowerGlow = android.graphics.RadialGradient(
             bounds.left + bounds.width() * .04f,
-            bounds.top + bounds.height() * .72f,
+            bounds.top + atmosphereHeight * .72f,
             bounds.width() * .78f,
             intArrayOf(0x142B8A82, 0x00080B12),
             null,
@@ -905,11 +1005,12 @@ private class NetworkAtmosphereDrawable(context: Context) : Drawable() {
         canvas.drawRect(area, lowerPaint)
 
         val seconds = if (motionEnabled) SystemClock.uptimeMillis() / 1000f else 0f
+        val atmosphereHeight = (referenceHeightPx ?: area.height()).toFloat()
         stars.forEach { star ->
             val twinkle = if (motionEnabled) .34f + .66f * ((sin(seconds * (6.2831855f / star.period) + star.phase) + 1f) * .5f) else .74f
             val alpha = (star.alpha * twinkle * drawableAlpha / 255f).toInt().coerceIn(0, 255)
             val x = area.left + area.width() * star.x
-            val y = area.top + area.height() * star.y
+            val y = area.top + atmosphereHeight * star.y
             starPaint.color = star.tint
             starPaint.alpha = alpha
             starPaint.colorFilter = colorFilter

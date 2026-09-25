@@ -1,17 +1,23 @@
 package space.deytt.connect
 
-import android.app.AlertDialog
+import android.app.Dialog
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.text.InputFilter
+import android.text.InputType
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -21,7 +27,9 @@ import androidx.recyclerview.widget.RecyclerView
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.Collections
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
 import space.deytt.connect.DeyttUi.AMBER
 import space.deytt.connect.DeyttUi.BLUE
 import space.deytt.connect.DeyttUi.BLUE_DEEP
@@ -43,6 +51,7 @@ import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
+import space.deytt.connect.AppLanguage.uiCopy
 
 internal class TopLevelViewPagerAdapter(
     private val createPage: (Int) -> View,
@@ -101,6 +110,7 @@ internal class TopLevelViewPagerAdapter(
 
 internal class PrimaryPages(private val host: MainActivity) {
     private val updateExecutor = Executors.newSingleThreadExecutor()
+    private val pairingExecutor = Executors.newSingleThreadExecutor()
     private var latestRelease: ReleaseInfo? = null
     private var updateStatus: TextView? = null
     private var updateButton: TextView? = null
@@ -114,6 +124,7 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     fun close() {
         updateExecutor.shutdownNow()
+        pairingExecutor.shutdownNow()
     }
 
     private fun scrollPage(content: LinearLayout): ScrollView = ScrollView(host).apply {
@@ -148,7 +159,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 quickGroup,
                 "Автоподбор",
                 "Выберем доступный узел",
-                "AUTO",
+                "ROUTE_AUTO",
                 listOf(route),
                 selectedId == route.id,
             ) { host.selectRoute(route) }
@@ -158,7 +169,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 quickGroup,
                 "Россия → Германия",
                 "Двойной маршрут · Санкт-Петербург → Франкфурт",
-                "2×",
+                "ROUTE_RU_DE",
                 listOf(route),
                 selectedId == route.id,
             ) { host.selectRoute(route) }
@@ -181,7 +192,8 @@ internal class PrimaryPages(private val host: MainActivity) {
                 in 2..4 -> "$count сервера · выбрать точку"
                 else -> "$count серверов · выбрать точку"
             }
-            val item = host.row(title, subtitle, if (version == "15") "1.5" else "3.1", if (count == 0) "обновить" else "открыть", emphasis = familyRoutes.any { it.id == selectedId }).apply {
+            val ping = host.actionLabel("пинг")
+            val item = host.row(title, subtitle, "AWG_MARK", "", emphasis = familyRoutes.any { it.id == selectedId }).apply {
                 if (count == 0) alpha = .78f
                 setOnClickListener {
                     if (count == 0) host.openSetup()
@@ -191,8 +203,19 @@ internal class PrimaryPages(private val host: MainActivity) {
                             .putExtra("version", version),
                     )
                 }
+                if (familyRoutes.isNotEmpty()) {
+                    ping.setOnClickListener { measure(familyRoutes, title, ping) }
+                    ping.setOnLongClickListener { showPingDiagnostics(familyRoutes, title); true }
+                    ping.contentDescription = host.uiCopy("Пинг $title. Короткое нажатие проверяет один сервер, удержание — все")
+                } else {
+                    ping.text = "обновить"
+                    ping.setOnClickListener { host.openSetup() }
+                    ping.contentDescription = "Профили не найдены. Обновить подписку"
+                }
+                addView(ping, LinearLayout.LayoutParams(host.dp(68), host.dp(40)))
             }
             appendToGroup(awgGroup, item)
+            if (familyRoutes.isNotEmpty()) item.post { measureAll(familyRoutes, title, ping) }
         }
         root.addView(awgGroup)
 
@@ -246,13 +269,16 @@ internal class PrimaryPages(private val host: MainActivity) {
         emphasis: Boolean = false,
         onClick: () -> Unit,
     ) {
-        val latency = host.actionLabel()
+        val latency = host.actionLabel("пинг")
         val item = host.row(title, subtitle, leading, "", emphasis = emphasis).apply {
             setOnClickListener { onClick() }
         }
         latency.setOnClickListener { measure(candidates, title, latency) }
+        latency.setOnLongClickListener { showPingDiagnostics(candidates, title); true }
+        latency.contentDescription = "Пинг $title. Короткое нажатие проверяет один сервер, удержание — все"
         item.addView(latency, LinearLayout.LayoutParams(host.dp(68), host.dp(40)))
         appendToGroup(group, item)
+        if (candidates.isNotEmpty()) item.post { measureAll(candidates, title, latency) }
     }
 
     private fun measure(candidates: List<DeyttRoute>, title: String, view: TextView) {
@@ -262,22 +288,164 @@ internal class PrimaryPages(private val host: MainActivity) {
         val target = RouteLatency.target(config, route, awgConfig)
         val generation = System.nanoTime()
         view.tag = generation
-        view.text = "проверяю…"
+        view.text = host.uiCopy("проверяю…")
         view.isEnabled = false
         if (target == null) {
-            view.text = "нет ответа"
+            view.text = host.uiCopy("нет ответа")
             view.isEnabled = true
             view.setTextColor(DeyttUi.CORAL)
             return
         }
         LatencyExecutor.pool.execute {
-            val label = RouteLatency.label(RouteLatency.measure(target))
+            val result = RouteLatency.measureDetailed(target)
+            val label = result?.let { if (AppLanguage.current(host) == AppLanguage.EN) "${it.milliseconds} ms" else "${it.milliseconds}мс" }
+                ?: host.uiCopy("нет ответа")
             host.runOnUiThread {
                 if (host.isFinishing || host.isDestroyed || view.tag != generation) return@runOnUiThread
                 view.text = label
                 view.isEnabled = true
-                view.setTextColor(if (label.contains("мс", ignoreCase = true)) DeyttUi.MINT else DeyttUi.CORAL)
-                view.contentDescription = "Задержка маршрута $title: $label"
+                view.setTextColor(if (result != null) DeyttUi.MINT else DeyttUi.CORAL)
+                view.contentDescription = result?.let {
+                    host.uiCopy("${it.method}-проверка маршрута $title: ${it.milliseconds} миллисекунд")
+                } ?: host.uiCopy("Сервер маршрута $title не ответил")
+            }
+        }
+    }
+
+    private fun measureAll(candidates: List<DeyttRoute>, title: String, view: TextView) {
+        val config = SubscriptionStore(host).readCurrent() ?: return
+        val routes = candidates.distinctBy { it.id }
+        val probes = routes.mapNotNull { route ->
+            val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) AwgProfileStore(host).read(route.id) else null
+            RouteLatency.target(config, route, awgConfig)?.let { route to it }
+        }
+        val generation = System.nanoTime()
+        view.tag = generation
+        if (probes.isEmpty()) {
+            view.text = "—"
+            view.contentDescription = host.uiCopy("Для маршрута $title нет проверяемых серверов")
+            return
+        }
+        val finished = AtomicInteger()
+        val results = Collections.synchronizedList(mutableListOf<Pair<DeyttRoute, RouteLatencyResult?>>())
+        view.text = "0/${probes.size}"
+        view.setTextColor(DeyttUi.SKY)
+        probes.forEach { (route, target) ->
+            LatencyExecutor.pool.execute {
+                val result = runCatching { RouteLatency.measureDetailed(target) }.getOrNull()
+                results += route to result
+                val completed = finished.incrementAndGet()
+                host.runOnUiThread {
+                    if (host.isFinishing || host.isDestroyed || view.tag != generation) return@runOnUiThread
+                    val snapshot = synchronized(results) { results.toList() }
+                    val successful = snapshot.mapNotNull { it.second }
+                    if (completed < probes.size) view.text = "$completed/${probes.size}"
+                    else view.text = successful.minOfOrNull { it.milliseconds }?.let { latency ->
+                        if (AppLanguage.current(host) == AppLanguage.EN) "$latency ms" else "$latency мс"
+                    } ?: host.uiCopy("нет")
+                    view.setTextColor(when {
+                        successful.isNotEmpty() -> DeyttUi.MINT
+                        completed >= probes.size -> DeyttUi.CORAL
+                        else -> DeyttUi.SKY
+                    })
+                    val details = snapshot.joinToString("; ") { (entry, measurement) ->
+                        "${entry.protocol.title}: " + (measurement?.let { "${it.method} ${it.milliseconds} мс" } ?: "нет ответа")
+                    }
+                    view.contentDescription = host.uiCopy("Проверка всех серверов $title: $details")
+                }
+            }
+        }
+    }
+
+    private fun showPingDiagnostics(candidates: List<DeyttRoute>, title: String) {
+        val config = SubscriptionStore(host).readCurrent() ?: return
+        val catalog = runCatching { RouteCatalog.from(config, AwgProfileStore(host).profiles()) }.getOrDefault(candidates)
+        val routes = catalog.filter { it.protocol != RouteProtocol.AUTO }.distinctBy { it.id }
+        if (routes.isEmpty()) return
+        val dialog = Dialog(host)
+        val sheet = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(20), host.dp(20), host.dp(20), host.dp(18))
+            background = host.rounded(SURFACE, 24f, LINE)
+        }
+        sheet.addView(host.mono("ДИАГНОСТИКА · ВСЕ ТОЧКИ", 9f, MUTED, 650))
+        sheet.addView(host.text("Задержка · все серверы", 19f, TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, host.dp(10), 0, host.dp(6))
+        })
+        sheet.addView(host.text("Запрос от «$title». ICMP, затем TCP при необходимости; результаты появятся по мере ответа.", 12f, MUTED).apply {
+            setPadding(0, 0, 0, host.dp(14))
+        })
+        val resultViews = mutableMapOf<String, TextView>()
+        val list = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            background = host.rounded(SURFACE_2, 18f, LINE)
+            clipToOutline = true
+        }
+        routes.forEachIndexed { index, route ->
+            if (index > 0) list.addView(View(host).apply { setBackgroundColor(LINE) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(1)).apply {
+                    leftMargin = host.dp(54)
+                    rightMargin = host.dp(14)
+                })
+            val result = host.actionLabel("проверяю…").apply {
+                isClickable = false
+                contentDescription = "Проверяю задержку ${route.country} ${route.protocol.title}"
+            }
+            resultViews[route.id] = result
+            list.addView(host.row(
+                route.country,
+                route.protocol.title,
+                when {
+                    route.engine == TunnelEngine.AMNEZIAWG -> "AWG_MARK"
+                    route.protocol == RouteProtocol.RU_DE -> "ROUTE_RU_DE"
+                    else -> route.flag
+                },
+                "",
+                interactive = false,
+            ).apply { addView(result, LinearLayout.LayoutParams(host.dp(92), host.dp(40))) })
+        }
+        val screenHeightDp = (host.resources.displayMetrics.heightPixels / host.resources.displayMetrics.density).toInt()
+        val listHeightDp = (screenHeightDp * .45f).toInt().coerceIn(240, 440)
+        sheet.addView(ScrollView(host).apply {
+            isFillViewport = false
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(list)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(listHeightDp)))
+        sheet.addView(host.button("Готово", secondary = true).apply { setOnClickListener { dialog.dismiss() } },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48)).apply { topMargin = host.dp(16) })
+        dialog.setContentView(sheet)
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setDimAmount(.62f)
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            setGravity(Gravity.BOTTOM)
+            decorView.setPadding(host.dp(14), 0, host.dp(14), host.dp(20))
+        }
+        dialog.show()
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+
+        routes.forEach { route ->
+            val view = resultViews[route.id] ?: return@forEach
+            val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) AwgProfileStore(host).read(route.id) else null
+            val target = RouteLatency.target(config, route, awgConfig)
+            if (target == null) {
+                view.text = "нет ответа"
+                view.setTextColor(DeyttUi.CORAL)
+                return@forEach
+            }
+            LatencyExecutor.pool.execute {
+                val measurement = runCatching { RouteLatency.measureDetailed(target) }.getOrNull()
+                host.runOnUiThread {
+                    if (!dialog.isShowing) return@runOnUiThread
+                    view.text = measurement?.let { "${it.method} ${it.milliseconds}мс" } ?: "нет ответа"
+                    view.setTextColor(if (measurement != null) DeyttUi.MINT else DeyttUi.CORAL)
+                    view.contentDescription = measurement?.let {
+                        "${it.method}-задержка ${route.country} ${route.protocol.title}: ${it.milliseconds} миллисекунд"
+                    } ?: "Сервер ${route.country} ${route.protocol.title} не ответил"
+                }
             }
         }
     }
@@ -333,16 +501,20 @@ internal class PrimaryPages(private val host: MainActivity) {
         root.addView(host.sectionLabel("конфигурации на устройстве"))
         val awg15 = profiles.count { it.version == "15" }
         val awg31 = profiles.count { it.version == "31" }
-        root.addView(host.row("AmneziaWG 1.5", profileCountLabel(awg15), "1.5", "открыть").apply {
+        root.addView(host.row("AmneziaWG 1.5", profileCountLabel(awg15), "AWG_MARK", "открыть").apply {
             setOnClickListener { host.selectTab(1) }
         })
-        root.addView(host.row("AmneziaWG 3.1", profileCountLabel(awg31), "3.1", "открыть").apply {
+        root.addView(host.row("AmneziaWG 3.1", profileCountLabel(awg31), "AWG_MARK", "открыть").apply {
             setOnClickListener { host.selectTab(1) }
         })
 
         root.addView(spacer(18, host))
         root.addView(host.sectionLabel("действия"))
-        root.addView(host.button("Обновить подписку", secondary = true).apply {
+        root.addView(host.row("Продлить или сменить тариф", "Тарифы и увеличение лимита в Telegram", "↗", "бот").apply {
+            setOnClickListener { openUrl("https://t.me/deyttbot") }
+        })
+        root.addView(spacer(6, host))
+        root.addView(host.button("Импортировать подписку", secondary = true).apply {
             setOnClickListener { host.openSetup() }
         })
         root.addView(spacer(10, host))
@@ -376,17 +548,114 @@ internal class PrimaryPages(private val host: MainActivity) {
     }
 
     private fun confirmTelegramReset() {
-        AlertDialog.Builder(host)
-            .setTitle("Продолжить сброс в Telegram?")
-            .setMessage("Сброс отзывает существующие ключи и создаёт новые. Откроется бот DEYTT, где операция потребует ещё одного подтверждения.")
-            .setNegativeButton("Отмена", null)
-            .setPositiveButton("Открыть бота") { _, _ -> openUrl("https://t.me/deyttbot") }
-            .show()
+        val dialog = Dialog(host)
+        val sheet = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(22), host.dp(20), host.dp(22), host.dp(18))
+            background = host.rounded(SURFACE, 24f, LINE)
+        }
+        sheet.addView(host.mono("КЛЮЧИ · ПОДТВЕРЖДЕНИЕ", 9f, MUTED, 650))
+        sheet.addView(host.text("Открыть управление ключами?", 19f, TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, host.dp(10), 0, host.dp(7))
+        })
+        sheet.addView(host.text(
+            "Бот покажет действие сброса и попросит подтвердить его отдельно. Существующие ключи не изменятся, пока вы не подтвердите операцию там.",
+            13f,
+            MUTED,
+        ).apply { setLineSpacing(host.dp(3).toFloat(), 1f) })
+        val actions = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, host.dp(16), 0, 0)
+        }
+        actions.addView(host.button("Отмена", secondary = true).apply {
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(0, host.dp(48), 1f).apply { marginEnd = host.dp(8) })
+        actions.addView(host.button("Открыть бота").apply {
+            setOnClickListener {
+                dialog.dismiss()
+                openUrl("https://t.me/deyttbot")
+            }
+        }, LinearLayout.LayoutParams(0, host.dp(48), 1f))
+        sheet.addView(actions)
+        showSheet(dialog, sheet)
+    }
+
+    private fun showSheet(dialog: Dialog, content: View) {
+        dialog.setContentView(content)
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.show()
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setDimAmount(.58f)
+            setGravity(Gravity.BOTTOM)
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            decorView.setPadding(host.dp(14), 0, host.dp(14), host.dp(18))
+        }
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     private fun settingsPage(): View {
         val root = host.screen(withBackdrop = true)
         root.addView(host.header("версия ${BuildConfig.VERSION_NAME}", "Настройки"))
+        root.addView(spacer(12, host))
+        root.addView(host.sectionLabel("язык"))
+        root.addView(host.row("Язык приложения", AppLanguage.label(host), "Aa", AppLanguage.label(host)).apply {
+            setOnClickListener {
+                val dialog = Dialog(host)
+                val sheet = LinearLayout(host).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(host.dp(20), host.dp(20), host.dp(20), host.dp(18))
+                    background = host.rounded(SURFACE, 24f, LINE)
+                }
+                sheet.addView(host.mono("НАСТРОЙКИ · ЯЗЫК", 9f, MUTED, 650))
+                sheet.addView(host.text("Язык приложения", 20f, TEXT, android.graphics.Typeface.BOLD).apply {
+                    setPadding(0, host.dp(10), 0, host.dp(8))
+                })
+                sheet.addView(host.text("Смена применяется сразу ко всем вкладкам.", 12f, MUTED).apply {
+                    setPadding(0, 0, 0, host.dp(12))
+                })
+                listOf(AppLanguage.RU to "Русский", AppLanguage.EN to "English").forEach { (code, label) ->
+                    val selected = code == AppLanguage.current(host)
+                    sheet.addView(host.row(
+                        label,
+                        if (selected) "Текущий язык" else "Выбрать",
+                        if (selected) "✓" else "○",
+                        if (selected) "выбрано" else "",
+                        emphasis = selected,
+                    ).apply {
+                        setOnClickListener {
+                            dialog.dismiss()
+                            if (code != AppLanguage.current(host)) {
+                                AppLanguage.set(host, code)
+                                host.recreate()
+                            }
+                        }
+                    })
+                }
+                sheet.addView(host.button("Готово", secondary = true).apply {
+                    setOnClickListener { dialog.dismiss() }
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48)).apply {
+                    topMargin = host.dp(12)
+                })
+                showSheet(dialog, sheet)
+            }
+        })
+        root.addView(spacer(12, host))
+        root.addView(host.sectionLabel("аккаунт"))
+        val sessionToken = TelegramSessionStore.read(host)
+        root.addView(host.row(
+            if (sessionToken == null) "Добавить приложение" else "Telegram подключён",
+            if (sessionToken == null) "Подтвердить аккаунт и загрузить профили из бота"
+            else "Профиль и подписка связаны с этим устройством",
+            if (sessionToken == null) "↗" else "✓",
+            if (sessionToken == null) "добавить" else "управлять",
+            emphasis = sessionToken != null,
+        ).apply {
+            setOnClickListener {
+                if (TelegramSessionStore.read(host) == null) showTelegramPairing()
+                else showLinkedTelegramAccount()
+            }
+        })
         root.addView(spacer(12, host))
         root.addView(host.sectionLabel("официальный релиз"))
         updateButton = host.button("Проверить обновления").apply {
@@ -404,36 +673,55 @@ internal class PrimaryPages(private val host: MainActivity) {
         })
         root.addView(spacer(20, host))
         root.addView(host.sectionLabel("подключение"))
-        val probeMethod = RouteProbePreferences.method(host)
+        val probeSummary = { host.uiCopy("Через двойной маршрут · 10 с · ${RouteProbePreferences.method(host).title}") }
         val probeRow = host.row(
             "Проверка маршрута",
-            "Via Proxy · Double · 10 с · ${probeMethod.title}",
+            probeSummary(),
             "↻",
-            "настроить",
+            "метод",
         ).apply {
             val details = getChildAt(1) as? LinearLayout
             val summary = details?.getChildAt(1) as? TextView
             setOnClickListener {
                 val methods = RouteProbeMethod.values()
-                AlertDialog.Builder(host)
-                    .setTitle("Метод проверки через прокси")
-                    .setSingleChoiceItems(
-                        arrayOf("HEAD · короткий запрос", "GET · запрос с ответом"),
-                        methods.indexOf(RouteProbePreferences.method(host)),
-                    ) { dialog, which ->
-                        methods.getOrNull(which)?.let { method ->
+                val selectedMethod = RouteProbePreferences.method(host)
+                val dialog = Dialog(host)
+                val sheet = LinearLayout(host).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(host.dp(20), host.dp(20), host.dp(20), host.dp(18))
+                    background = host.rounded(SURFACE, 24f, LINE)
+                }
+                sheet.addView(host.mono("ПОДКЛЮЧЕНИЕ · ДИАГНОСТИКА", 9f, MUTED, 650))
+                sheet.addView(host.text("Метод проверки", 20f, TEXT, android.graphics.Typeface.BOLD).apply {
+                    setPadding(0, host.dp(10), 0, host.dp(8))
+                })
+                sheet.addView(host.text("Проверка идёт через выбранный двойной маршрут. Запрос ограничен десятью секундами.", 12f, MUTED).apply {
+                    setPadding(0, 0, 0, host.dp(12))
+                })
+                methods.forEach { method ->
+                    val isSelected = method == selectedMethod
+                    val label = if (method == RouteProbeMethod.HEAD) "Короткий запрос HEAD" else "Запрос GET с ответом"
+                    val detail = if (method == RouteProbeMethod.HEAD) "Проверяет заголовки, меньше данных" else "Проверяет доступность ответа целиком"
+                    sheet.addView(host.row(label, detail, if (isSelected) "✓" else "○", if (isSelected) "выбрано" else "",
+                        emphasis = isSelected).apply {
+                        setOnClickListener {
                             RouteProbePreferences.saveMethod(host, method)
-                            summary?.text = "Via Proxy · Double · 10 с · ${method.title}"
-                            contentDescription = "Проверка маршрута: Via Proxy, Double, тайм-аут 10 секунд, метод ${method.title}"
+                            summary?.text = probeSummary()
+                            contentDescription = host.uiCopy("Проверка маршрута: через двойной маршрут, тайм-аут 10 секунд, метод ${method.title}")
+                            dialog.dismiss()
                         }
-                        dialog.dismiss()
-                    }
-                    .setNegativeButton("Закрыть", null)
-                .show()
+                    })
+                }
+                sheet.addView(host.button("Готово", secondary = true).apply {
+                    setOnClickListener { dialog.dismiss() }
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48)).apply {
+                    topMargin = host.dp(14)
+                })
+                showSheet(dialog, sheet)
             }
         }
         root.addView(probeRow)
-        root.addView(host.row("Настройки VPN Android", "Системные разрешения и блокировка", "↗", "открыть").apply {
+        root.addView(host.row("Разрешения соединения Android", "Системные разрешения и блокировка", "↗", "открыть").apply {
             setOnClickListener {
                 runCatching { host.startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) }
             }
@@ -449,7 +737,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             background = host.rounded(SURFACE, 20f, LINE)
             addView(preferenceSwitch(
                 "Показывать сеть на карте",
-                "Примерный город по IP через ipinfo.io. GPS не используется.",
+                "ipinfo.io видит IP запроса; координаты в приложении не сохраняются. GPS не используется.",
                 host.isNetworkLocationEnabled(),
                 host::setNetworkLocationEnabled,
             ))
@@ -468,7 +756,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         root.addView(preferences)
         root.addView(spacer(10, host))
         root.addView(host.note(
-            "Карта маршрутов встроена и работает офлайн. Для точки входа приложение отправляет запрос к ipinfo.io; IP-адрес не сохраняется, приблизительное место кэшируется на устройстве. Выключение функции стирает кэш.",
+            "Карта маршрутов встроена и работает офлайн. Чтобы определить регион, запрос с IP-адресом получает ipinfo.io. Приложение не сохраняет IP или координаты: место остаётся только в памяти до закрытия. Выключение функции сразу убирает точку с карты.",
             TEXT,
         ))
         root.addView(spacer(20, host))
@@ -479,7 +767,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         updateButton?.isEnabled = false
         updateButton?.alpha = .68f
         updateStatus?.apply {
-            text = "Проверяем официальный релиз…"
+            text = host.uiCopy("Проверяем официальный релиз…")
             setTextColor(DeyttUi.SKY)
         }
         updateStatusText = "Проверяем официальный релиз…"
@@ -491,23 +779,306 @@ internal class PrimaryPages(private val host: MainActivity) {
                     if (!ReleaseVersion.isNewer(release.tag, BuildConfig.VERSION_NAME)) {
                         latestRelease = null
                         updateStatusText = "Установлена последняя версия."
-                        updateButton?.text = "Проверить снова"
+                        updateButton?.text = host.uiCopy("Проверить снова")
                     } else {
                         latestRelease = release
                         updateStatusText = "Доступна ${release.tag}. Откройте официальный релиз и проверьте APK перед установкой."
-                        updateButton?.text = "Открыть официальный релиз"
+                        updateButton?.text = host.uiCopy("Открыть официальный релиз")
                     }
-                    updateStatus?.apply { text = updateStatusText; setTextColor(DeyttUi.MINT) }
+                    updateStatus?.apply { text = host.uiCopy(updateStatusText); setTextColor(DeyttUi.MINT) }
                 } }
                 .onFailure {
                     host.runOnUiThread {
                         latestRelease = null
                         updateStatusText = "Не удалось проверить официальный релиз. Повторите попытку позже."
-                        updateButton?.apply { isEnabled = true; alpha = 1f; text = "Проверить обновления" }
-                        updateStatus?.apply { text = updateStatusText; setTextColor(DeyttUi.CORAL) }
+                        updateButton?.apply { isEnabled = true; alpha = 1f; text = host.uiCopy("Проверить обновления") }
+                        updateStatus?.apply { text = host.uiCopy(updateStatusText); setTextColor(DeyttUi.CORAL) }
                     }
                 }
         }
+    }
+
+    private fun showTelegramPairing() {
+        val dialog = Dialog(host)
+        val sheet = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(22), host.dp(20), host.dp(22), host.dp(18))
+            background = host.rounded(SURFACE, 24f, LINE)
+        }
+        sheet.addView(host.mono("./c · АККАУНТ", 9f, MUTED, 650))
+        val title = host.text("Добавить приложение", 21f, TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, host.dp(10), 0, host.dp(6))
+        }
+        sheet.addView(title)
+        val detail = host.text(
+            "Укажи Telegram username. Бот подтвердит вход одноразовым кодом и подключит существующие профили.",
+            13f,
+            MUTED,
+        ).apply { setLineSpacing(host.dp(3).toFloat(), 1f) }
+        sheet.addView(detail)
+
+        fun inputField(hintText: String, inputType: Int, maximumLength: Int): EditText =
+            EditText(host).apply {
+                hint = hintText
+                setTextColor(TEXT)
+                setHintTextColor(MUTED)
+                textSize = 15f
+                setPadding(host.dp(15), 0, host.dp(15), 0)
+                background = host.rounded(SURFACE_2, 15f, LINE)
+                this.inputType = inputType
+                isSingleLine = true
+                imeOptions = EditorInfo.IME_ACTION_DONE
+                filters = arrayOf(InputFilter.LengthFilter(maximumLength))
+            }
+
+        val usernameField = inputField("@username", InputType.TYPE_CLASS_TEXT, 33)
+        val codeField = inputField("123456", InputType.TYPE_CLASS_NUMBER, 6).apply {
+            gravity = Gravity.CENTER
+            letterSpacing = .24f
+        }
+        sheet.addView(usernameField, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, host.dp(52),
+        ).apply { topMargin = host.dp(18) })
+        sheet.addView(codeField, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, host.dp(58),
+        ).apply { topMargin = host.dp(14) })
+
+        val status = host.text("", 12f, MUTED).apply {
+            setPadding(host.dp(2), host.dp(11), host.dp(2), 0)
+            setLineSpacing(host.dp(2).toFloat(), 1f)
+        }
+        sheet.addView(status)
+        val openBot = host.button("Открыть Telegram", secondary = true)
+        sheet.addView(openBot, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48),
+        ).apply { topMargin = host.dp(13) })
+        val primary = host.button("Продолжить")
+        sheet.addView(primary, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, host.dp(50),
+        ).apply { topMargin = host.dp(9) })
+
+        var challenge: String? = null
+        var botUrl: String? = null
+        var step = 0
+        fun setStep(value: Int) {
+            step = value
+            usernameField.visibility = if (step == 0) View.VISIBLE else View.GONE
+            codeField.visibility = if (step == 1) View.VISIBLE else View.GONE
+            openBot.visibility = if (step == 1) View.VISIBLE else View.GONE
+            primary.text = when (step) {
+                0 -> "Продолжить"
+                1 -> "Подтвердить код"
+                else -> "Готово"
+            }
+            title.text = when (step) {
+                0 -> "Добавить приложение"
+                1 -> "Проверь Telegram"
+                else -> "Аккаунт подключён"
+            }
+            detail.text = when (step) {
+                0 -> "Укажи Telegram username. Бот подтвердит вход одноразовым кодом и подключит существующие профили."
+                1 -> "Нажми Start у бота. Код появится в Telegram и действует 5 минут."
+                else -> ""
+            }
+        }
+        fun openBotLink() {
+            val link = botUrl ?: return
+            runCatching { host.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+                .onFailure { status.text = "Ссылка готова. Открой бота ещё раз кнопкой ниже." }
+        }
+
+        openBot.setOnClickListener { openBotLink() }
+        primary.setOnClickListener {
+            when (step) {
+                0 -> {
+                    val username = usernameField.text.toString().trim()
+                    if (!Regex("@?[A-Za-z0-9_]{5,32}").matches(username)) {
+                        status.text = "Введи username Telegram длиной от 5 до 32 знаков."
+                        status.setTextColor(DeyttUi.CORAL)
+                        return@setOnClickListener
+                    }
+                    primary.isEnabled = false
+                    primary.text = "Создаём ссылку…"
+                    status.setTextColor(BLUE)
+                    status.text = "Подготавливаем одноразовое подтверждение."
+                    pairingExecutor.execute {
+                        val result = runCatching { TelegramPairingClient.start(username) }
+                        host.runOnUiThread {
+                            if (host.isFinishing || host.isDestroyed || !dialog.isShowing) return@runOnUiThread
+                            primary.isEnabled = true
+                            result.onSuccess {
+                                challenge = it.challenge
+                                botUrl = it.botUrl
+                                setStep(1)
+                                status.setTextColor(BLUE)
+                                status.text = "Ссылка действует 5 минут. Код отправит бот после нажатия Start."
+                                openBotLink()
+                            }.onFailure {
+                                primary.text = "Продолжить"
+                                status.setTextColor(DeyttUi.CORAL)
+                                status.text = pairingError(it)
+                            }
+                        }
+                    }
+                }
+                1 -> {
+                    val currentChallenge = challenge
+                    val code = codeField.text.toString().trim()
+                    if (currentChallenge == null || !Regex("\\d{6}").matches(code)) {
+                        status.text = "Введи шесть цифр из сообщения бота."
+                        status.setTextColor(DeyttUi.CORAL)
+                        return@setOnClickListener
+                    }
+                    primary.isEnabled = false
+                    primary.text = "Проверяем код…"
+                    status.text = "Подтверждаем Telegram-аккаунт и загружаем профили."
+                    status.setTextColor(BLUE)
+                    pairingExecutor.execute {
+                        val result = runCatching {
+                            val session = TelegramPairingClient.verify(currentChallenge, code)
+                            TelegramSessionStore.save(host, session.token)
+                            var importedCount: Int? = null
+                            var importFailed = false
+                            runCatching {
+                                val subscriptionUrl = TelegramPairingClient.subscriptionUrl(session.token)
+                                if (subscriptionUrl != null) {
+                                    val currentRouteId = SelectedRouteStore(host).read().id
+                                    val imported = SubscriptionClient.import(host, subscriptionUrl)
+                                    host.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
+                                        .edit().putString("subscription_url", imported.url).apply()
+                                    val routes = RouteCatalog.from(
+                                        SubscriptionStore(host).readCurrent().orEmpty(),
+                                        AwgProfileStore(host).profiles(),
+                                    )
+                                    if (routes.none { it.id == currentRouteId }) {
+                                        routes.firstOrNull()?.let { SelectedRouteStore(host).save(it) }
+                                    }
+                                    importedCount = routes.size
+                                }
+                            }.onFailure { importFailed = true }
+                            session to when {
+                                importFailed -> "Аккаунт подключён. Не удалось обновить профили — повтори вход позже."
+                                importedCount != null -> "Загружено маршрутов: $importedCount. Текущий туннель не прерывался."
+                                else -> "Аккаунт подключён. Активной подписки для импорта пока нет."
+                            }
+                        }
+                        host.runOnUiThread {
+                            if (host.isFinishing || host.isDestroyed || !dialog.isShowing) return@runOnUiThread
+                            primary.isEnabled = true
+                            result.onSuccess { (session, message) ->
+                                status.setTextColor(DeyttUi.MINT)
+                                status.text = message
+                                setStep(2)
+                                host.updateTelegramIdentity(session.username, null)
+                                host.refreshTelegramAccount()
+                                host.refreshAccountViews()
+                            }.onFailure {
+                                primary.text = "Подтвердить код"
+                                status.setTextColor(DeyttUi.CORAL)
+                                status.text = pairingError(it)
+                            }
+                        }
+                    }
+                }
+                else -> dialog.dismiss()
+            }
+        }
+        setStep(0)
+        showSheet(dialog, sheet)
+    }
+
+    private fun pairingError(error: Throwable): String = when ((error as? TelegramPairingException)?.code) {
+        "invalid_username" -> "Проверь username Telegram."
+        "pairing_rate_limited", "rate_limited" -> "Слишком частые попытки. Подожди немного и повтори."
+        "pair_code_locked" -> "Лимит попыток исчерпан. Создай новую ссылку."
+        "pair_code_invalid" -> "Код неверный или уже истёк. Проверь Telegram или создай новую ссылку."
+        "account_blocked", "blocked" -> "Для этого аккаунта вход недоступен. Напиши в поддержку."
+        else -> "Не удалось завершить вход. Проверь соединение и попробуй ещё раз."
+    }
+
+    private fun showLinkedTelegramAccount() {
+        val token = TelegramSessionStore.read(host) ?: run {
+            showTelegramPairing()
+            return
+        }
+        val dialog = Dialog(host)
+        val sheet = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(22), host.dp(20), host.dp(22), host.dp(18))
+            background = host.rounded(SURFACE, 24f, LINE)
+        }
+        sheet.addView(host.mono("./c · TELEGRAM", 9f, MUTED, 650))
+        sheet.addView(host.text("Аккаунт подключён", 20f, TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, host.dp(10), 0, host.dp(7))
+        })
+        sheet.addView(host.text(
+            "Профиль и сессия связаны с Telegram. Переподключение загрузит свежие профили; отключение завершит эту сессию.",
+            13f, MUTED,
+        ).apply { setLineSpacing(host.dp(3).toFloat(), 1f) })
+        sheet.addView(host.button("Переподключить", secondary = true).apply {
+            setOnClickListener {
+                dialog.dismiss()
+                showTelegramPairing()
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48)).apply {
+            topMargin = host.dp(14)
+        })
+        sheet.addView(host.button("Отключить аккаунт", secondary = true).apply {
+            setOnClickListener {
+                dialog.dismiss()
+                confirmTelegramLogout(token)
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48)).apply {
+            topMargin = host.dp(8)
+        })
+        showSheet(dialog, sheet)
+    }
+
+    private fun confirmTelegramLogout(token: String) {
+        val dialog = Dialog(host)
+        val sheet = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(22), host.dp(20), host.dp(22), host.dp(18))
+            background = host.rounded(SURFACE, 24f, LINE)
+        }
+        sheet.addView(host.mono("./c · СЕССИЯ", 9f, MUTED, 650))
+        sheet.addView(host.text("Отключить Telegram?", 20f, TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, host.dp(10), 0, host.dp(7))
+        })
+        sheet.addView(host.text("Приложение перестанет получать профиль и обновления ключей.", 13f, MUTED))
+        val status = host.text("", 12f, DeyttUi.CORAL).apply { setPadding(0, host.dp(10), 0, 0) }
+        sheet.addView(status)
+        val actions = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, host.dp(14), 0, 0)
+        }
+        val cancel = host.button("Отмена", secondary = true).apply { setOnClickListener { dialog.dismiss() } }
+        actions.addView(cancel, LinearLayout.LayoutParams(0, host.dp(48), 1f).apply { marginEnd = host.dp(8) })
+        val unlink = host.button("Отключить")
+        actions.addView(unlink, LinearLayout.LayoutParams(0, host.dp(48), 1f))
+        unlink.setOnClickListener {
+            unlink.isEnabled = false
+            unlink.text = "Завершаем…"
+            pairingExecutor.execute {
+                val result = runCatching { TelegramPairingClient.logout(token) }
+                host.runOnUiThread {
+                    if (host.isFinishing || host.isDestroyed || !dialog.isShowing) return@runOnUiThread
+                    result.onSuccess {
+                        TelegramSessionStore.clear(host)
+                        dialog.dismiss()
+                        host.updateTelegramIdentity(null, null)
+                        host.refreshTelegramAccount()
+                        host.refreshAccountViews()
+                    }.onFailure {
+                        unlink.isEnabled = true
+                        unlink.text = "Повторить"
+                        status.text = "Не удалось отозвать сессию. Проверь соединение и повтори."
+                    }
+                }
+            }
+        }
+        sheet.addView(actions)
+        showSheet(dialog, sheet)
     }
 
     private fun openLatest() {
@@ -551,16 +1122,19 @@ internal class PrimaryPages(private val host: MainActivity) {
     }
 
     private fun formatBytes(value: Long): String {
-        if (value <= 0) return "0 Б"
-        val units = arrayOf("Б", "КБ", "МБ", "ГБ", "ТБ")
+        val english = AppLanguage.current(host) == AppLanguage.EN
+        if (value <= 0) return if (english) "0 B" else "0 Б"
+        val units = if (english) arrayOf("B", "KB", "MB", "GB", "TB") else arrayOf("Б", "КБ", "МБ", "ГБ", "ТБ")
         var amount = value.toDouble()
         var unit = 0
         while (amount >= 1024 && unit < units.lastIndex) { amount /= 1024; unit++ }
         return if (unit == 0) "${amount.toLong()} ${units[unit]}" else String.format(Locale.US, "%.1f %s", amount, units[unit])
     }
 
-    private fun formatDate(seconds: Long): String = DateFormat.getDateInstance(DateFormat.MEDIUM, Locale("ru"))
-        .format(Date(seconds * 1000))
+    private fun formatDate(seconds: Long): String {
+        val locale = if (AppLanguage.current(host) == AppLanguage.EN) Locale.ENGLISH else Locale("ru")
+        return DateFormat.getDateInstance(DateFormat.MEDIUM, locale).format(Date(seconds * 1000))
+    }
 }
 
 private class UsageBar(context: MainActivity, private val fraction: Float) : View(context) {

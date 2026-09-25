@@ -2,6 +2,7 @@
   const root = document.querySelector(".network-atlas");
   document.documentElement.dataset.theme = "dark";
   window.deyttMapRoute = "auto";
+  window.deyttMapLanguage = "ru";
   window.deyttMapUserLocation = null;
   window.deyttMapNodeTapped = function (key) {
     if (window.DeyttAtlasBridge && typeof window.DeyttAtlasBridge.onNodeTap === "function") {
@@ -16,10 +17,17 @@
       window.deyttMapAtlas.start();
     }
   };
+  window.deyttSetMapLanguage = function (language) {
+    window.deyttMapLanguage = language === "en" ? "en" : "ru";
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setLanguage(window.deyttMapLanguage);
+  };
   window.deyttSetMapTraffic = function (enabled) {
     if (!window.deyttMapAtlas) return;
     window.deyttMapAtlas.animateTraffic = Boolean(enabled);
     window.deyttMapAtlas.start();
+  };
+  window.deyttSetMapLocations = function (locations) {
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setAvailableLocations(locations);
   };
   window.deyttSetMapUserLocation = function (latitude, longitude, details) {
     window.deyttMapUserLocation = { latitude: latitude, longitude: longitude, details: details || {} };
@@ -44,12 +52,14 @@
     selectOnTap: false,
   }).then(function (atlas) {
     window.deyttMapAtlas = atlas;
+    window.deyttMapAtlas.setLanguage(window.deyttMapLanguage);
     const status = root.querySelector("[data-atlas-status]");
     if (status) {
       status.textContent = "";
       status.setAttribute("aria-hidden", "true");
     }
     window.deyttSetMapRoute(window.deyttMapRoute);
+    if (window.deyttMapLocations) window.deyttSetMapLocations(window.deyttMapLocations);
     if (window.deyttMapUserLocation) {
       const location = window.deyttMapUserLocation;
       window.deyttMapAtlas.setUserLocation(location.latitude, location.longitude, location.details);
@@ -58,7 +68,7 @@
     const status = root.querySelector("[data-atlas-status]");
     if (status) {
       status.removeAttribute("aria-hidden");
-      status.textContent = "карта временно недоступна";
+      status.textContent = window.deyttMapLanguage === "en" ? "Map temporarily unavailable" : "карта временно недоступна";
     }
   });
 }());

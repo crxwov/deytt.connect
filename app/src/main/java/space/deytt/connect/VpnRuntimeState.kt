@@ -27,8 +27,15 @@ object VpnControlDecision {
     fun decide(persisted: VpnPhase, libboxRunning: Boolean, awgRunning: Boolean): VpnControlAction =
         if (libboxRunning || awgRunning) VpnControlAction.STOP else VpnControlAction.START
 
-    fun effectivePhase(persisted: VpnPhase, libboxRunning: Boolean, awgRunning: Boolean): VpnPhase =
-        if (!libboxRunning && !awgRunning && persisted in setOf(VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.CONNECTED, VpnPhase.STOPPING)) {
+    fun effectivePhase(
+        persisted: VpnPhase,
+        libboxRunning: Boolean,
+        awgRunning: Boolean,
+        systemTunnelActive: Boolean = true,
+    ): VpnPhase =
+        if ((!libboxRunning && !awgRunning && persisted in setOf(VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.CONNECTED, VpnPhase.STOPPING)) ||
+            (persisted == VpnPhase.CONNECTED && !systemTunnelActive)
+        ) {
             VpnPhase.IDLE
         } else {
             persisted
@@ -55,9 +62,9 @@ class VpnStateStore(private val context: Context) {
         }
     }
 
-    fun reconcile(libboxRunning: Boolean, awgRunning: Boolean): VpnSnapshot {
+    fun reconcile(libboxRunning: Boolean, awgRunning: Boolean, systemTunnelActive: Boolean = true): VpnSnapshot {
         val saved = read()
-        val effective = VpnControlDecision.effectivePhase(saved.phase, libboxRunning, awgRunning)
+        val effective = VpnControlDecision.effectivePhase(saved.phase, libboxRunning, awgRunning, systemTunnelActive)
         if (effective != saved.phase) {
             write(VpnPhase.IDLE, IDLE_TITLE)
             return VpnSnapshot(VpnPhase.IDLE, IDLE_TITLE, null)

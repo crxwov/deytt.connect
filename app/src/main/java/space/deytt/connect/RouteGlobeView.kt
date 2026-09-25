@@ -15,6 +15,7 @@ import android.webkit.JavascriptInterface
 import android.widget.FrameLayout
 import java.io.ByteArrayInputStream
 import org.json.JSONObject
+import org.json.JSONArray
 
 /** Offline Android host for the same interactive network atlas used on deytt.space. */
 class RouteGlobeView(context: Context) : FrameLayout(context) {
@@ -22,9 +23,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var networkLocation: IpNetworkLocation? = null
     private var pageLoaded = false
     private var trafficEnabled = false
-    private var touchStartX = 0f
-    private var touchStartY = 0f
-    private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+    private var availableLocations = setOf("nl", "de", "fi", "ru")
     private val atlas: WebView
     var onMapNodeTapped: ((String) -> Unit)? = null
 
@@ -73,6 +72,8 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     pageLoaded = true
+                    applyMapLanguage()
+                    applyAvailableLocations()
                     applySelectedRoute()
                     applyTrafficState()
                     applyUserLocation()
@@ -80,18 +81,8 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             }
             setOnTouchListener { view, event ->
                 when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN -> {
-                        touchStartX = event.x
-                        touchStartY = event.y
-                    }
-                    MotionEvent.ACTION_POINTER_DOWN -> view.parent?.requestDisallowInterceptTouchEvent(true)
-                    MotionEvent.ACTION_MOVE -> {
-                        val dx = kotlin.math.abs(event.x - touchStartX)
-                        val dy = kotlin.math.abs(event.y - touchStartY)
-                        if (dy > touchSlop && dy > dx) {
-                            view.parent?.requestDisallowInterceptTouchEvent(false)
-                        }
-                    }
+                    MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN ->
+                        view.parent?.requestDisallowInterceptTouchEvent(true)
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
                         view.parent?.requestDisallowInterceptTouchEvent(false)
                 }
@@ -104,15 +95,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
     @Suppress("UNUSED_PARAMETER")
     fun focus(code: String, animate: Boolean = true) {
-        val normalized = code.uppercase().substringAfterLast(':')
-        selectedRoute = when {
-            normalized in setOf("RU-DE", "RU_DE") -> "ru-de"
-            normalized.contains("NL") -> "nl"
-            normalized.contains("DE") -> "de"
-            normalized.contains("FI") -> "fi"
-            normalized.contains("RU") -> "ru"
-            else -> "auto"
-        }
+        selectedRoute = routeKeyFor(code)
         applySelectedRoute()
     }
 
@@ -120,6 +103,12 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (trafficEnabled == enabled) return
         trafficEnabled = enabled
         applyTrafficState()
+    }
+
+    internal fun setAvailableLocations(locations: Set<String>) {
+        val allowed = setOf("nl", "de", "fi", "ru")
+        availableLocations = locations.map(String::lowercase).filter(allowed::contains).toSet()
+        if (pageLoaded) applyAvailableLocations()
     }
 
     internal fun setUserLocation(location: IpNetworkLocation?) {
@@ -153,6 +142,18 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         )
     }
 
+    private fun applyMapLanguage() {
+        if (!pageLoaded) return
+        val language = AppLanguage.current(context)
+        atlas.evaluateJavascript("window.deyttSetMapLanguage && window.deyttSetMapLanguage('$language')", null)
+    }
+
+    private fun applyAvailableLocations() {
+        if (!pageLoaded) return
+        val payload = JSONArray(availableLocations.toList()).toString()
+        atlas.evaluateJavascript("window.deyttSetMapLocations && window.deyttSetMapLocations($payload)", null)
+    }
+
     private fun applyTrafficState() {
         if (!pageLoaded) return
         atlas.evaluateJavascript(
@@ -169,7 +170,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             return
         }
         val details = JSONObject()
-            .put("city", location.city.take(80))
+            .put("city", AppLanguage.locationLabel(context, location.city.take(80)))
             .put("country", location.countryCode.take(3))
             .toString()
         atlas.evaluateJavascript(
@@ -179,6 +180,20 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     }
 
     private fun mapDescription(route: String): String {
+        if (AppLanguage.current(context) == AppLanguage.EN) {
+            val destination = when (route) {
+                "nl" -> "The selected exit is Amsterdam, Netherlands"
+                "de" -> "The selected exit is Frankfurt, Germany"
+                "fi" -> "The selected exit is Helsinki, Finland"
+                "ru" -> "The selected exit is Saint Petersburg, Russia"
+                "ru-de" -> "The selected route is a double hop from Saint Petersburg to Frankfurt"
+                else -> "Available exits are Amsterdam, Frankfurt, Helsinki, and Saint Petersburg"
+            }
+            val origin = networkLocation?.let {
+                " Entry point: ${it.placeLabel}, approximate by IP; the IP address is not stored."
+            }.orEmpty()
+            return "DEYTT network map. $destination.$origin Tap a point to choose an exit and protocol. Drag to rotate; pinch to zoom. Swipe horizontally to switch tabs."
+        }
         val destination = when (route) {
             "nl" -> "выбрана точка Амстердам, Нидерланды"
             "de" -> "выбрана точка Франкфурт, Германия"
@@ -231,5 +246,19 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
     companion object {
         private const val ASSET_HOST = "appassets.androidplatform.net"
+
+        internal fun routeKeyFor(selectedRouteId: String): String {
+            val routeTokens = selectedRouteId.uppercase().split(Regex("[^A-Z]+"))
+                .filter(String::isNotBlank)
+                .toSet()
+            return when {
+                routeTokens.containsAll(setOf("RU", "DE")) -> "ru-de"
+                "NL" in routeTokens -> "nl"
+                "DE" in routeTokens -> "de"
+                "FI" in routeTokens -> "fi"
+                "RU" in routeTokens -> "ru"
+                else -> "auto"
+            }
+        }
     }
 }

@@ -27,4 +27,30 @@ class VpnRuntimeStateTest {
             VpnControlDecision.decide(VpnPhase.IDLE, libboxRunning = false, awgRunning = true),
         )
     }
+
+    @Test
+    fun connectedStateWithoutAndroidVpnTransportIsReconciledAsIdle() {
+        assertEquals(
+            VpnPhase.IDLE,
+            VpnControlDecision.effectivePhase(
+                VpnPhase.CONNECTED,
+                libboxRunning = true,
+                awgRunning = false,
+                systemTunnelActive = false,
+            ),
+        )
+    }
+
+    @Test
+    fun connectingPhaseIsNotClearedBeforeAndroidRegistersTheTunnel() {
+        assertEquals(
+            VpnPhase.CHECKING,
+            VpnControlDecision.effectivePhase(
+                VpnPhase.CHECKING,
+                libboxRunning = true,
+                awgRunning = false,
+                systemTunnelActive = false,
+            ),
+        )
+    }
 }

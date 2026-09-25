@@ -9,19 +9,26 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.os.SystemClock
+import android.net.TrafficStats
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -31,6 +38,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.viewpager2.widget.ViewPager2
+import space.deytt.connect.AppLanguage.uiCopy
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.brandHeader
@@ -59,6 +67,10 @@ class MainActivity : Activity() {
     private lateinit var originPlaceText: TextView
     private lateinit var originHintText: TextView
     private lateinit var destinationText: TextView
+    private lateinit var destinationRouteHint: TextView
+    private var telegramAccountName: TextView? = null
+    private var telegramAvatarFallback: TextView? = null
+    private var telegramAvatarImage: ImageView? = null
     private var pendingRoute: SelectedRoute? = null
     private var latencyGeneration = 0
     private var renderedPhase: VpnPhase? = null
@@ -70,7 +82,39 @@ class MainActivity : Activity() {
     private var locationRequestGeneration = 0
     private var pendingRouteProbeId: String? = null
     private val locationExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val accountExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private var accountGeneration = 0
     private val connectionProgressHandler = Handler(Looper.getMainLooper())
+    private val trafficSampleHandler = Handler(Looper.getMainLooper())
+    private var previousUidRxBytes = -1L
+    private var previousUidTxBytes = -1L
+    private var trafficVisibleUntilElapsed = 0L
+    private val trafficSample = object : Runnable {
+        override fun run() {
+            if (!shouldSampleMapTraffic()) {
+                previousUidRxBytes = -1L
+                previousUidTxBytes = -1L
+                trafficVisibleUntilElapsed = 0L
+                if (::globe.isInitialized) globe.setTrafficEnabled(false)
+                return
+            }
+            val rx = TrafficStats.getUidRxBytes(Process.myUid())
+            val tx = TrafficStats.getUidTxBytes(Process.myUid())
+            if (rx >= 0L && tx >= 0L) {
+                if (previousUidRxBytes >= 0L && previousUidTxBytes >= 0L &&
+                    (rx > previousUidRxBytes || tx > previousUidTxBytes)
+                ) {
+                    trafficVisibleUntilElapsed = SystemClock.elapsedRealtime() + TRAFFIC_VISIBILITY_WINDOW_MS
+                }
+                previousUidRxBytes = rx
+                previousUidTxBytes = tx
+            }
+            if (::globe.isInitialized) {
+                globe.setTrafficEnabled(SystemClock.elapsedRealtime() < trafficVisibleUntilElapsed)
+            }
+            trafficSampleHandler.postDelayed(this, TRAFFIC_SAMPLE_INTERVAL_MS)
+        }
+    }
     private val connectionProgressTick = object : Runnable {
         override fun run() {
             val phase = renderedPhase ?: return
@@ -104,14 +148,14 @@ class MainActivity : Activity() {
             val error = event.getStringExtra(RouteProbeClient.EXTRA_ERROR)
             when {
                 elapsed >= 0L -> {
-                    latencyText.text = "${elapsed} мс"
+                    latencyText.text = formatLatency(elapsed)
                     latencyText.setTextColor(DeyttUi.MINT)
-                    latencyText.contentDescription = "Задержка через выбранный выход: ${elapsed} миллисекунд, два HTTPS-запроса HEAD или GET через прокси"
+                    latencyText.contentDescription = uiCopy("Задержка через выбранный выход: ${elapsed} миллисекунд, два HTTPS-запроса HEAD или GET через прокси")
                 }
                 !error.isNullOrBlank() -> {
-                    latencyText.text = if (error.contains("10 с")) "тайм-аут" else "нет ответа"
+                    latencyText.text = uiCopy(if (error.contains("10 с")) "тайм-аут" else "нет ответа")
                     latencyText.setTextColor(DeyttUi.CORAL)
-                    latencyText.contentDescription = "Проверка выхода через прокси: $error"
+                    latencyText.contentDescription = uiCopy("Проверка выхода через прокси: $error")
                 }
             }
             if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
@@ -122,7 +166,7 @@ class MainActivity : Activity() {
                     action.isEnabled = true
                     action.alpha = 1f
                 }
-                if (elapsed < 0L && error.isNullOrBlank()) latencyText.text = "пинг"
+                if (elapsed < 0L && error.isNullOrBlank()) latencyText.text = uiCopy("пинг")
             }
         }
     }
@@ -145,8 +189,12 @@ class MainActivity : Activity() {
         initialPage = savedInstanceState?.getInt(STATE_SELECTED_TAB)
             ?: intent?.getIntExtra(EXTRA_START_TAB, 0)?.coerceIn(0, 3)
             ?: 0
-        currentNetworkLocation = if (isNetworkLocationEnabled()) IpNetworkLocationStore(this).read() else null
+        // Clear approximate coordinates persisted by pre-consent builds.
+        // Location approval is remembered, location data itself is not.
+        IpNetworkLocationStore(this).clear()
+        currentNetworkLocation = null
         buildScreen()
+        window.decorView.post { showNetworkLocationConsentIfNeeded() }
         requestNotificationPermissionIfNeeded()
     }
 
@@ -170,6 +218,7 @@ class MainActivity : Activity() {
         }
         hasStartedBefore = true
         refreshNetworkLocation()
+        refreshTelegramAccount()
     }
 
     override fun onStop() {
@@ -191,6 +240,7 @@ class MainActivity : Activity() {
             }
         }
         connectionProgressHandler.removeCallbacks(connectionProgressTick)
+        trafficSampleHandler.removeCallbacks(trafficSample)
         if (::globe.isInitialized) globe.setTrafficEnabled(false)
         if (::pageAdapter.isInitialized) {
             pageAdapter.cachedPages().forEach { (_, page) -> DeyttUi.setStarfieldMotion(page, active = false) }
@@ -223,7 +273,81 @@ class MainActivity : Activity() {
         if (::primaryPages.isInitialized) primaryPages.close()
         locationRequestGeneration++
         locationExecutor.shutdownNow()
+        accountGeneration++
+        accountExecutor.shutdownNow()
+        trafficSampleHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
+    }
+
+    internal fun updateTelegramIdentity(username: String?, avatar: Bitmap?) {
+        val account = username?.trim()?.removePrefix("@")?.takeIf(String::isNotBlank)
+        telegramAccountName?.text = account?.let { "./c @$it" } ?: uiCopy("./c · без аккаунта")
+        telegramAvatarFallback?.apply {
+            text = account?.take(1)?.uppercase() ?: "•"
+            visibility = if (avatar == null) View.VISIBLE else View.GONE
+        }
+        telegramAvatarImage?.apply {
+            if (avatar == null) {
+                setImageDrawable(null)
+                visibility = View.GONE
+                alpha = 1f
+            } else {
+                setImageBitmap(avatar)
+                visibility = View.VISIBLE
+                alpha = 0f
+                animate().alpha(1f).setDuration(190L).start()
+            }
+        }
+    }
+
+    internal fun refreshTelegramAccount() {
+        if (isFinishing || isDestroyed) return
+        val token = TelegramSessionStore.read(this)
+        if (token == null) {
+            accountGeneration++
+            updateTelegramIdentity(null, null)
+            return
+        }
+        val generation = ++accountGeneration
+        accountExecutor.execute {
+            val result = runCatching {
+                val profile = TelegramPairingClient.profile(token)
+                    ?: throw TelegramPairingException("profile_unavailable")
+                val username = profile.optString("username").ifBlank { profile.optString("first_name") }
+                val imageBytes = TelegramPairingClient.avatar(token)
+                val image = imageBytes?.let(::decodeTelegramAvatar)
+                username to image
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed || generation != accountGeneration ||
+                    TelegramSessionStore.read(this) != token
+                ) return@runOnUiThread
+                result.onSuccess { (username, image) -> updateTelegramIdentity(username, image) }
+                result.onFailure { error ->
+                    if ((error as? TelegramPairingException)?.code == "session_expired") {
+                        TelegramSessionStore.clear(this)
+                        updateTelegramIdentity(null, null)
+                        refreshAccountViews()
+                    }
+                }
+            }
+        }
+    }
+
+    internal fun refreshAccountViews() {
+        if (!::pageAdapter.isInitialized) return
+        for (position in 0..3) pageAdapter.refresh(position)
+    }
+
+    private fun decodeTelegramAvatar(bytes: ByteArray): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sampleSize = 1
+        while (bounds.outWidth / sampleSize > 144 || bounds.outHeight / sampleSize > 144) {
+            sampleSize *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
     }
 
     private fun buildScreen() {
@@ -250,7 +374,15 @@ class MainActivity : Activity() {
             adapter = pageAdapter
         }
         navigationBar = DeyttUi.PrimaryNavigationBar(this, initialPage) { selectTab(it) }
-        statusInset = View(this).apply { background = DeyttUi.starfieldBackground(this@MainActivity) }
+        // The inset is clipped to system bars but draws against the page's coordinate space.
+        statusInset = View(this).apply { setBackgroundColor(DeyttUi.BG) }
+        pager.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            val viewportHeight = bottom - top
+            if (viewportHeight > 0 && viewportHeight != oldBottom - oldTop) {
+                statusInset.background = DeyttUi.starfieldBackground(this@MainActivity, viewportHeight)
+                updatePrimaryPageMotion(pager.currentItem)
+            }
+        }
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -287,7 +419,7 @@ class MainActivity : Activity() {
             override fun onPageSelected(position: Int) {
                 navigationBar.setSelectedPage(position)
                 updatePrimaryPageMotion(position)
-                if (::globe.isInitialized) globe.setTrafficEnabled(position == 0 && renderedPhase == VpnPhase.CONNECTED)
+                updateMapTrafficSampling()
             }
         })
         setContentView(root)
@@ -298,15 +430,20 @@ class MainActivity : Activity() {
 
     private fun buildHomePage(): View {
         val root = screen(withBackdrop = true)
-        root.addView(brandHeader())
+        val accountHeader = brandHeader()
+        telegramAccountName = accountHeader.findViewWithTag("telegram-account-name")
+        telegramAvatarFallback = accountHeader.findViewWithTag("telegram-avatar-fallback")
+        telegramAvatarImage = accountHeader.findViewWithTag("telegram-avatar-image")
+        root.addView(accountHeader)
         root.addView(spacer(14, this))
 
         globe = RouteGlobeView(this).apply {
             onMapNodeTapped = ::showMapRoutePicker
             focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
+            setAvailableLocations(availableMapLocations())
             setUserLocation(currentNetworkLocation)
         }
-        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(260)))
+        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(312)))
         root.addView(spacer(10, this))
         root.addView(buildRouteFlow())
         updateRouteFlow(SelectedRouteStore(this).read())
@@ -324,7 +461,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
         }
         statusDot = View(this).apply {
-            contentDescription = "Состояние соединения"
+            contentDescription = uiCopy("Состояние соединения")
             background = android.graphics.drawable.GradientDrawable().apply {
                 shape = android.graphics.drawable.GradientDrawable.OVAL
                 setColor(DeyttUi.MUTED)
@@ -380,12 +517,12 @@ class MainActivity : Activity() {
         if (::globe.isInitialized) globe.focus(selected.id, animate = false)
         updateRouteFlow(selected)
         if (::latencyText.isInitialized) {
-            latencyText.text = "пинг"
+            latencyText.text = uiCopy("пинг")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             latencyText.textSize = 9f
             latencyText.setTextColor(DeyttUi.MUTED)
-            latencyText.contentDescription = "Проверить задержку через выход ${selected.title}: два HTTPS-запроса HEAD или GET, тайм-аут 10 секунд"
+            latencyText.contentDescription = uiCopy("Проверить задержку через выход ${selected.title}: два HTTPS-запроса HEAD или GET, тайм-аут 10 секунд")
         }
     }
 
@@ -432,8 +569,8 @@ class MainActivity : Activity() {
         val connected = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         if (connected) {
             AlertDialog.Builder(this)
-                .setTitle("Сменить VPN-выход?")
-                .setMessage("Текущее соединение остановится. После выбора запустите подключение снова, чтобы применить новый маршрут.")
+                .setTitle("Изменить точку выхода?")
+                .setMessage("Текущее соединение завершится. После выбора подключитесь снова, чтобы применить новый маршрут.")
                 .setNegativeButton("Оставить подключение", null)
                 .setPositiveButton("Остановить и сменить") { _, _ -> applyRouteSelection(route) }
                 .show()
@@ -467,7 +604,7 @@ class MainActivity : Activity() {
             val place = currentNetworkLocation?.placeLabel ?: "Точка входа с этого устройства"
             AlertDialog.Builder(this)
                 .setTitle("Точка входа")
-                .setMessage("$place — приблизительное местоположение по IP. Это не VPN-выход и его нельзя выбрать как сервер.")
+                .setMessage("$place — примерное место по IP. Это не сервер выхода и на выбор маршрута не влияет.")
                 .setPositiveButton("Понятно", null)
                 .show()
             return
@@ -642,7 +779,7 @@ class MainActivity : Activity() {
         pageAdapter.cachedPages().forEach { (position, page) ->
             DeyttUi.setStarfieldMotion(page, active = position == selected && !isFinishing, reducedMotion = reduced)
         }
-        DeyttUi.setStarfieldMotion(statusInset, active = false, reducedMotion = reduced)
+        DeyttUi.setStarfieldMotion(statusInset, active = selected in 0..3 && !isFinishing, reducedMotion = reduced)
     }
 
     private fun buildRouteFlow(): View = LinearLayout(this).apply {
@@ -653,7 +790,7 @@ class MainActivity : Activity() {
 
         val origin = LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.VERTICAL
-            addView(this@MainActivity.mono("ТЕКУЩАЯ СЕТЬ", 8f, DeyttUi.MUTED, 600))
+            addView(this@MainActivity.mono("ВХОД", 8f, DeyttUi.MUTED, 600))
             originPlaceText = this@MainActivity.text("Ищем регион…", 13f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
@@ -667,12 +804,12 @@ class MainActivity : Activity() {
         addView(this@MainActivity.text("→", 18f, DeyttUi.SKY, android.graphics.Typeface.BOLD).apply {
             gravity = Gravity.CENTER
             setPadding(dp(8), 0, dp(8), 0)
-            contentDescription = "направление маршрута"
+            contentDescription = uiCopy("направление маршрута")
         })
         val destination = LinearLayout(this@MainActivity).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.END
-            addView(this@MainActivity.mono("VPN-ВЫХОД", 8f, DeyttUi.MUTED, 600).apply { gravity = Gravity.END })
+            addView(this@MainActivity.mono("ВЫХОД", 8f, DeyttUi.MUTED, 600).apply { gravity = Gravity.END })
             destinationText = this@MainActivity.text("Автоподбор", 13f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
@@ -684,7 +821,11 @@ class MainActivity : Activity() {
             val destinationHint = LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                addView(this@MainActivity.text("точка выхода", 9f, DeyttUi.MUTED),
+                destinationRouteHint = this@MainActivity.text("", 9f, DeyttUi.MUTED).apply {
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                }
+                addView(destinationRouteHint,
                     LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 latencyText = this@MainActivity.actionLabel().apply {
                     minHeight = dp(27)
@@ -698,11 +839,17 @@ class MainActivity : Activity() {
         }
         addView(destination, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { gravity = Gravity.TOP })
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        contentDescription = "Маршрут от текущей сети до VPN-выхода"
+        contentDescription = uiCopy("Путь от входа до выбранного выхода")
     }
 
     private fun updateRouteFlow(selected: SelectedRoute) {
-        if (::destinationText.isInitialized) destinationText.text = selected.title
+        if (!::destinationText.isInitialized) return
+        val isRuDe = selected.id.contains("RU-DE", ignoreCase = true)
+        destinationText.text = if (isRuDe) "🇩🇪 ${uiCopy("Франкфурт")}" else uiCopy(selected.title)
+        if (::destinationRouteHint.isInitialized) {
+            destinationRouteHint.text = if (isRuDe) uiCopy("через 🇷🇺 Петербург") else ""
+            destinationRouteHint.visibility = if (isRuDe) View.VISIBLE else View.GONE
+        }
     }
 
     private fun updateNetworkLocationViews() {
@@ -711,24 +858,24 @@ class MainActivity : Activity() {
         val location = currentNetworkLocation
         val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         originPlaceText.text = when {
-            !enabled -> "Место выключено"
-            location != null -> location.placeLabel
-            locationRequestInFlight -> "Определяем регион…"
-            tunnelActive -> "Сеть до VPN не определена"
-            else -> "Регион недоступен"
+            !enabled -> uiCopy("Место скрыто")
+            location != null -> AppLanguage.locationLabel(this, location.placeLabel)
+            locationRequestInFlight -> uiCopy("Определяем регион…")
+            tunnelActive -> uiCopy("Исходная сеть скрыта во время подключения")
+            else -> uiCopy("Регион недоступен")
         }
         originHintText.text = when {
-            !enabled -> "отключено в настройках"
-            locationRequestInFlight -> "примерно по IP"
-            location != null -> "примерно по IP · IP не сохраняем"
-            locationLookupFailed -> "геолокация временно недоступна"
-            tunnelActive -> "выключите VPN для определения сети"
-            else -> "ожидает сетевого запроса"
+            !enabled -> uiCopy("отключено в настройках")
+            locationRequestInFlight -> uiCopy("примерно по IP")
+            location != null -> uiCopy("примерно по IP · только в памяти")
+            locationLookupFailed -> uiCopy("геолокация временно недоступна")
+            tunnelActive -> uiCopy("отключите соединение для определения сети")
+            else -> uiCopy("ожидает сетевого запроса")
         }
     }
 
     internal fun isNetworkLocationEnabled(): Boolean =
-        getSharedPreferences(PROFILE_SETTINGS, MODE_PRIVATE).getBoolean(KEY_NETWORK_LOCATION_ENABLED, true)
+        getSharedPreferences(PROFILE_SETTINGS, MODE_PRIVATE).getBoolean(KEY_NETWORK_LOCATION_ENABLED, false)
 
     internal fun isReducedMotionEnabled(): Boolean =
         getSharedPreferences(PROFILE_SETTINGS, MODE_PRIVATE).getBoolean("reduced_motion", false)
@@ -747,6 +894,71 @@ class MainActivity : Activity() {
         if (enabled) refreshNetworkLocation(force = true)
     }
 
+    private fun showNetworkLocationConsentIfNeeded() {
+        val preferences = getSharedPreferences(PROFILE_SETTINGS, MODE_PRIVATE)
+        if (preferences.contains(KEY_NETWORK_LOCATION_ENABLED) || isFinishing || isDestroyed) return
+
+        val dialog = Dialog(this)
+        val sheet = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(20), dp(22), dp(18))
+            background = rounded(DeyttUi.SURFACE, 24f, DeyttUi.LINE)
+        }
+        sheet.addView(mono("КАРТА · ПРИВАТНОСТЬ", 9f, DeyttUi.MUTED, 700))
+        sheet.addView(text("Показывать ваш примерный регион?", 20f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, dp(10), 0, dp(8))
+        })
+        sheet.addView(text(
+            "Точка определяется по публичному IP через ipinfo.io — это не GPS и на выбор маршрута не влияет. Запрос видит внешний сервис; приложение не сохраняет адрес или координаты, а держит точку только в памяти до закрытия.",
+            13f,
+            DeyttUi.MUTED,
+        ).apply { setLineSpacing(dp(3).toFloat(), 1f) })
+        sheet.addView(button("Показывать на карте").apply {
+            setOnClickListener {
+                dialog.dismiss()
+                setNetworkLocationEnabled(true)
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)).apply { topMargin = dp(18) })
+        sheet.addView(text("не сейчас", 13f, DeyttUi.MUTED).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(14), 0, dp(4))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                dialog.dismiss()
+                setNetworkLocationEnabled(false)
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        dialog.setContentView(sheet)
+        dialog.setOnCancelListener { setNetworkLocationEnabled(false) }
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setDimAmount(.62f)
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            setGravity(Gravity.BOTTOM)
+            decorView.setPadding(dp(14), 0, dp(14), dp(20))
+        }
+        dialog.show()
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+    }
+
+    private fun availableMapLocations(): Set<String> {
+        val config = SubscriptionStore(this).readCurrent().orEmpty()
+        val routes = runCatching { RouteCatalog.from(config, AwgProfileStore(this).profiles()) }.getOrDefault(emptyList())
+        return routes.flatMap { route ->
+            when (route.countryCode.uppercase()) {
+                "NL" -> listOf("nl")
+                "DE" -> listOf("de")
+                "FI" -> listOf("fi")
+                "RU" -> listOf("ru")
+                "RU-DE" -> listOf("ru", "de")
+                else -> emptyList()
+            }
+        }.toSet()
+    }
+
     internal fun setReducedMotionEnabled(enabled: Boolean) {
         getSharedPreferences(PROFILE_SETTINGS, MODE_PRIVATE).edit { putBoolean("reduced_motion", enabled) }
         if (::pager.isInitialized) updatePrimaryPageMotion(pager.currentItem)
@@ -757,11 +969,9 @@ class MainActivity : Activity() {
             updateNetworkLocationViews()
             return
         }
-        val store = IpNetworkLocationStore(this)
-        val cached = store.read()
-        if (cached != null) {
-            currentNetworkLocation = cached
-            if (::globe.isInitialized) globe.setUserLocation(cached)
+        if (currentNetworkLocation != null && !force) {
+            updateNetworkLocationViews()
+            return
         }
         if (ConnectVpnService.isRunning() || AwgTunnelController.isRunning()) {
             android.util.Log.i(
@@ -771,7 +981,7 @@ class MainActivity : Activity() {
             updateNetworkLocationViews()
             return
         }
-        if (locationRequestInFlight || (!force && cached != null && !store.isStale(cached))) {
+        if (locationRequestInFlight) {
             updateNetworkLocationViews()
             return
         }
@@ -789,9 +999,8 @@ class MainActivity : Activity() {
                 if (isNetworkLocationEnabled() && !ConnectVpnService.isRunning() && !AwgTunnelController.isRunning()) {
                     result.onSuccess { location ->
                         locationLookupFailed = false
-                        IpNetworkLocationStore(this).save(location)
                         currentNetworkLocation = location
-                        android.util.Log.i("DeyttIpLocation", "Lookup succeeded; storing approximate place only")
+                        android.util.Log.i("DeyttIpLocation", "Approximate location is available in memory")
                         if (::globe.isInitialized) globe.setUserLocation(location)
                     }
                     result.onFailure { failure ->
@@ -833,11 +1042,11 @@ class MainActivity : Activity() {
             uploaded = uploaded,
             downloaded = downloaded,
             quota = metadata.totalBytes,
-            description = if (metadata.totalBytes > 0) {
+            description = uiCopy(if (metadata.totalBytes > 0) {
                 "Использовано ${formatBytes(used)} из ${formatBytes(metadata.totalBytes)}. Скачано ${formatBytes(downloaded)}, отправлено ${formatBytes(uploaded)}."
             } else {
                 "Передано ${formatBytes(used)} без заданного лимита. Скачано ${formatBytes(downloaded)}, отправлено ${formatBytes(uploaded)}."
-            },
+            }),
         ), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(6)).apply { topMargin = dp(10) })
         val legend = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -852,8 +1061,9 @@ class MainActivity : Activity() {
     }
 
     private fun formatBytes(value: Long): String {
-        if (value <= 0) return "0 Б"
-        val units = arrayOf("Б", "КБ", "МБ", "ГБ", "ТБ")
+        val english = AppLanguage.current(this) == AppLanguage.EN
+        if (value <= 0) return if (english) "0 B" else "0 Б"
+        val units = if (english) arrayOf("B", "KB", "MB", "GB", "TB") else arrayOf("Б", "КБ", "МБ", "ГБ", "ТБ")
         var amount = value.toDouble()
         var unit = 0
         while (amount >= 1024 && unit < units.lastIndex) {
@@ -863,6 +1073,9 @@ class MainActivity : Activity() {
         return if (unit == 0) "${amount.toLong()} ${units[unit]}"
         else String.format(java.util.Locale.US, "%.1f %s", amount, units[unit])
     }
+
+    private fun formatLatency(milliseconds: Long): String =
+        if (AppLanguage.current(this) == AppLanguage.EN) "$milliseconds ms" else "$milliseconds мс"
 
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -882,7 +1095,7 @@ class MainActivity : Activity() {
                 latencyText.text = "пинг"
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
-                latencyText.contentDescription = "Для проверки через прокси требуется системное разрешение VPN"
+                latencyText.contentDescription = "Для проверки через выход требуется системное разрешение Android"
             }
             return
         }
@@ -941,8 +1154,29 @@ class MainActivity : Activity() {
         val snapshot = VpnStateStore(this).reconcile(
             ConnectVpnService.isRunning(),
             AwgTunnelController.isRunning(),
+            systemTunnelActive = isSystemTunnelActive(),
         )
         renderStatus(snapshot.phase, snapshot.title, snapshot.detail)
+    }
+
+    private fun isSystemTunnelActive(): Boolean {
+        val connectivity = getSystemService(ConnectivityManager::class.java) ?: return false
+        return connectivity.allNetworks.any { network ->
+            connectivity.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+        }
+    }
+
+    private fun shouldSampleMapTraffic(): Boolean =
+        ::globe.isInitialized && ::pager.isInitialized && pager.currentItem == 0 &&
+            renderedPhase == VpnPhase.CONNECTED && isSystemTunnelActive()
+
+    private fun updateMapTrafficSampling() {
+        trafficSampleHandler.removeCallbacks(trafficSample)
+        previousUidRxBytes = -1L
+        previousUidTxBytes = -1L
+        trafficVisibleUntilElapsed = 0L
+        if (shouldSampleMapTraffic()) trafficSampleHandler.post(trafficSample)
+        else if (::globe.isInitialized) globe.setTrafficEnabled(false)
     }
 
     private fun renderStatus(phase: VpnPhase?, status: String?, error: String?) {
@@ -966,14 +1200,14 @@ class MainActivity : Activity() {
             }
         }
         renderedPhase = currentPhase
-        statusText.text = displayValue
-        detailText.text = when (currentPhase) {
+        statusText.text = uiCopy(displayValue)
+        detailText.text = uiCopy(when (currentPhase) {
             VpnPhase.STARTING, VpnPhase.CHECKING -> progressDetail(currentPhase, connectionElapsedSeconds())
             VpnPhase.CONNECTED -> "Соединение активно"
             VpnPhase.STOPPING -> "Завершаем работу туннеля"
             VpnPhase.ERROR -> error ?: "Попробуйте ещё раз или выберите другой маршрут"
             VpnPhase.IDLE -> "Готово к подключению"
-        }
+        })
         if (isConnecting) {
             connectionProgressHandler.removeCallbacks(connectionProgressTick)
             connectionProgressHandler.postDelayed(connectionProgressTick, CONNECTION_PROGRESS_INTERVAL_MS)
@@ -996,24 +1230,24 @@ class MainActivity : Activity() {
                 shape = android.graphics.drawable.GradientDrawable.OVAL
                 setColor(color)
             }
-            statusDot.contentDescription = displayValue
+            statusDot.contentDescription = uiCopy(displayValue)
             if (phaseChanged && animationsEnabled) {
                 statusDot.scaleX = .7f
                 statusDot.scaleY = .7f
                 statusDot.animate().scaleX(1f).scaleY(1f).setDuration(300L).start()
             }
         }
-        action.text = when (currentPhase) {
+        action.text = uiCopy(when (currentPhase) {
             VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.CONNECTED -> "Отключить"
             VpnPhase.STOPPING -> "Отключаем…"
             VpnPhase.ERROR -> "Повторить"
             VpnPhase.IDLE -> "Подключить"
-        }
+        })
         action.contentDescription = action.text.toString()
         action.isEnabled = currentPhase != VpnPhase.STOPPING
         action.alpha = if (action.isEnabled) 1f else .66f
         if (::globe.isInitialized) {
-            globe.setTrafficEnabled(::pager.isInitialized && pager.currentItem == 0 && currentPhase == VpnPhase.CONNECTED)
+            updateMapTrafficSampling()
         }
     }
 
@@ -1067,31 +1301,31 @@ class MainActivity : Activity() {
             .firstOrNull { it.id == selected.id } ?: return
         val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) awg.read(route.id) else null
         val method = RouteProbePreferences.method(this)
-        latencyText.text = "проверка…"
+        latencyText.text = uiCopy("проверка…")
         latencyText.isEnabled = false
         latencyText.alpha = .65f
         if (route.engine == TunnelEngine.AMNEZIAWG && !AwgTunnelController.isRunning() && !ConnectVpnService.isRunning()) {
             val target = RouteLatency.target(config, route, awgConfig)
             if (target == null) {
-                latencyText.text = "нет ответа"
+                latencyText.text = uiCopy("нет ответа")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.setTextColor(DeyttUi.CORAL)
-                latencyText.contentDescription = "Не удалось определить сервер AmneziaWG для TCP-проверки"
+                latencyText.contentDescription = uiCopy("Не удалось определить сервер AmneziaWG для TCP-проверки")
                 return
             }
             LatencyExecutor.pool.execute {
                 val elapsed = RouteLatency.measureTcp(target)
                 runOnUiThread {
                     if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
-                        latencyText.text = elapsed?.let { "TCP $it" } ?: "нет ответа"
+                        latencyText.text = elapsed?.let { "TCP $it ms" } ?: uiCopy("нет ответа")
                         latencyText.isEnabled = true
                         latencyText.alpha = 1f
                         latencyText.textSize = 8.5f
                         latencyText.setTextColor(if (elapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
                         latencyText.contentDescription = elapsed?.let {
-                            "TCP-подключение до сервера AmneziaWG заняло $it миллисекунд. Это проверка сервера, не HTTPS через прокси."
-                        } ?: "TCP-сервер AmneziaWG не ответил"
+                            uiCopy("TCP-подключение до сервера AmneziaWG заняло $it миллисекунд. Это проверка сервера, не HTTPS через прокси.")
+                        } ?: uiCopy("TCP-сервер AmneziaWG не ответил")
                     }
                 }
             }
@@ -1103,25 +1337,25 @@ class MainActivity : Activity() {
             if (route.id != selected.id ||
                 (route.engine == TunnelEngine.LIBBOX && !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName))
             ) {
-                latencyText.text = "отключите VPN"
+                latencyText.text = uiCopy("отключите соединение")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.textSize = 8f
                 latencyText.setTextColor(DeyttUi.AMBER)
-                latencyText.contentDescription = "Чтобы проверить другой выход, сначала отключите текущий VPN"
+                latencyText.contentDescription = uiCopy("Чтобы проверить другой выход, сначала отключите текущее соединение")
                 return
             }
             LatencyExecutor.pool.execute {
                 val elapsed = runCatching { RouteProxyProbe.measureThroughSystemVpn(method) }.getOrNull()
                 runOnUiThread {
                     if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
-                        latencyText.text = elapsed?.let { "$it мс" } ?: "нет ответа"
+                        latencyText.text = elapsed?.let(::formatLatency) ?: uiCopy("нет ответа")
                         latencyText.isEnabled = true
                         latencyText.alpha = 1f
                         latencyText.setTextColor(if (elapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
                         latencyText.contentDescription = elapsed?.let {
-                            "Два HTTPS-запроса ${method.wireValue} через активный VPN заняли ${it} миллисекунд"
-                        } ?: "HTTPS-проверка через активный VPN не ответила за 10 секунд"
+                            uiCopy("Два HTTPS-запроса ${method.wireValue} через активное соединение заняли ${it} миллисекунд")
+                        } ?: uiCopy("HTTPS-проверка через активное соединение не ответила за 10 секунд")
                     }
                 }
             }
@@ -1132,22 +1366,15 @@ class MainActivity : Activity() {
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             latencyText.setTextColor(DeyttUi.AMBER)
-            latencyText.contentDescription = "Для проверки AmneziaWG через HTTPS подключите этот профиль"
+            latencyText.contentDescription = uiCopy("Для проверки AmneziaWG через HTTPS подключите этот профиль")
             return
         }
         val vpnPermission = VpnService.prepare(this)
         if (vpnPermission != null) {
-            latencyText.text = "пинг"
+            latencyText.text = uiCopy("пинг")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
-            AlertDialog.Builder(this)
-                .setTitle("Разрешить диагностику?")
-                .setMessage("Android попросит системное разрешение VPN для проверки маршрута. Проверка использует временный локальный прокси и не запускает VPN-туннель.")
-                .setNegativeButton("Отмена", null)
-                .setPositiveButton("Продолжить") { _, _ ->
-                    startActivityForResult(vpnPermission, ROUTE_PROBE_PERMISSION_REQUEST)
-                }
-                .show()
+            showRouteProbePermissionSheet(vpnPermission)
             return
         }
         try {
@@ -1156,21 +1383,63 @@ class MainActivity : Activity() {
                 action.isEnabled = false
                 action.alpha = .65f
             }
-            latencyText.text = "через прокси…"
+            latencyText.text = uiCopy("через прокси…")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             latencyText.textSize = 8f
             latencyText.setTextColor(DeyttUi.SKY)
-            latencyText.contentDescription = "Проверяю выход через локальный прокси методом ${method.wireValue}, два запроса, тайм-аут 10 секунд"
+            latencyText.contentDescription = uiCopy("Проверяю выход через локальный прокси методом ${method.wireValue}, два запроса, тайм-аут 10 секунд")
         } catch (_: Throwable) {
             if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
-                latencyText.text = "ошибка"
+                latencyText.text = uiCopy("ошибка")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.setTextColor(DeyttUi.CORAL)
-                latencyText.contentDescription = "Не удалось запустить проверку через прокси"
+                latencyText.contentDescription = uiCopy("Не удалось запустить проверку через прокси")
             }
         }
+    }
+
+    private fun showRouteProbePermissionSheet(permission: Intent) {
+        val dialog = Dialog(this)
+        val sheet = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(20), dp(20), dp(18))
+            background = rounded(DeyttUi.SURFACE, 24f, DeyttUi.LINE)
+        }
+        sheet.addView(mono("ДИАГНОСТИКА · РАЗОВЫЙ ДОСТУП", 9f, DeyttUi.MUTED, 650))
+        sheet.addView(text("Проверить выбранный маршрут?", 19f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, dp(10), 0, dp(7))
+        })
+        sheet.addView(text(
+            "Для проверки Android покажет системный запрос на локальный сетевой интерфейс. Он нужен только для двух коротких HTTPS-запросов и не запускает подключение.",
+            13f,
+            DeyttUi.MUTED,
+        ).apply { setLineSpacing(dp(3).toFloat(), 1f) })
+        sheet.addView(button("Продолжить").apply {
+            setOnClickListener {
+                dialog.dismiss()
+                startActivityForResult(permission, ROUTE_PROBE_PERMISSION_REQUEST)
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(16) })
+        sheet.addView(text("отмена", 13f, DeyttUi.MUTED).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(13), 0, dp(2))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        dialog.setContentView(sheet)
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setDimAmount(.62f)
+            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setGravity(Gravity.BOTTOM)
+            decorView.setPadding(dp(14), 0, dp(14), dp(20))
+        }
+        dialog.show()
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     companion object {
@@ -1183,6 +1452,8 @@ class MainActivity : Activity() {
         private const val KEY_NETWORK_LOCATION_ENABLED = "network_location_enabled"
         private const val KEY_CONNECTION_STARTED_ELAPSED = "connection_started_elapsed"
         private const val CONNECTION_PROGRESS_INTERVAL_MS = 1_000L
+        private const val TRAFFIC_SAMPLE_INTERVAL_MS = 700L
+        private const val TRAFFIC_VISIBILITY_WINDOW_MS = 1_400L
     }
 }
 

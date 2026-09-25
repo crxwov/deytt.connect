@@ -13,7 +13,6 @@ internal data class IpNetworkLocation(
     val city: String,
     val region: String,
     val countryCode: String,
-    val savedAtMillis: Long,
 ) {
     val placeLabel: String
         get() = listOf(city, region, countryCode).firstOrNull(String::isNotBlank) ?: "Неизвестный регион"
@@ -22,46 +21,8 @@ internal data class IpNetworkLocation(
 internal class IpNetworkLocationStore(context: Context) {
     private val preferences = context.getSharedPreferences("network_location_cache", Context.MODE_PRIVATE)
 
-    fun read(): IpNetworkLocation? {
-        if (!preferences.contains(KEY_LATITUDE) || !preferences.contains(KEY_LONGITUDE)) return null
-        val latitude = preferences.getString(KEY_LATITUDE, null)?.toDoubleOrNull() ?: return null
-        val longitude = preferences.getString(KEY_LONGITUDE, null)?.toDoubleOrNull() ?: return null
-        if (!latitude.isFinite() || !longitude.isFinite() || latitude !in -85.0..85.0 || longitude !in -180.0..180.0) return null
-        return IpNetworkLocation(
-            latitude = latitude,
-            longitude = longitude,
-            city = preferences.getString(KEY_CITY, "").orEmpty(),
-            region = preferences.getString(KEY_REGION, "").orEmpty(),
-            countryCode = preferences.getString(KEY_COUNTRY, "").orEmpty(),
-            savedAtMillis = preferences.getLong(KEY_SAVED_AT, 0L),
-        )
-    }
-
-    fun save(location: IpNetworkLocation) {
-        preferences.edit()
-            .putString(KEY_LATITUDE, location.latitude.toString())
-            .putString(KEY_LONGITUDE, location.longitude.toString())
-            .putString(KEY_CITY, location.city)
-            .putString(KEY_REGION, location.region)
-            .putString(KEY_COUNTRY, location.countryCode)
-            .putLong(KEY_SAVED_AT, location.savedAtMillis)
-            .apply()
-    }
-
+    /** Removes coordinates written by older versions; current location stays in memory only. */
     fun clear() = preferences.edit().clear().apply()
-
-    fun isStale(location: IpNetworkLocation, nowMillis: Long = System.currentTimeMillis()): Boolean =
-        location.savedAtMillis <= 0L || nowMillis - location.savedAtMillis >= CACHE_MAX_AGE_MILLIS
-
-    private companion object {
-        const val KEY_LATITUDE = "latitude"
-        const val KEY_LONGITUDE = "longitude"
-        const val KEY_CITY = "city"
-        const val KEY_REGION = "region"
-        const val KEY_COUNTRY = "country"
-        const val KEY_SAVED_AT = "saved_at"
-        const val CACHE_MAX_AGE_MILLIS = 6 * 60 * 60 * 1000L
-    }
 }
 
 internal object IpNetworkLocationClient {
@@ -111,7 +72,6 @@ internal object IpNetworkLocationClient {
                 city = json.optString("city").takeIf { it != "null" }.orEmpty(),
                 region = json.optString("region").takeIf { it != "null" }.orEmpty(),
                 countryCode = json.optString("country").takeIf { it != "null" }.orEmpty(),
-                savedAtMillis = System.currentTimeMillis(),
             )
         } finally {
             connection.disconnect()

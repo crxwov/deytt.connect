@@ -1,66 +1,51 @@
-# DEYTT Connect interaction and visual refinement
+# Roadmap — DEYTT Connect account and globe refinement
 
-## Objective
+## Objective and Success Criteria
+Deliver a cohesive Android experience for globe routing, diagnostics, account linking, profile/subscription actions, and Telegram identity while preserving tunnel, subscription, and backend contracts.
 
-Refine the Android client's visual identity and interaction quality, with a restrained `./c` mark, polished route map selection, useful route/proxy diagnostics, and purposeful motion while preserving VPN and subscription contracts.
-
-## Status
-
-Completed. Implementation and validation passed. Commit `024b000df9fa830052967b3596442ff7b176a402` is on `main` and matches `origin/main`.
-
-## Success Criteria
-
-- Current visual baseline is captured before changes and final primary flows are verified on attached physical hardware.
-- Branding, typography, alignment, surfaces, and navigation indicator feel consistent and deliberate.
-- Route map locations support clear selection and an actionable route/bypass menu where existing app/backend contracts allow it.
-- Ping/route diagnostics use supported methods and honest labels/timeouts; no fake latency or misleading tunnel guarantees.
-- Motion is purposeful and reduced-motion aware, with bounded interaction transitions.
-- Focused build/lint/tests and physical interaction checks pass; final diff is reviewed.
-- Roadmap records evidence; changes are committed and pushed to `main`. Server delivery is performed only for server-facing changes.
+Success: the globe focuses on real route locations, starts without fictitious traffic, shows only consented ephemeral IP location, and animates only a selected/active route; app swipe and globe gestures do not conflict; routes, pings, icons, profile, subscription actions, and edge-to-edge surfaces are consistent; Telegram linking imports the authenticated user's existing profiles over a short-lived secure flow; physical-device screenshots and focused checks pass.
 
 ## Stages
-
-- [x] 1. Inspect app instructions, current physical-device baseline, UI architecture, route catalog, and diagnostic/API contracts. Result: four-screen A001 baseline, map touch gap, route-selection effects, direct-only latency implementation, Happ probe settings, and embedded libbox APIs are understood. Depends on project index and existing Roadmap.
-- [x] 2. Shape the refined visual system and implement scoped UI, map-selection, and diagnostic improvements. Depends on 1. Implemented the lighter `./c` mark and font weights; map labels cleared; globe taps bridged to a native route sheet; country flags; corrected inset-aware nav indicator; loopback-only authenticated sing-box probe config; GET/HEAD Double request flow with 10s deadline; comparison UI; TUN guard and active-VPN safeguards. Added an Android consent flow after the real device exposed the VpnService foreground-start requirement.
-- [x] 3. Build, run focused checks, install on A001, and verify the final visuals plus map/probe flows. Depends on 2. Unit tests, lint, and debug APK build pass. On A001, map-node selection opens the native route sheet; one-tap protocol comparison returns HTTPS proxy results. VPN remained off and the probe service exited.
-- [x] 4. Review diff, record final evidence, and deliver the client changes. Depends on 3. Commit `024b000df9fa830052967b3596442ff7b176a402` is pushed to `origin/main`.
+- [x] 1. Audit current physical UI, ExteraGram references, Android architecture, and bot/API contracts. Result: four A001 baseline screens, ExteraGram profile/settings interaction cues, verified API contract, and one-time Telegram pairing design.
+- [x] 2. Implement globe state/gesture/consent model and visual system. The focused atlas, route/traffic semantics, and status-bar starfield now share a coherent viewport; verified on A001.
+- [x] 3. Implement route cards, flags/protocol marks, automatic and gesture-triggered diagnostics, profile purchase/extension entry points, refined settings, and language selection. RU/EN labels, IP-derived city names, and route diagnostics are verified on A001.
+- [x] 4. Implement Telegram bot pairing and authenticated Android profile bootstrap using expiring one-time challenges; add scoped tests. Client flow uses the Projects API, Android test/lint/assemble passed, backend focused tests passed.
+- [x] 5. Iterate build/install/run/screenshots on A001 after each group. Final RU/EN Home, Routes, Profile, and Settings captures reviewed; map, safe-area, flags, pings, CTAs, and settings labels are consistent.
+- [ ] 6. Review diffs, update both Roadmaps, validate, commit, push, pull affected backend services, restart and verify them.
 
 ## Current State
-
-Task resumed from inspection on A001 at baseline commit `0ef6a06`. Implementation, device verification, final diff review, commit, and push are complete. Untracked user-owned `.agents/` remains untouched. This is client-only work; no server deployment is required.
+- Android app is separate repo /home/hackov/Documents/deytt-connect, branch main; preserve its user-owned untracked .agents/.
+- Server/control-plane repo is /home/hackov/Documents/Projects, branch main; preserve all existing untracked skills, indexes, roadmaps, and artifacts.
+- A001 (`0022935AM001077`) is attached via adb and unlocked. Latest screenshot after inset fix: /tmp/deytt-home-final-v6.png; previous settings/pairing screenshots: /tmp/deytt-settings-final-v6.png, /tmp/deytt-pair-dialog-v4.png. Baseline screenshots: /tmp/deytt-baseline-home.png, /tmp/deytt-baseline-routes.png, /tmp/deytt-baseline-profile.png, /tmp/deytt-baseline-settings.png. ExteraGram settings screenshot: /tmp/exteragram-settings-tab.png.
+- Code graph confirms native ViewPager2 screens and a WebView atlas. The atlas uses configured locations, renders a static selected route while disconnected, and keeps IP-derived coordinates in memory only; camera zoom is user-controlled. App chrome shows Telegram identity when linked and a `./c` fallback otherwise.
+- A001 previously showed stale Connected without VPN transport. Runtime state reconciliation now prevents that stale value from controlling connect/disconnect behavior or map traffic; no tunnel was started in this task.
+- First English device pass exposed mixed-language map labels and traffic units, Russian route-ping labels, and `RouteLatencyResult(...)` leaking into ping buttons. RU/EN formatting and map translation were added; route ping rendering was corrected to display the measured minimum milliseconds.
+- Latest RU/EN device pass verified all four main screens and automatic route pings. English Amnezia counts, idle map label leaders, primary CTA color, selected-route focus, four-flag Auto icon, Amnezia heading, and residual RU/EN labels were refined. IP-derived Russian cities now render in Cyrillic. The settings diagnostic action was shortened to avoid truncation.
+- After reinstall, Home showed that the selected Germany route still rendered as Auto: persisted IDs use `route:DE:VLESS`, while globe focus parsed only the final `VLESS` token. Route token parsing and regression cases for NL/DE/FI/RU/RU+DE/Auto are now included in the next build.
+- Route-ID parsing is now validated on A001: Germany focuses only Ufa and Frankfurt, and a static direct route appears without animated traffic. The first rendering reused the download pink/orange palette while disconnected, so idle selected routes now use a quieter cyan/teal stroke; final visual review is pending.
+- English screenshot review found one untranslated Amnezia section heading and the auto-pick icon still used a generic globe despite the user's request for flags. The heading is localized and auto-pick now uses a compact four-flag mark for NL/DE/FI/RU. Later review localized `Ufa` and shortened the settings row action; the final RU/EN screenshots show both fixes.
+- `test-android-apps` has no callable tool in the installed-tool registry; validation uses the physical A001 through adb and Gradle tests/lint.
+- Backend already provides `/api/tg/me`, `/api/tg/keys`, and hashed Telegram Mini App sessions. `/api/tg/keys` returns the current `happ.sub_url`; importing it through `SubscriptionClient` retrieves the sing-box subscription and AmneziaWG 1.5/3.1 profiles.
+- Stage 2 first group is implemented: the atlas removes idle mesh routes, shows only configured locations, focuses the server cluster, draws selected routes as static lines, and only animates when UID bytes increase while Android reports a VPN transport. Map touch ownership now blocks ViewPager interception. IP coordinates are memory-only; legacy persisted coordinates are cleared and first-run consent defaults off.
+- `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` passed with repository `.toolchain/jdk17` and `.toolchain/android-sdk`. An initial build using system Java 27 failed in Kotlin version parsing; no files were changed for that failure.
+- The latest arm64 APK installed over existing data and all four screens were inspected on A001 in RU and EN. No tunnel was started and no Telegram message was triggered.
 
 ## Findings and Decisions
-
-- Android source remains the separate Kotlin Views repository `crxwov/deytt.connect`; do not mix it with the DEYTT backend.
-- Existing app includes a native route globe/WebView atlas, RU+DE route selection, AWG profile selection, and manual endpoint probes. Verify current implementation and server contract before changing behavior.
-- Baseline captured on A001 (`/tmp/deytt-connect-baseline-{home,routes,profile,settings}.png`). Initial visible tab was Routes.
-- Current atlas sets `selectOnTap: false`; the current route measurement first invokes system ICMP then times a direct TCP socket. Backend Happ profile metadata specifies proxy ping, the `check-url-via-proxy` endpoint, and a 10-second proxy timeout. The client probe must be tied to an actual proxy path before claiming Happ-like latency.
-- Codebase-memory search found route symbols, but exact snippets did not match current `MainActivity.kt` line contents; the repository index was refreshed before further graph-based exploration. Generated index artifacts were restored before delivery.
-- Refreshed codebase-memory index. Baseline now captured for all four primary tabs on A001. Home brand mark and wordmark use bold type; navigation indicator positions from full bar width despite padded cells; route screen repeats large grouped surfaces with abbreviation-only icons. Route map stays decorative on touch. Route selection currently stops a running tunnel; any new route picker must disclose this and preserve the selection contract.
-- Official Happ App management docs confirm ping types via Proxy GET/HEAD, TCP, ICMP; `double` and `keepalive` are distinct proxy modes. The timeout range 5–15s is documented for iOS, so the Android app needs its own bounded timeout if implementing this behavior. Existing backend metadata currently uses `keepalive`; client work will not alter it.
-- Embedded libbox exposes `CommandServer.startOrReloadService`; the existing VpnService's interface protects core sockets from its TUN. Planned probe path: run a temporary libbox service config with an authenticated loopback HTTP proxy inbound and the chosen outbound, without a TUN inbound; issue two GET/HEAD requests with a 10s total deadline. A hard guard will reject any unexpected `openTun` call. Physical validation must confirm this path before calling it complete.
-- Product decisions: use a compact bottom sheet on a map-node tap to choose Auto, that country's VLESS/Trojan/Hysteria 2 route, and RU→DE when applicable; use the existing `SelectedRouteStore` and `MainActivity.selectRoute` contracts. Tapping the user's origin explains that it is not a VPN exit. If a tunnel is active, disclose that changing route stops it.
-- New diagnostic decisions: start a temporary command-server configuration with an authenticated `mixed` inbound on loopback, selected route as final outbound, and no client subscription inbounds. Reject all `openTun` calls while diagnostic-only. Check two HTTPS responses within a shared 10-second budget; use actual tunnel traffic only for its currently selected route, and identify inactive AmneziaWG endpoint checks as TCP-only.
-- Substantial UI work will stay in native Android Views. Compose-only adaptive and CSS-only animation recipes do not fit this repository; apply their restraint/reduced-motion principles without migrating frameworks.
-- The request covers a broad visual refinement and map-driven route interaction; keep visual changes within client scope unless an existing API change is essential and separately evidenced.
+- Telegram usernames alone do not authenticate a user; pairing must prove control of the Telegram account via a bot deep-link/one-time challenge.
+- The app must not store IP-derived location coordinates or city. Store at most the user's consent choice; keep approved coarse location in memory for the session.
+- No actual bot message, key reset, payment, or VPN tunnel will be triggered during validation.
+- Keep route and profile data contracts unchanged unless the authenticated pairing endpoint requires a narrow addition.
 
 ## Issues and Failed Attempts
-
-- Physical proxy comparison initially hit `ForegroundServiceDidNotStartInTimeException` twice. Early foreground promotion and explicit startup failure handling fixed it; a subsequent A001 comparison completed successfully.
-- `HttpsURLConnection` through the authenticated local proxy failed to establish the HTTPS probe. Replaced it with explicit HTTP CONNECT, platform-trusted TLS plus hostname verification, and bounded GET/HEAD requests; repeated route comparisons then succeeded on A001.
+- The first ExteraGram screenshot showed the physical lock screen; the user unlocked the device and the profile/settings pages were inspected without opening chats. Device is now awake for A001 validation.
 
 ## Important Files
-
-- `DeyttUi.kt`, `MainActivity.kt`, `TopLevelPages.kt`, `ProtocolActivity.kt`, `RouteGlobeView.kt`, `RouteLatency.kt`, `ConnectVpnService.kt`, `RouteProxyProbe.kt`, `RouteProxyProbeTest.kt`, and the bundled route-map JavaScript/CSS.
+- Expected Android: MainActivity.kt, RouteGlobeView.kt, TopLevelPages.kt, DeyttUi.kt, profile/account stores, map JavaScript assets.
+- Expected backend: bot handler/DB, vpn-admin router/session repository, focused tests.
 
 ## Validation and Blockers
-
-- `ANDROID_HOME="$PWD/.toolchain/android-sdk" ANDROID_SDK_ROOT="$PWD/.toolchain/android-sdk" JAVA_HOME="$PWD/.toolchain/jdk17" ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebug --no-daemon --console=plain` passed after the final source changes.
-- A001: updated APK installed and launched; map-node route sheet, protocol comparison screen, and results were inspected. Last sample: VLESS 540 ms, Trojan 377 ms, Hysteria 2 346 ms. These are transient measurements.
-- After comparison, `active_vpn_transport=false` and no `ConnectVpnService` instance remained. The probe uses the loopback HTTP proxy; no device TUN was opened.
-- `git diff --check` passed. A physical interaction test of the GET/HEAD preference menu was not performed; its default HEAD setting is visible and its change handler is covered by source review.
-- `main` and `origin/main` both resolve to `024b000df9fa830052967b3596442ff7b176a402`.
+- A001 detected, unlocked, and interactive. Baseline and ExteraGram audit complete. Latest `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` passed; APK installed via `adb install -r`; all four screens reviewed in RU/EN. Final captures: `/tmp/deytt-home-final-ru-r5.png`, `/tmp/deytt-routes-final-ru-r5.png`, `/tmp/deytt-profile-final-ru-r5.png`, `/tmp/deytt-settings-final-ru-r5.png`, with matching `*-en-r5.png` files. JS syntax and `git diff --check` passed. ARM64 artifact: `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
+- Backend pairing implementation is in the separate Projects repository; API and bot focused tests passed.
 
 ## Next Action and Resume Context
-
-No further action. No server pull/deploy or service restart applies to this client-only change.
+- Review scoped diffs; commit and push Android and backend task files plus Roadmaps, excluding generated indexes and pre-existing `.agents/`. Then run the separately tracked server pull, scoped backup/sync, restart the two affected services, and verify API health.
