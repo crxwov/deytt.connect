@@ -16,7 +16,7 @@ import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
 
 internal class TelegramPairingException(val code: String) : IOException(code)
-internal data class TelegramPairStart(val challenge: String, val botUrl: String)
+internal data class TelegramPairStart(val challenge: String, val botUrl: String, val delivery: String)
 internal data class TelegramPairSession(val token: String, val username: String, val firstName: String)
 
 internal object TelegramSessionStore {
@@ -91,6 +91,7 @@ internal object TelegramPairingClient {
                 ?: throw TelegramPairingException("pairing_unavailable"),
             response.optString("bot_url").takeIf(String::isNotBlank)
                 ?: throw TelegramPairingException("pairing_unavailable"),
+            response.optString("delivery").ifBlank { "start_required" },
         )
     }
 

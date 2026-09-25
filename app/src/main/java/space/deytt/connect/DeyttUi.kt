@@ -305,7 +305,12 @@ object DeyttUi {
             background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f,
                 if (emphasis) 0xFF3F5985.toInt() else LINE)
             contentDescription = "Значок AmneziaWG"
-            addView(AmneziaMarkView(context), FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+            addView(ImageView(context).apply {
+                setImageResource(R.drawable.ic_amneziawg)
+                imageTintList = ColorStateList.valueOf(DeyttUi.TEXT)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                contentDescription = "Оригинальный знак AmneziaWG"
+            }, FrameLayout.LayoutParams(dp(27), dp(27), Gravity.CENTER))
         }
     }
 

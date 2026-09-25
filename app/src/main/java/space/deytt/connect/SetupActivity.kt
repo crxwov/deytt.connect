@@ -1,14 +1,19 @@
 package space.deytt.connect
 
 import android.app.Activity
+import android.app.Dialog
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.os.Build
+import android.text.InputFilter
 import android.text.InputType
 import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -38,9 +43,16 @@ class SetupActivity : Activity() {
         val root = screen()
         root.addView(header("добавить источник", if (updating) "Обновить подписку" else "Подключить подписку", updating))
         root.addView(spacer(8, this))
-        root.addView(note("Добавьте ссылку DEYTTT, чтобы загрузить доступные направления. Она хранится только на этом устройстве.", DeyttUi.MUTED))
-        root.addView(spacer(19, this))
-        root.addView(sectionLabel("ссылка на подписку"))
+        root.addView(note(
+            "Войдите через Telegram — профили загрузятся сами. Ссылка подписки остаётся запасным способом.",
+            DeyttUi.MUTED,
+        ))
+        root.addView(spacer(14, this))
+        root.addView(button("Подключить аккаунт Telegram", secondary = true).apply {
+            setOnClickListener { showTelegramPairing() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)))
+        root.addView(spacer(18, this))
+        root.addView(sectionLabel("или добавьте ссылку вручную"))
         val incomingUrl = intent.getStringExtra(EXTRA_SUBSCRIPTION_URL)
         input = EditText(this).apply {
             hint = "https://deytt.space/sub/token/…"
@@ -134,6 +146,196 @@ class SetupActivity : Activity() {
                     state.announceForAccessibility(state.text)
                     input.isEnabled = true; importButton.isEnabled = true; importButton.alpha = 1f
                 }}
+        }
+    }
+
+    private fun showTelegramPairing() {
+        val dialog = Dialog(this)
+        val sheet = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(20), dp(22), dp(20))
+            background = rounded(DeyttUi.SURFACE, 24f, DeyttUi.LINE)
+        }
+        val title = text("Добавить приложение", 21f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, dp(4), 0, dp(6))
+        }
+        sheet.addView(title)
+        val detail = text("Укажи username Telegram. Если аккаунт уже есть в боте, код придёт сюда.", 13f, DeyttUi.MUTED).apply {
+            setLineSpacing(dp(3).toFloat(), 1f)
+        }
+        sheet.addView(detail)
+        fun field(hintText: String, inputTypeValue: Int, maxLength: Int): EditText =
+            EditText(this).apply {
+                hint = hintText
+                setTextColor(DeyttUi.TEXT)
+                setHintTextColor(DeyttUi.MUTED)
+                textSize = 15f
+                setPadding(dp(15), 0, dp(15), 0)
+                background = rounded(DeyttUi.SURFACE_2, 15f, DeyttUi.LINE)
+                inputType = inputTypeValue
+                isSingleLine = true
+                filters = arrayOf(InputFilter.LengthFilter(maxLength))
+            }
+        val username = field(
+            "username",
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
+            33,
+        )
+        val code = field("123456", InputType.TYPE_CLASS_NUMBER, 6).apply {
+            visibility = View.GONE
+            gravity = Gravity.CENTER
+            letterSpacing = .24f
+        }
+        sheet.addView(username, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)).apply {
+            topMargin = dp(17)
+        })
+        sheet.addView(code, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58)).apply {
+            topMargin = dp(12)
+        })
+        val status = text("", 12f, DeyttUi.MUTED).apply {
+            setPadding(dp(2), dp(10), dp(2), 0)
+            setLineSpacing(dp(2).toFloat(), 1f)
+        }
+        sheet.addView(status)
+        val openBot = button("Открыть ./c", secondary = true).apply { visibility = View.GONE }
+        sheet.addView(openBot, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)).apply {
+            topMargin = dp(11)
+        })
+        val primary = button("Получить код")
+        sheet.addView(primary, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)).apply {
+            topMargin = dp(9)
+        })
+        username.imeOptions = EditorInfo.IME_ACTION_GO
+        username.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
+                primary.performClick()
+                true
+            } else false
+        }
+        var challenge: String? = null
+        var botUrl: String? = null
+        var step = 0
+        var needsBotStart = false
+        fun updateStep(next: Int) {
+            step = next
+            username.visibility = if (step == 0) View.VISIBLE else View.GONE
+            code.visibility = if (step == 1) View.VISIBLE else View.GONE
+            openBot.visibility = if (step == 1 && needsBotStart) View.VISIBLE else View.GONE
+            title.text = if (step == 0) "Добавить приложение" else "Введите код"
+            detail.text = if (step == 0) {
+                "Укажи username Telegram. Если аккаунт уже есть в боте, код придёт сюда."
+            } else if (needsBotStart) {
+                "Этого username пока нет в боте. Открой ./c один раз — код появится здесь."
+            } else {
+                "Код уже отправлен в Telegram. Переключаться в бот не нужно."
+            }
+            primary.text = if (step == 0) "Получить код" else "Подтвердить код"
+        }
+        openBot.setOnClickListener {
+            botUrl?.let { link ->
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+                    .onFailure { status.text = "Не удалось открыть ссылку. Попробуй ещё раз." }
+            }
+        }
+        primary.setOnClickListener {
+            if (step == 0) {
+                val value = username.text.toString().trim()
+                if (!Regex("@?[A-Za-z0-9_]{5,32}").matches(value)) {
+                    status.setTextColor(DeyttUi.CORAL)
+                    status.text = "Введи username Telegram длиной от 5 до 32 знаков."
+                    return@setOnClickListener
+                }
+                primary.isEnabled = false
+                primary.text = "Отправляем…"
+                status.setTextColor(DeyttUi.SKY)
+                status.text = "Проверяю, доступен ли вход через бота."
+                executor.execute {
+                    val result = runCatching { TelegramPairingClient.start(value) }
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed || !dialog.isShowing) return@runOnUiThread
+                        primary.isEnabled = true
+                        result.onSuccess { started ->
+                            challenge = started.challenge
+                            botUrl = started.botUrl
+                            needsBotStart = started.delivery != "sent"
+                            updateStep(1)
+                            status.setTextColor(DeyttUi.SKY)
+                            status.text = when (started.delivery) {
+                                "sent" -> "Код отправлен в Telegram и действует 5 минут."
+                                "delivery_failed" -> "Не удалось доставить код. Открой ./c ниже, чтобы получить его."
+                                else -> "Этого username пока нет в боте. Открой ./c ниже один раз."
+                            }
+                        }.onFailure { error ->
+                            primary.text = "Получить код"
+                            status.setTextColor(DeyttUi.CORAL)
+                            status.text = when ((error as? TelegramPairingException)?.code) {
+                                "invalid_username" -> "Проверь username Telegram."
+                                "pairing_rate_limited", "rate_limited" -> "Слишком часто. Подожди и попробуй ещё раз."
+                                else -> "Не удалось начать вход. Проверь соединение и попробуй снова."
+                            }
+                        }
+                    }
+                }
+            } else {
+                val currentChallenge = challenge
+                val pin = code.text.toString().trim()
+                if (currentChallenge == null || !Regex("[0-9]{6}").matches(pin)) {
+                    status.setTextColor(DeyttUi.CORAL)
+                    status.text = "Введи шесть цифр из сообщения ./c."
+                    return@setOnClickListener
+                }
+                primary.isEnabled = false
+                primary.text = "Проверяем…"
+                status.setTextColor(DeyttUi.SKY)
+                status.text = "Подтверждаю аккаунт и загружаю доступные профили."
+                executor.execute {
+                    val result = runCatching {
+                        val session = TelegramPairingClient.verify(currentChallenge, pin)
+                        TelegramSessionStore.save(this, session.token)
+                        val subscription = runCatching {
+                            TelegramPairingClient.subscriptionUrl(session.token)
+                        }
+                        session to subscription
+                    }
+                    runOnUiThread {
+                        if (isFinishing || isDestroyed || !dialog.isShowing) return@runOnUiThread
+                        primary.isEnabled = true
+                        result.onSuccess { (_, subscriptionResult) ->
+                            dialog.dismiss()
+                            val subscription = subscriptionResult.getOrNull()
+                            if (subscription != null) {
+                                input.setText(subscription)
+                                importProfile()
+                            } else {
+                                state.visibility = View.VISIBLE
+                                state.setTextColor(if (subscriptionResult.isSuccess) DeyttUi.MINT else DeyttUi.AMBER)
+                                state.text = if (subscriptionResult.isSuccess) {
+                                    "Аккаунт Telegram подключён. Активной подписки нет — добавь ссылку ниже."
+                                } else {
+                                    "Аккаунт Telegram подключён, но загрузить подписку не удалось. Добавь ссылку ниже."
+                                }
+                            }
+                        }.onFailure { error ->
+                            primary.text = "Подтвердить код"
+                            status.setTextColor(DeyttUi.CORAL)
+                            status.text = when ((error as? TelegramPairingException)?.code) {
+                                "pair_code_invalid" -> "Код неверный или истёк. Запроси новый."
+                                "pair_code_locked" -> "Попытки закончились. Начни вход заново."
+                                else -> "Не удалось подтвердить код. Попробуй ещё раз."
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        dialog.setContentView(sheet)
+        dialog.show()
+        dialog.window?.apply {
+            setBackgroundDrawableResource(android.R.color.transparent)
+            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
+            setGravity(Gravity.BOTTOM)
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            attributes = attributes.apply { dimAmount = .58f }
         }
     }
 

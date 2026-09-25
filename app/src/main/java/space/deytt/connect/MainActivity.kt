@@ -65,8 +65,11 @@ class MainActivity : Activity() {
     private lateinit var statusInset: View
     private lateinit var originPlaceText: TextView
     private lateinit var originHintText: TextView
+    private lateinit var middleNode: View
+    private lateinit var firstHopArrow: View
+    private lateinit var secondHopArrow: View
+    private lateinit var middlePlaceText: TextView
     private lateinit var destinationText: TextView
-    private lateinit var destinationRouteHint: TextView
     private var telegramAccountName: TextView? = null
     private var telegramAvatarFallback: TextView? = null
     private var telegramAvatarImage: ImageView? = null
@@ -270,7 +273,7 @@ class MainActivity : Activity() {
 
     internal fun updateTelegramIdentity(username: String?, avatar: Bitmap?) {
         val account = username?.trim()?.removePrefix("@")?.takeIf(String::isNotBlank)
-        telegramAccountName?.text = account?.let { "./c @$it" } ?: uiCopy("./c · без аккаунта")
+        telegramAccountName?.text = account?.let { "./$it" } ?: uiCopy("./c · без аккаунта")
         telegramAvatarFallback?.apply {
             text = account?.take(1)?.uppercase() ?: "•"
             visibility = if (avatar == null) View.VISIBLE else View.GONE
@@ -286,6 +289,15 @@ class MainActivity : Activity() {
                 alpha = 0f
                 animate().alpha(1f).setDuration(190L).start()
             }
+        }
+    }
+
+    internal fun updateTelegramUsername(username: String?) {
+        val account = username?.trim()?.removePrefix("@")?.takeIf(String::isNotBlank)
+        telegramAccountName?.text = account?.let { "./$it" } ?: uiCopy("./c · без аккаунта")
+        if (telegramAvatarImage?.drawable == null) {
+            telegramAvatarFallback?.text = account?.take(1)?.uppercase() ?: "•"
+            telegramAvatarFallback?.visibility = View.VISIBLE
         }
     }
 
@@ -441,10 +453,10 @@ class MainActivity : Activity() {
 
         val connectionPanel = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(17), dp(15), dp(17), dp(16))
-            background = rounded(DeyttUi.SURFACE, 20f, DeyttUi.LINE)
+            setPadding(dp(19), dp(18), dp(19), dp(18))
+            background = rounded(DeyttUi.SURFACE_2, 23f, DeyttUi.LINE)
         }
-        connectionPanel.addView(sectionLabel("состояние соединения"))
+        connectionPanel.addView(sectionLabel("СОСТОЯНИЕ КАНАЛА"))
         val statusLine = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -457,21 +469,21 @@ class MainActivity : Activity() {
             }
         }
         statusLine.addView(statusDot, LinearLayout.LayoutParams(dp(9), dp(9)).apply { marginEnd = dp(11) })
-        statusText = text("Не подключено", 24f, DeyttUi.TEXT).apply {
+        statusText = text("Не подключено", 25f, DeyttUi.TEXT).apply {
             gravity = Gravity.START
             letterSpacing = -.025f
             maxLines = 2
         }
         statusLine.addView(statusText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         connectionPanel.addView(statusLine)
-        detailText = text("Готово к подключению", 12f, DeyttUi.MUTED).apply {
+        detailText = text("Готов к безопасному соединению", 12f, DeyttUi.MUTED).apply {
             gravity = Gravity.START
-            setPadding(dp(20), dp(5), 0, 0)
+            setPadding(dp(20), dp(7), 0, 0)
         }
         connectionPanel.addView(detailText)
         action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
-        connectionPanel.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)).apply {
-            topMargin = dp(16)
+        connectionPanel.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)).apply {
+            topMargin = dp(18)
         })
         root.addView(connectionPanel)
 
@@ -771,35 +783,48 @@ class MainActivity : Activity() {
         DeyttUi.setStarfieldMotion(statusInset, active = selected in 0..3 && !isFinishing, reducedMotion = reduced)
     }
 
-    private fun buildRouteFlow(): View = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(15), dp(12), dp(15), dp(12))
-        background = rounded(DeyttUi.SURFACE, 18f, DeyttUi.LINE)
+    private fun buildRouteFlow(): View {
+        val route = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(13), dp(12), dp(13), dp(12))
+            background = rounded(DeyttUi.SURFACE, 19f, DeyttUi.LINE)
+        }
+        fun node(label: String, alignEnd: Boolean = false): LinearLayout =
+            LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = if (alignEnd) Gravity.END else Gravity.START
+                addView(mono(label, 8f, DeyttUi.MUTED, 600).apply {
+                    gravity = if (alignEnd) Gravity.END else Gravity.START
+                })
+            }
+        fun arrow(): View = text("→", 15f, DeyttUi.SKY, android.graphics.Typeface.BOLD).apply {
+            gravity = Gravity.CENTER
+            contentDescription = uiCopy("направление маршрута")
+        }
+        fun weighted(view: View) = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+            .apply { gravity = Gravity.TOP }
 
-        val origin = LinearLayout(this@MainActivity).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(this@MainActivity.mono("ВХОД", 8f, DeyttUi.MUTED, 600))
-            originPlaceText = this@MainActivity.text("Ищем регион…", 13f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+        val origin = node("ВХОД").apply {
+            originPlaceText = text("Ищем регион…", 11f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(0, dp(5), 0, 0)
             }
             addView(originPlaceText)
-            originHintText = this@MainActivity.text("примерно по IP", 10f, DeyttUi.MUTED).apply { setPadding(0, dp(3), 0, 0) }
+            originHintText = text("примерно по IP", 9f, DeyttUi.MUTED).apply { setPadding(0, dp(3), 0, 0) }
             addView(originHintText)
         }
-        addView(origin, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { gravity = Gravity.TOP })
-        addView(this@MainActivity.text("→", 18f, DeyttUi.SKY, android.graphics.Typeface.BOLD).apply {
-            gravity = Gravity.CENTER
-            setPadding(dp(8), 0, dp(8), 0)
-            contentDescription = uiCopy("направление маршрута")
-        })
-        val destination = LinearLayout(this@MainActivity).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.END
-            addView(this@MainActivity.mono("ВЫХОД", 8f, DeyttUi.MUTED, 600).apply { gravity = Gravity.END })
-            destinationText = this@MainActivity.text("Автоподбор", 13f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+        val transit = node("ТРАНЗИТ").apply {
+            middlePlaceText = text("🇷🇺 Петербург", 11f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(0, dp(5), 0, 0)
+            }
+            addView(middlePlaceText)
+        }
+        val destination = node("ВЫХОД", alignEnd = true).apply {
+            destinationText = text("Автоподбор", 11f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 gravity = Gravity.END
@@ -807,37 +832,36 @@ class MainActivity : Activity() {
                 setOnClickListener { selectTab(1) }
             }
             addView(destinationText)
-            val destinationHint = LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                destinationRouteHint = this@MainActivity.text("", 9f, DeyttUi.MUTED).apply {
-                    maxLines = 1
-                    ellipsize = android.text.TextUtils.TruncateAt.END
-                }
-                addView(destinationRouteHint,
-                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                latencyText = this@MainActivity.actionLabel().apply {
-                    minHeight = dp(27)
-                    minimumHeight = dp(27)
-                    setPadding(dp(4), 0, dp(4), 0)
-                    setOnClickListener { measureSelectedRoute() }
-                }
-                addView(latencyText, LinearLayout.LayoutParams(dp(54), dp(27)).apply { gravity = Gravity.END })
+            latencyText = actionLabel().apply {
+                minHeight = dp(24)
+                minimumHeight = dp(24)
+                setPadding(0, dp(2), 0, 0)
+                gravity = Gravity.END
+                setOnClickListener { measureSelectedRoute() }
             }
-            addView(destinationHint, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(latencyText)
         }
-        addView(destination, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { gravity = Gravity.TOP })
-        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
-        contentDescription = uiCopy("Путь от входа до выбранного выхода")
+        route.addView(origin, weighted(origin))
+        firstHopArrow = arrow()
+        route.addView(firstHopArrow, LinearLayout.LayoutParams(dp(16), dp(24)))
+        middleNode = transit
+        route.addView(transit, weighted(transit))
+        secondHopArrow = arrow()
+        route.addView(secondHopArrow, LinearLayout.LayoutParams(dp(16), dp(24)))
+        route.addView(destination, weighted(destination))
+        route.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
+        route.contentDescription = uiCopy("Путь от входа через транзит к выбранному выходу")
+        return route
     }
 
     private fun updateRouteFlow(selected: SelectedRoute) {
         if (!::destinationText.isInitialized) return
         val isRuDe = selected.id.contains("RU-DE", ignoreCase = true)
-        destinationText.text = if (isRuDe) "🇩🇪 ${uiCopy("Франкфурт")}" else uiCopy(selected.title)
-        if (::destinationRouteHint.isInitialized) {
-            destinationRouteHint.text = if (isRuDe) uiCopy("через 🇷🇺 Петербург") else ""
-            destinationRouteHint.visibility = if (isRuDe) View.VISIBLE else View.GONE
+        destinationText.text = if (isRuDe) "🇩🇪 " + uiCopy("Франкфурт") else uiCopy(selected.title)
+        if (::middleNode.isInitialized) {
+            middleNode.visibility = if (isRuDe) View.VISIBLE else View.GONE
+            secondHopArrow.visibility = if (isRuDe) View.VISIBLE else View.GONE
+            firstHopArrow.visibility = View.VISIBLE
         }
     }
 

@@ -848,7 +848,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             setLineSpacing(host.dp(2).toFloat(), 1f)
         }
         sheet.addView(status)
-        val openBot = host.button("Открыть бота и нажать Start", secondary = true)
+        val openBot = host.button("Открыть ./c", secondary = true)
         sheet.addView(openBot, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48),
         ).apply { topMargin = host.dp(13) })
@@ -856,15 +856,23 @@ internal class PrimaryPages(private val host: MainActivity) {
         sheet.addView(primary, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, host.dp(50),
         ).apply { topMargin = host.dp(9) })
+        usernameField.imeOptions = EditorInfo.IME_ACTION_GO
+        usernameField.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
+                primary.performClick()
+                true
+            } else false
+        }
 
         var challenge: String? = null
         var botUrl: String? = null
+        var needsBotStart = false
         var step = 0
         fun setStep(value: Int) {
             step = value
             usernameField.visibility = if (step == 0) View.VISIBLE else View.GONE
             codeField.visibility = if (step == 1) View.VISIBLE else View.GONE
-            openBot.visibility = if (step == 1) View.VISIBLE else View.GONE
+            openBot.visibility = if (step == 1 && needsBotStart) View.VISIBLE else View.GONE
             primary.text = when (step) {
                 0 -> "Получить код"
                 1 -> "Подтвердить код"
@@ -872,12 +880,16 @@ internal class PrimaryPages(private val host: MainActivity) {
             }
             title.text = when (step) {
                 0 -> "Добавить приложение"
-                1 -> "Проверь Telegram"
+                1 -> if (needsBotStart) "Сначала открой ./c" else "Код отправлен"
                 else -> "Аккаунт подключён"
             }
             detail.text = when (step) {
                 0 -> "Укажи Telegram username. Бот подтвердит вход одноразовым кодом и подключит существующие профили."
-                1 -> "Проверь личный чат с ./c. Если кода нет, открой бота кнопкой ниже и нажми Start."
+                1 -> if (needsBotStart) {
+                    "Этот аккаунт ещё не начинал чат с ботом. Открой ./c один раз — код придёт сюда."
+                } else {
+                    "Код уже отправлен в Telegram. Оставайся в приложении и введи его ниже."
+                }
                 else -> ""
             }
         }
@@ -909,9 +921,14 @@ internal class PrimaryPages(private val host: MainActivity) {
                             result.onSuccess {
                                 challenge = it.challenge
                                 botUrl = it.botUrl
+                                needsBotStart = it.delivery != "sent"
                                 setStep(1)
                                 status.setTextColor(BLUE)
-                                status.text = "Проверь Telegram: код действует 5 минут. Если сообщения нет, открой бота кнопкой ниже и нажми Start."
+                                status.text = when (it.delivery) {
+                                    "sent" -> "Код отправлен в Telegram и действует 5 минут. Переключаться в бот не нужно."
+                                    "delivery_failed" -> "Не получилось доставить сообщение. Открой ./c ниже, чтобы получить код."
+                                    else -> "Этого аккаунта пока нет в боте. Открой ./c ниже один раз — код придёт в чат."
+                                }
                             }.onFailure {
                                 primary.text = "Продолжить"
                                 status.setTextColor(DeyttUi.CORAL)
@@ -968,7 +985,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                                 status.setTextColor(DeyttUi.MINT)
                                 status.text = message
                                 setStep(2)
-                                host.updateTelegramIdentity(session.username, null)
+                                host.updateTelegramUsername(session.username)
                                 host.refreshTelegramAccount()
                                 host.refreshAccountViews()
                             }.onFailure {
