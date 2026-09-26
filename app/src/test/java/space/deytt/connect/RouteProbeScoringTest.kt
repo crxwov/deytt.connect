@@ -37,8 +37,14 @@ class RouteProbeScoringTest {
     }
 
     @Test
-    fun equalMeasurementsReceiveEqualGrades() {
+    fun tiedMeasurementsStillHaveExactlyOneDeterministicBestRoute() {
         val samples = listOf("one", "two", "three").map { RouteProbeSample(it, 100, 500_000) }
-        assertEquals(1, RouteProbeScoring.grade(samples).values.toSet().size)
+        val grades = RouteProbeScoring.grade(samples)
+
+        assertEquals("one", RouteProbeScoring.bestRouteId(samples))
+        assertEquals(RouteGrade.GOOD, grades["one"])
+        assertEquals(1, grades.values.count { it == RouteGrade.GOOD })
+        assertEquals(RouteGrade.MEDIUM, grades["three"])
+        assertEquals(RouteGrade.POOR, grades["two"])
     }
 }

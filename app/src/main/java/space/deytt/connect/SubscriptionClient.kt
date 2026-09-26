@@ -14,7 +14,6 @@ data class ImportedSubscription(
     val url: String,
     val summary: ProfileSummary,
     val metadata: SubscriptionMetadata,
-    val awg15Available: Boolean,
     val awg31Available: Boolean,
     val warnings: List<String> = emptyList(),
 )
@@ -42,10 +41,7 @@ object SubscriptionClient {
         val metadata = SubscriptionMetadata.parse(response.profileTitle, response.userInfo)
         val awgStore = AwgProfileStore(context)
         val previousAwgProfiles = awgStore.profiles()
-        val awgResults = listOf(
-            fetchAwgProfiles(baseUrl, "amneziawg", "15", transport),
-            fetchAwgProfiles(baseUrl, "amneziawg31", "31", transport),
-        )
+        val awgResults = listOf(fetchAwgProfiles(baseUrl, "amneziawg31", "31", transport))
         // An optional AWG endpoint must not make a valid core subscription unusable.
         // Keep a last-known-good family when its gateway is temporarily failing.
         val awgProfiles = awgResults.flatMap { result ->
@@ -73,7 +69,6 @@ object SubscriptionClient {
             baseUrl,
             summary,
             metadata,
-            awgProfiles.any { it.version == "15" },
             awgProfiles.any { it.version == "31" },
             warnings = awgResults.mapNotNull { it.warning },
         )
@@ -369,7 +364,7 @@ object SubscriptionClient {
     }
 
     private fun awgWarning(version: String, failedCount: Int, availableCount: Int, temporary: Boolean): String {
-        val name = "AmneziaWG ${if (version == "31") "3.1" else "1.5"}"
+        val name = "AmneziaWG 3.1"
         return if (temporary) {
             if (availableCount == 0) {
                 "$name: $failedCount ${if (failedCount == 1) "сервер" else "сервера"} временно недоступ${if (failedCount == 1) "ен" else "ны"}. Доступных точек нет, обновите подписку позже."
@@ -386,7 +381,7 @@ object SubscriptionClient {
     }
 
     private fun awgWarning(version: String, error: Exception): String {
-        val name = "AmneziaWG ${if (version == "31") "3.1" else "1.5"}"
+        val name = "AmneziaWG 3.1"
         val reason = SubscriptionRetryPolicy.safeFailureSummary(error)
         return if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) == true) {
             "$name: дополнительные профили временно недоступны ($reason). Основная подписка добавлена, обновите её позже."

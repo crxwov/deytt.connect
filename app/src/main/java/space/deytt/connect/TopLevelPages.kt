@@ -272,7 +272,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             val protocolSummary = countryRoutes.map { route ->
                 when (route.engine) {
                     TunnelEngine.LIBBOX -> route.protocol.title
-                    TunnelEngine.AMNEZIAWG -> "AmneziaWG ${if (route.protocol == RouteProtocol.AWG31) "3.1" else "1.5"}"
+                    TunnelEngine.AMNEZIAWG -> route.protocol.title
                 }
             }.distinct().joinToString(" · ")
             val detail = routeGroup().apply { visibility = View.GONE }
@@ -587,14 +587,29 @@ internal class PrimaryPages(private val host: MainActivity) {
         diagnosticExecutor.execute {
             var measuredLatency: Long? = null
             val result = runCatching {
-                val current = { !closed && diagnosticForeground && country?.cancelled != true && AwgTunnelController.isRunning() &&
-                    VpnStateStore(host).read().phase == VpnPhase.CONNECTED && SelectedRouteStore(host).read().id == row.route.id }
+                val current = {
+                    !closed && diagnosticForeground && country?.cancelled != true &&
+                        AwgTunnelController.isRunning() && !AwgTunnelController.isStopping() &&
+                        SelectedRouteStore(host).read().id == row.route.id
+                }
                 check(current())
-                val latency = RouteProxyProbe.measureThroughSystemVpn(RouteProbePreferences.method(host))
-                measuredLatency = latency
-                host.runOnUiThread { if (current()) row.status.text = copy("Задержка: ", "Ping: ") + formatLatency(latency) + copy(" · скорость 1 с…", " · speed 1 s…") }
-                val speed = RouteProxyProbe.measureSystemDownload(token, current)
-                RouteProbeSample(row.route.id, latency, speed).also { RouteQualityStore.write(host, it) }
+                val speed = RouteProxyProbe.measureSystemDownload(token, current) { latency ->
+                    measuredLatency = latency
+                    host.runOnUiThread {
+                        if (current()) row.status.text = copy("Задержка: ", "Ping: ") +
+                            formatLatency(latency) + copy(" · скорость 1 с…", " · speed 1 s…")
+                    }
+                }
+                RouteProbeSample(
+                    row.route.id,
+                    measuredLatency ?: error("Latency was not reported"),
+                    speed,
+                ).also { RouteQualityStore.write(host, it) }
+            }.onFailure { error ->
+                android.util.Log.w(
+                    "DeyttAwgProbe",
+                    "Measurement failed (${error.javaClass.simpleName}: ${error.message?.take(72).orEmpty()})",
+                )
             }
             host.runOnUiThread {
                 row.progress.visibility = View.GONE

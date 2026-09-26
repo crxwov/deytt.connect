@@ -138,20 +138,8 @@ class SubscriptionClientTest {
     }
 
     @Test
-    fun validAwg15And31FamiliesImportOneAdvertisedServerEach() {
+    fun importsOnlyTheSupportedAmnezia31Family() {
         AwgProfileStore.validate(VALID_AWG31_CONFIG)
-        val awg15 = SubscriptionClient.fetchAwgProfilesForTest(
-            "https://deytt.space/sub/token",
-            "amneziawg",
-            "15",
-            FakeTransport(
-                SubscriptionClient.SubscriptionHttpResponse(
-                    200,
-                    body = VALID_AWG_CONFIG,
-                    awgServers = "[{\"id\":\"nl\",\"label\":\"Нидерланды\",\"short_label\":\"NL\"}]",
-                ),
-            ),
-        )
         val awg31 = SubscriptionClient.fetchAwgProfilesForTest(
             "https://deytt.space/sub/token",
             "amneziawg31",
@@ -165,11 +153,8 @@ class SubscriptionClientTest {
             ),
         )
 
-        assertEquals(SubscriptionClient.AwgFetchState.AVAILABLE, awg15.state)
         assertEquals(SubscriptionClient.AwgFetchState.AVAILABLE, awg31.state)
-        assertEquals("awg15:nl", awg15.profiles.single().id)
         assertEquals("awg31:de", awg31.profiles.single().id)
-        AwgProfileStore.validate(awg15.profiles.single().config)
         AwgProfileStore.validate(awg31.profiles.single().config)
     }
 

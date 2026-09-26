@@ -4,6 +4,7 @@
   window.deyttMapRoute = "auto";
   window.deyttMapLanguage = "ru";
   window.deyttMapUserLocation = null;
+  window.deyttMapEgressCountry = null;
   window.deyttMapNodeTapped = function (key) {
     if (window.DeyttAtlasBridge && typeof window.DeyttAtlasBridge.onNodeTap === "function") {
       window.DeyttAtlasBridge.onNodeTap(String(key || ""));
@@ -21,10 +22,9 @@
     window.deyttMapLanguage = language === "en" ? "en" : "ru";
     if (window.deyttMapAtlas) window.deyttMapAtlas.setLanguage(window.deyttMapLanguage);
   };
-  window.deyttSetMapTraffic = function (enabled) {
-    if (!window.deyttMapAtlas) return;
-    window.deyttMapAtlas.animateTraffic = Boolean(enabled);
-    window.deyttMapAtlas.start();
+  window.deyttSetMapEgressCountry = function (countryCode) {
+    window.deyttMapEgressCountry = countryCode || null;
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setAutoExitCountry(window.deyttMapEgressCountry);
   };
   window.deyttSetMapLocations = function (locations) {
     if (window.deyttMapAtlas) window.deyttMapAtlas.setAvailableLocations(locations);
@@ -38,9 +38,7 @@
   window.deyttClearMapUserLocation = function () {
     window.deyttMapUserLocation = null;
     if (window.deyttMapAtlas) {
-      window.deyttMapAtlas.userLocation = null;
-      window.deyttMapAtlas.staticDirty = true;
-      window.deyttMapAtlas.start();
+      window.deyttMapAtlas.setUserLocation(null, null, {});
     }
   };
 
@@ -48,7 +46,6 @@
     variant: "showcase",
     route: "auto",
     topologyUrl: "world-land.json",
-    animateTraffic: false,
     selectOnTap: false,
   }).then(function (atlas) {
     window.deyttMapAtlas = atlas;
@@ -59,6 +56,7 @@
       status.setAttribute("aria-hidden", "true");
     }
     window.deyttSetMapRoute(window.deyttMapRoute);
+    window.deyttSetMapEgressCountry(window.deyttMapEgressCountry);
     if (window.deyttMapLocations) window.deyttSetMapLocations(window.deyttMapLocations);
     if (window.deyttMapUserLocation) {
       const location = window.deyttMapUserLocation;

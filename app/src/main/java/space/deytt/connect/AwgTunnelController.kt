@@ -60,7 +60,10 @@ object AwgTunnelController {
                 tunnel = nextTunnel
                 appContext = context.applicationContext
                 nextBackend.setState(nextTunnel, Tunnel.State.UP, parsed)
-                verifyTraffic(operationId)
+                // Diagnostics immediately run the same HTTPS probe and speed
+                // sample through this app-only tunnel. A separate public Google
+                // canary adds up to 30 s and can fail on its DNS independently.
+                if (!diagnosticOnly) verifyTraffic(operationId)
                 ensureCurrent(operationId)
                 publish(context, VpnPhase.CONNECTED, "Подключено")
             } catch (error: Throwable) {

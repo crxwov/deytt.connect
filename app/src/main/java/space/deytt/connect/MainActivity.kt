@@ -22,7 +22,6 @@ import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.net.TrafficStats
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -116,26 +115,6 @@ class MainActivity : Activity() {
     private var accountGeneration = 0
     private val connectionProgressHandler = Handler(Looper.getMainLooper())
     private val selectedRouteLatencyHandler = Handler(Looper.getMainLooper())
-    private val trafficSampleHandler = Handler(Looper.getMainLooper())
-    private val mapTrafficActivity = TrafficActivityWindow(TRAFFIC_VISIBILITY_WINDOW_MS)
-    private val trafficSample = object : Runnable {
-        override fun run() {
-            if (!shouldSampleMapTraffic()) {
-                mapTrafficActivity.reset()
-                if (::globe.isInitialized) globe.setTrafficEnabled(false)
-                return
-            }
-            // UID counters omit other apps routed through Android's system VPN.
-            // Device totals are sampled only while the VPN transport is active.
-            val trafficActive = mapTrafficActivity.observe(
-                TrafficStats.getTotalRxBytes(),
-                TrafficStats.getTotalTxBytes(),
-                SystemClock.elapsedRealtime(),
-            )
-            if (::globe.isInitialized) globe.setTrafficEnabled(trafficActive)
-            trafficSampleHandler.postDelayed(this, TRAFFIC_SAMPLE_INTERVAL_MS)
-        }
-    }
     private val connectionProgressTick = object : Runnable {
         override fun run() {
             val phase = renderedPhase ?: return
@@ -297,8 +276,6 @@ class MainActivity : Activity() {
         }
         selectedRouteLatencyHandler.removeCallbacks(selectedRouteLatencyTick)
         connectionProgressHandler.removeCallbacks(connectionProgressTick)
-        trafficSampleHandler.removeCallbacks(trafficSample)
-        if (::globe.isInitialized) globe.setTrafficEnabled(false)
         if (::pageAdapter.isInitialized) {
             pageAdapter.cachedPages().forEach { (_, page) -> DeyttUi.setStarfieldMotion(page, active = false) }
         }
@@ -333,7 +310,6 @@ class MainActivity : Activity() {
         locationExecutor.shutdownNow()
         accountGeneration++
         accountExecutor.shutdownNow()
-        trafficSampleHandler.removeCallbacksAndMessages(null)
         selectedRouteLatencyHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
@@ -484,7 +460,6 @@ class MainActivity : Activity() {
             override fun onPageSelected(position: Int) {
                 navigationBar.setSelectedPage(position)
                 updatePrimaryPageMotion(position)
-                updateMapTrafficSampling()
                 homeSpeedOnHome = position == 0
                 if (position == 0) { updateQualityStrip(); measureHomeRouteDownload() }
                 else cancelHomeRouteDownload()
@@ -568,8 +543,8 @@ class MainActivity : Activity() {
             ?.takeIf(String::isNotBlank)
             ?.let { warning ->
                 root.addView(spacer(12, this))
-                val compactWarning = if (warning.contains("AmneziaWG 1.5") && warning.contains("AmneziaWG 3.1")) {
-                    "Профили AmneziaWG 1.5 и 3.1 не загружены. Обновите подписку."
+                val compactWarning = if (warning.startsWith("Профили AmneziaWG ") && warning.contains(" не загружены.")) {
+                    "Профиль AmneziaWG 3.1 не загружен. Обновите подписку."
                 } else warning
                 root.addView(note(compactWarning, DeyttUi.AMBER))
             }
@@ -752,6 +727,7 @@ class MainActivity : Activity() {
             completionSent = true
             temporaryAwgMeasurement = false
             restoreAwgMeasurement = null
+            if (restored && wasConnected) refreshNetworkLocation(force = true)
             if (!isFinishing && !isDestroyed) { rebuildRouteRow(); renderStoredState() }
             onComplete(restored && allSuccessful)
         }
@@ -1163,10 +1139,13 @@ class MainActivity : Activity() {
     }
 
     private fun updateNetworkLocationViews() {
-        if (!::originPlaceText.isInitialized || !::originHintText.isInitialized) return
         val enabled = isNetworkLocationEnabled()
-        val location = currentNetworkLocation
         val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
+        if (::globe.isInitialized) {
+            globe.setEgressCountry(if (enabled && tunnelActive) currentEgressLocation?.countryCode else null)
+        }
+        if (!::originPlaceText.isInitialized || !::originHintText.isInitialized) return
+        val location = currentNetworkLocation
         originFlagText.text = if (enabled && location != null) countryFlag(location.countryCode) else "◎"
         originPlaceText.text = when {
             !enabled -> uiCopy("Место скрыто")
@@ -1323,7 +1302,10 @@ class MainActivity : Activity() {
                     return
                 }
             }
-            if (currentEgressLocation != null && !force || egressRequestInFlight) {
+            // Sample the auto route's public exit once per VPN session. A load
+            // balancer can answer separate probes from different exits; using
+            // each response as a new map target makes the route appear to jump.
+            if (currentEgressLocation != null || egressRequestInFlight) {
                 updateNetworkLocationViews()
                 return
             }
@@ -1701,17 +1683,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun shouldSampleMapTraffic(): Boolean =
-        ::globe.isInitialized && ::pager.isInitialized && pager.currentItem == 0 &&
-            renderedPhase == VpnPhase.CONNECTED && isSystemTunnelActive()
-
-    private fun updateMapTrafficSampling() {
-        trafficSampleHandler.removeCallbacks(trafficSample)
-        mapTrafficActivity.reset()
-        if (shouldSampleMapTraffic()) trafficSampleHandler.post(trafficSample)
-        else if (::globe.isInitialized) globe.setTrafficEnabled(false)
-    }
-
     private fun renderStatus(phase: VpnPhase?, status: String?, error: String?) {
         if (!::statusText.isInitialized) return
         val value = status ?: "Соединение выключено"
@@ -1741,6 +1712,11 @@ class MainActivity : Activity() {
                 homeSpeedAttemptAt = 0L
                 selectedRouteLatencyHandler.postDelayed({ measureHomeRouteDownload() }, 1_800L)
             } else homeSpeedConnectedRouteId = null
+            if (!temporaryAwgMeasurement &&
+                (currentPhase == VpnPhase.CONNECTED || currentPhase == VpnPhase.IDLE || currentPhase == VpnPhase.ERROR)
+            ) {
+                refreshNetworkLocation(force = true)
+            }
         }
         statusText.text = uiCopy(displayValue)
         detailText.text = uiCopy(when (currentPhase) {
@@ -1788,9 +1764,6 @@ class MainActivity : Activity() {
         action.contentDescription = action.text.toString()
         action.isEnabled = currentPhase != VpnPhase.STOPPING
         action.alpha = if (action.isEnabled) 1f else .66f
-        if (::globe.isInitialized) {
-            updateMapTrafficSampling()
-        }
     }
 
     private fun ensureConnectionProgressStarted(previousPhase: VpnPhase?) {
@@ -1987,8 +1960,6 @@ class MainActivity : Activity() {
         private const val KEY_CONNECTION_STARTED_ELAPSED = "connection_started_elapsed"
         private const val CONNECTION_PROGRESS_INTERVAL_MS = 1_000L
         private const val SELECTED_ROUTE_LATENCY_INTERVAL_MS = 5_000L
-        private const val TRAFFIC_SAMPLE_INTERVAL_MS = 700L
-        private const val TRAFFIC_VISIBILITY_WINDOW_MS = 3_500L
     }
 }
 
