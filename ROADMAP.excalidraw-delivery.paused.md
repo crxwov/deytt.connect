@@ -19,7 +19,7 @@ Implement the actionable feedback in the 2026-09-26 Excalidraw note in the Andro
 - [x] 5. Refine Home and Profile/Settings: Telegram avatar, 10-second selected-route latency, remove profile AWG inventory, and build supported in-app account/device/session/key/plan/support/legal flows.
 - [x] 6. Add periodic official-release checking and a secure user-consented update flow compatible with the project's sideload distribution.
 - [x] 7. Review scoped diffs, commit and push client/backend changes, install the updated client, and inspect the available device screen.
-- [ ] 8. Increment app metadata, run tests/lint/build, verify ARM64 APK signature/hash, install the updated APK, and publish `v0.8.5-debug` with accurate notes.
+- [x] 8. Increment app metadata, run tests/lint/build, verify ARM64 APK signature/hash, install the updated APK, and publish `v0.8.5-debug` with accurate notes.
 - [ ] 9. Deploy the backend API commit by pulling it on the server, restarting affected services, and verifying health. Blocked until the actual Git checkout path is known.
 
 ## Current State
@@ -32,7 +32,7 @@ Implement the actionable feedback in the 2026-09-26 Excalidraw note in the Andro
 - Client commit `a1e2289` and backend commit `e46bcee` are pushed to their respective `main` branches. Server preflight at `/home/twin/vpn-admin` failed because that path is not recognized as a Git repository on `nl-vpn`; no pull or service restart was attempted.
 - Documentation status commits `e266ddd` and `64f1b44` record the delivery blocker. GitHub currently lists `v0.8.4-debug` as the latest client release (versionCode 18); user clarified that the new app work has no release. Publish the next version as `v0.8.5-debug` / versionCode 19.
 - `app/build.gradle.kts` now targets versionName `0.8.5` and versionCode `19`. Full Android unit tests, lint, and debug assembly pass. The ARM64 APK verifies with APK Signature Scheme v2, is installed on TECNO CH6i, and launches to the inspected setup screen. SHA-256: `eb673ca5c1128d663b182bc7258a414a0f65337c783e31d56b6ec74f56362c97`.
-- Remote release list and tag check confirm `v0.8.5-debug` is not published or tagged yet. The GH CLI is authenticated for `crxwov`; release creation remains the next action.
+- Published prerelease `v0.8.5-debug` at https://github.com/crxwov/deytt.connect/releases/tag/v0.8.5-debug, targeting commit `321ccb2d46c02a94a6d2613f056cbad1b408599e`. GitHub confirms the ARM64 APK asset is uploaded with the expected SHA-256 above.
 - Codebase-memory confirms native Android Views/ViewPager2. The probe service uses an isolated process, refuses another app's VPN, binds libbox sockets to the underlying physical network, and rejects accidental TUN creation.
 
 ## Findings and Decisions
@@ -51,6 +51,7 @@ Implement the actionable feedback in the 2026-09-26 Excalidraw note in the Andro
 - The first build used system Java 27 and failed Gradle's JVM check; use the repository JDK 17.
 - `ProfileRoutesTest` had legacy label-based country expectations; its fixture now checks authoritative short-label prefixes and unknown-region placement.
 - `AppLanguageTest` exposed an untranslated nested reset label. The translator was corrected; rerun the full suite after the setup-screen changes.
+- GitHub rejected abbreviated target commit `321ccb2` when creating the release; verified remote `main` matched the full SHA and release creation succeeded with that full commit SHA.
 
 ## Validation and Blockers
 - Baseline screenshot captured and visually inspected. Version 0.8.5 ARM64 APK installed and launched on TECNO CH6i; setup screen visually verified at `/tmp/deytt-connect-20260926-release.png` without signing in. Full unit tests, lint, APK assembly, `git diff --check`, and v2 APK signature verification passed.
@@ -58,4 +59,4 @@ Implement the actionable feedback in the 2026-09-26 Excalidraw note in the Andro
 - Delivery blocker: server checkout path must be confirmed before claiming production API availability. `vpn-admin.service` and `uebot.service` have not been restarted for the new mobile API.
 
 ## Next Action and Resume Context
-Commit and push the version bump and this roadmap, then publish `v0.8.5-debug` with `app-arm64-v8a-debug.apk` and accurate notes. Continue backend deployment only after confirming the Git checkout path on `nl-vpn`.
+The requested client release is complete and pushed. Continue only with backend deployment after confirming the Git checkout path on `nl-vpn`; then pull the API commit, restart both affected services, and verify health.
