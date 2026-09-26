@@ -161,7 +161,7 @@ object DeyttUi {
             ellipsize = android.text.TextUtils.TruncateAt.END
         })
         addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
-        addView(mono(uiCopy("ЧАСТНО · НА УСТРОЙСТВЕ"), 8f, MUTED, 600))
+        addView(mono("deytt./connect", 9f, MUTED, 600))
     }
 
     fun starfieldBackground(context: Context, referenceHeightPx: Int? = null): Drawable =
@@ -304,12 +304,12 @@ object DeyttUi {
         return FrameLayout(context).apply {
             background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f,
                 if (emphasis) 0xFF3F5985.toInt() else LINE)
-            contentDescription = "Значок AmneziaWG"
+            contentDescription = uiCopy("Значок AmneziaWG")
             addView(ImageView(context).apply {
                 setImageResource(R.drawable.ic_amneziawg)
                 imageTintList = ColorStateList.valueOf(DeyttUi.TEXT)
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                contentDescription = "Оригинальный знак AmneziaWG"
+                contentDescription = uiCopy("Оригинальный знак AmneziaWG")
             }, FrameLayout.LayoutParams(dp(27), dp(27), Gravity.CENTER))
         }
     }
@@ -319,7 +319,7 @@ object DeyttUi {
         return FrameLayout(context).apply {
             background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f,
                 if (emphasis) 0xFF3F5985.toInt() else LINE)
-            contentDescription = "Маршрут через Россию и Германию"
+            contentDescription = uiCopy("Маршрут через Россию и Германию")
             addView(text("🇷🇺", 14f, TEXT).apply { gravity = Gravity.CENTER },
                 FrameLayout.LayoutParams(dp(25), dp(26), Gravity.CENTER_VERTICAL or Gravity.START))
             addView(text("🇩🇪", 14f, TEXT).apply { gravity = Gravity.CENTER },

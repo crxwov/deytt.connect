@@ -58,6 +58,11 @@ class MainActivity : Activity() {
     private lateinit var globe: RouteGlobeView
     private lateinit var action: TextView
     private lateinit var latencyText: TextView
+    private lateinit var routeTitleText: TextView
+    private lateinit var downloadText: TextView
+    private val qualityBars = mutableListOf<View>()
+    private var temporaryAwgMeasurement = false
+    private var restoreAwgMeasurement: (() -> Unit)? = null
     private lateinit var pager: ViewPager2
     private lateinit var navigationBar: DeyttUi.PrimaryNavigationBar
     private lateinit var pageAdapter: TopLevelViewPagerAdapter
@@ -88,6 +93,9 @@ class MainActivity : Activity() {
     private var egressLookupFailed = false
     private var egressRequestGeneration = 0
     private var pendingRouteProbeId: String? = null
+    private var pendingRouteProbeHasOutcome = false
+    private var homeConnectQueued = false
+    private var lastRouteLatency: Pair<String, Long>? = null
     private var pendingRouteProbeAuthorization: (() -> Unit)? = null
     private var selectedRouteLatencyInFlight = false
     private val locationExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -126,7 +134,9 @@ class MainActivity : Activity() {
     private val selectedRouteLatencyTick = object : Runnable {
         override fun run() {
             if (isFinishing || isDestroyed) return
-            if (!RouteProbeClient.isRunning(this@MainActivity)) measureSelectedRoute()
+            if (::pager.isInitialized && pager.currentItem == 0 &&
+                VpnService.prepare(this@MainActivity) == null &&
+                !RouteProbeClient.isRunning(this@MainActivity)) measureSelectedRoute()
             selectedRouteLatencyHandler.postDelayed(this, SELECTED_ROUTE_LATENCY_INTERVAL_MS)
         }
     }
@@ -164,11 +174,14 @@ class MainActivity : Activity() {
             val error = event.getStringExtra(RouteProbeClient.EXTRA_ERROR)
             when {
                 elapsed >= 0L -> {
-                    latencyText.text = formatLatency(elapsed)
+                    pendingRouteProbeHasOutcome = true
+                    lastRouteLatency = selected.id to elapsed
+                    latencyText.text = uiCopy("Задержка") + ": " + formatLatency(elapsed)
                     latencyText.setTextColor(DeyttUi.MINT)
                     latencyText.contentDescription = uiCopy("Задержка через выбранный выход: ${elapsed} миллисекунд, два HTTPS-запроса HEAD или GET через прокси")
                 }
                 !error.isNullOrBlank() -> {
+                    pendingRouteProbeHasOutcome = true
                     latencyText.text = uiCopy(if (error.contains("10 с")) "тайм-аут" else "нет ответа")
                     latencyText.setTextColor(DeyttUi.CORAL)
                     latencyText.contentDescription = uiCopy("Проверка выхода через прокси: $error")
@@ -182,7 +195,12 @@ class MainActivity : Activity() {
                     action.isEnabled = true
                     action.alpha = 1f
                 }
-                if (elapsed < 0L && error.isNullOrBlank()) latencyText.text = uiCopy("пинг")
+                // A request's final broadcast only closes the queue. The preceding
+                // route broadcast already contains its result or error.
+                if (!pendingRouteProbeHasOutcome) {
+                    latencyText.text = uiCopy("Задержка") + ": " + uiCopy("нет ответа")
+                    latencyText.setTextColor(DeyttUi.CORAL)
+                }
             }
         }
     }
@@ -208,7 +226,7 @@ class MainActivity : Activity() {
         // Clear approximate coordinates persisted by pre-consent builds.
         // Location approval is remembered, location data itself is not.
         IpNetworkLocationStore(this).clear()
-        currentNetworkLocation = null
+        currentNetworkLocation = OriginLocationMemory.location
         buildScreen()
         window.decorView.post { showNetworkLocationConsentIfNeeded() }
         requestNotificationPermissionIfNeeded()
@@ -241,6 +259,9 @@ class MainActivity : Activity() {
     }
 
     override fun onStop() {
+        homeConnectQueued = false
+        latencyGeneration++
+        restoreAwgMeasurement?.invoke()
         runCatching { unregisterReceiver(statusReceiver) }
         runCatching { unregisterReceiver(routeProbeReceiver) }
         if (::primaryPages.isInitialized) primaryPages.stopForegroundUpdates()
@@ -248,7 +269,7 @@ class MainActivity : Activity() {
             runCatching { RouteProbeClient.cancel(this) }
             pendingRouteProbeId = null
             if (::latencyText.isInitialized) {
-                latencyText.text = "пинг"
+                latencyText.text = uiCopy("Задержка: —")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
             }
@@ -289,6 +310,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        restoreAwgMeasurement?.invoke()
         if (::primaryPages.isInitialized) primaryPages.close()
         locationRequestGeneration++
         locationExecutor.shutdownNow()
@@ -301,7 +323,7 @@ class MainActivity : Activity() {
 
     internal fun updateTelegramIdentity(username: String?, avatar: Bitmap?) {
         val account = username?.trim()?.removePrefix("@")?.takeIf(String::isNotBlank)
-        telegramAccountName?.text = account?.let { "./$it" } ?: uiCopy("./c · без аккаунта")
+        telegramAccountName?.text = account?.let { "./$it" } ?: uiCopy(if (TelegramSessionStore.read(this) != null) "Telegram подключён" else "Войти через Telegram")
         telegramAvatarFallback?.apply {
             text = account?.take(1)?.uppercase() ?: "•"
             visibility = if (avatar == null) View.VISIBLE else View.GONE
@@ -322,7 +344,7 @@ class MainActivity : Activity() {
 
     internal fun updateTelegramUsername(username: String?) {
         val account = username?.trim()?.removePrefix("@")?.takeIf(String::isNotBlank)
-        telegramAccountName?.text = account?.let { "./$it" } ?: uiCopy("./c · без аккаунта")
+        telegramAccountName?.text = account?.let { "./$it" } ?: uiCopy(if (TelegramSessionStore.read(this) != null) "Telegram подключён" else "Войти через Telegram")
         if (telegramAvatarImage?.drawable == null) {
             telegramAvatarFallback?.text = account?.take(1)?.uppercase() ?: "•"
             telegramAvatarFallback?.visibility = View.VISIBLE
@@ -332,32 +354,28 @@ class MainActivity : Activity() {
     internal fun refreshTelegramAccount() {
         if (isFinishing || isDestroyed) return
         val token = TelegramSessionStore.read(this)
-        if (token == null) {
-            accountGeneration++
-            updateTelegramIdentity(null, null)
-            return
-        }
+        TelegramIdentityCache.bind(token)
+        updateTelegramIdentity(TelegramIdentityCache.username, TelegramIdentityCache.avatar)
+        if (token == null) { accountGeneration++; return }
         val generation = ++accountGeneration
         accountExecutor.execute {
-            val result = runCatching {
-                val profile = TelegramPairingClient.profile(token)
-                    ?: throw TelegramPairingException("profile_unavailable")
-                val username = profile.optString("username").ifBlank { profile.optString("first_name") }
-                val imageBytes = TelegramPairingClient.avatar(token)
-                val image = imageBytes?.let(::decodeTelegramAvatar)
-                username to image
-            }
+            // A failed photo request must never erase a successfully loaded account.
+            val profileResult = runCatching { TelegramPairingClient.profile(token) }
+            val imageResult = runCatching { TelegramPairingClient.avatar(token)?.let(::decodeTelegramAvatar) }
             runOnUiThread {
                 if (isFinishing || isDestroyed || generation != accountGeneration ||
-                    TelegramSessionStore.read(this) != token
-                ) return@runOnUiThread
-                result.onSuccess { (username, image) -> updateTelegramIdentity(username, image) }
-                result.onFailure { error ->
-                    if ((error as? TelegramPairingException)?.code == "session_expired") {
-                        TelegramSessionStore.clear(this)
-                        updateTelegramIdentity(null, null)
-                        refreshAccountViews()
-                    }
+                    TelegramSessionStore.read(this) != token) return@runOnUiThread
+                val failure = profileResult.exceptionOrNull()
+                if ((failure as? TelegramPairingException)?.code == "session_expired") {
+                    TelegramSessionStore.clear(this)
+                    TelegramIdentityCache.bind(null)
+                    updateTelegramIdentity(null, null)
+                    refreshAccountViews()
+                } else {
+                    val profile = profileResult.getOrNull()
+                    val name = profile?.optString("username")?.ifBlank { profile.optString("first_name") }
+                    TelegramIdentityCache.update(token, name, imageResult.getOrNull())
+                    updateTelegramIdentity(TelegramIdentityCache.username, TelegramIdentityCache.avatar)
                 }
             }
         }
@@ -420,6 +438,7 @@ class MainActivity : Activity() {
             clipToPadding = false
         }
         root.addView(statusInset, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0))
+        root.addView(primaryPages.createUpdateBanner())
         root.addView(pager, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         root.addView(navigationBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(66)))
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
@@ -449,6 +468,7 @@ class MainActivity : Activity() {
                 navigationBar.setSelectedPage(position)
                 updatePrimaryPageMotion(position)
                 updateMapTrafficSampling()
+                if (position == 0) updateQualityStrip()
             }
         })
         setContentView(root)
@@ -463,7 +483,10 @@ class MainActivity : Activity() {
         telegramAccountName = accountHeader.findViewWithTag("telegram-account-name")
         telegramAvatarFallback = accountHeader.findViewWithTag("telegram-avatar-fallback")
         telegramAvatarImage = accountHeader.findViewWithTag("telegram-avatar-image")
+        accountHeader.setOnClickListener { selectTab(2) }
         root.addView(accountHeader)
+        TelegramIdentityCache.bind(TelegramSessionStore.read(this))
+        updateTelegramIdentity(TelegramIdentityCache.username, TelegramIdentityCache.avatar)
         root.addView(spacer(14, this))
 
         globe = RouteGlobeView(this).apply {
@@ -472,9 +495,15 @@ class MainActivity : Activity() {
             setAvailableLocations(availableMapLocations())
             setUserLocation(currentNetworkLocation)
         }
-        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(312)))
+        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(238)))
         root.addView(spacer(10, this))
+        routeTitleText = text("", 19f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(dp(3), dp(4), 0, dp(8))
+            setOnClickListener { selectTab(1) }
+        }
+        root.addView(routeTitleText)
         root.addView(buildRouteFlow())
+        root.addView(buildQualityStrip())
         updateRouteFlow(SelectedRouteStore(this).read())
         updateNetworkLocationViews()
         root.addView(spacer(16, this))
@@ -484,7 +513,7 @@ class MainActivity : Activity() {
             setPadding(dp(19), dp(18), dp(19), dp(18))
             background = rounded(DeyttUi.SURFACE_2, 23f, DeyttUi.LINE)
         }
-        connectionPanel.addView(sectionLabel("СОСТОЯНИЕ КАНАЛА"))
+
         val statusLine = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -515,8 +544,7 @@ class MainActivity : Activity() {
         })
         root.addView(connectionPanel)
 
-        root.addView(spacer(16, this))
-        root.addView(buildTrafficSummary())
+        root.addView(spacer(12, this))
         getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_warning", null)
             ?.takeIf(String::isNotBlank)
             ?.let { warning ->
@@ -545,17 +573,39 @@ class MainActivity : Activity() {
         val selected = SelectedRouteStore(this).read()
         if (::globe.isInitialized) globe.focus(selected.id, animate = false)
         updateRouteFlow(selected)
+        updateQualityStrip()
         if (::latencyText.isInitialized) {
-            latencyText.text = uiCopy("пинг")
+            val cachedLatency = lastRouteLatency?.takeIf { it.first == selected.id }?.second
+                ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
+            latencyText.text = uiCopy("Задержка") + ": " + (cachedLatency?.let(::formatLatency) ?: "—")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
-            latencyText.textSize = 9f
+            latencyText.textSize = 11f
             latencyText.setTextColor(DeyttUi.MUTED)
             latencyText.contentDescription = uiCopy("Проверить задержку через выход ${selected.title}: два HTTPS-запроса HEAD или GET, тайм-аут 10 секунд")
         }
     }
 
     private fun toggleTunnel() {
+        if (homeConnectQueued) return
+        latencyGeneration++
+        if (pendingRouteProbeId != null && RouteProbeClient.isRunning(this)) {
+            homeConnectQueued = true
+            pendingRouteProbeId = null
+            runCatching { RouteProbeClient.cancel(this) }
+            action.isEnabled = false
+            action.alpha = .65f
+            awaitEnginesStopped(waitForDiagnostics = true, onFailure = {
+                homeConnectQueued = false
+                if (!isFinishing && !isDestroyed) { action.isEnabled = true; action.alpha = 1f }
+            }, action = {
+                if (!homeConnectQueued) return@awaitEnginesStopped
+                homeConnectQueued = false
+                toggleTunnel()
+            })
+            return
+        }
+        if (temporaryAwgMeasurement) { restoreAwgMeasurement?.invoke(); return }
         if (RouteProbeClient.isRunning(this)) {
             if (::detailText.isInitialized) detailText.text = "Сначала дождитесь проверки маршрута."
             return
@@ -593,22 +643,23 @@ class MainActivity : Activity() {
         startActivity(Intent(this, SetupActivity::class.java))
     }
 
-    internal fun selectRoute(route: DeyttRoute) {
+    internal fun selectRoute(route: DeyttRoute, navigateHome: Boolean = true) {
+        if (temporaryAwgMeasurement) return
         if (SelectedRouteStore(this).read().id == route.id) return
         val connected = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         if (connected) {
             AlertDialog.Builder(this)
-                .setTitle("Изменить точку выхода?")
-                .setMessage("Текущее соединение завершится. После выбора подключитесь снова, чтобы применить новый маршрут.")
-                .setNegativeButton("Оставить подключение", null)
-                .setPositiveButton("Остановить и сменить") { _, _ -> applyRouteSelection(route) }
+                .setTitle(uiCopy("Изменить точку выхода?"))
+                .setMessage(uiCopy("Текущее соединение завершится. После выбора подключитесь снова, чтобы применить новый маршрут."))
+                .setNegativeButton(uiCopy("Оставить подключение"), null)
+                .setPositiveButton(uiCopy("Остановить и сменить")) { _, _ -> applyRouteSelection(route, navigateHome) }
                 .show()
             return
         }
-        applyRouteSelection(route)
+        applyRouteSelection(route, navigateHome)
     }
 
-    private fun applyRouteSelection(route: DeyttRoute) {
+    private fun applyRouteSelection(route: DeyttRoute, navigateHome: Boolean = true) {
         if (RouteProbeClient.isRunning(this)) {
             runCatching { RouteProbeClient.cancel(this) }
             pendingRouteProbeId = null
@@ -622,10 +673,103 @@ class MainActivity : Activity() {
             SubscriptionStore(this).saveValidated(ProfileRoutes.select(config, route.configTag))
         }
         SelectedRouteStore(this).save(route)
-        pageAdapter.refresh(1)
+        if (navigateHome) pageAdapter.refresh(1)
         rebuildRouteRow()
         renderStoredState()
-        selectTab(0)
+        if (navigateHome) selectTab(0)
+    }
+
+    internal fun requestAwgMeasurement(route: DeyttRoute, measure: ((Boolean) -> Unit) -> Unit) {
+        if (temporaryAwgMeasurement) return
+        val en = AppLanguage.current(this) == AppLanguage.EN
+        val previous = SelectedRouteStore(this).read()
+        val config = SubscriptionStore(this).readCurrent() ?: return
+        val previousRoute = RouteCatalog.from(config, AwgProfileStore(this).profiles()).firstOrNull { it.id == previous.id }
+            ?: return
+        val wasConnected = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
+        if (wasConnected && previous.id == route.id && AwgTunnelController.isRunning()) {
+            measure { updateQualityStrip() }
+            return
+        }
+        fun begin() {
+            if (VpnService.prepare(this) != null && requestRouteProbePermission { requestAwgMeasurement(route, measure) }) return
+            runCatching { RouteProbeClient.cancel(this) }
+            pendingRouteProbeId = null
+            temporaryAwgMeasurement = true
+            var restored = false
+            val restore = {
+                if (!restored) {
+                    restored = true
+                    restoreAwgMeasurement = null
+                    AwgTunnelController.stop(this, publishStatus = false)
+                    SelectedRouteStore(this).save(previousRoute)
+                    SubscriptionStore(this).saveValidated(config)
+                    pendingRoute = null
+                    val app = applicationContext
+                    val handler = Handler(Looper.getMainLooper())
+                    val restoreStarted = SystemClock.elapsedRealtime()
+                    val finish = object : Runnable {
+                        override fun run() {
+                            if (AwgTunnelController.isRunning() || AwgTunnelController.isStopping() ||
+                                ConnectVpnService.isRunning() || RouteProbeClient.isRunning(app)) {
+                                if (SystemClock.elapsedRealtime() - restoreStarted < 15_000L) {
+                                    handler.postDelayed(this, 100L)
+                                } else {
+                                    temporaryAwgMeasurement = false
+                                    VpnStateStore(app).write(VpnPhase.ERROR, "Не удалось восстановить соединение", "Подключитесь к прежнему маршруту вручную")
+                                    if (!isFinishing && !isDestroyed) renderStoredState()
+                                }
+                                return
+                            }
+                            temporaryAwgMeasurement = false
+                            // A recreated screen may have received a new explicit route selection.
+                            if (SelectedRouteStore(app).read().id != previous.id) return
+                            if (wasConnected) {
+                                if (previous.engine == TunnelEngine.AMNEZIAWG) {
+                                    AwgProfileStore(app).read(previous.id)?.let { AwgTunnelController.start(app, it, previous.id) }
+                                } else {
+                                    ContextCompat.startForegroundService(app, Intent(app, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START))
+                                }
+                            } else VpnStateStore(app).write(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
+                            if (!isFinishing && !isDestroyed) { rebuildRouteRow(); renderStoredState() }
+                        }
+                    }
+                    handler.postDelayed(finish, 100L)
+                }
+            }
+            restoreAwgMeasurement = restore
+            if (ConnectVpnService.isRunning()) startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+            AwgTunnelController.stop(this, publishStatus = false)
+            SelectedRouteStore(this).save(route)
+            pendingRoute = null
+            awaitEnginesStopped(waitForDiagnostics = true, onFailure = { restore() }, action = {
+                if (restored || isFinishing || isDestroyed) return@awaitEnginesStopped
+                startSelectedTunnelAfterStop(SelectedRouteStore(this).read())
+                val started = SystemClock.elapsedRealtime()
+                val check = object : Runnable {
+                    override fun run() {
+                        if (restored) return
+                        val state = VpnStateStore(this@MainActivity).read()
+                        when {
+                            isFinishing || isDestroyed || state.phase == VpnPhase.ERROR ||
+                                SystemClock.elapsedRealtime() - started > 30_000L -> restore()
+                            state.phase == VpnPhase.CONNECTED && AwgTunnelController.isRunning() -> {
+                                runCatching { measure { runOnUiThread { restore() } } }.onFailure { restore() }
+                            }
+                            else -> window.decorView.postDelayed(this, 250L)
+                        }
+                    }
+                }
+                window.decorView.postDelayed(check, 250L)
+            })
+        }
+        AlertDialog.Builder(this)
+            .setTitle(if (en) "Test ${route.protocol.title}?" else "Проверить ${route.protocol.title}?")
+            .setMessage(if (en) "Android needs a temporary VPN connection to measure this protocol. The previous route and connection will be restored after the test."
+                else "Для замера этого протокола Android временно подключит VPN. После проверки вернём прежний маршрут и состояние соединения.")
+            .setNegativeButton(if (en) "Cancel" else "Отмена", null)
+            .setPositiveButton(if (en) "Connect and test" else "Подключить и проверить") { _, _ -> begin() }
+            .show()
     }
 
     private fun showMapRoutePicker(node: String) {
@@ -767,7 +911,7 @@ class MainActivity : Activity() {
         if (comparableCode != null) {
             panel.addView(button("Сравнить протоколы", secondary = true).apply {
                 setOnClickListener {
-                    startActivity(Intent(this@MainActivity, ProtocolActivity::class.java).putExtra("country", comparableCode))
+                    selectTab(1)
                     currentMapRouteSheet?.dismiss()
                 }
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(12) })
@@ -822,9 +966,7 @@ class MainActivity : Activity() {
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = if (alignEnd) Gravity.END else Gravity.START
-                addView(mono(label, 8f, DeyttUi.MUTED, 600).apply {
-                    gravity = if (alignEnd) Gravity.END else Gravity.START
-                })
+
             }
         fun arrow(): View = text("→", 15f, DeyttUi.SKY, android.graphics.Typeface.BOLD).apply {
             gravity = Gravity.CENTER
@@ -867,14 +1009,7 @@ class MainActivity : Activity() {
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }
             addView(egressHintText)
-            latencyText = actionLabel().apply {
-                minHeight = dp(24)
-                minimumHeight = dp(24)
-                setPadding(0, dp(2), 0, 0)
-                gravity = Gravity.END
-                setOnClickListener { measureSelectedRoute() }
-            }
-            addView(latencyText)
+
         }
         route.addView(origin, weighted(origin))
         firstHopArrow = arrow()
@@ -889,10 +1024,25 @@ class MainActivity : Activity() {
         return route
     }
 
+    private fun selectedExitLabel(selected: SelectedRoute): String {
+        val config = SubscriptionStore(this).readCurrent()
+        val route = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles()) }.getOrNull() }
+            ?.firstOrNull { it.id == selected.id }
+        if (route == null) return uiCopy(selected.title)
+        val city = when (route.countryCode) {
+            "NL" -> "Амстердам"
+            "DE", "RU-DE" -> "Франкфурт"
+            "RU" -> "Санкт-Петербург"
+            "FI" -> "Хельсинки"
+            else -> return uiCopy(selected.title)
+        }
+        return (if (route.countryCode == "RU-DE") "🇩🇪" else route.flag) + " " + uiCopy(city)
+    }
+
     private fun updateRouteFlow(selected: SelectedRoute) {
         if (!::destinationText.isInitialized) return
         val isRuDe = selected.id.contains("RU-DE", ignoreCase = true)
-        destinationText.text = if (isRuDe) "🇩🇪 " + uiCopy("Франкфурт") else uiCopy(selected.title)
+        destinationText.text = selectedExitLabel(selected)
         if (::middleNode.isInitialized) {
             middleNode.visibility = if (isRuDe) View.VISIBLE else View.GONE
             secondHopArrow.visibility = if (isRuDe) View.VISIBLE else View.GONE
@@ -916,7 +1066,7 @@ class MainActivity : Activity() {
         originHintText.text = when {
             !enabled -> uiCopy("отключено в настройках")
             locationRequestInFlight -> uiCopy("примерно по IP")
-            location != null -> uiCopy("примерно по IP · только в памяти")
+            location != null -> uiCopy("примерно по IP")
             locationLookupFailed -> uiCopy("геолокация временно недоступна")
             tunnelActive -> uiCopy("отключите соединение для определения сети")
             else -> uiCopy("ожидает сетевого запроса")
@@ -924,16 +1074,16 @@ class MainActivity : Activity() {
         if (::destinationText.isInitialized && ::egressHintText.isInitialized) {
             val selected = SelectedRouteStore(this).read()
             val isRuDe = selected.id.contains("RU-DE", ignoreCase = true)
-            val selectedLabel = if (isRuDe) "🇩🇪 " + uiCopy("Франкфурт") else uiCopy(selected.title)
+            val selectedLabel = selectedExitLabel(selected)
             when {
                 !enabled -> {
                     destinationText.text = selectedLabel
-                    egressHintText.text = uiCopy("отключено в настройках")
+                    egressHintText.text = ""
                 }
                 tunnelActive && currentEgressLocation != null -> {
                     destinationText.text = AppLanguage.locationLabel(this, currentEgressLocation!!.placeLabel)
                     destinationText.contentDescription = uiCopy("Фактический выход, регион определён примерно по IP")
-                    egressHintText.text = uiCopy("выход · примерно по IP · только в памяти")
+                    egressHintText.text = uiCopy("примерно по IP")
                 }
                 tunnelActive && egressRequestInFlight -> {
                     egressHintText.text = uiCopy("определяем регион выхода…")
@@ -947,7 +1097,7 @@ class MainActivity : Activity() {
                 else -> {
                     destinationText.text = selectedLabel
                     destinationText.contentDescription = uiCopy("Выбранный выход: ${selected.title}")
-                    egressHintText.text = uiCopy("регион выхода появится после подключения")
+                    egressHintText.text = ""
                 }
             }
         }
@@ -971,6 +1121,7 @@ class MainActivity : Activity() {
             currentNetworkLocation = null
             currentEgressLocation = null
             IpNetworkLocationStore(this).clear()
+            OriginLocationMemory.location = null
             if (::globe.isInitialized) globe.setUserLocation(null)
         }
         updateNetworkLocationViews()
@@ -1054,8 +1205,7 @@ class MainActivity : Activity() {
         }
         val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         if (tunnelActive) {
-            locationRequestGeneration++
-            locationRequestInFlight = false
+            if (currentNetworkLocation == null) refreshOriginOutsideVpn()
             if (ConnectVpnService.isRunning()) {
                 val config = SubscriptionStore(this).readCurrent()
                 if (config != null && !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName)) {
@@ -1126,6 +1276,7 @@ class MainActivity : Activity() {
                     result.onSuccess { location ->
                         locationLookupFailed = false
                         currentNetworkLocation = location
+                        OriginLocationMemory.location = location
                         android.util.Log.i("DeyttIpLocation", "Approximate location is available in memory")
                         if (::globe.isInitialized) globe.setUserLocation(location)
                     }
@@ -1136,6 +1287,85 @@ class MainActivity : Activity() {
                 }
                 updateNetworkLocationViews()
             }
+        }
+    }
+
+    private fun refreshOriginOutsideVpn() {
+        if (locationRequestInFlight || !isNetworkLocationEnabled()) return
+        val manager = getSystemService(ConnectivityManager::class.java) ?: return
+        val network = manager.allNetworks.firstOrNull { candidate ->
+            val capabilities = manager.getNetworkCapabilities(candidate)
+            capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
+                !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+        } ?: return
+        val generation = ++locationRequestGeneration
+        locationRequestInFlight = true
+        locationExecutor.execute {
+            val result = runCatching { IpNetworkLocationClient.fetch(network) }
+            runOnUiThread {
+                if (isDestroyed || isFinishing || generation != locationRequestGeneration) return@runOnUiThread
+                locationRequestInFlight = false
+                if (isNetworkLocationEnabled()) {
+                    result.onSuccess {
+                        currentNetworkLocation = it
+                        OriginLocationMemory.location = it
+                        if (::globe.isInitialized) globe.setUserLocation(it)
+                    }
+                    locationLookupFailed = result.isFailure
+                }
+                updateNetworkLocationViews()
+            }
+        }
+    }
+
+    private fun buildQualityStrip(): View = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        setPadding(dp(3), dp(12), dp(3), dp(2))
+        val download = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val bars = LinearLayout(this@MainActivity).apply { gravity = Gravity.BOTTOM }
+        qualityBars.clear()
+        repeat(4) { index ->
+            val bar = View(this@MainActivity).apply { background = rounded(DeyttUi.LINE, 2f) }
+            qualityBars.add(bar)
+            bars.addView(bar, LinearLayout.LayoutParams(dp(4), dp(6 + index * 4)).apply { marginEnd = dp(3) })
+        }
+        download.addView(bars, LinearLayout.LayoutParams(dp(32), dp(20)))
+        downloadText = text("Скорость: —", 11f, DeyttUi.MUTED)
+        download.addView(downloadText)
+        download.setOnClickListener { selectTab(1) }
+        addView(download, LinearLayout.LayoutParams(0, dp(44), 1f))
+        latencyText = text("Задержка: —", 11f, DeyttUi.MUTED).apply {
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            minHeight = dp(44)
+            setOnClickListener { measureSelectedRoute() }
+        }
+        addView(latencyText)
+    }
+
+    private fun updateQualityStrip() {
+        if (!::downloadText.isInitialized) return
+        val selected = SelectedRouteStore(this).read()
+        val config = SubscriptionStore(this).readCurrent()
+        val route = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles()) }.getOrNull() }
+            ?.firstOrNull { it.id == selected.id }
+        if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
+            RouteProtocol.AUTO -> uiCopy("Автоподбор")
+            RouteProtocol.RU_DE -> "./ru → de"
+            else -> route?.let { "./${it.countryCode.lowercase()} ${it.protocol.title.lowercase()}" } ?: uiCopy(selected.title)
+        }
+        val sample = RouteQualityStore.read(this, selected.id)
+        val mbps = sample?.downloadBytesPerSecond?.times(8.0)?.div(1_000_000.0)
+        val en = AppLanguage.current(this) == AppLanguage.EN
+        downloadText.text = if (mbps == null) uiCopy("Скорость: проверить")
+            else String.format(java.util.Locale.US, if (en) "Speed: %.1f Mbps" else "Скорость: %.1f Мбит/с", mbps)
+        downloadText.contentDescription = uiCopy("Последний замер загрузки. Нажмите, чтобы проверить маршруты.")
+        val filled = when { mbps == null -> 0; mbps < 5 -> 1; mbps < 20 -> 2; mbps < 50 -> 3; else -> 4 }
+        qualityBars.forEachIndexed { index, bar ->
+            bar.background = rounded(if (index < filled) DeyttUi.MINT else DeyttUi.LINE, 2f)
         }
     }
 
@@ -1220,7 +1450,7 @@ class MainActivity : Activity() {
             if (resultCode == RESULT_OK) {
                 if (continuation != null) continuation() else measureSelectedRoute()
             } else if (::latencyText.isInitialized && continuation == null) {
-                latencyText.text = "пинг"
+                latencyText.text = uiCopy("Задержка: —")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.contentDescription = "Для проверки через выход требуется системное разрешение Android"
@@ -1262,20 +1492,32 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun awaitEnginesStopped(action: () -> Unit, attempt: Int = 0) {
-        if (isFinishing || isDestroyed) return
+    private fun awaitEnginesStopped(
+        action: () -> Unit,
+        attempt: Int = 0,
+        waitForDiagnostics: Boolean = false,
+        onFailure: (() -> Unit)? = null,
+    ) {
+        if (isFinishing || isDestroyed) {
+            onFailure?.invoke()
+            return
+        }
         if (!ConnectVpnService.isRunning() &&
             !AwgTunnelController.isRunning() &&
-            !AwgTunnelController.isStopping()
+            !AwgTunnelController.isStopping() &&
+            (!waitForDiagnostics || !RouteProbeClient.isRunning(this))
         ) {
             action()
             return
         }
-        if (attempt >= 100) {
+        if (attempt >= if (waitForDiagnostics) 300 else 100) {
+            onFailure?.invoke()
             renderStatus(VpnPhase.ERROR, "Не удалось завершить предыдущее соединение", "Попробуйте отключить его ещё раз")
             return
         }
-        window.decorView.postDelayed({ awaitEnginesStopped(action, attempt + 1) }, 50L)
+        window.decorView.postDelayed({
+            awaitEnginesStopped(action, attempt + 1, waitForDiagnostics, onFailure)
+        }, 50L)
     }
 
     private fun renderStoredState() {
@@ -1419,13 +1661,17 @@ class MainActivity : Activity() {
     private fun measureSelectedRoute() {
         if (!::latencyText.isInitialized) return
         if (RouteProbeClient.isRunning(this) || selectedRouteLatencyInFlight) return
+        if (homeConnectQueued || temporaryAwgMeasurement || renderedPhase in setOf(VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.STOPPING)) return
         val generation = ++latencyGeneration
         val selected = SelectedRouteStore(this).read()
         val config = SubscriptionStore(this).readCurrent() ?: return
         val route = RouteCatalog.from(config, AwgProfileStore(this).profiles())
             .firstOrNull { it.id == selected.id } ?: return
         val method = RouteProbePreferences.method(this)
-        latencyText.text = uiCopy("проверка…")
+        val previousLatency = lastRouteLatency?.takeIf { it.first == selected.id }?.second
+            ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
+        latencyText.text = if (previousLatency == null) uiCopy("проверка…")
+            else uiCopy("Задержка") + ": " + formatLatency(previousLatency)
         latencyText.isEnabled = false
         latencyText.alpha = .65f
         val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
@@ -1436,7 +1682,7 @@ class MainActivity : Activity() {
                 latencyText.text = uiCopy("отключите соединение")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
-                latencyText.textSize = 8f
+                latencyText.textSize = 11f
                 latencyText.setTextColor(DeyttUi.AMBER)
                 latencyText.contentDescription = uiCopy("Чтобы проверить другой выход, сначала отключите текущее соединение")
                 return
@@ -1445,7 +1691,7 @@ class MainActivity : Activity() {
                 latencyText.text = uiCopy("подключите AmneziaWG")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
-                latencyText.textSize = 8f
+                latencyText.textSize = 11f
                 latencyText.setTextColor(DeyttUi.AMBER)
                 latencyText.contentDescription = uiCopy("Для HTTP-проверки подключите выбранный профиль AmneziaWG")
                 return
@@ -1456,7 +1702,8 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     selectedRouteLatencyInFlight = false
                     if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
-                        latencyText.text = elapsed?.let(::formatLatency) ?: uiCopy("нет ответа")
+                        if (elapsed != null) lastRouteLatency = selected.id to elapsed
+                        latencyText.text = uiCopy("Задержка") + ": " + (elapsed?.let(::formatLatency) ?: uiCopy("нет ответа"))
                         latencyText.isEnabled = true
                         latencyText.alpha = 1f
                         latencyText.setTextColor(if (elapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
@@ -1478,24 +1725,21 @@ class MainActivity : Activity() {
         }
         val vpnPermission = VpnService.prepare(this)
         if (vpnPermission != null) {
-            latencyText.text = uiCopy("пинг")
+            latencyText.text = uiCopy("Задержка: —")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             showRouteProbePermissionSheet(vpnPermission)
             return
         }
         try {
+            pendingRouteProbeHasOutcome = false
             pendingRouteProbeId = RouteProbeClient.start(
-                this, config, listOf(route.configTag), method, TelegramSessionStore.read(this),
+                this, config, listOf(route.configTag), method, TelegramSessionStore.read(this), latencyOnly = true,
             )
-            if (::action.isInitialized) {
-                action.isEnabled = false
-                action.alpha = .65f
-            }
-            latencyText.text = uiCopy("через прокси…")
+            if (previousLatency == null) latencyText.text = uiCopy("через прокси…")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
-            latencyText.textSize = 8f
+            latencyText.textSize = 11f
             latencyText.setTextColor(DeyttUi.SKY)
             latencyText.contentDescription = uiCopy("Проверяю выход через локальный прокси методом ${method.wireValue}, два запроса, тайм-аут 10 секунд")
         } catch (_: Throwable) {
@@ -1568,7 +1812,7 @@ class MainActivity : Activity() {
         private const val KEY_NETWORK_LOCATION_ENABLED = "network_location_enabled"
         private const val KEY_CONNECTION_STARTED_ELAPSED = "connection_started_elapsed"
         private const val CONNECTION_PROGRESS_INTERVAL_MS = 1_000L
-        private const val SELECTED_ROUTE_LATENCY_INTERVAL_MS = 10_000L
+        private const val SELECTED_ROUTE_LATENCY_INTERVAL_MS = 5_000L
         private const val TRAFFIC_SAMPLE_INTERVAL_MS = 700L
         private const val TRAFFIC_VISIBILITY_WINDOW_MS = 3_500L
     }

@@ -274,7 +274,11 @@ object RouteProxyProbe {
         var total = 0L
         val buffer = ByteArray(8 * 1024)
         while (total < maximumBytes) {
-            val line = readHttpLine(socket, input, deadline).substringBefore(';').trim()
+            val line = try {
+                readHttpLine(socket, input, deadline).substringBefore(';').trim()
+            } catch (timeout: SocketTimeoutException) {
+                if (total > 0L) return total else throw timeout
+            }
             val chunkSize = line.toLongOrNull(16) ?: throw IOException("Некорректный HTTP chunk")
             if (chunkSize == 0L) return total
             val allowed = minOf(chunkSize, maximumBytes - total)
@@ -298,7 +302,11 @@ object RouteProxyProbe {
                 }
             }
             if (allowed < chunkSize) return total
-            readHttpLine(socket, input, deadline)
+            try {
+                readHttpLine(socket, input, deadline)
+            } catch (timeout: SocketTimeoutException) {
+                if (total > 0L) return total else throw timeout
+            }
         }
         return total
     }
@@ -373,6 +381,42 @@ object RouteProxyProbe {
         return lastMeasurement ?: throw IOException("Проверка маршрута не получила ответа")
     }
 
+    /** A bounded sample through the current Android VPN. Caller verifies its route. */
+    fun measureSystemDownload(token: String, stillCurrent: () -> Boolean): Long {
+        require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
+        val connection = URL("https://$DOWNLOAD_HOST$DOWNLOAD_PATH")
+            .openConnection(Proxy.NO_PROXY) as HttpsURLConnection
+        try {
+            connection.connectTimeout = 8_000
+            connection.readTimeout = 5_000
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("X-TG-App-Token", token)
+            connection.setRequestProperty("Accept-Encoding", "identity")
+            connection.setRequestProperty("Cache-Control", "no-store")
+            check(stillCurrent()) { "Route changed during measurement" }
+            check(connection.responseCode == HTTP_OK) { "Download endpoint unavailable" }
+            val started = SystemClock.elapsedRealtime()
+            val deadline = started + 5_000L
+            var received = 0L
+            val buffer = ByteArray(32 * 1024)
+            connection.inputStream.use { input ->
+                while (SystemClock.elapsedRealtime() < deadline && received < 32L * 1024 * 1024) {
+                    check(stillCurrent() && !Thread.currentThread().isInterrupted) { "Route changed during measurement" }
+                    connection.readTimeout = (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(1L).toInt()
+                    val count = try { input.read(buffer) } catch (error: SocketTimeoutException) {
+                        if (received > 0) break else throw error
+                    }
+                    if (count < 0) break
+                    received += count
+                }
+            }
+            check(stillCurrent() && received > 0) { "Measurement did not complete" }
+            return received * 1_000L / (SystemClock.elapsedRealtime() - started).coerceAtLeast(1L)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     fun isApplicationRoutedByTunnel(config: String, packageName: String): Boolean {
         val inbounds = JSONObject(config).optJSONArray("inbounds") ?: return false
         val tun = (0 until inbounds.length())
@@ -407,6 +451,7 @@ object RouteProbeClient {
         routeTags: List<String>,
         method: RouteProbeMethod,
         token: String?,
+        latencyOnly: Boolean = false,
     ): String {
         require(routeTags.isNotEmpty()) { "Не выбраны маршруты для проверки" }
         require(token == null || token.length in 32..256) { "Invalid Telegram session" }
@@ -419,7 +464,7 @@ object RouteProbeClient {
             .putExtra("config", config)
             .putStringArrayListExtra("route_tags", ArrayList(routeTags))
             .putExtra("method", method.name)
-            .putExtra(EXTRA_TOKEN, token.orEmpty())
+            .putExtra(EXTRA_TOKEN, if (latencyOnly) "" else token.orEmpty())
         activeRequestId = requestId
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
@@ -438,7 +483,7 @@ object RouteProbeClient {
     }
 
     fun cancel(context: Context) {
-        activeRequestId = null
+        if (activeRequestId == null) return
         context.startService(Intent(context, RouteProbeVpnService::class.java)
             .setAction(ConnectVpnService.ACTION_CANCEL_ROUTE_PROBE))
     }

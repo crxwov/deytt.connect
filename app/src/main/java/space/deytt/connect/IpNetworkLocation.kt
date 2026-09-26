@@ -1,6 +1,7 @@
 package space.deytt.connect
 
 import android.content.Context
+import android.net.Network
 import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -31,8 +32,9 @@ internal object IpNetworkLocationClient {
     private const val READ_TIMEOUT_MILLIS = 3_500
     private const val MAX_RESPONSE_CHARS = 8_192
 
-    fun fetch(): IpNetworkLocation {
-        val connection = (URL(ENDPOINT).openConnection() as HttpURLConnection).apply {
+    fun fetch(network: Network? = null): IpNetworkLocation {
+        val url = URL(ENDPOINT)
+        val connection = ((network?.openConnection(url) ?: url.openConnection()) as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = CONNECT_TIMEOUT_MILLIS
             readTimeout = READ_TIMEOUT_MILLIS
@@ -77,4 +79,9 @@ internal object IpNetworkLocationClient {
             connection.disconnect()
         }
     }
+}
+
+/** Session-only region; never writes coordinates to disk. */
+internal object OriginLocationMemory {
+    var location: IpNetworkLocation? = null
 }

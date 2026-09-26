@@ -16,7 +16,8 @@ object RouteProbeScoring {
         val ranked = ranked(complete)
 
         val grades = ranked.mapIndexed { index, (id, _) ->
-            val percentile = index.toDouble() / ranked.size
+            val firstTiedIndex = ranked.indexOfFirst { it.second == ranked[index].second }
+            val percentile = firstTiedIndex.toDouble() / ranked.size
             id to when {
                 percentile < 1.0 / 3.0 -> RouteGrade.GOOD
                 percentile >= 2.0 / 3.0 -> RouteGrade.POOR
@@ -31,7 +32,8 @@ object RouteProbeScoring {
         samples.filter(::isComplete).takeIf { it.size >= 2 }?.let(::ranked)?.firstOrNull()?.first
 
     private fun isComplete(sample: RouteProbeSample): Boolean =
-        sample.latencyMillis != null && sample.downloadBytesPerSecond != null
+        sample.latencyMillis != null && sample.latencyMillis >= 0 &&
+            sample.downloadBytesPerSecond != null && sample.downloadBytesPerSecond > 0
 
     private fun ranked(samples: List<RouteProbeSample>): List<Pair<String, Double>> {
         val latencies = samples.map { it.latencyMillis!!.toDouble() }

@@ -121,6 +121,27 @@ internal object TelegramPairingClient {
 
     fun keys(token: String): JSONObject = request("/api/tg/keys", "GET", null, token)
 
+    fun setHappDeviceBlocked(token: String, deviceId: Long, blocked: Boolean): JSONObject {
+        require(deviceId > 0L)
+        val action = if (blocked) "revoke" else "restore"
+        val result = request("/api/tg/happ/devices/$action", "POST", JSONObject().put("device_id", deviceId), token)
+        requireDeviceUpdateConfirmation(result, blocked)
+        return result
+    }
+
+    internal fun requireDeviceUpdateConfirmation(result: JSONObject, blocked: Boolean) {
+        if (!result.optBoolean("ok") || result.isNull("blocked") || result.opt("blocked") !is Boolean || result.optBoolean("blocked") != blocked) {
+            throw TelegramPairingException("device_update_unconfirmed")
+        }
+    }
+
+    fun sessions(token: String): JSONObject = request("/api/tg/sessions", "GET", null, token)
+
+    fun revokeSession(token: String, sessionId: String): JSONObject {
+        require(sessionId.isNotBlank() && sessionId.length <= 128)
+        return request("/api/tg/sessions/revoke", "POST", JSONObject().put("session_id", sessionId), token)
+    }
+
     fun resetKeys(token: String, scope: String): JSONObject {
         require(scope in setOf("all", "awg", "happ"))
         return request("/api/tg/keys/reset", "POST", JSONObject().put("scope", scope), token)
@@ -147,12 +168,14 @@ internal object TelegramPairingClient {
         return request("/api/tg/quote?$query", "GET", null, token)
     }
 
-    fun checkout(token: String, kind: String, method: String, plan: String? = null, months: Int? = null): JSONObject {
-        require(kind in setOf("preset", "add_time"))
+    fun checkout(token: String, kind: String, method: String, plan: String? = null, months: Int? = null, devices: Int? = null, extra: Int? = null): JSONObject {
+        require(kind in setOf("preset", "custom", "add_time", "add_devices"))
         require(method in setOf("stars", "platega"))
         val body = JSONObject().put("kind", kind).put("method", method)
         plan?.let { body.put("plan", it) }
         months?.let { body.put("months", it) }
+        devices?.let { body.put("devices", it) }
+        extra?.let { body.put("extra", it) }
         return request("/api/tg/checkout", "POST", body, token)
     }
 

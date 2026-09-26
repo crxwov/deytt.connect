@@ -1,55 +1,27 @@
-# Roadmap — Excalidraw mobile app updates
+# Roadmap — Mobile remediation 0.8.6
 
-## Objective and Success Criteria
-Implement the actionable feedback in the 2026-09-26 Excalidraw note in the Android client. Simplify and reorganize the route, home, profile, and settings journeys while preserving tunnel/subscription contracts and requiring explicit user action for account, key, and update operations.
-
-- Group every available exit, including AmneziaWG profiles, under its country. Countries start collapsed; opening one country is the only trigger for measuring its candidates.
-- Measure sing-box candidates with proxy-routed HTTP GET/HEAD latency and a five-second download-speed sample. Bypass this app's active VPN with socket-level protection where supported; clearly report that another VPN cannot be bypassed. Show averages and a relative grade, and select the best combined latency/download result. Keep AmneziaWG diagnostics labeled as endpoint-only until an actual AWG measurement tunnel exists; never use ICMP.
-- Refresh the selected-route home latency every 10 seconds, show the Telegram avatar when available, and remove redundant diagnostics from the home flow.
-- Remove AmneziaWG profile inventory from Profile. Provide app-native account, device/session, key-reset, plan/payment, support, and legal entry points where existing authenticated APIs safely support them. Keep Telegram proxy configuration out of the app.
-- Check official app releases every three hours while the app is in use and present update state and a user-controlled install/restart flow.
-- Preserve RU/EN localization, accessible state feedback, existing route/tunnel semantics, and user-owned repository files. Build and run targeted checks; install on the connected phone and inspect changed screens where real account data permits.
+## Objective and status
+Deliver the evidenced mobile fixes from the 40-item Excalidraw audit, preserve account/keys, validate on the physical TECNO. Implementation and bounded acceptance completed; delivery pending. Full original acceptance is not claimed: remaining constraints below are explicit.
 
 ## Stages
-- [x] 1. Read the Excalidraw comments and four reference screenshots; inspect the current client architecture and capture the clean-device baseline.
-- [x] 2. Audit existing route catalog, proxy probe, public speed-test implementation, authenticated account APIs, update distribution, and current uncommitted state. Record any missing server capability before choosing a safe client behavior.
-- [x] 3. Restructure Routes into collapsed country sections with all available protocols and original marks; remove eager and duplicate per-protocol measurement UI.
-- [x] 4. Implement on-demand per-country latency/download sampling, scoring, classification, progress, cancellation, and localized display without routing measurements through the user's active VPN.
-- [x] 5. Refine Home and Profile/Settings: Telegram avatar, 10-second selected-route latency, remove profile AWG inventory, and build supported in-app account/device/session/key/plan/support/legal flows.
-- [x] 6. Add periodic official-release checking and a secure user-consented update flow compatible with the project's sideload distribution.
-- [ ] 7. Review the scoped diffs, commit and push the client and backend, pull the server checkout, restart affected services, and verify service health.
+- [x] Diagnose actual API/runtime and phone failures.
+- [x] Repair avatar, account sessions, HWID subscription access, diagnostics endpoint, price/support/legal contracts; deploy backend via Git and restart API.
+- [x] Complete native home/profile/diagnostic/update flows, bilingual states and lifecycle fixes.
+- [x] Unit tests, lint/APK build, physical touch flows and external HTTPS verification.
+- [ ] Commit/push Android main, publish verified APK, verify installed/released identity and final device state.
 
-## Current State
-- Android repository: `/home/hackov/Documents/deytt-connect`, branch `main`. Preserve unrelated `.agents/`, `.codebase-memory/`, `.kotlin/`, and `ROADMAP.connect-ui-refinement.completed.md` files.
-- Baseline screenshot: `/tmp/deytt-connect-20260926-baseline-app.png` on TECNO CH6i. Device has no linked app account/subscription; do not sign in, reset keys, start a VPN, or send support messages.
-- Excalidraw Markdown and four attached reference screenshots are in `/home/hackov/1/Excalidraw` and `/home/hackov/1/Pasted Image 2026092614*.png`.
-- Implemented collapsed country route groups with on-expand HTTP probes, averaged latency and bounded five-second download samples, relative scoring, AWG endpoint-only listing with unknown marks unassigned, 10-second selected-route refresh, approximate exit-region display, in-app account/payment/support flows, and official release updates.
-- Removed the manual subscription URL form from Setup. Telegram pairing remains; validated `deytt.connect://import` links go directly through import. Existing linked sessions can retry fetching their subscription. Physical-device inspection caught an English/Russian mismatch; setup-screen copy is now covered by localization tests.
-- Backend API work is in `/home/hackov/Documents/Projects` and tracked by `ROADMAP.android-mobile-api.paused.md`: bounded authenticated download and owner-scoped support history/reply/close. Focused backend tests passed earlier; backend commit is pushed and deployment is blocked pending the actual server checkout path.
-- Client commit `a1e2289` and backend commit `e46bcee` are pushed to their respective `main` branches. Server preflight at `/home/twin/vpn-admin` failed because that path is not recognized as a Git repository on `nl-vpn`; no pull or service restart was attempted.
-- Codebase-memory confirms native Android Views/ViewPager2. The probe service uses an isolated process, refuses another app's VPN, binds libbox sockets to the underlying physical network, and rejects accidental TUN creation.
+## Verified state
+Android 0.8.6 (20) installed without data reset; final APK SHA256 3036bf33633fed3d39a8fc29347938c28dad65aeb7f199bd0232a48f07eb4f39.
+65 Android tests pass, lint 0 errors / 66 warnings, APK assembly pass. Backend combined targeted suite42 tests passes; additional HWID/subscription regression suite passed. Backend commits a67cc52/e37b9ac/51d1c10/d4a1a33 pushed and delivered;9/9 latest runtime files match checkout, migration present, zero real HWID blocks, API active. Legal aliases validated nginx syntax and real phone browser pages.
+Real avatar shown. All12 country protocol samples give speed+latency. NL AWG3.1 temporary test restores VPNoff; NL AWG1.5 restores active FI VLESS. FI tunnel opens external HTTPS; origin survives browser return; country diagnostic preserves active tunnel. Home5s ping retains results, Connect preempts background check. Language recreation preserves account/photo. Support chat recreation closes old poll/dialog without crash; OS rotation settings restored. Profile traffic, special plan explanation, HWID confirmation, session details and legal links verified.
+See docs/mobile-qa-0.8.6.md for metrics/reproduction. Private evidence: /home/hackov/.codex/visualizations/2026/09/26/01a0ddcc-bcd9-7822-b240-2690823c64fa/fix-qa/fixes.md.
 
-## Findings and Decisions
-- The latest and most specific measurement instruction is on-demand per expanded country; do not scan at page entry. Home latency may refresh separately every 10 seconds.
-- Candidate quality should use proxy GET/HEAD latency plus download throughput. Use normalized within-country ranks with equal latency/speed weight unless source speed-test code establishes a better formula; handle small candidate sets without implying unavailable grades.
-- AWG country assignment comes only from an NL/DE/RU/FI prefix in `shortLabel`; unknown marks remain unassigned and endpoint-only. Do not compare raw TCP with sing-box proxy scores.
-- Bypass this app's VPN by binding each libbox socket to a physical `Network`; reject checks behind another app's VPN. Avoid process-wide network binding.
-- Device control, key reset, payment, and support must remain behind the existing Telegram-linked identity and explicit confirmation. Never fabricate account/session data or expose credentials.
-- Do not promise session revocation: no owner-scoped revoke API exists. Support history/reply/close and bounded download were added in the backend task.
-- Keep Telegram pairing and authorized deep-link import; do not offer manual subscription URL entry.
-- The APK itself has no server service. Backend changes require project deploy steps and restarts of `vpn-admin.service` and `uebot.service`.
+## Decisions / limits
+No purchases, support sends, real key resets, device/session revocations, or new VPN credentials. Synthetic tests cover destructive paths. HWID block prevents future subscription retrieval; downloaded shared credentials/existing tunnels remain usable. Happ provider APIs support one-link device management but no provider InstallID integration is configured here. No credential migration or bulk rotation.
+Unlimited-device grants retain special terms; support renews them rather than inventing a finite tariff price. Update checks every3h foreground; no3h wait/future OTA cycle claimed; Android controls install/restart. AWG requires temporary systemVPN, all individual AWG regions not tested. Trojan neutral icon; official Xray/Hysteria/Amnezia marks. API24–27 signature flags fixed, no old physical device available.
 
-## Issues and Failed Attempts
-- The literal path ending in .excalidraw did not exist; the user drawing is the matching .excalidraw.md file with four embedded screenshot attachments.
-- The device is authenticated only at Android level; app account state is empty. Do not attempt sign-in as the user or send test support messages.
-- The first build used system Java 27 and failed Gradle's JVM check; use the repository JDK 17.
-- `ProfileRoutesTest` had legacy label-based country expectations; its fixture now checks authoritative short-label prefixes and unknown-region placement.
-- `AppLanguageTest` exposed an untranslated nested reset label. The translator was corrected; rerun the full suite after the setup-screen changes.
+## Findings / failed attempts
+Telegram album returns0 photos but getChat supplies current public image; upstream MIME application/octet-stream. Partial-body and MIME assumptions repaired with17tests. Home queue completion previously erased successful latency. Unlimited grant previously returned bad_custom_params. Server support/download initially stale despite checkout. One deploy supplied incorrect pre-pull revision, safely rejected before sync; verified revision rerun succeeded. Country DE test during API restart failed; stable post-restart repeat passed. All unrelated graph artifacts, skills and concurrent backend work preserved.
 
-## Validation and Blockers
-- Baseline screenshot captured and visually inspected. Updated APK installed and launched on TECNO CH6i; corrected English setup screen visually verified at `/tmp/deytt-connect-20260926-setup-fixed.png` without signing in. Full unit tests, lint, APK assembly, and `git diff --check` passed after the final setup-copy localization change.
-- Device account is unlinked, so authenticated route, profile, support, payment, and tunnel journeys cannot be exercised here. No account was linked and VPN stayed off. Physical-device verification covers install/launch/setup presentation only.
-- Delivery blocker: server checkout path must be confirmed before continuing. Production backend pull and restarts of `vpn-admin.service` and `uebot.service` are not verified.
-
-## Next Action and Resume Context
-Resume only after confirming the Git checkout path on `nl-vpn`; then pull the already-pushed backend commit, restart `vpn-admin.service` and `uebot.service`, verify health, and record delivery evidence.
+## Next action / resume
+Deliver Android commit+push+prerelease APK, verify GitHub digest and installed version, restore user device preferences. Preserve roadmap as acceptance/delivery record.

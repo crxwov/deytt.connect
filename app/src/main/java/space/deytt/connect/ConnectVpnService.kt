@@ -217,45 +217,41 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             val server = CommandServer(this, this)
             commandServer = server
             server.start()
+            val latencies = linkedMapOf<String, Long>()
             routeTags.forEach { tag ->
                 if (operation.get() != operationId || !routeProbeOnly) return@forEach
-                var routeStage = "route config"
-                var latency: Long? = null
                 try {
-                    val probeConfig = session.configuration(config, tag)
-                    routeStage = "route reload"
                     server.startOrReloadService(
-                        runtimeConfig(probeConfig),
+                        runtimeConfig(session.configuration(config, tag)),
                         OverrideOptions().apply { autoRedirect = false },
                     )
                     if (operation.get() != operationId || !routeProbeOnly) return@forEach
-                    routeStage = "HTTP proxy probe"
                     sendRouteProbeResult(requestId, tag, null, null, stage = "latency")
-                    latency = RouteProxyProbe.measureProxy(session, method)
-                    if (token.isNotBlank()) {
-                        routeStage = "download sample"
-                        sendRouteProbeResult(requestId, tag, null, null, stage = "download")
-                        val speed = RouteProxyProbe.measureDownload(session, token)
-                        sendRouteProbeResult(
-                            requestId,
-                            tag,
-                            latency,
-                            null,
-                            stage = "complete",
-                            bytesPerSecond = speed,
-                        )
-                    } else {
-                        sendRouteProbeResult(requestId, tag, latency, null, stage = "complete")
-                    }
+                    val latency = RouteProxyProbe.measureProxy(session, method)
+                    latencies[tag] = latency
+                    sendRouteProbeResult(requestId, tag, latency, null,
+                        stage = if (token.isBlank()) "complete" else "waiting_download")
                 } catch (error: Throwable) {
-                    Log.w(TAG, "Route proxy probe failed at $routeStage (${probeFailureKind(error)})")
-                    sendRouteProbeResult(
-                        requestId,
-                        tag,
-                        latency,
-                        routeProbeError(error),
-                        stage = "failed",
+                    Log.w(TAG, "Route latency probe failed (${probeFailureKind(error)})")
+                    sendRouteProbeResult(requestId, tag, null, routeProbeError(error), stage = "failed")
+                }
+            }
+            // Show every latency first, then sample downloads serially so tests
+            // do not compete for bandwidth and distort the country ranking.
+            if (token.isNotBlank()) latencies.forEach { (tag, latency) ->
+                if (operation.get() != operationId || !routeProbeOnly) return@forEach
+                try {
+                    server.startOrReloadService(
+                        runtimeConfig(session.configuration(config, tag)),
+                        OverrideOptions().apply { autoRedirect = false },
                     )
+                    if (operation.get() != operationId || !routeProbeOnly) return@forEach
+                    sendRouteProbeResult(requestId, tag, latency, null, stage = "download")
+                    val speed = RouteProxyProbe.measureDownload(session, token)
+                    sendRouteProbeResult(requestId, tag, latency, null, stage = "complete", bytesPerSecond = speed)
+                } catch (error: Throwable) {
+                    Log.w(TAG, "Route download probe failed (${probeFailureKind(error)})")
+                    sendRouteProbeResult(requestId, tag, latency, routeProbeError(error), stage = "failed")
                 }
             }
         } catch (error: Throwable) {
@@ -303,6 +299,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         stage: String? = null,
         bytesPerSecond: Long? = null,
     ) {
+        if (complete) RouteProbeClient.clear(this, requestId)
         val intent = Intent(RouteProbeClient.ACTION_RESULT)
             .setPackage(packageName)
             .putExtra(RouteProbeClient.EXTRA_REQUEST_ID, requestId)
@@ -583,7 +580,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         val disconnect = PendingIntent.getService(
             this,
             NOTIFICATION_ID + 1,
-            Intent(this, ConnectVpnService::class.java).setAction(stopAction),
+            Intent(this, if (routeProbeOnly) RouteProbeVpnService::class.java else ConnectVpnService::class.java).setAction(stopAction),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val restore = PendingIntent.getService(

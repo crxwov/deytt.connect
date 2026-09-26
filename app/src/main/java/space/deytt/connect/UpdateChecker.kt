@@ -102,17 +102,27 @@ object UpdateChecker {
 
             val digest = MessageDigest.getInstance("SHA-256")
             var received = 0L
+            var reportedProgress = -1
+            val deadline = android.os.SystemClock.elapsedRealtime() + 10 * 60_000L
             connection.inputStream.use { raw ->
                 DigestInputStream(raw, digest).use { input ->
                     FileOutputStream(partial).use { file ->
                         val buffer = ByteArray(32 * 1024)
                         while (true) {
+                            check(!Thread.currentThread().isInterrupted) { "APK download cancelled" }
+                            check(android.os.SystemClock.elapsedRealtime() < deadline) { "APK download timed out" }
                             val count = input.read(buffer)
                             if (count < 0) break
                             received += count
                             check(received <= MAX_APK_BYTES) { "APK exceeds the download limit" }
                             file.write(buffer, 0, count)
-                            if (length > 0) onProgress(((received * 100L) / length).toInt().coerceIn(0, 100))
+                            if (length > 0) {
+                                val progress = ((received * 100L) / length).toInt().coerceIn(0, 100)
+                                if (progress != reportedProgress) {
+                                    reportedProgress = progress
+                                    onProgress(progress)
+                                }
+                            }
                         }
                     }
                 }
@@ -185,7 +195,7 @@ object UpdateChecker {
 
     private fun verifyInstalledPackageSignature(context: Context, apk: File) {
         val packageManager = context.packageManager
-        val archive = packageManager.getPackageArchiveInfo(apk.absolutePath, PackageManager.GET_SIGNING_CERTIFICATES)
+        val archive = packageManager.getPackageArchiveInfo(apk.absolutePath, signingCertificateQueryFlags())
             ?: error("Downloaded file is not a valid Android package")
         check(archive.packageName == BuildConfig.APPLICATION_ID) { "Downloaded APK belongs to another app" }
         val installed = installedPackageInfo(context)
@@ -195,13 +205,18 @@ object UpdateChecker {
     }
 
     @Suppress("DEPRECATION")
+    private fun signingCertificateQueryFlags(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) PackageManager.GET_SIGNING_CERTIFICATES
+        else PackageManager.GET_SIGNATURES
+
+    @Suppress("DEPRECATION")
     private fun installedPackageInfo(context: Context): PackageInfo = if (Build.VERSION.SDK_INT >= 33) {
         context.packageManager.getPackageInfo(
             context.packageName,
-            PackageManager.PackageInfoFlags.of(PackageManager.GET_SIGNING_CERTIFICATES.toLong()),
+            PackageManager.PackageInfoFlags.of(signingCertificateQueryFlags().toLong()),
         )
     } else {
-        context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+        context.packageManager.getPackageInfo(context.packageName, signingCertificateQueryFlags())
     }
 
     @Suppress("DEPRECATION")

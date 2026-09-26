@@ -37,6 +37,10 @@ internal object AppLanguage {
         "Republic of Bashkortostan" to "Республика Башкортостан",
         "Bashkortostan" to "Башкортостан",
         "Ufa" to "Уфа",
+        "Amsterdam" to "Амстердам",
+        "Frankfurt am Main" to "Франкфурт",
+        "Frankfurt" to "Франкфурт",
+        "Helsinki" to "Хельсинки",
         "Moscow Oblast" to "Московская область",
         "Moscow" to "Москва",
         "Saint Petersburg" to "Санкт-Петербург",
@@ -62,6 +66,28 @@ internal object AppLanguage {
     )
 
     internal fun english(value: String): String {
+        val additions = mapOf(
+            "Изменить точку выхода?" to "Change exit?",
+            "Текущее соединение завершится. После выбора подключитесь снова, чтобы применить новый маршрут." to "Your current connection will end. Connect again after selecting the new route.",
+            "Оставить подключение" to "Keep connection",
+            "Остановить и сменить" to "Stop and change",
+            "Значок AmneziaWG" to "AmneziaWG icon",
+            "Оригинальный знак AmneziaWG" to "AmneziaWG logo",
+            "Маршрут через Россию и Германию" to "Route through Russia and Germany",
+            "Путь от входа через транзит к выбранному выходу" to "Route from your location through the selected exit",
+            "выходы · выбор · диагностика" to "LOCATIONS · PROTOCOLS",
+            "Раскройте страну, чтобы проверить выходы. Выбор не запускает подключение." to "Open a country to compare its routes. Select a route, then connect.",
+            "быстрый выбор" to "Quick select", "выбрать" to "select", "ТРАНЗИТ" to "VIA",
+            "Задержка" to "Ping", "Задержка: —" to "Ping: —", "Скорость: —" to "Speed: —",
+            "Скорость: проверить" to "Test speed",
+            "Последний замер загрузки. Нажмите, чтобы проверить маршруты." to "Last download test. Tap to compare routes.",
+            "Войти через Telegram" to "Sign in with Telegram",
+            "Быстрый QUIC-маршрут" to "QUIC transport",
+            "Сброс ключей отключит выбранные подключения. Завершение сессии приложения отключает только доступ к аккаунту." to "Key reset disconnects the selected connections. Ending an app session only revokes account access."
+        )
+        additions[value]?.let { return it }
+        additions[value.lowercase(Locale.ROOT)]?.let { return if (value == value.uppercase(Locale.ROOT)) it.uppercase(Locale.ROOT) else it }
+
         val upperCase = value == value.uppercase(Locale.ROOT)
         val normalized = if (upperCase) value.lowercase(Locale.ROOT) else value
         (translations[value] ?: translations[normalized])?.let {
@@ -111,7 +137,7 @@ internal object AppLanguage {
             return "AmneziaWG: ${it.groupValues[1]} · Happ: ${it.groupValues[2]}"
         }
         Regex("^Раскрыть выходы (.+); откроется проверка HTTP маршрутов$").matchEntire(value)?.let {
-            return "Expand ${it.groupValues[1]} exits to start the HTTP route check"
+            return "Expand ${english(it.groupValues[1])} exits to start the HTTP route check"
         }
         Regex("^Качество маршрута: (.+)$").matchEntire(value)?.let {
             return "Route quality: ${it.groupValues[1].replaceFirstChar(Char::uppercase)}"
@@ -309,7 +335,11 @@ internal object AppLanguage {
         "Проверить обновления" to "Check for updates",
         "Проверить задержку" to "Check latency",
         "Аватар Telegram" to "Telegram avatar",
-        "Значок AmneziaWG" to "AmneziaWG mark",
+        "Изменить точку выхода?" to "Change exit?",
+            "Текущее соединение завершится. После выбора подключитесь снова, чтобы применить новый маршрут." to "Your current connection will end. Connect again after selecting the new route.",
+            "Оставить подключение" to "Keep connection",
+            "Остановить и сменить" to "Stop and change",
+            "Значок AmneziaWG" to "AmneziaWG mark",
         "Маршрут через Россию и Германию" to "Route through Russia and Germany",
         "подключение" to "CONNECTION",
         "Проверка маршрута" to "Route check",

@@ -124,8 +124,19 @@ internal class PrimaryPages(private val host: MainActivity) {
         val routes: List<DeyttRoute>,
         val rows: Map<String, ProbeRouteRow>,
         val samples: MutableMap<String, RouteProbeSample> = mutableMapOf(),
+        var selectionAtStart: String? = null,
+        var cancelled: Boolean = false,
     )
 
+    private val diagnosticExecutor = Executors.newSingleThreadExecutor()
+    private val pendingCountries = linkedMapOf<String, CountryProbeState>()
+    private var awgMeasurementRunning = false
+    private var awgCompletion: ((Boolean) -> Unit)? = null
+    private var updateBanner: LinearLayout? = null
+    private var updateBannerText: TextView? = null
+    private var updateBannerProgress: ProgressBar? = null
+    private var updateDownloadInFlight = false
+    private var closed = false
     private val updateExecutor = Executors.newSingleThreadExecutor()
     private val pairingExecutor = Executors.newSingleThreadExecutor()
     private val updateHandler = Handler(Looper.getMainLooper())
@@ -150,10 +161,43 @@ internal class PrimaryPages(private val host: MainActivity) {
         else -> settingsPage()
     }
 
+    fun createUpdateBanner(): View {
+        val label = host.text("", 12f, TEXT).apply { setPadding(host.dp(18), host.dp(10), host.dp(18), host.dp(8)) }
+        val progress = ProgressBar(host, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progressTintList = ColorStateList.valueOf(DeyttUi.SKY)
+            progressBackgroundTintList = ColorStateList.valueOf(LINE)
+        }
+        updateBannerText = label
+        updateBannerProgress = progress
+        return LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(SURFACE)
+            visibility = View.GONE
+            addView(label)
+            addView(progress, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(3)))
+            setOnClickListener { if (!updateDownloadInFlight) updateAction() }
+            updateBanner = this
+        }
+    }
+
+    private fun showUpdateProgress(label: String, percent: Int? = null) {
+        updateBanner?.visibility = View.VISIBLE
+        updateBannerText?.text = label
+        updateBannerProgress?.isIndeterminate = percent == null
+        percent?.let { updateBannerProgress?.progress = it }
+    }
+
     fun close() {
+        closed = true
+        awgCompletion?.also { awgCompletion = null }?.invoke(false)
         updateHandler.removeCallbacks(updateCycle)
         updateExecutor.shutdownNow()
         pairingExecutor.shutdownNow()
+        diagnosticExecutor.shutdownNow()
+        routeProbeStates.values.forEach { it.cancelled = true }
+        pendingCountries.clear()
+        if (routeProbeStates.isNotEmpty()) RouteProbeClient.cancel(host)
         profileFlows.close()
     }
 
@@ -206,8 +250,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         if (quickGroup.childCount > 0) root.addView(quickGroup)
 
-        root.addView(spacer(20, host))
-        root.addView(spacer(20, host))
+        root.addView(spacer(24, host))
         root.addView(host.sectionLabel(host.uiCopy("LTE./белые списки")))
         val orderedCodes = listOf("NL", "DE", "RU", "FI", "AWG_UNKNOWN")
         val countries = routes.filter { it.countryCode in orderedCodes }
@@ -235,9 +278,9 @@ internal class PrimaryPages(private val host: MainActivity) {
                 val isAwg = route.engine == TunnelEngine.AMNEZIAWG
                 val rowTitle = if (isAwg) route.profileName ?: route.protocol.title else route.protocol.title
                 val rowSubtitle = if (isAwg) "${route.shortMark()} · ${route.protocol.title}" else route.protocol.detail
-                val metric = host.actionLabel(if (isAwg) "AWG" else "—").apply {
-                    minWidth = host.dp(72)
-                    gravity = Gravity.CENTER
+                val cached = RouteQualityStore.read(host, route.id)
+                val metric = host.text(cached?.let(::sampleLabel) ?: copy("Ещё не проверен", "Not measured yet"), 11f, MUTED).apply {
+                    setPadding(host.dp(54), 0, host.dp(16), host.dp(12))
                 }
                 val spinner = ProgressBar(host, null, android.R.attr.progressBarStyleSmall).apply {
                     isIndeterminate = true
@@ -246,22 +289,43 @@ internal class PrimaryPages(private val host: MainActivity) {
                 }
                 val item = host.row(rowTitle, rowSubtitle, if (isAwg) "AWG_MARK" else protocolMark(route.protocol), "",
                     emphasis = route.id == selectedId)
+                val protocolDrawable = when (route.protocol) {
+                    RouteProtocol.VLESS -> R.drawable.ic_xray
+                    RouteProtocol.HYSTERIA2 -> R.drawable.ic_hysteria
+                    else -> null
+                }
+                protocolDrawable?.let { resource ->
+                    val old = item.getChildAt(0)
+                    val params = old.layoutParams
+                    item.removeViewAt(0)
+                    item.addView(android.widget.ImageView(host).apply {
+                        setImageResource(resource)
+                        scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                        setPadding(host.dp(5), host.dp(5), host.dp(5), host.dp(5))
+                        contentDescription = route.protocol.title
+                    }, 0, params)
+                }
                 item.addView(LinearLayout(host).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     addView(spinner, LinearLayout.LayoutParams(host.dp(18), host.dp(18)))
-                    addView(metric, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(40)).apply {
-                        marginStart = host.dp(5)
-                    })
+
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(44)))
                 item.setOnClickListener { host.selectRoute(route) }
+                val probeRow = ProbeRouteRow(route, metric, spinner)
                 if (isAwg) {
-                    metric.setTextColor(AMBER)
-                    metric.contentDescription = host.uiCopy("Проверка через выход AmneziaWG пока недоступна")
-                } else {
-                    rowById[route.id] = ProbeRouteRow(route, metric, spinner)
-                }
+                    item.setOnClickListener {
+                        AlertDialog.Builder(host)
+                            .setTitle(host.uiCopy(rowTitle))
+                            .setItems(arrayOf(copy("Выбрать маршрут", "Select route"), copy("Подключить и проверить", "Connect and measure"))) { _, action ->
+                                if (action == 0) host.selectRoute(route) else startAwgProbe(probeRow)
+                            }.show()
+                    }
+                    metric.text = cached?.let(::sampleLabel) ?: copy("Нажмите → подключить и проверить", "Tap → connect and measure")
+                    metric.setOnClickListener { startAwgProbe(probeRow) }
+                } else rowById[route.id] = probeRow
                 detail.addView(item)
+                detail.addView(metric)
             }
             val countryState = CountryProbeState(code, networkRoutes, rowById)
             val countryHeader = host.row(
@@ -277,6 +341,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                     detail.visibility = if (expanded) View.VISIBLE else View.GONE
                     findViewWithTag<TextView>("country-chevron")?.text = if (expanded) "⌃" else "⌄"
                     if (expanded) startCountryProbe(countryState)
+                    else cancelCountryProbe(countryState)
                 }
                 (getChildAt(childCount - 1) as? TextView)?.tag = "country-chevron"
             }
@@ -300,7 +365,7 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun protocolMark(protocol: RouteProtocol): String = when (protocol) {
         RouteProtocol.VLESS -> "VL"
-        RouteProtocol.TROJAN -> "TR"
+        RouteProtocol.TROJAN -> "◇"
         RouteProtocol.HYSTERIA2 -> "H2"
         RouteProtocol.RU_DE -> "RU→DE"
         else -> "·"
@@ -315,7 +380,19 @@ internal class PrimaryPages(private val host: MainActivity) {
     }
 
     private fun startCountryProbe(country: CountryProbeState) {
-        if (country.routes.isEmpty() || RouteProbeClient.isRunning(host)) return
+        if (country.routes.isEmpty()) return
+        if (routeProbeStates.values.any { it === country }) {
+            if (country.cancelled) pendingCountries[country.code] = country
+            return
+        }
+        country.cancelled = false
+        if (RouteProbeClient.isRunning(host)) {
+            pendingCountries[country.code] = country
+            country.rows.values.forEach { it.status.text = copy("В очереди…", "Queued…") }
+            return
+        }
+        country.selectionAtStart = SelectedRouteStore(host).read().id
+        country.samples.clear()
         if (VpnService.prepare(host) != null && host.requestRouteProbePermission { startCountryProbe(country) }) return
         val config = SubscriptionStore(host).readCurrent() ?: return
         country.rows.values.forEach { row ->
@@ -344,7 +421,17 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     fun onRouteProbeEvent(event: Intent) {
         val requestId = event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty()
-        val country = routeProbeStates[requestId] ?: return
+        val country = routeProbeStates[requestId] ?: run {
+            if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) launchNextCountry()
+            return
+        }
+        if (country.cancelled) {
+            if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
+                routeProbeStates.remove(requestId)
+                launchNextCountry()
+            }
+            return
+        }
         val tag = event.getStringExtra(RouteProbeClient.EXTRA_ROUTE_TAG).orEmpty()
         if (tag.isNotBlank()) {
             val row = country.rows.values.firstOrNull { it.route.configTag == tag }
@@ -355,14 +442,17 @@ internal class PrimaryPages(private val host: MainActivity) {
                 val speed = event.getLongExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, -1L)
                     .takeIf { it >= 0L } ?: previous.downloadBytesPerSecond
                 country.samples[row.route.id] = RouteProbeSample(row.route.id, latency, speed)
-                when (event.getStringExtra(RouteProbeClient.EXTRA_STAGE)) {
+                when (event.getStringExtra(RouteProbeClient.EXTRA_STAGE)
+                    ?: if (!event.getStringExtra(RouteProbeClient.EXTRA_ERROR).isNullOrBlank()) "failed" else "") {
                     "latency" -> row.status.text = host.uiCopy("измеряем задержку…")
                     "download" -> row.status.text = host.uiCopy("измеряем скорость…")
+                    "waiting_download" -> row.status.text = copy("задержка: ", "ping: ") +
+                        (latency?.let(::formatLatency) ?: "—") + copy(" · скорость в очереди", " · speed queued")
                     "complete", "failed" -> {
                         row.progress.visibility = View.GONE
-                        val latencyLabel = latency?.let { formatLatency(it) } ?: "—"
-                        val speedLabel = speed?.let(::formatSpeed) ?: "—"
-                        row.status.text = "$latencyLabel · $speedLabel"
+                        row.status.text = sampleLabel(country.samples.getValue(row.route.id))
+                        if (speed == null) row.status.append("\n" + copy("Скорость не измерена · нажмите страну для повтора", "Speed unavailable · reopen country to retry"))
+                        country.samples[row.route.id]?.let { RouteQualityStore.write(host, it) }
                         row.status.setTextColor(if (latency != null) DeyttUi.TEXT else DeyttUi.CORAL)
                     }
                 }
@@ -373,6 +463,10 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
             routeProbeStates.remove(requestId)
+            val requestError = event.getStringExtra(RouteProbeClient.EXTRA_ERROR)
+            if (!requestError.isNullOrBlank()) country.rows.values.forEach { row ->
+                row.status.text = host.uiCopy(requestError)
+            }
             val grades = RouteProbeScoring.grade(country.samples.values.toList())
             country.rows.values.forEach { row ->
                 row.progress.visibility = View.GONE
@@ -383,12 +477,74 @@ internal class PrimaryPages(private val host: MainActivity) {
                     RouteGrade.POOR -> DeyttUi.CORAL
                     RouteGrade.UNRATED -> DeyttUi.MUTED
                 })
-                row.status.contentDescription = host.uiCopy("Качество маршрута: ${grade.name.lowercase()}")
+                row.status.contentDescription = row.status.text
             }
             val bestId = RouteProbeScoring.bestRouteId(country.samples.values.toList())
             val best = bestId?.let { id -> country.routes.firstOrNull { it.id == id } }
-            if (best != null && !ConnectVpnService.isRunning() && !AwgTunnelController.isRunning()) {
-                host.selectRoute(best)
+            best?.let { country.rows[it.id]?.status?.append(copy(" · лучший", " · best")) }
+            if (best != null && SelectedRouteStore(host).read().id == country.selectionAtStart &&
+                !ConnectVpnService.isRunning() && !AwgTunnelController.isRunning()) {
+                host.selectRoute(best, navigateHome = false)
+            }
+            launchNextCountry()
+        }
+    }
+
+    private fun cancelCountryProbe(country: CountryProbeState) {
+        pendingCountries.remove(country.code)
+        country.cancelled = true
+        country.rows.values.forEach { it.progress.visibility = View.GONE }
+        if (routeProbeStates.values.any { it === country }) RouteProbeClient.cancel(host)
+    }
+
+    private fun launchNextCountry() {
+        updateHandler.postDelayed({
+            if (!host.isDestroyed && !RouteProbeClient.isRunning(host)) {
+                pendingCountries.values.firstOrNull()?.let { next ->
+                    pendingCountries.remove(next.code)
+                    startCountryProbe(next)
+                }
+            }
+        }, 200)
+    }
+
+    private fun copy(ru: String, en: String): String = if (AppLanguage.current(host) == AppLanguage.EN) en else ru
+
+    private fun sampleLabel(sample: RouteProbeSample): String =
+        copy("задержка: ", "ping: ") + (sample.latencyMillis?.let(::formatLatency) ?: "—") +
+            "  ·  " + copy("скорость: ", "speed: ") + (sample.downloadBytesPerSecond?.let(::formatSpeed) ?: "—")
+
+    private fun startAwgProbe(row: ProbeRouteRow) {
+        if (awgMeasurementRunning) return
+        val token = TelegramSessionStore.read(host)
+        if (token == null) {
+            row.status.text = copy("Подключите Telegram для измерения скорости", "Link Telegram to measure speed")
+            return
+        }
+        host.requestAwgMeasurement(row.route) { finished ->
+            awgCompletion = finished
+            awgMeasurementRunning = true
+            row.progress.visibility = View.VISIBLE
+            row.status.text = copy("Измеряем задержку…", "Measuring ping…")
+            diagnosticExecutor.execute {
+                val result = runCatching {
+                    val current = { !closed && AwgTunnelController.isRunning() &&
+                        VpnStateStore(host).read().phase == VpnPhase.CONNECTED &&
+                        SelectedRouteStore(host).read().id == row.route.id }
+                    check(current())
+                    val latency = RouteProxyProbe.measureThroughSystemVpn(RouteProbePreferences.method(host))
+                    host.runOnUiThread { row.status.text = copy("Измеряем скорость · 5 с…", "Measuring speed · 5 s…") }
+                    val speed = RouteProxyProbe.measureSystemDownload(token, current)
+                    RouteProbeSample(row.route.id, latency, speed).also { RouteQualityStore.write(host, it) }
+                }
+                host.runOnUiThread {
+                    awgMeasurementRunning = false
+                    row.progress.visibility = View.GONE
+                    row.status.text = result.getOrNull()?.let(::sampleLabel)
+                        ?: copy("Не удалось измерить · повторите проверку", "Measurement failed · try again")
+                    row.status.setTextColor(if (result.isSuccess) DeyttUi.MINT else DeyttUi.CORAL)
+                    awgCompletion?.also { awgCompletion = null }?.invoke(result.isSuccess)
+                }
             }
         }
     }
@@ -514,7 +670,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         })
         root.addView(spacer(20, host))
         root.addView(host.sectionLabel("подключение"))
-        val probeSummary = { host.uiCopy("Через двойной маршрут · 10 с · ${RouteProbePreferences.method(host).title}") }
+        val probeSummary = { host.uiCopy(copy("HTTP ${RouteProbePreferences.method(host).title} · загрузка 5 с", "HTTP ${RouteProbePreferences.method(host).title} · 5 s download")) }
         val probeRow = host.row(
             "Проверка маршрута",
             probeSummary(),
@@ -536,7 +692,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 sheet.addView(host.text("Метод проверки", 20f, TEXT, android.graphics.Typeface.BOLD).apply {
                     setPadding(0, host.dp(10), 0, host.dp(8))
                 })
-                sheet.addView(host.text("Проверка идёт через выбранный двойной маршрут. Запрос ограничен десятью секундами.", 12f, MUTED).apply {
+                sheet.addView(host.text(copy("Задержка измеряется через каждый выход, затем — загрузка до 5 секунд (до 32 МБ). AmneziaWG проверяется после подключения.", "Ping is measured through each route, then download for up to 5 seconds (up to 32 MB). Connect AmneziaWG to measure it."), 12f, MUTED).apply {
                     setPadding(0, 0, 0, host.dp(12))
                 })
                 methods.forEach { method ->
@@ -548,7 +704,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                         setOnClickListener {
                             RouteProbePreferences.saveMethod(host, method)
                             summary?.text = probeSummary()
-                            contentDescription = host.uiCopy("Проверка маршрута: через двойной маршрут, тайм-аут 10 секунд, метод ${method.title}")
+                            contentDescription = host.uiCopy(copy("Проверка HTTP ${method.title}, загрузка 5 секунд", "HTTP ${method.title}, 5 second download"))
                             dialog.dismiss()
                         }
                     })
@@ -605,7 +761,7 @@ internal class PrimaryPages(private val host: MainActivity) {
     }
 
     private fun checkForUpdate(force: Boolean = true) {
-        if (updateCheckInFlight) return
+        if (updateCheckInFlight || updateDownloadInFlight || closed) return
         val preferences = host.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
         val now = System.currentTimeMillis()
         val lastCheck = preferences.getLong(KEY_LAST_UPDATE_CHECK, 0L)
@@ -621,6 +777,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         updateExecutor.execute {
             runCatching { UpdateChecker.latest() }
                 .onSuccess { release -> host.runOnUiThread {
+                    if (closed || host.isFinishing || host.isDestroyed) return@runOnUiThread
                     updateCheckInFlight = false
                     preferences.edit().putLong(KEY_LAST_UPDATE_CHECK, System.currentTimeMillis()).apply()
                     updateButton?.isEnabled = true
@@ -643,6 +800,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 } }
                 .onFailure {
                     host.runOnUiThread {
+                        if (closed || host.isFinishing || host.isDestroyed) return@runOnUiThread
                         updateCheckInFlight = false
                         preferences.edit().putLong(KEY_LAST_UPDATE_CHECK, System.currentTimeMillis()).apply()
                         latestRelease = null
@@ -675,7 +833,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             .setMessage(host.uiCopy("Скачать официальный APK сейчас? Позже его можно будет открыть в настройках."))
             .setNegativeButton(host.uiCopy("Позже"), null)
             .setNeutralButton(host.uiCopy("Страница релиза")) { _, _ -> openLatest() }
-            .setPositiveButton(host.uiCopy("Обновить сейчас")) { _, _ -> askDownload(release) }
+            .setPositiveButton(host.uiCopy("Обновить сейчас")) { _, _ -> downloadUpdate(release) }
             .show()
     }
 
@@ -695,6 +853,9 @@ internal class PrimaryPages(private val host: MainActivity) {
     }
 
     private fun downloadUpdate(release: ReleaseInfo) {
+        if (updateDownloadInFlight || closed) return
+        updateDownloadInFlight = true
+        showUpdateProgress(copy("Скачиваем обновление…", "Downloading update…"), 0)
         updateButton?.apply { isEnabled = false; alpha = .68f; text = host.uiCopy("Скачиваем…") }
         updateStatus?.apply { text = host.uiCopy("Скачиваем и проверяем официальный APK…"); setTextColor(DeyttUi.SKY) }
         updateExecutor.execute {
@@ -702,19 +863,25 @@ internal class PrimaryPages(private val host: MainActivity) {
                 UpdateChecker.downloadAndVerify(host, release) { progress ->
                     host.runOnUiThread {
                         if (!host.isFinishing && !host.isDestroyed) {
-                            updateStatus?.text = host.uiCopy("Скачиваем обновление · $progress%")
+                            updateStatusText = copy("Скачиваем обновление · $progress%", "Downloading update · $progress%")
+                            updateStatus?.text = updateStatusText
+                            showUpdateProgress(updateStatusText, progress)
                         }
                     }
                 }
             }.onSuccess { apk -> host.runOnUiThread {
                 if (host.isFinishing || host.isDestroyed) return@runOnUiThread
+                updateDownloadInFlight = false
                 downloadedUpdate = apk
+                showUpdateProgress(copy("Обновление готово · нажмите, чтобы установить", "Update ready · tap to install"), 100)
                 updateButton?.apply { isEnabled = true; alpha = 1f; text = host.uiCopy("Установить обновление") }
                 updateStatusText = "APK проверен. Установка начнётся только после подтверждения Android."
                 updateStatus?.apply { text = host.uiCopy(updateStatusText); setTextColor(DeyttUi.MINT) }
                 offerInstall(apk)
             } }.onFailure { failure -> host.runOnUiThread {
                 if (host.isFinishing || host.isDestroyed) return@runOnUiThread
+                updateDownloadInFlight = false
+                showUpdateProgress(copy("Обновление не загружено · нажмите для повтора", "Update failed · tap to retry"), 0)
                 updateButton?.apply { isEnabled = true; alpha = 1f; text = host.uiCopy("Повторить загрузку") }
                 updateStatusText = when (failure.message) {
                     "Downloaded APK belongs to another app" -> "APK принадлежит другому приложению. Установка отменена."
@@ -729,7 +896,7 @@ internal class PrimaryPages(private val host: MainActivity) {
     private fun offerInstall(apk: File) {
         AlertDialog.Builder(host)
             .setTitle(host.uiCopy("Обновление готово"))
-            .setMessage(host.uiCopy("Android попросит подтвердить установку. Приложение перезапустится после её завершения."))
+            .setMessage(host.uiCopy(copy("Android попросит подтвердить установку и закроет текущую версию. После установки нажмите «Открыть» или запустите приложение позже.", "Android will ask to install and close the current version. After installation, tap Open or launch the app later.")))
             .setNegativeButton(host.uiCopy("Позже"), null)
             .setPositiveButton(host.uiCopy("Установить сейчас")) { _, _ -> launchInstaller(apk) }
             .show()

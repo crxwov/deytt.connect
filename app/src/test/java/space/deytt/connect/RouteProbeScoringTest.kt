@@ -29,4 +29,16 @@ class RouteProbeScoringTest {
         assertEquals(RouteGrade.UNRATED, grades["one"])
         assertEquals(RouteGrade.UNRATED, grades["failed"])
     }
+    @Test
+    fun doesNotRankFailedZeroOrNegativeSamples() {
+        val samples = listOf(RouteProbeSample("zero", 1, 0), RouteProbeSample("negative", -1, 100))
+        assertEquals(null, RouteProbeScoring.bestRouteId(samples))
+        assertEquals(setOf(RouteGrade.UNRATED), RouteProbeScoring.grade(samples).values.toSet())
+    }
+
+    @Test
+    fun equalMeasurementsReceiveEqualGrades() {
+        val samples = listOf("one", "two", "three").map { RouteProbeSample(it, 100, 500_000) }
+        assertEquals(1, RouteProbeScoring.grade(samples).values.toSet().size)
+    }
 }
