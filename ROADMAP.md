@@ -25,7 +25,8 @@ Implement the actionable feedback in the 2026-09-26 Excalidraw note in the Andro
 - Excalidraw Markdown and four attached reference screenshots are in `/home/hackov/1/Excalidraw` and `/home/hackov/1/Pasted Image 2026092614*.png`.
 - Implemented collapsed country route groups with on-expand HTTP probes, averaged latency and bounded five-second download samples, relative scoring, AWG endpoint-only listing with unknown marks unassigned, 10-second selected-route refresh, approximate exit-region display, in-app account/payment/support flows, and official release updates.
 - Removed the manual subscription URL form from Setup. Telegram pairing remains; validated `deytt.connect://import` links go directly through import. Existing linked sessions can retry fetching their subscription. Physical-device inspection caught an English/Russian mismatch; setup-screen copy is now covered by localization tests.
-- Backend API work is in `/home/hackov/Documents/Projects` and tracked by `ROADMAP.android-mobile-api.paused.md`: bounded authenticated download and owner-scoped support history/reply/close. Focused backend tests passed earlier; commit and deployment remain pending.
+- Backend API work is in `/home/hackov/Documents/Projects` and tracked by `ROADMAP.android-mobile-api.paused.md`: bounded authenticated download and owner-scoped support history/reply/close. Focused backend tests passed earlier; backend commit is pushed and deployment is blocked pending the actual server checkout path.
+- Client commit `a1e2289` and backend commit `e46bcee` are pushed to their respective `main` branches. Server preflight at `/home/twin/vpn-admin` failed because that path is not recognized as a Git repository on `nl-vpn`; no pull or service restart was attempted.
 - Codebase-memory confirms native Android Views/ViewPager2. The probe service uses an isolated process, refuses another app's VPN, binds libbox sockets to the underlying physical network, and rejects accidental TUN creation.
 
 ## Findings and Decisions
@@ -48,6 +49,7 @@ Implement the actionable feedback in the 2026-09-26 Excalidraw note in the Andro
 ## Validation and Blockers
 - Baseline screenshot captured and visually inspected. Updated APK installed and launched on TECNO CH6i; corrected English setup screen visually verified at `/tmp/deytt-connect-20260926-setup-fixed.png` without signing in. Full unit tests, lint, APK assembly, and `git diff --check` passed after the final setup-copy localization change.
 - Device account is unlinked, so authenticated route, profile, support, payment, and tunnel journeys cannot be exercised here. No account was linked and VPN stayed off. Physical-device verification covers install/launch/setup presentation only.
+- Delivery blocker: server checkout path must be confirmed before continuing. Production backend pull and restarts of `vpn-admin.service` and `uebot.service` are not verified.
 
 ## Next Action and Resume Context
-Commit and push the reviewed client and backend changes, then perform the authorized server pull/restart/health check and record delivery evidence.
+Resume only after confirming the Git checkout path on `nl-vpn`; then pull the already-pushed backend commit, restart `vpn-admin.service` and `uebot.service`, verify health, and record delivery evidence.
