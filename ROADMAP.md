@@ -8,12 +8,13 @@ Polish the Android client against the supplied screenshots and brand assets; fix
 - [x] Implement cohesive dialogs, map labels/leaders, aligned itinerary, regular-weight launcher mark, profile/document/settings improvements, and RU→DE-only LTE+whitelist labeling.
 - [x] Improve concurrent latency checks, bounded speed probes, automatic app-only AWG checks, and restore the user's active route after diagnostics.
 - [x] Run automated checks and physical-device acceptance; install and verify 0.8.7 (versionCode 21).
-- [ ] Commit the scoped Android changes and Roadmap to `main`, then push. No backend or server service changed in this task; server pull/restart is not applicable.
+- [x] Commit the scoped Android changes to `main` and push. No backend or server service changed in this task; server pull/restart is not applicable.
 
 ## Current state
 - Final Android APK built and installed on TECNO CH6i. Physical screen confirms the account avatar, map labels/leaders, route strip, ping, and live speed on an active route; final idle baseline also shows the fully loaded map and automatic ping with VPN disconnected. The route strip keeps the selected Amsterdam exit aligned with the map and labels Frankfurt only as approximate IP geolocation.
 - Device restored to baseline: English, Auto-select, network-location lookup off, VPN idle/disconnected.
 - User data and VPN keys were preserved. Backend profile metadata work (`4544fe3`) was already deployed in the preceding task and was not changed here.
+- Android implementation commit `1b0346b` is pushed to `origin/main`; this Roadmap records the verified delivery state.
 
 ## Findings and decisions
 - Route checks were physically exercised for NL and DE protocols, available NL/DE AmneziaWG profiles, FI VLESS/Trojan/Hysteria, and the RU→DE double route. Temporary AWG measurement is app-only and restores the user's selected active tunnel.
@@ -30,9 +31,10 @@ Polish the Android client against the supplied screenshots and brand assets; fix
 - `git diff --check`: passed.
 - First build attempt used unsupported system JDK 27 and failed in Kotlin version parsing; rerunning with the repository JDK 17 and Android SDK succeeded.
 - Final JDK 17 build after profile copy refinement passed: 74 unit tests (0 failures/errors/skips), lint (0 errors; 71 warnings), and debug assembly. `git diff --check` passes. Final APK SHA256: `2d500dce96dcb07269db6530db8ef5b485c23eec66589d586342053496eb2db1`.
+- `1b0346b` pushed to `origin/main`. No server deployment/restart applies to this client-only change.
 
 ## Changed files
 Android app UI and behavior in `MainActivity`, `TopLevelPages`, `ProfileFlows`, `DeyttUi`, `AppLanguage`, `ConnectVpnService`, `AwgTunnelController`, `RouteProxyProbe`, `ProtocolActivity`, and `AppDialog`, `AwgDiagnosticConfig`, `LegalDocument`, `NativeDocumentActivity`; route map asset; launcher vector/theme/manifest; focused unit tests; protocol-mark and font-license docs.
 
 ## Next action and resume context
-Commit only the Android implementation, tests, owned documentation, and this Roadmap on `main`, then push. Keep `.codebase-memory`, `.agents`, and unrelated completed Roadmaps untouched. No server deployment or restart is needed because this is a client-only change.
+Completed. Keep `.codebase-memory`, `.agents`, and unrelated completed Roadmaps untouched. No server deployment or restart is needed because this is a client-only change.
