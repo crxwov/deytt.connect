@@ -8,13 +8,14 @@ Restore truthful, smooth traffic animation on the active route; keep measured pi
 - [x] Fix active-route traffic animation, AWG measurement failures, retained ping/speed states, and transparent icon safe area; add focused regression tests.
 - [x] Resolve the live Auto outbound from sing-box group state without IP geolocation, and animate the selected route only.
 - [x] Run tests, lint, debug build, install, and verify Auto/direct/double-hop route behavior on TECNO CH6i.
-- [ ] Record verified release state, commit and push `main`, then publish the downloadable APK if release tooling is available.
+- [x] Record verified release state, commit and push `main`; update the existing GitHub publication with the downloadable APK.
 
 ## Current state
 - Repository `/home/hackov/Documents/deytt-connect`, branch `main`, base `874145f` (`0.8.8`); no tracked changes at task start.
 - Connected test device: TECNO CH6i (`08357252AA002939`); existing account and approximate-location opt-out must be preserved.
 - Previous `ROADMAP.md` captured completed `0.8.8` delivery and was archived as `ROADMAP.0.8.8.completed.md`.
 - Installed and verified app version `0.8.9`; device is disconnected, Auto is selected, and location privacy remains disabled.
+- Existing GitHub publication `v0.8.8-debug` was edited in place as requested: title is now `deytt./connect 0.8.9 debug`, it is a regular (non-prerelease) Latest release, and its APK asset was replaced with the validated 0.8.9 arm64 build. The tag and public URL were preserved because commit `cffc897` is not present in the GitHub repository; GitHub `main` still points at `0.8.7`.
 
 ## Findings and decisions
 - Baseline home screenshot is stable in Auto with no selected egress; approximate-location permission is off. User reports connected traffic particles stopped.
@@ -29,12 +30,14 @@ Restore truthful, smooth traffic animation on the active route; keep measured pi
 
 ## Issues and failed attempts
 - Early Gradle attempts used system Java 27 and omitted the repository SDK; reran successfully with the bundled JDK 17 and SDK.
+- `gh release create v0.8.9-debug` stopped before confirming a new release because GitHub API returned `TLS handshake timeout` while checking the tag. At the user's explicit request, updated the existing release instead; no new release was created.
 
 ## Validation and blockers
 - `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` pass after final changes using bundled JDK 17/Android SDK; JavaScript syntax and `git diff --check` pass.
 - Physical Auto connection selected Helsinki from sing-box while approximate location stayed disabled. Consecutive frames retained stable map labels/camera; disconnect removed the active-exit marker.
 - Automatic country diagnostics displayed VLESS, Trojan, Hysteria 2, and AmneziaWG 3.1 results. Germany AmneziaWG measured 581 ms and 18.1 Mbps; VLESS alone received the green “best choice” status.
 - Final arm64 APK SHA-256: `76814bd4cfc45bdf0ef1d39fabae04cd43152fc3c4278ebb1be786b93c5cbed1`.
+- GitHub Release API confirms `prerelease=false`, `draft=false`, asset `app-arm64-v8a-debug.apk`, size `37,937,296` bytes, and digest `sha256:76814bd4cfc45bdf0ef1d39fabae04cd43152fc3c4278ebb1be786b93c5cbed1`. `/releases/latest` resolves to the edited publication at `https://github.com/crxwov/deytt.connect/releases/tag/v0.8.8-debug`.
 
 ## Next action and resume context
-Commit the validated 0.8.9 source and roadmap to `main`, push, publish the arm64 debug APK as the next GitHub pre-release, then record the release URL/checksum and finish delivery. This standalone Android client has no production server/service to pull or restart.
+Completed: source commit `cffc897` is on Gitea `main`; validated arm64 APK is on the physical device and uploaded to the edited GitHub Latest release. Release asset and URL are verified. This standalone Android client has no production server/service to pull or restart.
