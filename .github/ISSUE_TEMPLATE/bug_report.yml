@@ -1,0 +1,52 @@
+name: Ошибка в приложении
+description: Сообщить о сбое или неверном поведении клиента
+title: "[Ошибка] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Issues публичные. Не указывайте личные данные, Telegram-коды, ссылки подписки, VPN-ключи, конфигурации, IP-адреса и не прикладывайте снимки экрана с аккаунтом. Для вопросов по подписке используйте [поддержку в Telegram](https://t.me/deyttbot).
+  - type: input
+    id: app_version
+    attributes:
+      label: Версия приложения
+      placeholder: 0.8.9
+    validations:
+      required: true
+  - type: input
+    id: android_version
+    attributes:
+      label: Версия Android
+      placeholder: Android 14
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Модель устройства
+      placeholder: Например, Pixel 8a
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Как повторить ошибку
+      description: Напишите действия по порядку. Не включайте секреты и персональные данные.
+      placeholder: |
+        1. Открыл экран маршрутов
+        2. Выбрал маршрут
+        3. Нажал «Подключить»
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Что должно было произойти?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Что произошло?
+    validations:
+      required: true

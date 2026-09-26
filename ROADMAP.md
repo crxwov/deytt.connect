@@ -1,43 +1,38 @@
-# Roadmap — Stable traffic map and route diagnostics
+# Roadmap — GitHub first-client readiness
 
 ## Objective and success criteria
-Restore truthful, smooth traffic animation on the active route; keep measured ping visible while speed is tested; make AmneziaWG probes reliable; fit the launcher glyph inside a transparent circular safe area; clarify measurement state and route suitability.
+Make the public repository and Releases page understandable and safe for the first Android client users. Keep every release's notes limited to verified changes, provide one clear current download path, and publish matching source and release metadata.
 
 ## Stages
-- [x] Inspect live device baseline, map byte sampling and lifecycle, probe state/error handling, and icon resources.
-- [x] Fix active-route traffic animation, AWG measurement failures, retained ping/speed states, and transparent icon safe area; add focused regression tests.
-- [x] Resolve the live Auto outbound from sing-box group state without IP geolocation, and animate the selected route only.
-- [x] Run tests, lint, debug build, install, and verify Auto/direct/double-hop route behavior on TECNO CH6i.
-- [x] Record verified release state, commit and push `main`; update the existing GitHub publication with the downloadable APK.
+- [x] Inspect repository metadata, current README, release history/assets, and GitHub branch ancestry.
+- [ ] Set an accurate repository identity and write first-client install, update, support, compatibility, and checksum guidance.
+- [ ] Reduce every published release body to a concise changelog; remove only verified duplicate or obsolete release assets.
+- [ ] Align the 0.8.9 release tag and published APK with source history, then fast-forward GitHub `main` if the update stays non-destructive.
+- [ ] Validate GitHub metadata, all release notes/assets, the direct APK download/checksum, and repository changes; commit and push `main`.
 
 ## Current state
-- Repository `/home/hackov/Documents/deytt-connect`, branch `main`, base `874145f` (`0.8.8`); no tracked changes at task start.
-- Connected test device: TECNO CH6i (`08357252AA002939`); existing account and approximate-location opt-out must be preserved.
-- Previous `ROADMAP.md` captured completed `0.8.8` delivery and was archived as `ROADMAP.0.8.8.completed.md`.
-- Installed and verified app version `0.8.9`; device is disconnected, Auto is selected, and location privacy remains disabled.
-- Existing GitHub publication `v0.8.8-debug` was edited in place as requested: title is now `deytt./connect 0.8.9 debug`, it is a regular (non-prerelease) Latest release, and its APK asset was replaced with the validated 0.8.9 arm64 build. The tag and public URL were preserved because commit `cffc897` is not present in the GitHub repository; GitHub `main` still points at `0.8.7`.
+- Repository `/home/hackov/Documents/deytt-connect`, branch `main`; existing unrelated worktree changes are present and must remain unstaged.
+- Gitea `origin/main` is at `dc88f60`; GitHub `main` is an ancestor of local `HEAD`, so a normal fast-forward is possible.
+- GitHub repository metadata has no description, homepage, topics, detected license, or issue templates. README still points to 0.8.8 and contains duplicated stale artifact instructions.
+- GitHub has 21 releases from 0.2.0 through the renamed 0.8.9 publication. Release notes mix changelogs with QA logs, backend deployment details, known issue history, and checksums. 0.4.0 and 0.3.3 have duplicate APKs by digest; 0.3.2 contains ARM64 plus a separate universal debug build.
+- Latest release currently uses old tag `v0.8.8-debug`; uploaded APK is 0.8.9. Its release is non-prerelease and the asset digest is verified.
+- Current app contract: Android 7.0+ (API 24), published 0.8.9 asset is arm64-v8a, Telegram one-time-code pairing imports the active DEYTTT subscription, and VPN setup is confirmed by Android's system dialog.
+- Existing code license is explicitly GPL-3.0-or-later, but `LICENSE` contains only a summary, so GitHub reports `NOASSERTION`. Third-party notices already document sing-box and AmneziaWG components.
+- Local README, full GPL text, Issue forms, and `SECURITY.md` are drafted. GitHub private vulnerability reporting is enabled; repository profile, source branch, releases, and assets are not yet updated.
+- The legal-info URL used by the app and profile, `https://deytt.space/info`, timed out from this environment. Keep the existing canonical link, but do not claim it was reachable during this pass.
 
 ## Findings and decisions
-- Baseline home screenshot is stable in Auto with no selected egress; approximate-location permission is off. User reports connected traffic particles stopped.
-- Production never sampled traffic bytes, though `TrafficActivityWindow` and tests already existed. Map motion now follows device-wide counters only while the VPN is connected and Home is visible; it draws packets on known route arcs or a pulse on the confirmed exit where origin is private/unknown.
-- Route probe `download` state replaced the ping label despite preserving it in `RouteProbeSample`; both HTTP and AmneziaWG speed states now include the measured ping.
-- Manual AWG measurement did not request system VPN permission; a probe failure could also be overwritten by the batch fallback. Permission is requested through the existing consent sheet, and fallback is limited to truly pending rows.
-- AmneziaWG partial samples remain visible with a safe, classified timeout/address/network failure.
-- Launcher source had no safe-area inset; the original transparent mark is scaled inside its existing PNG canvas, with density variants regenerated.
-- Auto selected exit was previously shown only from optional IP geolocation. The live sing-box `CommandGroup` stream now reports its selected outbound; whitelisted route tags are mapped to one confirmed country/route, and the double-hop can draw its RU→DE segment. No IP lookup or extra location permission is used.
-- Device testing exposed a stale active-exit marker after disconnect because selected sing-box exit and optional IP geolocation shared one map state. They are now separate; the actual exit highlights while connected and clears after disconnect.
-- Code index refreshed before discovery; Android CLI, design engineering, animation, and animation review skills are being applied.
+- Keep published release history and each unique downloadable build. Do not delete historical releases or assets merely to shorten the page.
+- Keep release bodies focused on user-visible changes. Put install details and the current SHA-256 in README or asset labels, not repeated release prose.
+- Current source commit is available for a GitHub fast-forward. Correct the latest tag only after GitHub has the matching source commit.
+- Retain unique historic APKs and release records. Remove only exact duplicate assets that have no users, and preserve any existing user-facing download alias.
 
 ## Issues and failed attempts
-- Early Gradle attempts used system Java 27 and omitted the repository SDK; reran successfully with the bundled JDK 17 and SDK.
-- `gh release create v0.8.9-debug` stopped before confirming a new release because GitHub API returned `TLS handshake timeout` while checking the tag. At the user's explicit request, updated the existing release instead; no new release was created.
+- None in this task.
 
 ## Validation and blockers
-- `:app:testDebugUnitTest`, `:app:lintDebug`, and `:app:assembleDebug` pass after final changes using bundled JDK 17/Android SDK; JavaScript syntax and `git diff --check` pass.
-- Physical Auto connection selected Helsinki from sing-box while approximate location stayed disabled. Consecutive frames retained stable map labels/camera; disconnect removed the active-exit marker.
-- Automatic country diagnostics displayed VLESS, Trojan, Hysteria 2, and AmneziaWG 3.1 results. Germany AmneziaWG measured 581 ms and 18.1 Mbps; VLESS alone received the green “best choice” status.
-- Final arm64 APK SHA-256: `76814bd4cfc45bdf0ef1d39fabae04cd43152fc3c4278ebb1be786b93c5cbed1`.
-- GitHub Release API confirms `prerelease=false`, `draft=false`, asset `app-arm64-v8a-debug.apk`, size `37,937,296` bytes, and digest `sha256:76814bd4cfc45bdf0ef1d39fabae04cd43152fc3c4278ebb1be786b93c5cbed1`. `/releases/latest` resolves to the edited publication at `https://github.com/crxwov/deytt.connect/releases/tag/v0.8.8-debug`.
+- Git ancestry check confirms GitHub `main` can fast-forward to local `HEAD` without force.
+- No repository metadata, release descriptions, release tags, source refs, or assets have been changed in this task yet.
 
 ## Next action and resume context
-Completed: source commit `cffc897` is on Gitea `main`; validated arm64 APK is on the physical device and uploaded to the edited GitHub Latest release. Release asset and URL are verified. This standalone Android client has no production server/service to pull or restart.
+Review the drafted public docs and Issue forms, validate the direct release/download path, then push the GitHub branch, normalize all 21 release changelogs, remove the two exact duplicate assets, and verify the resulting GitHub state.
