@@ -1,14 +1,14 @@
 # Roadmap — Mobile remediation 0.8.6
 
 ## Objective and status
-Deliver the evidenced mobile fixes from the 40-item Excalidraw audit, preserve account/keys, validate on the physical TECNO. Implementation and bounded acceptance completed; delivery pending. Full original acceptance is not claimed: remaining constraints below are explicit.
+Deliver the evidenced mobile fixes from the 40-item Excalidraw audit, preserve account/keys, validate on the physical TECNO. Implementation, bounded acceptance and delivery completed. Full original acceptance is not claimed: remaining constraints below are explicit.
 
 ## Stages
 - [x] Diagnose actual API/runtime and phone failures.
 - [x] Repair avatar, account sessions, HWID subscription access, diagnostics endpoint, price/support/legal contracts; deploy backend via Git and restart API.
 - [x] Complete native home/profile/diagnostic/update flows, bilingual states and lifecycle fixes.
 - [x] Unit tests, lint/APK build, physical touch flows and external HTTPS verification.
-- [ ] Commit/push Android main, publish verified APK, verify installed/released identity and final device state.
+- [x] Commit/push Android main, publish verified APK, verify installed/released identity and final device state.
 
 ## Verified state
 Android 0.8.6 (20) installed without data reset; final APK SHA256 3036bf33633fed3d39a8fc29347938c28dad65aeb7f199bd0232a48f07eb4f39.
@@ -21,7 +21,7 @@ No purchases, support sends, real key resets, device/session revocations, or new
 Unlimited-device grants retain special terms; support renews them rather than inventing a finite tariff price. Update checks every3h foreground; no3h wait/future OTA cycle claimed; Android controls install/restart. AWG requires temporary systemVPN, all individual AWG regions not tested. Trojan neutral icon; official Xray/Hysteria/Amnezia marks. API24–27 signature flags fixed, no old physical device available.
 
 ## Findings / failed attempts
-Telegram album returns0 photos but getChat supplies current public image; upstream MIME application/octet-stream. Partial-body and MIME assumptions repaired with17tests. Home queue completion previously erased successful latency. Unlimited grant previously returned bad_custom_params. Server support/download initially stale despite checkout. One deploy supplied incorrect pre-pull revision, safely rejected before sync; verified revision rerun succeeded. Country DE test during API restart failed; stable post-restart repeat passed. All unrelated graph artifacts, skills and concurrent backend work preserved.
+Telegram album returns0 photos but getChat supplies current public image; upstream MIME application/octet-stream. Partial-body and MIME assumptions repaired with17tests. Home queue completion previously erased successful latency. Unlimited grant previously returned bad_custom_params. Server support/download initially stale despite checkout. One deploy supplied incorrect pre-pull revision, safely rejected before sync; verified revision rerun succeeded. Country DE test during API restart failed; stable post-restart repeat passed. GitHub rejected the abbreviated target SHA; using the verified full commit SHA published successfully. All unrelated graph artifacts, skills and concurrent backend work preserved.
 
 ## Next action / resume
-Deliver Android commit+push+prerelease APK, verify GitHub digest and installed version, restore user device preferences. Preserve roadmap as acceptance/delivery record.
+Android b4097f5 pushed; v0.8.6-debug published. GitHub asset and installed APK hashes both match the verified build. Manual app update check confirms latest version installed. Device restored to VPNoff, Auto-select, English, locationoff; original OS rotation restored. Documentation finalized. Preserve this roadmap; remaining acceptance limits above require separate test conditions or provider integration, not a claim of absolute perfection.
