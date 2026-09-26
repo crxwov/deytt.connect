@@ -1,38 +1,53 @@
-# Roadmap — Telegram identity and Android product polish
+# Roadmap — Excalidraw mobile app updates
 
 ## Objective and Success Criteria
-Make account linking immediate for users already known to the Telegram bot; clearly identify users who must start the bot once. Show their Telegram avatar and render the linked handle as `./username`. Redesign route and home connection panels, show RU as an explicit hop in RU→DE routes, and use the official Amnezia mark for Amnezia profiles. Preserve tunnel/subscription behavior and deliver a tested APK.
+Implement the actionable feedback in the 2026-09-26 Excalidraw note in the Android client. Simplify and reorganize the route, home, profile, and settings journeys while preserving tunnel/subscription contracts and requiring explicit user action for account, key, and update operations.
+
+- Group every available exit, including AmneziaWG profiles, under its country. Countries start collapsed; opening one country is the only trigger for measuring its candidates.
+- Measure sing-box candidates with proxy-routed HTTP GET/HEAD latency and a five-second download-speed sample. Bypass this app's active VPN with socket-level protection where supported; clearly report that another VPN cannot be bypassed. Show averages and a relative grade, and select the best combined latency/download result. Keep AmneziaWG diagnostics labeled as endpoint-only until an actual AWG measurement tunnel exists; never use ICMP.
+- Refresh the selected-route home latency every 10 seconds, show the Telegram avatar when available, and remove redundant diagnostics from the home flow.
+- Remove AmneziaWG profile inventory from Profile. Provide app-native account, device/session, key-reset, plan/payment, support, and legal entry points where existing authenticated APIs safely support them. Keep Telegram proxy configuration out of the app.
+- Check official app releases every three hours while the app is in use and present update state and a user-controlled install/restart flow.
+- Preserve RU/EN localization, accessible state feedback, existing route/tunnel semantics, and user-owned repository files. Build and run targeted checks; install on the connected phone and inspect changed screens where real account data permits.
 
 ## Stages
-- [x] 1. Build/install/launch current client on TECNO CH6i and capture baseline. Fresh install shows only subscription setup; other signed-in screens require an account/subscription.
-- [x] 2. Trace pairing/identity/avatar and current screen rendering; identify API's ambiguous delivery result, missing sign-in on first launch, transient avatar reset, and the underspecified route timeline.
-- [x] 3. Implement immediate pairing feedback, first-run Telegram sign-in, Telegram profile/avatar display, and consistent `./username` identity.
-- [x] 4. Refine route cards and home entry→RU→exit diagram, install official Amnezia logo asset, and polish surfaces/typography/motion across core screens.
-- [ ] 5. Build/install and run checks; finish visual iteration on the real device after unlocking it and capturing app screenshots.
-- [x] 6. Commit/push Android/backend changes, deploy backend through the documented pull/sync/restart procedure, verify health, install APK on TECNO, and publish GitHub prerelease v0.8.4-debug.
+- [x] 1. Read the Excalidraw comments and four reference screenshots; inspect the current client architecture and capture the clean-device baseline.
+- [x] 2. Audit existing route catalog, proxy probe, public speed-test implementation, authenticated account APIs, update distribution, and current uncommitted state. Record any missing server capability before choosing a safe client behavior.
+- [x] 3. Restructure Routes into collapsed country sections with all available protocols and original marks; remove eager and duplicate per-protocol measurement UI.
+- [x] 4. Implement on-demand per-country latency/download sampling, scoring, classification, progress, cancellation, and localized display without routing measurements through the user's active VPN.
+- [x] 5. Refine Home and Profile/Settings: Telegram avatar, 10-second selected-route latency, remove profile AWG inventory, and build supported in-app account/device/session/key/plan/support/legal flows.
+- [x] 6. Add periodic official-release checking and a secure user-consented update flow compatible with the project's sideload distribution.
+- [ ] 7. Review the scoped diffs, commit and push the client and backend, pull the server checkout, restart affected services, and verify service health.
 
 ## Current State
-- Android repository `/home/hackov/Documents/deytt-connect`, branch `main`; preserve existing untracked `.agents/`, `.codebase-memory/`, and completed Roadmap files.
-- Backend repository `/home/hackov/Documents/Projects`, branch `main`; preserve existing untracked tool/skill and Roadmap artifacts.
-- Connected physical test phone: TECNO CH6i, serial `08357252AA002939`; final APK is installed. The device is currently locked, so the app UI is not visible for screenshot review.
-- Final code is version 0.8.4 (versionCode 18); Android unit tests/build pass. GitHub prerelease `v0.8.4-debug` is published with APK SHA-256 `829cd35c6462e19f8f923d672cb6d7440dfd96afae9f582c1d79190e59b6207f`.
-- Setup now keeps known Telegram users in-app for code delivery and offers the bot only when the account must start it; the existing authenticated avatar request is retained and username updates no longer clear the photo while it reloads.
+- Android repository: `/home/hackov/Documents/deytt-connect`, branch `main`. Preserve unrelated `.agents/`, `.codebase-memory/`, `.kotlin/`, and `ROADMAP.connect-ui-refinement.completed.md` files.
+- Baseline screenshot: `/tmp/deytt-connect-20260926-baseline-app.png` on TECNO CH6i. Device has no linked app account/subscription; do not sign in, reset keys, start a VPN, or send support messages.
+- Excalidraw Markdown and four attached reference screenshots are in `/home/hackov/1/Excalidraw` and `/home/hackov/1/Pasted Image 2026092614*.png`.
+- Implemented collapsed country route groups with on-expand HTTP probes, averaged latency and bounded five-second download samples, relative scoring, AWG endpoint-only listing with unknown marks unassigned, 10-second selected-route refresh, approximate exit-region display, in-app account/payment/support flows, and official release updates.
+- Removed the manual subscription URL form from Setup. Telegram pairing remains; validated `deytt.connect://import` links go directly through import. Existing linked sessions can retry fetching their subscription. Physical-device inspection caught an English/Russian mismatch; setup-screen copy is now covered by localization tests.
+- Backend API work is in `/home/hackov/Documents/Projects` and tracked by `ROADMAP.android-mobile-api.paused.md`: bounded authenticated download and owner-scoped support history/reply/close. Focused backend tests passed earlier; commit and deployment remain pending.
+- Codebase-memory confirms native Android Views/ViewPager2. The probe service uses an isolated process, refuses another app's VPN, binds libbox sockets to the underlying physical network, and rejects accidental TUN creation.
 
 ## Findings and Decisions
-- Telegram username alone is insufficient for a bot to initiate a private chat; direct delivery requires a known bot chat/user id. Unknown users need an in-app explanation and one explicit bot-start action.
-- Reuse the existing authenticated avatar endpoint if it can safely return Telegram profile bytes; never expose the bot token or a tokenized Telegram file URL to the client.
-- Keep the existing route/profile and tunnel contracts; RU is a visual hop when the selected route is RU→DE.
+- The latest and most specific measurement instruction is on-demand per expanded country; do not scan at page entry. Home latency may refresh separately every 10 seconds.
+- Candidate quality should use proxy GET/HEAD latency plus download throughput. Use normalized within-country ranks with equal latency/speed weight unless source speed-test code establishes a better formula; handle small candidate sets without implying unavailable grades.
+- AWG country assignment comes only from an NL/DE/RU/FI prefix in `shortLabel`; unknown marks remain unassigned and endpoint-only. Do not compare raw TCP with sing-box proxy scores.
+- Bypass this app's VPN by binding each libbox socket to a physical `Network`; reject checks behind another app's VPN. Avoid process-wide network binding.
+- Device control, key reset, payment, and support must remain behind the existing Telegram-linked identity and explicit confirmation. Never fabricate account/session data or expose credentials.
+- Do not promise session revocation: no owner-scoped revoke API exists. Support history/reply/close and bounded download were added in the backend task.
+- Keep Telegram pairing and authorized deep-link import; do not offer manual subscription URL entry.
+- The APK itself has no server service. Backend changes require project deploy steps and restarts of `vpn-admin.service` and `uebot.service`.
 
 ## Issues and Failed Attempts
-- `android layout` stalled while installing its instrumentation helper; stopped it and used direct `uiautomator` successfully.
+- The literal path ending in .excalidraw did not exist; the user drawing is the matching .excalidraw.md file with four embedded screenshot attachments.
+- The device is authenticated only at Android level; app account state is empty. Do not attempt sign-in as the user or send test support messages.
+- The first build used system Java 27 and failed Gradle's JVM check; use the repository JDK 17.
+- `ProfileRoutesTest` had legacy label-based country expectations; its fixture now checks authoritative short-label prefixes and unknown-region placement.
+- `AppLanguageTest` exposed an untranslated nested reset label. The translator was corrected; rerun the full suite after the setup-screen changes.
 
 ## Validation and Blockers
-- Baseline screenshot: `/tmp/deytt-oldphone-baseline-home.png`. A fresh install has no linked account/subscription, so signed-in screens require a real account and must not be accessed by sending a test code.
-- Physical-device visual iteration remains incomplete: the vendor lock-screen prompt was denied and the device stayed locked. No permissions or unlock controls were bypassed.
-- Live Telegram messages will not be sent during QA; use mocked backend tests and a synthetic username.
-- Android unit tests and debug build pass; backend pairing/avatar tests pass (7/7). Backend commit `d2f33b3` is deployed, `vpn-admin.service` is active, and `/health` returned `{"status":"ok"}`.
-- Android commit `8280ff6` is pushed; prerelease asset is uploaded and verified against the SHA-256 above. App version 0.8.4 (code 18) is installed on TECNO.
-- `SYSTEM_ALERT_WINDOW` is absent from the merged app manifest. Vendor overlay permission prompt was denied; no sensitive access was granted. Device sleep timeout is 30 minutes; temporary USB-awake setting was restored.
+- Baseline screenshot captured and visually inspected. Updated APK installed and launched on TECNO CH6i; corrected English setup screen visually verified at `/tmp/deytt-connect-20260926-setup-fixed.png` without signing in. Full unit tests, lint, APK assembly, and `git diff --check` passed after the final setup-copy localization change.
+- Device account is unlinked, so authenticated route, profile, support, payment, and tunnel journeys cannot be exercised here. No account was linked and VPN stayed off. Physical-device verification covers install/launch/setup presentation only.
 
 ## Next Action and Resume Context
-Resume physical-device QA once TECNO is unlocked: capture the setup and pairing screens, inspect accessible screens, compare against the baseline and fix any evidenced visual issues. The APK release and backend deployment are already complete; do not send a real pairing code during QA.
+Commit and push the reviewed client and backend changes, then perform the authorized server pull/restart/health check and record delivery evidence.

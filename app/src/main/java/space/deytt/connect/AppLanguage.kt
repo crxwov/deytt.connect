@@ -107,6 +107,46 @@ internal object AppLanguage {
         Regex("^Проверяем задержку (.+)$").matchEntire(value)?.let {
             return "Checking latency for ${it.groupValues[1]}"
         }
+        Regex("^AmneziaWG: ([0-9]+) · Happ: ([0-9]+)$").matchEntire(value)?.let {
+            return "AmneziaWG: ${it.groupValues[1]} · Happ: ${it.groupValues[2]}"
+        }
+        Regex("^Раскрыть выходы (.+); откроется проверка HTTP маршрутов$").matchEntire(value)?.let {
+            return "Expand ${it.groupValues[1]} exits to start the HTTP route check"
+        }
+        Regex("^Качество маршрута: (.+)$").matchEntire(value)?.let {
+            return "Route quality: ${it.groupValues[1].replaceFirstChar(Char::uppercase)}"
+        }
+        Regex("^Использовано (.+) из (.+)$").matchEntire(value)?.let {
+            return "${it.groupValues[1]} used of ${it.groupValues[2]}"
+        }
+        Regex("^Передано (.+) · без установленного лимита$").matchEntire(value)?.let {
+            return "${it.groupValues[1]} transferred · no limit set"
+        }
+        Regex("^(.+) · ([0-9]+) устройств · ([0-9]+) мес\\. · ([0-9]+) ₽$").matchEntire(value)?.let {
+            return "${it.groupValues[1]} · ${it.groupValues[2]} devices · ${it.groupValues[3]} months · ₽${it.groupValues[4]}"
+        }
+        Regex("^Обращение №([0-9]+) · открыто$").matchEntire(value)?.let {
+            return "Ticket #${it.groupValues[1]} · open"
+        }
+        Regex("^Действие отзовёт текущие ключи (.+) и может временно отключить устройства\\. Продолжить\\?$")
+            .matchEntire(value)?.let {
+                return "This revokes the current ${it.groupValues[1]} keys and may temporarily disconnect devices. Continue?"
+            }
+        Regex("^Сбросить (.+)\\?$").matchEntire(value)?.let { return "Reset ${english(it.groupValues[1])}?" }
+        Regex("^([0-9]+) мес\\.$").matchEntire(value)?.let { return "${it.groupValues[1]} months" }
+        Regex("^Скачиваем обновление · ([0-9]+)%$").matchEntire(value)?.let {
+            return "Downloading update · ${it.groupValues[1]}%"
+        }
+        Regex("^Файл с GitHub будет проверен по имени пакета и подписи приложения(?: · ([0-9.]+ MB))?\\.$")
+            .matchEntire(value)?.let {
+                val size = it.groupValues[1].takeIf(String::isNotBlank)?.let { suffix -> " · $suffix" }.orEmpty()
+                return "The GitHub file will be checked against the app package and signing certificate$size."
+            }
+        Regex("^Доступно обновление (.+)$").matchEntire(value)?.let { return "Update ${it.groupValues[1]} is available" }
+        Regex("^Доступна версия (.+) · ([0-9.]+ MB)$").matchEntire(value)?.let {
+            return "Version ${it.groupValues[1]} is available · ${it.groupValues[2]}"
+        }
+        Regex("^Скачать версию (.+)\\?$").matchEntire(value)?.let { return "Download version ${it.groupValues[1]}?" }
         Regex("^Проверка через (.+) завершена$").matchEntire(value)?.let {
             return "Check through ${it.groupValues[1]} complete"
         }
@@ -322,6 +362,19 @@ internal object AppLanguage {
         "Задержка · все серверы" to "Latency · all servers",
         "проверяю…" to "checking…",
         "нет ответа" to "no response",
+        "Проверка через выход AmneziaWG пока недоступна" to "Checks through AmneziaWG exits are not available yet",
+        "в очереди" to "queued",
+        "измеряем задержку…" to "measuring latency…",
+        "измеряем скорость…" to "measuring speed…",
+        "Telegram Stars" to "Telegram Stars",
+        "Войдите в Telegram, чтобы загрузить подписку и маршруты." to "Sign in to Telegram to load your subscription and routes.",
+        "Подключить подписку" to "Connect subscription",
+        "Подключить аккаунт Telegram" to "Link Telegram account",
+        "Обновить подписку" to "Refresh subscription",
+        "Повторить загрузку" to "Retry loading",
+        "Проверяем подписку в Telegram…" to "Checking subscription in Telegram…",
+        "Активная подписка не найдена. Оформите её в Telegram, затем повторите загрузку." to "No active subscription found. Start one in Telegram, then try loading again.",
+        "Не удалось загрузить подписку. Проверьте соединение и попробуйте ещё раз." to "Could not load the subscription. Check your connection and try again.",
         "Сброс — только после подтверждения в Telegram." to "Keys reset only after confirmation in Telegram.",
         "КЛЮЧИ · ПОДТВЕРЖДЕНИЕ" to "KEYS · CONFIRMATION",
         "Открыть управление ключами?" to "Open key management?",
@@ -335,6 +388,102 @@ internal object AppLanguage {
         "Не удалось отозвать сессию. Проверь соединение и повтори." to "Could not revoke the session. Check your connection and try again.",
         "Вход" to "Entry",
         "Выход" to "Exit",
+        "LTE./белые списки" to "LTE./whitelist",
+        "аккаунт · подписка · устройства" to "account · subscription · devices",
+        "Подключить Telegram" to "Link Telegram",
+        "Войти по username, чтобы открыть подписку и устройства" to "Sign in with your username to view the subscription and devices",
+        "Профиль привязан к этому устройству" to "Account linked to this device",
+        "подписка" to "SUBSCRIPTION",
+        "Подключите Telegram, чтобы загрузить тариф и срок действия." to "Link Telegram to load your plan and expiry.",
+        "Загружаем данные подписки…" to "Loading subscription…",
+        "Активный доступ" to "Active access",
+        "Нет активной подписки" to "No active subscription",
+        "без срока" to "no expiry",
+        "срок не указан" to "expiry not available",
+        "Тарифы и оплата" to "Plans and payment",
+        "Сумму подтвердит сервер перед оформлением" to "The server confirms the amount before checkout",
+        "устройства и сессии" to "DEVICES AND SESSIONS",
+        "Подключите аккаунт, чтобы увидеть устройства." to "Link your account to view devices.",
+        "Загружаем список…" to "Loading devices…",
+        "Сбросить ключи" to "Reset keys",
+        "Отозвать действующие ключи выбранного типа" to "Revoke active keys for a selected protocol",
+        "Список AWG-конфигураций не отображается. Здесь видны только общие счётчики и устройства Happ; сброс требует отдельного подтверждения." to "AWG configs are not shown. Only aggregate counts and Happ devices appear here; key reset requires confirmation.",
+        "помощь и документы" to "HELP AND DOCUMENTS",
+        "Диалог с командой DEYTT" to "Chat with the DEYTT team",
+        "Условия использования" to "Terms of service",
+        "Политика конфиденциальности" to "Privacy policy",
+        "Не удалось загрузить подписку." to "Could not load the subscription.",
+        "Не удалось загрузить данные аккаунта." to "Could not load account data.",
+        "Проверьте подключение и откройте профиль снова." to "Check your connection and open the profile again.",
+        "Устройство Happ" to "Happ device",
+        "Пока нет зарегистрированных устройств Happ." to "No Happ devices are registered yet.",
+        "Что сбросить?" to "What should be reset?",
+        "Все ключи" to "All keys",
+        "все ключи" to "all keys",
+        "Сбросить" to "Reset",
+        "Сбрасываем ключи…" to "Resetting keys…",
+        "Ключи сброшены. Обновляем аккаунт…" to "Keys reset. Refreshing account…",
+        "Загружаем доступные планы…" to "Loading available plans…",
+        "Продлить подписку" to "Extend subscription",
+        "Выберите план" to "Choose a plan",
+        "Сейчас планы недоступны. Попробуйте позже." to "Plans are unavailable right now. Try again later.",
+        "Подтвердите сумму" to "Confirm the amount",
+        "Подписка" to "Subscription",
+        "Оплатить картой" to "Pay by card",
+        "Готовим безопасный счёт…" to "Preparing secure checkout…",
+        "Платёж ожидает подтверждения · нажмите, чтобы проверить" to "Payment pending · tap to check",
+        "Счёт готов" to "Checkout is ready",
+        "Откройте защищённую страницу оплаты. Приложение не запрашивает данные карты." to "Open the secure payment page. The app never asks for card details.",
+        "Проверить статус" to "Check status",
+        "Открыть оплату" to "Open payment",
+        "Платёжная ссылка недоступна." to "Payment link is unavailable.",
+        "Проверяем платёж…" to "Checking payment…",
+        "Оплата подтверждена" to "Payment confirmed",
+        "Платёж ещё не подтверждён. Проверьте позже." to "Payment is not confirmed yet. Check again later.",
+        "DEYTT · SUPPORT" to "DEYTT · SUPPORT",
+        "Загружаем переписку…" to "Loading conversation…",
+        "Новое обращение создастся после первого сообщения." to "A new ticket will be created when you send the first message.",
+        "Обращение закрыто. Новое сообщение откроет новое обращение." to "Ticket closed. A new message will open another ticket.",
+        "Сообщение команде" to "Message the team",
+        "Закрыть обращение" to "Close ticket",
+        "Отправить" to "Send",
+        "Напишите сообщение минимум из пяти символов." to "Write a message of at least five characters.",
+        "Отправляем сообщение…" to "Sending message…",
+        "Закрыть обращение?" to "Close this ticket?",
+        "Новые ответы не будут приниматься. При необходимости вы сможете создать новое обращение." to "New replies will stop. You can create another ticket whenever you need.",
+        "Закрыть" to "Close",
+        "Позже" to "Later",
+        "Обновление" to "Update",
+        "Доступно обновление" to "Update available",
+        "Скачать официальный APK сейчас? Позже его можно будет открыть в настройках." to "Download the official APK now? You can install it later from Settings.",
+        "Страница релиза" to "Release page",
+        "Обновить сейчас" to "Update now",
+        "Скачать" to "Download",
+        "Файл с GitHub будет проверен по имени пакета и подписи приложения." to "The GitHub file will be checked against the app package and signing certificate.",
+        "Скачиваем…" to "Downloading…",
+        "Скачиваем и проверяем официальный APK…" to "Downloading and verifying the official APK…",
+        "APK принадлежит другому приложению. Установка отменена." to "The APK belongs to another app. Installation cancelled.",
+        "Подпись APK не совпадает с установленной версией. Установка отменена." to "The APK signature does not match the installed app. Installation cancelled.",
+        "Не удалось загрузить или проверить APK. Попробуйте позже." to "Could not download or verify the APK. Try again later.",
+        "Повторить загрузку" to "Retry download",
+        "APK проверен. Установка начнётся только после подтверждения Android." to "APK verified. Android will ask before installing it.",
+        "Обновление готово" to "Update ready",
+        "Android попросит подтвердить установку. Приложение перезапустится после её завершения." to "Android will ask you to confirm the install. The app will restart when it finishes.",
+        "Установить сейчас" to "Install now",
+        "Установить обновление" to "Install update",
+        "Разрешите установку обновлений" to "Allow app installs",
+        "Android откроет настройки разрешения для этого приложения. Вернитесь и нажмите «Установить обновление»." to "Android will open this app's install permission. Return and tap “Install update”.",
+        "Открыть настройки" to "Open settings",
+        "Не удалось открыть системный установщик Android." to "Could not open the Android package installer.",
+        "Скачать обновление" to "Download update",
+        "Открыть официальный релиз" to "Open official release",
+        "примерно по IP после подключения" to "approx. by IP after connecting",
+        "Фактический выход, регион определён примерно по IP" to "Observed exit, region estimated by IP",
+        "выход · примерно по IP · только в памяти" to "exit · approx. by IP · memory only",
+        "определяем регион выхода…" to "Locating exit region…",
+        "регион выхода по IP недоступен" to "Exit region by IP is unavailable",
+        "выход · примерно по IP" to "exit · approx. by IP",
+        "регион выхода появится после подключения" to "Exit region appears after connecting",
         "Франкфурт" to "Frankfurt",
         "Санкт-Петербург" to "Saint Petersburg",
         "Хельсинки" to "Helsinki",

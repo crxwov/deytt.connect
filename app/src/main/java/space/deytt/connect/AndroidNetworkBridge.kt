@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.ParcelFileDescriptor
 import android.system.OsConstants
 import android.util.Log
 import io.nekohasekai.libbox.ExchangeContext
@@ -143,6 +144,14 @@ internal class AndroidNetworkBridge(context: Context) {
     fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
         val callback = callbacks.remove(listener) ?: return
         runCatching { connectivity.unregisterNetworkCallback(callback) }
+    }
+
+    /** Bind one not-yet-connected libbox socket to the physical network without changing process routing. */
+    fun bindSocketToUnderlying(fd: Int) {
+        val network = underlyingNetwork()
+        ParcelFileDescriptor.fromFd(fd).use { duplicate ->
+            network.bindSocket(duplicate.fileDescriptor)
+        }
     }
 
     private fun publishDefaultInterface(listener: InterfaceUpdateListener, network: Network) {

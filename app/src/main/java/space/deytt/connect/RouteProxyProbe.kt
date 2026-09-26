@@ -62,6 +62,8 @@ object RouteProxyProbe {
     private const val PROBE_PATH = "/generate_204"
     private const val HTTP_OK = 200
     private const val HTTP_NO_CONTENT = 204
+    private const val DOWNLOAD_HOST = "deytt.space"
+    private const val DOWNLOAD_PATH = "/api/tg/mobile/probe/download"
     private const val MAX_HTTP_LINE_BYTES = 8_192
     private const val MAX_HTTP_HEADERS = 64
     private const val MAX_HTTP_HEADER_BYTES = 32_768
@@ -108,7 +110,7 @@ object RouteProxyProbe {
         timeoutMillis: Int = TIMEOUT_MILLIS,
     ): Long {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis
-        var lastMeasurement: Long? = null
+        var totalMeasurement = 0L
         repeat(2) {
             val remaining = remainingTimeout(deadline)
             val started = SystemClock.elapsedRealtime()
@@ -156,13 +158,58 @@ object RouteProxyProbe {
                 }
                 val status = readHttpStatus(tls, tls.inputStream, deadline)
                 if (status != HTTP_NO_CONTENT) throw IOException("Проверочный сервер ответил HTTP $status")
-                lastMeasurement = SystemClock.elapsedRealtime() - started
+                totalMeasurement += SystemClock.elapsedRealtime() - started
             } finally {
                 runCatching { tlsSocket?.close() }
                 runCatching { proxySocket.close() }
             }
         }
-        return lastMeasurement ?: throw IOException("Проверка маршрута не получила ответа")
+        return totalMeasurement / 2L
+    }
+
+    /** Measures bytes returned during a bounded authenticated download sample. */
+    fun measureDownload(
+        session: RouteProbeSession,
+        token: String,
+        sampleMillis: Int = 5_000,
+        maximumBytes: Long = 32L * 1024L * 1024L,
+    ): Long {
+        require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
+        require(sampleMillis in 1_000..5_000)
+        val connectDeadline = SystemClock.elapsedRealtime() + 8_000L
+        val socket = openTlsTunnel(session, DOWNLOAD_HOST, connectDeadline)
+        try {
+            socket.soTimeout = remainingTimeout(connectDeadline)
+            socket.outputStream.apply {
+                val request = "GET $DOWNLOAD_PATH HTTP/1.1\r\n" +
+                    "Host: $DOWNLOAD_HOST\r\n" +
+                    "User-Agent: deytt-connect/${BuildConfig.VERSION_NAME}\r\n" +
+                    "X-TG-App-Token: $token\r\n" +
+                    "Accept-Encoding: identity\r\n" +
+                    "Cache-Control: no-store\r\n" +
+                    "Connection: close\r\n\r\n"
+                write(request.toByteArray(Charsets.US_ASCII))
+                flush()
+            }
+            val response = readHttpResponse(socket, socket.inputStream, connectDeadline)
+            if (response.status != HTTP_OK) throw IOException("Сервер скорости ответил HTTP ${response.status}")
+
+            val sampleDeadline = SystemClock.elapsedRealtime() + sampleMillis
+            val sampleStarted = SystemClock.elapsedRealtime()
+            val body = socket.inputStream
+            val transferEncoding = response.headers["transfer-encoding"].orEmpty()
+            val contentLength = response.headers["content-length"]?.toLongOrNull()
+            val received = if (transferEncoding.contains("chunked", ignoreCase = true)) {
+                countChunkedBody(socket, body, sampleDeadline, maximumBytes)
+            } else {
+                countBody(socket, body, sampleDeadline, minOf(contentLength ?: maximumBytes, maximumBytes))
+            }
+            check(received > 0L) { "Сервер скорости не передал данные" }
+            val elapsed = (SystemClock.elapsedRealtime() - sampleStarted).coerceAtLeast(1L)
+            return received * 1_000L / elapsed
+        } finally {
+            runCatching { socket.close() }
+        }
     }
 
     internal fun parseHttpStatusCode(statusLine: String): Int {
@@ -171,16 +218,110 @@ object RouteProxyProbe {
         return match.groupValues[1].toInt()
     }
 
-    private fun readHttpStatus(socket: Socket, input: InputStream, deadline: Long): Int {
+    private data class HttpResponse(val status: Int, val headers: Map<String, String>)
+
+    private fun readHttpStatus(socket: Socket, input: InputStream, deadline: Long): Int =
+        readHttpResponse(socket, input, deadline).status
+
+    private fun readHttpResponse(socket: Socket, input: InputStream, deadline: Long): HttpResponse {
         val status = parseHttpStatusCode(readHttpLine(socket, input, deadline))
         var headerBytes = 0
+        val headers = linkedMapOf<String, String>()
         repeat(MAX_HTTP_HEADERS) {
             val line = readHttpLine(socket, input, deadline)
             headerBytes += line.length + 2
             if (headerBytes > MAX_HTTP_HEADER_BYTES) throw IOException("Слишком длинные HTTP-заголовки")
-            if (line.isEmpty()) return status
+            if (line.isEmpty()) return HttpResponse(status, headers)
+            val separator = line.indexOf(':')
+            if (separator > 0) {
+                headers[line.substring(0, separator).trim().lowercase()] = line.substring(separator + 1).trim()
+            }
         }
         throw IOException("Слишком много HTTP-заголовков")
+    }
+
+    private fun openTlsTunnel(session: RouteProbeSession, host: String, deadline: Long): SSLSocket {
+        val proxySocket = Socket()
+        try {
+            proxySocket.connect(InetSocketAddress("127.0.0.1", session.port), remainingTimeout(deadline))
+            val authorization = Base64.encodeToString(
+                "${session.username}:${session.password}".toByteArray(Charsets.UTF_8),
+                Base64.NO_WRAP,
+            )
+            val request = "CONNECT $host:443 HTTP/1.1\r\nHost: $host:443\r\nProxy-Authorization: Basic $authorization\r\n\r\n"
+            proxySocket.getOutputStream().apply {
+                write(request.toByteArray(Charsets.US_ASCII))
+                flush()
+            }
+            val status = readHttpStatus(proxySocket, proxySocket.getInputStream(), deadline)
+            if (status != HTTP_OK) throw IOException("Локальный прокси ответил HTTP $status")
+            val tls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                .createSocket(proxySocket, host, 443, true) as SSLSocket
+            tls.soTimeout = remainingTimeout(deadline)
+            tls.startHandshake()
+            if (!HttpsURLConnection.getDefaultHostnameVerifier().verify(host, tls.session)) {
+                tls.close()
+                throw SSLPeerUnverifiedException("TLS hostname verification failed")
+            }
+            return tls
+        } catch (error: Throwable) {
+            runCatching { proxySocket.close() }
+            throw error
+        }
+    }
+
+    private fun countChunkedBody(socket: Socket, input: InputStream, deadline: Long, maximumBytes: Long): Long {
+        var total = 0L
+        val buffer = ByteArray(8 * 1024)
+        while (total < maximumBytes) {
+            val line = readHttpLine(socket, input, deadline).substringBefore(';').trim()
+            val chunkSize = line.toLongOrNull(16) ?: throw IOException("Некорректный HTTP chunk")
+            if (chunkSize == 0L) return total
+            val allowed = minOf(chunkSize, maximumBytes - total)
+            var remaining = allowed
+            while (remaining > 0L) {
+                val timeout = deadline - SystemClock.elapsedRealtime()
+                if (timeout <= 0L) {
+                    if (total > 0L) return total
+                    throw SocketTimeoutException("Скоростная проверка превысила лимит времени")
+                }
+                socket.soTimeout = timeout.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                val count = try {
+                    input.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                } catch (timeout: SocketTimeoutException) {
+                    if (total > 0L) return total else throw timeout
+                }
+                if (count < 0) throw IOException("Поток скорости завершился раньше ожидаемого")
+                if (count > 0) {
+                    total += count
+                    remaining -= count
+                }
+            }
+            if (allowed < chunkSize) return total
+            readHttpLine(socket, input, deadline)
+        }
+        return total
+    }
+
+    private fun countBody(socket: Socket, input: InputStream, deadline: Long, maximumBytes: Long): Long {
+        var total = 0L
+        val buffer = ByteArray(8 * 1024)
+        while (total < maximumBytes) {
+            val remainingTime = deadline - SystemClock.elapsedRealtime()
+            if (remainingTime <= 0L) {
+                if (total > 0L) break
+                throw SocketTimeoutException("Скоростная проверка превысила лимит времени")
+            }
+            socket.soTimeout = remainingTime.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            val count = try {
+                input.read(buffer, 0, minOf(buffer.size.toLong(), maximumBytes - total).toInt())
+            } catch (timeout: SocketTimeoutException) {
+                if (total > 0L) break else throw timeout
+            }
+            if (count < 0) break
+            if (count > 0) total += count
+        }
+        return total
     }
 
     private fun readHttpLine(socket: Socket, input: InputStream, deadline: Long): String {
@@ -254,24 +395,51 @@ object RouteProbeClient {
     const val EXTRA_MILLISECONDS = "milliseconds"
     const val EXTRA_ERROR = "probe_error"
     const val EXTRA_COMPLETE = "complete"
+    const val EXTRA_STAGE = "probe_stage"
+    const val EXTRA_BYTES_PER_SECOND = "bytes_per_second"
+    const val EXTRA_TOKEN = "session_token"
+    @Volatile
+    private var activeRequestId: String? = null
 
     fun start(
         context: Context,
         config: String,
         routeTags: List<String>,
         method: RouteProbeMethod,
+        token: String?,
     ): String {
         require(routeTags.isNotEmpty()) { "Не выбраны маршруты для проверки" }
+        require(token == null || token.length in 32..256) { "Invalid Telegram session" }
         check(VpnService.prepare(context) == null) { "Нужно системное разрешение VPN для диагностики маршрутов" }
+        check(activeRequestId == null) { "Проверка маршрутов уже выполняется" }
         val requestId = java.util.UUID.randomUUID().toString()
-        val intent = Intent(context, ConnectVpnService::class.java)
+        val intent = Intent(context, RouteProbeVpnService::class.java)
             .setAction(ConnectVpnService.ACTION_ROUTE_PROBE)
             .putExtra(EXTRA_REQUEST_ID, requestId)
             .putExtra("config", config)
             .putStringArrayListExtra("route_tags", ArrayList(routeTags))
             .putExtra("method", method.name)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
-        else context.startService(intent)
+            .putExtra(EXTRA_TOKEN, token.orEmpty())
+        activeRequestId = requestId
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
+            else context.startService(intent)
+        } catch (error: Throwable) {
+            activeRequestId = null
+            throw error
+        }
         return requestId
+    }
+
+    fun isRunning(context: Context): Boolean = activeRequestId != null
+
+    fun clear(context: Context, requestId: String) {
+        if (activeRequestId == requestId) activeRequestId = null
+    }
+
+    fun cancel(context: Context) {
+        activeRequestId = null
+        context.startService(Intent(context, RouteProbeVpnService::class.java)
+            .setAction(ConnectVpnService.ACTION_CANCEL_ROUTE_PROBE))
     }
 }

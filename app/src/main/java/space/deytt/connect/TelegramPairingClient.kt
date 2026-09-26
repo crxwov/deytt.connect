@@ -8,6 +8,7 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -116,6 +117,84 @@ internal object TelegramPairingClient {
     fun profile(token: String): JSONObject? =
         request("/api/tg/me", "GET", null, token).optJSONObject("profile")
 
+    fun accountSnapshot(token: String): JSONObject = request("/api/tg/me", "GET", null, token)
+
+    fun keys(token: String): JSONObject = request("/api/tg/keys", "GET", null, token)
+
+    fun resetKeys(token: String, scope: String): JSONObject {
+        require(scope in setOf("all", "awg", "happ"))
+        return request("/api/tg/keys/reset", "POST", JSONObject().put("scope", scope), token)
+    }
+
+    fun tariffs(): JSONObject = request("/api/tg/tariffs", "GET", null, null)
+
+    fun quote(
+        token: String,
+        kind: String,
+        plan: String? = null,
+        devices: Int? = null,
+        months: Int? = null,
+        extra: Int? = null,
+    ): JSONObject {
+        require(kind in setOf("preset", "custom", "add_time", "add_devices"))
+        val query = buildList {
+            add("kind=${encode(kind)}")
+            plan?.takeIf(String::isNotBlank)?.let { add("plan=${encode(it)}") }
+            devices?.let { add("devices=$it") }
+            months?.let { add("months=$it") }
+            extra?.let { add("extra=$it") }
+        }.joinToString("&")
+        return request("/api/tg/quote?$query", "GET", null, token)
+    }
+
+    fun checkout(token: String, kind: String, method: String, plan: String? = null, months: Int? = null): JSONObject {
+        require(kind in setOf("preset", "add_time"))
+        require(method in setOf("stars", "platega"))
+        val body = JSONObject().put("kind", kind).put("method", method)
+        plan?.let { body.put("plan", it) }
+        months?.let { body.put("months", it) }
+        return request("/api/tg/checkout", "POST", body, token)
+    }
+
+    fun paymentStatus(token: String, externalId: String): JSONObject {
+        require(Regex("[A-Za-z0-9_-]{1,64}").matches(externalId))
+        return request("/api/tg/payment-status?external_id=${encode(externalId)}", "GET", null, token)
+    }
+
+    fun supportThread(token: String): JSONObject = request("/api/tg/support", "GET", null, token)
+
+    fun createSupportTicket(token: String, text: String): JSONObject {
+        val clean = text.trim()
+        require(clean.length in 5..4000)
+        return request(
+            "/api/tg/support",
+            "POST",
+            JSONObject().put("text", clean).put("category", "other"),
+            token,
+        )
+    }
+
+    fun sendSupportMessage(token: String, ticketId: Int, text: String): JSONObject {
+        val clean = text.trim()
+        require(ticketId > 0 && clean.isNotEmpty() && clean.length <= 4000)
+        return request(
+            "/api/tg/support/messages",
+            "POST",
+            JSONObject().put("ticket_id", ticketId).put("text", clean),
+            token,
+        )
+    }
+
+    fun closeSupportTicket(token: String, ticketId: Int): JSONObject {
+        require(ticketId > 0)
+        return request(
+            "/api/tg/support/close",
+            "POST",
+            JSONObject().put("ticket_id", ticketId),
+            token,
+        )
+    }
+
     fun avatar(token: String): ByteArray? {
         val connection = openConnection("/api/tg/me/avatar", "GET", token)
         try {
@@ -166,6 +245,8 @@ internal object TelegramPairingClient {
             if (method == "POST") setRequestProperty("Content-Type", "application/json; charset=utf-8")
         }
     }
+
+    private fun encode(value: String): String = URLEncoder.encode(value, Charsets.UTF_8.name())
 
     private fun readLimited(input: java.io.InputStream, maximum: Int): ByteArray {
         val output = ByteArrayOutputStream()

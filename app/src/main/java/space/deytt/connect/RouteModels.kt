@@ -24,6 +24,7 @@ data class DeyttRoute(
     val protocol: RouteProtocol,
     val engine: TunnelEngine,
     val configTag: String = "",
+    val profileName: String? = null,
 )
 
 data class SelectedRoute(
@@ -70,6 +71,20 @@ object RouteCatalog {
         "RU-DE" to ("🇷🇺→🇩🇪" to "RU → DE"),
     )
 
+    private val awgCountries = mapOf(
+        "NL" to ("🇳🇱" to "Нидерланды"),
+        "DE" to ("🇩🇪" to "Германия"),
+        "RU" to ("🇷🇺" to "Россия"),
+        "FI" to ("🇫🇮" to "Финляндия"),
+    )
+
+    private fun awgCountry(profile: AwgProfile): Pair<String, Pair<String, String>>? {
+        val mark = Regex("^(NL|DE|RU|FI)(?:$|[-_\\s])", RegexOption.IGNORE_CASE)
+            .find(profile.shortLabel.trim())?.groupValues?.get(1)?.uppercase()
+            ?: return null
+        return awgCountries[mark]?.let { mark to it }
+    }
+
     fun from(config: String, awg15: Boolean, awg31: Boolean): List<DeyttRoute> {
         val legacyProfiles = listOfNotNull(
             if (awg15) AwgProfile("awg15", "15", "Основной", "AWG", "") else null,
@@ -103,13 +118,15 @@ object RouteCatalog {
         }
         awgProfiles.forEach { profile ->
             val protocol = if (profile.version == "31") RouteProtocol.AWG31 else RouteProtocol.AWG15
+            val country = awgCountry(profile)
             routes += DeyttRoute(
                 profile.id,
-                "AWG",
-                profile.label,
-                profile.shortLabel,
+                country?.first ?: "AWG_UNKNOWN",
+                country?.second?.second ?: "Регион не указан",
+                country?.second?.first ?: "AWG_MARK",
                 protocol,
                 TunnelEngine.AMNEZIAWG,
+                profileName = profile.label,
             )
         }
         return routes

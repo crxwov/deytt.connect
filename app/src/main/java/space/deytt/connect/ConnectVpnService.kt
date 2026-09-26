@@ -42,7 +42,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.HttpsURLConnection
 
-class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface {
+open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface {
     companion object {
         const val ACTION_START = "space.deytt.connect.action.START"
         const val ACTION_STOP = "space.deytt.connect.action.STOP"
@@ -158,17 +158,13 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
     private fun beginRouteProbe(intent: Intent, startId: Int) {
         val requestId = intent.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty()
         val config = intent.getStringExtra("config")
+        val token = intent.getStringExtra(RouteProbeClient.EXTRA_TOKEN).orEmpty()
         val routeTags = intent.getStringArrayListExtra("route_tags").orEmpty()
         val method = runCatching {
             RouteProbeMethod.valueOf(intent.getStringExtra("method") ?: RouteProbeMethod.HEAD.name)
         }.getOrDefault(RouteProbeMethod.HEAD)
         if (started || runtimeRunning) {
             sendRouteProbeResult(requestId, "", null, "Сначала отключите активный VPN", complete = true)
-            return
-        }
-        if (AwgTunnelController.isRunning()) {
-            sendRouteProbeResult(requestId, "", null, "Сначала отключите активный VPN", complete = true)
-            stopSelf(startId)
             return
         }
         if (isUpstreamVpnActive()) {
@@ -189,7 +185,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         val operationId = operation.incrementAndGet()
         try {
             startForegroundCompat("Проверяем маршрут через прокси…")
-            executor.execute { runRouteProbe(requestId, config, routeTags, method, operationId, startId) }
+            executor.execute { runRouteProbe(requestId, config, routeTags, method, token, operationId, startId) }
         } catch (error: Throwable) {
             sendRouteProbeResult(requestId, "", null, "Не удалось запустить проверку", complete = true)
             closeRouteProbeCore()
@@ -206,6 +202,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         config: String,
         routeTags: List<String>,
         method: RouteProbeMethod,
+        token: String,
         operationId: Long,
         startId: Int,
     ) {
@@ -223,6 +220,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             routeTags.forEach { tag ->
                 if (operation.get() != operationId || !routeProbeOnly) return@forEach
                 var routeStage = "route config"
+                var latency: Long? = null
                 try {
                     val probeConfig = session.configuration(config, tag)
                     routeStage = "route reload"
@@ -232,11 +230,32 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
                     )
                     if (operation.get() != operationId || !routeProbeOnly) return@forEach
                     routeStage = "HTTP proxy probe"
-                    val elapsed = RouteProxyProbe.measureProxy(session, method)
-                    sendRouteProbeResult(requestId, tag, elapsed, null)
+                    sendRouteProbeResult(requestId, tag, null, null, stage = "latency")
+                    latency = RouteProxyProbe.measureProxy(session, method)
+                    if (token.isNotBlank()) {
+                        routeStage = "download sample"
+                        sendRouteProbeResult(requestId, tag, null, null, stage = "download")
+                        val speed = RouteProxyProbe.measureDownload(session, token)
+                        sendRouteProbeResult(
+                            requestId,
+                            tag,
+                            latency,
+                            null,
+                            stage = "complete",
+                            bytesPerSecond = speed,
+                        )
+                    } else {
+                        sendRouteProbeResult(requestId, tag, latency, null, stage = "complete")
+                    }
                 } catch (error: Throwable) {
                     Log.w(TAG, "Route proxy probe failed at $routeStage (${probeFailureKind(error)})")
-                    sendRouteProbeResult(requestId, tag, null, routeProbeError(error))
+                    sendRouteProbeResult(
+                        requestId,
+                        tag,
+                        latency,
+                        routeProbeError(error),
+                        stage = "failed",
+                    )
                 }
             }
         } catch (error: Throwable) {
@@ -246,6 +265,7 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             }
         } finally {
             sendRouteProbeResult(requestId, "", null, null, complete = true)
+            RouteProbeClient.clear(this, requestId)
             closeRouteProbeCore()
             started = false
             runtimeRunning = false
@@ -280,6 +300,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         milliseconds: Long?,
         error: String?,
         complete: Boolean = false,
+        stage: String? = null,
+        bytesPerSecond: Long? = null,
     ) {
         val intent = Intent(RouteProbeClient.ACTION_RESULT)
             .setPackage(packageName)
@@ -288,6 +310,8 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             .putExtra(RouteProbeClient.EXTRA_COMPLETE, complete)
         if (milliseconds != null) intent.putExtra(RouteProbeClient.EXTRA_MILLISECONDS, milliseconds)
         if (!error.isNullOrBlank()) intent.putExtra(RouteProbeClient.EXTRA_ERROR, error)
+        if (!stage.isNullOrBlank()) intent.putExtra(RouteProbeClient.EXTRA_STAGE, stage)
+        if (bytesPerSecond != null) intent.putExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, bytesPerSecond)
         sendBroadcast(intent)
     }
 
@@ -338,9 +362,15 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
 
     private fun isUpstreamVpnActive(): Boolean {
         val connectivity = getSystemService(ConnectivityManager::class.java)
-        val activeNetwork = connectivity.activeNetwork ?: return false
-        return connectivity.getNetworkCapabilities(activeNetwork)
-            ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+        val activeVpn = connectivity.allNetworks.firstOrNull { network ->
+            connectivity.getNetworkCapabilities(network)
+                ?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+        } ?: return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val ownerUid = connectivity.getNetworkCapabilities(activeVpn)?.ownerUid ?: return true
+            if (ownerUid == applicationInfo.uid) return false
+        }
+        return true
     }
 
     private fun startTunnel(operationId: Long) {
@@ -381,10 +411,15 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
         if (libboxSetup) return
         synchronized(ConnectVpnService::class.java) {
             if (libboxSetup) return
+            val probeProcess = this is RouteProbeVpnService
+            val baseDirectory = if (probeProcess) File(filesDir, "route-probe") else filesDir
+            val temporaryDirectory = if (probeProcess) File(cacheDir, "route-probe") else cacheDir
+            check(baseDirectory.isDirectory || baseDirectory.mkdirs())
+            check(temporaryDirectory.isDirectory || temporaryDirectory.mkdirs())
             val setup = SetupOptions().apply {
-                basePath = filesDir.absolutePath
-                workingPath = filesDir.absolutePath
-                tempPath = cacheDir.absolutePath
+                basePath = baseDirectory.absolutePath
+                workingPath = baseDirectory.absolutePath
+                tempPath = temporaryDirectory.absolutePath
                 fixAndroidStack = Build.VERSION.SDK_INT in 24..25
                 debug = BuildConfig.DEBUG
                 appVersion = BuildConfig.VERSION_NAME
@@ -393,12 +428,12 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
             }
             Libbox.setup(setup)
             libboxSetup = true
-            Log.i(TAG, "libbox setup complete: basePath=${filesDir.absolutePath}")
+            Log.i(TAG, "libbox setup complete: basePath=${baseDirectory.absolutePath}")
         }
     }
 
     private fun runtimeConfig(config: String): String {
-        val directory = File(noBackupFilesDir, "sing-box")
+        val directory = File(noBackupFilesDir, if (this is RouteProbeVpnService) "route-probe/sing-box" else "sing-box")
         check(directory.isDirectory || directory.mkdirs()) { "Не удалось создать локальное хранилище соединения" }
         check(directory.canWrite()) { "Нет доступа к локальному хранилищу соединения" }
         return RuntimeProfile.withPrivateCacheFile(config, File(directory, "cache.db").absolutePath)
@@ -640,7 +675,11 @@ class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface 
 
     // PlatformInterface
     override fun autoDetectInterfaceControl(fd: Int) {
-        if (!protect(fd)) error("Не удалось исключить core-соединение из VPN")
+        if (this is RouteProbeVpnService) {
+            networkBridge.bindSocketToUnderlying(fd)
+        } else if (!protect(fd)) {
+            error("Не удалось исключить core-соединение из VPN")
+        }
     }
 
     override fun cancelNotification(identifier: String, typeID: Int) = Unit

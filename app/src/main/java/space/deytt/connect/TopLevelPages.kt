@@ -1,6 +1,7 @@
 package space.deytt.connect
 
 import android.app.Dialog
+import android.app.AlertDialog
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Canvas
@@ -9,7 +10,11 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.net.VpnService
 import android.net.Uri
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
@@ -20,6 +25,7 @@ import android.text.InputType
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -27,9 +33,8 @@ import androidx.recyclerview.widget.RecyclerView
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.Collections
+import java.io.File
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicInteger
 import space.deytt.connect.DeyttUi.AMBER
 import space.deytt.connect.DeyttUi.BLUE
 import space.deytt.connect.DeyttUi.BLUE_DEEP
@@ -52,6 +57,10 @@ import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
 import space.deytt.connect.AppLanguage.uiCopy
+
+private const val UPDATE_CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000L
+private const val KEY_LAST_UPDATE_CHECK = "last_official_update_check_ms"
+private const val KEY_LAST_OFFERED_UPDATE = "last_offered_official_update"
 
 internal class TopLevelViewPagerAdapter(
     private val createPage: (Int) -> View,
@@ -109,12 +118,31 @@ internal class TopLevelViewPagerAdapter(
 }
 
 internal class PrimaryPages(private val host: MainActivity) {
+    private data class ProbeRouteRow(val route: DeyttRoute, val status: TextView, val progress: ProgressBar)
+    private data class CountryProbeState(
+        val code: String,
+        val routes: List<DeyttRoute>,
+        val rows: Map<String, ProbeRouteRow>,
+        val samples: MutableMap<String, RouteProbeSample> = mutableMapOf(),
+    )
+
     private val updateExecutor = Executors.newSingleThreadExecutor()
     private val pairingExecutor = Executors.newSingleThreadExecutor()
+    private val updateHandler = Handler(Looper.getMainLooper())
+    private val profileFlows = ProfileFlows(host, ::showTelegramPairing, ::showLinkedTelegramAccount)
     private var latestRelease: ReleaseInfo? = null
+    private var downloadedUpdate: File? = null
+    private var updateCheckInFlight = false
     private var updateStatus: TextView? = null
     private var updateButton: TextView? = null
     private var updateStatusText = "Готово проверить официальный релиз."
+    private val routeProbeStates = mutableMapOf<String, CountryProbeState>()
+    private val updateCycle = object : Runnable {
+        override fun run() {
+            checkForUpdate(force = false)
+            updateHandler.postDelayed(this, UPDATE_CHECK_INTERVAL_MS)
+        }
+    }
 
     fun create(position: Int): View = when (position) {
         1 -> routePage()
@@ -123,8 +151,20 @@ internal class PrimaryPages(private val host: MainActivity) {
     }
 
     fun close() {
+        updateHandler.removeCallbacks(updateCycle)
         updateExecutor.shutdownNow()
         pairingExecutor.shutdownNow()
+        profileFlows.close()
+    }
+
+    fun startForegroundUpdates() {
+        updateHandler.removeCallbacks(updateCycle)
+        checkForUpdate(force = false)
+        updateHandler.postDelayed(updateCycle, UPDATE_CHECK_INTERVAL_MS)
+    }
+
+    fun stopForegroundUpdates() {
+        updateHandler.removeCallbacks(updateCycle)
     }
 
     private fun scrollPage(content: LinearLayout): ScrollView = ScrollView(host).apply {
@@ -144,103 +184,222 @@ internal class PrimaryPages(private val host: MainActivity) {
         val routes = config?.let { RouteCatalog.from(it, profiles) }.orEmpty()
         val selectedId = SelectedRouteStore(host).read().id
         val root = host.screen(withBackdrop = true)
-        root.addView(host.header("узлы · протоколы · AmneziaWG", "Маршруты"))
+        root.addView(host.header("выходы · выбор · диагностика", "Маршруты"))
         root.addView(spacer(8, host))
-        root.addView(host.text(
-            "Выберите выход. Изменение вступит в силу при следующем подключении.",
-            13f,
-            MUTED,
-        ).apply { setPadding(0, 0, 0, host.dp(18)) })
+        root.addView(host.text("Раскройте страну, чтобы проверить выходы. Выбор не запускает подключение.", 13f, MUTED)
+            .apply { setPadding(0, 0, 0, host.dp(18)) })
 
         root.addView(host.sectionLabel("быстрый выбор"))
         val quickGroup = routeGroup()
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { route ->
-            addMeasuredRow(
-                quickGroup,
-                "Автоподбор",
-                "Выберем доступный узел",
-                "ROUTE_AUTO",
-                listOf(route),
-                selectedId == route.id,
-            ) { host.selectRoute(route) }
+            appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "✦", "выбрать", selectedId == route.id)
+                .apply { setOnClickListener { host.selectRoute(route) } })
         }
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { route ->
-            addMeasuredRow(
-                quickGroup,
+            appendToGroup(quickGroup, host.row(
                 "Россия → Германия",
                 "Двойной маршрут · Санкт-Петербург → Франкфурт",
                 "ROUTE_RU_DE",
-                listOf(route),
+                "выбрать",
                 selectedId == route.id,
-            ) { host.selectRoute(route) }
+            ).apply { setOnClickListener { host.selectRoute(route) } })
         }
         if (quickGroup.childCount > 0) root.addView(quickGroup)
 
         root.addView(spacer(20, host))
-        root.addView(host.sectionLabel("AmneziaWG · готовые профили"))
-        val awgGroup = routeGroup()
-        listOf("15" to "AmneziaWG 1.5", "31" to "AmneziaWG 3.1").forEach { (version, title) ->
-            val familyRoutes = routes.filter {
-                it.engine == TunnelEngine.AMNEZIAWG &&
-                    ((version == "15" && it.protocol == RouteProtocol.AWG15) ||
-                        (version == "31" && it.protocol == RouteProtocol.AWG31))
-            }
-            val count = familyRoutes.size
-            val subtitle = when (count) {
-                0 -> "Профили не найдены · обновите подписку"
-                1 -> "1 сервер · выбрать точку"
-                in 2..4 -> "$count сервера · выбрать точку"
-                else -> "$count серверов · выбрать точку"
-            }
-            val ping = host.actionLabel("пинг")
-            val item = host.row(title, subtitle, "AWG_MARK", "", emphasis = familyRoutes.any { it.id == selectedId }).apply {
-                if (count == 0) alpha = .78f
-                setOnClickListener {
-                    if (count == 0) host.openSetup()
-                    else host.startActivity(
-                        Intent(host, ProtocolActivity::class.java)
-                            .putExtra("country", "AWG")
-                            .putExtra("version", version),
-                    )
-                }
-                if (familyRoutes.isNotEmpty()) {
-                    ping.setOnClickListener { measure(familyRoutes, title, ping) }
-                    ping.setOnLongClickListener { showPingDiagnostics(familyRoutes, title); true }
-                    ping.contentDescription = host.uiCopy("Пинг $title. Короткое нажатие проверяет один сервер, удержание — все")
-                } else {
-                    ping.text = "обновить"
-                    ping.setOnClickListener { host.openSetup() }
-                    ping.contentDescription = "Профили не найдены. Обновить подписку"
-                }
-                addView(ping, LinearLayout.LayoutParams(host.dp(68), host.dp(40)))
-            }
-            appendToGroup(awgGroup, item)
-            if (familyRoutes.isNotEmpty()) item.post { measureAll(familyRoutes, title, ping) }
-        }
-        root.addView(awgGroup)
-
         root.addView(spacer(20, host))
-        root.addView(host.sectionLabel("выходы по стране"))
-        val countryGroup = routeGroup()
-        routes.filter { it.countryCode in setOf("NL", "DE", "RU", "FI") }
+        root.addView(host.sectionLabel(host.uiCopy("LTE./белые списки")))
+        val orderedCodes = listOf("NL", "DE", "RU", "FI", "AWG_UNKNOWN")
+        val countries = routes.filter { it.countryCode in orderedCodes }
             .groupBy { it.countryCode }
-            .forEach { (code, countryRoutes) ->
-                val first = countryRoutes.first()
-                val protocols = countryRoutes.joinToString(" · ") { it.protocol.title }
-                addMeasuredRow(
-                    countryGroup,
-                    first.country,
-                    protocols,
-                    first.flag,
-                    countryRoutes,
-                    countryRoutes.any { it.id == selectedId },
-                ) {
-                    host.startActivity(Intent(host, ProtocolActivity::class.java).putExtra("country", code))
+        orderedCodes.filter { it in countries }.forEach { code ->
+            val countryRoutes = countries[code].orEmpty().distinctBy { it.id }
+            val networkRoutes = countryRoutes.filter { it.engine == TunnelEngine.LIBBOX }
+                .sortedBy { routeProtocolOrder(it.protocol) }
+            val awgRoutes = countryRoutes.filter { it.engine == TunnelEngine.AMNEZIAWG }
+            val first = countryRoutes.first()
+            val protocolSummary = countryRoutes.map { route ->
+                when (route.engine) {
+                    TunnelEngine.LIBBOX -> route.protocol.title
+                    TunnelEngine.AMNEZIAWG -> "AmneziaWG ${if (route.protocol == RouteProtocol.AWG31) "3.1" else "1.5"}"
                 }
+            }.distinct().joinToString(" · ")
+            val detail = routeGroup().apply { visibility = View.GONE }
+            val rowById = linkedMapOf<String, ProbeRouteRow>()
+            countryRoutes.forEachIndexed { index, route ->
+                if (index > 0) detail.addView(View(host).apply { setBackgroundColor(LINE) },
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(1)).apply {
+                        leftMargin = host.dp(54)
+                        rightMargin = host.dp(16)
+                    })
+                val isAwg = route.engine == TunnelEngine.AMNEZIAWG
+                val rowTitle = if (isAwg) route.profileName ?: route.protocol.title else route.protocol.title
+                val rowSubtitle = if (isAwg) "${route.shortMark()} · ${route.protocol.title}" else route.protocol.detail
+                val metric = host.actionLabel(if (isAwg) "AWG" else "—").apply {
+                    minWidth = host.dp(72)
+                    gravity = Gravity.CENTER
+                }
+                val spinner = ProgressBar(host, null, android.R.attr.progressBarStyleSmall).apply {
+                    isIndeterminate = true
+                    indeterminateTintList = ColorStateList.valueOf(DeyttUi.SKY)
+                    visibility = View.GONE
+                }
+                val item = host.row(rowTitle, rowSubtitle, if (isAwg) "AWG_MARK" else protocolMark(route.protocol), "",
+                    emphasis = route.id == selectedId)
+                item.addView(LinearLayout(host).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(spinner, LinearLayout.LayoutParams(host.dp(18), host.dp(18)))
+                    addView(metric, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(40)).apply {
+                        marginStart = host.dp(5)
+                    })
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(44)))
+                item.setOnClickListener { host.selectRoute(route) }
+                if (isAwg) {
+                    metric.setTextColor(AMBER)
+                    metric.contentDescription = host.uiCopy("Проверка через выход AmneziaWG пока недоступна")
+                } else {
+                    rowById[route.id] = ProbeRouteRow(route, metric, spinner)
+                }
+                detail.addView(item)
             }
-        root.addView(countryGroup)
+            val countryState = CountryProbeState(code, networkRoutes, rowById)
+            val countryHeader = host.row(
+                if (code == "AWG_UNKNOWN") "Регион не указан" else first.country,
+                if (protocolSummary.isBlank()) "Маршруты не найдены" else protocolSummary,
+                first.flag,
+                "⌄",
+                emphasis = countryRoutes.any { it.id == selectedId },
+            ).apply {
+                contentDescription = host.uiCopy("Раскрыть выходы ${first.country}; откроется проверка HTTP маршрутов")
+                setOnClickListener {
+                    val expanded = detail.visibility != View.VISIBLE
+                    detail.visibility = if (expanded) View.VISIBLE else View.GONE
+                    findViewWithTag<TextView>("country-chevron")?.text = if (expanded) "⌃" else "⌄"
+                    if (expanded) startCountryProbe(countryState)
+                }
+                (getChildAt(childCount - 1) as? TextView)?.tag = "country-chevron"
+            }
+            root.addView(countryHeader)
+            root.addView(detail)
+            root.addView(spacer(6, host))
+        }
+        if (routes.isEmpty()) {
+            root.addView(host.note("Пока нет маршрутов. Обновите подписку по ссылке, с которой открывали приложение.", AMBER))
+        }
         root.addView(spacer(18, host))
         return scrollPage(root)
+    }
+
+    private fun routeProtocolOrder(protocol: RouteProtocol): Int = when (protocol) {
+        RouteProtocol.VLESS -> 0
+        RouteProtocol.TROJAN -> 1
+        RouteProtocol.HYSTERIA2 -> 2
+        else -> 3
+    }
+
+    private fun protocolMark(protocol: RouteProtocol): String = when (protocol) {
+        RouteProtocol.VLESS -> "VL"
+        RouteProtocol.TROJAN -> "TR"
+        RouteProtocol.HYSTERIA2 -> "H2"
+        RouteProtocol.RU_DE -> "RU→DE"
+        else -> "·"
+    }
+
+    private fun DeyttRoute.shortMark(): String = when (countryCode) {
+        "NL" -> "NL"
+        "DE" -> "DE"
+        "RU" -> "RU"
+        "FI" -> "FI"
+        else -> profileName ?: "AWG"
+    }
+
+    private fun startCountryProbe(country: CountryProbeState) {
+        if (country.routes.isEmpty() || RouteProbeClient.isRunning(host)) return
+        if (VpnService.prepare(host) != null && host.requestRouteProbePermission { startCountryProbe(country) }) return
+        val config = SubscriptionStore(host).readCurrent() ?: return
+        country.rows.values.forEach { row ->
+            row.status.text = host.uiCopy("в очереди")
+            row.status.setTextColor(DeyttUi.SKY)
+            row.progress.visibility = View.VISIBLE
+        }
+        val token = TelegramSessionStore.read(host)
+        runCatching {
+            RouteProbeClient.start(
+                host,
+                config,
+                country.routes.map(DeyttRoute::configTag),
+                RouteProbePreferences.method(host),
+                token,
+            )
+        }.onSuccess { requestId -> routeProbeStates[requestId] = country }
+            .onFailure {
+                country.rows.values.forEach { row ->
+                    row.progress.visibility = View.GONE
+                    row.status.text = host.uiCopy("ошибка")
+                    row.status.setTextColor(DeyttUi.CORAL)
+                }
+            }
+    }
+
+    fun onRouteProbeEvent(event: Intent) {
+        val requestId = event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty()
+        val country = routeProbeStates[requestId] ?: return
+        val tag = event.getStringExtra(RouteProbeClient.EXTRA_ROUTE_TAG).orEmpty()
+        if (tag.isNotBlank()) {
+            val row = country.rows.values.firstOrNull { it.route.configTag == tag }
+            if (row != null) {
+                val previous = country.samples[row.route.id] ?: RouteProbeSample(row.route.id, null, null)
+                val latency = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
+                    .takeIf { it >= 0L } ?: previous.latencyMillis
+                val speed = event.getLongExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, -1L)
+                    .takeIf { it >= 0L } ?: previous.downloadBytesPerSecond
+                country.samples[row.route.id] = RouteProbeSample(row.route.id, latency, speed)
+                when (event.getStringExtra(RouteProbeClient.EXTRA_STAGE)) {
+                    "latency" -> row.status.text = host.uiCopy("измеряем задержку…")
+                    "download" -> row.status.text = host.uiCopy("измеряем скорость…")
+                    "complete", "failed" -> {
+                        row.progress.visibility = View.GONE
+                        val latencyLabel = latency?.let { formatLatency(it) } ?: "—"
+                        val speedLabel = speed?.let(::formatSpeed) ?: "—"
+                        row.status.text = "$latencyLabel · $speedLabel"
+                        row.status.setTextColor(if (latency != null) DeyttUi.TEXT else DeyttUi.CORAL)
+                    }
+                }
+                event.getStringExtra(RouteProbeClient.EXTRA_ERROR)?.let { error ->
+                    if (error.isNotBlank()) row.status.contentDescription = host.uiCopy(error)
+                }
+            }
+        }
+        if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
+            routeProbeStates.remove(requestId)
+            val grades = RouteProbeScoring.grade(country.samples.values.toList())
+            country.rows.values.forEach { row ->
+                row.progress.visibility = View.GONE
+                val grade = grades[row.route.id] ?: RouteGrade.UNRATED
+                row.status.setTextColor(when (grade) {
+                    RouteGrade.GOOD -> DeyttUi.MINT
+                    RouteGrade.MEDIUM -> AMBER
+                    RouteGrade.POOR -> DeyttUi.CORAL
+                    RouteGrade.UNRATED -> DeyttUi.MUTED
+                })
+                row.status.contentDescription = host.uiCopy("Качество маршрута: ${grade.name.lowercase()}")
+            }
+            val bestId = RouteProbeScoring.bestRouteId(country.samples.values.toList())
+            val best = bestId?.let { id -> country.routes.firstOrNull { it.id == id } }
+            if (best != null && !ConnectVpnService.isRunning() && !AwgTunnelController.isRunning()) {
+                host.selectRoute(best)
+            }
+        }
+    }
+
+    private fun formatLatency(milliseconds: Long): String =
+        if (AppLanguage.current(host) == AppLanguage.EN) "$milliseconds ms" else "$milliseconds мс"
+
+    private fun formatSpeed(bytesPerSecond: Long): String {
+        val megabits = bytesPerSecond * 8.0 / 1_000_000.0
+        val unit = if (AppLanguage.current(host) == AppLanguage.EN) "Mbps" else "Мбит/с"
+        return String.format(Locale.US, "%.1f %s", megabits, unit)
     }
 
     private fun routeGroup(): LinearLayout = LinearLayout(host).apply {
@@ -260,325 +419,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         group.addView(item)
     }
 
-    private fun addMeasuredRow(
-        group: LinearLayout,
-        title: String,
-        subtitle: String,
-        leading: String,
-        candidates: List<DeyttRoute>,
-        emphasis: Boolean = false,
-        onClick: () -> Unit,
-    ) {
-        val latency = host.actionLabel("пинг")
-        val item = host.row(title, subtitle, leading, "", emphasis = emphasis).apply {
-            setOnClickListener { onClick() }
-        }
-        latency.setOnClickListener { measure(candidates, title, latency) }
-        latency.setOnLongClickListener { showPingDiagnostics(candidates, title); true }
-        latency.contentDescription = "Пинг $title. Короткое нажатие проверяет один сервер, удержание — все"
-        item.addView(latency, LinearLayout.LayoutParams(host.dp(68), host.dp(40)))
-        appendToGroup(group, item)
-        if (candidates.isNotEmpty()) item.post { measureAll(candidates, title, latency) }
-    }
-
-    private fun measure(candidates: List<DeyttRoute>, title: String, view: TextView) {
-        val route = candidates.firstOrNull() ?: return
-        val config = SubscriptionStore(host).readCurrent() ?: return
-        val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) AwgProfileStore(host).read(route.id) else null
-        val target = RouteLatency.target(config, route, awgConfig)
-        val generation = System.nanoTime()
-        view.tag = generation
-        view.text = host.uiCopy("проверяю…")
-        view.isEnabled = false
-        if (target == null) {
-            view.text = host.uiCopy("нет ответа")
-            view.isEnabled = true
-            view.setTextColor(DeyttUi.CORAL)
-            return
-        }
-        LatencyExecutor.pool.execute {
-            val result = RouteLatency.measureDetailed(target)
-            val label = result?.let { if (AppLanguage.current(host) == AppLanguage.EN) "${it.milliseconds} ms" else "${it.milliseconds}мс" }
-                ?: host.uiCopy("нет ответа")
-            host.runOnUiThread {
-                if (host.isFinishing || host.isDestroyed || view.tag != generation) return@runOnUiThread
-                view.text = label
-                view.isEnabled = true
-                view.setTextColor(if (result != null) DeyttUi.MINT else DeyttUi.CORAL)
-                view.contentDescription = result?.let {
-                    host.uiCopy("${it.method}-проверка маршрута $title: ${it.milliseconds} миллисекунд")
-                } ?: host.uiCopy("Сервер маршрута $title не ответил")
-            }
-        }
-    }
-
-    private fun measureAll(candidates: List<DeyttRoute>, title: String, view: TextView) {
-        val config = SubscriptionStore(host).readCurrent() ?: return
-        val routes = candidates.distinctBy { it.id }
-        val probes = routes.mapNotNull { route ->
-            val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) AwgProfileStore(host).read(route.id) else null
-            RouteLatency.target(config, route, awgConfig)?.let { route to it }
-        }
-        val generation = System.nanoTime()
-        view.tag = generation
-        if (probes.isEmpty()) {
-            view.text = "—"
-            view.contentDescription = host.uiCopy("Для маршрута $title нет проверяемых серверов")
-            return
-        }
-        val finished = AtomicInteger()
-        val results = Collections.synchronizedList(mutableListOf<Pair<DeyttRoute, RouteLatencyResult?>>())
-        view.text = "0/${probes.size}"
-        view.setTextColor(DeyttUi.SKY)
-        probes.forEach { (route, target) ->
-            LatencyExecutor.pool.execute {
-                val result = runCatching { RouteLatency.measureDetailed(target) }.getOrNull()
-                results += route to result
-                val completed = finished.incrementAndGet()
-                host.runOnUiThread {
-                    if (host.isFinishing || host.isDestroyed || view.tag != generation) return@runOnUiThread
-                    val snapshot = synchronized(results) { results.toList() }
-                    val successful = snapshot.mapNotNull { it.second }
-                    if (completed < probes.size) view.text = "$completed/${probes.size}"
-                    else view.text = successful.minOfOrNull { it.milliseconds }?.let { latency ->
-                        if (AppLanguage.current(host) == AppLanguage.EN) "$latency ms" else "$latency мс"
-                    } ?: host.uiCopy("нет")
-                    view.setTextColor(when {
-                        successful.isNotEmpty() -> DeyttUi.MINT
-                        completed >= probes.size -> DeyttUi.CORAL
-                        else -> DeyttUi.SKY
-                    })
-                    val details = snapshot.joinToString("; ") { (entry, measurement) ->
-                        "${entry.protocol.title}: " + (measurement?.let { "${it.method} ${it.milliseconds} мс" } ?: "нет ответа")
-                    }
-                    view.contentDescription = host.uiCopy("Проверка всех серверов $title: $details")
-                }
-            }
-        }
-    }
-
-    private fun showPingDiagnostics(candidates: List<DeyttRoute>, title: String) {
-        val config = SubscriptionStore(host).readCurrent() ?: return
-        val catalog = runCatching { RouteCatalog.from(config, AwgProfileStore(host).profiles()) }.getOrDefault(candidates)
-        val routes = catalog.filter { it.protocol != RouteProtocol.AUTO }.distinctBy { it.id }
-        if (routes.isEmpty()) return
-        val dialog = Dialog(host)
-        val sheet = LinearLayout(host).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(host.dp(20), host.dp(20), host.dp(20), host.dp(18))
-            background = host.rounded(SURFACE, 24f, LINE)
-        }
-        sheet.addView(host.mono("ДИАГНОСТИКА · ВСЕ ТОЧКИ", 9f, MUTED, 650))
-        sheet.addView(host.text("Задержка · все серверы", 19f, TEXT, android.graphics.Typeface.BOLD).apply {
-            setPadding(0, host.dp(10), 0, host.dp(6))
-        })
-        sheet.addView(host.text("Запрос от «$title». ICMP, затем TCP при необходимости; результаты появятся по мере ответа.", 12f, MUTED).apply {
-            setPadding(0, 0, 0, host.dp(14))
-        })
-        val resultViews = mutableMapOf<String, TextView>()
-        val list = LinearLayout(host).apply {
-            orientation = LinearLayout.VERTICAL
-            background = host.rounded(SURFACE_2, 18f, LINE)
-            clipToOutline = true
-        }
-        routes.forEachIndexed { index, route ->
-            if (index > 0) list.addView(View(host).apply { setBackgroundColor(LINE) },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(1)).apply {
-                    leftMargin = host.dp(54)
-                    rightMargin = host.dp(14)
-                })
-            val result = host.actionLabel("проверяю…").apply {
-                isClickable = false
-                contentDescription = "Проверяю задержку ${route.country} ${route.protocol.title}"
-            }
-            resultViews[route.id] = result
-            list.addView(host.row(
-                route.country,
-                route.protocol.title,
-                when {
-                    route.engine == TunnelEngine.AMNEZIAWG -> "AWG_MARK"
-                    route.protocol == RouteProtocol.RU_DE -> "ROUTE_RU_DE"
-                    else -> route.flag
-                },
-                "",
-                interactive = false,
-            ).apply { addView(result, LinearLayout.LayoutParams(host.dp(92), host.dp(40))) })
-        }
-        val screenHeightDp = (host.resources.displayMetrics.heightPixels / host.resources.displayMetrics.density).toInt()
-        val listHeightDp = (screenHeightDp * .45f).toInt().coerceIn(240, 440)
-        sheet.addView(ScrollView(host).apply {
-            isFillViewport = false
-            clipToPadding = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            addView(list)
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(listHeightDp)))
-        sheet.addView(host.button("Готово", secondary = true).apply { setOnClickListener { dialog.dismiss() } },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48)).apply { topMargin = host.dp(16) })
-        dialog.setContentView(sheet)
-        dialog.setCanceledOnTouchOutside(true)
-        dialog.window?.apply {
-            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-            setDimAmount(.62f)
-            addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            setGravity(Gravity.BOTTOM)
-            decorView.setPadding(host.dp(14), 0, host.dp(14), host.dp(20))
-        }
-        dialog.show()
-        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-
-        routes.forEach { route ->
-            val view = resultViews[route.id] ?: return@forEach
-            val awgConfig = if (route.engine == TunnelEngine.AMNEZIAWG) AwgProfileStore(host).read(route.id) else null
-            val target = RouteLatency.target(config, route, awgConfig)
-            if (target == null) {
-                view.text = "нет ответа"
-                view.setTextColor(DeyttUi.CORAL)
-                return@forEach
-            }
-            LatencyExecutor.pool.execute {
-                val measurement = runCatching { RouteLatency.measureDetailed(target) }.getOrNull()
-                host.runOnUiThread {
-                    if (!dialog.isShowing) return@runOnUiThread
-                    view.text = measurement?.let { "${it.method} ${it.milliseconds}мс" } ?: "нет ответа"
-                    view.setTextColor(if (measurement != null) DeyttUi.MINT else DeyttUi.CORAL)
-                    view.contentDescription = measurement?.let {
-                        "${it.method}-задержка ${route.country} ${route.protocol.title}: ${it.milliseconds} миллисекунд"
-                    } ?: "Сервер ${route.country} ${route.protocol.title} не ответил"
-                }
-            }
-        }
-    }
-
-    private fun profilePage(): View {
-        val metadata = SubscriptionMetadataStore(host).read()
-        val profiles = AwgProfileStore(host).profiles()
-        val usage = metadata.usedBytes
-        val limit = metadata.totalBytes
-        val fraction = if (limit > 0) (usage.toDouble() / limit).toFloat().coerceIn(0f, 1f) else 0f
-        val root = host.screen(withBackdrop = true)
-        root.addView(host.header("подписка · устройства · ключи", "Профиль"))
-        root.addView(spacer(10, host))
-        root.addView(host.sectionLabel("трафик подписки"))
-        val subscription = LinearLayout(host).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(host.dp(19), host.dp(18), host.dp(19), host.dp(17))
-            background = host.rounded(SURFACE, 20f, LINE)
-            addView(host.text(metadata.title, 13f, MUTED).apply { maxLines = 2 })
-            addView(host.text(formatBytes(usage), 32f, TEXT, android.graphics.Typeface.BOLD).apply {
-                setPadding(0, host.dp(12), 0, 0)
-            })
-            addView(host.text(
-                if (limit > 0) "из ${formatBytes(limit)} использовано" else "использовано · без установленного лимита",
-                12f,
-                MUTED,
-            ).apply { setPadding(0, host.dp(3), 0, 0) })
-            if (limit > 0) addView(UsageBar(host, fraction),
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(6)).apply { topMargin = host.dp(15) })
-            addView(View(host).apply { setBackgroundColor(LINE) },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(1)).apply { topMargin = host.dp(16) })
-            addView(LinearLayout(host).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, host.dp(13), 0, 0)
-                addView(stat("ЗАГРУЖЕНО", formatBytes(metadata.downloadBytes)),
-                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                addView(stat("ОТДАНО", formatBytes(metadata.uploadBytes)),
-                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            })
-            addView(LinearLayout(host).apply {
-                orientation = LinearLayout.HORIZONTAL
-                setPadding(0, host.dp(15), 0, 0)
-                addView(stat("ЛИМИТ", if (limit > 0) formatBytes(limit) else "Без лимита"),
-                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                addView(stat("ДЕЙСТВУЕТ ДО", metadata.expiresAtSeconds?.let(::formatDate) ?: "Без срока"),
-                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            })
-        }
-        root.addView(subscription)
-
-        root.addView(spacer(20, host))
-        root.addView(host.sectionLabel("конфигурации на устройстве"))
-        val awg15 = profiles.count { it.version == "15" }
-        val awg31 = profiles.count { it.version == "31" }
-        root.addView(host.row("AmneziaWG 1.5", profileCountLabel(awg15), "AWG_MARK", "открыть").apply {
-            setOnClickListener { host.selectTab(1) }
-        })
-        root.addView(host.row("AmneziaWG 3.1", profileCountLabel(awg31), "AWG_MARK", "открыть").apply {
-            setOnClickListener { host.selectTab(1) }
-        })
-
-        root.addView(spacer(18, host))
-        root.addView(host.sectionLabel("действия"))
-        root.addView(host.row("Продлить или сменить тариф", "Тарифы и увеличение лимита в Telegram", "↗", "бот").apply {
-            setOnClickListener { openUrl("https://t.me/deyttbot") }
-        })
-        root.addView(spacer(6, host))
-        root.addView(host.button("Импортировать подписку", secondary = true).apply {
-            setOnClickListener { host.openSetup() }
-        })
-        root.addView(spacer(10, host))
-        root.addView(host.row("Сбросить ключи в Telegram", "Переход к подтверждению в боте", "↻", "открыть").apply {
-            setOnClickListener { confirmTelegramReset() }
-        })
-        root.addView(host.row("Поддержка", "Написать команде DEYTT", "↗", "Telegram").apply {
-            setOnClickListener { openUrl("https://t.me/deytt_support") }
-        })
-        root.addView(spacer(12, host))
-        root.addView(host.note("Сброс — только после подтверждения в Telegram.", MUTED))
-        root.addView(spacer(20, host))
-        return scrollPage(root)
-    }
-
-    private fun stat(label: String, value: String): LinearLayout = LinearLayout(host).apply {
-        orientation = LinearLayout.VERTICAL
-        addView(host.mono(label, 9f, MUTED, 560))
-        addView(host.text(value, 14f, TEXT, android.graphics.Typeface.BOLD).apply {
-            setPadding(0, host.dp(5), host.dp(7), 0)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-        })
-    }
-
-    private fun profileCountLabel(count: Int): String = when (count) {
-        0 -> "Нет профилей · обновите подписку"
-        1 -> "1 профиль загружен"
-        in 2..4 -> "$count профиля загружено"
-        else -> "$count профилей загружено"
-    }
-
-    private fun confirmTelegramReset() {
-        val dialog = Dialog(host)
-        val sheet = LinearLayout(host).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(host.dp(22), host.dp(20), host.dp(22), host.dp(18))
-            background = host.rounded(SURFACE, 24f, LINE)
-        }
-        sheet.addView(host.mono("КЛЮЧИ · ПОДТВЕРЖДЕНИЕ", 9f, MUTED, 650))
-        sheet.addView(host.text("Открыть управление ключами?", 19f, TEXT, android.graphics.Typeface.BOLD).apply {
-            setPadding(0, host.dp(10), 0, host.dp(7))
-        })
-        sheet.addView(host.text(
-            "Бот покажет действие сброса и попросит подтвердить его отдельно. Существующие ключи не изменятся, пока вы не подтвердите операцию там.",
-            13f,
-            MUTED,
-        ).apply { setLineSpacing(host.dp(3).toFloat(), 1f) })
-        val actions = LinearLayout(host).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(0, host.dp(16), 0, 0)
-        }
-        actions.addView(host.button("Отмена", secondary = true).apply {
-            setOnClickListener { dialog.dismiss() }
-        }, LinearLayout.LayoutParams(0, host.dp(48), 1f).apply { marginEnd = host.dp(8) })
-        actions.addView(host.button("Открыть бота").apply {
-            setOnClickListener {
-                dialog.dismiss()
-                openUrl("https://t.me/deyttbot")
-            }
-        }, LinearLayout.LayoutParams(0, host.dp(48), 1f))
-        sheet.addView(actions)
-        showSheet(dialog, sheet)
-    }
+    private fun profilePage(): View = profileFlows.page()
 
     private fun showSheet(dialog: Dialog, content: View) {
         dialog.setContentView(content)
@@ -659,7 +500,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         root.addView(spacer(12, host))
         root.addView(host.sectionLabel("официальный релиз"))
         updateButton = host.button("Проверить обновления").apply {
-            setOnClickListener { if (latestRelease == null) checkForUpdate() else openLatest() }
+            setOnClickListener { updateAction() }
         }
         updateStatus = host.text(updateStatusText, 12f, MUTED).apply { setPadding(host.dp(2), host.dp(10), 0, 0) }
         root.addView(LinearLayout(host).apply {
@@ -763,7 +604,13 @@ internal class PrimaryPages(private val host: MainActivity) {
         return scrollPage(root)
     }
 
-    private fun checkForUpdate() {
+    private fun checkForUpdate(force: Boolean = true) {
+        if (updateCheckInFlight) return
+        val preferences = host.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val lastCheck = preferences.getLong(KEY_LAST_UPDATE_CHECK, 0L)
+        if (!force && now - lastCheck < UPDATE_CHECK_INTERVAL_MS) return
+        updateCheckInFlight = true
         updateButton?.isEnabled = false
         updateButton?.alpha = .68f
         updateStatus?.apply {
@@ -774,21 +621,30 @@ internal class PrimaryPages(private val host: MainActivity) {
         updateExecutor.execute {
             runCatching { UpdateChecker.latest() }
                 .onSuccess { release -> host.runOnUiThread {
+                    updateCheckInFlight = false
+                    preferences.edit().putLong(KEY_LAST_UPDATE_CHECK, System.currentTimeMillis()).apply()
                     updateButton?.isEnabled = true
                     updateButton?.alpha = 1f
                     if (!ReleaseVersion.isNewer(release.tag, BuildConfig.VERSION_NAME)) {
                         latestRelease = null
+                        downloadedUpdate = null
                         updateStatusText = "Установлена последняя версия."
                         updateButton?.text = host.uiCopy("Проверить снова")
                     } else {
                         latestRelease = release
-                        updateStatusText = "Доступна ${release.tag}. Откройте официальный релиз и проверьте APK перед установкой."
-                        updateButton?.text = host.uiCopy("Открыть официальный релиз")
+                        val apkSize = release.apkSize?.let { " · ${formatUpdateSize(it)}" }.orEmpty()
+                        updateStatusText = if (release.apkUrl != null) {
+                            "Доступна ${release.tag}$apkSize. APK будет проверен по подписи перед установкой."
+                        } else "Доступна ${release.tag}. APK пока нет; доступна только страница релиза."
+                        updateButton?.text = host.uiCopy(if (release.apkUrl != null) "Скачать обновление" else "Открыть официальный релиз")
+                        offerUpdateIfNew(release)
                     }
                     updateStatus?.apply { text = host.uiCopy(updateStatusText); setTextColor(DeyttUi.MINT) }
                 } }
                 .onFailure {
                     host.runOnUiThread {
+                        updateCheckInFlight = false
+                        preferences.edit().putLong(KEY_LAST_UPDATE_CHECK, System.currentTimeMillis()).apply()
                         latestRelease = null
                         updateStatusText = "Не удалось проверить официальный релиз. Повторите попытку позже."
                         updateButton?.apply { isEnabled = true; alpha = 1f; text = host.uiCopy("Проверить обновления") }
@@ -797,6 +653,110 @@ internal class PrimaryPages(private val host: MainActivity) {
                 }
         }
     }
+
+    private fun updateAction() {
+        val cached = downloadedUpdate?.takeIf { it.isFile }
+        if (cached != null) {
+            offerInstall(cached)
+            return
+        }
+        val release = latestRelease
+        if (release == null) checkForUpdate(force = true)
+        else if (release.apkUrl != null) askDownload(release)
+        else openLatest()
+    }
+
+    private fun offerUpdateIfNew(release: ReleaseInfo) {
+        val preferences = host.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
+        if (preferences.getString(KEY_LAST_OFFERED_UPDATE, null) == release.tag || release.apkUrl == null) return
+        preferences.edit().putString(KEY_LAST_OFFERED_UPDATE, release.tag).apply()
+        AlertDialog.Builder(host)
+            .setTitle(host.uiCopy("Доступно обновление ${release.tag}"))
+            .setMessage(host.uiCopy("Скачать официальный APK сейчас? Позже его можно будет открыть в настройках."))
+            .setNegativeButton(host.uiCopy("Позже"), null)
+            .setNeutralButton(host.uiCopy("Страница релиза")) { _, _ -> openLatest() }
+            .setPositiveButton(host.uiCopy("Обновить сейчас")) { _, _ -> askDownload(release) }
+            .show()
+    }
+
+    private fun askDownload(release: ReleaseInfo) {
+        if (release.apkUrl == null) {
+            openLatest()
+            return
+        }
+        val size = release.apkSize?.let { " · ${formatUpdateSize(it)}" }.orEmpty()
+        AlertDialog.Builder(host)
+            .setTitle(host.uiCopy("Скачать версию ${release.tag}?"))
+            .setMessage(host.uiCopy("Файл с GitHub будет проверен по имени пакета и подписи приложения$size."))
+            .setNegativeButton(host.uiCopy("Позже"), null)
+            .setNeutralButton(host.uiCopy("Страница релиза")) { _, _ -> openLatest() }
+            .setPositiveButton(host.uiCopy("Скачать")) { _, _ -> downloadUpdate(release) }
+            .show()
+    }
+
+    private fun downloadUpdate(release: ReleaseInfo) {
+        updateButton?.apply { isEnabled = false; alpha = .68f; text = host.uiCopy("Скачиваем…") }
+        updateStatus?.apply { text = host.uiCopy("Скачиваем и проверяем официальный APK…"); setTextColor(DeyttUi.SKY) }
+        updateExecutor.execute {
+            runCatching {
+                UpdateChecker.downloadAndVerify(host, release) { progress ->
+                    host.runOnUiThread {
+                        if (!host.isFinishing && !host.isDestroyed) {
+                            updateStatus?.text = host.uiCopy("Скачиваем обновление · $progress%")
+                        }
+                    }
+                }
+            }.onSuccess { apk -> host.runOnUiThread {
+                if (host.isFinishing || host.isDestroyed) return@runOnUiThread
+                downloadedUpdate = apk
+                updateButton?.apply { isEnabled = true; alpha = 1f; text = host.uiCopy("Установить обновление") }
+                updateStatusText = "APK проверен. Установка начнётся только после подтверждения Android."
+                updateStatus?.apply { text = host.uiCopy(updateStatusText); setTextColor(DeyttUi.MINT) }
+                offerInstall(apk)
+            } }.onFailure { failure -> host.runOnUiThread {
+                if (host.isFinishing || host.isDestroyed) return@runOnUiThread
+                updateButton?.apply { isEnabled = true; alpha = 1f; text = host.uiCopy("Повторить загрузку") }
+                updateStatusText = when (failure.message) {
+                    "Downloaded APK belongs to another app" -> "APK принадлежит другому приложению. Установка отменена."
+                    "Downloaded APK signing certificate does not match" -> "Подпись APK не совпадает с установленной версией. Установка отменена."
+                    else -> "Не удалось загрузить или проверить APK. Попробуйте позже."
+                }
+                updateStatus?.apply { text = host.uiCopy(updateStatusText); setTextColor(DeyttUi.CORAL) }
+            } }
+        }
+    }
+
+    private fun offerInstall(apk: File) {
+        AlertDialog.Builder(host)
+            .setTitle(host.uiCopy("Обновление готово"))
+            .setMessage(host.uiCopy("Android попросит подтвердить установку. Приложение перезапустится после её завершения."))
+            .setNegativeButton(host.uiCopy("Позже"), null)
+            .setPositiveButton(host.uiCopy("Установить сейчас")) { _, _ -> launchInstaller(apk) }
+            .show()
+    }
+
+    private fun launchInstaller(apk: File) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !host.packageManager.canRequestPackageInstalls()) {
+            AlertDialog.Builder(host)
+                .setTitle(host.uiCopy("Разрешите установку обновлений"))
+                .setMessage(host.uiCopy("Android откроет настройки разрешения для этого приложения. Вернитесь и нажмите «Установить обновление»."))
+                .setNegativeButton(host.uiCopy("Позже"), null)
+                .setPositiveButton(host.uiCopy("Открыть настройки")) { _, _ ->
+                    val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${host.packageName}"))
+                    runCatching { host.startActivity(intent) }
+                }
+                .show()
+            return
+        }
+        runCatching { UpdateChecker.launchInstaller(host, apk) }
+            .onFailure {
+                updateStatusText = "Не удалось открыть системный установщик Android."
+                updateStatus?.apply { text = host.uiCopy(updateStatusText); setTextColor(DeyttUi.CORAL) }
+            }
+    }
+
+    private fun formatUpdateSize(bytes: Long): String =
+        String.format(Locale.US, "%.1f MB", bytes / 1_000_000.0)
 
     private fun showTelegramPairing() {
         val dialog = Dialog(host)

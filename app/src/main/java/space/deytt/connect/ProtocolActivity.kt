@@ -44,14 +44,20 @@ class ProtocolActivity : Activity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             val event = intent ?: return
             if (event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID) != pendingProbeRequestId) return
+            if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
+                RouteProbeClient.clear(this@ProtocolActivity, pendingProbeRequestId.orEmpty())
+            }
             val tag = event.getStringExtra(RouteProbeClient.EXTRA_ROUTE_TAG).orEmpty()
             val view = latencyViews[tag]
             val elapsed = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
+            val bytesPerSecond = event.getLongExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, -1L)
             val error = event.getStringExtra(RouteProbeClient.EXTRA_ERROR)
             if (view != null) {
                 when {
                     elapsed >= 0L -> {
-                        view.text = "$elapsed мс"
+                        view.text = if (bytesPerSecond >= 0L) {
+                            String.format(java.util.Locale.US, "$elapsed мс · %.1f Мбит/с", bytesPerSecond * 8.0 / 1_000_000.0)
+                        } else "$elapsed мс"
                         view.setTextColor(DeyttUi.MINT)
                         view.contentDescription = "Задержка через proxy ${view.tag}: $elapsed миллисекунд"
                     }
@@ -101,10 +107,8 @@ class ProtocolActivity : Activity() {
     }
 
     override fun onStop() {
-        if (pendingProbeRequestId != null && ConnectVpnService.isRouteProbeRunning()) {
-            runCatching {
-                startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_CANCEL_ROUTE_PROBE))
-            }
+        if (pendingProbeRequestId != null && RouteProbeClient.isRunning(this)) {
+            runCatching { RouteProbeClient.cancel(this) }
             pendingProbeRequestId = null
             latencyViews.values.forEach { view ->
                 view.text = "пинг"
@@ -348,14 +352,7 @@ class ProtocolActivity : Activity() {
     }
 
     private fun compareProtocols(routes: List<DeyttRoute>) {
-        if (ConnectVpnService.isRouteProbeRunning()) return
-        if (ConnectVpnService.isRunning() || AwgTunnelController.isRunning()) {
-            AlertDialog.Builder(this)
-                .setMessage("Отключите VPN, чтобы сравнить отдельные выходы. Проверка активного маршрута остаётся доступна у его строки.")
-                .setPositiveButton("Понятно", null)
-                .show()
-            return
-        }
+        if (RouteProbeClient.isRunning(this)) return
         val config = SubscriptionStore(this).readCurrent() ?: return
         val candidates = routes.filter { it.engine == TunnelEngine.LIBBOX && it.configTag.isNotBlank() }
         if (candidates.size < 2) return
@@ -381,6 +378,7 @@ class ProtocolActivity : Activity() {
                 config,
                 candidates.map(DeyttRoute::configTag),
                 method,
+                TelegramSessionStore.read(this),
             )
         } catch (_: Throwable) {
             candidates.forEach { route ->
@@ -396,7 +394,7 @@ class ProtocolActivity : Activity() {
     }
 
     private fun measure(route: DeyttRoute, view: TextView) {
-        if (ConnectVpnService.isRouteProbeRunning()) return
+        if (RouteProbeClient.isRunning(this)) return
         val generation = ++latencyGeneration
         val config = SubscriptionStore(this).readCurrent() ?: return
         val selected = SelectedRouteStore(this).read()
@@ -425,23 +423,18 @@ class ProtocolActivity : Activity() {
             return
         }
 
-        if (active || route.engine == TunnelEngine.AMNEZIAWG) {
-            val target = if (!active && route.engine == TunnelEngine.AMNEZIAWG) {
-                RouteLatency.target(config, route, AwgProfileStore(this).read(route.id))
-            } else null
-            if (!active && target == null) {
-                view.text = "нет ответа"
-                view.isEnabled = true
-                view.alpha = 1f
-                view.contentDescription = "Не удалось определить сервер AmneziaWG для TCP-проверки"
-                return
-            }
+        if (route.engine == TunnelEngine.AMNEZIAWG && !active) {
+            view.text = "HTTP после подключения"
+            view.isEnabled = true
+            view.alpha = 1f
+            view.setTextColor(DeyttUi.AMBER)
+            view.contentDescription = "HTTP через этот профиль будет измерен после подключения"
+            return
+        }
+
+        if (active) {
             LatencyExecutor.pool.execute {
-                val elapsed = if (active) {
-                    runCatching { RouteProxyProbe.measureThroughSystemVpn(method) }.getOrNull()
-                } else {
-                    target?.let { RouteLatency.measureTcp(it) }
-                }
+                val elapsed = runCatching { RouteProxyProbe.measureThroughSystemVpn(method) }.getOrNull()
                 runOnUiThread {
                     if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
                         view.text = elapsed?.let { "$it мс" } ?: "нет ответа"
@@ -449,12 +442,7 @@ class ProtocolActivity : Activity() {
                         view.alpha = 1f
                         view.textSize = 9f
                         view.setTextColor(if (elapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
-                        view.contentDescription = when {
-                            elapsed == null -> "Проверка маршрута не ответила за 10 секунд"
-                            route.engine == TunnelEngine.AMNEZIAWG && !active ->
-                                "TCP-подключение до сервера AmneziaWG заняло $elapsed миллисекунд; HTTPS через прокси не проверялся"
-                            else -> "Два HTTPS-запроса ${method.wireValue} через активный VPN заняли $elapsed миллисекунд"
-                        }
+                        view.contentDescription = if (elapsed != null) "HTTP $elapsed миллисекунд через активный VPN" else "HTTP через активный VPN не ответил"
                     }
                 }
             }
@@ -462,7 +450,9 @@ class ProtocolActivity : Activity() {
         }
 
         try {
-            pendingProbeRequestId = RouteProbeClient.start(this, config, listOf(route.configTag), method)
+            pendingProbeRequestId = RouteProbeClient.start(
+                this, config, listOf(route.configTag), method, TelegramSessionStore.read(this),
+            )
             view.text = "proxy…"
             view.isEnabled = true
             view.alpha = 1f
@@ -506,8 +496,8 @@ class ProtocolActivity : Activity() {
     }
 
     private fun applySelection(route: DeyttRoute) {
-        if (ConnectVpnService.isRouteProbeRunning()) {
-            startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_CANCEL_ROUTE_PROBE))
+        if (RouteProbeClient.isRunning(this)) {
+            runCatching { RouteProbeClient.cancel(this) }
             pendingProbeRequestId = null
         }
         if (ConnectVpnService.isRunning()) {

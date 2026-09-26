@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.os.Build
 import android.text.InputFilter
 import android.text.InputType
-import android.text.method.PasswordTransformationMethod
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -20,93 +19,89 @@ import android.widget.TextView
 import androidx.core.content.edit
 import java.util.concurrent.Executors
 import space.deytt.connect.DeyttUi.button
-import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.note
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.screen
-import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
+import space.deytt.connect.AppLanguage.uiCopy
 
 class SetupActivity : Activity() {
     private val executor = Executors.newSingleThreadExecutor()
-    private lateinit var input: EditText
     private lateinit var state: TextView
-    private lateinit var importButton: TextView
+    private lateinit var accountAction: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val updating = SubscriptionStore(this).readCurrent() != null
+        val sessionToken = TelegramSessionStore.read(this)
+        val incomingUrl = intent.getStringExtra(EXTRA_SUBSCRIPTION_URL)
         val root = screen()
-        root.addView(header("добавить источник", if (updating) "Обновить подписку" else "Подключить подписку", updating))
+        root.addView(header(uiCopy("аккаунт · подписка · устройства"), uiCopy(if (updating) "Обновить подписку" else "Подключить подписку"), updating))
         root.addView(spacer(8, this))
         root.addView(note(
-            "Войдите через Telegram — профили загрузятся сами. Ссылка подписки остаётся запасным способом.",
+            uiCopy("Войдите в Telegram, чтобы загрузить подписку и маршруты."),
             DeyttUi.MUTED,
         ))
         root.addView(spacer(14, this))
-        root.addView(button("Подключить аккаунт Telegram", secondary = true).apply {
-            setOnClickListener { showTelegramPairing() }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)))
-        root.addView(spacer(18, this))
-        root.addView(sectionLabel("или добавьте ссылку вручную"))
-        val incomingUrl = intent.getStringExtra(EXTRA_SUBSCRIPTION_URL)
-        input = EditText(this).apply {
-            hint = "https://deytt.space/sub/token/…"
-            setHintTextColor(DeyttUi.MUTED)
-            setTextColor(DeyttUi.TEXT)
-            textSize = 15f
-            setSingleLine(true)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-            contentDescription = "Ссылка на подписку, скрытая"
-            minHeight = dp(56)
-            setPadding(dp(16), dp(16), dp(16), dp(16))
-            background = rounded(DeyttUi.SURFACE_2, 12f, DeyttUi.LINE)
-            setText(incomingUrl ?: getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_url", ""))
-            transformationMethod = PasswordTransformationMethod.getInstance()
+        accountAction = button(uiCopy(if (sessionToken == null) "Подключить аккаунт Telegram" else "Обновить подписку"), secondary = true).apply {
+            setOnClickListener { loadAccountSubscription() }
         }
-        root.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        val revealLink = actionLabel("показать").apply {
-            contentDescription = "Показать или скрыть ссылку на подписку"
-            setOnClickListener {
-                val cursor = input.selectionStart.coerceAtLeast(0)
-                val hidden = input.transformationMethod is PasswordTransformationMethod
-                input.transformationMethod = if (hidden) null else PasswordTransformationMethod.getInstance()
-                contentDescription = if (hidden) "Скрыть ссылку на подписку" else "Показать ссылку на подписку"
-                text = if (hidden) "скрыть" else "показать"
-                input.setSelection(cursor.coerceAtMost(input.length()))
-            }
-        }
-        root.addView(revealLink, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.END
-        })
-        root.addView(spacer(14, this))
-        importButton = button(if (updating) "Обновить подписку" else "Добавить подписку").apply { setOnClickListener { importProfile() } }
         state = note("", DeyttUi.MUTED).apply {
             visibility = View.GONE
             setPadding(dp(14), dp(13), dp(14), dp(13))
         }
         root.addView(state)
-        present(root, importButton)
+        present(root, accountAction)
+        if (!incomingUrl.isNullOrBlank()) importProfile(incomingUrl)
     }
 
-    private fun importProfile() {
-        val raw = input.text.toString().trim()
-        if (raw.isBlank()) {
-            state.visibility = View.VISIBLE
-            state.setTextColor(DeyttUi.CORAL)
-            state.text = "Вставьте ссылку на подписку"
+    private fun loadAccountSubscription() {
+        val token = TelegramSessionStore.read(this)
+        if (token == null) {
+            showTelegramPairing()
             return
         }
-        input.isEnabled = false
-        importButton.isEnabled = false
-        importButton.alpha = .65f
         state.visibility = View.VISIBLE
         state.setTextColor(DeyttUi.BLUE)
-        state.text = "Получаем маршруты…"
+        state.text = uiCopy("Проверяем подписку в Telegram…")
+        state.announceForAccessibility(state.text)
+        accountAction.isEnabled = false
+        accountAction.alpha = .65f
+        executor.execute {
+            val subscription = runCatching { TelegramPairingClient.subscriptionUrl(token) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                subscription.onSuccess { url ->
+                    if (url.isNullOrBlank()) {
+                        state.setTextColor(DeyttUi.AMBER)
+                        state.text = uiCopy("Активная подписка не найдена. Оформите её в Telegram, затем повторите загрузку.")
+                        accountAction.text = uiCopy("Повторить загрузку")
+                        accountAction.isEnabled = true
+                        accountAction.alpha = 1f
+                    } else {
+                        importProfile(url)
+                    }
+                }.onFailure {
+                    state.setTextColor(DeyttUi.CORAL)
+                    state.text = uiCopy("Не удалось загрузить подписку. Проверьте соединение и попробуйте ещё раз.")
+                    accountAction.text = uiCopy("Повторить загрузку")
+                    accountAction.isEnabled = true
+                    accountAction.alpha = 1f
+                }
+            }
+        }
+    }
+
+    private fun importProfile(raw: String) {
+        accountAction.isEnabled = false
+        accountAction.alpha = .65f
+        state.visibility = View.VISIBLE
+        state.setTextColor(DeyttUi.BLUE)
+        state.text = uiCopy("Получаем маршруты…")
         state.announceForAccessibility(state.text)
         executor.execute {
             runCatching { SubscriptionClient.import(this, raw) }
@@ -144,7 +139,9 @@ class SetupActivity : Activity() {
                     state.setTextColor(DeyttUi.CORAL)
                     state.text = SubscriptionErrorText.userMessage(error)
                     state.announceForAccessibility(state.text)
-                    input.isEnabled = true; importButton.isEnabled = true; importButton.alpha = 1f
+                    accountAction.text = uiCopy("Повторить загрузку")
+                    accountAction.isEnabled = true
+                    accountAction.alpha = 1f
                 }}
         }
     }
@@ -304,16 +301,16 @@ class SetupActivity : Activity() {
                             dialog.dismiss()
                             val subscription = subscriptionResult.getOrNull()
                             if (subscription != null) {
-                                input.setText(subscription)
-                                importProfile()
+                                accountAction.text = uiCopy("Обновить подписку")
+                                importProfile(subscription)
                             } else {
                                 state.visibility = View.VISIBLE
                                 state.setTextColor(if (subscriptionResult.isSuccess) DeyttUi.MINT else DeyttUi.AMBER)
-                                state.text = if (subscriptionResult.isSuccess) {
-                                    "Аккаунт Telegram подключён. Активной подписки нет — добавь ссылку ниже."
-                                } else {
-                                    "Аккаунт Telegram подключён, но загрузить подписку не удалось. Добавь ссылку ниже."
-                                }
+                                state.text = if (subscriptionResult.isSuccess) uiCopy("Активная подписка не найдена. Оформите её в Telegram, затем повторите загрузку.")
+                                else uiCopy("Не удалось загрузить подписку. Проверьте соединение и попробуйте ещё раз.")
+                                accountAction.text = uiCopy("Повторить загрузку")
+                                accountAction.isEnabled = true
+                                accountAction.alpha = 1f
                             }
                         }.onFailure { error ->
                             primary.text = "Подтвердить код"

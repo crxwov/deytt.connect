@@ -15,6 +15,16 @@ class AppLanguageTest {
     }
 
     @Test
+    fun translatesSubscriptionSetupScreen() {
+        assertEquals("Connect subscription", AppLanguage.english("Подключить подписку"))
+        assertEquals("Link Telegram account", AppLanguage.english("Подключить аккаунт Telegram"))
+        assertEquals(
+            "Sign in to Telegram to load your subscription and routes.",
+            AppLanguage.english("Войдите в Telegram, чтобы загрузить подписку и маршруты."),
+        )
+    }
+
+    @Test
     fun translatesDynamicTrafficAndConnectionCopy() {
         assertEquals(
             "14 GB used of 20 GB. 10 GB downloaded, 4 GB uploaded.",
@@ -38,6 +48,23 @@ class AppLanguageTest {
         assertEquals("1 profile loaded", AppLanguage.english("1 профиль загружен"))
         assertEquals("4 profiles loaded", AppLanguage.english("4 профиля загружено"))
         assertEquals("5 profiles loaded", AppLanguage.english("5 профилей загружено"))
+    }
+
+    @Test
+    fun translatesRouteDiagnosticsAndUpdateDetails() {
+        assertEquals("queued", AppLanguage.english("в очереди"))
+        assertEquals("Route quality: Good", AppLanguage.english("Качество маршрута: good"))
+        assertEquals(
+            "Expand Netherlands exits to start the HTTP route check",
+            AppLanguage.english("Раскрыть выходы Netherlands; откроется проверка HTTP маршрутов"),
+        )
+        assertEquals("Reset all keys?", AppLanguage.english("Сбросить все ключи?"))
+        assertEquals("12 months", AppLanguage.english("12 мес."))
+        assertEquals(
+            "The GitHub file will be checked against the app package and signing certificate · 13 MB.",
+            AppLanguage.english("Файл с GitHub будет проверен по имени пакета и подписи приложения · 13 MB."),
+        )
+        assertEquals("Downloading update · 72%", AppLanguage.english("Скачиваем обновление · 72%"))
     }
 
     @Test
