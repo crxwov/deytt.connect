@@ -1,40 +1,29 @@
-# Roadmap — deytt.connect 0.8.7
+# Roadmap — Publish deytt.connect 0.8.7
 
 ## Objective and success criteria
-Polish the Android client against the supplied screenshots and brand assets; fix route-map labels and itinerary, connected speed/latency visibility and automatic route diagnostics, the RU→DE LTE+whitelist label, protocol marks, dialogs, profile, and settings. Validate on the attached Android phone without rotating keys or changing account data.
+Publish Android app version 0.8.7 as a GitHub release for `crxwov/deytt.connect`.
+Success: use a suitable installable APK built from pushed `main`, validate its package/version/signature/hash, create tag/release, attach the APK, and verify the public release asset. Preserve unrelated working-tree changes.
 
 ## Stages
-- [x] Inspect app, assets, existing device state, and route contracts.
-- [x] Implement cohesive dialogs, map labels/leaders, aligned itinerary, regular-weight launcher mark, profile/document/settings improvements, and RU→DE-only LTE+whitelist labeling.
-- [x] Improve concurrent latency checks, bounded speed probes, automatic app-only AWG checks, and restore the user's active route after diagnostics.
-- [x] Run automated checks and physical-device acceptance; install and verify 0.8.7 (versionCode 21).
-- [x] Commit the scoped Android changes to `main` and push. No backend or server service changed in this task; server pull/restart is not applicable.
+- [x] Inspect release/tag history, repository guidance, and Android signing/build configuration.
+- [x] Build and validate the installable debug pre-release APK; confirm signing identity matches the previous published version.
+- [x] Create the 0.8.7 GitHub release and attach the validated APK; verify tag and downloadable asset.
+- [x] Record final release URL, artifact hash, validation, and status here.
 
 ## Current state
-- Final Android APK built and installed on TECNO CH6i. Physical screen confirms the account avatar, map labels/leaders, route strip, ping, and live speed on an active route; final idle baseline also shows the fully loaded map and automatic ping with VPN disconnected. The route strip keeps the selected Amsterdam exit aligned with the map and labels Frankfurt only as approximate IP geolocation.
-- Device restored to baseline: English, Auto-select, network-location lookup off, VPN idle/disconnected.
-- User data and VPN keys were preserved. Backend profile metadata work (`4544fe3`) was already deployed in the preceding task and was not changed here.
-- Android implementation commit `1b0346b` is pushed to `origin/main`; this Roadmap records the verified delivery state.
+- Source implementation is pushed to `main` at `d5b2d39`.
+- GitHub pre-release `v0.8.7-debug` is published at https://github.com/crxwov/deytt.connect/releases/tag/v0.8.7-debug and targets source commit `d5b2d396d5754b6290d9e3d32d6bebb504a96f1f`.
+- Asset `app-arm64-v8a-debug.apk` is uploaded and was downloaded back from GitHub; its SHA-256 matches the local artifact.
 
 ## Findings and decisions
-- Route checks were physically exercised for NL and DE protocols, available NL/DE AmneziaWG profiles, FI VLESS/Trojan/Hysteria, and the RU→DE double route. Temporary AWG measurement is app-only and restores the user's selected active tunnel.
-- Finland AmneziaWG is configured in the client catalogue but has no active AWG service/interface/listener on the FI host. Official Amnezia documentation warns that reinstalling/removing the server protocol can delete users and require new connection keys; no reinstall or key mutation was attempted. The app reports this endpoint unavailable.
-- VLESS and Hysteria use their upstream marks. Trojan has no standalone mark in the upstream project documentation, so the UI uses a neutral diamond rather than claiming an unofficial logo.
-- The live account has no registration timestamp; tenure is omitted rather than fabricated.
-- Read-only key review: Happ credentials for VLESS, Trojan, and Hysteria derive from the existing subscription token; no extra identities are required to revoke that token. Xray HandlerService removes a VLESS/Trojan user from the live inbound, while the documented `sib` disconnect targets a source IP; the docs do not promise that removing a user closes already-established streams. Device-HWID revoke is enforced on subscription refresh and does not terminate an active tunnel. Amnezia guest access is explicitly revocable per protocol/device; its full-access key has different limitations. Profile copy now explains that an established Happ tunnel may persist until reconnect. No keys or sessions were changed.
+- Existing project convention is GitHub pre-release `vX.Y.Z-debug` with `app-arm64-v8a-debug.apk`; latest is `v0.8.6-debug`. No `v0.8.7-debug` tag/release exists.
+- Validated artifact: `app-arm64-v8a-debug.apk`, package `space.deytt.connect`, versionName `0.8.7`, versionCode `21`, ABI `arm64-v8a`; APK signature verifies and matches the last release certificate.
+- SHA-256: `2d500dce96dcb07269db6530db8ef5b485c23eec66589d586342053496eb2db1`.
+- The project publishes debug builds as prereleases. This artifact is signed with the same certificate as `v0.8.6-debug`, preserving update compatibility; it is not a Play Store production-signed build.
 
-## Validation
-- `:app:testDebugUnitTest`: 74 tests, 0 failures/errors/skips.
-- `:app:lintDebug`: passed, 0 errors (71 warnings).
-- `:app:assembleDebug`: passed; ARM64 APK installed and launched on the attached phone.
-- Physical route diagnostics passed on NL, DE and RU→DE; Finland AWG remains blocked by server provisioning. Active NL Trojan reconnect, ping/speed display, map-to-itinerary consistency, language, privacy setting, final profile copy, and baseline restoration verified. After final install, Auto-select idle home was left open until the map and ping finished loading; VPN remained disconnected.
-- `git diff --check`: passed.
-- First build attempt used unsupported system JDK 27 and failed in Kotlin version parsing; rerunning with the repository JDK 17 and Android SDK succeeded.
-- Final JDK 17 build after profile copy refinement passed: 74 unit tests (0 failures/errors/skips), lint (0 errors; 71 warnings), and debug assembly. `git diff --check` passes. Final APK SHA256: `2d500dce96dcb07269db6530db8ef5b485c23eec66589d586342053496eb2db1`.
-- `1b0346b` pushed to `origin/main`. No server deployment/restart applies to this client-only change.
-
-## Changed files
-Android app UI and behavior in `MainActivity`, `TopLevelPages`, `ProfileFlows`, `DeyttUi`, `AppLanguage`, `ConnectVpnService`, `AwgTunnelController`, `RouteProxyProbe`, `ProtocolActivity`, and `AppDialog`, `AwgDiagnosticConfig`, `LegalDocument`, `NativeDocumentActivity`; route map asset; launcher vector/theme/manifest; focused unit tests; protocol-mark and font-license docs.
+## Issues and validation
+- `aapt dump badging` and `apksigner verify` passed; package/version/ABI match 0.8.7 / 21 / arm64-v8a.
+- GitHub release API reports the asset as uploaded. Downloaded release asset hash equals the local APK hash. Remote tag resolves to the intended `main` source commit.
 
 ## Next action and resume context
-Completed. Keep `.codebase-memory`, `.agents`, and unrelated completed Roadmaps untouched. No server deployment or restart is needed because this is a client-only change.
+Completed; release link and verified APK are available above.
