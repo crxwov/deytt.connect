@@ -11,3 +11,5 @@ captures/
 .toolchain/
 *.keystore
 *.jks
+
+ROADMAP*.md
