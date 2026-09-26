@@ -7,10 +7,10 @@ Stop map labels and paths jumping during all routes; make Auto show a stable, co
 - [x] Capture device behavior and trace map, scoring, AWG diagnostics, and release setup.
 - [x] Stabilize map rendering, make ranking unique, remove AWG 1.5, fix the AWG UAPI socket path, and remove its unrelated external DNS canary.
 - [x] Combine AWG latency and speed into one bounded request; validate icon, build and device behavior.
-- [ ] Record the verified final state, commit, push, and publish the downloadable debug APK.
+- [x] Record the verified final state, commit, push, and publish the downloadable debug APK.
 
 ## Current state
-- Repository: `/home/hackov/Documents/deytt-connect`, branch `main`; published baseline `2bf938e` / `v0.8.7-debug`; working version `0.8.8`.
+- Repository: `/home/hackov/Documents/deytt-connect`, branch `main`; source commit `37e340c` pushed; debug prerelease `v0.8.8-debug` published. Prior baseline was `2bf938e` / `v0.8.7-debug`.
 - Physical device available: TECNO CH6i. Preserve its account and approximate-IP-location opt-in.
 - This is a standalone Android client. Server pull/restart does not apply.
 
