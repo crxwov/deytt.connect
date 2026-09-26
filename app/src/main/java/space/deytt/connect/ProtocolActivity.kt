@@ -70,7 +70,7 @@ class ProtocolActivity : Activity() {
                 view.isEnabled = true
                 view.alpha = 1f
             } else if (!error.isNullOrBlank() && tag.isBlank()) {
-                AlertDialog.Builder(this@ProtocolActivity)
+                AppDialog.Builder(this@ProtocolActivity)
                     .setMessage(error)
                     .setPositiveButton("Понятно", null)
                     .show()
@@ -145,7 +145,7 @@ class ProtocolActivity : Activity() {
         val globe = RouteGlobeView(this)
         globe.onMapNodeTapped = { node ->
             if (node == "user") {
-                AlertDialog.Builder(this)
+                AppDialog.Builder(this)
                     .setMessage("Точка входа показывает приблизительный регион этого устройства; выбрать её как VPN-выход нельзя.")
                     .setPositiveButton("Понятно", null)
                     .show()
@@ -339,7 +339,7 @@ class ProtocolActivity : Activity() {
 
     private fun requestProbeAuthorization(afterGrant: () -> Unit): Boolean {
         val permission = VpnService.prepare(this) ?: return false
-        AlertDialog.Builder(this)
+        AppDialog.Builder(this)
             .setTitle("Разрешить диагностику?")
             .setMessage("Android попросит системное разрешение VPN для проверки маршрутов. Проверка использует временный локальный прокси и не запускает VPN-туннель.")
             .setNegativeButton("Отмена", null)
@@ -386,7 +386,7 @@ class ProtocolActivity : Activity() {
             }
             compareButton?.apply { text = "Сравнить протоколы"; isEnabled = true; alpha = 1f }
             chooseButton?.isEnabled = !selecting
-            AlertDialog.Builder(this)
+            AppDialog.Builder(this)
                 .setMessage("Не удалось запустить проверку маршрутов.")
                 .setPositiveButton("Понятно", null)
                 .show()
@@ -482,7 +482,7 @@ class ProtocolActivity : Activity() {
                 selecting = false
                 chooseButton?.isEnabled = true
             }
-            val confirmation = AlertDialog.Builder(this)
+            val confirmation = AppDialog.Builder(this)
                 .setTitle("Сменить VPN-выход?")
                 .setMessage("Текущее соединение остановится. После выбора запустите подключение снова, чтобы применить новый маршрут.")
                 .setNegativeButton("Оставить подключение") { _, _ -> resumeSelection() }

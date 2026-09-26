@@ -1,27 +1,38 @@
-# Roadmap — Mobile remediation 0.8.6
+# Roadmap — deytt.connect 0.8.7
 
-## Objective and status
-Deliver the evidenced mobile fixes from the 40-item Excalidraw audit, preserve account/keys, validate on the physical TECNO. Implementation, bounded acceptance and delivery completed. Full original acceptance is not claimed: remaining constraints below are explicit.
+## Objective and success criteria
+Polish the Android client against the supplied screenshots and brand assets; fix route-map labels and itinerary, connected speed/latency visibility and automatic route diagnostics, the RU→DE LTE+whitelist label, protocol marks, dialogs, profile, and settings. Validate on the attached Android phone without rotating keys or changing account data.
 
 ## Stages
-- [x] Diagnose actual API/runtime and phone failures.
-- [x] Repair avatar, account sessions, HWID subscription access, diagnostics endpoint, price/support/legal contracts; deploy backend via Git and restart API.
-- [x] Complete native home/profile/diagnostic/update flows, bilingual states and lifecycle fixes.
-- [x] Unit tests, lint/APK build, physical touch flows and external HTTPS verification.
-- [x] Commit/push Android main, publish verified APK, verify installed/released identity and final device state.
+- [x] Inspect app, assets, existing device state, and route contracts.
+- [x] Implement cohesive dialogs, map labels/leaders, aligned itinerary, regular-weight launcher mark, profile/document/settings improvements, and RU→DE-only LTE+whitelist labeling.
+- [x] Improve concurrent latency checks, bounded speed probes, automatic app-only AWG checks, and restore the user's active route after diagnostics.
+- [x] Run automated checks and physical-device acceptance; install and verify 0.8.7 (versionCode 21).
+- [ ] Commit the scoped Android changes and Roadmap to `main`, then push. No backend or server service changed in this task; server pull/restart is not applicable.
 
-## Verified state
-Android 0.8.6 (20) installed without data reset; final APK SHA256 3036bf33633fed3d39a8fc29347938c28dad65aeb7f199bd0232a48f07eb4f39.
-65 Android tests pass, lint 0 errors / 66 warnings, APK assembly pass. Backend combined targeted suite42 tests passes; additional HWID/subscription regression suite passed. Backend commits a67cc52/e37b9ac/51d1c10/d4a1a33 pushed and delivered;9/9 latest runtime files match checkout, migration present, zero real HWID blocks, API active. Legal aliases validated nginx syntax and real phone browser pages.
-Real avatar shown. All12 country protocol samples give speed+latency. NL AWG3.1 temporary test restores VPNoff; NL AWG1.5 restores active FI VLESS. FI tunnel opens external HTTPS; origin survives browser return; country diagnostic preserves active tunnel. Home5s ping retains results, Connect preempts background check. Language recreation preserves account/photo. Support chat recreation closes old poll/dialog without crash; OS rotation settings restored. Profile traffic, special plan explanation, HWID confirmation, session details and legal links verified.
-See docs/mobile-qa-0.8.6.md for metrics/reproduction. Private evidence: /home/hackov/.codex/visualizations/2026/09/26/01a0ddcc-bcd9-7822-b240-2690823c64fa/fix-qa/fixes.md.
+## Current state
+- Final Android APK built and installed on TECNO CH6i. Physical screen confirms the account avatar, map labels/leaders, route strip, ping, and live speed on an active route; final idle baseline also shows the fully loaded map and automatic ping with VPN disconnected. The route strip keeps the selected Amsterdam exit aligned with the map and labels Frankfurt only as approximate IP geolocation.
+- Device restored to baseline: English, Auto-select, network-location lookup off, VPN idle/disconnected.
+- User data and VPN keys were preserved. Backend profile metadata work (`4544fe3`) was already deployed in the preceding task and was not changed here.
 
-## Decisions / limits
-No purchases, support sends, real key resets, device/session revocations, or new VPN credentials. Synthetic tests cover destructive paths. HWID block prevents future subscription retrieval; downloaded shared credentials/existing tunnels remain usable. Happ provider APIs support one-link device management but no provider InstallID integration is configured here. No credential migration or bulk rotation.
-Unlimited-device grants retain special terms; support renews them rather than inventing a finite tariff price. Update checks every3h foreground; no3h wait/future OTA cycle claimed; Android controls install/restart. AWG requires temporary systemVPN, all individual AWG regions not tested. Trojan neutral icon; official Xray/Hysteria/Amnezia marks. API24–27 signature flags fixed, no old physical device available.
+## Findings and decisions
+- Route checks were physically exercised for NL and DE protocols, available NL/DE AmneziaWG profiles, FI VLESS/Trojan/Hysteria, and the RU→DE double route. Temporary AWG measurement is app-only and restores the user's selected active tunnel.
+- Finland AmneziaWG is configured in the client catalogue but has no active AWG service/interface/listener on the FI host. Official Amnezia documentation warns that reinstalling/removing the server protocol can delete users and require new connection keys; no reinstall or key mutation was attempted. The app reports this endpoint unavailable.
+- VLESS and Hysteria use their upstream marks. Trojan has no standalone mark in the upstream project documentation, so the UI uses a neutral diamond rather than claiming an unofficial logo.
+- The live account has no registration timestamp; tenure is omitted rather than fabricated.
+- Read-only key review: Happ credentials for VLESS, Trojan, and Hysteria derive from the existing subscription token; no extra identities are required to revoke that token. Xray HandlerService removes a VLESS/Trojan user from the live inbound, while the documented `sib` disconnect targets a source IP; the docs do not promise that removing a user closes already-established streams. Device-HWID revoke is enforced on subscription refresh and does not terminate an active tunnel. Amnezia guest access is explicitly revocable per protocol/device; its full-access key has different limitations. Profile copy now explains that an established Happ tunnel may persist until reconnect. No keys or sessions were changed.
 
-## Findings / failed attempts
-Telegram album returns0 photos but getChat supplies current public image; upstream MIME application/octet-stream. Partial-body and MIME assumptions repaired with17tests. Home queue completion previously erased successful latency. Unlimited grant previously returned bad_custom_params. Server support/download initially stale despite checkout. One deploy supplied incorrect pre-pull revision, safely rejected before sync; verified revision rerun succeeded. Country DE test during API restart failed; stable post-restart repeat passed. GitHub rejected the abbreviated target SHA; using the verified full commit SHA published successfully. All unrelated graph artifacts, skills and concurrent backend work preserved.
+## Validation
+- `:app:testDebugUnitTest`: 74 tests, 0 failures/errors/skips.
+- `:app:lintDebug`: passed, 0 errors (71 warnings).
+- `:app:assembleDebug`: passed; ARM64 APK installed and launched on the attached phone.
+- Physical route diagnostics passed on NL, DE and RU→DE; Finland AWG remains blocked by server provisioning. Active NL Trojan reconnect, ping/speed display, map-to-itinerary consistency, language, privacy setting, final profile copy, and baseline restoration verified. After final install, Auto-select idle home was left open until the map and ping finished loading; VPN remained disconnected.
+- `git diff --check`: passed.
+- First build attempt used unsupported system JDK 27 and failed in Kotlin version parsing; rerunning with the repository JDK 17 and Android SDK succeeded.
+- Final JDK 17 build after profile copy refinement passed: 74 unit tests (0 failures/errors/skips), lint (0 errors; 71 warnings), and debug assembly. `git diff --check` passes. Final APK SHA256: `2d500dce96dcb07269db6530db8ef5b485c23eec66589d586342053496eb2db1`.
 
-## Next action / resume
-Android b4097f5 pushed; v0.8.6-debug published. GitHub asset and installed APK hashes both match the verified build. Manual app update check confirms latest version installed. Device restored to VPNoff, Auto-select, English, locationoff; original OS rotation restored. Documentation finalized. Preserve this roadmap; remaining acceptance limits above require separate test conditions or provider integration, not a claim of absolute perfection.
+## Changed files
+Android app UI and behavior in `MainActivity`, `TopLevelPages`, `ProfileFlows`, `DeyttUi`, `AppLanguage`, `ConnectVpnService`, `AwgTunnelController`, `RouteProxyProbe`, `ProtocolActivity`, and `AppDialog`, `AwgDiagnosticConfig`, `LegalDocument`, `NativeDocumentActivity`; route map asset; launcher vector/theme/manifest; focused unit tests; protocol-mark and font-license docs.
+
+## Next action and resume context
+Commit only the Android implementation, tests, owned documentation, and this Roadmap on `main`, then push. Keep `.codebase-memory`, `.agents`, and unrelated completed Roadmaps untouched. No server deployment or restart is needed because this is a client-only change.

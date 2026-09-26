@@ -1,6 +1,5 @@
 package space.deytt.connect
 
-import android.app.AlertDialog
 import android.app.Dialog
 import android.content.Intent
 import android.graphics.Color
@@ -14,6 +13,9 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.ImageView
+import android.widget.FrameLayout
+import android.graphics.BitmapFactory
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -49,6 +51,11 @@ internal class ProfileFlows(
     @Volatile private var closed = false
     private var pageToken: String? = null
     private var closeSupport: (() -> Unit)? = null
+    private var identityName: TextView? = null
+    private var identityHandle: TextView? = null
+    private var identitySince: TextView? = null
+    private var identityAvatar: ImageView? = null
+    private var identityFallback: TextView? = null
     private var subscriptionText: TextView? = null
     private var usageText: TextView? = null
     private var deviceSummaryText: TextView? = null
@@ -84,9 +91,8 @@ internal class ProfileFlows(
 
     fun page(): View {
         val root = host.screen(withBackdrop = true)
-        root.addView(host.header("аккаунт · подписка · устройства", "Профиль"))
+        root.addView(host.header(copy("ваш аккаунт", "your account"), "Профиль"))
         root.addView(spacer(12, host))
-        root.addView(host.sectionLabel("аккаунт"))
         val token = TelegramSessionStore.read(host)
         // Rebuilding the signed-out page must invalidate requests issued before logout too.
         refreshGeneration++
@@ -96,16 +102,7 @@ internal class ProfileFlows(
             closeSupport = null
             pageToken = token
         }
-        root.addView(host.row(
-            if (token == null) "Подключить Telegram" else "Telegram подключён",
-            if (token == null) "Войти по username, чтобы открыть подписку и устройства"
-            else "Профиль привязан к этому устройству",
-            if (token == null) "↗" else "✓",
-            if (token == null) "подключить" else "управлять",
-            emphasis = token != null,
-        ).apply {
-            setOnClickListener { if (TelegramSessionStore.read(host) == null) onPairAccount() else onManageAccount() }
-        })
+        root.addView(identityCard(token))
 
         root.addView(spacer(18, host))
         root.addView(host.sectionLabel("подписка"))
@@ -141,39 +138,44 @@ internal class ProfileFlows(
         })
 
         root.addView(spacer(18, host))
-        root.addView(host.sectionLabel("устройства и сессии"))
+        val devicesGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
         deviceSummaryText = host.text(
             if (token == null) "Подключите аккаунт, чтобы увидеть устройства."
             else "Загружаем список…",
             12f,
             MUTED,
         ).apply { setPadding(host.dp(2), host.dp(4), host.dp(2), host.dp(8)) }
-        root.addView(deviceSummaryText)
+        devicesGroup.addView(deviceSummaryText)
         happDevices = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
         }
-        root.addView(happDevices)
+        devicesGroup.addView(happDevices)
         appSessions = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(appSessions)
-        root.addView(host.row("Сбросить ключи", "Отозвать действующие ключи выбранного типа", "↻", "управлять").apply {
+        devicesGroup.addView(appSessions)
+        devicesGroup.addView(host.row("Сбросить ключи", "Отозвать действующие ключи выбранного типа", "↻", "управлять").apply {
             setOnClickListener { showResetChoices() }
         })
-        root.addView(host.note(
-            copy("Сброс ключей отключит выбранные подключения. Завершение сессии приложения отключает только доступ к аккаунту.", "Resetting keys disconnects the selected connections. Ending an app session only removes account access."),
+        devicesGroup.addView(host.note(
+            copy(
+                "Отзыв старого ключа блокирует новые подключения. Активный Happ-туннель может оставаться подключённым до переподключения. Выход из сессии приложения отзывает только доступ к аккаунту.",
+                "Revoking an old key blocks new connections. An active Happ tunnel may stay connected until it reconnects. Ending an app session only removes account access.",
+            ),
             MUTED,
         ))
 
-        root.addView(spacer(18, host))
-        root.addView(host.sectionLabel("помощь и документы"))
-        root.addView(host.row("Поддержка", "Диалог с командой DEYTT", "↗", "открыть").apply {
+        root.addView(accordion(copy("Устройства и сессии", "Devices and sessions"), copy("Подключения и управление доступом", "Connections and access"), devicesGroup))
+        root.addView(spacer(10, host))
+        val helpGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
+        helpGroup.addView(host.row("Поддержка", "Диалог с командой DEYTT", "↗", "открыть").apply {
             setOnClickListener { showSupportChoices() }
         })
-        root.addView(host.row("Условия использования", "deytt.space/info", "↗", "открыть").apply {
-            setOnClickListener { openHttps("https://deytt.space/info/#terms") }
+        helpGroup.addView(host.row("Условия использования", copy("Читать в приложении", "Read in the app"), "↗", "открыть").apply {
+            setOnClickListener { openDocument("terms") }
         })
-        root.addView(host.row("Политика конфиденциальности", "deytt.space/info", "↗", "открыть").apply {
-            setOnClickListener { openHttps("https://deytt.space/info/#privacy") }
+        helpGroup.addView(host.row("Политика конфиденциальности", copy("Читать в приложении", "Read in the app"), "↗", "открыть").apply {
+            setOnClickListener { openDocument("privacy") }
         })
+        root.addView(accordion(copy("Помощь и документы", "Help and documents"), copy("Поддержка, условия и конфиденциальность", "Support, terms and privacy"), helpGroup))
         root.addView(spacer(20, host))
 
         if (token != null) refreshProfile()
@@ -186,13 +188,127 @@ internal class ProfileFlows(
         }
     }
 
+    private fun identityCard(token: String?): View {
+        TelegramIdentityCache.bind(token)
+        val card = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(16), host.dp(16), host.dp(16), host.dp(14))
+            background = host.rounded(SURFACE, 20f, LINE)
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { if (TelegramSessionStore.read(host) == null) onPairAccount() else onManageAccount() }
+        }
+        val identity = LinearLayout(host).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        val avatar = FrameLayout(host).apply { background = host.rounded(SURFACE_2, 32f); clipToOutline = true }
+        identityFallback = host.text(TelegramIdentityCache.username?.take(1)?.uppercase() ?: "•", 24f, TEXT, Typeface.BOLD).apply { gravity = Gravity.CENTER }
+        identityAvatar = ImageView(host).apply { scaleType = ImageView.ScaleType.CENTER_CROP; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        avatar.addView(identityFallback, FrameLayout.LayoutParams(-1, -1))
+        avatar.addView(identityAvatar, FrameLayout.LayoutParams(-1, -1))
+        identity.addView(avatar, LinearLayout.LayoutParams(host.dp(60), host.dp(60)).apply { marginEnd = host.dp(14) })
+        val words = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
+        identityName = host.text(if (token == null) host.uiCopy("Подключить Telegram") else TelegramIdentityCache.username ?: "Telegram", 19f, TEXT, Typeface.BOLD)
+        identityHandle = host.text(if (token == null) copy("Войти в аккаунт", "Sign in") else copy("Загружаем профиль…", "Loading profile…"), 12f, MUTED)
+        words.addView(identityName)
+        words.addView(identityHandle, LinearLayout.LayoutParams(-1, -2).apply { topMargin = host.dp(4) })
+        identity.addView(words, LinearLayout.LayoutParams(0, -2, 1f))
+        identity.addView(host.text("›", 22f, MUTED))
+        card.addView(identity)
+        identitySince = host.text("", 12f, MUTED).apply { visibility = View.GONE; setPadding(0, host.dp(13), 0, 0) }
+        card.addView(identitySince)
+        renderIdentityAvatar()
+        return card
+    }
+
+    private fun renderIdentityAvatar() {
+        val bitmap = TelegramIdentityCache.avatar
+        identityAvatar?.setImageBitmap(bitmap)
+        identityAvatar?.visibility = if (bitmap == null) View.GONE else View.VISIBLE
+        identityFallback?.visibility = if (bitmap == null) View.VISIBLE else View.GONE
+    }
+
+    private fun renderIdentity(profile: JSONObject) {
+        val username = profile.optString("username").takeIf { it.isNotBlank() && it != "null" }
+        val name = listOf(profile.optString("first_name"), profile.optString("last_name"))
+            .filter { it.isNotBlank() && it != "null" }.joinToString(" ")
+        identityName?.text = name.ifBlank { username ?: "Telegram" }
+        identityHandle?.text = username?.let { "@$it" } ?: copy("Telegram подключён", "Telegram connected")
+        identityFallback?.text = (name.ifBlank { username ?: "•" }).take(1).uppercase()
+        val since = profile.optString("registered_at").takeIf { it.isNotBlank() && it != "null" }
+        val days = profile.optLong("service_days", -1L)
+        identitySince?.apply {
+            visibility = if (since == null) View.GONE else View.VISIBLE
+            text = if (since == null) "" else copy("С нами с ", "With us since ") + displayDate(since, withTime = false) +
+                if (days >= 0) " · " + serviceDaysLabel(days) else ""
+        }
+        renderIdentityAvatar()
+    }
+
+    private fun serviceDaysLabel(days: Long): String {
+        val ending = when {
+            days % 100 in 11L..14L -> "дней"
+            days % 10 == 1L -> "день"
+            days % 10 in 2L..4L -> "дня"
+            else -> "дней"
+        }
+        return copy("$days $ending в сервисе", "$days " + if (days == 1L) "day with DEYTT" else "days with DEYTT")
+    }
+
+    private fun accordion(title: String, subtitle: String, content: LinearLayout): View {
+        val group = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
+        content.visibility = View.GONE
+        val indicator = host.text("+", 22f, MUTED).apply { gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
+        val toggle = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = host.dp(74)
+            setPadding(host.dp(16), host.dp(12), host.dp(16), host.dp(12))
+            background = host.rounded(SURFACE, 18f, LINE)
+            isClickable = true
+            isFocusable = true
+            val labels = LinearLayout(host).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(host.text(title, 14f, TEXT, Typeface.BOLD))
+                addView(host.text(subtitle, 11f, MUTED).apply { setPadding(0, host.dp(4), host.dp(8), 0) })
+            }
+            addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(indicator, LinearLayout.LayoutParams(host.dp(28), host.dp(32)))
+            contentDescription = "$title · " + copy("свернуто", "collapsed")
+            setOnClickListener {
+                val expanded = content.visibility != View.VISIBLE
+                content.visibility = if (expanded) View.VISIBLE else View.GONE
+                indicator.text = if (expanded) "−" else "+"
+                contentDescription = "$title · " + if (expanded) copy("развернуто", "expanded") else copy("свернуто", "collapsed")
+                announceForAccessibility(contentDescription)
+            }
+        }
+        group.addView(toggle)
+        group.addView(content)
+        return group
+    }
+
+    private fun openDocument(section: String) {
+        host.startActivity(Intent(host, NativeDocumentActivity::class.java).putExtra(NativeDocumentActivity.EXTRA_SECTION, section))
+    }
+
     private fun refreshProfile() {
         val token = TelegramSessionStore.read(host) ?: return
         val generation = ++refreshGeneration
         actionStatus?.visibility = View.GONE
         executeFor(token) {
             runCatching {
-                TelegramPairingClient.accountSnapshot(token) to TelegramPairingClient.keys(token)
+                val snapshot = TelegramPairingClient.accountSnapshot(token)
+                if (TelegramIdentityCache.avatar == null) {
+                    runCatching { TelegramPairingClient.avatar(token) }.getOrNull()?.let { bytes ->
+                        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+                        if (bounds.outWidth in 1..8192 && bounds.outHeight in 1..8192) {
+                            val options = BitmapFactory.Options().apply { inSampleSize = (maxOf(bounds.outWidth, bounds.outHeight) / 256).coerceAtLeast(1) }
+                            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                            if (isCurrent(token)) TelegramIdentityCache.update(token, null, bitmap)
+                        }
+                    }
+                }
+                snapshot to TelegramPairingClient.keys(token)
             }.onSuccess { (snapshot, keys) ->
                 host.runOnUiThread {
                     if (generation != refreshGeneration || !isCurrent(token)) return@runOnUiThread
@@ -203,6 +319,7 @@ internal class ProfileFlows(
                         subscriptionText?.text = host.uiCopy("Не удалось загрузить подписку.")
                         return@runOnUiThread
                     }
+                    renderIdentity(profile)
                     currentDeviceLimit = subscription.optInt("device_limit", 1).coerceAtLeast(1)
                     unlimitedDevices = subscription.isNull("device_limit")
                     unlimitedTime = subscription.optBoolean("unlimited_time")
@@ -261,7 +378,7 @@ internal class ProfileFlows(
                         add(copy("Последнее подключение", "Last connection") + ": " + displayDate(device.optString("last_seen")))
                         if (blocked) add(copy("Заблокировано", "Blocked on") + ": " + displayDate(device.optString("blocked_at")))
                     }.joinToString("\n")
-                    val dialog = AlertDialog.Builder(host).setTitle(model).setMessage(information)
+                    val dialog = AppDialog.Builder(host).setTitle(model).setMessage(information)
                         .setNegativeButton(host.uiCopy("Закрыть"), null)
                     if (id != null) dialog.setPositiveButton(
                         if (blocked) copy("Восстановить доступ", "Restore access") else copy("Заблокировать", "Block"),
@@ -285,7 +402,7 @@ internal class ProfileFlows(
             "Устройство снова сможет обновлять подписку. Сервер проверит, есть ли свободное место в вашем плане.",
             "This device will be able to refresh its subscription again. The server will check for a free device slot in your plan.",
         )
-        AlertDialog.Builder(host).setTitle(title).setMessage("$label\n\n$explanation")
+        AppDialog.Builder(host).setTitle(title).setMessage("$label\n\n$explanation")
             .setNegativeButton(host.uiCopy("Отмена"), null)
             .setPositiveButton(if (block) copy("Заблокировать", "Block") else copy("Восстановить", "Restore")) { _, _ ->
                 changeHappDevice(id, label, block)
@@ -311,7 +428,7 @@ internal class ProfileFlows(
                         else -> host.uiCopy(apiError(failure))
                     }
                     setActionStatus(message, true) { refreshProfile() }
-                    AlertDialog.Builder(host).setTitle(label).setMessage(message)
+                    AppDialog.Builder(host).setTitle(label).setMessage(message)
                         .setNegativeButton(host.uiCopy("Закрыть"), null)
                         .setPositiveButton(copy("Повторить", "Retry")) { _, _ -> confirmHappDeviceChange(id, label, block) }.show()
                 } }
@@ -330,15 +447,15 @@ internal class ProfileFlows(
         }
     }
 
-    private fun displayDate(raw: String): String = runCatching {
+    private fun displayDate(raw: String, withTime: Boolean = true): String = runCatching {
         val normalized = raw.replace(Regex("\\.[0-9]+"), "")
         val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
         parser.timeZone = java.util.TimeZone.getTimeZone("UTC")
         val date = parser.parse(normalized) ?: return@runCatching raw
-        java.text.DateFormat.getDateTimeInstance(
-            java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT,
-            java.util.Locale.forLanguageTag(AppLanguage.current(host)),
-        ).format(date)
+        val locale = java.util.Locale.forLanguageTag(AppLanguage.current(host))
+        val formatter = if (withTime) java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT, locale)
+            else java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM, locale)
+        formatter.format(date)
     }.getOrDefault(raw).ifBlank { "—" }
 
     private fun refreshSessions(generation: Int, token: String) {
@@ -357,12 +474,12 @@ internal class ProfileFlows(
                         val id = session.optString("id")
                         container.addView(host.row(label, if (current) copy("Это устройство", "This device") else displayDate(session.optString("created_at")), "↗", "›").apply {
                             setOnClickListener {
-                                val builder = AlertDialog.Builder(host).setTitle(label)
+                                val builder = AppDialog.Builder(host).setTitle(label)
                                     .setMessage(copy("Вход", "Signed in") + ": " + displayDate(session.optString("created_at")) + "\n" +
                                         copy("Действует до", "Valid until") + ": " + displayDate(session.optString("expires_at")))
                                     .setNegativeButton(host.uiCopy("Закрыть"), null)
                                 if (!current && id.isNotBlank()) builder.setPositiveButton(copy("Завершить сессию", "End session")) { _, _ ->
-                                    AlertDialog.Builder(host).setTitle(copy("Завершить сессию?", "End this session?"))
+                                    AppDialog.Builder(host).setTitle(copy("Завершить сессию?", "End this session?"))
                                         .setMessage(copy("На этом устройстве потребуется снова войти через Telegram. VPN-ключи останутся действительными.", "This device will need to sign in through Telegram again. VPN keys will remain valid."))
                                         .setNegativeButton(host.uiCopy("Отмена"), null)
                                         .setPositiveButton(copy("Завершить", "End session")) { _, _ -> revokeSession(token, id) }.show()
@@ -398,12 +515,12 @@ internal class ProfileFlows(
     private fun showDurationPicker(token: String, devices: Int? = null) {
         if (!isCurrent(token)) return
         val months = listOf(1, 3, 6, 12)
-        AlertDialog.Builder(host).setTitle(copy("Срок подписки", "Subscription duration"))
+        AppDialog.Builder(host).setTitle(copy("Срок подписки", "Subscription duration"))
             .setItems(months.map { copy("$it мес.", if (it == 1) "$it month" else "$it months") }.toTypedArray()) { _, index ->
                 requestQuote(token, if (devices == null) "add_time" else "custom", null, months[index], devices)
             }.setNeutralButton(copy("Другой срок", "Other duration")) { _, _ ->
                 val picker = android.widget.NumberPicker(host).apply { minValue = 1; maxValue = 36; value = 1; wrapSelectorWheel = false }
-                AlertDialog.Builder(host).setTitle(copy("Количество месяцев", "Number of months"))
+                AppDialog.Builder(host).setTitle(copy("Количество месяцев", "Number of months"))
                     .setView(picker).setNegativeButton(host.uiCopy("Отмена"), null)
                     .setPositiveButton(copy("Рассчитать", "Calculate")) { _, _ ->
                         requestQuote(token, if (devices == null) "add_time" else "custom", null, picker.value, devices)
@@ -415,13 +532,13 @@ internal class ProfileFlows(
         if (!isCurrent(token)) return
         val maximum = if (kind == "custom") 10 else if (unlimitedDevices) 0 else (10 - currentDeviceLimit).coerceAtLeast(0)
         if (maximum == 0) {
-            AlertDialog.Builder(host).setTitle(copy("Лимит устройств", "Device limit"))
+            AppDialog.Builder(host).setTitle(copy("Лимит устройств", "Device limit"))
                 .setMessage(copy("Для вашего плана увеличение лимита не требуется или недоступно. Изменить условия поможет поддержка.", "Your plan does not need or support a higher device limit. Contact support to change its terms."))
                 .setPositiveButton(host.uiCopy("Закрыть"), null).show()
             return
         }
         val picker = android.widget.NumberPicker(host).apply { minValue = 1; maxValue = maximum; value = 1; wrapSelectorWheel = false }
-        AlertDialog.Builder(host).setTitle(if (kind == "custom") copy("Количество устройств", "Number of devices") else copy("Сколько добавить?", "How many to add?"))
+        AppDialog.Builder(host).setTitle(if (kind == "custom") copy("Количество устройств", "Number of devices") else copy("Сколько добавить?", "How many to add?"))
             .setView(picker).setNegativeButton(host.uiCopy("Отмена"), null)
             .setPositiveButton(copy("Продолжить", "Continue")) { _, _ ->
                 if (kind == "custom") showDurationPicker(token, picker.value)
@@ -430,7 +547,7 @@ internal class ProfileFlows(
     }
 
     private fun showSupportChoices() {
-        AlertDialog.Builder(host).setTitle(host.uiCopy("Поддержка"))
+        AppDialog.Builder(host).setTitle(host.uiCopy("Поддержка"))
             .setItems(arrayOf(copy("Написать в приложении", "Chat in the app"), copy("Открыть Telegram", "Open Telegram"))) { _, index ->
                 if (index == 0) showSupportChat() else openHttps(supportUrl)
             }.setNegativeButton(host.uiCopy("Отмена"), null).show()
@@ -438,12 +555,12 @@ internal class ProfileFlows(
 
     private fun showResetChoices() {
         val token = TelegramSessionStore.read(host) ?: run { onPairAccount(); return }
-        AlertDialog.Builder(host)
+        AppDialog.Builder(host)
             .setTitle(host.uiCopy("Что сбросить?"))
             .setItems(arrayOf(host.uiCopy("Все ключи"), "AmneziaWG", "Happ")) { _, index ->
                 val scope = listOf("all", "awg", "happ")[index]
                 val label = listOf(host.uiCopy("все ключи"), "AmneziaWG", "Happ")[index]
-                AlertDialog.Builder(host)
+                AppDialog.Builder(host)
                     .setTitle(host.uiCopy("Сбросить $label?"))
                     .setMessage(host.uiCopy("Действие отзовёт текущие ключи $label и может временно отключить устройства. Продолжить?"))
                     .setNegativeButton(host.uiCopy("Отмена"), null)
@@ -493,21 +610,21 @@ internal class ProfileFlows(
                 if (!isCurrent(token)) return@runOnUiThread
                 actionStatus?.visibility = View.GONE
                 if (active && unlimitedTime) {
-                    AlertDialog.Builder(host).setTitle(copy("Бессрочная подписка", "Lifetime subscription"))
+                    AppDialog.Builder(host).setTitle(copy("Бессрочная подписка", "Lifetime subscription"))
                         .setMessage(copy("Продлевать срок не нужно. Для изменения условий напишите в поддержку.", "No renewal is needed. Contact support to change your plan."))
                         .setNeutralButton(host.uiCopy("Поддержка")) { _, _ -> showSupportChoices() }
                         .setPositiveButton(host.uiCopy("Закрыть"), null).show()
                     return@runOnUiThread
                 }
                 if (active && unlimitedDevices) {
-                    AlertDialog.Builder(host).setTitle(copy("План без лимита устройств", "Unlimited device plan"))
+                    AppDialog.Builder(host).setTitle(copy("План без лимита устройств", "Unlimited device plan"))
                         .setMessage(copy("У вас индивидуальные условия без лимита устройств. Поддержка поможет продлить этот план, сохранив все его возможности.", "Your plan has individual terms with unlimited devices. Support can renew it while preserving all of its benefits."))
                         .setNeutralButton(host.uiCopy("Поддержка")) { _, _ -> showSupportChoices() }
                         .setPositiveButton(host.uiCopy("Закрыть"), null).show()
                     return@runOnUiThread
                 }
                 if (active) {
-                    AlertDialog.Builder(host).setTitle(copy("Управление подпиской", "Manage subscription"))
+                    AppDialog.Builder(host).setTitle(copy("Управление подпиской", "Manage subscription"))
                         .setItems(arrayOf(copy("Продлить срок", "Extend subscription"), copy("Добавить устройства", "Add devices"))) { _, action ->
                             if (action == 1) {
                                 showQuantityPicker(token, "add_devices")
@@ -527,7 +644,7 @@ internal class ProfileFlows(
                     val rubles = plan.optInt("rubles", 0)
                     host.uiCopy("$name · $devices устройств · $months мес. · $rubles ₽")
                 }.toTypedArray()
-                AlertDialog.Builder(host)
+                AppDialog.Builder(host)
                     .setTitle(host.uiCopy("Выберите план"))
                     .setItems(labels) { _, index -> requestQuote(token, "preset", options[index].optString("code"), null) }
                     .setNeutralButton(copy("Свой план", "Custom plan")) { _, _ -> showQuantityPicker(token, "custom") }
@@ -553,7 +670,7 @@ internal class ProfileFlows(
                     val detail = "$name\n" + copy("${quote.optInt("devices")} устройств", "${quote.optInt("devices")} " + if (quote.optInt("devices") == 1) "device" else "devices") +
                         " · $duration\n${quote.optInt("rubles")} ₽ · ⭐ ${quote.optInt("stars")}"
 
-                    AlertDialog.Builder(host)
+                    AppDialog.Builder(host)
                         .setTitle(host.uiCopy("Подтвердите сумму"))
                         .setMessage(detail)
                         .setNegativeButton(host.uiCopy("Отмена"), null)
@@ -581,7 +698,7 @@ internal class ProfileFlows(
                         visibility = if (externalId == null) View.GONE else View.VISIBLE
                         text = host.uiCopy("Платёж ожидает подтверждения · нажмите, чтобы проверить")
                     }
-                    AlertDialog.Builder(host)
+                    AppDialog.Builder(host)
                         .setTitle(host.uiCopy("Счёт готов"))
                         .setMessage(host.uiCopy("Откройте защищённую страницу оплаты. Приложение не запрашивает данные карты."))
                         .setNegativeButton(host.uiCopy("Позже"), null)
@@ -758,7 +875,7 @@ internal class ProfileFlows(
         }
         closeTicket.setOnClickListener {
             val id = ticketId ?: return@setOnClickListener
-            AlertDialog.Builder(host)
+            AppDialog.Builder(host)
                 .setTitle(host.uiCopy("Закрыть обращение?"))
                 .setMessage(host.uiCopy("Новые ответы не будут приниматься. При необходимости вы сможете создать новое обращение."))
                 .setNegativeButton(host.uiCopy("Отмена"), null)

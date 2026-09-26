@@ -1,5 +1,7 @@
 package space.deytt.connect
 
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
@@ -55,6 +57,7 @@ data class RouteProbeSession(
 /** Runs a bounded GET/HEAD check through a loopback-only sing-box HTTP proxy. */
 object RouteProxyProbe {
     const val TIMEOUT_MILLIS = 10_000
+    const val QUICK_DOWNLOAD_MILLIS = 1_000
     const val PROBE_URL = "https://cp.cloudflare.com/generate_204"
     private const val PROBE_INBOUND = "deytt-route-probe"
     private const val PROBE_HOST = "cp.cloudflare.com"
@@ -101,6 +104,42 @@ object RouteProxyProbe {
         // The diagnostic core routes a single authenticated loopback proxy and
         // must never create a device TUN or expose subscription inbounds.
         root.put("inbounds", JSONArray().put(inbound))
+        return root.toString()
+    }
+
+    /** One core with isolated authenticated inbounds; no reload while a request is in flight. */
+    fun batchConfiguration(config: String, sessions: Map<String, RouteProbeSession>): String {
+        require(sessions.isNotEmpty() && sessions.size <= 16) { "Invalid diagnostic batch size" }
+        require(sessions.values.map { it.port }.distinct().size == sessions.size) { "Duplicate diagnostic port" }
+        sessions.forEach { (tag, session) ->
+            require(session.port in 1..65535 && session.username.isNotBlank() && session.password.isNotBlank())
+            ProfileRoutes.select(config, tag) // Reject internal, unknown or removed routes.
+        }
+        val root = JSONObject(config)
+        val inbounds = JSONArray()
+        val rules = JSONArray()
+        sessions.entries.forEachIndexed { index, (tag, session) ->
+            val inboundTag = "$PROBE_INBOUND-$index"
+            inbounds.put(JSONObject().put("type", "mixed").put("tag", inboundTag)
+                .put("listen", "127.0.0.1").put("listen_port", session.port)
+                .put("users", JSONArray().put(JSONObject()
+                    .put("username", session.username).put("password", session.password))))
+            rules.put(JSONObject().put("inbound", JSONArray().put(inboundTag))
+                .put("action", "route").put("outbound", tag))
+        }
+        root.put("inbounds", inbounds)
+        val routing = root.getJSONObject("route")
+        val existing = routing.optJSONArray("rules")
+        repeat(existing?.length() ?: 0) { rules.put(existing!!.get(it)) }
+        routing.put("rules", rules).put("final", sessions.keys.first())
+        // Resolve test and endpoint names on the underlying network. Otherwise
+        // one failed selected route's DNS detour would fail every candidate.
+        val dnsServers = root.optJSONObject("dns")?.optJSONArray("servers")
+        repeat(dnsServers?.length() ?: 0) { index ->
+            // A direct outbound has no dialer options: libbox 1.14 rejects it
+            // as a DNS detour. Omitting detour selects the direct dialer.
+            dnsServers!!.optJSONObject(index)?.remove("detour")
+        }
         return root.toString()
     }
 
@@ -171,7 +210,7 @@ object RouteProxyProbe {
     fun measureDownload(
         session: RouteProbeSession,
         token: String,
-        sampleMillis: Int = 5_000,
+        sampleMillis: Int = QUICK_DOWNLOAD_MILLIS,
         maximumBytes: Long = 32L * 1024L * 1024L,
     ): Long {
         require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
@@ -382,7 +421,8 @@ object RouteProxyProbe {
     }
 
     /** A bounded sample through the current Android VPN. Caller verifies its route. */
-    fun measureSystemDownload(token: String, stillCurrent: () -> Boolean): Long {
+    fun measureSystemDownload(token: String, stillCurrent: () -> Boolean, sampleMillis: Int = QUICK_DOWNLOAD_MILLIS): Long {
+        require(sampleMillis in 1_000..5_000)
         require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
         val connection = URL("https://$DOWNLOAD_HOST$DOWNLOAD_PATH")
             .openConnection(Proxy.NO_PROXY) as HttpsURLConnection
@@ -396,7 +436,7 @@ object RouteProxyProbe {
             check(stillCurrent()) { "Route changed during measurement" }
             check(connection.responseCode == HTTP_OK) { "Download endpoint unavailable" }
             val started = SystemClock.elapsedRealtime()
-            val deadline = started + 5_000L
+            val deadline = started + sampleMillis
             var received = 0L
             val buffer = ByteArray(32 * 1024)
             connection.inputStream.use { input ->
@@ -445,6 +485,30 @@ object RouteProbeClient {
     @Volatile
     private var activeRequestId: String? = null
 
+    private var completionReceiverRegistered = false
+
+    @Synchronized
+    private fun ensureCompletionReceiver(context: Context) {
+        if (completionReceiverRegistered) return
+        val app = context.applicationContext
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.getBooleanExtra(EXTRA_COMPLETE, false)) {
+                    clear(app, intent.getStringExtra(EXTRA_REQUEST_ID).orEmpty())
+                }
+            }
+        }
+        // Cancellation acknowledgements must survive Activity.onStop and recreation.
+        // Keep the receiver for the application process lifetime, without retaining an Activity.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            app.registerReceiver(receiver, IntentFilter(ACTION_RESULT), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            app.registerReceiver(receiver, IntentFilter(ACTION_RESULT))
+        }
+        completionReceiverRegistered = true
+    }
+
     fun start(
         context: Context,
         config: String,
@@ -457,6 +521,7 @@ object RouteProbeClient {
         require(token == null || token.length in 32..256) { "Invalid Telegram session" }
         check(VpnService.prepare(context) == null) { "Нужно системное разрешение VPN для диагностики маршрутов" }
         check(activeRequestId == null) { "Проверка маршрутов уже выполняется" }
+        ensureCompletionReceiver(context)
         val requestId = java.util.UUID.randomUUID().toString()
         val intent = Intent(context, RouteProbeVpnService::class.java)
             .setAction(ConnectVpnService.ACTION_ROUTE_PROBE)

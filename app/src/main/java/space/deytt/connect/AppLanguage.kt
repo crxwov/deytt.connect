@@ -394,6 +394,8 @@ internal object AppLanguage {
         "нет ответа" to "no response",
         "Проверка через выход AmneziaWG пока недоступна" to "Checks through AmneziaWG exits are not available yet",
         "в очереди" to "queued",
+        "Не удалось запустить диагностику" to "Could not start diagnostics",
+        "маршрут не ответил" to "Route did not respond",
         "измеряем задержку…" to "measuring latency…",
         "измеряем скорость…" to "measuring speed…",
         "Telegram Stars" to "Telegram Stars",

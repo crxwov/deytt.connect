@@ -47,4 +47,52 @@ class RouteProxyProbeTest {
     fun rejectsUnknownRouteInsteadOfFallingBackToDirect() {
         RouteProxyProbe.configuration(profile, "direct", 43871, "probe-user", "ephemeral-password")
     }
+    @Test
+    fun batchPinsEveryLoopbackInboundBeforeExistingBypassRules() {
+        val source = JSONObject(profile)
+        source.getJSONArray("outbounds").put(JSONObject()
+            .put("type", "trojan").put("tag", "route:DE:TROJAN").put("server", "test.invalid").put("server_port", 443))
+        source.getJSONObject("route").getJSONArray("rules").put(JSONObject().put("outbound", "direct"))
+        val result = JSONObject(RouteProxyProbe.batchConfiguration(source.toString(), linkedMapOf(
+            "route:DE:VLESS" to RouteProbeSession(42001, "a", "one"),
+            "route:DE:TROJAN" to RouteProbeSession(42002, "b", "two"),
+        )))
+        val inbounds = result.getJSONArray("inbounds")
+        val rules = result.getJSONObject("route").getJSONArray("rules")
+        assertEquals(2, inbounds.length())
+        assertEquals(3, rules.length())
+        listOf("route:DE:VLESS", "route:DE:TROJAN").forEachIndexed { index, tag ->
+            assertEquals("127.0.0.1", inbounds.getJSONObject(index).getString("listen"))
+            assertEquals(inbounds.getJSONObject(index).getString("tag"), rules.getJSONObject(index).getJSONArray("inbound").getString(0))
+            assertEquals(tag, rules.getJSONObject(index).getString("outbound"))
+        }
+        assertEquals("direct", rules.getJSONObject(2).getString("outbound"))
+        assertEquals("tun", source.getJSONArray("inbounds").getJSONObject(0).getString("type"))
+    }
+
+    @Test
+    fun batchUsesDefaultDirectDnsDialerInsteadOfUnsupportedDirectDetour() {
+        val source = JSONObject(profile)
+        source.getJSONObject("dns").getJSONArray("servers").put(JSONObject()
+            .put("tag", "remote-dns").put("detour", "route:DE:VLESS"))
+        val result = JSONObject(RouteProxyProbe.batchConfiguration(source.toString(), mapOf(
+            "route:DE:VLESS" to RouteProbeSession(42001, "a", "one"),
+        )))
+        val servers = result.getJSONObject("dns").getJSONArray("servers")
+        repeat(servers.length()) { assertFalse(servers.getJSONObject(it).has("detour")) }
+        assertEquals("route:DE:VLESS", source.getJSONObject("dns").getJSONArray("servers").getJSONObject(1).getString("detour"))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun batchRejectsDuplicatePorts() {
+        RouteProxyProbe.batchConfiguration(profile, linkedMapOf(
+            "route:DE:VLESS" to RouteProbeSession(42001, "a", "one"),
+            "route:DE" to RouteProbeSession(42001, "b", "two"),
+        ))
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun batchRejectsInternalRoute() {
+        RouteProxyProbe.batchConfiguration(profile, mapOf("direct" to RouteProbeSession(42001, "a", "one")))
+    }
 }

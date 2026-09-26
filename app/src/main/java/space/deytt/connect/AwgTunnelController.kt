@@ -34,7 +34,7 @@ object AwgTunnelController {
     fun isRunning(): Boolean = runtimeRunning
     fun isStopping(): Boolean = stopping
 
-    fun start(context: Context, rawConfig: String, name: String) {
+    fun start(context: Context, rawConfig: String, name: String, diagnosticOnly: Boolean = false) {
         val operationId = operation.incrementAndGet()
         runtimeRunning = true
         stopping = true
@@ -44,7 +44,8 @@ object AwgTunnelController {
                 stopInternal()
                 if (operation.get() == operationId) stopping = false
                 ensureCurrent(operationId)
-                val parsed = Config.parse(BufferedReader(StringReader(rawConfig)))
+                val effectiveConfig = if (diagnosticOnly) AwgDiagnosticConfig.forApplication(rawConfig, context.packageName) else rawConfig
+                val parsed = Config.parse(BufferedReader(StringReader(effectiveConfig)))
                 val nextBackend = GoBackend(context.applicationContext)
                 val nextTunnel = object : Tunnel {
                     override fun getName(): String = name.take(15)
@@ -63,6 +64,15 @@ object AwgTunnelController {
                 ensureCurrent(operationId)
                 publish(context, VpnPhase.CONNECTED, "Подключено")
             } catch (error: Throwable) {
+                val handshake = runCatching { backend?.let { current -> tunnel?.let(current::getLastHandshake) } }.getOrNull()
+                val failure = when {
+                    error is BackendException -> error.reason.name
+                    errorChainContains(error, "timeout") -> "timeout"
+                    errorChainContains(error, "Unable to resolve") -> "dns"
+                    operation.get() != operationId -> "cancelled"
+                    else -> error.javaClass.simpleName
+                }
+                android.util.Log.w("deytt-awg", "Start failed: appOnly=$diagnosticOnly kind=$failure handshake=${handshake?.let { it > 0L } ?: false}")
                 stopInternal()
                 if (operation.get() == operationId) {
                     runtimeRunning = false

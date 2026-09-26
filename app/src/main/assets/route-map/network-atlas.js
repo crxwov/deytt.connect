@@ -757,30 +757,38 @@
       context.font = "700 " + (compact ? 9 : 10) + "px ui-monospace, SFMono-Regular, Menlo, monospace";
       const width = Math.max(context.measureText(title).width, context.measureText(meta).width) + (compact ? 20 : 24);
       const height = compact ? 35 : 39;
-      const alternatives = [
-        offset,
-        { x: offset.x, y: offset.y - height - 12, align: offset.align },
-        { x: offset.x, y: offset.y + height + 12, align: offset.align },
-        { x: -offset.x, y: offset.y, align: offset.align === "right" ? "left" : "right" },
+      // Prefer nearby labels; score all alternatives instead of falling back
+      // to (8,8), which detached crowded user labels from their actual pin.
+      const alternatives = [offset,
+        { x: 14, y: -height / 2 - 12, align: "left" },
+        { x: -14, y: -height / 2 - 12, align: "right" },
+        { x: 14, y: height / 2 + 12, align: "left" },
+        { x: -14, y: height / 2 + 12, align: "right" },
+        { x: -width / 2, y: -height - 30, align: "left" },
+        { x: -width / 2, y: height + 30, align: "left" }
       ];
-      let left = 8;
-      let top = 8;
-      let align = offset.align;
+      let left = 8, top = 8, bestScore = Infinity;
       for (const candidate of alternatives) {
-        const anchorX = point.x + candidate.x;
-        const anchorY = point.y + candidate.y;
-        const candidateLeft = clamp(candidate.align === "right" ? anchorX - width : anchorX, 8, this.width - width - 8);
-        const candidateTop = clamp(anchorY - height / 2, 8, this.height - height - 8);
-        const collides = occupied.some((label) => candidateLeft < label.left + label.width + 8
-          && candidateLeft + width + 8 > label.left
-          && candidateTop < label.top + label.height + 8
-          && candidateTop + height + 8 > label.top);
-        if (collides) continue;
-        left = candidateLeft;
-        top = candidateTop;
-        align = candidate.align;
-        break;
+        const candidateLeft = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
+        const candidateTop = clamp(point.y + candidate.y - height / 2, 8, this.height - height - 8);
+        const overlap = occupied.reduce((sum, label) => sum +
+          Math.max(0, Math.min(candidateLeft + width + 6, label.left + label.width + 6) - Math.max(candidateLeft - 6, label.left - 6)) *
+          Math.max(0, Math.min(candidateTop + height + 6, label.top + label.height + 6) - Math.max(candidateTop - 6, label.top - 6)), 0);
+        const dx = point.x - clamp(point.x, candidateLeft, candidateLeft + width);
+        const dy = point.y - clamp(point.y, candidateTop, candidateTop + height);
+        const coveringPin = Object.values(this.projectedNodes).some(p => p.z > .03 && p.x > candidateLeft - 5 && p.x < candidateLeft + width + 5 && p.y > candidateTop - 5 && p.y < candidateTop + height + 5);
+        const score = overlap * 100 + dx * dx + dy * dy + (coveringPin ? 100000 : 0);
+        if (score < bestScore) { bestScore = score; left = candidateLeft; top = candidateTop; }
       }
+      const endX = clamp(point.x, left + 5, left + width - 5);
+      const endY = clamp(point.y, top + 5, top + height - 5);
+      context.beginPath();
+      context.moveTo(point.x, point.y);
+      context.lineTo(endX, endY);
+      context.strokeStyle = key === "user" ? colors.node : colors.nodeCore;
+      context.lineWidth = 1;
+      context.globalAlpha = .7;
+      context.stroke();
       occupied.push({ left: left, top: top, width: width, height: height });
       context.beginPath();
       context.roundRect(left, top, width, height, compact ? 10 : 12);
@@ -812,10 +820,10 @@
       });
       if (this.userLocation) this.drawNode("user", this.userLocation, colors, "user");
       const occupied = [];
+      if (this.userLocation) this.drawLabel("user", colors, occupied);
       LOCATION_ORDER.forEach((key) => {
         if (this.availableLocationKeys.has(key)) this.drawLabel(key, colors, occupied);
       });
-      if (this.userLocation) this.drawLabel("user", colors, occupied);
     }
 
     renderStatic(colors) {

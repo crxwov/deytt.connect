@@ -39,6 +39,7 @@
         <activity android:name=".RoutesActivity" android:exported="false" />
         <activity android:name=".ProtocolActivity" android:exported="false" />
         <activity android:name=".ProfileActivity" android:exported="false" />
+        <activity android:name=".NativeDocumentActivity" android:exported="false" />
         <activity android:name=".SettingsActivity" android:exported="false" />
 
         <provider

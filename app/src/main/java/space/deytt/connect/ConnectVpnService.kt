@@ -39,6 +39,9 @@ import io.nekohasekai.libbox.WIFIState
 import java.net.URL
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorCompletionService
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.HttpsURLConnection
 
@@ -84,6 +87,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     private var routeProbeOnly = false
     private var notificationText = "Запуск deytt./connect"
     private val operation = AtomicLong(0)
+    @Volatile private var probeWorkers: ExecutorService? = null
     private val networkBridge by lazy { AndroidNetworkBridge(this) }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -150,7 +154,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     override fun onDestroy() {
         operation.incrementAndGet()
-        if (routeProbeOnly) closeRouteProbeCore() else stopTunnel()
+        if (this is RouteProbeVpnService || routeProbeOnly) closeRouteProbeCore() else stopTunnel()
+        probeWorkers?.shutdownNow()
         executor.shutdownNow()
         super.onDestroy()
     }
@@ -210,58 +215,85 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         try {
             ProfileValidator.validate(config)
             stage = "loopback proxy setup"
-            val session = RouteProxyProbe.newSession()
+            val sessions = linkedMapOf<String, RouteProbeSession>()
+            routeTags.distinct().forEach { tag ->
+                var session = RouteProxyProbe.newSession()
+                while (sessions.values.any { it.port == session.port }) session = RouteProxyProbe.newSession()
+                sessions[tag] = session
+            }
+            if (operation.get() != operationId || !routeProbeOnly) return
             stage = "libbox setup"
             setupLibbox()
             stage = "command server start"
             val server = CommandServer(this, this)
             commandServer = server
             server.start()
+            if (operation.get() != operationId || !routeProbeOnly) return
+            stage = "batch routes setup"
+            server.startOrReloadService(
+                runtimeConfig(RouteProxyProbe.batchConfiguration(config, sessions)),
+                OverrideOptions().apply { autoRedirect = false },
+            )
             val latencies = linkedMapOf<String, Long>()
-            routeTags.forEach { tag ->
-                if (operation.get() != operationId || !routeProbeOnly) return@forEach
-                try {
-                    server.startOrReloadService(
-                        runtimeConfig(session.configuration(config, tag)),
-                        OverrideOptions().apply { autoRedirect = false },
-                    )
-                    if (operation.get() != operationId || !routeProbeOnly) return@forEach
-                    sendRouteProbeResult(requestId, tag, null, null, stage = "latency")
-                    val latency = RouteProxyProbe.measureProxy(session, method)
-                    latencies[tag] = latency
-                    sendRouteProbeResult(requestId, tag, latency, null,
-                        stage = if (token.isBlank()) "complete" else "waiting_download")
-                } catch (error: Throwable) {
-                    Log.w(TAG, "Route latency probe failed (${probeFailureKind(error)})")
-                    sendRouteProbeResult(requestId, tag, null, routeProbeError(error), stage = "failed")
-                }
+            val workers = Executors.newFixedThreadPool(minOf(3, sessions.size))
+            probeWorkers = workers
+            val completed = ExecutorCompletionService<Pair<String, Long?>>(workers)
+            sessions.forEach { (tag, session) ->
+                completed.submit(java.util.concurrent.Callable {
+                    if (operation.get() != operationId || !routeProbeOnly) return@Callable tag to null
+                    try {
+                        sendRouteProbeResult(requestId, tag, null, null, stage = "latency")
+                        val latency = RouteProxyProbe.measureProxy(session, method)
+                        if (operation.get() == operationId && routeProbeOnly) {
+                            sendRouteProbeResult(requestId, tag, latency, null,
+                                stage = if (token.isBlank()) "complete" else "waiting_download")
+                        }
+                        tag to latency
+                    } catch (error: Throwable) {
+                        if (operation.get() == operationId && routeProbeOnly) {
+                            Log.w(TAG, "Route latency probe failed (${probeFailureKind(error)})")
+                            sendRouteProbeResult(requestId, tag, null, routeProbeError(error), stage = "failed")
+                        }
+                        tag to null
+                    }
+                })
             }
-            // Show every latency first, then sample downloads serially so tests
-            // do not compete for bandwidth and distort the country ranking.
+            repeat(sessions.size) {
+                if (operation.get() != operationId || !routeProbeOnly) return@repeat
+                val result = completed.poll((RouteProxyProbe.TIMEOUT_MILLIS + 1_000).toLong(), TimeUnit.MILLISECONDS)
+                    ?: throw java.net.SocketTimeoutException("Diagnostic batch timed out")
+                val (tag, latency) = result.get()
+                if (latency != null) latencies[tag] = latency
+            }
+            workers.shutdownNow()
+            probeWorkers = null
+            // Latencies run in parallel, but downloads stay serial: simultaneous
+            // bandwidth samples would measure contention rather than each route.
             if (token.isNotBlank()) latencies.forEach { (tag, latency) ->
                 if (operation.get() != operationId || !routeProbeOnly) return@forEach
                 try {
-                    server.startOrReloadService(
-                        runtimeConfig(session.configuration(config, tag)),
-                        OverrideOptions().apply { autoRedirect = false },
-                    )
-                    if (operation.get() != operationId || !routeProbeOnly) return@forEach
                     sendRouteProbeResult(requestId, tag, latency, null, stage = "download")
-                    val speed = RouteProxyProbe.measureDownload(session, token)
-                    sendRouteProbeResult(requestId, tag, latency, null, stage = "complete", bytesPerSecond = speed)
+                    val speed = RouteProxyProbe.measureDownload(sessions.getValue(tag), token)
+                    if (operation.get() == operationId && routeProbeOnly) {
+                        sendRouteProbeResult(requestId, tag, latency, null, stage = "complete", bytesPerSecond = speed)
+                    }
                 } catch (error: Throwable) {
-                    Log.w(TAG, "Route download probe failed (${probeFailureKind(error)})")
-                    sendRouteProbeResult(requestId, tag, latency, routeProbeError(error), stage = "failed")
+                    if (operation.get() == operationId && routeProbeOnly) {
+                        Log.w(TAG, "Route download probe failed (${probeFailureKind(error)})")
+                        sendRouteProbeResult(requestId, tag, latency, routeProbeError(error), stage = "failed")
+                    }
                 }
             }
         } catch (error: Throwable) {
             Log.w(TAG, "Route proxy probe failed at $stage (${probeFailureKind(error)})")
+            val message = if (stage == "batch routes setup" || stage == "command server start" || stage == "libbox setup")
+                "Не удалось запустить диагностику" else routeProbeError(error)
             routeTags.forEach { tag ->
-                sendRouteProbeResult(requestId, tag, null, routeProbeError(error))
+                sendRouteProbeResult(requestId, tag, null, message)
             }
         } finally {
-            sendRouteProbeResult(requestId, "", null, null, complete = true)
-            RouteProbeClient.clear(this, requestId)
+            probeWorkers?.shutdownNow()
+            probeWorkers = null
             closeRouteProbeCore()
             started = false
             runtimeRunning = false
@@ -269,12 +301,14 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             routeProbeRunning = false
             stopForegroundCompat()
             stopSelf(startId)
+            sendRouteProbeResult(requestId, "", null, null, complete = true)
         }
     }
 
     private fun cancelRouteProbe(startId: Int) {
         operation.incrementAndGet()
         routeProbeRunning = false
+        probeWorkers?.shutdownNow()
         closeRouteProbeCore()
         started = false
         routeProbeOnly = false
@@ -282,6 +316,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         stopSelf(startId)
     }
 
+    @Synchronized
     private fun closeRouteProbeCore() {
         runCatching { commandServer?.closeService() }
         runCatching { commandServer?.close() }
@@ -459,11 +494,21 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     private fun verifyTunnelOnce(url: String, expectedStatus: Int?, failurePrefix: String) {
-        val connection = (URL(url).openConnection() as HttpsURLConnection).apply {
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        val vpnNetwork = connectivity.allNetworks.firstOrNull { network ->
+            val capabilities = connectivity.getNetworkCapabilities(network)
+            capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true &&
+                (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || capabilities.ownerUid == applicationInfo.uid)
+        } ?: error("Системный интерфейс VPN ещё не готов")
+        // Bind the canary to this VPN generation. The process HTTP pool may still
+        // contain sockets from the previous AWG/TUN network after a handoff.
+        val connection = (vpnNetwork.openConnection(URL(url)) as HttpsURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 10_000
             readTimeout = 10_000
             instanceFollowRedirects = false
+            useCaches = false
+            setRequestProperty("Connection", "close")
             setRequestProperty("Cache-Control", "no-cache")
         }
         try {
@@ -497,7 +542,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         if (!started && commandServer == null && tunnel == null) {
             runtimeRunning = false
             stopForeground(STOP_FOREGROUND_REMOVE)
-            VpnStateStore(this).write(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
+            if (VpnStateStore(this).read().phase != VpnPhase.ERROR)
+                VpnStateStore(this).write(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
             return
         }
         runCatching { commandServer?.closeService() }

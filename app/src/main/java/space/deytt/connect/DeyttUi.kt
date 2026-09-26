@@ -172,7 +172,7 @@ object DeyttUi {
             text = uiCopy(value)
             textSize = size
             setTextColor(color)
-            typeface = typeface(FontFamily.INTER_TIGHT, if (style == Typeface.BOLD) 650 else 470)
+            typeface = typeface(FontFamily.INTER_TIGHT, if (style == Typeface.BOLD) 560 else 400)
             includeFontPadding = false
         }
 
