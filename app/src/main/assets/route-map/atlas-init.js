@@ -5,6 +5,8 @@
   window.deyttMapLanguage = "ru";
   window.deyttMapUserLocation = null;
   window.deyttMapEgressCountry = null;
+  window.deyttMapActiveAutoRoute = null;
+  window.deyttMapTrafficActive = false;
   window.deyttMapNodeTapped = function (key) {
     if (window.DeyttAtlasBridge && typeof window.DeyttAtlasBridge.onNodeTap === "function") {
       window.DeyttAtlasBridge.onNodeTap(String(key || ""));
@@ -25,6 +27,14 @@
   window.deyttSetMapEgressCountry = function (countryCode) {
     window.deyttMapEgressCountry = countryCode || null;
     if (window.deyttMapAtlas) window.deyttMapAtlas.setAutoExitCountry(window.deyttMapEgressCountry);
+  };
+  window.deyttSetMapActiveAutoRoute = function (routeKey) {
+    window.deyttMapActiveAutoRoute = routeKey || null;
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setActiveAutoRoute(window.deyttMapActiveAutoRoute);
+  };
+  window.deyttSetMapTrafficActive = function (active) {
+    window.deyttMapTrafficActive = Boolean(active);
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
   };
   window.deyttSetMapLocations = function (locations) {
     if (window.deyttMapAtlas) window.deyttMapAtlas.setAvailableLocations(locations);
@@ -50,6 +60,7 @@
   }).then(function (atlas) {
     window.deyttMapAtlas = atlas;
     window.deyttMapAtlas.setLanguage(window.deyttMapLanguage);
+    window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
     const status = root.querySelector("[data-atlas-status]");
     if (status) {
       status.textContent = "";
@@ -57,6 +68,7 @@
     }
     window.deyttSetMapRoute(window.deyttMapRoute);
     window.deyttSetMapEgressCountry(window.deyttMapEgressCountry);
+    window.deyttSetMapActiveAutoRoute(window.deyttMapActiveAutoRoute);
     if (window.deyttMapLocations) window.deyttSetMapLocations(window.deyttMapLocations);
     if (window.deyttMapUserLocation) {
       const location = window.deyttMapUserLocation;

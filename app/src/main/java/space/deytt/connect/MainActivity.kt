@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.TrafficStats
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
@@ -87,6 +88,7 @@ class MainActivity : Activity() {
     private var hasStartedBefore = false
     private var currentNetworkLocation: IpNetworkLocation? = null
     private var currentEgressLocation: IpNetworkLocation? = null
+    private var currentAutoRouteKey: String? = null
     private var locationRequestInFlight = false
     private var locationLookupFailed = false
     private var locationRequestGeneration = 0
@@ -115,6 +117,16 @@ class MainActivity : Activity() {
     private var accountGeneration = 0
     private val connectionProgressHandler = Handler(Looper.getMainLooper())
     private val selectedRouteLatencyHandler = Handler(Looper.getMainLooper())
+    private val mapTrafficHandler = Handler(Looper.getMainLooper())
+    private val mapTrafficWindow = TrafficActivityWindow(MAP_TRAFFIC_GRACE_MS)
+    private var mapTrafficActive = false
+    private val mapTrafficTick = object : Runnable {
+        override fun run() {
+            if (!homeSpeedForeground || isFinishing || isDestroyed) return
+            sampleMapTraffic()
+            mapTrafficHandler.postDelayed(this, MAP_TRAFFIC_SAMPLE_INTERVAL_MS)
+        }
+    }
     private val connectionProgressTick = object : Runnable {
         override fun run() {
             val phase = renderedPhase ?: return
@@ -136,6 +148,12 @@ class MainActivity : Activity() {
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == ConnectVpnService.ACTION_ACTIVE_ROUTE) {
+                currentAutoRouteKey = intent.getStringExtra(ConnectVpnService.EXTRA_ACTIVE_ROUTE_KEY)
+                    ?.takeIf { it in setOf("nl", "de", "fi", "ru", "ru-de") }
+                if (::globe.isInitialized) globe.setActiveAutoRoute(currentAutoRouteKey)
+                return
+            }
             val phase = intent?.getStringExtra(ConnectVpnService.STATE_PHASE)
                 ?.let { runCatching { VpnPhase.valueOf(it) }.getOrNull() }
             renderStatus(
@@ -228,7 +246,16 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         homeSpeedForeground = true
-        val filter = IntentFilter(ConnectVpnService.ACTION_STATUS)
+        mapTrafficWindow.reset()
+        mapTrafficHandler.removeCallbacks(mapTrafficTick)
+        mapTrafficHandler.post(mapTrafficTick)
+        currentAutoRouteKey = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
+            .getString(ConnectVpnService.EXTRA_ACTIVE_ROUTE_KEY, null)
+            ?.takeIf { it in setOf("nl", "de", "fi", "ru", "ru-de") }
+        val filter = IntentFilter().apply {
+            addAction(ConnectVpnService.ACTION_STATUS)
+            addAction(ConnectVpnService.ACTION_ACTIVE_ROUTE)
+        }
         ContextCompat.registerReceiver(this, statusReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
         ContextCompat.registerReceiver(
             this,
@@ -254,6 +281,9 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         homeSpeedForeground = false
+        mapTrafficHandler.removeCallbacks(mapTrafficTick)
+        mapTrafficWindow.reset()
+        setMapTrafficActive(false)
         cancelHomeRouteDownload()
         homeConnectQueued = false
         latencyGeneration++
@@ -1143,6 +1173,10 @@ class MainActivity : Activity() {
         val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         if (::globe.isInitialized) {
             globe.setEgressCountry(if (enabled && tunnelActive) currentEgressLocation?.countryCode else null)
+            val isAutoRoute = SelectedRouteStore(this).read().id == "auto"
+            if (!tunnelActive || !isAutoRoute || currentAutoRouteKey != null) {
+                globe.setActiveAutoRoute(currentAutoRouteKey.takeIf { tunnelActive && isAutoRoute })
+            }
         }
         if (!::originPlaceText.isInitialized || !::originHintText.isInitialized) return
         val location = currentNetworkLocation
@@ -1683,6 +1717,29 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun sampleMapTraffic() {
+        val connectedOnHome = homeSpeedForeground &&
+            ::pager.isInitialized && pager.currentItem == 0 &&
+            renderedPhase == VpnPhase.CONNECTED && isSystemTunnelActive()
+        val active = if (connectedOnHome) {
+            mapTrafficWindow.observe(
+                rxBytes = TrafficStats.getTotalRxBytes(),
+                txBytes = TrafficStats.getTotalTxBytes(),
+                nowElapsedMs = SystemClock.elapsedRealtime(),
+            )
+        } else {
+            mapTrafficWindow.reset()
+            false
+        }
+        setMapTrafficActive(active)
+    }
+
+    private fun setMapTrafficActive(active: Boolean) {
+        if (mapTrafficActive == active) return
+        mapTrafficActive = active
+        if (::globe.isInitialized) globe.setTrafficActive(active)
+    }
+
     private fun renderStatus(phase: VpnPhase?, status: String?, error: String?) {
         if (!::statusText.isInitialized) return
         val value = status ?: "Соединение выключено"
@@ -1901,35 +1958,45 @@ class MainActivity : Activity() {
     }
 
     private fun showRouteProbePermissionSheet(permission: Intent) {
+        val localized: (String, String) -> String = { ru, en ->
+            if (AppLanguage.current(this) == AppLanguage.EN) en else ru
+        }
         val dialog = Dialog(this)
         val sheet = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(20), dp(20), dp(18))
             background = rounded(DeyttUi.SURFACE, 24f, DeyttUi.LINE)
         }
-        sheet.addView(mono("ДИАГНОСТИКА · РАЗОВЫЙ ДОСТУП", 9f, DeyttUi.MUTED, 650))
-        sheet.addView(text("Проверить выбранный маршрут?", 19f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+        sheet.addView(mono(localized("ДИАГНОСТИКА · РАЗОВОЕ РАЗРЕШЕНИЕ", "DIAGNOSTICS · ONE-TIME PERMISSION"), 9f, DeyttUi.MUTED, 650))
+        sheet.addView(text(localized("Разрешить проверку маршрутов?", "Allow route diagnostics?"), 19f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
             setPadding(0, dp(10), 0, dp(7))
         })
         sheet.addView(text(
-            "Android запросит разовое разрешение для HTTP-проверки через выбранный выход. VPN-туннель при этом не запускается.",
+            localized(
+                "Android запросит системное разрешение для замера. Для AmneziaWG тестовый туннель временно подключится, а после проверки приложение вернёт прежний маршрут.",
+                "Android will request system permission for route diagnostics. AmneziaWG briefly connects a test tunnel, then restores your previous route.",
+            ),
             13f,
             DeyttUi.MUTED,
         ).apply { setLineSpacing(dp(3).toFloat(), 1f) })
-        sheet.addView(button("Продолжить").apply {
+        sheet.addView(button(localized("Продолжить", "Continue")).apply {
             setOnClickListener {
                 dialog.dismiss()
                 startActivityForResult(permission, ROUTE_PROBE_PERMISSION_REQUEST)
             }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)).apply { topMargin = dp(16) })
-        sheet.addView(text("отмена", 13f, DeyttUi.MUTED).apply {
+        sheet.addView(text(localized("отмена", "cancel"), 13f, DeyttUi.MUTED).apply {
             gravity = Gravity.CENTER
             setPadding(0, dp(13), 0, dp(2))
             isClickable = true
             isFocusable = true
-            setOnClickListener { dialog.dismiss() }
+            setOnClickListener {
+                pendingRouteProbeAuthorization = null
+                dialog.dismiss()
+            }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         dialog.setContentView(sheet)
+        dialog.setOnCancelListener { pendingRouteProbeAuthorization = null }
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
@@ -1960,6 +2027,8 @@ class MainActivity : Activity() {
         private const val KEY_CONNECTION_STARTED_ELAPSED = "connection_started_elapsed"
         private const val CONNECTION_PROGRESS_INTERVAL_MS = 1_000L
         private const val SELECTED_ROUTE_LATENCY_INTERVAL_MS = 5_000L
+        private const val MAP_TRAFFIC_SAMPLE_INTERVAL_MS = 420L
+        private const val MAP_TRAFFIC_GRACE_MS = 2_800L
     }
 }
 

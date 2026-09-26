@@ -248,6 +248,7 @@
       this.language = "ru";
       this.userLocation = null;
       this.autoExitCountry = null;
+      this.autoExitRouteKey = null;
       this.labelPlacements = new Map();
       this.routeInitialized = false;
       this.lastFocusSignature = null;
@@ -282,6 +283,8 @@
       this.renderCount = 0;
       this.staticRenderCount = 0;
       this.cameraMoving = false;
+      this.trafficActive = false;
+      this.trafficStartedAt = 0;
       this.projectedNodes = {};
       this.bind();
     }
@@ -659,9 +662,12 @@
       context.globalAlpha = 1;
     }
 
-    drawRoutes(colors) {
+    drawRoutes(colors, time) {
       const route = ROUTES[this.route];
-      route.links.forEach((link) => {
+      const activeRoute = this.route === "auto" && this.autoExitRouteKey
+        ? ROUTES[this.autoExitRouteKey]
+        : route;
+      (activeRoute || route).links.forEach((link) => {
         if (link.every((key) => this.availableLocationKeys.has(key))) {
           this.drawArc(link[0], link[1], colors, true);
         }
@@ -670,10 +676,79 @@
       if (this.userLocation && firstHop) {
         this.drawArc("user", firstHop, colors, true);
       }
+      if (this.trafficActive) this.drawTraffic(colors, time || performance.now());
+    }
+
+    drawTraffic(colors, time) {
+      const activeRoute = this.route === "auto" && this.autoExitRouteKey
+        ? ROUTES[this.autoExitRouteKey]
+        : ROUTES[this.route];
+      const links = (activeRoute || ROUTES[this.route]).links.filter((link) =>
+        link.every((key) => this.availableLocationKeys.has(key))
+      );
+      const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
+      if (this.userLocation && firstHop) links.unshift(["user", firstHop]);
+
+      if (!links.length) {
+        // Without the location opt-in there is no truthful origin point for a
+        // route line. Pulse the confirmed exit instead of inventing a source.
+        const exit = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
+        if (!exit) return;
+        const point = this.projectLocation(LOCATIONS[exit], 1.018);
+        if (point.z <= .015) return;
+        const phase = this.reducedMotion.matches ? .5 : ((time - this.trafficStartedAt) % 1_800) / 1_800;
+        const context = this.context;
+        context.save();
+        context.globalAlpha = (1 - phase) * .38;
+        context.beginPath();
+        context.arc(point.x, point.y, 7 + phase * 9, 0, TAU);
+        context.strokeStyle = colors.routeHot;
+        context.lineWidth = 1.5;
+        context.shadowColor = colors.routeHot;
+        context.shadowBlur = 8;
+        context.stroke();
+        context.restore();
+        return;
+      }
+
+      const linkDuration = 1800;
+      const routeDuration = linkDuration * links.length;
+      const elapsed = Math.max(0, time - this.trafficStartedAt);
+      const packetCount = this.reducedMotion.matches ? 1 : 2;
+      for (let packet = 0; packet < packetCount; packet += 1) {
+        const routePosition = this.reducedMotion.matches
+          ? links.length * .52
+          : (((elapsed / routeDuration + packet / packetCount) % 1) * links.length);
+        const linkIndex = Math.min(links.length - 1, Math.floor(routePosition));
+        const progress = routePosition - linkIndex;
+        const [fromKey, toKey] = links[linkIndex];
+        const fromLocation = fromKey === "user" ? this.userLocation : LOCATIONS[fromKey];
+        const from = vector(fromLocation.lat, fromLocation.lon);
+        const to = vector(LOCATIONS[toKey].lat, LOCATIONS[toKey].lon);
+        const lift = fromKey === "user" ? .16 : .11;
+        for (let tail = 2; tail >= 0; tail -= 1) {
+          const amount = progress - tail * .055;
+          if (amount < 0 || amount > 1) continue;
+          const point = this.projectVector(slerp(from, to, amount), 1 + Math.sin(amount * Math.PI) * lift);
+          if (point.z <= -.02) continue;
+          const context = this.context;
+          context.save();
+          context.globalAlpha = (tail === 0 ? .95 : .58 - tail * .14) *
+            (this.reducedMotion.matches ? .82 : 1);
+          context.beginPath();
+          context.arc(point.x, point.y, tail === 0 ? 2.8 : 1.8 - tail * .25, 0, TAU);
+          context.fillStyle = tail === 0 ? colors.routeHot : colors.route;
+          context.shadowColor = colors.routeHot;
+          context.shadowBlur = tail === 0 ? 10 : 5;
+          context.fill();
+          context.restore();
+        }
+      }
     }
 
     activeRouteNodeKeys() {
       if (this.route === "auto") {
+        if (this.autoExitRouteKey && ROUTES[this.autoExitRouteKey]) return ROUTES[this.autoExitRouteKey].nodes;
         const key = COUNTRY_EXIT_KEYS[this.autoExitCountry];
         return key && this.availableLocationKeys.has(key) ? [key] : [];
       }
@@ -837,7 +912,9 @@
       this.cameraMoving = cameraMoving;
       // The atlas only animates while the user pans or zooms. Once the camera
       // settles, static routes and labels stay still and consume no frame loop.
-      const frameInterval = cameraMoving ? (this.width < 520 ? 20 : 16) : 16;
+      const frameInterval = cameraMoving
+        ? (this.width < 520 ? 20 : 16)
+        : this.trafficActive && !this.reducedMotion.matches ? 33 : 16;
       const elapsed = this.lastFrame ? time - this.lastFrame : frameInterval;
       if (elapsed < frameInterval && !this.dragging) {
         this.start();
@@ -868,10 +945,10 @@
       const colors = this.colors();
       if (this.staticDirty) this.renderStatic(colors);
       this.context.drawImage(this.staticCanvas, 0, 0, this.width, this.height);
-      this.drawRoutes(colors);
+      this.drawRoutes(colors, time);
       this.drawNodes(colors);
       this.renderCount += 1;
-      if (Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001) this.start();
+      if (Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || (this.trafficActive && !this.reducedMotion.matches)) this.start();
     }
 
     start() {
@@ -1027,10 +1104,30 @@
         : null;
       if (this.autoExitCountry === nextKey) return;
       this.autoExitCountry = nextKey;
+      this.staticDirty = true;
+      this.start();
+    }
+
+    setActiveAutoRoute(routeKey) {
+      const allowed = ["nl", "de", "fi", "ru", "ru-de"];
+      const requestedKey = String(routeKey || "").toLowerCase();
+      const nextRouteKey = allowed.includes(requestedKey)
+        ? requestedKey
+        : null;
+      if (this.autoExitRouteKey === nextRouteKey) return;
+      this.autoExitRouteKey = nextRouteKey;
       // Egress metadata changes the active endpoint, never the user's camera
       // or the stable label layout. This avoids refocusing the whole map when
       // an IP lookup reports a corrected exit region.
       this.staticDirty = true;
+      this.start();
+    }
+
+    setTrafficActive(active) {
+      const next = Boolean(active);
+      if (this.trafficActive === next) return;
+      this.trafficActive = next;
+      this.trafficStartedAt = next ? performance.now() : 0;
       this.start();
     }
 

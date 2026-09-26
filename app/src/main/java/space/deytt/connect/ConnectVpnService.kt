@@ -18,19 +18,26 @@ import io.nekohasekai.libbox.BridgeOptions
 import io.nekohasekai.libbox.BridgeSession
 import io.nekohasekai.libbox.CommandServer
 import io.nekohasekai.libbox.CommandServerHandler
+import io.nekohasekai.libbox.CommandClient
+import io.nekohasekai.libbox.CommandClientHandler
 import io.nekohasekai.libbox.ConnectionOwner
+import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.Libbox
+import io.nekohasekai.libbox.LogIterator
 import io.nekohasekai.libbox.LocalDNSTransport
 import io.nekohasekai.libbox.NeighborEntryIterator
 import io.nekohasekai.libbox.NeighborUpdateListener
 import io.nekohasekai.libbox.NetworkInterfaceIterator
+import io.nekohasekai.libbox.OutboundGroupIterator
+import io.nekohasekai.libbox.OutboundGroupItemIterator
 import io.nekohasekai.libbox.Notification as LibboxNotification
 import io.nekohasekai.libbox.OverrideOptions
 import io.nekohasekai.libbox.PlatformInterface
 import io.nekohasekai.libbox.PlatformUser
 import io.nekohasekai.libbox.RoutePrefixIterator
 import io.nekohasekai.libbox.SetupOptions
+import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.ShellSession
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.SystemProxyStatus
@@ -53,6 +60,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         const val ACTION_CANCEL_ROUTE_PROBE = "space.deytt.connect.action.CANCEL_ROUTE_PROBE"
         const val ACTION_RESTORE_NOTIFICATION = "space.deytt.connect.action.RESTORE_NOTIFICATION"
         const val ACTION_STATUS = "space.deytt.connect.action.STATUS"
+        const val ACTION_ACTIVE_ROUTE = "space.deytt.connect.action.ACTIVE_ROUTE"
+        const val EXTRA_ACTIVE_ROUTE_KEY = "active_route_key"
+        const val EXTRA_ACTIVE_EXIT_COUNTRY = "active_exit_country"
         const val EXTRA_STATUS = "status"
         const val EXTRA_ERROR = "error"
         private const val CHANNEL_ID = "vpn"
@@ -82,6 +92,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     private val executor = Executors.newSingleThreadExecutor()
     private var commandServer: CommandServer? = null
+    private var commandClient: CommandClient? = null
     private var tunnel: ParcelFileDescriptor? = null
     private var started = false
     private var routeProbeOnly = false
@@ -419,6 +430,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             commandServer = server
             server.start()
             server.startOrReloadService(runtimeConfig, OverrideOptions().apply { autoRedirect = false })
+            observeAutoRoute()
             ensureCurrent(operationId)
             publishStatus(VpnPhase.CHECKING, "Проверяем туннель…", "Проверяю доступ к интернету через выбранный маршрут")
             updateNotification("Проверяем туннель…")
@@ -437,6 +449,70 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     private fun ensureCurrent(operationId: Long) {
         check(operation.get() == operationId && runtimeRunning) { "Подключение отменено" }
+    }
+
+    private fun observeAutoRoute() {
+        val selected = SelectedRouteStore(this).read()
+        publishActiveAutoRoute(null)
+        if (selected.id != "auto" || selected.configTag.isBlank()) return
+
+        val options = io.nekohasekai.libbox.CommandClientOptions().apply {
+            addCommand(Libbox.CommandGroup)
+        }
+        val clientHandler = object : CommandClientHandler {
+            override fun connected() = Unit
+            override fun disconnected(message: String) = Unit
+            override fun initializeClashMode(modeList: StringIterator, currentMode: String) = Unit
+            override fun setDefaultLogLevel(level: Int) = Unit
+            override fun updateClashMode(newMode: String) = Unit
+            override fun clearLogs() = Unit
+            override fun writeConnectionEvents(events: ConnectionEvents) = Unit
+            override fun writeLogs(messageList: LogIterator) = Unit
+            override fun writeOutbounds(message: OutboundGroupItemIterator) = Unit
+            override fun writeStatus(message: StatusMessage) = Unit
+
+            override fun writeGroups(message: OutboundGroupIterator) {
+                while (message.hasNext()) {
+                    val group = message.next()
+                    if (group.tag != selected.configTag) continue
+                    val route = ActiveRouteSelection.fromOutboundTag(group.selected) ?: return
+                    if (SelectedRouteStore(this@ConnectVpnService).read().id == "auto") {
+                        publishActiveAutoRoute(route)
+                    }
+                    return
+                }
+            }
+        }
+        val client = Libbox.newCommandClient(clientHandler, options)
+        commandClient = client
+        runCatching { client.connect() }
+            .onFailure {
+                Log.w(TAG, "Unable to observe selected auto route (${it.javaClass.simpleName})")
+                if (commandClient === client) commandClient = null
+                runCatching { client.disconnect() }
+            }
+    }
+
+    private fun publishActiveAutoRoute(route: ActiveRouteSelection?) {
+        val preferences = getSharedPreferences(STATE_PREFS, MODE_PRIVATE).edit()
+        if (route == null) {
+            preferences.remove(EXTRA_ACTIVE_ROUTE_KEY).remove(EXTRA_ACTIVE_EXIT_COUNTRY)
+        } else {
+            preferences.putString(EXTRA_ACTIVE_ROUTE_KEY, route.routeKey)
+                .putString(EXTRA_ACTIVE_EXIT_COUNTRY, route.exitCountry)
+        }
+        preferences.apply()
+        sendBroadcast(
+            Intent(ACTION_ACTIVE_ROUTE).setPackage(packageName)
+                .putExtra(EXTRA_ACTIVE_ROUTE_KEY, route?.routeKey.orEmpty())
+                .putExtra(EXTRA_ACTIVE_EXIT_COUNTRY, route?.exitCountry.orEmpty()),
+        )
+    }
+
+    private fun closeCommandClient() {
+        val client = commandClient ?: return
+        commandClient = null
+        runCatching { client.disconnect() }
     }
 
     private fun setupLibbox() {
@@ -523,6 +599,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     private fun fail(message: String) {
+        closeCommandClient()
+        publishActiveAutoRoute(null)
         publishStatus(VpnPhase.ERROR, "Ошибка запуска соединения", message)
         runCatching { updateNotification(message) }
             .onFailure { Log.w(TAG, "Failed to update error notification", it) }
@@ -546,6 +624,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 VpnStateStore(this).write(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
             return
         }
+        closeCommandClient()
+        publishActiveAutoRoute(null)
         runCatching { commandServer?.closeService() }
             .onFailure { Log.w(TAG, "Failed to close core service", it) }
         runCatching { commandServer?.close() }

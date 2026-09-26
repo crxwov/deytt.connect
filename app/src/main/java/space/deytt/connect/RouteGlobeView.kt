@@ -22,8 +22,10 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var selectedRoute = "auto"
     private var networkLocation: IpNetworkLocation? = null
     private var egressCountryCode: String? = null
+    private var activeAutoRouteKey: String? = null
     private var pageLoaded = false
     private var availableLocations = setOf("nl", "de", "fi", "ru")
+    private var trafficActive = false
     private val atlas: WebView
     var onMapNodeTapped: ((String) -> Unit)? = null
 
@@ -77,6 +79,8 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                     applySelectedRoute()
                     applyUserLocation()
                     applyEgressCountry()
+                    applyActiveAutoRoute()
+                    applyTrafficActive()
                 }
             }
             setOnTouchListener { view, event ->
@@ -117,6 +121,20 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         egressCountryCode = normalized
         atlas.contentDescription = mapDescription(selectedRoute)
         applyEgressCountry()
+    }
+
+    internal fun setActiveAutoRoute(routeKey: String?) {
+        val allowed = setOf("nl", "de", "fi", "ru", "ru-de")
+        val normalized = routeKey?.lowercase()?.takeIf(allowed::contains)
+        if (activeAutoRouteKey == normalized) return
+        activeAutoRouteKey = normalized
+        applyActiveAutoRoute()
+    }
+
+    internal fun setTrafficActive(active: Boolean) {
+        if (trafficActive == active) return
+        trafficActive = active
+        applyTrafficActive()
     }
 
     override fun onAttachedToWindow() {
@@ -178,6 +196,23 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         val country = egressCountryCode?.let(JSONObject::quote) ?: "null"
         atlas.evaluateJavascript(
             "window.deyttSetMapEgressCountry && window.deyttSetMapEgressCountry($country)",
+            null,
+        )
+    }
+
+    private fun applyActiveAutoRoute() {
+        if (!pageLoaded) return
+        val route = activeAutoRouteKey?.let(JSONObject::quote) ?: "null"
+        atlas.evaluateJavascript(
+            "window.deyttSetMapActiveAutoRoute && window.deyttSetMapActiveAutoRoute($route)",
+            null,
+        )
+    }
+
+    private fun applyTrafficActive() {
+        if (!pageLoaded) return
+        atlas.evaluateJavascript(
+            "window.deyttSetMapTrafficActive && window.deyttSetMapTrafficActive($trafficActive)",
             null,
         )
     }
