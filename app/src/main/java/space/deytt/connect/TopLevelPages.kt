@@ -118,12 +118,21 @@ internal class TopLevelViewPagerAdapter(
 }
 
 internal class PrimaryPages(private val host: MainActivity) {
-    private data class ProbeRouteRow(val route: DeyttRoute, val status: TextView, val progress: ProgressBar)
+    private data class ProbeRouteRow(
+        val route: DeyttRoute,
+        val status: TextView,
+        val progress: ProgressBar,
+        val visualizer: RouteProbeVisualizerView,
+    )
     private data class CountryProbeState(
         val code: String,
         val routes: List<DeyttRoute>,
         val rows: Map<String, ProbeRouteRow>,
         val samples: MutableMap<String, RouteProbeSample> = mutableMapOf(),
+        val pingTraces: MutableMap<String, MutableList<Long>> = mutableMapOf(),
+        val speedTraces: MutableMap<String, MutableList<Long>> = mutableMapOf(),
+        val errors: MutableMap<String, String> = mutableMapOf(),
+        var speedCheckEnabled: Boolean = false,
         var selectionAtStart: String? = null,
         var cancelled: Boolean = false,
     )
@@ -238,7 +247,14 @@ internal class PrimaryPages(private val host: MainActivity) {
         val root = host.screen(withBackdrop = true)
         root.addView(host.header("выходы · выбор · диагностика", "Маршруты"))
         root.addView(spacer(8, host))
-        root.addView(host.text("Раскройте страну, чтобы проверить выходы. Выбор не запускает подключение.", 13f, MUTED)
+        root.addView(host.text(
+            copy(
+                "Откройте страну: пинги маршрутов идут параллельно, скорость измеряется по очереди.",
+                "Open a country: route pings run in parallel, then speed is measured one route at a time.",
+            ),
+            13f,
+            MUTED,
+        )
             .apply { setPadding(0, 0, 0, host.dp(18)) })
 
         root.addView(host.sectionLabel("быстрый выбор"))
@@ -295,8 +311,21 @@ internal class PrimaryPages(private val host: MainActivity) {
                     11f,
                     if (isCachedBest) DeyttUi.MINT else MUTED,
                 ).apply {
-                    setPadding(host.dp(54), 0, host.dp(16), host.dp(12))
+                    setPadding(0, 0, 0, host.dp(12))
                     if (isCachedBest) setTypeface(null, android.graphics.Typeface.BOLD)
+                }
+                val visualizer = RouteProbeVisualizerView(host).apply {
+                    val initial = when {
+                        cached?.downloadBytesPerSecond != null -> RouteProbeVisualState.SPEED_RESULT
+                        cached?.latencyMillis != null -> RouteProbeVisualState.PING_RESULT
+                        else -> RouteProbeVisualState.IDLE
+                    }
+                    render(
+                        initial,
+                        ping = listOfNotNull(cached?.latencyMillis),
+                        speed = listOfNotNull(cached?.downloadBytesPerSecond),
+                        description = copy("График задержки и скорости", "Latency and speed trace"),
+                    )
                 }
                 val spinner = ProgressBar(host, null, android.R.attr.progressBarStyleSmall).apply {
                     isIndeterminate = true
@@ -328,7 +357,7 @@ internal class PrimaryPages(private val host: MainActivity) {
 
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(44)))
                 item.setOnClickListener { host.selectRoute(route) }
-                val probeRow = ProbeRouteRow(route, metric, spinner)
+                val probeRow = ProbeRouteRow(route, metric, spinner, visualizer)
                 if (isAwg) {
                     item.setOnClickListener {
                         AppDialog.Builder(host)
@@ -343,7 +372,18 @@ internal class PrimaryPages(private val host: MainActivity) {
                 }
                 rowById[route.id] = probeRow
                 detail.addView(item)
-                detail.addView(metric)
+                detail.addView(LinearLayout(host).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(metric, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
+                        leftMargin = host.dp(54)
+                        rightMargin = host.dp(8)
+                    })
+                    addView(visualizer, LinearLayout.LayoutParams(host.dp(76), host.dp(44)).apply {
+                        rightMargin = host.dp(16)
+                        bottomMargin = host.dp(8)
+                    })
+                })
             }
             val countryState = CountryProbeState(code, networkRoutes + awgRoutes, rowById)
             val countryHeader = host.row(
@@ -411,15 +451,30 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         country.selectionAtStart = SelectedRouteStore(host).read().id
         country.samples.clear()
+        country.pingTraces.clear()
+        country.speedTraces.clear()
+        country.errors.clear()
         if (VpnService.prepare(host) != null && host.requestRouteProbePermission { startCountryProbe(country) }) return
         val config = SubscriptionStore(host).readCurrent() ?: return
+        val token = TelegramSessionStore.read(host)
+        country.speedCheckEnabled = !token.isNullOrBlank()
         country.rows.values.forEach { row ->
-            row.status.text = host.uiCopy("в очереди")
+            row.status.text = copy("пинг…", "starting ping…")
             row.status.setTextColor(DeyttUi.SKY)
             row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
             row.progress.visibility = View.VISIBLE
+            country.pingTraces[row.route.id] = mutableListOf()
+            country.speedTraces[row.route.id] = mutableListOf()
+            row.visualizer.render(
+                RouteProbeVisualState.PING,
+                ping = emptyList(),
+                speed = emptyList(),
+                description = copy(
+                    "Проверяю пинг параллельно с другими маршрутами",
+                    "Checking ping in parallel with other routes",
+                ),
+            )
         }
-        val token = TelegramSessionStore.read(host)
         val networkRoutes = country.routes.filter { it.engine == TunnelEngine.LIBBOX }
         if (networkRoutes.isEmpty()) { startCountryAwgProbes(country); return }
         runCatching {
@@ -459,30 +514,99 @@ internal class PrimaryPages(private val host: MainActivity) {
             val row = country.rows.values.firstOrNull { it.route.configTag == tag }
             if (row != null) {
                 val previous = country.samples[row.route.id] ?: RouteProbeSample(row.route.id, null, null)
-                val latency = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
-                    .takeIf { it >= 0L } ?: previous.latencyMillis
-                val speed = event.getLongExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, -1L)
-                    .takeIf { it >= 0L } ?: previous.downloadBytesPerSecond
+                val stage = event.getStringExtra(RouteProbeClient.EXTRA_STAGE)
+                    ?: if (!event.getStringExtra(RouteProbeClient.EXTRA_ERROR).isNullOrBlank()) "failed" else ""
+                val reportedLatency = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
+                    .takeIf { it >= 0L }
+                val latency = if (stage == "latency_sample") previous.latencyMillis
+                    else reportedLatency ?: previous.latencyMillis
+                val reportedSpeed = event.getLongExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, -1L)
+                    .takeIf { it >= 0L }
+                val speed = if (stage == "download_progress") previous.downloadBytesPerSecond
+                    else reportedSpeed ?: previous.downloadBytesPerSecond
                 country.samples[row.route.id] = RouteProbeSample(row.route.id, latency, speed)
-                when (event.getStringExtra(RouteProbeClient.EXTRA_STAGE)
-                    ?: if (!event.getStringExtra(RouteProbeClient.EXTRA_ERROR).isNullOrBlank()) "failed" else "") {
-                    "latency" -> row.status.text = host.uiCopy("измеряем задержку…")
+                val english = AppLanguage.current(host) == AppLanguage.EN
+                val pingTrace = country.pingTraces.getOrPut(row.route.id) { mutableListOf() }
+                val speedTrace = country.speedTraces.getOrPut(row.route.id) { mutableListOf() }
+                event.getStringExtra(RouteProbeClient.EXTRA_ERROR)?.takeIf(String::isNotBlank)
+                    ?.let { country.errors[row.route.id] = it }
+                when (stage) {
+                    "latency" -> {
+                        row.status.text = copy("измеряем задержку…", "measuring ping…")
+                        row.visualizer.render(RouteProbeVisualState.PING, pingTrace, speedTrace)
+                    }
+                    "latency_sample" -> {
+                        reportedLatency?.let(pingTrace::add)
+                        val sampleIndex = event.getIntExtra(RouteProbeClient.EXTRA_SAMPLE_INDEX, pingTrace.size)
+                        row.status.text = copy("пинг $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT} · ", "ping $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT} · ") +
+                            (reportedLatency?.let(::formatLatency) ?: "—")
+                        row.status.setTextColor(DeyttUi.SKY)
+                        row.visualizer.render(RouteProbeVisualState.PING, pingTrace)
+                    }
+                    "latency_retry" -> {
+                        val sampleIndex = event.getIntExtra(RouteProbeClient.EXTRA_SAMPLE_INDEX, 0)
+                        row.status.text = copy(
+                            "повторяем пинг $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT}…",
+                            "retrying ping $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT}…",
+                        )
+                        row.visualizer.render(RouteProbeVisualState.PING, pingTrace)
+                    }
                     "download" -> row.status.text = RouteProbePresentation.speedProgress(
                         latency?.let(::formatLatency),
-                        AppLanguage.current(host) == AppLanguage.EN,
+                        english,
                     )
-                    "waiting_download" -> row.status.text = copy("задержка: ", "ping: ") +
-                        (latency?.let(::formatLatency) ?: "—") + copy(" · скорость в очереди", " · speed queued")
+                    "download_progress" -> {
+                        reportedSpeed?.let { rate ->
+                            if (speedTrace.lastOrNull() != rate) speedTrace += rate
+                        }
+                        row.status.text = RouteProbePresentation.speedProgress(
+                            latency?.let(::formatLatency),
+                            english,
+                            reportedSpeed,
+                        )
+                        row.visualizer.render(RouteProbeVisualState.SPEED, pingTrace, speedTrace)
+                    }
+                    "waiting_download" -> {
+                        row.status.text = copy("задержка: ", "ping: ") +
+                            (latency?.let(::formatLatency) ?: "—") + copy(" · скорость в очереди", " · speed queued")
+                        row.visualizer.render(RouteProbeVisualState.PING_RESULT, pingTrace, speedTrace)
+                    }
                     "complete", "failed" -> {
                         row.progress.visibility = View.GONE
                         row.status.text = sampleLabel(country.samples.getValue(row.route.id))
-                        if (speed == null) row.status.append("\n" + copy("Скорость не измерена · нажмите страну для повтора", "Speed unavailable · reopen country to retry"))
+                        if (speed == null) {
+                            val reason = country.errors[row.route.id]?.let {
+                                RouteProbePresentation.failureMessage(it, english)
+                            } ?: if (!country.speedCheckEnabled) {
+                                copy("Войдите через Telegram, чтобы проверить скорость", "Link Telegram to measure speed")
+                            } else {
+                                copy("Скорость не измерена · нажмите страну для повтора", "Speed unavailable · reopen country to retry")
+                            }
+                            row.status.append("\n$reason")
+                        }
                         country.samples[row.route.id]?.let { RouteQualityStore.write(host, it) }
                         row.status.setTextColor(if (latency != null) DeyttUi.TEXT else DeyttUi.CORAL)
+                        val visualState = when {
+                            speed != null -> RouteProbeVisualState.SPEED_RESULT
+                            latency != null -> RouteProbeVisualState.PING_RESULT
+                            else -> RouteProbeVisualState.FAILURE
+                        }
+                        row.visualizer.render(
+                            visualState,
+                            ping = pingTrace.ifEmpty { listOfNotNull(latency) },
+                            speed = speedTrace.ifEmpty { listOfNotNull(speed) },
+                            description = country.errors[row.route.id]?.let {
+                                RouteProbePresentation.failureMessage(it, english)
+                            } ?: sampleLabel(country.samples.getValue(row.route.id)),
+                        )
                     }
                 }
                 event.getStringExtra(RouteProbeClient.EXTRA_ERROR)?.let { error ->
-                    if (error.isNotBlank()) row.status.contentDescription = host.uiCopy(error)
+                    if (error.isNotBlank() && stage !in setOf("complete", "failed")) {
+                        row.status.contentDescription = host.uiCopy(error)
+                    } else if (stage in setOf("complete", "failed")) {
+                        row.status.contentDescription = row.status.text
+                    }
                 }
             }
         }
