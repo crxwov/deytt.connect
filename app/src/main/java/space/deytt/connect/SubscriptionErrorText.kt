@@ -2,6 +2,10 @@ package space.deytt.connect
 
 /** Keep transport internals out of the import screen while retaining a useful retry hint. */
 object SubscriptionErrorText {
+    fun isAppDeviceSlotConflict(error: Throwable): Boolean = errorChain(error)
+        .filterIsInstance<SubscriptionHttpFailure>()
+        .any { it.statusCode == 409 && it.code == "app_device_limit_reached" }
+
     fun userMessage(error: Throwable): String {
         val raw = errorChainMessage(error)
         val diagnostic = SubscriptionRetryPolicy.diagnosticCode(error)

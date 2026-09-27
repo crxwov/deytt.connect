@@ -3,9 +3,27 @@ package space.deytt.connect
 import java.io.IOException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SubscriptionErrorTextTest {
+    @Test
+    fun recognizesOnlyTheFirstPartyAppSlotConflict() {
+        assertTrue(
+            SubscriptionErrorText.isAppDeviceSlotConflict(
+                SubscriptionHttpFailure(409, "conflict", "app_device_limit_reached"),
+            ),
+        )
+        assertFalse(
+            SubscriptionErrorText.isAppDeviceSlotConflict(SubscriptionHttpFailure(409, "conflict")),
+        )
+        assertFalse(
+            SubscriptionErrorText.isAppDeviceSlotConflict(
+                SubscriptionHttpFailure(403, "forbidden", "app_device_limit_reached"),
+            ),
+        )
+    }
+
     @Test
     fun typedErrorsHaveDistinctActionableSafeMessages() {
         val failures = listOf(
