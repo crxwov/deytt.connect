@@ -2,14 +2,13 @@ package space.deytt.connect
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageInfo
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
-import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.DigestInputStream
@@ -25,19 +24,54 @@ data class ReleaseInfo(
 )
 
 internal object ReleaseUrlPolicy {
-    fun isOfficialPage(raw: String): Boolean = runCatching {
-        val url = URL(raw)
-        url.protocol.equals("https", ignoreCase = true) &&
-            url.host.equals("github.com", ignoreCase = true) &&
-            url.userInfo == null
-    }.getOrDefault(false)
+    private const val RELEASE_PATH = "/crxwov/deytt.connect/releases/"
 
-    fun isOfficialAsset(raw: String): Boolean = runCatching {
+    fun isOfficialPage(raw: String): Boolean = officialPath(raw)?.let {
+        it.matches(Regex("${Regex.escape(RELEASE_PATH)}tag/[A-Za-z0-9._-]+"))
+    } ?: false
+
+    fun isOfficialAsset(raw: String): Boolean = officialPath(raw)?.let {
+        it.matches(Regex("${Regex.escape(RELEASE_PATH)}download/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\\.apk"))
+    } ?: false
+
+    private fun officialPath(raw: String): String? = runCatching {
         val url = URL(raw)
-        url.protocol.equals("https", ignoreCase = true) &&
-            url.host.equals("github.com", ignoreCase = true) &&
-            url.userInfo == null
-    }.getOrDefault(false)
+        url.path.takeIf {
+            url.protocol.equals("https", ignoreCase = true) &&
+                url.host.equals("github.com", ignoreCase = true) &&
+                url.userInfo == null && (url.port == -1 || url.port == 443) &&
+                url.query == null && url.ref == null
+        }
+    }.getOrNull()
+}
+
+internal object ReleaseAssetPolicy {
+    fun preferredName(names: List<String>, supportedAbis: List<String>): String? {
+        // Prefer a production APK even when a legacy debug asset appears first.
+        for (variant in listOf("release", "debug")) {
+            for (abi in supportedAbis + "universal") {
+                val name = "app-$abi-$variant.apk"
+                if (name in names) return name
+            }
+        }
+        return null
+    }
+}
+
+internal object UpdateSignaturePolicy {
+    // Histories must come exclusively from Android's verified SigningInfo, never
+    // release metadata. Multi-signer packages require the entire current set.
+    fun accepts(
+        installedSigners: Set<String>,
+        candidateSigners: Set<String>,
+        candidateHistory: List<String>,
+    ): Boolean {
+        if (installedSigners.isEmpty() || candidateSigners.isEmpty()) return false
+        if (installedSigners == candidateSigners) return true
+        if (installedSigners.size != 1 || candidateSigners.size != 1) return false
+        return candidateHistory.lastOrNull() == candidateSigners.single() &&
+            installedSigners.single() in candidateHistory.dropLast(1)
+    }
 }
 
 object UpdateChecker {
@@ -52,6 +86,7 @@ object UpdateChecker {
         val connection = (URL(RELEASES_URL).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8_000
             readTimeout = 8_000
+            instanceFollowRedirects = false
             setRequestProperty("Accept", "application/vnd.github+json")
             setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
         }
@@ -65,9 +100,13 @@ object UpdateChecker {
             val pageUrl = json.optString("html_url")
             check(ReleaseUrlPolicy.isOfficialPage(pageUrl)) { "Untrusted release page" }
             val assets = json.optJSONArray("assets")
-            val apkAsset = (0 until (assets?.length() ?: 0))
+            val candidates = (0 until (assets?.length() ?: 0))
                 .mapNotNull { assets?.optJSONObject(it) }
-                .firstOrNull { it.optString("name").endsWith(".apk", ignoreCase = true) }
+                .filter { ReleaseUrlPolicy.isOfficialAsset(it.optString("browser_download_url")) }
+            val preferredName = ReleaseAssetPolicy.preferredName(
+                candidates.map { it.optString("name") }, Build.SUPPORTED_ABIS.toList(),
+            )
+            val apkAsset = candidates.firstOrNull { it.optString("name") == preferredName }
             val apkUrl = apkAsset?.optString("browser_download_url")
                 ?.takeIf(ReleaseUrlPolicy::isOfficialAsset)
             val assetSize = apkAsset?.optLong("size", 0L)?.takeIf { it in 1..MAX_APK_BYTES }
@@ -149,6 +188,8 @@ object UpdateChecker {
 
     fun launchInstaller(context: Context, apk: File) {
         require(apk.isFile && apk.extension.equals("apk", ignoreCase = true))
+        // Permission dialogs can delay installation; validate the cached file again.
+        verifyInstalledPackageSignature(context, apk)
         val uri = FileProvider.getUriForFile(
             context,
             "${BuildConfig.APPLICATION_ID}.updateprovider",
@@ -193,15 +234,31 @@ object UpdateChecker {
             (host == "github.com" || host.endsWith(".githubusercontent.com"))
     }
 
-    private fun verifyInstalledPackageSignature(context: Context, apk: File) {
+    internal fun verifyInstalledPackageSignature(
+        context: Context,
+        apk: File,
+        allowDebuggable: Boolean = BuildConfig.DEBUG,
+    ) {
         val packageManager = context.packageManager
         val archive = packageManager.getPackageArchiveInfo(apk.absolutePath, signingCertificateQueryFlags())
             ?: error("Downloaded file is not a valid Android package")
         check(archive.packageName == BuildConfig.APPLICATION_ID) { "Downloaded APK belongs to another app" }
+        val application = archive.applicationInfo ?: error("Downloaded APK has no application information")
+        check(allowDebuggable || application.flags and ApplicationInfo.FLAG_DEBUGGABLE == 0) {
+            "Downloaded APK is a debug build"
+        }
         val installed = installedPackageInfo(context)
+        check(packageVersion(archive) > packageVersion(installed)) { "Downloaded APK is not a newer version" }
         val expected = signingCertificateDigests(installed)
         val actual = signingCertificateDigests(archive)
-        check(expected.isNotEmpty() && actual == expected) { "Downloaded APK signing certificate does not match" }
+        val history = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            archive.signingInfo?.signingCertificateHistory.orEmpty().map {
+                hex(MessageDigest.getInstance("SHA-256").digest(it.toByteArray()))
+            }
+        } else emptyList()
+        check(UpdateSignaturePolicy.accepts(expected, actual, history)) {
+            "Downloaded APK signing certificate does not match"
+        }
     }
 
     @Suppress("DEPRECATION")
@@ -223,11 +280,14 @@ object UpdateChecker {
     private fun signingCertificateDigests(info: PackageInfo): Set<String> {
         val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             val signingInfo = info.signingInfo ?: return emptySet()
-            if (signingInfo.hasMultipleSigners()) signingInfo.apkContentsSigners
-            else signingInfo.signingCertificateHistory
+            signingInfo.apkContentsSigners.orEmpty()
         } else info.signatures.orEmpty()
         return signatures.map { hex(MessageDigest.getInstance("SHA-256").digest(it.toByteArray())) }.toSet()
     }
+
+    @Suppress("DEPRECATION")
+    private fun packageVersion(info: PackageInfo): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
 
     private fun readLimited(input: java.io.InputStream, maximum: Int): ByteArray {
         val output = java.io.ByteArrayOutputStream()

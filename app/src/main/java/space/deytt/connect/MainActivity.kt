@@ -218,13 +218,9 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        intent?.data?.let { data ->
-            val incomingUrl = data.getQueryParameter("url") ?: data.getQueryParameter("subscription")
-            if (!incomingUrl.isNullOrBlank()) {
-                startActivity(Intent(this, SetupActivity::class.java).putExtra(SetupActivity.EXTRA_SUBSCRIPTION_URL, incomingUrl))
-                finish()
-                return
-            }
+        if (openIncomingSubscription(intent)) {
+            finish()
+            return
         }
         if (SubscriptionStore(this).readCurrent() == null) {
             startActivity(Intent(this, SetupActivity::class.java))
@@ -321,7 +317,15 @@ class MainActivity : Activity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        if (openIncomingSubscription(intent)) return
         intent.getIntExtra(EXTRA_START_TAB, -1).takeIf { it in 0..3 }?.let { selectTab(it) }
+    }
+
+    private fun openIncomingSubscription(incoming: Intent?): Boolean {
+        val url = SubscriptionImportLink.parse(incoming?.action, incoming?.dataString) ?: return false
+        // Forward only the validated value, never the incoming Intent or its grants/extras.
+        startActivity(Intent(this, SetupActivity::class.java).putExtra(SetupActivity.EXTRA_SUBSCRIPTION_URL, url))
+        return true
     }
 
     @Deprecated("Back navigation is delegated to the selected primary tab")

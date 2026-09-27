@@ -1,0 +1,7 @@
+{
+  "package": "space.deytt.connect",
+  "min_sdk": 24,
+  "rotation_min_sdk": 28,
+  "legacy_certificate_sha256": "25e335babcdc88679ad4e8d884de5a8475866b55341d5b4596c5168e82bf2b46",
+  "release_certificate_sha256": "bb39b663e555c7ed7b725c543ed73ea2602432b003591b2e1370f0359c4c4333"
+}
