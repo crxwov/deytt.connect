@@ -11,6 +11,9 @@ captures/
 .toolchain/
 *.keystore
 *.jks
+*.p12
+*.password
+__pycache__/
 ROADMAP*.md
 
 .kotlin/

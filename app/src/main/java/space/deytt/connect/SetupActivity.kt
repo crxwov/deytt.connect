@@ -44,19 +44,24 @@ class SetupActivity : Activity() {
         val updating = SubscriptionStore(this).readCurrent() != null
         val sessionToken = TelegramSessionStore.read(this)
         val incomingUrl = intent.getStringExtra(EXTRA_SUBSCRIPTION_URL)
-        pendingImportUrl = savedInstanceState?.getString("pending_import_url") ?: incomingUrl
+        pendingImportUrl = SubscriptionImportLink.validateSubscriptionUrl(
+            savedInstanceState?.getString("pending_import_url") ?: incomingUrl,
+        )
         val root = screen()
         root.addView(header(uiCopy("аккаунт · подписка · устройства"), uiCopy(if (updating) "Обновить подписку" else "Подключить подписку"), updating))
         root.addView(spacer(8, this))
         root.addView(note(
-            uiCopy("Войдите в Telegram, чтобы загрузить подписку и маршруты."),
+            uiCopy(if (pendingImportUrl != null) {
+                if (updating) "Ссылка готова к импорту. Подписка будет заменена, текущее соединение отключится."
+                else "Ссылка готова к импорту. Нажмите кнопку ниже, чтобы загрузить подписку и маршруты."
+            } else "Войдите в Telegram, чтобы загрузить подписку и маршруты."),
             DeyttUi.MUTED,
         ))
         root.addView(spacer(14, this))
-        accountAction = button(uiCopy(if (sessionToken == null) "Подключить аккаунт Telegram" else "Обновить подписку"), secondary = true).apply {
+        accountAction = button(uiCopy(if (pendingImportUrl != null) "Импортировать подписку" else if (sessionToken == null) "Подключить аккаунт Telegram" else "Обновить подписку"), secondary = true).apply {
             setOnClickListener {
                 val pending = pendingImportUrl
-                if (pending != null && TelegramSessionStore.read(this@SetupActivity) != null) importProfile(pending)
+                if (pending != null) importProfile(pending)
                 else loadAccountSubscription()
             }
         }
@@ -74,7 +79,7 @@ class SetupActivity : Activity() {
         }
         if (savedInstanceState?.getBoolean("resume_download") == true) {
             pendingImportUrl?.let(::importProfile) ?: loadAccountSubscription()
-        } else if (savedInstanceState == null && !incomingUrl.isNullOrBlank()) importProfile(incomingUrl)
+        }
     }
 
     private fun loadAccountSubscription() {
@@ -201,7 +206,7 @@ class SetupActivity : Activity() {
         state.text = "${SubscriptionLoadDiagnostics.userMessage(error)}\n\nКод: $reference"
         lastFailureMessage = state.text.toString()
         state.announceForAccessibility(state.text)
-        accountAction.text = uiCopy(if (TelegramSessionStore.read(this) == null) "Подключить аккаунт Telegram" else "Повторить загрузку")
+        accountAction.text = uiCopy(if (pendingImportUrl != null) "Повторить импорт" else if (TelegramSessionStore.read(this) == null) "Подключить аккаунт Telegram" else "Повторить загрузку")
         accountAction.isEnabled = true
         accountAction.alpha = 1f
     }

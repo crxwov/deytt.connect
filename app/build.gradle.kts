@@ -15,14 +15,20 @@ android {
         applicationId = if (providers.gradleProperty("isolatedQa").orNull == "true") "space.deytt.connect.qa" else "space.deytt.connect"
         minSdk = 24
         targetSdk = 35
-        versionCode = 26
-        versionName = "0.8.12"
+        versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
+            providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
+        } else 27
+        versionName = "0.8.13"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }
 
     buildTypes {
         release {
+            // Signing and certificate rotation are checked by scripts/release.py.
+            // Keep this output unsigned instead of silently using a debug key.
+            isDebuggable = false
+            isJniDebuggable = false
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -42,6 +48,8 @@ android {
 
     packaging {
         jniLibs.useLegacyPackaging = true
+        // AGP may retain native outputs from older builds of the upstream tools.
+        jniLibs.excludes += setOf("**/libwg.so", "**/libwg-quick.so")
     }
 
     splits {

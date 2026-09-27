@@ -19,6 +19,10 @@ val prepareDeyttAwgBackend by tasks.registering {
             from(upstreamRoot)
             into(outputRoot)
             exclude("org/amnezia/awg/backend/GoBackend.java")
+            // The app uses GoBackend only; omit unused privileged shell tooling.
+            exclude("org/amnezia/awg/backend/AwgQuickBackend.java")
+            exclude("org/amnezia/awg/util/RootShell.java")
+            exclude("org/amnezia/awg/util/ToolsInstaller.java")
         }
         val source = upstream.readText()
         var patched = source
@@ -183,7 +187,7 @@ android {
                     "-DANDROID_PACKAGE_NAME=space.deytt.connect",
                     "-DGRADLE_USER_HOME=${project.gradle.gradleUserHomeDir}",
                 )
-                targets("libwg-go.so", "libwg.so", "libwg-quick.so", "libdeytt-awg.so")
+                targets("libwg-go.so", "libdeytt-awg.so")
             }
         }
     }
