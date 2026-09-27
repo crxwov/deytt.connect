@@ -9,6 +9,73 @@ import org.junit.Test
 
 class SubscriptionClientTest {
     @Test
+    fun longServerBackoffReturnsControlWithoutHammeringEndpoint() {
+        val transport = FakeTransport(SubscriptionClient.SubscriptionHttpResponse(429, retryAfterMillis = 60_000))
+        val error = runCatching {
+            SubscriptionClient.requestForTest("https://deytt.space/sub/token", "application/json", true, transport)
+        }.exceptionOrNull()
+        assertTrue(error is SubscriptionHttpFailure)
+        assertEquals(1, transport.calls.size)
+    }
+
+    @Test
+    fun parsesBothRetryAfterFormatsAndBoundsUntrustedValues() {
+        assertEquals(2_000L, SubscriptionClient.parseRetryAfter("2"))
+        assertEquals(86_400_000L, SubscriptionClient.parseRetryAfter("9999999999999"))
+        assertEquals(2_000L, SubscriptionClient.parseRetryAfter("Thu, 01 Jan 1970 00:00:02 GMT", 0))
+        assertEquals(null, SubscriptionClient.parseRetryAfter("garbage"))
+    }
+
+    @Test
+    fun retriesDnsAndConnectFailuresWithBoundedAttempts() {
+        val transport = FakeTransport(java.net.UnknownHostException(), java.net.ConnectException(), java.io.EOFException())
+        val error = runCatching {
+            SubscriptionClient.requestForTest("https://deytt.space/sub/token", "application/json", true, transport)
+        }.exceptionOrNull()
+        assertTrue(error is java.io.EOFException)
+        assertEquals(3, transport.calls.size)
+    }
+
+    @Test
+    fun interruptedImportNeverMakesNetworkRequestOrSwallowsCancellationAsOptional() {
+        val transport = FakeTransport(SubscriptionClient.SubscriptionHttpResponse(200))
+        Thread.currentThread().interrupt()
+        try {
+            val error = runCatching {
+                SubscriptionClient.fetchAwgProfilesForTest("https://deytt.space/sub/token", "amneziawg31", "31", transport)
+            }.exceptionOrNull()
+            assertTrue(error is SubscriptionCancelledException)
+            assertTrue(Thread.currentThread().isInterrupted)
+            assertTrue(transport.calls.isEmpty())
+        } finally { Thread.interrupted() }
+    }
+
+    @Test
+    fun partialHttpResponseCannotBecomeAValidProfile() {
+        val transport = FakeTransport(SubscriptionClient.SubscriptionHttpResponse(206, body = "partial"))
+        val error = runCatching {
+            SubscriptionClient.requestForTest("https://deytt.space/sub/token", "application/json", true, transport)
+        }.exceptionOrNull()
+        assertTrue(error is SubscriptionPayloadException)
+        assertEquals(1, transport.calls.size)
+    }
+
+    @Test
+    fun rejectsUnexpectedTlsPortBeforeSendingIdentity() {
+        assertTrue(runCatching {
+            SubscriptionClient.normalizeBaseUrlForTest("https://deytt.space:8443/sub/token")
+        }.exceptionOrNull() is IllegalArgumentException)
+    }
+
+    @Test
+    fun malformedAwgManifestDoesNotSilentlyDropProfiles() {
+        val result = SubscriptionClient.fetchAwgProfilesForTest("https://deytt.space/sub/token", "amneziawg31", "31",
+            FakeTransport(SubscriptionClient.SubscriptionHttpResponse(200, VALID_AWG31_CONFIG,
+                awgServers = "[{\"id\":\"nl\"},{\"id\":\"nl\"}]")))
+        assertEquals(SubscriptionClient.AwgFetchState.TRANSIENT_FAILURE, result.state)
+    }
+
+    @Test
     fun canonicalizesFormatServerIdAndPreservesDuplicateSafeQueryValues() {
         assertEquals(
             "https://deytt.space/sub/token?keep=one&keep=two&lang=ru",

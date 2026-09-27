@@ -6,6 +6,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
+import java.io.IOException
 import java.io.StringReader
 
 data class AwgProfile(
@@ -16,41 +17,46 @@ data class AwgProfile(
     val config: String,
 )
 
-class AwgProfileStore(context: Context) {
-    private val directory = File(context.filesDir, "subscription")
+class AwgProfileStore internal constructor(private val directory: File) {
+    constructor(context: Context) : this(File(context.filesDir, "subscription"))
     private val indexFile = File(directory, "awg-profiles.json")
 
-    fun profiles(): List<AwgProfile> {
-        if (indexFile.isFile) {
-            val stored = runCatching {
-                val source = JSONArray(indexFile.readText(Charsets.UTF_8))
-                buildList {
-                    for (index in 0 until source.length()) {
-                        val item = source.getJSONObject(index)
-                        if (item.optString("version") != "31") continue
-                        val file = File(directory, item.getString("file"))
-                        if (file.isFile) add(
-                            AwgProfile(
-                                id = item.getString("id"),
-                                version = item.getString("version"),
-                                label = item.getString("label"),
-                                shortLabel = item.getString("shortLabel"),
-                                config = file.readText(Charsets.UTF_8),
-                            ),
-                        )
-                    }
-                }
-            }.getOrDefault(emptyList())
-            if (stored.size < runCatching { JSONArray(indexFile.readText(Charsets.UTF_8)).length() }.getOrDefault(stored.size)) {
-                // Migrate old local indexes and remove unsupported profile files.
-                save(stored)
-            }
-            return stored
+    fun profiles(): List<AwgProfile> = synchronized(AtomicSubscriptionFile.lock) {
+        try {
+            AtomicSubscriptionFile.recover(directory)
+        } catch (_: IOException) {
+            return@synchronized emptyList()
         }
-        File(directory, "awg15.conf").delete()
-        return listOfNotNull(
-            readFile("awg31.conf")?.let { AwgProfile("awg31", "31", "Основной", "AWG", it) },
-        )
+        if (indexFile.isFile) {
+            // A damaged optional cache must not prevent importing the main subscription.
+            val source = runCatching { JSONArray(indexFile.readText(Charsets.UTF_8)) }.getOrNull()
+                ?: return@synchronized emptyList()
+            return@synchronized (0 until source.length()).mapNotNull { position ->
+                runCatching {
+                    val item = source.getJSONObject(position)
+                    if (item.optString("version") != "31") return@runCatching null
+                    val name = item.getString("file")
+                    require(name.isNotBlank() && File(name).name == name && name.endsWith(".conf"))
+                    val file = File(directory, name)
+                    require(file.canonicalFile.parentFile == directory.canonicalFile)
+                    val config = readFile(name) ?: return@runCatching null
+                    validate(config)
+                    AwgProfile(
+                        id = item.getString("id"),
+                        version = "31",
+                        label = item.getString("label"),
+                        shortLabel = item.getString("shortLabel"),
+                        config = config,
+                    )
+                }.getOrNull()
+            }
+        }
+        listOfNotNull(runCatching {
+            readFile("awg31.conf")?.let {
+                validate(it)
+                AwgProfile("awg31", "31", "Основной", "AWG", it)
+            }
+        }.getOrNull())
     }
 
     fun read31(): String? = profiles().firstOrNull { it.version == "31" }?.config
@@ -60,48 +66,55 @@ class AwgProfileStore(context: Context) {
         listOfNotNull(config31?.let { AwgProfile("awg31", "31", "Основной", "AWG", it) }),
     )
 
-    fun save(profiles: List<AwgProfile>) {
+    fun save(profiles: List<AwgProfile>) = saveWithCommit(profiles) {}
+
+    internal fun saveWithCommit(profiles: List<AwgProfile>, commit: () -> Unit) = synchronized(AtomicSubscriptionFile.lock) {
         val supportedProfiles = profiles.filter { it.version == "31" }
         supportedProfiles.forEach { validate(it.config) }
         directory.mkdirs()
-        val generation = java.lang.Long.toUnsignedString(System.nanoTime(), 36)
+        val generation = java.util.UUID.randomUUID().toString()
         val activeFiles = mutableSetOf<String>()
         val index = JSONArray()
-        supportedProfiles.forEachIndexed { position, profile ->
-            val safeId = profile.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
-            val name = "awg-$generation-${profile.version}-$safeId-$position.conf"
-            writeAtomic(name, profile.config)
-            activeFiles += name
-            index.put(
-                JSONObject()
-                    .put("id", profile.id)
-                    .put("version", profile.version)
-                    .put("label", profile.label)
-                    .put("shortLabel", profile.shortLabel)
-                    .put("file", name),
-            )
+        try {
+            AtomicSubscriptionFile.transaction(directory) {
+                supportedProfiles.forEachIndexed { position, profile ->
+                    val name = "awg-$generation-${profile.version}-$position.conf"
+                    writeAtomic(name, profile.config)
+                    activeFiles += name
+                    index.put(
+                        JSONObject()
+                            .put("id", profile.id)
+                            .put("version", profile.version)
+                            .put("label", profile.label)
+                            .put("shortLabel", profile.shortLabel)
+                            .put("file", name),
+                    )
+                }
+                writeAtomic(indexFile.name, index.toString())
+                commit()
+            }
+        } catch (failure: Exception) {
+            // A retained journal means recovery failed: keep every generation available.
+            if (!File(directory, ".subscription-transaction.json").exists()) {
+                activeFiles.forEach { File(directory, it).delete() }
+            }
+            throw failure
         }
-        writeAtomic(indexFile.name, index.toString())
+        // Old generation is removed only after the durable transaction has committed.
         directory.listFiles { file ->
             file.name.startsWith("awg-") && file.extension == "conf" && file.name !in activeFiles
         }?.forEach(File::delete)
         File(directory, "awg15.conf").delete()
         File(directory, "awg31.conf").delete()
+        Unit
     }
 
     private fun readFile(name: String): String? = File(directory, name)
         .takeIf { it.isFile && it.length() > 0L }
         ?.readText(Charsets.UTF_8)
 
-    private fun writeAtomic(name: String, content: String) {
-        val target = File(directory, name)
-        val temporary = File(directory, "$name.tmp")
-        temporary.writeText(content, Charsets.UTF_8)
-        if (!temporary.renameTo(target)) {
-            temporary.copyTo(target, overwrite = true)
-            temporary.delete()
-        }
-    }
+    private fun writeAtomic(name: String, content: String) =
+        AtomicSubscriptionFile.write(File(directory, name), content)
 
     companion object {
         fun validate(content: String?) {
