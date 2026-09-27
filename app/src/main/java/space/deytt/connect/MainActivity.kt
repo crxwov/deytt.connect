@@ -785,7 +785,7 @@ class MainActivity : Activity() {
                     if (SelectedRouteStore(app).read().id != previous.id) { complete(false); return }
                     val state = VpnStateStore(app).read()
                     if (reconnectStarted) {
-                        val originalRunning = if (previous.engine == TunnelEngine.AMNEZIAWG) AwgTunnelController.isRunning() else ConnectVpnService.isRunning()
+                        val originalRunning = ConnectVpnService.isRunning()
                         when {
                             state.phase == VpnPhase.CONNECTED && originalRunning -> complete(true)
                             state.phase == VpnPhase.ERROR && !originalRunning && retries == 0 -> {
@@ -823,10 +823,7 @@ class MainActivity : Activity() {
                     reconnectAt = SystemClock.elapsedRealtime()
                     VpnStateStore(app).write(VpnPhase.STARTING, "Восстанавливаем соединение…")
                     runCatching {
-                        if (previous.engine == TunnelEngine.AMNEZIAWG) {
-                            val raw = AwgProfileStore(app).read(previous.id) ?: error("Previous profile unavailable")
-                            AwgTunnelController.start(app, raw, previous.id)
-                        } else ContextCompat.startForegroundService(app,
+                        ContextCompat.startForegroundService(app,
                             Intent(app, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START))
                     }.onFailure { restorationFailed() }
                     if (!completionSent) handler.postDelayed(this, 100L)
@@ -1666,11 +1663,9 @@ class MainActivity : Activity() {
                 renderStatus(VpnPhase.ERROR, "Ошибка запуска соединения", "Обновите подписку: профиль ${route.subtitle} отсутствует")
                 return
             }
-            AwgTunnelController.start(this, config, route.id)
-        } else {
-            val intent = Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
         }
+        val intent = Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
     }
 
     private fun awaitEnginesStopped(
