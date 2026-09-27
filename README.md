@@ -21,7 +21,7 @@
 
 ## Подключение
 
-**Версия 0.8.9 · Android 7.0+ · ARM64 (`arm64-v8a`)**
+**Версия 0.8.10 · Android 7.0+ · ARM64 (`arm64-v8a`)**
 
 1. Скачайте [APK для ARM64](https://github.com/crxwov/deytt.connect/releases/latest/download/app-arm64-v8a-debug.apk) и откройте файл. Если Android запросит разрешение, разрешите установку для браузера или файлового менеджера.
 2. Войдите через Telegram: укажите username, запросите одноразовый код и подтвердите вход. Если код не приходит, откройте [бота DEYTTT](https://t.me/deyttbot) и запросите его ещё раз.
@@ -42,10 +42,10 @@
 
 ## Релизы и проверка файла
 
-В [последнем релизе](https://github.com/crxwov/deytt.connect/releases/latest) находятся changelog и актуальный APK. Для версии **0.8.9** опубликован SHA-256 файла `app-arm64-v8a-debug.apk`:
+В [последнем релизе](https://github.com/crxwov/deytt.connect/releases/latest) находятся changelog и актуальный APK. Для версии **0.8.10** опубликован SHA-256 файла `app-arm64-v8a-debug.apk`:
 
 ```text
-76814bd4cfc45bdf0ef1d39fabae04cd43152fc3c4278ebb1be786b93c5cbed1
+3638468d9ba7ad5ac0acdb934e03840ab87f5657b5dad5435c8cd30c7ccc74f3
 ```
 
 Сверьте контрольную сумму, если вручную проверяете скачанный файл.
