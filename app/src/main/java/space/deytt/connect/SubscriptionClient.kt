@@ -9,6 +9,7 @@ import java.net.URL
 import java.net.URLDecoder
 import java.net.URLEncoder
 import org.json.JSONArray
+import org.json.JSONObject
 
 data class ImportedSubscription(
     val url: String,
@@ -20,12 +21,20 @@ data class ImportedSubscription(
 
 object SubscriptionClient {
     private const val MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024
-    private val defaultTransport = SubscriptionHttpTransport { url, accept ->
-        requestUrlConnection(url, accept)
-    }
 
     fun import(context: android.content.Context, rawUrl: String): ImportedSubscription {
-        return import(context, rawUrl, defaultTransport)
+        val headers = SubscriptionRequestIdentity.headers(context)
+        try {
+            return import(context, rawUrl, SubscriptionHttpTransport { url, accept ->
+                requestUrlConnection(url, accept, headers)
+            })
+        } catch (error: SubscriptionHttpFailure) {
+            if (error.statusCode == 401 && error.code == "session_expired" &&
+                TelegramSessionStore.read(context) == headers["X-TG-App-Token"]) {
+                TelegramSessionStore.clear(context)
+            }
+            throw error
+        }
     }
 
     internal fun import(
@@ -124,7 +133,7 @@ object SubscriptionClient {
         url: String,
         accept: String,
         required: Boolean,
-        transport: SubscriptionHttpTransport = defaultTransport,
+        transport: SubscriptionHttpTransport,
     ): SubscriptionResponse? {
         var lastError: IOException? = null
         repeat(SubscriptionRetryPolicy.MAX_ATTEMPTS) { attempt ->
@@ -164,7 +173,8 @@ object SubscriptionClient {
                 502, 503, 504 -> "Сервер подписки временно недоступен (HTTP $responseCode)"
                 else -> "Сервер подписки ответил HTTP $responseCode"
             }
-            throw SubscriptionHttpFailure(responseCode, detail)
+            val code = runCatching { JSONObject(response.body).let { it.optString("error").ifBlank { it.optString("detail") } } }.getOrDefault("")
+            throw SubscriptionHttpFailure(responseCode, detail, code)
         }
         return SubscriptionResponse(
             body = response.body,
@@ -174,7 +184,7 @@ object SubscriptionClient {
         )
     }
 
-    private fun requestUrlConnection(url: String, accept: String): SubscriptionHttpResponse {
+    private fun requestUrlConnection(url: String, accept: String, headers: Map<String, String>): SubscriptionHttpResponse {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = 15_000
@@ -182,6 +192,7 @@ object SubscriptionClient {
             // A subscription URL is a bearer token. Do not let the HTTP stack
             // silently forward it to an untrusted host.
             instanceFollowRedirects = false
+            headers.forEach { (name, value) -> setRequestProperty(name, value) }
             setRequestProperty("Accept", accept)
             setRequestProperty("Cache-Control", "no-cache")
             setRequestProperty("Connection", "close")
@@ -195,7 +206,7 @@ object SubscriptionClient {
                 body = if (responseCode in 200..299) {
                     connection.inputStream.use(::readLimitedUtf8)
                 } else {
-                    ""
+                    connection.errorStream?.use(::readLimitedUtf8).orEmpty()
                 },
                 profileTitle = connection.getHeaderField("Profile-Title"),
                 userInfo = connection.getHeaderField("Subscription-Userinfo"),
@@ -261,7 +272,7 @@ object SubscriptionClient {
         baseUrl: String,
         format: String,
         version: String,
-        transport: SubscriptionHttpTransport = defaultTransport,
+        transport: SubscriptionHttpTransport,
     ): AwgFetchResult {
         return try {
             val first = request(
@@ -323,6 +334,7 @@ object SubscriptionClient {
                                 add(profile)
                             }
                         } catch (error: Exception) {
+                            if (isAccessFailure(error)) throw error
                             failedIds += id
                             if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) != true) {
                                 failedRequestsAreTransient = false
@@ -354,6 +366,7 @@ object SubscriptionClient {
                 AwgFetchResult(version, profiles, AwgFetchState.AVAILABLE)
             }
         } catch (error: Exception) {
+            if (isAccessFailure(error)) throw error
             AwgFetchResult(
                 version = version,
                 profiles = emptyList(),
@@ -362,6 +375,9 @@ object SubscriptionClient {
             )
         }
     }
+
+    private fun isAccessFailure(error: Exception): Boolean =
+        error is SubscriptionHttpFailure && error.statusCode in setOf(400, 401, 403, 409)
 
     private fun awgWarning(version: String, failedCount: Int, availableCount: Int, temporary: Boolean): String {
         val name = "AmneziaWG 3.1"

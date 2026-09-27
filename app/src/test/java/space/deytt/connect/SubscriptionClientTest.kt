@@ -213,6 +213,38 @@ class SubscriptionClientTest {
         assertFalse(result.warning.orEmpty().contains("1 сервер"))
     }
 
+    @Test
+    fun deviceSlotRejectionIsExplicitAndNeverRetried() {
+        val transport = FakeTransport(SubscriptionClient.SubscriptionHttpResponse(
+            409, body = """{"error":"app_device_limit_reached","device_limit":1}""",
+        ))
+        val error = runCatching {
+            SubscriptionClient.requestForTest("https://deytt.space/sub/token", "application/json", true, transport)
+        }.exceptionOrNull() as SubscriptionHttpFailure
+        assertEquals("app_device_limit_reached", error.code)
+        assertEquals(1, transport.calls.size)
+        assertTrue(SubscriptionErrorText.userMessage(error).contains("другим устройством"))
+    }
+
+    @Test
+    fun blockedDeviceIsNotMisreportedAsExpiredLink() {
+        val error = runCatching {
+            SubscriptionClient.requestForTest("https://deytt.space/sub/token", "application/json", true,
+                FakeTransport(SubscriptionClient.SubscriptionHttpResponse(403, body = """{"error":"device_blocked"}""")))
+        }.exceptionOrNull() as SubscriptionHttpFailure
+        assertTrue(SubscriptionErrorText.userMessage(error).contains("заблокирован"))
+    }
+
+    @Test
+    fun expiredSessionDuringAwgFetchIsNotHiddenAsOptionalFailure() {
+        val error = runCatching {
+            SubscriptionClient.fetchAwgProfilesForTest("https://deytt.space/sub/token", "amneziawg31", "31",
+                FakeTransport(SubscriptionClient.SubscriptionHttpResponse(401, body = """{"error":"session_expired"}""")))
+        }.exceptionOrNull() as SubscriptionHttpFailure
+        assertEquals("session_expired", error.code)
+        assertTrue(SubscriptionErrorText.userMessage(error).contains("Войдите через Telegram снова"))
+    }
+
     private class FakeTransport(vararg values: Any) : SubscriptionClient.SubscriptionHttpTransport {
         private val responses = ArrayDeque(values.toList())
         val calls = mutableListOf<Pair<String, String>>()

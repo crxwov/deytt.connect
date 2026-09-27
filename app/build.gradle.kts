@@ -15,8 +15,8 @@ android {
         applicationId = "space.deytt.connect"
         minSdk = 24
         targetSdk = 35
-        versionCode = 23
-        versionName = "0.8.9"
+        versionCode = 24
+        versionName = "0.8.10"
     }
 
     buildTypes {
