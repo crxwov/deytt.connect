@@ -36,6 +36,8 @@ class SetupActivity : Activity() {
     private var loading = false
     private var pendingImportUrl: String? = null
     private var lastFailureMessage: String? = null
+    private var deviceSlotConflict = false
+    private var transferRequestSent = false
     private var pairingDialog: Dialog? = null
     @Volatile private var loadingStage = "account"
 
@@ -47,6 +49,8 @@ class SetupActivity : Activity() {
         pendingImportUrl = SubscriptionImportLink.validateSubscriptionUrl(
             savedInstanceState?.getString("pending_import_url") ?: incomingUrl,
         )
+        deviceSlotConflict = savedInstanceState?.getBoolean("device_slot_conflict") == true
+        transferRequestSent = savedInstanceState?.getBoolean("transfer_request_sent") == true
         val root = screen()
         root.addView(header(uiCopy("аккаунт · подписка · устройства"), uiCopy(if (updating) "Обновить подписку" else "Подключить подписку"), updating))
         root.addView(spacer(8, this))
@@ -58,11 +62,19 @@ class SetupActivity : Activity() {
             DeyttUi.MUTED,
         ))
         root.addView(spacer(14, this))
-        accountAction = button(uiCopy(if (pendingImportUrl != null) "Импортировать подписку" else if (sessionToken == null) "Подключить аккаунт Telegram" else "Обновить подписку"), secondary = true).apply {
+        accountAction = button(uiCopy(when {
+            deviceSlotConflict && transferRequestSent -> "Повторить проверку"
+            deviceSlotConflict -> "Обратиться в поддержку"
+            pendingImportUrl != null -> "Импортировать подписку"
+            sessionToken == null -> "Подключить аккаунт Telegram"
+            else -> "Обновить подписку"
+        }), secondary = true).apply {
             setOnClickListener {
-                val pending = pendingImportUrl
-                if (pending != null) importProfile(pending)
-                else loadAccountSubscription()
+                when {
+                    deviceSlotConflict && !transferRequestSent -> requestDeviceTransfer()
+                    pendingImportUrl != null -> pendingImportUrl?.let(::importProfile)
+                    else -> loadAccountSubscription()
+                }
             }
         }
         state = note("", DeyttUi.MUTED).apply {
@@ -153,6 +165,8 @@ class SetupActivity : Activity() {
                 .onSuccess { imported -> runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     loading = false
+                    deviceSlotConflict = false
+                    transferRequestSent = false
                     if (TelegramSessionStore.read(this) != expectedSession) {
                         loadAccountSubscription()
                         return@runOnUiThread
@@ -201,20 +215,88 @@ class SetupActivity : Activity() {
             TelegramSessionStore.clearIfMatches(this, expectedSession)
         }
         val reference = SubscriptionLoadDiagnostics.record(this, loadingStage, error)
+        deviceSlotConflict = SubscriptionErrorText.isAppDeviceSlotConflict(error)
+        if (!deviceSlotConflict) transferRequestSent = false
         state.visibility = View.VISIBLE
         state.setTextColor(DeyttUi.CORAL)
         state.text = "${SubscriptionLoadDiagnostics.userMessage(error)}\n\nКод: $reference"
         lastFailureMessage = state.text.toString()
         state.announceForAccessibility(state.text)
-        accountAction.text = uiCopy(if (pendingImportUrl != null) "Повторить импорт" else if (TelegramSessionStore.read(this) == null) "Подключить аккаунт Telegram" else "Повторить загрузку")
+        accountAction.text = uiCopy(when {
+            deviceSlotConflict && transferRequestSent -> "Повторить проверку"
+            deviceSlotConflict -> "Обратиться в поддержку"
+            pendingImportUrl != null -> "Повторить импорт"
+            TelegramSessionStore.read(this) == null -> "Подключить аккаунт Telegram"
+            else -> "Повторить загрузку"
+        })
         accountAction.isEnabled = true
         accountAction.alpha = 1f
+    }
+
+    private fun requestDeviceTransfer() {
+        val token = TelegramSessionStore.read(this)
+        if (token.isNullOrBlank()) {
+            showTelegramPairing()
+            return
+        }
+        AppDialog.Builder(this)
+            .setTitle(uiCopy("Перенос приложения"))
+            .setMessage(uiCopy("Отправить в поддержку обращение с просьбой перенести deytt.connect на это устройство?"))
+            .setNegativeButton(uiCopy("Отмена"), null)
+            .setPositiveButton(uiCopy("Отправить обращение")) { _, _ -> sendDeviceTransferRequest(token) }
+            .show()
+    }
+
+    private fun sendDeviceTransferRequest(token: String) {
+        if (loading || isFinishing || isDestroyed) return
+        loading = true
+        accountAction.isEnabled = false
+        accountAction.alpha = .65f
+        state.visibility = View.VISIBLE
+        state.setTextColor(DeyttUi.BLUE)
+        state.text = uiCopy("Отправляем запрос в поддержку…")
+        state.announceForAccessibility(state.text)
+        val message = "Здравствуйте! Не получается подключить deytt.connect: сервер отвечает HTTP 409 app_device_limit_reached (download/http_409). Прошу проверить и перенести приложение на это устройство."
+        executor.execute {
+            val result = runCatching {
+                check(TelegramSessionStore.read(this) == token) { "Сессия Telegram изменилась" }
+                val thread = TelegramPairingClient.supportThread(token)
+                val ticket = thread.optJSONObject("ticket")
+                val ticketId = ticket?.optInt("id", 0) ?: 0
+                if (ticket?.optString("status") == "open" && ticketId > 0) {
+                    TelegramPairingClient.sendSupportMessage(token, ticketId, message)
+                } else {
+                    TelegramPairingClient.createSupportTicket(token, message)
+                }
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                loading = false
+                accountAction.isEnabled = true
+                accountAction.alpha = 1f
+                result.onSuccess {
+                    transferRequestSent = true
+                    state.setTextColor(DeyttUi.MINT)
+                    state.text = uiCopy("Запрос отправлен. После переноса слота поддержкой нажмите «Повторить проверку».")
+                    lastFailureMessage = state.text.toString()
+                    accountAction.text = uiCopy("Повторить проверку")
+                }.onFailure { error ->
+                    state.setTextColor(DeyttUi.CORAL)
+                    state.text = "${SubscriptionErrorText.userMessage(error)}\n\n${uiCopy("Не удалось отправить обращение. Проверьте интернет и повторите попытку.")}"
+                    lastFailureMessage = state.text.toString()
+                    accountAction.text = uiCopy("Обратиться в поддержку")
+                }
+                state.announceForAccessibility(state.text)
+            }
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putBoolean("resume_download", loading)
         outState.putString("pending_import_url", pendingImportUrl)
         outState.putString("failure_message", lastFailureMessage)
+        outState.putBoolean("device_slot_conflict", deviceSlotConflict)
+        outState.putBoolean("transfer_request_sent", transferRequestSent)
         super.onSaveInstanceState(outState)
     }
 
