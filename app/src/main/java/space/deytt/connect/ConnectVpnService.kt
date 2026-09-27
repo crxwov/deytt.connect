@@ -261,7 +261,29 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                     if (operation.get() != operationId || !routeProbeOnly) return@Callable tag to null
                     try {
                         sendRouteProbeResult(requestId, tag, null, null, stage = "latency")
-                        val latency = RouteProxyProbe.measureProxy(session, method)
+                        val latency = RouteProxyProbe.measureProxy(session, method) { sampleIndex, sample ->
+                            if (operation.get() == operationId && routeProbeOnly) {
+                                if (sample != null) {
+                                    sendRouteProbeResult(
+                                        requestId,
+                                        tag,
+                                        sample,
+                                        null,
+                                        stage = "latency_sample",
+                                        sampleIndex = sampleIndex,
+                                    )
+                                } else {
+                                    sendRouteProbeResult(
+                                        requestId,
+                                        tag,
+                                        null,
+                                        null,
+                                        stage = "latency_retry",
+                                        sampleIndex = sampleIndex,
+                                    )
+                                }
+                            }
+                        }
                         if (operation.get() == operationId && routeProbeOnly) {
                             sendRouteProbeResult(requestId, tag, latency, null,
                                 stage = if (token.isBlank()) "complete" else "waiting_download")
@@ -269,7 +291,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                         tag to latency
                     } catch (error: Throwable) {
                         if (operation.get() == operationId && routeProbeOnly) {
-                            Log.w(TAG, "Route latency probe failed (${probeFailureKind(error)})")
+                            Log.w(TAG, "Route ${safeRouteLogLabel(tag)} latency probe failed (${probeFailureKind(error)})")
                             sendRouteProbeResult(requestId, tag, null, routeProbeError(error), stage = "failed")
                         }
                         tag to null
@@ -291,14 +313,25 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 if (operation.get() != operationId || !routeProbeOnly) return@forEach
                 try {
                     sendRouteProbeResult(requestId, tag, latency, null, stage = "download")
-                    val speed = RouteProxyProbe.measureDownload(sessions.getValue(tag), token)
+                    val speed = RouteProxyProbe.measureDownload(sessions.getValue(tag), token) { bytesPerSecond ->
+                        if (operation.get() == operationId && routeProbeOnly) {
+                            sendRouteProbeResult(
+                                requestId,
+                                tag,
+                                latency,
+                                null,
+                                stage = "download_progress",
+                                bytesPerSecond = bytesPerSecond,
+                            )
+                        }
+                    }
                     if (operation.get() == operationId && routeProbeOnly) {
                         sendRouteProbeResult(requestId, tag, latency, null, stage = "complete", bytesPerSecond = speed)
                     }
                 } catch (error: Throwable) {
                     if (operation.get() == operationId && routeProbeOnly) {
-                        Log.w(TAG, "Route download probe failed (${probeFailureKind(error)})")
-                        sendRouteProbeResult(requestId, tag, latency, routeProbeError(error), stage = "failed")
+                        Log.w(TAG, "Route ${safeRouteLogLabel(tag)} download probe failed (${probeFailureKind(error)})")
+                        sendRouteProbeResult(requestId, tag, latency, routeProbeError(error, speedProbe = true), stage = "failed")
                     }
                 }
             }
@@ -351,6 +384,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         complete: Boolean = false,
         stage: String? = null,
         bytesPerSecond: Long? = null,
+        sampleIndex: Int? = null,
     ) {
         if (complete) RouteProbeClient.clear(this, requestId)
         val intent = Intent(RouteProbeClient.ACTION_RESULT)
@@ -362,19 +396,38 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         if (!error.isNullOrBlank()) intent.putExtra(RouteProbeClient.EXTRA_ERROR, error)
         if (!stage.isNullOrBlank()) intent.putExtra(RouteProbeClient.EXTRA_STAGE, stage)
         if (bytesPerSecond != null) intent.putExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, bytesPerSecond)
+        if (sampleIndex != null) intent.putExtra(RouteProbeClient.EXTRA_SAMPLE_INDEX, sampleIndex)
         sendBroadcast(intent)
     }
 
-    private fun routeProbeError(error: Throwable): String = when {
+    private fun routeProbeError(error: Throwable, speedProbe: Boolean = false): String = when {
+        speedProbe && errorChainMessage(error).contains("http 401", ignoreCase = true) ->
+            "Сервер скорости отклонил вход · проверьте Telegram"
+        speedProbe && errorChainMessage(error).contains("http 403", ignoreCase = true) ->
+            "Сервер скорости запретил замер"
+        speedProbe && Regex("http 5\\d{2}", RegexOption.IGNORE_CASE).containsMatchIn(errorChainMessage(error)) ->
+            "Сервер скорости временно недоступен"
         error.message.orEmpty().contains("timeout", ignoreCase = true) ||
-            error.message.orEmpty().contains("времен", ignoreCase = true) -> "тайм-аут · 10 с"
+            error.message.orEmpty().contains("времен", ignoreCase = true) -> "тайм-аут · 8 с"
         error.message.orEmpty().startsWith("Локальный прокси ответил HTTP") ->
             error.message.orEmpty().substringAfter("ответил ")
+        speedProbe && error.message.orEmpty().startsWith("Сервер скорости ответил HTTP") ||
+            speedProbe &&
+            error.message.orEmpty().startsWith("Download endpoint returned HTTP") ->
+            "Сервер скорости: " + Regex("HTTP\\s+\\d{3}", RegexOption.IGNORE_CASE)
+                .find(error.message.orEmpty())?.value.orEmpty()
         errorChainContains(error, "TLS hostname verification failed") -> "ошибка проверки TLS-сертификата"
         error.message.orEmpty().startsWith("Проверочный сервер ответил HTTP") ->
             error.message.orEmpty().substringAfter("ответил ")
         else -> "маршрут не ответил"
     }
+
+    private fun errorChainMessage(error: Throwable): String =
+        generateSequence(error) { it.cause }.take(8).mapNotNull { it.message }.joinToString(" ")
+
+    private fun safeRouteLogLabel(tag: String): String = tag.substringAfterLast(':')
+        .filter { it.isLetterOrDigit() || it == '_' || it == '-' }
+        .take(24)
 
     private fun causeClassChain(error: Throwable): String {
         val classes = mutableListOf<String>()
@@ -406,6 +459,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             "timeout" in messages || "timed out" in messages -> "timed out"
             "connection reset" in messages || "broken pipe" in messages -> "connection reset"
             "ssl" in messages || "handshake" in messages -> "TLS handshake failed"
+            Regex("http\\s+\\d{3}").find(messages)?.value != null ->
+                Regex("http\\s+\\d{3}").find(messages)!!.value.uppercase()
             else -> causeClassChain(error)
         }
     }
