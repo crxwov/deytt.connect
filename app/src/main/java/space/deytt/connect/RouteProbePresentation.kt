@@ -8,14 +8,15 @@ import java.util.Locale
 internal object RouteProbePresentation {
     fun speedProgress(latency: String?, english: Boolean, bytesPerSecond: Long? = null): String {
         val measuredPing = latency?.takeIf(String::isNotBlank)?.let {
-            if (english) "Ping: $it\n" else "Задержка: $it\n"
-        }.orEmpty()
+            if (english) "Ping: $it" else "Пинг: $it"
+        } ?: if (english) "Ping: —" else "Пинг: —"
+        val separator = " · "
         val liveRate = bytesPerSecond?.takeIf { it > 0L }?.let { formatSpeed(it, english) }
         return when {
-            english && liveRate != null -> measuredPing + "↓ $liveRate · measuring…"
-            english -> measuredPing + "Speed test in progress…"
-            liveRate != null -> measuredPing + "↓ $liveRate · замер…"
-            else -> measuredPing + "Скорость измеряется…"
+            english && liveRate != null -> measuredPing + separator + "Speed: ↓ $liveRate · measuring…"
+            english -> measuredPing + separator + "Speed: sampling…"
+            liveRate != null -> measuredPing + separator + "Скорость: ↓ $liveRate · замер…"
+            else -> measuredPing + separator + "Скорость: замер…"
         }
     }
 

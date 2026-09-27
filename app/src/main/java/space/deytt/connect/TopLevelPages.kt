@@ -121,16 +121,16 @@ internal class PrimaryPages(private val host: MainActivity) {
     private data class ProbeRouteRow(
         val route: DeyttRoute,
         val status: TextView,
-        val progress: ProgressBar,
-        val visualizer: RouteProbeVisualizerView,
+        val progress: DiagnosticDotsView,
     )
     private data class CountryProbeState(
         val code: String,
         val routes: List<DeyttRoute>,
         val rows: Map<String, ProbeRouteRow>,
+        val summary: TextView,
+        val summaryDots: DiagnosticDotsView,
         val samples: MutableMap<String, RouteProbeSample> = mutableMapOf(),
         val pingTraces: MutableMap<String, MutableList<Long>> = mutableMapOf(),
-        val speedTraces: MutableMap<String, MutableList<Long>> = mutableMapOf(),
         val errors: MutableMap<String, String> = mutableMapOf(),
         var speedCheckEnabled: Boolean = false,
         var selectionAtStart: String? = null,
@@ -294,6 +294,22 @@ internal class PrimaryPages(private val host: MainActivity) {
                 }
             }.distinct().joinToString(" · ")
             val detail = routeGroup().apply { visibility = View.GONE }
+            val summary = host.text(
+                cachedLatencySummary(cachedSamples) ?: copy("Пинг: —", "Ping: —"),
+                11f,
+                MUTED,
+            ).apply {
+                maxLines = 2
+                setPadding(0, host.dp(8), 0, host.dp(8))
+            }
+            val summaryDots = DiagnosticDotsView(host)
+            detail.addView(LinearLayout(host).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(host.dp(54), host.dp(2), host.dp(16), host.dp(2))
+                addView(summary, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(summaryDots, LinearLayout.LayoutParams(host.dp(26), host.dp(30)))
+            })
             val rowById = linkedMapOf<String, ProbeRouteRow>()
             countryRoutes.forEachIndexed { index, route ->
                 if (index > 0) detail.addView(View(host).apply { setBackgroundColor(LINE) },
@@ -307,31 +323,15 @@ internal class PrimaryPages(private val host: MainActivity) {
                 val cached = RouteQualityStore.read(host, route.id)
                 val isCachedBest = route.id == cachedBestRouteId
                 val metric = host.text(
-                    cached?.let { sampleLabel(it, isCachedBest) } ?: copy("Ещё не проверен", "Not measured yet"),
+                    cached?.let { sampleLabel(it, isCachedBest) } ?: copy("Пинг: — · Скорость: —", "Ping: — · Speed: —"),
                     11f,
                     if (isCachedBest) DeyttUi.MINT else MUTED,
                 ).apply {
-                    setPadding(0, 0, 0, host.dp(12))
+                    maxLines = 2
+                    setPadding(0, host.dp(4), 0, host.dp(8))
                     if (isCachedBest) setTypeface(null, android.graphics.Typeface.BOLD)
                 }
-                val visualizer = RouteProbeVisualizerView(host).apply {
-                    val initial = when {
-                        cached?.downloadBytesPerSecond != null -> RouteProbeVisualState.SPEED_RESULT
-                        cached?.latencyMillis != null -> RouteProbeVisualState.PING_RESULT
-                        else -> RouteProbeVisualState.IDLE
-                    }
-                    render(
-                        initial,
-                        ping = listOfNotNull(cached?.latencyMillis),
-                        speed = listOfNotNull(cached?.downloadBytesPerSecond),
-                        description = copy("График задержки и скорости", "Latency and speed trace"),
-                    )
-                }
-                val spinner = ProgressBar(host, null, android.R.attr.progressBarStyleSmall).apply {
-                    isIndeterminate = true
-                    indeterminateTintList = ColorStateList.valueOf(DeyttUi.SKY)
-                    visibility = View.GONE
-                }
+                val dots = DiagnosticDotsView(host)
                 val item = host.row(rowTitle, rowSubtitle, if (isAwg) "AWG_MARK" else protocolMark(route.protocol), "",
                     emphasis = route.id == selectedId)
                 val protocolDrawable = when (route.protocol) {
@@ -350,14 +350,8 @@ internal class PrimaryPages(private val host: MainActivity) {
                         contentDescription = route.protocol.title
                     }, 0, params)
                 }
-                item.addView(LinearLayout(host).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(spinner, LinearLayout.LayoutParams(host.dp(18), host.dp(18)))
-
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, host.dp(44)))
                 item.setOnClickListener { host.selectRoute(route) }
-                val probeRow = ProbeRouteRow(route, metric, spinner, visualizer)
+                val probeRow = ProbeRouteRow(route, metric, dots)
                 if (isAwg) {
                     item.setOnClickListener {
                         AppDialog.Builder(host)
@@ -367,7 +361,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                             }.show()
                     }
                     metric.text = cached?.let { sampleLabel(it, isCachedBest) }
-                        ?: copy("Автопроверка после HTTP-маршрутов", "Automatic check after HTTP routes")
+                        ?: copy("Пинг: — · Скорость: —", "Ping: — · Speed: —")
                     metric.setOnClickListener { startAwgProbe(probeRow) }
                 }
                 rowById[route.id] = probeRow
@@ -379,13 +373,12 @@ internal class PrimaryPages(private val host: MainActivity) {
                         leftMargin = host.dp(54)
                         rightMargin = host.dp(8)
                     })
-                    addView(visualizer, LinearLayout.LayoutParams(host.dp(76), host.dp(44)).apply {
+                    addView(dots, LinearLayout.LayoutParams(host.dp(26), host.dp(32)).apply {
                         rightMargin = host.dp(16)
-                        bottomMargin = host.dp(8)
                     })
                 })
             }
-            val countryState = CountryProbeState(code, networkRoutes + awgRoutes, rowById)
+            val countryState = CountryProbeState(code, networkRoutes + awgRoutes, rowById, summary, summaryDots)
             val countryHeader = host.row(
                 if (code == "AWG_UNKNOWN") "Регион не указан" else first.country,
                 if (protocolSummary.isBlank()) "Маршруты не найдены" else protocolSummary,
@@ -452,28 +445,19 @@ internal class PrimaryPages(private val host: MainActivity) {
         country.selectionAtStart = SelectedRouteStore(host).read().id
         country.samples.clear()
         country.pingTraces.clear()
-        country.speedTraces.clear()
         country.errors.clear()
+        country.summary.text = copy("Пинг: —", "Ping: —")
+        country.summaryDots.setLoading(true)
         if (VpnService.prepare(host) != null && host.requestRouteProbePermission { startCountryProbe(country) }) return
         val config = SubscriptionStore(host).readCurrent() ?: return
         val token = TelegramSessionStore.read(host)
         country.speedCheckEnabled = !token.isNullOrBlank()
         country.rows.values.forEach { row ->
-            row.status.text = copy("пинг…", "starting ping…")
+            row.status.text = copy("Пинг: —", "Ping: —")
             row.status.setTextColor(DeyttUi.SKY)
             row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
-            row.progress.visibility = View.VISIBLE
+            row.progress.setLoading(true)
             country.pingTraces[row.route.id] = mutableListOf()
-            country.speedTraces[row.route.id] = mutableListOf()
-            row.visualizer.render(
-                RouteProbeVisualState.PING,
-                ping = emptyList(),
-                speed = emptyList(),
-                description = copy(
-                    "Проверяю пинг параллельно с другими маршрутами",
-                    "Checking ping in parallel with other routes",
-                ),
-            )
         }
         val networkRoutes = country.routes.filter { it.engine == TunnelEngine.LIBBOX }
         if (networkRoutes.isEmpty()) { startCountryAwgProbes(country); return }
@@ -488,7 +472,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         }.onSuccess { requestId -> routeProbeStates[requestId] = country }
             .onFailure {
                 country.rows.values.forEach { row ->
-                    row.progress.visibility = View.GONE
+                    row.progress.setLoading(false)
                     row.status.text = host.uiCopy("ошибка")
                     row.status.setTextColor(DeyttUi.CORAL)
                 }
@@ -516,64 +500,55 @@ internal class PrimaryPages(private val host: MainActivity) {
                 val previous = country.samples[row.route.id] ?: RouteProbeSample(row.route.id, null, null)
                 val stage = event.getStringExtra(RouteProbeClient.EXTRA_STAGE)
                     ?: if (!event.getStringExtra(RouteProbeClient.EXTRA_ERROR).isNullOrBlank()) "failed" else ""
+                val pingTrace = country.pingTraces.getOrPut(row.route.id) { mutableListOf() }
                 val reportedLatency = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
-                    .takeIf { it >= 0L }
-                val latency = if (stage == "latency_sample") previous.latencyMillis
+                    .takeIf(RouteProbeStatistics::isValidLatencyMillis)
+                if (stage == "latency_sample") reportedLatency?.let(pingTrace::add)
+                val latency = if (stage == "latency_sample") {
+                    RouteProbeStatistics.medianLatencyMillis(pingTrace) ?: previous.latencyMillis
+                }
                     else reportedLatency ?: previous.latencyMillis
                 val reportedSpeed = event.getLongExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, -1L)
-                    .takeIf { it >= 0L }
+                    .takeIf { it > 0L }
                 val speed = if (stage == "download_progress") previous.downloadBytesPerSecond
                     else reportedSpeed ?: previous.downloadBytesPerSecond
-                country.samples[row.route.id] = RouteProbeSample(row.route.id, latency, speed)
+                val sample = RouteProbeSample(row.route.id, latency, speed)
+                country.samples[row.route.id] = sample
                 val english = AppLanguage.current(host) == AppLanguage.EN
-                val pingTrace = country.pingTraces.getOrPut(row.route.id) { mutableListOf() }
-                val speedTrace = country.speedTraces.getOrPut(row.route.id) { mutableListOf() }
                 event.getStringExtra(RouteProbeClient.EXTRA_ERROR)?.takeIf(String::isNotBlank)
                     ?.let { country.errors[row.route.id] = it }
                 when (stage) {
                     "latency" -> {
-                        row.status.text = copy("измеряем задержку…", "measuring ping…")
-                        row.visualizer.render(RouteProbeVisualState.PING, pingTrace, speedTrace)
+                        row.status.text = sampleLabel(sample)
+                        row.progress.setLoading(true)
                     }
                     "latency_sample" -> {
-                        reportedLatency?.let(pingTrace::add)
-                        val sampleIndex = event.getIntExtra(RouteProbeClient.EXTRA_SAMPLE_INDEX, pingTrace.size)
-                        row.status.text = copy("пинг $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT} · ", "ping $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT} · ") +
-                            (reportedLatency?.let(::formatLatency) ?: "—")
-                        row.status.setTextColor(DeyttUi.SKY)
-                        row.visualizer.render(RouteProbeVisualState.PING, pingTrace)
+                        row.status.text = sampleLabel(sample)
+                        row.progress.setLoading(country.speedCheckEnabled && speed == null)
                     }
                     "latency_retry" -> {
-                        val sampleIndex = event.getIntExtra(RouteProbeClient.EXTRA_SAMPLE_INDEX, 0)
-                        row.status.text = copy(
-                            "повторяем пинг $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT}…",
-                            "retrying ping $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT}…",
-                        )
-                        row.visualizer.render(RouteProbeVisualState.PING, pingTrace)
+                        row.status.text = sampleLabel(sample)
+                        row.progress.setLoading(true)
                     }
-                    "download" -> row.status.text = RouteProbePresentation.speedProgress(
-                        latency?.let(::formatLatency),
-                        english,
-                    )
+                    "download" -> {
+                        row.status.text = RouteProbePresentation.speedProgress(latency?.let(::formatLatency), english)
+                        row.progress.setLoading(true)
+                    }
                     "download_progress" -> {
-                        reportedSpeed?.let { rate ->
-                            if (speedTrace.lastOrNull() != rate) speedTrace += rate
-                        }
                         row.status.text = RouteProbePresentation.speedProgress(
                             latency?.let(::formatLatency),
                             english,
                             reportedSpeed,
                         )
-                        row.visualizer.render(RouteProbeVisualState.SPEED, pingTrace, speedTrace)
+                        row.progress.setLoading(reportedSpeed == null)
                     }
                     "waiting_download" -> {
-                        row.status.text = copy("задержка: ", "ping: ") +
-                            (latency?.let(::formatLatency) ?: "—") + copy(" · скорость в очереди", " · speed queued")
-                        row.visualizer.render(RouteProbeVisualState.PING_RESULT, pingTrace, speedTrace)
+                        row.status.text = sampleLabel(sample) + copy(" · скорость в очереди", " · speed queued")
+                        row.progress.setLoading(true)
                     }
                     "complete", "failed" -> {
-                        row.progress.visibility = View.GONE
-                        row.status.text = sampleLabel(country.samples.getValue(row.route.id))
+                        row.progress.setLoading(false)
+                        row.status.text = sampleLabel(sample)
                         if (speed == null) {
                             val reason = country.errors[row.route.id]?.let {
                                 RouteProbePresentation.failureMessage(it, english)
@@ -582,23 +557,9 @@ internal class PrimaryPages(private val host: MainActivity) {
                             } else {
                                 copy("Скорость не измерена · нажмите страну для повтора", "Speed unavailable · reopen country to retry")
                             }
-                            row.status.append("\n$reason")
+                            row.status.append(" · $reason")
                         }
-                        country.samples[row.route.id]?.let { RouteQualityStore.write(host, it) }
-                        row.status.setTextColor(if (latency != null) DeyttUi.TEXT else DeyttUi.CORAL)
-                        val visualState = when {
-                            speed != null -> RouteProbeVisualState.SPEED_RESULT
-                            latency != null -> RouteProbeVisualState.PING_RESULT
-                            else -> RouteProbeVisualState.FAILURE
-                        }
-                        row.visualizer.render(
-                            visualState,
-                            ping = pingTrace.ifEmpty { listOfNotNull(latency) },
-                            speed = speedTrace.ifEmpty { listOfNotNull(speed) },
-                            description = country.errors[row.route.id]?.let {
-                                RouteProbePresentation.failureMessage(it, english)
-                            } ?: sampleLabel(country.samples.getValue(row.route.id)),
-                        )
+                        RouteQualityStore.write(host, sample)
                     }
                 }
                 event.getStringExtra(RouteProbeClient.EXTRA_ERROR)?.let { error ->
@@ -608,6 +569,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                         row.status.contentDescription = row.status.text
                     }
                 }
+                updateCountryLatencySummary(country)
             }
         }
         if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
@@ -615,28 +577,37 @@ internal class PrimaryPages(private val host: MainActivity) {
             val requestError = event.getStringExtra(RouteProbeClient.EXTRA_ERROR)
             if (!requestError.isNullOrBlank()) country.rows.values.forEach { row ->
                 if (country.samples[row.route.id]?.downloadBytesPerSecond == null) {
-                    row.status.text = host.uiCopy(requestError)
+                    row.progress.setLoading(false)
+                    row.status.text = sampleLabel(country.samples[row.route.id] ?: RouteProbeSample(row.route.id, null, null)) +
+                        " · " + RouteProbePresentation.failureMessage(requestError, AppLanguage.current(host) == AppLanguage.EN)
                 }
             }
+            updateCountryLatencySummary(country)
             startCountryAwgProbes(country)
         }
     }
 
     private fun finishCountryProbe(country: CountryProbeState) {
         if (country.cancelled || closed || !diagnosticForeground) { launchNextCountry(); return }
-        val grades = RouteProbeScoring.grade(country.samples.values.toList())
+        val samples = country.samples.values.toList()
+        val grades = RouteProbeScoring.grade(samples)
+        val latencyGrades = RouteProbeScoring.gradeByLatency(samples)
+        country.summaryDots.setLoading(false)
+        updateCountryLatencySummary(country)
         country.rows.values.forEach { row ->
-            row.progress.visibility = View.GONE
+            row.progress.setLoading(false)
             row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
-            row.status.setTextColor(when (grades[row.route.id] ?: RouteGrade.UNRATED) {
-                RouteGrade.GOOD -> DeyttUi.MINT
-                RouteGrade.MEDIUM -> AMBER
-                RouteGrade.POOR -> DeyttUi.CORAL
-                RouteGrade.UNRATED -> DeyttUi.MUTED
-            })
+            val grade = grades[row.route.id]?.takeIf { it != RouteGrade.UNRATED }
+                ?: latencyGrades[row.route.id] ?: RouteGrade.UNRATED
+            row.status.setTextColor(gradeColor(grade))
             row.status.contentDescription = row.status.text
         }
-        val best = RouteProbeScoring.bestRouteId(country.samples.values.toList())
+        val completeSamples = samples.filter {
+            it.latencyMillis?.let(RouteProbeStatistics::isValidLatencyMillis) == true &&
+                it.downloadBytesPerSecond != null && it.downloadBytesPerSecond > 0L
+        }
+        val bestId = RouteProbeScoring.bestRouteId(samples) ?: completeSamples.singleOrNull()?.routeId
+        val best = bestId
             ?.let { id -> country.routes.firstOrNull { it.id == id } }
         best?.let { country.rows[it.id]?.status?.apply {
             append(copy(" · лучший выбор", " · best choice"))
@@ -651,7 +622,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         val rows = country.rows.values.filter { it.route.engine == TunnelEngine.AMNEZIAWG }
         if (rows.isEmpty() || country.cancelled || closed || !diagnosticForeground) { finishCountryProbe(country); return }
         if (TelegramSessionStore.read(host) == null) {
-            rows.forEach { it.progress.visibility = View.GONE; it.status.text = copy("Подключите Telegram для проверки", "Link Telegram to measure") }
+            rows.forEach { it.progress.setLoading(false); it.status.text = copy("Подключите Telegram для проверки", "Link Telegram to measure") }
             finishCountryProbe(country)
             return
         }
@@ -661,12 +632,15 @@ internal class PrimaryPages(private val host: MainActivity) {
         ) return
         awgMeasurementRunning = true
         activeAwgCountry = country
-        rows.forEach { it.status.text = copy("В очереди · временный VPN только для приложения", "Queued · temporary app-only VPN") }
+        rows.forEach {
+            it.status.text = copy("В очереди · временный VPN только для приложения", "Queued · temporary app-only VPN")
+            it.progress.setLoading(true)
+        }
         host.requestAwgMeasurements(rows.map { it.route }, onComplete = {
             awgMeasurementRunning = false
             activeAwgCountry = null
             rows.forEach { row ->
-                row.progress.visibility = View.GONE
+                row.progress.setLoading(false)
                 val pendingStatus = row.status.text.toString() in setOf(
                     copy("В очереди · временный VPN только для приложения", "Queued · temporary app-only VPN"),
                     copy("Подключаем AmneziaWG…", "Connecting AmneziaWG…"),
@@ -678,11 +652,14 @@ internal class PrimaryPages(private val host: MainActivity) {
             finishCountryProbe(country)
         }, onRouteFailure = { route ->
             country.rows[route.id]?.let { row ->
-                row.progress.visibility = View.GONE
+                row.progress.setLoading(false)
                 row.status.text = copy("Нет ответа · нажмите для повтора", "No response · tap to retry")
             }
         }, onRouteStarting = { route ->
-            country.rows[route.id]?.status?.text = copy("Подключаем AmneziaWG…", "Connecting AmneziaWG…")
+            country.rows[route.id]?.let { row ->
+                row.status.text = copy("Подключаем AmneziaWG…", "Connecting AmneziaWG…")
+                row.progress.setLoading(true)
+            }
         }, measure = { route, finished ->
             val row = country.rows.getValue(route.id)
             measureAwgRow(row, country, finished)
@@ -692,8 +669,9 @@ internal class PrimaryPages(private val host: MainActivity) {
     private fun cancelCountryProbe(country: CountryProbeState) {
         pendingCountries.remove(country.code)
         country.cancelled = true
+        country.summaryDots.setLoading(false)
         country.rows.values.forEach {
-            it.progress.visibility = View.GONE
+            it.progress.setLoading(false)
             if (it.route.id !in country.samples) it.status.text = copy("Проверка отменена · откройте страну снова", "Measurement cancelled · reopen country")
         }
         if (routeProbeStates.values.any { it === country }) RouteProbeClient.cancel(host)
@@ -714,9 +692,44 @@ internal class PrimaryPages(private val host: MainActivity) {
     private fun copy(ru: String, en: String): String = if (AppLanguage.current(host) == AppLanguage.EN) en else ru
 
     private fun sampleLabel(sample: RouteProbeSample, isBest: Boolean = false): String =
-        copy("задержка: ", "ping: ") + (sample.latencyMillis?.let(::formatLatency) ?: "—") +
-            "  ·  " + copy("скорость: ", "speed: ") + (sample.downloadBytesPerSecond?.let(::formatSpeed) ?: "—") +
+        copy("Пинг: ", "Ping: ") + (sample.latencyMillis?.let(::formatLatency) ?: "—") +
+            "  ·  " + copy("Скорость: ", "Speed: ") + (sample.downloadBytesPerSecond?.takeIf { it > 0L }?.let(::formatSpeed) ?: "—") +
             if (isBest) copy(" · лучший выбор", " · best choice") else ""
+
+    private fun cachedLatencySummary(samples: List<RouteProbeSample>): String? =
+        RouteProbeStatistics.latencySummary(samples.mapNotNull { it.latencyMillis })?.let(::latencySummaryLabel)
+
+    private fun latencySummaryLabel(summary: RouteLatencySummary): String =
+        if (AppLanguage.current(host) == AppLanguage.EN) {
+            "Ping · best ${summary.bestMillis} · avg ${summary.averageMillis} · worst ${summary.worstMillis} ms"
+        } else {
+            "Пинг · лучший ${summary.bestMillis} · средний ${summary.averageMillis} · худший ${summary.worstMillis} мс"
+        }
+
+    private fun updateCountryLatencySummary(country: CountryProbeState) {
+        val summary = RouteProbeStatistics.latencySummary(country.samples.values.mapNotNull { it.latencyMillis })
+        if (summary == null) {
+            country.summary.text = copy("Пинг: —", "Ping: —")
+            country.summaryDots.setLoading(country.rows.values.any { it.progress.visibility == View.VISIBLE })
+        } else {
+            country.summary.text = latencySummaryLabel(summary)
+            country.summary.contentDescription = country.summary.text
+            country.summaryDots.setLoading(false)
+        }
+        val grades = RouteProbeScoring.gradeByLatency(country.samples.values.toList())
+        country.rows.values.forEach { row ->
+            if (country.samples[row.route.id]?.latencyMillis != null) {
+                row.status.setTextColor(gradeColor(grades[row.route.id] ?: RouteGrade.UNRATED))
+            }
+        }
+    }
+
+    private fun gradeColor(grade: RouteGrade): Int = when (grade) {
+        RouteGrade.GOOD -> DeyttUi.MINT
+        RouteGrade.MEDIUM -> AMBER
+        RouteGrade.POOR -> DeyttUi.CORAL
+        RouteGrade.UNRATED -> DeyttUi.MUTED
+    }
 
     private fun startAwgProbe(row: ProbeRouteRow) {
         if (awgMeasurementRunning || RouteProbeClient.isRunning(host) || closed) return
@@ -726,11 +739,11 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         if (VpnService.prepare(host) != null && host.requestRouteProbePermission { startAwgProbe(row) }) return
         awgMeasurementRunning = true
-        row.progress.visibility = View.VISIBLE
+        row.progress.setLoading(true)
         row.status.text = copy("Подключаем для проверки…", "Connecting to measure…")
         host.requestAwgMeasurement(row.route, onComplete = { successful ->
             awgMeasurementRunning = false
-            row.progress.visibility = View.GONE
+            row.progress.setLoading(false)
             if (!successful && RouteQualityStore.read(host, row.route.id) == null &&
                 row.status.text.toString() == copy("Подключаем для проверки…", "Connecting to measure…")
             ) row.status.text = copy("Проверка недоступна · повторите", "Measurement unavailable · retry")
@@ -742,8 +755,8 @@ internal class PrimaryPages(private val host: MainActivity) {
         val token = TelegramSessionStore.read(host)
         if (closed || !diagnosticForeground || country?.cancelled == true || token == null) { finished(false); return }
         awgCompletion = finished
-        row.progress.visibility = View.VISIBLE
-        row.status.text = copy("Измеряем задержку…", "Measuring ping…")
+        row.progress.setLoading(true)
+        row.status.text = sampleLabel(RouteProbeSample(row.route.id, null, null))
         diagnosticExecutor.execute {
             var measuredLatency: Long? = null
             val result = runCatching {
@@ -753,20 +766,54 @@ internal class PrimaryPages(private val host: MainActivity) {
                         SelectedRouteStore(host).read().id == row.route.id
                 }
                 check(current())
-                val speed = RouteProxyProbe.measureSystemDownload(token, current) { latency ->
-                    measuredLatency = latency
-                    host.runOnUiThread {
-                        if (current()) row.status.text = RouteProbePresentation.speedProgress(
-                            formatLatency(latency),
-                            AppLanguage.current(host) == AppLanguage.EN,
-                        )
+                val pingSamples = mutableListOf<Long>()
+                runCatching {
+                    RouteProxyProbe.measureThroughSystemVpn(
+                        RouteProbePreferences.method(host),
+                        onSample = { _, latency ->
+                            if (latency != null && RouteProbeStatistics.isValidLatencyMillis(latency)) {
+                                pingSamples += latency
+                                val currentLatency = RouteProbeStatistics.medianLatencyMillis(pingSamples)
+                                measuredLatency = currentLatency
+                                val snapshot = pingSamples.toList()
+                                host.runOnUiThread {
+                                    if (current()) {
+                                        val sample = RouteProbeSample(row.route.id, currentLatency, null)
+                                        row.status.text = sampleLabel(sample)
+                                        row.progress.setLoading(true)
+                                        if (country != null) {
+                                            country.samples[row.route.id] = sample
+                                            country.pingTraces[row.route.id] = snapshot.toMutableList()
+                                            updateCountryLatencySummary(country)
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }.onSuccess { measuredLatency = it }
+                    .onFailure {
+                        android.util.Log.w("DeyttAwgProbe", "Latency probe failed (${it.javaClass.simpleName})")
                     }
-                }
-                RouteProbeSample(
-                    row.route.id,
-                    measuredLatency ?: error("Latency was not reported"),
-                    speed,
-                ).also { RouteQualityStore.write(host, it) }
+                val english = AppLanguage.current(host) == AppLanguage.EN
+                val speed = RouteProxyProbe.measureSystemDownload(token, current, onProgress = { bytesPerSecond ->
+                    val latency = measuredLatency
+                    host.runOnUiThread {
+                        if (current()) {
+                            row.status.text = RouteProbePresentation.speedProgress(
+                                latency?.let(::formatLatency),
+                                english,
+                                bytesPerSecond,
+                            )
+                            row.progress.setLoading(false)
+                            if (country != null) {
+                                country.samples[row.route.id] = RouteProbeSample(row.route.id, latency, bytesPerSecond)
+                                updateCountryLatencySummary(country)
+                            }
+                        }
+                    }
+                })
+                RouteProbeSample(row.route.id, measuredLatency, speed).also { RouteQualityStore.write(host, it) }
             }.onFailure { error ->
                 android.util.Log.w(
                     "DeyttAwgProbe",
@@ -774,10 +821,13 @@ internal class PrimaryPages(private val host: MainActivity) {
                 )
             }
             host.runOnUiThread {
-                row.progress.visibility = View.GONE
+                row.progress.setLoading(false)
                 if (!closed && diagnosticForeground && country?.cancelled != true) {
                     val sample = result.getOrNull() ?: measuredLatency?.let { RouteProbeSample(row.route.id, it, null) }
-                    sample?.let { country?.samples?.put(row.route.id, it); RouteQualityStore.write(host, it) }
+                    sample?.let {
+                        country?.samples?.put(row.route.id, it)
+                        RouteQualityStore.write(host, it)
+                    }
                     row.status.text = sample?.let(::sampleLabel) ?: copy("Не удалось измерить · повторите проверку", "Measurement failed · try again")
                     if (sample != null && sample.downloadBytesPerSecond == null) {
                         val failure = result.exceptionOrNull()?.let {
@@ -786,15 +836,16 @@ internal class PrimaryPages(private val host: MainActivity) {
                         row.status.append(" · $failure")
                     }
                     row.status.setTextColor(when {
-                        sample?.downloadBytesPerSecond != null -> DeyttUi.MINT
+                        sample?.downloadBytesPerSecond?.let { it > 0L } == true -> DeyttUi.MINT
                         sample != null -> AMBER
                         else -> DeyttUi.CORAL
                     })
+                    if (country != null) updateCountryLatencySummary(country)
                 }
                 // Only the matching measurement owns this continuation. A cancelled
                 // worker must not advance a later country's diagnostic sequence.
                 if (awgCompletion === finished) awgCompletion = null
-                finished(result.isSuccess)
+                finished(result.isSuccess && measuredLatency != null)
             }
         }
     }

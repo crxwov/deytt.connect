@@ -9,18 +9,18 @@ class RouteProbePresentationTest {
     @Test
     fun speedStateKeepsThePingThatWasAlreadyMeasured() {
         assertEquals(
-            "Задержка: 500 мс\nСкорость измеряется…",
+            "Пинг: 500 мс · Скорость: замер…",
             RouteProbePresentation.speedProgress("500 мс", english = false),
         )
         assertEquals(
-            "Ping: 500 ms\nSpeed test in progress…",
+            "Ping: 500 ms · Speed: sampling…",
             RouteProbePresentation.speedProgress("500 ms", english = true),
         )
     }
 
     @Test
     fun speedStateCanStartBeforePingHasArrived() {
-        assertEquals("Скорость измеряется…", RouteProbePresentation.speedProgress(null, english = false))
+        assertEquals("Пинг: — · Скорость: замер…", RouteProbePresentation.speedProgress(null, english = false))
     }
 
     @Test
@@ -39,7 +39,7 @@ class RouteProbePresentationTest {
     @Test
     fun speedProgressShowsLiveThroughputWithoutDroppingLatency() {
         assertEquals(
-            "Ping: 500 ms\n↓ 8.0 Mbps · measuring…",
+            "Ping: 500 ms · Speed: ↓ 8.0 Mbps · measuring…",
             RouteProbePresentation.speedProgress("500 ms", english = true, bytesPerSecond = 1_000_000L),
         )
     }

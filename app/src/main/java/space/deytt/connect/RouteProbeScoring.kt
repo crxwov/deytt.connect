@@ -9,6 +9,27 @@ data class RouteProbeSample(
 enum class RouteGrade { GOOD, MEDIUM, POOR, UNRATED }
 
 object RouteProbeScoring {
+    /** Ranks whichever HTTP latency samples are available while the full scan is still running. */
+    fun gradeByLatency(samples: List<RouteProbeSample>): Map<String, RouteGrade> {
+        val measured = samples.filter { it.latencyMillis?.let(RouteProbeStatistics::isValidLatencyMillis) == true }
+        if (measured.isEmpty()) return samples.associate { it.routeId to RouteGrade.UNRATED }
+        val fastest = measured.minOf { it.latencyMillis!! }
+        val slowest = measured.maxOf { it.latencyMillis!! }
+        val unique = measured.sortedBy { it.routeId }
+        return samples.associate { sample ->
+            val latency = sample.latencyMillis?.takeIf(RouteProbeStatistics::isValidLatencyMillis)
+            val grade = when {
+                latency == null -> RouteGrade.UNRATED
+                fastest == slowest && latency == fastest ->
+                    if (sample.routeId == unique.firstOrNull()?.routeId) RouteGrade.GOOD else RouteGrade.MEDIUM
+                latency == fastest -> RouteGrade.GOOD
+                latency == slowest -> RouteGrade.POOR
+                else -> RouteGrade.MEDIUM
+            }
+            sample.routeId to grade
+        }
+    }
+
     /** Compares only complete HTTP latency + download samples from one country scan. */
     fun grade(samples: List<RouteProbeSample>): Map<String, RouteGrade> {
         val complete = samples.filter(::isComplete)
@@ -31,7 +52,7 @@ object RouteProbeScoring {
         samples.filter(::isComplete).takeIf { it.size >= 2 }?.let(::ranked)?.firstOrNull()?.first
 
     private fun isComplete(sample: RouteProbeSample): Boolean =
-        sample.latencyMillis != null && sample.latencyMillis >= 0 &&
+        sample.latencyMillis?.let(RouteProbeStatistics::isValidLatencyMillis) == true &&
             sample.downloadBytesPerSecond != null && sample.downloadBytesPerSecond > 0
 
     private fun ranked(samples: List<RouteProbeSample>): List<Pair<String, Double>> {
