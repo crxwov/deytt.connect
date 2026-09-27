@@ -51,6 +51,11 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.HttpsURLConnection
+import org.amnezia.awg.config.Config
+import space.deytt.awg.AwgProxyBackend
+import java.io.BufferedReader
+import java.io.StringReader
+import java.util.UUID
 
 open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface {
     companion object {
@@ -94,6 +99,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     private var commandServer: CommandServer? = null
     private var commandClient: CommandClient? = null
     private var tunnel: ParcelFileDescriptor? = null
+    private var awgProxy: AwgProxyBackend? = null
+    private var activeRuntimeConfig: String? = null
     private var started = false
     private var routeProbeOnly = false
     private var notificationText = "Запуск deytt./connect"
@@ -423,21 +430,54 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 fail("Нет сохранённой подписки")
                 return
             }
-            val runtimeConfig = runtimeConfig(config)
-            ProfileValidator.validate(runtimeConfig)
-            setupLibbox()
-            val server = CommandServer(this, this)
-            commandServer = server
-            server.start()
-            server.startOrReloadService(runtimeConfig, OverrideOptions().apply { autoRedirect = false })
-            observeAutoRoute()
+            val selected = SelectedRouteStore(this).read()
+            val parsedAwg = if (selected.engine == TunnelEngine.AMNEZIAWG) {
+                val raw = AwgProfileStore(this).read(selected.id)
+                    ?: error("Обновите подписку: профиль AmneziaWG отсутствует")
+                Config.parse(BufferedReader(StringReader(raw)))
+            } else null
+            // Endpoint hostname resolution must not hold the lifecycle lock:
+            // Android calls stop/revoke on its main thread.
+            val awgUserspace = parsedAwg?.toAwgUserspaceString()
+            synchronized(this) {
+                ensureCurrent(operationId)
+                val routed = if (parsedAwg != null) {
+                    val local = parsedAwg.`interface`
+                    val username = UUID.randomUUID().toString()
+                    val password = UUID.randomUUID().toString()
+                    val proxy = AwgProxyBackend.start(
+                        awgUserspace!!,
+                        local.addresses.map { it.address.hostAddress!! }.toTypedArray(),
+                        local.dnsServers.map { it.hostAddress!! }.toTypedArray(),
+                        local.mtu.orElse(1280), username, password, this::protect,
+                    )
+                    awgProxy = proxy
+                    SplitTunnelProfile.forAwg(config, proxy.port, username, password)
+                } else {
+                    val selectedConfig = if (selected.configTag.isNotBlank()) {
+                        ProfileRoutes.select(config, selected.configTag)
+                    } else config
+                    SplitTunnelProfile.apply(selectedConfig)
+                }
+                val runtimeConfig = runtimeConfig(routed)
+                ProfileValidator.validate(runtimeConfig)
+                setupLibbox()
+                val server = CommandServer(this, this)
+                commandServer = server
+                server.start()
+                server.startOrReloadService(runtimeConfig, OverrideOptions().apply { autoRedirect = false })
+                activeRuntimeConfig = runtimeConfig
+                observeAutoRoute()
+            }
             ensureCurrent(operationId)
             publishStatus(VpnPhase.CHECKING, "Проверяем туннель…", "Проверяю доступ к интернету через выбранный маршрут")
             updateNotification("Проверяем туннель…")
             verifyTunnel()
-            ensureCurrent(operationId)
-            updateNotification("Подключено")
-            publishStatus(VpnPhase.CONNECTED, "Подключено")
+            synchronized(this) {
+                ensureCurrent(operationId)
+                updateNotification("Подключено")
+                publishStatus(VpnPhase.CONNECTED, "Подключено")
+            }
             Log.i(TAG, "VPN service started")
         } catch (error: Throwable) {
             Log.e(TAG, "Unable to start VPN", error)
@@ -598,6 +638,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         }
     }
 
+    @Synchronized
     private fun fail(message: String) {
         closeCommandClient()
         publishActiveAutoRoute(null)
@@ -608,6 +649,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             .onFailure { Log.w(TAG, "Failed to close core service after startup error", it) }
         runCatching { commandServer?.close() }
         commandServer = null
+        runCatching { awgProxy?.close() }
+        awgProxy = null
+        activeRuntimeConfig = null
         runCatching { tunnel?.close() }
         tunnel = null
         started = false
@@ -616,8 +660,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         stopSelf()
     }
 
+    @Synchronized
     private fun stopTunnel() {
-        if (!started && commandServer == null && tunnel == null) {
+        if (!started && commandServer == null && tunnel == null && awgProxy == null) {
             runtimeRunning = false
             stopForeground(STOP_FOREGROUND_REMOVE)
             if (VpnStateStore(this).read().phase != VpnPhase.ERROR)
@@ -630,12 +675,15 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             .onFailure { Log.w(TAG, "Failed to close core service", it) }
         runCatching { commandServer?.close() }
         commandServer = null
+        runCatching { awgProxy?.close() }
+        awgProxy = null
+        activeRuntimeConfig = null
         runCatching { tunnel?.close() }
         tunnel = null
         started = false
         runtimeRunning = false
         stopForeground(STOP_FOREGROUND_REMOVE)
-        if (SelectedRouteStore(this).read().engine == TunnelEngine.LIBBOX) {
+        if (VpnStateStore(this).read().phase != VpnPhase.ERROR) {
             publishStatus(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
         }
     }
@@ -766,6 +814,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     override fun onRevoke() {
+        operation.incrementAndGet()
         stopTunnel()
         super.onRevoke()
     }
@@ -778,9 +827,10 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     // CommandServerHandler
     override fun connectSSHAgent(): Int = -1
     override fun getSystemProxyStatus(): SystemProxyStatus? = null
+    @Synchronized
     override fun serviceReload() {
-        val config = SubscriptionStore(this).readCurrent() ?: return
-        commandServer?.startOrReloadService(runtimeConfig(config), OverrideOptions().apply { autoRedirect = false })
+        val config = activeRuntimeConfig ?: return
+        commandServer?.startOrReloadService(config, OverrideOptions().apply { autoRedirect = false })
     }
     override fun serviceStop() {
         if (routeProbeOnly) {

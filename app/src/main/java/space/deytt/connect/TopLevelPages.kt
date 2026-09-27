@@ -744,6 +744,26 @@ internal class PrimaryPages(private val host: MainActivity) {
 
         root.addView(spacer(16, host))
         root.addView(host.sectionLabel(copy("подключение", "connection")))
+        root.addView(host.row(
+            copy("Раздельное туннелирование", "Split tunneling"),
+            copy("Сайты из подписки · все протоколы", "Subscription sites · all protocols"), "↗", "›",
+        ).apply {
+            setOnClickListener {
+                val sites = SubscriptionStore(host).readCurrent()?.let { config ->
+                    runCatching { SplitTunnelProfile.bypassSites(config) }.getOrNull()
+                }
+                val message = if (sites == null) {
+                    copy("Добавьте подписку, чтобы загрузить список сайтов.", "Add a subscription to load the site list.")
+                } else {
+                    copy(
+                        "Указанные сайты открываются без VPN. Звёздочка включает поддомены. Остальной трафик идёт через выбранное соединение, включая AmneziaWG. Список обновляется вместе с подпиской.",
+                        "These sites bypass the VPN. An asterisk includes subdomains. Other traffic uses the selected connection, including AmneziaWG. The list updates with your subscription.",
+                    ) + "\n\n" + sites.joinToString("\n")
+                }
+                AppDialog.Builder(host).setTitle(copy("Без VPN", "Without VPN"))
+                    .setMessage(message).setPositiveButton("OK", null).show()
+            }
+        })
         val probeSummary = { copy("HTTP ${RouteProbePreferences.method(host).title} · быстрая проверка, загрузка 1 с", "HTTP ${RouteProbePreferences.method(host).title} · fast check, 1 s download") }
         root.addView(host.row(copy("Проверка маршрута", "Route check"), probeSummary(), "↻", "›").apply {
             val summary = (getChildAt(1) as? LinearLayout)?.getChildAt(1) as? TextView

@@ -183,7 +183,7 @@ android {
                     "-DANDROID_PACKAGE_NAME=space.deytt.connect",
                     "-DGRADLE_USER_HOME=${project.gradle.gradleUserHomeDir}",
                 )
-                targets("libwg-go.so", "libwg.so", "libwg-quick.so")
+                targets("libwg-go.so", "libwg.so", "libwg-quick.so", "libdeytt-awg.so")
             }
         }
     }
@@ -199,7 +199,7 @@ android {
 
     externalNativeBuild {
         cmake {
-            path = file("../third_party/amneziawg-android/tunnel/tools/CMakeLists.txt")
+            path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
     }
@@ -220,4 +220,5 @@ dependencies {
     implementation("androidx.annotation:annotation:1.9.1")
     implementation("androidx.collection:collection:1.5.0")
     compileOnly("com.google.code.findbugs:jsr305:3.0.2")
+    testImplementation("junit:junit:4.13.2")
 }
