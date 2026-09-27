@@ -47,4 +47,31 @@ class RouteProbeScoringTest {
         assertEquals(RouteGrade.MEDIUM, grades["three"])
         assertEquals(RouteGrade.POOR, grades["two"])
     }
+
+    @Test
+    fun ranksPartialLatencySamplesAsTheyArrive() {
+        val first = listOf(RouteProbeSample("first", 70L, null))
+        assertEquals(RouteGrade.GOOD, RouteProbeScoring.gradeByLatency(first)["first"])
+
+        val updated = listOf(
+            RouteProbeSample("first", 70L, null),
+            RouteProbeSample("second", 110L, null),
+            RouteProbeSample("third", 90L, null),
+            RouteProbeSample("waiting", null, null),
+        )
+        val grades = RouteProbeScoring.gradeByLatency(updated)
+        assertEquals(RouteGrade.GOOD, grades["first"])
+        assertEquals(RouteGrade.MEDIUM, grades["third"])
+        assertEquals(RouteGrade.POOR, grades["second"])
+        assertEquals(RouteGrade.UNRATED, grades["waiting"])
+    }
+
+    @Test
+    fun equalLatencySamplesAreNotMarkedAsWorst() {
+        val grades = RouteProbeScoring.gradeByLatency(
+            listOf(RouteProbeSample("first", 80L, null), RouteProbeSample("second", 80L, null)),
+        )
+        assertEquals(RouteGrade.GOOD, grades["first"])
+        assertEquals(RouteGrade.MEDIUM, grades["second"])
+    }
 }

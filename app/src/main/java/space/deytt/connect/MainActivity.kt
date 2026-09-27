@@ -58,12 +58,10 @@ class MainActivity : Activity() {
     private lateinit var globe: RouteGlobeView
     private lateinit var action: TextView
     private lateinit var latencyText: TextView
+    private lateinit var qualityDots: DiagnosticDotsView
     private lateinit var routeTitleText: TextView
     private lateinit var downloadText: TextView
-    private lateinit var qualityVisualizer: RouteProbeVisualizerView
-    private val qualityBars = mutableListOf<View>()
     private val homePingSamples = mutableListOf<Long>()
-    private val homeSpeedSamples = mutableListOf<Long>()
     private var temporaryAwgMeasurement = false
     private var restoreAwgMeasurement: (() -> Unit)? = null
     private lateinit var pager: ViewPager2
@@ -100,6 +98,7 @@ class MainActivity : Activity() {
     private var egressRequestGeneration = 0
     private var pendingRouteProbeId: String? = null
     private var pendingRouteProbeHasOutcome = false
+    private var homePingErrorRouteId: String? = null
     private var homeConnectQueued = false
     private var lastRouteLatency: Pair<String, Long>? = null
     private var pendingRouteProbeAuthorization: (() -> Unit)? = null
@@ -190,27 +189,25 @@ class MainActivity : Activity() {
             val elapsed = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
             val error = event.getStringExtra(RouteProbeClient.EXTRA_ERROR)
             if (stage == "latency_sample") {
-                if (elapsed >= 0L) homePingSamples += elapsed
-                val sampleIndex = event.getIntExtra(RouteProbeClient.EXTRA_SAMPLE_INDEX, homePingSamples.size)
-                val en = AppLanguage.current(this@MainActivity) == AppLanguage.EN
-                latencyText.text = if (en) "Ping $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT} · ${elapsed.takeIf { it >= 0L }?.let(::formatLatency) ?: "retrying…"}"
-                    else "Пинг $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT} · ${elapsed.takeIf { it >= 0L }?.let(::formatLatency) ?: "повтор…"}"
+                if (RouteProbeStatistics.isValidLatencyMillis(elapsed)) homePingSamples += elapsed
+                RouteProbeStatistics.medianLatencyMillis(homePingSamples)?.let { median ->
+                    lastRouteLatency = selected.id to median
+                    homePingErrorRouteId = null
+                }
                 latencyText.setTextColor(DeyttUi.SKY)
-                qualityVisualizer.render(RouteProbeVisualState.PING, homePingSamples)
+                updateQualityStrip()
                 return
             }
             if (stage == "latency_retry") {
-                val sampleIndex = event.getIntExtra(RouteProbeClient.EXTRA_SAMPLE_INDEX, 0)
-                latencyText.text = uiCopy("повторяем пинг $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT}…")
                 latencyText.setTextColor(DeyttUi.SKY)
-                qualityVisualizer.render(RouteProbeVisualState.PING, homePingSamples)
+                updateQualityStrip()
                 return
             }
             when {
-                elapsed >= 0L -> {
+                RouteProbeStatistics.isValidLatencyMillis(elapsed) -> {
                     pendingRouteProbeHasOutcome = true
                     lastRouteLatency = selected.id to elapsed
-                    latencyText.text = uiCopy("Задержка") + ": " + formatLatency(elapsed)
+                    homePingErrorRouteId = null
                     latencyText.setTextColor(DeyttUi.MINT)
                     val english = AppLanguage.current(this@MainActivity) == AppLanguage.EN
                     latencyText.contentDescription = if (english) {
@@ -218,23 +215,15 @@ class MainActivity : Activity() {
                     } else {
                         "Медиана трёх HTTPS-ответов через выбранный выход после установки TLS: $elapsed миллисекунд"
                     }
-                    qualityVisualizer.render(
-                        RouteProbeVisualState.PING_RESULT,
-                        ping = homePingSamples.ifEmpty { listOf(elapsed) },
-                    )
                 }
                 !error.isNullOrBlank() -> {
                     pendingRouteProbeHasOutcome = true
-                    latencyText.text = uiCopy(if (error.contains("8 с")) "тайм-аут" else "нет ответа")
+                    homePingErrorRouteId = selected.id
                     latencyText.setTextColor(DeyttUi.CORAL)
                     latencyText.contentDescription = uiCopy("Проверка выхода через прокси: $error")
-                    qualityVisualizer.render(
-                        if (homePingSamples.isEmpty()) RouteProbeVisualState.FAILURE else RouteProbeVisualState.PING_RESULT,
-                        ping = homePingSamples,
-                        description = RouteProbePresentation.failureMessage(error, AppLanguage.current(this@MainActivity) == AppLanguage.EN),
-                    )
                 }
             }
+            updateQualityStrip()
             if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
                 pendingRouteProbeId = null
                 latencyText.isEnabled = true
@@ -246,9 +235,9 @@ class MainActivity : Activity() {
                 // A request's final broadcast only closes the queue. The preceding
                 // route broadcast already contains its result or error.
                 if (!pendingRouteProbeHasOutcome) {
-                    latencyText.text = uiCopy("Задержка") + ": " + uiCopy("нет ответа")
+                    homePingErrorRouteId = selected.id
                     latencyText.setTextColor(DeyttUi.CORAL)
-                    qualityVisualizer.render(RouteProbeVisualState.FAILURE, homePingSamples)
+                    updateQualityStrip()
                 }
             }
         }
@@ -329,7 +318,7 @@ class MainActivity : Activity() {
             runCatching { RouteProbeClient.cancel(this) }
             pendingRouteProbeId = null
             if (::latencyText.isInitialized) {
-                latencyText.text = uiCopy("Задержка: —")
+                latencyText.text = uiCopy("Пинг: —")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
             }
@@ -643,7 +632,7 @@ class MainActivity : Activity() {
         if (::latencyText.isInitialized) {
             val cachedLatency = lastRouteLatency?.takeIf { it.first == selected.id }?.second
                 ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
-            latencyText.text = uiCopy("Задержка") + ": " + (cachedLatency?.let(::formatLatency) ?: "—")
+            latencyText.text = uiCopy("Пинг") + ": " + (cachedLatency?.let(::formatLatency) ?: "—")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             latencyText.textSize = 11f
@@ -1489,28 +1478,21 @@ class MainActivity : Activity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val bars = LinearLayout(this@MainActivity).apply { gravity = Gravity.BOTTOM }
-        qualityBars.clear()
-        repeat(4) { index ->
-            val bar = View(this@MainActivity).apply { background = rounded(DeyttUi.LINE, 2f) }
-            qualityBars.add(bar)
-            bars.addView(bar, LinearLayout.LayoutParams(dp(4), dp(6 + index * 4)).apply { marginEnd = dp(3) })
+        downloadText = text("Скорость: —", 10.5f, DeyttUi.MUTED).apply {
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
-        download.addView(bars, LinearLayout.LayoutParams(dp(32), dp(20)))
-        downloadText = text("Скорость: —", 10.5f, DeyttUi.MUTED).apply { maxLines = 2 }
         download.addView(downloadText)
         download.setOnClickListener { selectTab(1) }
         addView(download, LinearLayout.LayoutParams(0, dp(44), 1f))
-        qualityVisualizer = RouteProbeVisualizerView(this@MainActivity).apply {
-            render(RouteProbeVisualState.IDLE, ping = emptyList(), speed = emptyList())
-        }
-        addView(qualityVisualizer, LinearLayout.LayoutParams(dp(72), dp(38)).apply {
-            leftMargin = dp(6)
-            rightMargin = dp(8)
-        })
-        latencyText = text("Задержка: —", 11f, DeyttUi.MUTED).apply {
+        qualityDots = DiagnosticDotsView(this@MainActivity)
+        addView(qualityDots, LinearLayout.LayoutParams(dp(24), dp(44)))
+        latencyText = text("Пинг: —", 11f, DeyttUi.MUTED).apply {
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
             gravity = Gravity.END or Gravity.CENTER_VERTICAL
             minHeight = dp(44)
+            minWidth = dp(90)
             setOnClickListener { measureSelectedRoute() }
         }
         addView(latencyText)
@@ -1535,6 +1517,9 @@ class MainActivity : Activity() {
         val displayedSpeed = if (homeSpeedInFlight) homeSpeedCurrentBps else recentSpeed
         val mbps = displayedSpeed?.times(8.0)?.div(1_000_000.0)
         val en = AppLanguage.current(this) == AppLanguage.EN
+        val latency = lastRouteLatency?.takeIf {
+            it.first == selected.id && RouteProbeStatistics.isValidLatencyMillis(it.second)
+        }?.second ?: sample?.latencyMillis
         downloadText.text = when {
             homeSpeedInFlight && mbps != null -> String.format(
                 java.util.Locale.US,
@@ -1543,17 +1528,33 @@ class MainActivity : Activity() {
             )
             homeSpeedInFlight -> if (en) "Speed: sampling…" else "Скорость: замер…"
             homeSpeedError != null -> if (en) "Speed unavailable" else "Скорость недоступна"
-            mbps == null -> uiCopy("Скорость: проверить")
+            mbps == null -> uiCopy("Скорость: —")
             else -> String.format(java.util.Locale.US, if (en) "Speed: %.1f Mbps" else "Скорость: %.1f Мбит/с", mbps)
         }
+        latencyText.text = when {
+            homePingErrorRouteId == selected.id -> if (en) "Ping: no response" else "Пинг: нет ответа"
+            latency != null -> (if (en) "Ping: " else "Пинг: ") + formatLatency(latency)
+            else -> if (en) "Ping: —" else "Пинг: —"
+        }
+        latencyText.setTextColor(when {
+            homePingErrorRouteId == selected.id -> DeyttUi.CORAL
+            selectedRouteLatencyInFlight || pendingRouteProbeId != null -> DeyttUi.SKY
+            latency != null -> DeyttUi.MINT
+            else -> DeyttUi.MUTED
+        })
         val sampleSeconds = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS / 1_000
         downloadText.contentDescription = homeSpeedError
             ?: if (en) "Download speed, $sampleSeconds-second sample. Tap to check routes."
             else "Скорость загрузки, проба $sampleSeconds с. Нажмите для проверки маршрутов."
-        val filled = when { mbps == null -> 0; mbps < 5 -> 1; mbps < 20 -> 2; mbps < 50 -> 3; else -> 4 }
-        qualityBars.forEachIndexed { index, bar ->
-            bar.background = rounded(if (index < filled) DeyttUi.MINT else DeyttUi.LINE, 2f)
+        latencyText.contentDescription = when {
+            homePingErrorRouteId == selected.id -> uiCopy("Пинг: нет ответа через выбранный маршрут")
+            latency != null -> uiCopy("Пинг через выбранный маршрут: ${latency} миллисекунд")
+            else -> uiCopy("Проверить пинг через выбранный маршрут")
         }
+        qualityDots.setLoading(
+            (latency == null && homePingErrorRouteId != selected.id) ||
+                (mbps == null && homeSpeedError == null && renderedPhase == VpnPhase.CONNECTED),
+        )
     }
 
     private fun cancelHomeRouteDownload() {
@@ -1580,8 +1581,6 @@ class MainActivity : Activity() {
         homeSpeedInFlight = true
         homeSpeedError = null
         homeSpeedCurrentBps = null
-        homeSpeedSamples.clear()
-        qualityVisualizer.render(RouteProbeVisualState.SPEED, homePingSamples, emptyList())
         val generation = homeSpeedGeneration
         val stillCurrent = {
             generation == homeSpeedGeneration && homeSpeedForeground && homeSpeedOnHome &&
@@ -1603,8 +1602,6 @@ class MainActivity : Activity() {
                                 return@runOnUiThread
                             }
                             homeSpeedCurrentBps = bytesPerSecond
-                            if (homeSpeedSamples.lastOrNull() != bytesPerSecond) homeSpeedSamples += bytesPerSecond
-                            qualityVisualizer.render(RouteProbeVisualState.SPEED, homePingSamples, homeSpeedSamples)
                             updateQualityStrip()
                         }
                     },
@@ -1618,24 +1615,16 @@ class MainActivity : Activity() {
                 if (!stillCurrent() || isFinishing || isDestroyed) return@runOnUiThread
                 result.getOrNull()?.takeIf { it > 0L }?.let { speed ->
                     homeSpeedError = null
-                    if (homeSpeedSamples.lastOrNull() != speed) homeSpeedSamples += speed
                     homeSpeedSample = selected.id to speed
                     homeSpeedSampleToken = token
                     homeSpeedSampleAt = SystemClock.elapsedRealtime()
                     val latency = lastRouteLatency?.takeIf { it.first == selected.id }?.second
                         ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
                     if (latency != null) RouteQualityStore.write(this, RouteProbeSample(selected.id, latency, speed))
-                    qualityVisualizer.render(RouteProbeVisualState.SPEED_RESULT, homePingSamples, homeSpeedSamples)
                 } ?: run {
                     homeSpeedError = result.exceptionOrNull()?.let {
                         RouteProbePresentation.failure(it, AppLanguage.current(this) == AppLanguage.EN)
                     }
-                    qualityVisualizer.render(
-                        RouteProbeVisualState.FAILURE,
-                        ping = homePingSamples,
-                        speed = homeSpeedSamples,
-                        description = homeSpeedError,
-                    )
                 }
                 updateQualityStrip()
             }
@@ -1723,7 +1712,7 @@ class MainActivity : Activity() {
             if (resultCode == RESULT_OK) {
                 if (continuation != null) continuation() else measureSelectedRoute()
             } else if (::latencyText.isInitialized && continuation == null) {
-                latencyText.text = uiCopy("Задержка: —")
+                latencyText.text = uiCopy("Пинг: —")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.contentDescription = "Для проверки через выход требуется системное разрешение Android"
@@ -1958,83 +1947,85 @@ class MainActivity : Activity() {
         if (homeConnectQueued || temporaryAwgMeasurement || renderedPhase in setOf(VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.STOPPING)) return
         val generation = ++latencyGeneration
         homePingSamples.clear()
-        qualityVisualizer.render(RouteProbeVisualState.PING, ping = emptyList(), speed = homeSpeedSamples)
         val selected = SelectedRouteStore(this).read()
         val config = SubscriptionStore(this).readCurrent() ?: return
         val route = RouteCatalog.from(config, AwgProfileStore(this).profiles())
             .firstOrNull { it.id == selected.id } ?: return
         val method = RouteProbePreferences.method(this)
-        val previousLatency = lastRouteLatency?.takeIf { it.first == selected.id }?.second
+        val previousLatency = lastRouteLatency?.takeIf {
+            it.first == selected.id && RouteProbeStatistics.isValidLatencyMillis(it.second)
+        }?.second
             ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
-        latencyText.text = if (previousLatency == null) uiCopy("проверка…")
-            else uiCopy("Задержка") + ": " + formatLatency(previousLatency)
+        homePingErrorRouteId = null
+        latencyText.text = if (previousLatency == null) uiCopy("Пинг: —")
+            else uiCopy("Пинг") + ": " + formatLatency(previousLatency)
         latencyText.isEnabled = false
         latencyText.alpha = .65f
+        updateQualityStrip()
         val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         if (tunnelActive) {
             if (route.id != selected.id ||
                 (route.engine == TunnelEngine.LIBBOX && !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName))
             ) {
-                latencyText.text = uiCopy("отключите соединение")
+                latencyText.text = uiCopy("Пинг: отключите соединение")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
-                latencyText.textSize = 11f
                 latencyText.setTextColor(DeyttUi.AMBER)
                 latencyText.contentDescription = uiCopy("Чтобы проверить другой выход, сначала отключите текущее соединение")
                 return
             }
             if (route.engine == TunnelEngine.AMNEZIAWG && !AwgTunnelController.isRunning()) {
-                latencyText.text = uiCopy("подключите AmneziaWG")
+                latencyText.text = uiCopy("Пинг: подключите AmneziaWG")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
-                latencyText.textSize = 11f
                 latencyText.setTextColor(DeyttUi.AMBER)
                 latencyText.contentDescription = uiCopy("Для HTTP-проверки подключите выбранный профиль AmneziaWG")
                 return
             }
             selectedRouteLatencyInFlight = true
+            updateQualityStrip()
             LatencyExecutor.pool.execute {
                 val elapsed = runCatching {
-                    RouteProxyProbe.measureThroughSystemVpn(method, onSample = { sampleIndex, sample ->
+                    RouteProxyProbe.measureThroughSystemVpn(method, onSample = { _, sample ->
                         runOnUiThread {
                             if (generation != latencyGeneration || isFinishing || isDestroyed) return@runOnUiThread
-                            if (sample != null) homePingSamples += sample
-                            val en = AppLanguage.current(this) == AppLanguage.EN
-                            latencyText.text = if (sample != null) {
-                                (if (en) "Ping" else "Пинг") + " $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT} · " + formatLatency(sample)
-                            } else {
-                                (if (en) "Retrying ping" else "Повтор пинга") + " $sampleIndex/${RouteProxyProbe.LATENCY_SAMPLE_COUNT}…"
+                            if (sample != null && RouteProbeStatistics.isValidLatencyMillis(sample)) {
+                                homePingSamples += sample
+                                RouteProbeStatistics.medianLatencyMillis(homePingSamples)?.let { median ->
+                                    lastRouteLatency = selected.id to median
+                                    homePingErrorRouteId = null
+                                }
                             }
                             latencyText.setTextColor(DeyttUi.SKY)
-                            qualityVisualizer.render(RouteProbeVisualState.PING, homePingSamples)
+                            updateQualityStrip()
                         }
                     })
                 }.getOrNull()
                 runOnUiThread {
                     selectedRouteLatencyInFlight = false
                     if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
-                        if (elapsed != null) lastRouteLatency = selected.id to elapsed
-                        latencyText.text = uiCopy("Задержка") + ": " + (elapsed?.let(::formatLatency) ?: uiCopy("нет ответа"))
+                        val validElapsed = elapsed?.takeIf(RouteProbeStatistics::isValidLatencyMillis)
+                        if (validElapsed != null) {
+                            lastRouteLatency = selected.id to validElapsed
+                            homePingErrorRouteId = null
+                        } else {
+                            homePingErrorRouteId = selected.id
+                        }
+                        if (validElapsed != null && homePingSamples.isEmpty()) homePingSamples += validElapsed
                         latencyText.isEnabled = true
                         latencyText.alpha = 1f
-                        latencyText.setTextColor(if (elapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
-                        latencyText.contentDescription = elapsed?.let {
-                            uiCopy("Медиана трёх HTTPS-ответов через активное соединение после TLS: ${it} миллисекунд")
+                        latencyText.setTextColor(if (validElapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
+                        latencyText.contentDescription = validElapsed?.let {
+                            uiCopy("Медиана HTTPS-ответов через активное соединение: ${it} миллисекунд")
                         } ?: uiCopy("HTTPS-проверка через активное соединение не ответила за 8 секунд")
-                        if (elapsed != null && homePingSamples.isEmpty()) homePingSamples += elapsed
-                        qualityVisualizer.render(
-                            if (elapsed != null) RouteProbeVisualState.PING_RESULT else RouteProbeVisualState.FAILURE,
-                            homePingSamples,
-                            description = elapsed?.let { uiCopy("Медиана трёх ping-проб: ${formatLatency(it)}") }
-                                ?: uiCopy("Проверка ping не получила ответа"),
-                        )
+                        updateQualityStrip()
                     }
                 }
             }
             return
         }
         if (route.engine == TunnelEngine.AMNEZIAWG) {
-            latencyText.text = uiCopy("подключите AmneziaWG")
+            latencyText.text = uiCopy("Пинг: подключите AmneziaWG")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             latencyText.setTextColor(DeyttUi.AMBER)
@@ -2043,7 +2034,7 @@ class MainActivity : Activity() {
         }
         val vpnPermission = VpnService.prepare(this)
         if (vpnPermission != null) {
-            latencyText.text = uiCopy("Задержка: —")
+            latencyText.text = uiCopy("Пинг: —")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             showRouteProbePermissionSheet(vpnPermission)
@@ -2052,23 +2043,24 @@ class MainActivity : Activity() {
         try {
             pendingRouteProbeHasOutcome = false
             homePingSamples.clear()
-            qualityVisualizer.render(RouteProbeVisualState.PING, ping = emptyList(), speed = homeSpeedSamples)
             pendingRouteProbeId = RouteProbeClient.start(
                 this, config, listOf(route.configTag), method, TelegramSessionStore.read(this), latencyOnly = true,
             )
-            if (previousLatency == null) latencyText.text = uiCopy("через прокси…")
+            if (previousLatency == null) latencyText.text = uiCopy("Пинг: —")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
-            latencyText.textSize = 11f
             latencyText.setTextColor(DeyttUi.SKY)
             latencyText.contentDescription = uiCopy("Проверяю выход тремя HTTPS-запросами методом ${method.wireValue}, общий тайм-аут 8 секунд")
+            updateQualityStrip()
         } catch (_: Throwable) {
             if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
-                latencyText.text = uiCopy("ошибка")
+                homePingErrorRouteId = selected.id
+                latencyText.text = uiCopy("Пинг: ошибка")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.setTextColor(DeyttUi.CORAL)
                 latencyText.contentDescription = uiCopy("Не удалось запустить проверку через прокси")
+                updateQualityStrip()
             }
         }
     }
