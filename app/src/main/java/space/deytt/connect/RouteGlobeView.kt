@@ -21,9 +21,11 @@ import org.json.JSONArray
 class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var selectedRoute = "auto"
     private var networkLocation: IpNetworkLocation? = null
+    private var egressCountryCode: String? = null
+    private var activeAutoRouteKey: String? = null
     private var pageLoaded = false
-    private var trafficEnabled = false
     private var availableLocations = setOf("nl", "de", "fi", "ru")
+    private var trafficActive = false
     private val atlas: WebView
     var onMapNodeTapped: ((String) -> Unit)? = null
 
@@ -75,8 +77,10 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                     applyMapLanguage()
                     applyAvailableLocations()
                     applySelectedRoute()
-                    applyTrafficState()
                     applyUserLocation()
+                    applyEgressCountry()
+                    applyActiveAutoRoute()
+                    applyTrafficActive()
                 }
             }
             setOnTouchListener { view, event ->
@@ -99,12 +103,6 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         applySelectedRoute()
     }
 
-    fun setTrafficEnabled(enabled: Boolean) {
-        if (trafficEnabled == enabled) return
-        trafficEnabled = enabled
-        applyTrafficState()
-    }
-
     internal fun setAvailableLocations(locations: Set<String>) {
         val allowed = setOf("nl", "de", "fi", "ru")
         availableLocations = locations.map(String::lowercase).filter(allowed::contains).toSet()
@@ -115,6 +113,28 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         networkLocation = location
         atlas.contentDescription = mapDescription(selectedRoute)
         applyUserLocation()
+    }
+
+    internal fun setEgressCountry(countryCode: String?) {
+        val normalized = countryCode?.uppercase()?.takeIf { it in setOf("NL", "DE", "FI", "RU") }
+        if (egressCountryCode == normalized) return
+        egressCountryCode = normalized
+        atlas.contentDescription = mapDescription(selectedRoute)
+        applyEgressCountry()
+    }
+
+    internal fun setActiveAutoRoute(routeKey: String?) {
+        val allowed = setOf("nl", "de", "fi", "ru", "ru-de")
+        val normalized = routeKey?.lowercase()?.takeIf(allowed::contains)
+        if (activeAutoRouteKey == normalized) return
+        activeAutoRouteKey = normalized
+        applyActiveAutoRoute()
+    }
+
+    internal fun setTrafficActive(active: Boolean) {
+        if (trafficActive == active) return
+        trafficActive = active
+        applyTrafficActive()
     }
 
     override fun onAttachedToWindow() {
@@ -154,14 +174,6 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         atlas.evaluateJavascript("window.deyttSetMapLocations && window.deyttSetMapLocations($payload)", null)
     }
 
-    private fun applyTrafficState() {
-        if (!pageLoaded) return
-        atlas.evaluateJavascript(
-            "window.deyttSetMapTraffic && window.deyttSetMapTraffic($trafficEnabled)",
-            null,
-        )
-    }
-
     private fun applyUserLocation() {
         if (!pageLoaded) return
         val location = networkLocation
@@ -179,6 +191,32 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         )
     }
 
+    private fun applyEgressCountry() {
+        if (!pageLoaded) return
+        val country = egressCountryCode?.let(JSONObject::quote) ?: "null"
+        atlas.evaluateJavascript(
+            "window.deyttSetMapEgressCountry && window.deyttSetMapEgressCountry($country)",
+            null,
+        )
+    }
+
+    private fun applyActiveAutoRoute() {
+        if (!pageLoaded) return
+        val route = activeAutoRouteKey?.let(JSONObject::quote) ?: "null"
+        atlas.evaluateJavascript(
+            "window.deyttSetMapActiveAutoRoute && window.deyttSetMapActiveAutoRoute($route)",
+            null,
+        )
+    }
+
+    private fun applyTrafficActive() {
+        if (!pageLoaded) return
+        atlas.evaluateJavascript(
+            "window.deyttSetMapTrafficActive && window.deyttSetMapTrafficActive($trafficActive)",
+            null,
+        )
+    }
+
     private fun mapDescription(route: String): String {
         if (AppLanguage.current(context) == AppLanguage.EN) {
             val destination = when (route) {
@@ -189,10 +227,11 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                 "ru-de" -> "The selected route is a double hop from Saint Petersburg to Frankfurt"
                 else -> "Available exits are Amsterdam, Frankfurt, Helsinki, and Saint Petersburg"
             }
-            val origin = networkLocation?.let {
-                " Entry point: ${it.placeLabel}, approximate by IP; the IP address is not stored."
-            }.orEmpty()
-            return "DEYTT network map. $destination.$origin Tap a point to choose an exit and protocol. Drag to rotate; pinch to zoom. Swipe horizontally to switch tabs."
+        val origin = networkLocation?.let {
+            " Entry point: ${it.placeLabel}, approximate by IP; the IP address is not stored."
+        }.orEmpty()
+            val egress = if (route == "auto" && egressCountryCode != null) " Approximate active exit: $egressCountryCode." else ""
+            return "DEYTT network map. $destination.$origin$egress Tap a point to choose an exit and protocol. Drag to rotate; pinch to zoom. Swipe horizontally to switch tabs."
         }
         val destination = when (route) {
             "nl" -> "выбрана точка Амстердам, Нидерланды"
@@ -203,7 +242,16 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             else -> "показаны точки Амстердам, Франкфурт, Хельсинки и Санкт-Петербург"
         }
         val origin = networkLocation?.let { " Точка входа — ${it.placeLabel}, приблизительно по IP; адрес IP не сохраняется." }.orEmpty()
-        return "Карта сети DEYTT; $destination.$origin Нажмите точку, чтобы выбрать выход и протокол. Поворот и масштаб — жестами двумя пальцами. Горизонтальный свайп переключает вкладку."
+        val egress = if (route == "auto" && egressCountryCode != null) " Примерно по IP выбран выход в ${countryName(egressCountryCode!!)}." else ""
+        return "Карта сети DEYTT; $destination.$origin$egress Нажмите точку, чтобы выбрать выход и протокол. Поворот и масштаб — жестами двумя пальцами. Горизонтальный свайп переключает вкладку."
+    }
+
+    private fun countryName(code: String): String = when (code) {
+        "NL" -> "Нидерландах"
+        "DE" -> "Германии"
+        "FI" -> "Финляндии"
+        "RU" -> "России"
+        else -> code
     }
 
     private fun localResponse(uri: Uri): WebResourceResponse {
@@ -229,7 +277,9 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                 "UTF-8",
                 200,
                 "OK",
-                mapOf("Cache-Control" to "public, max-age=31536000"),
+                mapOf(
+                    "Cache-Control" to if (assetName == "world-land.json") "public, max-age=31536000" else "no-store",
+                ),
                 context.assets.open(assetPath),
             )
         }.getOrElse { blockedResponse() }

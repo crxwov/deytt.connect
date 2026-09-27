@@ -125,18 +125,17 @@ class ProtocolActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val code = intent.getStringExtra("country") ?: run { finish(); return }
-        val requestedVersion = intent.getStringExtra("version")
+        val requestedVersion = intent.getStringExtra("version")?.takeIf { it == "31" }
         val config = SubscriptionStore(this).readCurrent() ?: run { finish(); return }
         val awg = AwgProfileStore(this)
         val routes = RouteCatalog.from(config, awg.profiles())
             .filter { route ->
                 route.countryCode == code &&
                     (requestedVersion == null ||
-                        (requestedVersion == "15" && route.protocol == RouteProtocol.AWG15) ||
                         (requestedVersion == "31" && route.protocol == RouteProtocol.AWG31))
             }
         val title = if (code == "AWG") {
-            requestedVersion?.let { "AmneziaWG ${if (it == "31") "3.1" else "1.5"}" } ?: "AmneziaWG"
+            "AmneziaWG 3.1"
         } else routes.firstOrNull()?.country ?: "Протокол"
         val root = screen()
         val selectedId = SelectedRouteStore(this).read().id

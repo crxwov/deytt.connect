@@ -252,7 +252,7 @@ internal object AppLanguage {
         "Попробуйте ещё раз или выберите другой маршрут" to "Try again or choose another route",
         "Проверяем маршрут и интернет" to "Checking route and internet",
         "Настраиваем защищённый туннель" to "Setting up the secure tunnel",
-        "Профили AmneziaWG 1.5 и 3.1 не загружены. Обновите подписку." to "AmneziaWG 1.5 and 3.1 profiles are missing. Refresh the subscription.",
+        "Профиль AmneziaWG 3.1 не загружен. Обновите подписку." to "AmneziaWG 3.1 profile is missing. Refresh the subscription.",
         "ВХОД" to "ENTRY",
         "ВЫХОД" to "EXIT",
         "Ищем регион…" to "Locating region…",

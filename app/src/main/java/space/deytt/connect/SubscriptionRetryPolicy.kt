@@ -55,4 +55,5 @@ object SubscriptionRetryPolicy {
 class SubscriptionHttpFailure(
     val statusCode: Int,
     message: String,
+    val code: String = "",
 ) : IOException(message)

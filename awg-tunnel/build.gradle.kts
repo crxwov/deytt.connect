@@ -121,6 +121,45 @@ tasks.withType<JavaCompile>().configureEach {
     dependsOn(prepareDeyttAwgBackend)
 }
 
+// AmneziaWG 3.1 moved the Go module under /v3, but its Android Makefile still
+// injects the old linker symbol. Without this correction the Go backend falls
+// back to /var/run/amneziawg, which Android mounts read-only. The Android
+// backend accesses tunnel state through JNI, so this private UAPI socket only
+// needs to live under this app's writable cache directory.
+val prepareDeyttAwgUapiSocketPath by tasks.registering {
+    val upstreamMakefile = file("../third_party/amneziawg-android/tunnel/tools/libwg-go/Makefile")
+    outputs.upToDateWhen { false }
+    doLast {
+        check(upstreamMakefile.isFile) { "AmneziaWG Go backend Makefile is missing; initialize the vendored submodule" }
+        val oldSymbol = "github.com/amnezia-vpn/amneziawg-go/ipc.socketDirectory"
+        val newSymbol = "github.com/amnezia-vpn/amneziawg-go/v3/ipc.socketDirectory"
+        val source = upstreamMakefile.readText()
+        when {
+            source.contains(newSymbol) && !source.contains(oldSymbol) -> Unit
+            source.contains(oldSymbol) && !source.contains(newSymbol) ->
+                upstreamMakefile.writeText(source.replace(oldSymbol, newSymbol))
+            else -> error("Unexpected AmneziaWG Go backend linker symbol; review its Makefile before building")
+        }
+
+        // The upstream Makefile does not list itself as a prerequisite for
+        // libwg-go.so, so an existing binary can survive a linker-flag fix.
+        // Keep valid outputs; force only stale builds to be regenerated.
+        val expectedSocketPath = "/data/data/space.deytt.connect/cache/amneziawg"
+        fileTree(layout.buildDirectory.dir("intermediates/cxx")) {
+            include("**/obj/**/libwg-go.so")
+        }.files.forEach { output ->
+            val contents = output.readBytes().toString(Charsets.ISO_8859_1)
+            if (!contents.contains(expectedSocketPath)) {
+                check(output.delete()) { "Could not remove stale AmneziaWG backend output: ${output.name}" }
+            }
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }.configureEach {
+    dependsOn(prepareDeyttAwgUapiSocketPath)
+}
+
 // AGP's annotation extraction reads the generated source directly and must
 // be ordered after the mirror is produced. Matching only these consumers is
 // important: broad task wiring makes native clean tasks depend on generation

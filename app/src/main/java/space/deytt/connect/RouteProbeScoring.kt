@@ -16,10 +16,9 @@ object RouteProbeScoring {
         val ranked = ranked(complete)
 
         val grades = ranked.mapIndexed { index, (id, _) ->
-            val firstTiedIndex = ranked.indexOfFirst { it.second == ranked[index].second }
-            val percentile = firstTiedIndex.toDouble() / ranked.size
+            val percentile = index.toDouble() / ranked.size
             id to when {
-                percentile < 1.0 / 3.0 -> RouteGrade.GOOD
+                index == 0 -> RouteGrade.GOOD
                 percentile >= 2.0 / 3.0 -> RouteGrade.POOR
                 else -> RouteGrade.MEDIUM
             }

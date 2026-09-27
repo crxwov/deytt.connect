@@ -18,6 +18,14 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketTimeoutException
 import java.net.URL
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.FutureTask
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.SynchronousQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicReference
 import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLPeerUnverifiedException
 import javax.net.ssl.SSLSocket
@@ -56,8 +64,19 @@ data class RouteProbeSession(
 
 /** Runs a bounded GET/HEAD check through a loopback-only sing-box HTTP proxy. */
 object RouteProxyProbe {
-    const val TIMEOUT_MILLIS = 10_000
+    const val TIMEOUT_MILLIS = 4_000
     const val QUICK_DOWNLOAD_MILLIS = 1_000
+    private const val SYSTEM_DOWNLOAD_CONNECT_TIMEOUT_MILLIS = 3_500
+    private const val SYSTEM_DOWNLOAD_DEADLINE_MILLIS = 5_000L
+    private val systemVpnProbeExecutor = ThreadPoolExecutor(
+        0,
+        4,
+        30L,
+        TimeUnit.SECONDS,
+        SynchronousQueue(),
+        { task -> Thread(task, "deytt-route-probe").apply { isDaemon = true } },
+        ThreadPoolExecutor.AbortPolicy(),
+    )
     const val PROBE_URL = "https://cp.cloudflare.com/generate_204"
     private const val PROBE_INBOUND = "deytt-route-probe"
     private const val PROBE_HOST = "cp.cloudflare.com"
@@ -395,13 +414,44 @@ object RouteProxyProbe {
         method: RouteProbeMethod,
         timeoutMillis: Int = TIMEOUT_MILLIS,
     ): Long {
+        val activeConnection = AtomicReference<HttpsURLConnection?>()
+        val task = FutureTask { measureThroughSystemVpnBlocking(method, timeoutMillis, activeConnection) }
+        try {
+            systemVpnProbeExecutor.execute(task)
+            return task.get(timeoutMillis.toLong(), TimeUnit.MILLISECONDS)
+        } catch (failure: RejectedExecutionException) {
+            throw SocketTimeoutException("Слишком много одновременных проверок маршрута").also { it.initCause(failure) }
+        } catch (failure: TimeoutException) {
+            activeConnection.getAndSet(null)?.disconnect()
+            task.cancel(true)
+            throw SocketTimeoutException("Проверка маршрута превысила $timeoutMillis мс").also { it.initCause(failure) }
+        } catch (failure: InterruptedException) {
+            activeConnection.getAndSet(null)?.disconnect()
+            task.cancel(true)
+            Thread.currentThread().interrupt()
+            throw SocketTimeoutException("Проверка маршрута прервана").also { it.initCause(failure) }
+        } catch (failure: ExecutionException) {
+            when (val cause = failure.cause) {
+                is IOException -> throw cause
+                is RuntimeException -> throw cause
+                else -> throw IOException("Не удалось проверить маршрут", cause)
+            }
+        }
+    }
+
+    private fun measureThroughSystemVpnBlocking(
+        method: RouteProbeMethod,
+        timeoutMillis: Int,
+        activeConnection: AtomicReference<HttpsURLConnection?>,
+    ): Long {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis
         var lastMeasurement: Long? = null
         repeat(2) {
             val remaining = (deadline - SystemClock.elapsedRealtime()).toInt()
-            if (remaining <= 0) throw SocketTimeoutException("Проверка маршрута превысила 10 секунд")
+            if (remaining <= 0) throw SocketTimeoutException("Проверка маршрута превысила $timeoutMillis мс")
             val started = SystemClock.elapsedRealtime()
             val connection = URL(PROBE_URL).openConnection(Proxy.NO_PROXY) as HttpsURLConnection
+            activeConnection.set(connection)
             try {
                 connection.requestMethod = method.wireValue
                 connection.connectTimeout = remaining
@@ -415,45 +465,98 @@ object RouteProxyProbe {
                 lastMeasurement = SystemClock.elapsedRealtime() - started
             } finally {
                 connection.disconnect()
+                activeConnection.compareAndSet(connection, null)
             }
         }
         return lastMeasurement ?: throw IOException("Проверка маршрута не получила ответа")
     }
 
     /** A bounded sample through the current Android VPN. Caller verifies its route. */
-    fun measureSystemDownload(token: String, stillCurrent: () -> Boolean, sampleMillis: Int = QUICK_DOWNLOAD_MILLIS): Long {
+    fun measureSystemDownload(
+        token: String,
+        stillCurrent: () -> Boolean,
+        sampleMillis: Int = QUICK_DOWNLOAD_MILLIS,
+        onLatency: (Long) -> Unit = {},
+    ): Long {
         require(sampleMillis in 1_000..5_000)
         require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
+        val activeConnection = AtomicReference<HttpsURLConnection?>()
+        val task = FutureTask {
+            measureSystemDownloadBlocking(token, stillCurrent, sampleMillis, onLatency, activeConnection)
+        }
+        try {
+            systemVpnProbeExecutor.execute(task)
+            return task.get(SYSTEM_DOWNLOAD_DEADLINE_MILLIS, TimeUnit.MILLISECONDS)
+        } catch (failure: RejectedExecutionException) {
+            throw SocketTimeoutException("Слишком много одновременных проверок скорости").also { it.initCause(failure) }
+        } catch (failure: TimeoutException) {
+            activeConnection.getAndSet(null)?.disconnect()
+            task.cancel(true)
+            throw SocketTimeoutException("Замер скорости превысил 5 секунд").also { it.initCause(failure) }
+        } catch (failure: InterruptedException) {
+            activeConnection.getAndSet(null)?.disconnect()
+            task.cancel(true)
+            Thread.currentThread().interrupt()
+            throw SocketTimeoutException("Замер скорости прерван").also { it.initCause(failure) }
+        } catch (failure: ExecutionException) {
+            when (val cause = failure.cause) {
+                is IOException -> throw cause
+                is RuntimeException -> throw cause
+                else -> throw IOException("Не удалось измерить скорость", cause)
+            }
+        }
+    }
+
+    private fun measureSystemDownloadBlocking(
+        token: String,
+        stillCurrent: () -> Boolean,
+        sampleMillis: Int,
+        onLatency: (Long) -> Unit,
+        activeConnection: AtomicReference<HttpsURLConnection?>,
+    ): Long {
+        val requestStarted = SystemClock.elapsedRealtime()
         val connection = URL("https://$DOWNLOAD_HOST$DOWNLOAD_PATH")
             .openConnection(Proxy.NO_PROXY) as HttpsURLConnection
+        activeConnection.set(connection)
         try {
-            connection.connectTimeout = 8_000
-            connection.readTimeout = 5_000
+            connection.connectTimeout = SYSTEM_DOWNLOAD_CONNECT_TIMEOUT_MILLIS
+            connection.readTimeout = SYSTEM_DOWNLOAD_CONNECT_TIMEOUT_MILLIS
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("X-TG-App-Token", token)
             connection.setRequestProperty("Accept-Encoding", "identity")
             connection.setRequestProperty("Cache-Control", "no-store")
             check(stillCurrent()) { "Route changed during measurement" }
-            check(connection.responseCode == HTTP_OK) { "Download endpoint unavailable" }
-            val started = SystemClock.elapsedRealtime()
-            val deadline = started + sampleMillis
+            val responseCode = connection.responseCode
+            if (responseCode != HTTP_OK) throw IOException("Download endpoint returned HTTP $responseCode")
+            val headersAt = SystemClock.elapsedRealtime()
+            onLatency((headersAt - requestStarted).coerceAtLeast(1L))
+            val totalDeadline = requestStarted + SYSTEM_DOWNLOAD_DEADLINE_MILLIS
+            var sampleStarted: Long? = null
             var received = 0L
             val buffer = ByteArray(32 * 1024)
             connection.inputStream.use { input ->
-                while (SystemClock.elapsedRealtime() < deadline && received < 32L * 1024 * 1024) {
+                while (received < 32L * 1024 * 1024) {
                     check(stillCurrent() && !Thread.currentThread().isInterrupted) { "Route changed during measurement" }
-                    connection.readTimeout = (deadline - SystemClock.elapsedRealtime()).coerceAtLeast(1L).toInt()
+                    val now = SystemClock.elapsedRealtime()
+                    val sampleDeadline = sampleStarted?.plus(sampleMillis) ?: totalDeadline
+                    if (now >= sampleDeadline || now >= totalDeadline) break
+                    connection.readTimeout = (sampleDeadline - now).coerceAtLeast(1L).toInt()
                     val count = try { input.read(buffer) } catch (error: SocketTimeoutException) {
                         if (received > 0) break else throw error
                     }
                     if (count < 0) break
-                    received += count
+                    if (count > 0) {
+                        if (sampleStarted == null) sampleStarted = SystemClock.elapsedRealtime()
+                        received += count
+                    }
                 }
             }
+            val measuredFrom = sampleStarted ?: headersAt
             check(stillCurrent() && received > 0) { "Measurement did not complete" }
-            return received * 1_000L / (SystemClock.elapsedRealtime() - started).coerceAtLeast(1L)
+            return received * 1_000L / (SystemClock.elapsedRealtime() - measuredFrom).coerceAtLeast(1L)
         } finally {
             connection.disconnect()
+            activeConnection.compareAndSet(connection, null)
         }
     }
 

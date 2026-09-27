@@ -138,20 +138,8 @@ class SubscriptionClientTest {
     }
 
     @Test
-    fun validAwg15And31FamiliesImportOneAdvertisedServerEach() {
+    fun importsOnlyTheSupportedAmnezia31Family() {
         AwgProfileStore.validate(VALID_AWG31_CONFIG)
-        val awg15 = SubscriptionClient.fetchAwgProfilesForTest(
-            "https://deytt.space/sub/token",
-            "amneziawg",
-            "15",
-            FakeTransport(
-                SubscriptionClient.SubscriptionHttpResponse(
-                    200,
-                    body = VALID_AWG_CONFIG,
-                    awgServers = "[{\"id\":\"nl\",\"label\":\"Нидерланды\",\"short_label\":\"NL\"}]",
-                ),
-            ),
-        )
         val awg31 = SubscriptionClient.fetchAwgProfilesForTest(
             "https://deytt.space/sub/token",
             "amneziawg31",
@@ -165,11 +153,8 @@ class SubscriptionClientTest {
             ),
         )
 
-        assertEquals(SubscriptionClient.AwgFetchState.AVAILABLE, awg15.state)
         assertEquals(SubscriptionClient.AwgFetchState.AVAILABLE, awg31.state)
-        assertEquals("awg15:nl", awg15.profiles.single().id)
         assertEquals("awg31:de", awg31.profiles.single().id)
-        AwgProfileStore.validate(awg15.profiles.single().config)
         AwgProfileStore.validate(awg31.profiles.single().config)
     }
 
@@ -226,6 +211,38 @@ class SubscriptionClientTest {
         assertEquals(SubscriptionClient.AwgFetchState.TRANSIENT_FAILURE, result.state)
         assertTrue(result.warning.orEmpty().contains("дополнительные профили"))
         assertFalse(result.warning.orEmpty().contains("1 сервер"))
+    }
+
+    @Test
+    fun deviceSlotRejectionIsExplicitAndNeverRetried() {
+        val transport = FakeTransport(SubscriptionClient.SubscriptionHttpResponse(
+            409, body = """{"error":"app_device_limit_reached","device_limit":1}""",
+        ))
+        val error = runCatching {
+            SubscriptionClient.requestForTest("https://deytt.space/sub/token", "application/json", true, transport)
+        }.exceptionOrNull() as SubscriptionHttpFailure
+        assertEquals("app_device_limit_reached", error.code)
+        assertEquals(1, transport.calls.size)
+        assertTrue(SubscriptionErrorText.userMessage(error).contains("другим устройством"))
+    }
+
+    @Test
+    fun blockedDeviceIsNotMisreportedAsExpiredLink() {
+        val error = runCatching {
+            SubscriptionClient.requestForTest("https://deytt.space/sub/token", "application/json", true,
+                FakeTransport(SubscriptionClient.SubscriptionHttpResponse(403, body = """{"error":"device_blocked"}""")))
+        }.exceptionOrNull() as SubscriptionHttpFailure
+        assertTrue(SubscriptionErrorText.userMessage(error).contains("заблокирован"))
+    }
+
+    @Test
+    fun expiredSessionDuringAwgFetchIsNotHiddenAsOptionalFailure() {
+        val error = runCatching {
+            SubscriptionClient.fetchAwgProfilesForTest("https://deytt.space/sub/token", "amneziawg31", "31",
+                FakeTransport(SubscriptionClient.SubscriptionHttpResponse(401, body = """{"error":"session_expired"}""")))
+        }.exceptionOrNull() as SubscriptionHttpFailure
+        assertEquals("session_expired", error.code)
+        assertTrue(SubscriptionErrorText.userMessage(error).contains("Войдите через Telegram снова"))
     }
 
     private class FakeTransport(vararg values: Any) : SubscriptionClient.SubscriptionHttpTransport {

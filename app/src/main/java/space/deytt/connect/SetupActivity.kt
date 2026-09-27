@@ -85,10 +85,13 @@ class SetupActivity : Activity() {
                     } else {
                         importProfile(url)
                     }
-                }.onFailure {
+                }.onFailure { error ->
+                    val expired = error is TelegramPairingException && error.code == "session_expired"
+                    if (expired && TelegramSessionStore.read(this) == token) TelegramSessionStore.clear(this)
                     state.setTextColor(DeyttUi.CORAL)
-                    state.text = uiCopy("Не удалось загрузить подписку. Проверьте соединение и попробуйте ещё раз.")
-                    accountAction.text = uiCopy("Повторить загрузку")
+                    state.text = uiCopy(if (expired) "Сессия Telegram истекла. Войдите через Telegram снова, чтобы обновить подписку."
+                        else "Не удалось загрузить подписку. Проверьте соединение и попробуйте ещё раз.")
+                    accountAction.text = uiCopy(if (expired) "Подключить аккаунт Telegram" else "Повторить загрузку")
                     accountAction.isEnabled = true
                     accountAction.alpha = 1f
                 }
@@ -139,7 +142,7 @@ class SetupActivity : Activity() {
                     state.setTextColor(DeyttUi.CORAL)
                     state.text = SubscriptionErrorText.userMessage(error)
                     state.announceForAccessibility(state.text)
-                    accountAction.text = uiCopy("Повторить загрузку")
+                    accountAction.text = uiCopy(if (TelegramSessionStore.read(this) == null) "Подключить аккаунт Telegram" else "Повторить загрузку")
                     accountAction.isEnabled = true
                     accountAction.alpha = 1f
                 }}

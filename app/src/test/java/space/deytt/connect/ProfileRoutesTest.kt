@@ -53,7 +53,10 @@ class ProfileRoutesTest {
 
     @Test
     fun exposesEveryFirstPartyProtocolWithoutInternalNames() {
-        val routes = RouteCatalog.from(config, awg15 = true, awg31 = true)
+        val routes = RouteCatalog.from(
+            config,
+            listOf(AwgProfile("awg31", "31", "Основной", "RU", "valid-awg31")),
+        )
 
         assertEquals(
             listOf(
@@ -62,7 +65,6 @@ class ProfileRoutesTest {
                 RouteProtocol.TROJAN,
                 RouteProtocol.HYSTERIA2,
                 RouteProtocol.RU_DE,
-                RouteProtocol.AWG15,
                 RouteProtocol.AWG31,
             ),
             routes.map(DeyttRoute::protocol),
@@ -76,7 +78,7 @@ class ProfileRoutesTest {
     }
 
     @Test
-    fun exposesEveryAvailableAmneziaServerSeparately() {
+    fun ignoresUnsupportedAwgVersionsAndExposesEveryAmnezia31Server() {
         val profiles = listOf(
             AwgProfile("awg15:nl", "15", "Амстердам 01", "NL", "valid-awg15"),
             AwgProfile("awg31:de", "31", "Франкфурт 02", "DE", "valid-awg31"),
@@ -85,10 +87,10 @@ class ProfileRoutesTest {
 
         val routes = RouteCatalog.from(config, profiles).filter { it.engine == TunnelEngine.AMNEZIAWG }
 
-        assertEquals(listOf("awg15:nl", "awg31:de", "awg31:unknown"), routes.map(DeyttRoute::id))
-        assertEquals(listOf("Нидерланды", "Германия", "Регион не указан"), routes.map(DeyttRoute::country))
-        assertEquals(listOf("🇳🇱", "🇩🇪", "AWG_MARK"), routes.map(DeyttRoute::flag))
-        assertEquals(listOf("NL", "DE", "AWG_UNKNOWN"), routes.map(DeyttRoute::countryCode))
-        assertEquals(listOf(RouteProtocol.AWG15, RouteProtocol.AWG31, RouteProtocol.AWG31), routes.map(DeyttRoute::protocol))
+        assertEquals(listOf("awg31:de", "awg31:unknown"), routes.map(DeyttRoute::id))
+        assertEquals(listOf("Германия", "Регион не указан"), routes.map(DeyttRoute::country))
+        assertEquals(listOf("🇩🇪", "AWG_MARK"), routes.map(DeyttRoute::flag))
+        assertEquals(listOf("DE", "AWG_UNKNOWN"), routes.map(DeyttRoute::countryCode))
+        assertEquals(listOf(RouteProtocol.AWG31, RouteProtocol.AWG31), routes.map(DeyttRoute::protocol))
     }
 }

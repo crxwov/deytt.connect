@@ -26,6 +26,7 @@
     fi: { code: "fi", city: "хельсинки", country: "финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
     ru: { code: "ru", city: "санкт-петербург", country: "россия", countryId: "643", lat: 59.9311, lon: 30.3609 }
   };
+  const COUNTRY_EXIT_KEYS = { NL: "nl", DE: "de", FI: "fi", RU: "ru" };
   const ROUTES = {
     auto: {
       title: "автоподбор",
@@ -241,13 +242,16 @@
       this.tooltip = root.querySelector("[data-atlas-tooltip]");
       this.options = options || {};
       this.variant = this.options.variant || "home";
-      this.animateTraffic = this.options.animateTraffic !== false;
       this.selectOnTap = this.options.selectOnTap !== false;
       this.root.dataset.atlasVariant = this.variant;
       this.route = "auto";
       this.language = "ru";
-      this.trafficMode = "download";
       this.userLocation = null;
+      this.autoExitCountry = null;
+      this.autoExitRouteKey = null;
+      this.labelPlacements = new Map();
+      this.routeInitialized = false;
+      this.lastFocusSignature = null;
       this.availableLocationKeys = new Set(LOCATION_ORDER);
       this.showcaseFocused = false;
       this.hovered = null;
@@ -266,7 +270,6 @@
       this.width = 0;
       this.height = 0;
       this.radius = 0;
-      this.phase = 0;
       this.lastFrame = 0;
       this.frame = 0;
       this.visible = true;
@@ -280,6 +283,8 @@
       this.renderCount = 0;
       this.staticRenderCount = 0;
       this.cameraMoving = false;
+      this.trafficActive = false;
+      this.trafficStartedAt = 0;
       this.projectedNodes = {};
       this.bind();
     }
@@ -419,11 +424,14 @@
 
     resize() {
       const rectangle = this.canvas.getBoundingClientRect();
+      const previousWidth = this.width;
+      const previousHeight = this.height;
       const pixelRatioCap = rectangle.width < 520 || (navigator.connection && navigator.connection.saveData) ? 1.5 : 2;
       const ratio = Math.min(window.devicePixelRatio || 1, pixelRatioCap);
       this.pixelRatio = ratio;
       this.width = Math.max(1, Math.round(rectangle.width));
       this.height = Math.max(1, Math.round(rectangle.height));
+      if (this.width !== previousWidth || this.height !== previousHeight) this.labelPlacements.clear();
       this.canvas.width = Math.round(this.width * ratio);
       this.canvas.height = Math.round(this.height * ratio);
       this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -621,13 +629,8 @@
       }
       const visible = points.filter((point) => point.z > -.02);
       if (visible.length < 2) return;
-      const upload = this.trafficMode === "upload";
-      const routeColor = this.animateTraffic
-        ? upload ? (colors.upload || "#63dfb3") : (colors.download || colors.route)
-        : colors.route;
-      const routeHotColor = this.animateTraffic
-        ? upload ? (colors.uploadHot || "#b8f6dc") : (colors.downloadHot || colors.routeHot)
-        : colors.routeHot;
+      const routeColor = colors.route;
+      const routeHotColor = colors.routeHot;
       const gradient = context.createLinearGradient(visible[0].x, visible[0].y, visible[visible.length - 1].x, visible[visible.length - 1].y);
       gradient.addColorStop(0, routeColor);
       gradient.addColorStop(.54, routeHotColor);
@@ -644,69 +647,112 @@
       };
       trace(points);
       context.strokeStyle = routeColor;
-      context.lineWidth = emphasized ? (this.animateTraffic ? 10 : 4) : 7;
-      context.globalAlpha = emphasized ? (this.animateTraffic ? .12 : .08) : .08;
+      context.lineWidth = emphasized ? 7 : 5;
+      context.globalAlpha = emphasized ? .12 : .07;
       context.shadowColor = routeHotColor;
-      context.shadowBlur = this.animateTraffic ? 26 : 8;
+      context.shadowBlur = emphasized ? 16 : 7;
       context.stroke();
       trace(points);
       context.strokeStyle = gradient;
-      context.lineWidth = emphasized ? (this.animateTraffic ? 2.25 : 1.5) : 1.65;
-      context.globalAlpha = emphasized ? (this.animateTraffic ? .96 : .86) : .78;
-      context.shadowBlur = this.animateTraffic ? 11 : 5;
+      context.lineWidth = emphasized ? 2.1 : 1.4;
+      context.globalAlpha = emphasized ? .92 : .7;
+      context.shadowBlur = emphasized ? 8 : 4;
       context.stroke();
       context.shadowBlur = 0;
       context.globalAlpha = 1;
-
-      if (this.reducedMotion.matches || !this.animateTraffic) return;
-      const particleCount = emphasized ? 3 : 4;
-      for (let particle = 0; particle < particleCount; particle += 1) {
-        const speed = fromKey === "user" ? .014 : .011;
-        const amount = (this.phase * speed + particle / particleCount) % 1;
-        const reverse = flowDirection === "reverse";
-        const travelAmount = reverse ? 1 - amount : amount;
-        const lift = 1 + Math.sin(travelAmount * Math.PI) * baseLift;
-        const point = this.projectVector(slerp(from, to, travelAmount), lift);
-        if (point.z <= -0.02) continue;
-        context.beginPath();
-        for (let trail = 4; trail >= 0; trail -= 1) {
-          const trailAmount = reverse ? clamp(travelAmount + trail * .016, 0, 1) : clamp(travelAmount - trail * .016, 0, 1);
-          const trailLift = 1 + Math.sin(trailAmount * Math.PI) * baseLift;
-          const trailPoint = this.projectVector(slerp(from, to, trailAmount), trailLift);
-          if (trail === 4) context.moveTo(trailPoint.x, trailPoint.y);
-          else context.lineTo(trailPoint.x, trailPoint.y);
-        }
-        context.strokeStyle = routeHotColor;
-        context.lineWidth = emphasized ? 2.3 : 1.8;
-        context.globalAlpha = .25;
-        context.shadowColor = routeHotColor;
-        context.shadowBlur = 13;
-        context.stroke();
-        context.beginPath();
-        context.arc(point.x, point.y, emphasized ? 2.3 : 1.8, 0, TAU);
-        context.fillStyle = routeHotColor;
-        context.shadowBlur = 12;
-        context.globalAlpha = 1;
-        context.fill();
-        context.shadowBlur = 0;
-      }
-      context.globalAlpha = 1;
     }
 
-    drawRoutes(colors) {
+    drawRoutes(colors, time) {
       const route = ROUTES[this.route];
-      const internalDirection = this.trafficMode === "upload" ? "forward" : "reverse";
-      route.links.forEach((link) => {
+      const activeRoute = this.route === "auto" && this.autoExitRouteKey
+        ? ROUTES[this.autoExitRouteKey]
+        : route;
+      (activeRoute || route).links.forEach((link) => {
         if (link.every((key) => this.availableLocationKeys.has(key))) {
-          this.drawArc(link[0], link[1], colors, true, internalDirection);
+          this.drawArc(link[0], link[1], colors, true);
         }
       });
-      // A direct path is only drawn when the user explicitly approved the
-      // approximate origin marker. Auto-pick has no resolved exit while idle.
-      const firstHop = route.nodes.find((key) => this.availableLocationKeys.has(key));
-      if (this.userLocation && this.route !== "auto" && firstHop) {
-        this.drawArc("user", firstHop, colors, true, internalDirection);
+      const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
+      if (this.userLocation && firstHop) {
+        this.drawArc("user", firstHop, colors, true);
       }
+      if (this.trafficActive) this.drawTraffic(colors, time || performance.now());
+    }
+
+    drawTraffic(colors, time) {
+      const activeRoute = this.route === "auto" && this.autoExitRouteKey
+        ? ROUTES[this.autoExitRouteKey]
+        : ROUTES[this.route];
+      const links = (activeRoute || ROUTES[this.route]).links.filter((link) =>
+        link.every((key) => this.availableLocationKeys.has(key))
+      );
+      const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
+      if (this.userLocation && firstHop) links.unshift(["user", firstHop]);
+
+      if (!links.length) {
+        // Without the location opt-in there is no truthful origin point for a
+        // route line. Pulse the confirmed exit instead of inventing a source.
+        const exit = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
+        if (!exit) return;
+        const point = this.projectLocation(LOCATIONS[exit], 1.018);
+        if (point.z <= .015) return;
+        const phase = this.reducedMotion.matches ? .5 : ((time - this.trafficStartedAt) % 1_800) / 1_800;
+        const context = this.context;
+        context.save();
+        context.globalAlpha = (1 - phase) * .38;
+        context.beginPath();
+        context.arc(point.x, point.y, 7 + phase * 9, 0, TAU);
+        context.strokeStyle = colors.routeHot;
+        context.lineWidth = 1.5;
+        context.shadowColor = colors.routeHot;
+        context.shadowBlur = 8;
+        context.stroke();
+        context.restore();
+        return;
+      }
+
+      const linkDuration = 1800;
+      const routeDuration = linkDuration * links.length;
+      const elapsed = Math.max(0, time - this.trafficStartedAt);
+      const packetCount = this.reducedMotion.matches ? 1 : 2;
+      for (let packet = 0; packet < packetCount; packet += 1) {
+        const routePosition = this.reducedMotion.matches
+          ? links.length * .52
+          : (((elapsed / routeDuration + packet / packetCount) % 1) * links.length);
+        const linkIndex = Math.min(links.length - 1, Math.floor(routePosition));
+        const progress = routePosition - linkIndex;
+        const [fromKey, toKey] = links[linkIndex];
+        const fromLocation = fromKey === "user" ? this.userLocation : LOCATIONS[fromKey];
+        const from = vector(fromLocation.lat, fromLocation.lon);
+        const to = vector(LOCATIONS[toKey].lat, LOCATIONS[toKey].lon);
+        const lift = fromKey === "user" ? .16 : .11;
+        for (let tail = 2; tail >= 0; tail -= 1) {
+          const amount = progress - tail * .055;
+          if (amount < 0 || amount > 1) continue;
+          const point = this.projectVector(slerp(from, to, amount), 1 + Math.sin(amount * Math.PI) * lift);
+          if (point.z <= -.02) continue;
+          const context = this.context;
+          context.save();
+          context.globalAlpha = (tail === 0 ? .95 : .58 - tail * .14) *
+            (this.reducedMotion.matches ? .82 : 1);
+          context.beginPath();
+          context.arc(point.x, point.y, tail === 0 ? 2.8 : 1.8 - tail * .25, 0, TAU);
+          context.fillStyle = tail === 0 ? colors.routeHot : colors.route;
+          context.shadowColor = colors.routeHot;
+          context.shadowBlur = tail === 0 ? 10 : 5;
+          context.fill();
+          context.restore();
+        }
+      }
+    }
+
+    activeRouteNodeKeys() {
+      if (this.route === "auto") {
+        if (this.autoExitRouteKey && ROUTES[this.autoExitRouteKey]) return ROUTES[this.autoExitRouteKey].nodes;
+        const key = COUNTRY_EXIT_KEYS[this.autoExitCountry];
+        return key && this.availableLocationKeys.has(key) ? [key] : [];
+      }
+      return ROUTES[this.route].nodes;
     }
 
     drawNode(key, location, colors, kind) {
@@ -714,7 +760,7 @@
       const projected = this.projectLocation(location, 1.008);
       this.projectedNodes[key] = projected;
       if (projected.z <= 0.015) return;
-      const active = kind === "user" || ROUTES[this.route].nodes.includes(key);
+      const active = kind === "user" || this.activeRouteNodeKeys().includes(key);
       const hovered = this.hovered === key;
       const outer = active || hovered ? (hovered ? 12 : 8) : 0;
       if (outer) {
@@ -745,8 +791,9 @@
       if (!point || point.z <= .03) return;
       if (this.hovered === key) return;
       if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
-      const active = key === "user" || ROUTES[this.route].nodes.includes(key);
-      if (!active && this.hovered !== key) return;
+      const active = key === "user" || this.activeRouteNodeKeys().includes(key);
+      const autoCandidate = this.route === "auto" && ROUTES.auto.nodes.includes(key);
+      if (!active && !autoCandidate && this.hovered !== key) return;
       const context = this.context;
       const location = key === "user" ? this.userLocation : LOCATIONS[key];
       const compact = this.width < 520;
@@ -767,43 +814,52 @@
         { x: -width / 2, y: -height - 30, align: "left" },
         { x: -width / 2, y: height + 30, align: "left" }
       ];
-      let left = 8, top = 8, bestScore = Infinity;
-      for (const candidate of alternatives) {
-        const candidateLeft = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
-        const candidateTop = clamp(point.y + candidate.y - height / 2, 8, this.height - height - 8);
-        const overlap = occupied.reduce((sum, label) => sum +
-          Math.max(0, Math.min(candidateLeft + width + 6, label.left + label.width + 6) - Math.max(candidateLeft - 6, label.left - 6)) *
-          Math.max(0, Math.min(candidateTop + height + 6, label.top + label.height + 6) - Math.max(candidateTop - 6, label.top - 6)), 0);
-        const dx = point.x - clamp(point.x, candidateLeft, candidateLeft + width);
-        const dy = point.y - clamp(point.y, candidateTop, candidateTop + height);
-        const coveringPin = Object.values(this.projectedNodes).some(p => p.z > .03 && p.x > candidateLeft - 5 && p.x < candidateLeft + width + 5 && p.y > candidateTop - 5 && p.y < candidateTop + height + 5);
-        const score = overlap * 100 + dx * dx + dy * dy + (coveringPin ? 100000 : 0);
-        if (score < bestScore) { bestScore = score; left = candidateLeft; top = candidateTop; }
+      let placementIndex = this.labelPlacements.get(key);
+      if (placementIndex == null || placementIndex >= alternatives.length) {
+        let bestScore = Infinity;
+        placementIndex = 0;
+        for (let index = 0; index < alternatives.length; index += 1) {
+          const candidate = alternatives[index];
+          const candidateLeft = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
+          const candidateTop = clamp(point.y + candidate.y - height / 2, 8, this.height - height - 8);
+          const overlap = occupied.reduce((sum, label) => sum +
+            Math.max(0, Math.min(candidateLeft + width + 6, label.left + label.width + 6) - Math.max(candidateLeft - 6, label.left - 6)) *
+            Math.max(0, Math.min(candidateTop + height + 6, label.top + label.height + 6) - Math.max(candidateTop - 6, label.top - 6)), 0);
+          const dx = point.x - clamp(point.x, candidateLeft, candidateLeft + width);
+          const dy = point.y - clamp(point.y, candidateTop, candidateTop + height);
+          const coveringPin = Object.values(this.projectedNodes).some(p => p.z > .03 && p.x > candidateLeft - 5 && p.x < candidateLeft + width + 5 && p.y > candidateTop - 5 && p.y < candidateTop + height + 5);
+          const score = overlap * 100 + dx * dx + dy * dy + (coveringPin ? 100000 : 0);
+          if (score < bestScore) { bestScore = score; placementIndex = index; }
+        }
+        this.labelPlacements.set(key, placementIndex);
       }
+      const placement = alternatives[placementIndex];
+      const left = clamp(point.x + placement.x - (placement.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
+      const top = clamp(point.y + placement.y - height / 2, 8, this.height - height - 8);
       const endX = clamp(point.x, left + 5, left + width - 5);
       const endY = clamp(point.y, top + 5, top + height - 5);
       context.beginPath();
       context.moveTo(point.x, point.y);
       context.lineTo(endX, endY);
-      context.strokeStyle = key === "user" ? colors.node : colors.nodeCore;
+      context.strokeStyle = key === "user" ? colors.node : active ? colors.nodeCore : colors.border;
       context.lineWidth = 1;
-      context.globalAlpha = .7;
+      context.globalAlpha = active ? .7 : .35;
       context.stroke();
       occupied.push({ left: left, top: top, width: width, height: height });
       context.beginPath();
       context.roundRect(left, top, width, height, compact ? 10 : 12);
       context.fillStyle = colors.labelBg;
-      context.globalAlpha = .96;
+      context.globalAlpha = active ? .96 : .68;
       context.shadowColor = "rgba(16,29,65,.22)";
       context.shadowBlur = 18;
       context.fill();
       context.shadowBlur = 0;
       context.strokeStyle = this.hovered === key ? colors.borderHot : colors.border;
-      context.globalAlpha = this.hovered === key ? .9 : .65;
+      context.globalAlpha = active ? (this.hovered === key ? .9 : .65) : .35;
       context.stroke();
       context.textBaseline = "middle";
       context.textAlign = "left";
-      context.fillStyle = colors.label;
+      context.fillStyle = active ? colors.label : colors.labelMuted;
       context.globalAlpha = 1;
       context.font = "700 " + (compact ? 9 : 10) + "px ui-monospace, SFMono-Regular, Menlo, monospace";
       context.fillText(title, left + (compact ? 10 : 12), top + (compact ? 11 : 12));
@@ -854,10 +910,11 @@
       if (!this.visible || document.hidden || !this.width) return;
       const cameraMoving = this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
-      // Traffic particles keep moving while idle, so throttle only the
-      // expensive camera-motion pass. A 24/31 FPS idle cap made the animation
-      // visibly stutter after the user stopped interacting with the globe.
-      const frameInterval = cameraMoving ? (this.width < 520 ? 20 : 16) : 16;
+      // The atlas only animates while the user pans or zooms. Once the camera
+      // settles, static routes and labels stay still and consume no frame loop.
+      const frameInterval = cameraMoving
+        ? (this.width < 520 ? 20 : 16)
+        : this.trafficActive && !this.reducedMotion.matches ? 33 : 16;
       const elapsed = this.lastFrame ? time - this.lastFrame : frameInterval;
       if (elapsed < frameInterval && !this.dragging) {
         this.start();
@@ -865,7 +922,6 @@
       }
       const delta = Math.min(48, elapsed);
       this.lastFrame = time;
-      if (this.animateTraffic && !this.reducedMotion.matches) this.phase += delta * 0.06;
       const previousLon = this.centerLon;
       const previousLat = this.centerLat;
       const previousZoom = this.zoom;
@@ -889,10 +945,10 @@
       const colors = this.colors();
       if (this.staticDirty) this.renderStatic(colors);
       this.context.drawImage(this.staticCanvas, 0, 0, this.width, this.height);
-      this.drawRoutes(colors);
+      this.drawRoutes(colors, time);
       this.drawNodes(colors);
       this.renderCount += 1;
-      if ((this.animateTraffic && !this.reducedMotion.matches) || Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001) this.start();
+      if (Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || (this.trafficActive && !this.reducedMotion.matches)) this.start();
     }
 
     start() {
@@ -946,7 +1002,10 @@
     setRoute(key, announce) {
       if (!ROUTES[key]) return;
       if (this.variant === "showcase" && announce !== false) this.showcaseFocused = true;
+      const routeChanged = !this.routeInitialized || this.route !== key;
       this.route = key;
+      this.routeInitialized = true;
+      if (routeChanged) this.labelPlacements.clear();
       this.staticDirty = true;
       this.root.querySelectorAll("[data-atlas-route]").forEach(function (button) {
         const active = button.dataset.atlasRoute === key;
@@ -955,7 +1014,7 @@
       });
       const route = ROUTES[key];
       this.renderRouteCopy();
-      this.focusRoute();
+      if (routeChanged) this.focusRoute();
       if (announce !== false) this.root.dispatchEvent(new CustomEvent("deytt:route-change", { detail: { key: key, route: route } }));
       this.start();
     }
@@ -989,7 +1048,9 @@
     }
 
     setLanguage(language) {
-      this.language = language === "en" ? "en" : "ru";
+      const nextLanguage = language === "en" ? "en" : "ru";
+      if (this.language !== nextLanguage) this.labelPlacements.clear();
+      this.language = nextLanguage;
       document.documentElement.lang = this.language;
       document.title = this.language === "en" ? "DEYTT network map" : "Карта сети DEYTT";
       const hint = this.root.querySelector(".network-atlas__hint");
@@ -1008,32 +1069,85 @@
 
     setAvailableLocations(keys) {
       const next = new Set((Array.isArray(keys) ? keys : []).map((key) => String(key).toLowerCase()).filter((key) => LOCATION_ORDER.includes(key)));
+      const changed = next.size !== this.availableLocationKeys.size || Array.from(next).some((key) => !this.availableLocationKeys.has(key));
+      if (!changed) return;
       this.availableLocationKeys = next;
+      this.labelPlacements.clear();
       this.focusRoute();
       this.staticDirty = true;
-      this.start();
-    }
-
-    setTrafficMode(mode) {
-      if (mode !== "upload" && mode !== "download") return;
-      if (this.trafficMode === mode) return;
-      this.trafficMode = mode;
       this.start();
     }
 
     setUserLocation(latitude, longitude, details) {
-      this.userLocation = { lat: clamp(Number(latitude), -85, 85), lon: ((Number(longitude) + 540) % 360) - 180, city: details && details.city, country: details && details.country };
-      this.focusRoute();
+      const previousLocation = this.userLocation;
+      const nextLocation = latitude == null || longitude == null ? null : {
+        lat: clamp(Number(latitude), -85, 85),
+        lon: ((Number(longitude) + 540) % 360) - 180,
+        city: details && details.city,
+        country: details && details.country
+      };
+      if (JSON.stringify(this.userLocation) === JSON.stringify(nextLocation)) return;
+      this.userLocation = nextLocation;
+      this.labelPlacements.clear();
+      // The first origin fix (or an explicit removal) may change the useful
+      // framing. Later IP-location refreshes update the endpoint in place so
+      // a small geolocation correction cannot make the whole atlas jump.
+      if (previousLocation == null || nextLocation == null) this.focusRoute();
       this.staticDirty = true;
       this.start();
     }
 
+    setAutoExitCountry(countryCode) {
+      const nextCountry = String(countryCode || "").toUpperCase();
+      const nextKey = COUNTRY_EXIT_KEYS[nextCountry] && this.availableLocationKeys.has(COUNTRY_EXIT_KEYS[nextCountry])
+        ? nextCountry
+        : null;
+      if (this.autoExitCountry === nextKey) return;
+      this.autoExitCountry = nextKey;
+      this.staticDirty = true;
+      this.start();
+    }
+
+    setActiveAutoRoute(routeKey) {
+      const allowed = ["nl", "de", "fi", "ru", "ru-de"];
+      const requestedKey = String(routeKey || "").toLowerCase();
+      const nextRouteKey = allowed.includes(requestedKey)
+        ? requestedKey
+        : null;
+      if (this.autoExitRouteKey === nextRouteKey) return;
+      this.autoExitRouteKey = nextRouteKey;
+      // Egress metadata changes the active endpoint, never the user's camera
+      // or the stable label layout. This avoids refocusing the whole map when
+      // an IP lookup reports a corrected exit region.
+      this.staticDirty = true;
+      this.start();
+    }
+
+    setTrafficActive(active) {
+      const next = Boolean(active);
+      if (this.trafficActive === next) return;
+      this.trafficActive = next;
+      this.trafficStartedAt = next ? performance.now() : 0;
+      this.start();
+    }
+
     focusRoute() {
-      const routeNodes = (this.variant === "observatory" ? LOCATION_ORDER : ROUTES[this.route].nodes)
+      const focusNodes = this.variant === "observatory"
+        ? LOCATION_ORDER
+        : this.route === "auto" && this.activeRouteNodeKeys().length
+          ? this.activeRouteNodeKeys()
+          : ROUTES[this.route].nodes;
+      const routeNodes = focusNodes
         .filter((key) => this.availableLocationKeys.has(key));
       const locations = routeNodes.map((key) => LOCATIONS[key]);
       if (this.userLocation) locations.push(this.userLocation);
       if (!locations.length) return;
+      const originKey = this.userLocation
+        ? Math.round(this.userLocation.lat * 5) / 5 + ":" + Math.round(this.userLocation.lon * 5) / 5
+        : "none";
+      const focusSignature = this.variant + "|" + routeNodes.join(",") + "|" + originKey;
+      if (focusSignature === this.lastFocusSignature) return;
+      this.lastFocusSignature = focusSignature;
       const vectors = locations.map((location) => vector(location.lat, location.lon));
       const center = normalize(vectors.reduce(function (total, point) {
         return { x: total.x + point.x, y: total.y + point.y, z: total.z + point.z };

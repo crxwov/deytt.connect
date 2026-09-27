@@ -22,11 +22,12 @@ class AwgProfileStore(context: Context) {
 
     fun profiles(): List<AwgProfile> {
         if (indexFile.isFile) {
-            return runCatching {
+            val stored = runCatching {
                 val source = JSONArray(indexFile.readText(Charsets.UTF_8))
                 buildList {
                     for (index in 0 until source.length()) {
                         val item = source.getJSONObject(index)
+                        if (item.optString("version") != "31") continue
                         val file = File(directory, item.getString("file"))
                         if (file.isFile) add(
                             AwgProfile(
@@ -40,31 +41,33 @@ class AwgProfileStore(context: Context) {
                     }
                 }
             }.getOrDefault(emptyList())
+            if (stored.size < runCatching { JSONArray(indexFile.readText(Charsets.UTF_8)).length() }.getOrDefault(stored.size)) {
+                // Migrate old local indexes and remove unsupported profile files.
+                save(stored)
+            }
+            return stored
         }
+        File(directory, "awg15.conf").delete()
         return listOfNotNull(
-            readFile("awg15.conf")?.let { AwgProfile("awg15", "15", "Основной", "AWG", it) },
             readFile("awg31.conf")?.let { AwgProfile("awg31", "31", "Основной", "AWG", it) },
         )
     }
 
-    fun read15(): String? = profiles().firstOrNull { it.version == "15" }?.config
     fun read31(): String? = profiles().firstOrNull { it.version == "31" }?.config
     fun read(id: String): String? = profiles().firstOrNull { it.id == id }?.config
 
-    fun save(config15: String?, config31: String?) = save(
-        listOfNotNull(
-            config15?.let { AwgProfile("awg15", "15", "Основной", "AWG", it) },
-            config31?.let { AwgProfile("awg31", "31", "Основной", "AWG", it) },
-        ),
+    fun save(config31: String?) = save(
+        listOfNotNull(config31?.let { AwgProfile("awg31", "31", "Основной", "AWG", it) }),
     )
 
     fun save(profiles: List<AwgProfile>) {
-        profiles.forEach { validate(it.config) }
+        val supportedProfiles = profiles.filter { it.version == "31" }
+        supportedProfiles.forEach { validate(it.config) }
         directory.mkdirs()
         val generation = java.lang.Long.toUnsignedString(System.nanoTime(), 36)
         val activeFiles = mutableSetOf<String>()
         val index = JSONArray()
-        profiles.forEachIndexed { position, profile ->
+        supportedProfiles.forEachIndexed { position, profile ->
             val safeId = profile.id.replace(Regex("[^a-zA-Z0-9._-]"), "_")
             val name = "awg-$generation-${profile.version}-$safeId-$position.conf"
             writeAtomic(name, profile.config)

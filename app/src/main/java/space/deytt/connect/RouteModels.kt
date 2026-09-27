@@ -12,7 +12,6 @@ enum class RouteProtocol(val title: String, val detail: String) {
     VLESS("VLESS", "WebSocket + TLS"),
     TROJAN("Trojan", "WebSocket + TLS"),
     HYSTERIA2("Hysteria 2", "Быстрый QUIC-маршрут"),
-    AWG15("AmneziaWG 1.5", "Основной защищённый туннель"),
     AWG31("AmneziaWG 3.1", "Новая маскировка трафика"),
 }
 
@@ -85,14 +84,6 @@ object RouteCatalog {
         return awgCountries[mark]?.let { mark to it }
     }
 
-    fun from(config: String, awg15: Boolean, awg31: Boolean): List<DeyttRoute> {
-        val legacyProfiles = listOfNotNull(
-            if (awg15) AwgProfile("awg15", "15", "Основной", "AWG", "") else null,
-            if (awg31) AwgProfile("awg31", "31", "Основной", "AWG", "") else null,
-        )
-        return from(config, legacyProfiles)
-    }
-
     fun from(config: String, awgProfiles: List<AwgProfile>): List<DeyttRoute> {
         val automaticTag = autoTag(config)
         require(automaticTag.isNotBlank()) { "В подписке отсутствует автоподбор" }
@@ -116,15 +107,14 @@ object RouteCatalog {
                 routes += DeyttRoute(tag, parts[1], presentation.second, presentation.first, protocol, TunnelEngine.LIBBOX, tag)
             }
         }
-        awgProfiles.forEach { profile ->
-            val protocol = if (profile.version == "31") RouteProtocol.AWG31 else RouteProtocol.AWG15
+        awgProfiles.filter { it.version == "31" }.forEach { profile ->
             val country = awgCountry(profile)
             routes += DeyttRoute(
                 profile.id,
                 country?.first ?: "AWG_UNKNOWN",
                 country?.second?.second ?: "Регион не указан",
                 country?.second?.first ?: "AWG_MARK",
-                protocol,
+                RouteProtocol.AWG31,
                 TunnelEngine.AMNEZIAWG,
                 profileName = profile.label,
             )

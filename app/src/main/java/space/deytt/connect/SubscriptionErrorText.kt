@@ -6,6 +6,22 @@ object SubscriptionErrorText {
         val raw = errorChainMessage(error)
         val httpFailure = errorChain(error).filterIsInstance<SubscriptionHttpFailure>().firstOrNull()
         return when {
+            httpFailure?.statusCode == 401 && httpFailure.code == "session_expired" ->
+                "Сессия Telegram истекла. Войдите через Telegram снова, чтобы обновить подписку."
+            httpFailure?.code == "subscription_inactive" ->
+                "Подписка неактивна. Проверьте срок действия и тариф в Telegram."
+            httpFailure?.code == "session_owner_mismatch" ->
+                "Подписка принадлежит другому аккаунту. Войдите в нужный аккаунт Telegram."
+            httpFailure?.code == "device_identity_required" ->
+                "Не удалось определить устройство. Перезапустите приложение и повторите попытку."
+
+            httpFailure?.statusCode == 409 && httpFailure.code == "app_device_limit_reached" ->
+                "Место для deytt.connect уже занято другим устройством. Обратитесь в поддержку, чтобы перенести приложение."
+            httpFailure?.statusCode == 409 ->
+                "Достигнут лимит устройств. Войдите через Telegram для отдельного места deytt.connect или обратитесь в поддержку."
+            httpFailure?.statusCode == 403 && httpFailure.code in setOf("blocked", "device_blocked", "user_blocked") ->
+                "Доступ к подписке или этому устройству заблокирован. Обратитесь в поддержку."
+
             raw.contains("unexpected end of stream", ignoreCase = true) ||
                 raw.contains("connection reset", ignoreCase = true) ->
                 "Сервер оборвал соединение. Проверьте ссылку и повторите обновление."
