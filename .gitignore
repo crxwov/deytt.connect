@@ -12,3 +12,6 @@ captures/
 *.keystore
 *.jks
 ROADMAP*.md
+
+.kotlin/
+output/

@@ -21,7 +21,7 @@
 
 ## Подключение
 
-**Версия 0.8.10 · Android 7.0+ · ARM64 (`arm64-v8a`)**
+**Версия 0.8.11 · Android 7.0+ · ARM64 (`arm64-v8a`)**
 
 1. Скачайте [APK для ARM64](https://github.com/crxwov/deytt.connect/releases/latest/download/app-arm64-v8a-debug.apk) и откройте файл. Если Android запросит разрешение, разрешите установку для браузера или файлового менеджера.
 2. Войдите через Telegram: укажите username, запросите одноразовый код и подтвердите вход. Если код не приходит, откройте [бота DEYTTT](https://t.me/deyttbot) и запросите его ещё раз.
@@ -42,17 +42,17 @@
 
 ## Релизы и проверка файла
 
-В [последнем релизе](https://github.com/crxwov/deytt.connect/releases/latest) находятся changelog и актуальный APK. Для версии **0.8.10** опубликован SHA-256 файла `app-arm64-v8a-debug.apk`:
+В [последнем релизе](https://github.com/crxwov/deytt.connect/releases/latest) находятся changelog и актуальный APK. Для версии **0.8.11** опубликован SHA-256 файла `app-arm64-v8a-debug.apk`:
 
 ```text
-3638468d9ba7ad5ac0acdb934e03840ab87f5657b5dad5435c8cd30c7ccc74f3
+4ed7e167a1a82c14da904b8601a926df88008b79cebaa4e7dee15544b75042dc
 ```
 
 Сверьте контрольную сумму, если вручную проверяете скачанный файл.
 
 ## Поддержка и сообщения об ошибках
 
-По вопросам входа, подписки и подключения напишите в [бот DEYTTT](https://t.me/deyttbot). Ошибку приложения можно описать в [GitHub Issue](https://github.com/crxwov/deytt.connect/issues): укажите версию приложения и Android, модель устройства и шаги воспроизведения.
+По вопросам входа, подписки и подключения напишите в [бот DEYTTT](https://t.me/deyttbot). При ошибке загрузки подписки укажите код, показанный на экране: он не содержит ссылку подписки или данные аккаунта. Ошибку приложения можно описать в [GitHub Issue](https://github.com/crxwov/deytt.connect/issues): укажите версию приложения и Android, модель устройства и шаги воспроизведения.
 
 Issues публичные. Не прикладывайте username, коды входа, ссылки подписки, VPN-ключи, конфигурации, IP-адреса или снимки экрана с данными аккаунта.
 
@@ -76,6 +76,8 @@ git submodule update --init --recursive
 ```
 
 ARM64 APK появится в `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
+
+Проверки загрузки и изолированный тест на устройстве описаны в [subscription-reliability.md](docs/subscription-reliability.md).
 
 ## Лицензии
 

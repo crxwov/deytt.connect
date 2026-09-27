@@ -22,16 +22,26 @@ data class ImportedSubscription(
 object SubscriptionClient {
     private const val MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024
 
-    fun import(context: android.content.Context, rawUrl: String): ImportedSubscription {
+    fun import(
+        context: android.content.Context, rawUrl: String, onStage: (String) -> Unit = {},
+    ): ImportedSubscription {
         val headers = SubscriptionRequestIdentity.headers(context)
+        val coreBudget = SubscriptionRequestBudget(60_000)
+        var optionalBudget: SubscriptionRequestBudget? = null
         try {
             return import(context, rawUrl, SubscriptionHttpTransport { url, accept ->
-                requestUrlConnection(url, accept, headers)
+                val budget = if (accept == "application/json") coreBudget else {
+                    optionalBudget ?: SubscriptionRequestBudget(20_000).also { optionalBudget = it }
+                }
+                requestUrlConnection(url, accept, headers, budget)
+            }, onStage, onBeforeCommit = {
+                if (TelegramSessionStore.read(context) != headers["X-TG-App-Token"]) {
+                    throw SubscriptionCancelledException()
+                }
             })
         } catch (error: SubscriptionHttpFailure) {
-            if (error.statusCode == 401 && error.code == "session_expired" &&
-                TelegramSessionStore.read(context) == headers["X-TG-App-Token"]) {
-                TelegramSessionStore.clear(context)
+            if (error.statusCode == 401 && error.code == "session_expired") {
+                TelegramSessionStore.clearIfMatches(context, headers["X-TG-App-Token"])
             }
             throw error
         }
@@ -41,19 +51,23 @@ object SubscriptionClient {
         context: android.content.Context,
         rawUrl: String,
         transport: SubscriptionHttpTransport,
+        onStage: (String) -> Unit = {},
+        onBeforeCommit: () -> Unit = {},
     ): ImportedSubscription {
         val baseUrl = normalizeBaseUrl(rawUrl)
         val url = withFormat(baseUrl, "singbox")
+        onStage("download")
         val response = request(url, "application/json", required = true, transport = transport)!!
         val content = response.body
-        val summary = ProfileValidator.validate(content)
+        onStage("validate")
+        val summary = validateDownloadedProfile(content)
         val metadata = SubscriptionMetadata.parse(response.profileTitle, response.userInfo)
         val awgStore = AwgProfileStore(context)
-        val previousAwgProfiles = awgStore.profiles()
+        onStage("awg")
         val awgResults = listOf(fetchAwgProfiles(baseUrl, "amneziawg31", "31", transport))
         // An optional AWG endpoint must not make a valid core subscription unusable.
         // Keep a last-known-good family when its gateway is temporarily failing.
-        val awgProfiles = awgResults.flatMap { result ->
+        fun mergedProfiles(previousAwgProfiles: List<AwgProfile>) = awgResults.flatMap { result ->
             val previousFamily = previousAwgProfiles.filter { it.version == result.version }
             when (result.state) {
                 AwgFetchState.NOT_AVAILABLE,
@@ -71,16 +85,54 @@ object SubscriptionClient {
             // sing-box import fail; simply omit that optional profile.
             runCatching { AwgProfileStore.validate(profile.config) }.isSuccess
         }
-        SubscriptionStore(context).saveValidated(content)
-        SubscriptionMetadataStore(context).save(metadata)
-        awgStore.save(awgProfiles)
+        checkCancellation()
+        onStage("save")
+        val warnings = awgResults.mapNotNull { it.warning }.toMutableList()
+        val awgProfiles = synchronized(AtomicSubscriptionFile.lock) {
+            checkCancellation()
+            onBeforeCommit()
+            val settings = context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
+            val previousUrl = settings.getString("subscription_url", null)
+            // Read ownership and last-good files under the commit lock: another
+            // completed import must not be replaced by an older fallback snapshot.
+            val sameSubscription = previousUrl != null && runCatching {
+                normalizeBaseUrl(previousUrl) == baseUrl
+            }.getOrDefault(false)
+            val profiles = mergedProfiles(if (sameSubscription) awgStore.profiles() else emptyList())
+            // Invalidate ownership before the multi-file commit. After a process/disk
+            // failure no old account's AWG config may be reused for a new source.
+            if (!settings.edit().remove("subscription_url").commit()) throw SubscriptionStorageException()
+            try {
+                SubscriptionStore(context).commitValidated(content, awgStore, profiles)
+            } catch (error: IOException) {
+                throw SubscriptionStorageException()
+            }
+            if (runCatching { SubscriptionMetadataStore(context).save(metadata) }.isFailure) {
+                warnings += "Маршруты сохранены, но сведения о тарифе не обновились. Повторите обновление позже."
+            }
+            val edit = settings.edit().putString("subscription_url", baseUrl)
+            if (warnings.isEmpty()) edit.remove("subscription_warning")
+            else edit.putString("subscription_warning", warnings.joinToString("\n"))
+            if (!edit.commit()) throw SubscriptionStorageException()
+            profiles
+        }
         return ImportedSubscription(
             baseUrl,
             summary,
             metadata,
             awgProfiles.any { it.version == "31" },
-            warnings = awgResults.mapNotNull { it.warning },
+            warnings = warnings,
         )
+    }
+
+    internal fun validateDownloadedProfile(content: String): ProfileSummary = try {
+        ProfileValidator.validate(content).also {
+            // The UI requires an automatic route. Check that contract before
+            // replacing the last-good file, not in the success screen afterward.
+            RouteCatalog.from(content, emptyList())
+        }
+    } catch (error: Exception) {
+        throw SubscriptionPayloadException()
     }
 
     internal data class SubscriptionResponse(
@@ -106,6 +158,7 @@ object SubscriptionClient {
         val profileTitle: String? = null,
         val userInfo: String? = null,
         val awgServers: String? = null,
+        val retryAfterMillis: Long? = null,
     )
 
     internal fun interface SubscriptionHttpTransport {
@@ -137,12 +190,22 @@ object SubscriptionClient {
     ): SubscriptionResponse? {
         var lastError: IOException? = null
         repeat(SubscriptionRetryPolicy.MAX_ATTEMPTS) { attempt ->
+            checkCancellation()
             try {
                 return requestOnce(url, accept, required, transport)
             } catch (error: IOException) {
                 lastError = error
                 if (attempt < SubscriptionRetryPolicy.MAX_ATTEMPTS - 1 && SubscriptionRetryPolicy.shouldRetry(error)) {
-                    Thread.sleep(SubscriptionRetryPolicy.delayMillis(attempt))
+                    val serverDelay = (error as? SubscriptionHttpFailure)?.retryAfterMillis
+                    // Long rate limits should return control to the user, never
+                    // hammer the server or occupy a worker for minutes.
+                    if (serverDelay != null && serverDelay > 5_000) throw error
+                    try {
+                        Thread.sleep(maxOf(SubscriptionRetryPolicy.delayMillis(attempt), serverDelay ?: 0))
+                    } catch (interrupted: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw SubscriptionCancelledException()
+                    }
                 } else {
                     throw error
                 }
@@ -174,8 +237,9 @@ object SubscriptionClient {
                 else -> "Сервер подписки ответил HTTP $responseCode"
             }
             val code = runCatching { JSONObject(response.body).let { it.optString("error").ifBlank { it.optString("detail") } } }.getOrDefault("")
-            throw SubscriptionHttpFailure(responseCode, detail, code)
+            throw SubscriptionHttpFailure(responseCode, detail, code, response.retryAfterMillis)
         }
+        if (responseCode != 200) throw SubscriptionPayloadException()
         return SubscriptionResponse(
             body = response.body,
             profileTitle = response.profileTitle,
@@ -184,11 +248,15 @@ object SubscriptionClient {
         )
     }
 
-    private fun requestUrlConnection(url: String, accept: String, headers: Map<String, String>): SubscriptionHttpResponse {
+    private fun requestUrlConnection(
+        url: String, accept: String, headers: Map<String, String>, budget: SubscriptionRequestBudget,
+    ): SubscriptionHttpResponse {
+        budget.check()
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            connectTimeout = 15_000
-            readTimeout = 20_000
+            connectTimeout = minOf(10_000, budget.remainingMillis())
+            readTimeout = minOf(12_000, budget.remainingMillis())
+            useCaches = false
             // A subscription URL is a bearer token. Do not let the HTTP stack
             // silently forward it to an untrusted host.
             instanceFollowRedirects = false
@@ -199,21 +267,27 @@ object SubscriptionClient {
             setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
         }
 
-        try {
+        return budget.withConnection(connection) {
             val responseCode = connection.responseCode
-            return SubscriptionHttpResponse(
+            SubscriptionHttpResponse(
                 statusCode = responseCode,
                 body = if (responseCode in 200..299) {
-                    connection.inputStream.use(::readLimitedUtf8)
+                    connection.inputStream.use { readLimitedUtf8(it, budget) }
                 } else {
-                    connection.errorStream?.use(::readLimitedUtf8).orEmpty()
+                    // Status must remain authoritative if a proxy sends a broken
+                    // error body; never turn an access denial into a retryable EOF.
+                    try {
+                        connection.errorStream?.use { readLimitedUtf8(it, budget) }.orEmpty()
+                    } catch (error: IOException) {
+                        budget.check()
+                        ""
+                    }
                 },
                 profileTitle = connection.getHeaderField("Profile-Title"),
                 userInfo = connection.getHeaderField("Subscription-Userinfo"),
                 awgServers = connection.getHeaderField("X-Deytt-Awg-Servers"),
+                retryAfterMillis = parseRetryAfter(connection.getHeaderField("Retry-After")),
             )
-        } finally {
-            connection.disconnect()
         }
     }
 
@@ -225,6 +299,7 @@ object SubscriptionClient {
             "Для защиты токена нужна HTTPS-ссылка на подписку"
         }
         require(!uri.host.isNullOrBlank()) { "Укажите полную HTTPS-ссылку на подписку" }
+        require(uri.port == -1 || uri.port == 443) { "Ссылка на подписку имеет недопустимый порт" }
         require(uri.userInfo == null) { "Ссылка на подписку имеет недопустимый формат" }
         require(SubscriptionHostPolicy.isAllowed(uri.host)) {
             "Ссылка должна вести на официальный домен deytt.space"
@@ -282,7 +357,16 @@ object SubscriptionClient {
                 transport = transport,
             )
                 ?: return AwgFetchResult(version, emptyList(), AwgFetchState.NOT_AVAILABLE)
-            val servers = runCatching { JSONArray(first.awgServers ?: "[]") }.getOrNull()
+            val servers = try { JSONArray(first.awgServers ?: "[]") } catch (error: Exception) {
+                throw SubscriptionPayloadException()
+            }
+            if (servers != null && servers.length() > 16) throw SubscriptionPayloadException()
+            val advertisedIds = mutableSetOf<String>()
+            if (servers != null) for (index in 0 until servers.length()) {
+                val item = servers.optJSONObject(index) ?: throw SubscriptionPayloadException()
+                val id = item.optString("id").trim()
+                if (id.isEmpty() || id.length > 128 || !advertisedIds.add(id)) throw SubscriptionPayloadException()
+            }
             val failedIds = mutableSetOf<String>()
             var failedRequestsAreTransient = true
             val profiles = if (servers == null || servers.length() == 0) {
@@ -334,7 +418,7 @@ object SubscriptionClient {
                                 add(profile)
                             }
                         } catch (error: Exception) {
-                            if (isAccessFailure(error)) throw error
+                            if (isAccessFailure(error) || error is SubscriptionCancelledException) throw error
                             failedIds += id
                             if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) != true) {
                                 failedRequestsAreTransient = false
@@ -366,7 +450,7 @@ object SubscriptionClient {
                 AwgFetchResult(version, profiles, AwgFetchState.AVAILABLE)
             }
         } catch (error: Exception) {
-            if (isAccessFailure(error)) throw error
+            if (isAccessFailure(error) || error is SubscriptionCancelledException) throw error
             AwgFetchResult(
                 version = version,
                 profiles = emptyList(),
@@ -406,16 +490,32 @@ object SubscriptionClient {
         }
     }
 
-    private fun readLimitedUtf8(stream: InputStream): String {
+    internal fun parseRetryAfter(value: String?, nowMillis: Long = System.currentTimeMillis()): Long? {
+        val raw = value?.trim()?.takeIf { it.length <= 64 } ?: return null
+        raw.toLongOrNull()?.let { return it.coerceIn(0, 86_400) * 1_000 }
+        return runCatching {
+            java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", java.util.Locale.US).apply {
+                isLenient = false
+                timeZone = java.util.TimeZone.getTimeZone("GMT")
+            }.parse(raw)?.time?.minus(nowMillis)?.coerceIn(0, 86_400_000)
+        }.getOrNull()
+    }
+
+    private fun checkCancellation() {
+        if (Thread.currentThread().isInterrupted) throw SubscriptionCancelledException()
+    }
+
+    private fun readLimitedUtf8(stream: InputStream, budget: SubscriptionRequestBudget): String {
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
         var total = 0
         while (true) {
+            budget.check()
             val count = stream.read(buffer)
             if (count < 0) break
             total += count
             if (total > MAX_SUBSCRIPTION_BYTES) {
-                throw IOException("Подписка слишком большая")
+                throw SubscriptionPayloadException()
             }
             output.write(buffer, 0, count)
         }

@@ -11,6 +11,7 @@ data class ProfileSummary(
 
 object ProfileValidator {
     private val networkProtocols = setOf("hysteria2", "vless", "trojan", "wireguard", "shadowsocks")
+    private val nonNetworkTypes = setOf("urltest", "selector", "direct", "block", "dns")
     private val legacyTunFields = setOf(
         "inet4_address",
         "inet6_address",
@@ -45,18 +46,25 @@ object ProfileValidator {
         val outbounds = root.optJSONArray("outbounds")
             ?: throw IllegalArgumentException("В подписке отсутствует outbounds")
         val protocols = mutableSetOf<String>()
+        val tags = mutableSetOf<String>()
         var hasNetworkOutbound = false
-        for (index in 0 until outbounds.length()) {
-            val outbound = outbounds.optJSONObject(index) ?: continue
-            val type = outbound.optString("type").lowercase()
-            if (type in networkProtocols) {
-                protocols += type
-                hasNetworkOutbound = true
-            }
-            if (type == "urltest" || type == "selector") {
-                hasNetworkOutbound = true
+        fun inspect(items: JSONArray) {
+            for (index in 0 until items.length()) {
+                val outbound = items.optJSONObject(index)
+                    ?: throw IllegalArgumentException("В подписке некорректный сетевой выход")
+                val tag = outbound.opt("tag") as? String
+                require(!tag.isNullOrBlank() && tags.add(tag)) {
+                    "В подписке отсутствует или повторяется имя сетевого выхода"
+                }
+                val type = outbound.optString("type").lowercase()
+                if (type in networkProtocols) protocols += type
+                // Keep compatibility with future engine protocols. A group,
+                // direct or blocked route alone cannot provide a VPN connection.
+                if (type.isNotBlank() && type !in nonNetworkTypes) hasNetworkOutbound = true
             }
         }
+        inspect(outbounds)
+        root.optJSONArray("endpoints")?.let(::inspect)
         if (!hasNetworkOutbound) {
             throw IllegalArgumentException("В подписке нет рабочего сетевого выхода")
         }
@@ -94,8 +102,9 @@ object ProfileValidator {
 
         val route = root.optJSONObject("route")
             ?: throw IllegalArgumentException("В подписке отсутствует route")
-        if (route.optString("final").isBlank()) {
-            throw IllegalArgumentException("В подписке не задан маршрут по умолчанию")
+        val finalTag = route.opt("final") as? String
+        if (finalTag.isNullOrBlank() || finalTag !in tags) {
+            throw IllegalArgumentException("В подписке не задан существующий маршрут по умолчанию")
         }
 
         val routeRules = route.optJSONArray("rules")

@@ -4,6 +4,7 @@ package space.deytt.connect
 object SubscriptionErrorText {
     fun userMessage(error: Throwable): String {
         val raw = errorChainMessage(error)
+        val diagnostic = SubscriptionRetryPolicy.diagnosticCode(error)
         val httpFailure = errorChain(error).filterIsInstance<SubscriptionHttpFailure>().firstOrNull()
         return when {
             httpFailure?.statusCode == 401 && httpFailure.code == "session_expired" ->
@@ -22,12 +23,24 @@ object SubscriptionErrorText {
             httpFailure?.statusCode == 403 && httpFailure.code in setOf("blocked", "device_blocked", "user_blocked") ->
                 "Доступ к подписке или этому устройству заблокирован. Обратитесь в поддержку."
 
-            raw.contains("unexpected end of stream", ignoreCase = true) ||
+            diagnostic == "cancelled" -> "Загрузка отменена. Повторите обновление, когда будете готовы."
+            diagnostic == "dns" -> "Не удалось найти сервер подписки. Проверьте интернет и DNS или попробуйте другую сеть."
+            diagnostic == "connect" -> "Не удалось подключиться к серверу подписки. Проверьте интернет или попробуйте другую сеть."
+            diagnostic in setOf("tls", "tls_trust") ->
+                "Не удалось установить защищённое соединение. Проверьте дату и время телефона или попробуйте другую сеть."
+            diagnostic == "storage" -> "Не удалось сохранить подписку. Проверьте свободное место на телефоне и повторите обновление."
+            diagnostic == "invalid_response" ->
+                "Сервер вернул некорректную подписку. Повторите обновление позже или обратитесь в поддержку."
+            httpFailure?.statusCode == 429 ->
+                "Слишком много запросов. Подождите немного и повторите обновление."
+            httpFailure?.statusCode in 300..399 ->
+                "Сервер перенаправляет запрос. Получите актуальную ссылку через Telegram."
+            diagnostic == "connection_interrupted" || raw.contains("unexpected end of stream", ignoreCase = true) ||
                 raw.contains("connection reset", ignoreCase = true) ->
                 "Сервер оборвал соединение. Проверьте ссылку и повторите обновление."
-            raw.contains("timeout", ignoreCase = true) || raw.contains("timed out", ignoreCase = true) ->
+            diagnostic == "deadline" || raw.contains("timeout", ignoreCase = true) || raw.contains("timed out", ignoreCase = true) ->
                 "Сервер не ответил вовремя. Повторите обновление через несколько секунд."
-            httpFailure?.statusCode?.let { it in 502..504 } == true ->
+            httpFailure?.statusCode?.let { it == 408 || it == 500 || it in 502..504 } == true ->
                 "Сервер подписки временно недоступен. Повторите обновление через несколько секунд."
             httpFailure?.statusCode == 401 || httpFailure?.statusCode == 403 ->
                 "Ссылка на подписку недействительна или срок её действия истёк."

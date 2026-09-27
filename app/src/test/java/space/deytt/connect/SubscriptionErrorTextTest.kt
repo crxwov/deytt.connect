@@ -7,6 +7,24 @@ import org.junit.Test
 
 class SubscriptionErrorTextTest {
     @Test
+    fun typedErrorsHaveDistinctActionableSafeMessages() {
+        val failures = listOf(
+            java.net.UnknownHostException("secret") to "DNS",
+            java.net.ConnectException("secret") to "другую сеть",
+            javax.net.ssl.SSLHandshakeException("secret") to "дату и время",
+            SubscriptionPayloadException() to "некорректную подписку",
+            SubscriptionStorageException() to "свободное место",
+            SubscriptionCancelledException() to "отменена",
+            SubscriptionDeadlineException() to "не ответил вовремя",
+        )
+        failures.forEach { (error, hint) ->
+            val message = SubscriptionErrorText.userMessage(error)
+            org.junit.Assert.assertTrue(message, message.contains(hint))
+            assertFalse(message.contains("secret"))
+        }
+    }
+
+    @Test
     fun hidesOkHttpStreamInternals() {
         assertEquals(
             "Сервер оборвал соединение. Проверьте ссылку и повторите обновление.",

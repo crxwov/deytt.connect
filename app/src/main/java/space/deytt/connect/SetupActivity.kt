@@ -33,12 +33,18 @@ class SetupActivity : Activity() {
     private val executor = Executors.newSingleThreadExecutor()
     private lateinit var state: TextView
     private lateinit var accountAction: TextView
+    private var loading = false
+    private var pendingImportUrl: String? = null
+    private var lastFailureMessage: String? = null
+    private var pairingDialog: Dialog? = null
+    @Volatile private var loadingStage = "account"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val updating = SubscriptionStore(this).readCurrent() != null
         val sessionToken = TelegramSessionStore.read(this)
         val incomingUrl = intent.getStringExtra(EXTRA_SUBSCRIPTION_URL)
+        pendingImportUrl = savedInstanceState?.getString("pending_import_url") ?: incomingUrl
         val root = screen()
         root.addView(header(uiCopy("аккаунт · подписка · устройства"), uiCopy(if (updating) "Обновить подписку" else "Подключить подписку"), updating))
         root.addView(spacer(8, this))
@@ -48,7 +54,11 @@ class SetupActivity : Activity() {
         ))
         root.addView(spacer(14, this))
         accountAction = button(uiCopy(if (sessionToken == null) "Подключить аккаунт Telegram" else "Обновить подписку"), secondary = true).apply {
-            setOnClickListener { loadAccountSubscription() }
+            setOnClickListener {
+                val pending = pendingImportUrl
+                if (pending != null && TelegramSessionStore.read(this@SetupActivity) != null) importProfile(pending)
+                else loadAccountSubscription()
+            }
         }
         state = note("", DeyttUi.MUTED).apply {
             visibility = View.GONE
@@ -56,15 +66,27 @@ class SetupActivity : Activity() {
         }
         root.addView(state)
         present(root, accountAction)
-        if (!incomingUrl.isNullOrBlank()) importProfile(incomingUrl)
+        savedInstanceState?.getString("failure_message")?.let {
+            lastFailureMessage = it
+            state.text = it
+            state.setTextColor(DeyttUi.CORAL)
+            state.visibility = View.VISIBLE
+        }
+        if (savedInstanceState?.getBoolean("resume_download") == true) {
+            pendingImportUrl?.let(::importProfile) ?: loadAccountSubscription()
+        } else if (savedInstanceState == null && !incomingUrl.isNullOrBlank()) importProfile(incomingUrl)
     }
 
     private fun loadAccountSubscription() {
+        if (loading || isFinishing || isDestroyed) return
         val token = TelegramSessionStore.read(this)
         if (token == null) {
             showTelegramPairing()
             return
         }
+        loading = true
+        lastFailureMessage = null
+        loadingStage = "account"
         state.visibility = View.VISIBLE
         state.setTextColor(DeyttUi.BLUE)
         state.text = uiCopy("Проверяем подписку в Telegram…")
@@ -75,6 +97,11 @@ class SetupActivity : Activity() {
             val subscription = runCatching { TelegramPairingClient.subscriptionUrl(token) }
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
+                loading = false
+                if (TelegramSessionStore.read(this) != token) {
+                    loadAccountSubscription()
+                    return@runOnUiThread
+                }
                 subscription.onSuccess { url ->
                     if (url.isNullOrBlank()) {
                         state.setTextColor(DeyttUi.AMBER)
@@ -86,36 +113,53 @@ class SetupActivity : Activity() {
                         importProfile(url)
                     }
                 }.onFailure { error ->
-                    val expired = error is TelegramPairingException && error.code == "session_expired"
-                    if (expired && TelegramSessionStore.read(this) == token) TelegramSessionStore.clear(this)
-                    state.setTextColor(DeyttUi.CORAL)
-                    state.text = uiCopy(if (expired) "Сессия Telegram истекла. Войдите через Telegram снова, чтобы обновить подписку."
-                        else "Не удалось загрузить подписку. Проверьте соединение и попробуйте ещё раз.")
-                    accountAction.text = uiCopy(if (expired) "Подключить аккаунт Telegram" else "Повторить загрузку")
-                    accountAction.isEnabled = true
-                    accountAction.alpha = 1f
+                    showLoadFailure(error, token)
                 }
             }
         }
     }
 
     private fun importProfile(raw: String) {
+        if (loading || isFinishing || isDestroyed) return
+        loading = true
+        lastFailureMessage = null
+        loadingStage = "download"
         accountAction.isEnabled = false
         accountAction.alpha = .65f
         state.visibility = View.VISIBLE
         state.setTextColor(DeyttUi.BLUE)
         state.text = uiCopy("Получаем маршруты…")
         state.announceForAccessibility(state.text)
+        val expectedSession = TelegramSessionStore.read(this)
         executor.execute {
-            runCatching { SubscriptionClient.import(this, raw) }
-                .onSuccess { imported -> runOnUiThread {
-                    getSharedPreferences("profile_settings", MODE_PRIVATE).edit {
-                        putString("subscription_url", imported.url)
-                        if (imported.warnings.isEmpty()) remove("subscription_warning")
-                        else putString("subscription_warning", imported.warnings.joinToString("\n"))
+            runCatching { SubscriptionClient.import(this, raw) { stage ->
+                loadingStage = stage
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed && loading) {
+                        state.text = when (stage) {
+                            "validate" -> "Проверяем подписку…"
+                            "awg" -> "Загружаем дополнительные маршруты…"
+                            "save" -> "Сохраняем подписку…"
+                            else -> uiCopy("Получаем маршруты…")
+                        }
                     }
-                    val config = SubscriptionStore(this).readCurrent().orEmpty()
-                    val routes = RouteCatalog.from(config, AwgProfileStore(this@SetupActivity).profiles())
+                }
+            } }
+                .onSuccess { imported -> runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    loading = false
+                    if (TelegramSessionStore.read(this) != expectedSession) {
+                        loadAccountSubscription()
+                        return@runOnUiThread
+                    }
+                    val routes = runCatching {
+                        val config = SubscriptionStore(this).readCurrent() ?: throw SubscriptionStorageException()
+                        RouteCatalog.from(config, AwgProfileStore(this@SetupActivity).profiles())
+                    }.getOrElse {
+                        loadingStage = "save"
+                        showLoadFailure(SubscriptionStorageException())
+                        return@runOnUiThread
+                    }
                     routes.firstOrNull()?.let { SelectedRouteStore(this).save(it) }
                     stopService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
                     AwgTunnelController.stop(this, publishStatus = false)
@@ -133,24 +177,47 @@ class SetupActivity : Activity() {
                         remove(ConnectVpnService.STATE_ERROR)
                     }
                     state.animate().alpha(1f).setDuration(220).withEndAction {
+                        if (isFinishing || isDestroyed) return@withEndAction
                         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
                         finish()
                         applyFadeTransition()
                     }.start()
                 }}
                 .onFailure { error -> runOnUiThread {
-                    state.setTextColor(DeyttUi.CORAL)
-                    state.text = SubscriptionErrorText.userMessage(error)
-                    state.announceForAccessibility(state.text)
-                    accountAction.text = uiCopy(if (TelegramSessionStore.read(this) == null) "Подключить аккаунт Telegram" else "Повторить загрузку")
-                    accountAction.isEnabled = true
-                    accountAction.alpha = 1f
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    loading = false
+                    showLoadFailure(error)
                 }}
         }
     }
 
+    private fun showLoadFailure(error: Throwable, expectedSession: String? = null) {
+        if (expectedSession != null && error is TelegramPairingException && error.code == "session_expired") {
+            TelegramSessionStore.clearIfMatches(this, expectedSession)
+        }
+        val reference = SubscriptionLoadDiagnostics.record(this, loadingStage, error)
+        state.visibility = View.VISIBLE
+        state.setTextColor(DeyttUi.CORAL)
+        state.text = "${SubscriptionLoadDiagnostics.userMessage(error)}\n\nКод: $reference"
+        lastFailureMessage = state.text.toString()
+        state.announceForAccessibility(state.text)
+        accountAction.text = uiCopy(if (TelegramSessionStore.read(this) == null) "Подключить аккаунт Telegram" else "Повторить загрузку")
+        accountAction.isEnabled = true
+        accountAction.alpha = 1f
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("resume_download", loading)
+        outState.putString("pending_import_url", pendingImportUrl)
+        outState.putString("failure_message", lastFailureMessage)
+        super.onSaveInstanceState(outState)
+    }
+
     private fun showTelegramPairing() {
+        if (pairingDialog?.isShowing == true) return
         val dialog = Dialog(this)
+        pairingDialog = dialog
+        dialog.setOnDismissListener { pairingDialog = null }
         val sheet = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(20), dp(22), dp(20))
@@ -216,6 +283,8 @@ class SetupActivity : Activity() {
         var botUrl: String? = null
         var step = 0
         var needsBotStart = false
+        val requestNewCode = button("Запросить новый код", secondary = true).apply { visibility = View.GONE }
+        sheet.addView(requestNewCode, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)))
         fun updateStep(next: Int) {
             step = next
             username.visibility = if (step == 0) View.VISIBLE else View.GONE
@@ -230,6 +299,15 @@ class SetupActivity : Activity() {
                 "Код уже отправлен в Telegram. Переключаться в бот не нужно."
             }
             primary.text = if (step == 0) "Получить код" else "Подтвердить код"
+            requestNewCode.visibility = if (step == 1) View.VISIBLE else View.GONE
+        }
+        requestNewCode.setOnClickListener {
+            if (primary.isEnabled) {
+                challenge = null
+                code.setText("")
+                status.text = ""
+                updateStep(0)
+            }
         }
         openBot.setOnClickListener {
             botUrl?.let { link ->
@@ -300,12 +378,15 @@ class SetupActivity : Activity() {
                     runOnUiThread {
                         if (isFinishing || isDestroyed || !dialog.isShowing) return@runOnUiThread
                         primary.isEnabled = true
-                        result.onSuccess { (_, subscriptionResult) ->
+                        result.onSuccess { (session, subscriptionResult) ->
                             dialog.dismiss()
+                            loadingStage = "account"
                             val subscription = subscriptionResult.getOrNull()
-                            if (subscription != null) {
+                            if (subscriptionResult.isFailure) {
+                                showLoadFailure(subscriptionResult.exceptionOrNull()!!, session.token)
+                            } else if (subscription != null) {
                                 accountAction.text = uiCopy("Обновить подписку")
-                                importProfile(subscription)
+                                importProfile(pendingImportUrl ?: subscription)
                             } else {
                                 state.visibility = View.VISIBLE
                                 state.setTextColor(if (subscriptionResult.isSuccess) DeyttUi.MINT else DeyttUi.AMBER)
@@ -321,8 +402,9 @@ class SetupActivity : Activity() {
                             status.text = when ((error as? TelegramPairingException)?.code) {
                                 "pair_code_invalid" -> "Код неверный или истёк. Запроси новый."
                                 "pair_code_locked" -> "Попытки закончились. Начни вход заново."
-                                else -> "Не удалось подтвердить код. Попробуй ещё раз."
+                                else -> "${SubscriptionLoadDiagnostics.userMessage(error)} Если код уже использован, запроси новый."
                             }
+                            SubscriptionLoadDiagnostics.record(this, "pair", error)
                         }
                     }
                 }
@@ -339,7 +421,12 @@ class SetupActivity : Activity() {
         }
     }
 
-    override fun onDestroy() { executor.shutdownNow(); super.onDestroy() }
+    override fun onDestroy() {
+        executor.shutdownNow()
+        pairingDialog?.dismiss()
+        state.animate().cancel()
+        super.onDestroy()
+    }
 
     @Suppress("DEPRECATION")
     private fun applyFadeTransition() {

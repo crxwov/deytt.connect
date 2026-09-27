@@ -16,7 +16,7 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import org.json.JSONObject
 
-internal class TelegramPairingException(val code: String) : IOException(code)
+internal class TelegramPairingException(val code: String, val statusCode: Int = 0, val retryAfterMillis: Long? = null) : IOException(code)
 internal data class TelegramPairStart(val challenge: String, val botUrl: String, val delivery: String)
 internal data class TelegramPairSession(val token: String, val username: String, val firstName: String)
 
@@ -27,7 +27,7 @@ internal object TelegramSessionStore {
     private const val KEY_ALIAS = "deytt.connect.telegram.session.v1"
     private val aad = "deytt.connect:telegram-session:v1".toByteArray(Charsets.UTF_8)
 
-    fun read(context: Context): String? = synchronized(this) {
+    fun read(context: Context): String? = synchronized(AtomicSubscriptionFile.lock) {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val encrypted = prefs.getString(TOKEN, null) ?: return@synchronized null
         val iv = prefs.getString(IV, null) ?: return@synchronized null
@@ -43,7 +43,7 @@ internal object TelegramSessionStore {
         }
     }
 
-    fun save(context: Context, token: String) = synchronized(this) {
+    fun save(context: Context, token: String) = synchronized(AtomicSubscriptionFile.lock) {
         require(token.length in 32..256)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
@@ -55,9 +55,15 @@ internal object TelegramSessionStore {
             .commit())
     }
 
-    fun clear(context: Context) = synchronized(this) {
+    fun clear(context: Context) = synchronized(AtomicSubscriptionFile.lock) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .remove(TOKEN).remove(IV).commit()
+    }
+
+    fun clearIfMatches(context: Context, expected: String?): Boolean = synchronized(AtomicSubscriptionFile.lock) {
+        if (read(context) != expected) return@synchronized false
+        clear(context)
+        true
     }
 
     private fun key(): SecretKey {
@@ -109,9 +115,7 @@ internal object TelegramPairingClient {
     }
 
     fun subscriptionUrl(token: String): String? {
-        val happ = request("/api/tg/keys", "GET", null, token).optJSONObject("happ") ?: return null
-        if (!happ.optBoolean("available")) return null
-        return happ.optString("sub_url").takeIf(String::isNotBlank)
+        return TelegramRequestPolicy.subscriptionUrl(request("/api/tg/keys", "GET", null, token))
     }
 
     fun profile(token: String): JSONObject? =
@@ -236,22 +240,21 @@ internal object TelegramPairingClient {
     }
 
     private fun request(path: String, method: String, body: JSONObject?, token: String?): JSONObject {
-        val connection = openConnection(path, method, token)
-        try {
-            if (body != null) {
-                connection.doOutput = true
-                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+        val budget = SubscriptionRequestBudget(45_000)
+        return TelegramRequestPolicy.execute(method, budget) {
+            val connection = openConnection(path, method, token)
+            connection.connectTimeout = minOf(connection.connectTimeout, budget.remainingMillis())
+            connection.readTimeout = minOf(connection.readTimeout, budget.remainingMillis())
+            budget.withConnection(connection) {
+                if (body != null) {
+                    connection.doOutput = true
+                    connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+                }
+                val status = connection.responseCode
+                val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+                val payload = stream?.use { readLimited(it, MAX_JSON_BYTES) }?.toString(Charsets.UTF_8).orEmpty()
+                TelegramRequestPolicy.parseResponse(status, payload, connection.getHeaderField("Retry-After"))
             }
-            val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val payload = stream?.use { readLimited(it, MAX_JSON_BYTES) }?.toString(Charsets.UTF_8).orEmpty()
-            val response = runCatching { JSONObject(payload) }.getOrElse { JSONObject() }
-            if (status !in 200..299) {
-                throw TelegramPairingException(response.optString("error").ifBlank { "request_failed" })
-            }
-            return response
-        } finally {
-            connection.disconnect()
         }
     }
 
@@ -264,6 +267,9 @@ internal object TelegramPairingClient {
             instanceFollowRedirects = false
             setRequestProperty("Accept", "application/json, image/*")
             setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
+            setRequestProperty("X-Deytt-Client", "deytt-connect")
+            setRequestProperty("Cache-Control", "no-cache")
+            setRequestProperty("Connection", "close")
             token?.let { setRequestProperty(SESSION_HEADER, it) }
             if (method == "POST") setRequestProperty("Content-Type", "application/json; charset=utf-8")
         }
@@ -275,9 +281,10 @@ internal object TelegramPairingClient {
         val output = ByteArrayOutputStream()
         val buffer = ByteArray(8 * 1024)
         while (true) {
+            if (Thread.currentThread().isInterrupted) throw SubscriptionCancelledException()
             val count = input.read(buffer)
             if (count < 0) break
-            if (output.size() + count > maximum) throw IOException("response_too_large")
+            if (output.size() + count > maximum) throw TelegramPairingException("response_too_large")
             output.write(buffer, 0, count)
         }
         return output.toByteArray()

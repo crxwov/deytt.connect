@@ -12,11 +12,12 @@ android {
     }
 
     defaultConfig {
-        applicationId = "space.deytt.connect"
+        applicationId = if (providers.gradleProperty("isolatedQa").orNull == "true") "space.deytt.connect.qa" else "space.deytt.connect"
         minSdk = 24
         targetSdk = 35
-        versionCode = 24
-        versionName = "0.8.10"
+        versionCode = 25
+        versionName = "0.8.11"
+        testInstrumentationRunner = "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }
 
     buildTypes {

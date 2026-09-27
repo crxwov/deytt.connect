@@ -10,7 +10,11 @@ data class SubscriptionMetadata(
     val totalBytes: Long = 0,
     val expiresAtSeconds: Long? = null,
 ) {
-    val usedBytes: Long get() = uploadBytes + downloadBytes
+    val usedBytes: Long get() {
+        val upload = uploadBytes.coerceAtLeast(0)
+        val download = downloadBytes.coerceAtLeast(0)
+        return if (upload > Long.MAX_VALUE - download) Long.MAX_VALUE else upload + download
+    }
 
     companion object {
         fun parse(title: String?, userInfo: String?): SubscriptionMetadata {
@@ -42,11 +46,15 @@ class SubscriptionMetadataStore(context: Context) {
         }
     }
 
-    fun read(): SubscriptionMetadata = SubscriptionMetadata(
-        title = preferences.getString("title", "deytt") ?: "deytt",
-        uploadBytes = preferences.getLong("upload", 0),
-        downloadBytes = preferences.getLong("download", 0),
-        totalBytes = preferences.getLong("total", 0),
-        expiresAtSeconds = preferences.takeIf { it.contains("expire") }?.getLong("expire", 0),
-    )
+    fun read(): SubscriptionMetadata {
+        // Preferences are optional display data; old or damaged field types must not break setup.
+        val values = runCatching { preferences.all }.getOrDefault(emptyMap<String, Any>())
+        return SubscriptionMetadata(
+            title = (values["title"] as? String)?.takeIf(String::isNotBlank) ?: "deytt",
+            uploadBytes = (values["upload"] as? Long)?.coerceAtLeast(0) ?: 0,
+            downloadBytes = (values["download"] as? Long)?.coerceAtLeast(0) ?: 0,
+            totalBytes = (values["total"] as? Long)?.coerceAtLeast(0) ?: 0,
+            expiresAtSeconds = (values["expire"] as? Long)?.takeIf { it > 0 },
+        )
+    }
 }
