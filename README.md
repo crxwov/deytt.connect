@@ -1,85 +1,82 @@
-# deytt./connect
+<div align="center">
+  <img src="assets/readme-banner.svg" alt="deytt./connect — open source Android client for DEYTTT" width="100%">
 
-Открытый Android-клиент DEYTTT: одно приложение для VLESS, Trojan, Hysteria 2,
-AmneziaWG 1.5 и AmneziaWG 3.1.
+  <p><strong>Android-клиент DEYTTT для подключения к своей подписке и выбора VPN-маршрута.</strong></p>
 
-Репозиторий: <https://github.com/crxwov/deytt.connect>
+  <p>
+    <a href="https://github.com/crxwov/deytt.connect/releases/latest/download/app-arm64-v8a-debug.apk">Скачать APK для ARM64</a>
+    · <a href="https://github.com/crxwov/deytt.connect/releases/latest">Релизы</a>
+    · <a href="https://t.me/deyttbot">Поддержка</a>
+    · <a href="https://deytt.space/info">Условия и конфиденциальность</a>
+  </p>
 
-## Возможности
+  <p>
+    <img src="https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 7.0 and newer">
+    <img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later license">
+    <img src="https://img.shields.io/badge/status-early%20access-f0b45b" alt="Early access">
+  </p>
+</div>
 
-- принимает HTTPS-ссылку DEYTTT на подписку;
-- загружает sing-box и все доступные региональные AmneziaWG-профили одной подписки;
-- проверяет наличие TUN, маршрута и сетевого outbound;
-- сохраняет профиль атомарно и оставляет предыдущую рабочую копию;
-- запускает `libbox` для VLESS/Trojan/Hysteria 2 и официальный userspace
-  AmneziaWG tunnel-модуль для AWG 1.5/3.1;
-- разделяет импорт, главный экран, страны, протоколы и данные подписки на
-  самостоятельные экраны;
-- предлагает маршрут до запуска и подтверждает соединение внешней HTTPS-проверкой;
-- показывает отдельный маршрут RU → DE, позволяет выбрать сервер AmneziaWG и
-  запускает ручную проверку задержки до endpoint выбранного варианта;
-- восстанавливается после устаревшего состояния сервиса без очистки данных и
-  повторного импорта подписки;
-- останавливает сетевое ядро при любой ошибке, чтобы следующий запуск не
-  блокировался занятым cache-file.
-- держит настоящее ongoing-системное уведомление, принадлежащее активной
-  Android foreground-службе, для обоих движков;
-- показывает нативный глобус маршрутов и отдельный выбор серверов AWG;
-- принимает deep-link `deytt.connect://import?url=...` из бота и проверяет
-  последний GitHub-релиз из экрана настроек.
+> Для использования нужен активный доступ DEYTTT. Сейчас опубликована ARM64-сборка для ручной установки; приложение не распространяется через Google Play.
 
-На этом этапе не заявляются split-tunnel UI, kill switch, импорт сырых
-`vless://`/`trojan://`/`hy2://` ссылок и production-ready reconnect после
-смены сети. Это следующие этапы, а не скрытый fallback.
+## Подключение
 
-## Архитектура
+**Версия 0.8.9 · Android 7.0+ · ARM64 (`arm64-v8a`)**
 
-- `SubscriptionClient` принимает только HTTPS-ссылки первого домена, нормализует
-  формат запроса и атомарно сохраняет обязательный sing-box-профиль;
-- AWG 1.5/3.1 загружается как необязательное расширение: временный отказ одной
-  точки не отменяет основной импорт и сохраняет последнюю рабочую конфигурацию;
-- libbox работает внутри `ConnectVpnService`, а встроенный userspace AWG владеет
-  собственным `GoBackend.VpnService`; обе службы сами поднимают и снимают
-  foreground-уведомление. Для AWG `awg-tunnel` собирает небольшой исходный
-  overlay поверх чистого upstream submodule, поэтому fork стороннего проекта
-  не требуется;
-- endpoint latency — отдельная ручная диагностика и не выдаётся за доказательство
-  реального трафика. После запуска каждый движок проходит HTTPS canary.
+1. Скачайте [APK для ARM64](https://github.com/crxwov/deytt.connect/releases/latest/download/app-arm64-v8a-debug.apk) и откройте файл. Если Android запросит разрешение, разрешите установку для браузера или файлового менеджера.
+2. Войдите через Telegram: укажите username, запросите одноразовый код и подтвердите вход. Если код не приходит, откройте [бота DEYTTT](https://t.me/deyttbot) и запросите его ещё раз.
+3. Выберите «Авто» или маршрут подписки, нажмите подключение и подтвердите системный запрос Android на создание VPN-подключения.
+4. Разрешите уведомление о работающем VPN, если Android его запросит. Для отключения используйте кнопку в приложении.
 
-## Сборка
+> APK собран для раннего доступа и подписан отладочным ключом. Если Android откажется обновлять установленную тестовую сборку, сначала напишите в поддержку: переустановка может сбросить локальные данные приложения.
 
-Нужны JDK 17, Android SDK platform 35, NDK 26.1, CMake 3.22.1 и рекурсивно
-загруженные submodules:
+## Что умеет приложение
+
+- Войти через Telegram и загрузить маршруты активной подписки.
+- Подключаться по VLESS, Trojan, Hysteria 2 и AmneziaWG 3.1 — если они доступны в подписке.
+- Выбрать автоматический маршрут, отдельный регион или маршрут Russia → Germany.
+- Проверить доступность, задержку и скорость маршрутов.
+- Проверить новые GitHub-релизы и APK перед подтверждением установки.
+
+Определение региона на карте можно включить в настройках. Для него используется IP-адрес через [ipinfo.io](https://ipinfo.io), а не GPS. Подробнее — в [политике конфиденциальности и условиях](https://deytt.space/info).
+
+## Релизы и проверка файла
+
+В [последнем релизе](https://github.com/crxwov/deytt.connect/releases/latest) находятся changelog и актуальный APK. Для версии **0.8.9** опубликован SHA-256 файла `app-arm64-v8a-debug.apk`:
+
+```text
+76814bd4cfc45bdf0ef1d39fabae04cd43152fc3c4278ebb1be786b93c5cbed1
+```
+
+Сверьте контрольную сумму, если вручную проверяете скачанный файл.
+
+## Поддержка и сообщения об ошибках
+
+По вопросам входа, подписки и подключения напишите в [бот DEYTTT](https://t.me/deyttbot). Ошибку приложения можно описать в [GitHub Issue](https://github.com/crxwov/deytt.connect/issues): укажите версию приложения и Android, модель устройства и шаги воспроизведения.
+
+Issues публичные. Не прикладывайте username, коды входа, ссылки подписки, VPN-ключи, конфигурации, IP-адреса или снимки экрана с данными аккаунта.
+
+О проблемах безопасности сообщайте приватно через [Security Advisories](https://github.com/crxwov/deytt.connect/security/advisories/new). Подробности — в [политике безопасности](SECURITY.md).
+
+## Сборка из исходников
+
+Нужны JDK 17, Android SDK 35, NDK 26.1, CMake 3.22.1 и Git submodules:
+
+```bash
+git clone --recurse-submodules https://github.com/crxwov/deytt.connect.git
+cd deytt.connect
+./gradlew assembleDebug
+```
+
+Если репозиторий уже клонирован без подмодулей:
 
 ```bash
 git submodule update --init --recursive
 ./gradlew assembleDebug
 ```
 
-ARM64 APK появится в
-`app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`; рядом Gradle создаст
-варианты для ARMv7, x86_64 и универсальную сборку.
+ARM64 APK появится в `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
 
-Перед публикацией необходимо проверить лицензионный пакет GPL-компонентов,
-подписывать релиз собственным ключом вне репозитория и приложить checksum.
+## Лицензии
 
-## Проверенный debug-артефакт
-
-Кандидат `0.8.1` опубликован отдельно как debug-сборка в
-[GitHub Releases](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.1-debug).
-Для большинства телефонов используйте ARM64 APK и сверяйте SHA-256:
-
-```text
-070c0503e6f764d8b7a1a325e81f5c5022768881615a18cae81fb8a8286db50d  app-arm64-v8a-debug.apk
-```
-
-Это debug-артефакт: локальная сборка и статические проверки пройдены, но
-проверка реального устройства, системного уведомления и внешнего HTTPS-canary
-требует телефона и не подменяется успешной сборкой.
-
-## Лицензия
-
-Код проекта распространяется под GNU GPL v3.0-or-later. Ядро `libbox` и
-связанные материалы имеют собственные уведомления в
-[`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). Название и брендинг
-SagerNet/sing-box не используются как обозначение официального приложения.
+Код приложения распространяется по **GNU GPL-3.0-or-later**. Для сторонних компонентов и материалов действуют отдельные условия из [уведомлений о сторонних компонентах](THIRD-PARTY-NOTICES.md) и [атрибуций значков](THIRD_PARTY_NOTICES.md).
