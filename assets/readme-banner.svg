@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="560" viewBox="0 0 1600 560" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="94" y1="48" x2="1470" y2="522" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B1220"/>
+      <stop offset="1" stop-color="#111B2C"/>
+    </linearGradient>
+    <linearGradient id="line" x1="973" y1="103" x2="1438" y2="452" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7DE6C3"/>
+      <stop offset="1" stop-color="#60A5FA"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="matrix(527 0 0 318 1238 280)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#287E87" stop-opacity=".24"/><stop offset="1" stop-color="#287E87" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0V48" stroke="#B7C8DD" stroke-opacity=".045"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="560" rx="34" fill="url(#bg)"/>
+  <rect width="1600" height="560" rx="34" fill="url(#grid)"/>
+  <rect width="1600" height="560" rx="34" fill="url(#glow)"/>
+  <path d="M0 511.5H1600" stroke="#D6E4F0" stroke-opacity=".1"/>
+  <text x="106" y="155" fill="#A4B5C9" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="600" letter-spacing="5">DEYTT · ANDROID CLIENT</text>
+  <text x="100" y="285" fill="#F5F8FC" font-family="Inter,Arial,sans-serif" font-size="104" font-weight="700" letter-spacing="-6">deytt./connect</text>
+  <text x="106" y="350" fill="#BDCAD9" font-family="Inter,Arial,sans-serif" font-size="29">One app. Your subscription. A route you choose.</text>
+  <text x="106" y="420" fill="#7DE6C3" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="600" letter-spacing="2">OPEN SOURCE  ·  ANDROID  ·  GPL-3.0</text>
+  <g opacity=".96">
+    <circle cx="1245" cy="278" r="154" stroke="#AFC4D8" stroke-opacity=".12" stroke-width="1.5"/>
+    <circle cx="1245" cy="278" r="112" stroke="#AFC4D8" stroke-opacity=".2" stroke-width="1.5"/>
+    <circle cx="1245" cy="278" r="69" stroke="#AFC4D8" stroke-opacity=".16" stroke-width="1.5"/>
+    <path d="M1090 278H1400M1245 124V432M1135 168C1204 219 1287 340 1355 388M1354 168C1284 223 1208 336 1137 389" stroke="#AFC4D8" stroke-opacity=".19" stroke-width="1.5"/>
+    <path d="M1088 278C1154 277 1173 221 1231 221C1288 221 1292 330 1350 330C1383 330 1391 301 1402 278" stroke="url(#line)" stroke-width="5" stroke-linecap="round"/>
+    <circle cx="1089" cy="278" r="7" fill="#7DE6C3"/>
+    <circle cx="1401" cy="278" r="7" fill="#60A5FA"/>
+    <circle cx="1232" cy="221" r="5" fill="#E4F7F3"/>
+  </g>
+  <text x="107" y="524" fill="#718198" font-family="Inter,Arial,sans-serif" font-size="15" letter-spacing="1.4">VLESS  /  TROJAN  /  HYSTERIA 2  /  AMNEZIAWG</text>
+</svg>
