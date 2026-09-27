@@ -65,9 +65,9 @@ data class RouteProbeSession(
 /** Runs a bounded GET/HEAD check through a loopback-only sing-box HTTP proxy. */
 object RouteProxyProbe {
     const val TIMEOUT_MILLIS = 4_000
-    const val QUICK_DOWNLOAD_MILLIS = 1_000
+    const val QUICK_DOWNLOAD_MILLIS = 3_000
     private const val SYSTEM_DOWNLOAD_CONNECT_TIMEOUT_MILLIS = 3_500
-    private const val SYSTEM_DOWNLOAD_DEADLINE_MILLIS = 5_000L
+    private const val SYSTEM_DOWNLOAD_DEADLINE_MILLIS = 8_000L
     private val systemVpnProbeExecutor = ThreadPoolExecutor(
         0,
         4,
@@ -77,7 +77,6 @@ object RouteProxyProbe {
         { task -> Thread(task, "deytt-route-probe").apply { isDaemon = true } },
         ThreadPoolExecutor.AbortPolicy(),
     )
-    const val PROBE_URL = "https://cp.cloudflare.com/generate_204"
     private const val PROBE_INBOUND = "deytt-route-probe"
     private const val PROBE_HOST = "cp.cloudflare.com"
     private const val PROBE_PORT = 443
@@ -171,7 +170,6 @@ object RouteProxyProbe {
         var totalMeasurement = 0L
         repeat(2) {
             val remaining = remainingTimeout(deadline)
-            val started = SystemClock.elapsedRealtime()
             val proxySocket = Socket()
             var tlsSocket: SSLSocket? = null
             try {
@@ -202,27 +200,37 @@ object RouteProxyProbe {
                     .getDefaultHostnameVerifier()
                     .verify(PROBE_HOST, tls.session)
                 if (!hostnameVerified) throw SSLPeerUnverifiedException("TLS hostname verification failed")
-
-                val httpsRequest = buildString {
-                    append(method.wireValue).append(' ').append(PROBE_PATH).append(" HTTP/1.1\r\n")
-                    append("Host: ").append(PROBE_HOST).append("\r\n")
-                    append("User-Agent: deytt-connect/1\r\n")
-                    append("Cache-Control: no-cache\r\n")
-                    append("Connection: close\r\n\r\n")
-                }
-                tls.outputStream.apply {
-                    write(httpsRequest.toByteArray(Charsets.US_ASCII))
-                    flush()
-                }
-                val status = readHttpStatus(tls, tls.inputStream, deadline)
-                if (status != HTTP_NO_CONTENT) throw IOException("Проверочный сервер ответил HTTP $status")
-                totalMeasurement += SystemClock.elapsedRealtime() - started
+                totalMeasurement += measureProbeHttpRoundTrip(tls, method, deadline)
             } finally {
                 runCatching { tlsSocket?.close() }
                 runCatching { proxySocket.close() }
             }
         }
         return totalMeasurement / 2L
+    }
+
+    /** Measures the HTTPS request/response round trip after TCP and TLS are already established. */
+    private fun measureProbeHttpRoundTrip(
+        socket: SSLSocket,
+        method: RouteProbeMethod,
+        deadline: Long,
+    ): Long {
+        val request = buildString {
+            append(method.wireValue).append(' ').append(PROBE_PATH).append(" HTTP/1.1\r\n")
+            append("Host: ").append(PROBE_HOST).append("\r\n")
+            append("User-Agent: deytt-connect/1\r\n")
+            append("Cache-Control: no-cache\r\n")
+            append("Connection: close\r\n\r\n")
+        }.toByteArray(Charsets.US_ASCII)
+        socket.soTimeout = remainingTimeout(deadline)
+        val started = SystemClock.elapsedRealtime()
+        socket.outputStream.apply {
+            write(request)
+            flush()
+        }
+        val status = readHttpStatus(socket, socket.inputStream, deadline)
+        if (status != HTTP_NO_CONTENT) throw IOException("Проверочный сервер ответил HTTP $status")
+        return (SystemClock.elapsedRealtime() - started).coerceAtLeast(1L)
     }
 
     /** Measures bytes returned during a bounded authenticated download sample. */
@@ -414,7 +422,7 @@ object RouteProxyProbe {
         method: RouteProbeMethod,
         timeoutMillis: Int = TIMEOUT_MILLIS,
     ): Long {
-        val activeConnection = AtomicReference<HttpsURLConnection?>()
+        val activeConnection = AtomicReference<Socket?>()
         val task = FutureTask { measureThroughSystemVpnBlocking(method, timeoutMillis, activeConnection) }
         try {
             systemVpnProbeExecutor.execute(task)
@@ -422,11 +430,11 @@ object RouteProxyProbe {
         } catch (failure: RejectedExecutionException) {
             throw SocketTimeoutException("Слишком много одновременных проверок маршрута").also { it.initCause(failure) }
         } catch (failure: TimeoutException) {
-            activeConnection.getAndSet(null)?.disconnect()
+            runCatching { activeConnection.getAndSet(null)?.close() }
             task.cancel(true)
             throw SocketTimeoutException("Проверка маршрута превысила $timeoutMillis мс").also { it.initCause(failure) }
         } catch (failure: InterruptedException) {
-            activeConnection.getAndSet(null)?.disconnect()
+            runCatching { activeConnection.getAndSet(null)?.close() }
             task.cancel(true)
             Thread.currentThread().interrupt()
             throw SocketTimeoutException("Проверка маршрута прервана").also { it.initCause(failure) }
@@ -442,33 +450,35 @@ object RouteProxyProbe {
     private fun measureThroughSystemVpnBlocking(
         method: RouteProbeMethod,
         timeoutMillis: Int,
-        activeConnection: AtomicReference<HttpsURLConnection?>,
+        activeConnection: AtomicReference<Socket?>,
     ): Long {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis
-        var lastMeasurement: Long? = null
+        var totalMeasurement = 0L
         repeat(2) {
-            val remaining = (deadline - SystemClock.elapsedRealtime()).toInt()
-            if (remaining <= 0) throw SocketTimeoutException("Проверка маршрута превысила $timeoutMillis мс")
-            val started = SystemClock.elapsedRealtime()
-            val connection = URL(PROBE_URL).openConnection(Proxy.NO_PROXY) as HttpsURLConnection
-            activeConnection.set(connection)
+            val socket = Socket()
+            var tlsSocket: SSLSocket? = null
+            activeConnection.set(socket)
             try {
-                connection.requestMethod = method.wireValue
-                connection.connectTimeout = remaining
-                connection.readTimeout = remaining
-                connection.useCaches = false
-                connection.instanceFollowRedirects = false
-                connection.setRequestProperty("Cache-Control", "no-cache")
-                connection.setRequestProperty("Connection", "close")
-                val status = connection.responseCode
-                if (status != 204) throw IOException("Проверочный сервер ответил HTTP $status")
-                lastMeasurement = SystemClock.elapsedRealtime() - started
+                socket.connect(InetSocketAddress(PROBE_HOST, PROBE_PORT), remainingTimeout(deadline))
+                socket.soTimeout = remainingTimeout(deadline)
+                val tls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                    .createSocket(socket, PROBE_HOST, PROBE_PORT, true) as SSLSocket
+                tlsSocket = tls
+                activeConnection.set(tls)
+                tls.soTimeout = remainingTimeout(deadline)
+                tls.startHandshake()
+                val hostnameVerified = HttpsURLConnection.getDefaultHostnameVerifier()
+                    .verify(PROBE_HOST, tls.session)
+                if (!hostnameVerified) throw SSLPeerUnverifiedException("TLS hostname verification failed")
+                totalMeasurement += measureProbeHttpRoundTrip(tls, method, deadline)
             } finally {
-                connection.disconnect()
-                activeConnection.compareAndSet(connection, null)
+                runCatching { tlsSocket?.close() }
+                runCatching { socket.close() }
+                activeConnection.compareAndSet(tlsSocket, null)
+                activeConnection.compareAndSet(socket, null)
             }
         }
-        return lastMeasurement ?: throw IOException("Проверка маршрута не получила ответа")
+        return totalMeasurement / 2L
     }
 
     /** A bounded sample through the current Android VPN. Caller verifies its route. */

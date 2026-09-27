@@ -184,9 +184,13 @@ internal object AppLanguage {
             .matchEntire(value)?.let {
                 return "Check latency through ${it.groupValues[1]}: two HEAD or GET HTTPS requests, 10-second timeout"
             }
-        Regex("^Задержка через выбранный выход: ([0-9]+) миллисекунд, два HTTPS-запроса HEAD или GET через прокси$")
+        Regex("^Среднее время HTTPS-ответа через выбранный выход после установки TLS: ([0-9]+) миллисекунд$")
             .matchEntire(value)?.let {
-                return "Latency through selected exit: ${it.groupValues[1]} milliseconds, two HEAD or GET HTTPS requests"
+                return "Average HTTPS response time through the selected exit after TLS setup: ${it.groupValues[1]} milliseconds"
+            }
+        Regex("^Среднее время HTTPS-ответа через активное соединение после TLS: ([0-9]+) миллисекунд$")
+            .matchEntire(value)?.let {
+                return "Average HTTPS response time through the active connection after TLS setup: ${it.groupValues[1]} milliseconds"
             }
         Regex("^Проверяю выход через локальный прокси методом (.+), два запроса, тайм-аут 10 секунд$")
             .matchEntire(value)?.let {
