@@ -189,7 +189,7 @@ class MainActivity : Activity() {
                     lastRouteLatency = selected.id to elapsed
                     latencyText.text = uiCopy("Задержка") + ": " + formatLatency(elapsed)
                     latencyText.setTextColor(DeyttUi.MINT)
-                    latencyText.contentDescription = uiCopy("Задержка через выбранный выход: ${elapsed} миллисекунд, два HTTPS-запроса HEAD или GET через прокси")
+                    latencyText.contentDescription = uiCopy("Среднее время HTTPS-ответа через выбранный выход после установки TLS: ${elapsed} миллисекунд")
                 }
                 !error.isNullOrBlank() -> {
                     pendingRouteProbeHasOutcome = true
@@ -1492,8 +1492,9 @@ class MainActivity : Activity() {
         downloadText.text = if (mbps == null && homeSpeedInFlight) { if (en) "Speed: checking…" else "Скорость: проверка…" }
             else if (mbps == null) uiCopy("Скорость: проверить")
             else String.format(java.util.Locale.US, if (en) "Speed: %.1f Mbps" else "Скорость: %.1f Мбит/с", mbps)
-        downloadText.contentDescription = if (en) "Last measured download speed, quick 1 second sample. Tap to check routes."
-            else "Последняя измеренная скорость загрузки, быстрая проба 1 секунда. Нажмите для проверки маршрутов."
+        val sampleSeconds = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS / 1_000
+        downloadText.contentDescription = if (en) "Last measured download speed, $sampleSeconds-second sample. Tap to check routes."
+            else "Последняя измеренная скорость загрузки, проба $sampleSeconds с. Нажмите для проверки маршрутов."
         val filled = when { mbps == null -> 0; mbps < 5 -> 1; mbps < 20 -> 2; mbps < 50 -> 3; else -> 4 }
         qualityBars.forEachIndexed { index, bar ->
             bar.background = rounded(if (index < filled) DeyttUi.MINT else DeyttUi.LINE, 2f)
@@ -1532,7 +1533,13 @@ class MainActivity : Activity() {
         }
         updateQualityStrip()
         homeSpeedFuture = LatencyExecutor.pool.submit {
-            val result = runCatching { RouteProxyProbe.measureSystemDownload(token, stillCurrent, sampleMillis = 1_000) }
+            val result = runCatching {
+                RouteProxyProbe.measureSystemDownload(
+                    token,
+                    stillCurrent,
+                    sampleMillis = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS,
+                )
+            }
             runOnUiThread {
                 if (generation != homeSpeedGeneration) return@runOnUiThread
                 homeSpeedInFlight = false
@@ -1911,7 +1918,7 @@ class MainActivity : Activity() {
                         latencyText.alpha = 1f
                         latencyText.setTextColor(if (elapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
                         latencyText.contentDescription = elapsed?.let {
-                            uiCopy("Два HTTPS-запроса ${method.wireValue} через активное соединение заняли ${it} миллисекунд")
+                            uiCopy("Среднее время HTTPS-ответа через активное соединение после TLS: ${it} миллисекунд")
                         } ?: uiCopy("HTTPS-проверка через активное соединение не ответила за 10 секунд")
                     }
                 }
