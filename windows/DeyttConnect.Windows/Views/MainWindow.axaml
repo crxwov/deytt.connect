@@ -1,0 +1,54 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:DeyttConnect.Windows.Controls"
+        x:Class="DeyttConnect.Windows.Views.MainWindow"
+        Title="deytt./connect"
+        Width="470"
+        Height="930"
+        MinWidth="410"
+        MinHeight="660"
+        MaxWidth="620"
+        WindowStartupLocation="CenterScreen"
+        Background="#080B12"
+        RequestedThemeVariant="Dark">
+
+    <Grid RowDefinitions="*,Auto">
+        <Grid Grid.RowSpan="2" IsHitTestVisible="False">
+            <Border>
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                        <GradientStop Color="#101426" Offset="0" />
+                        <GradientStop Color="#080B12" Offset="0.5" />
+                        <GradientStop Color="#07100F" Offset="1" />
+                    </LinearGradientBrush>
+                </Border.Background>
+            </Border>
+            <controls:StarfieldBackground />
+        </Grid>
+
+        <ScrollViewer x:Name="PageScroll"
+                      Grid.Row="0"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Hidden">
+            <StackPanel x:Name="PageHost"
+                        MaxWidth="520"
+                        HorizontalAlignment="Center"
+                        Margin="24,18,24,28"
+                        Spacing="0" />
+        </ScrollViewer>
+
+        <Border Grid.Row="1"
+                Height="76"
+                Background="#111823"
+                BorderBrush="#283548"
+                BorderThickness="0,1,0,0"
+                Padding="12,5,12,7">
+            <Grid ColumnDefinitions="*,*,*,*">
+                <Button x:Name="HomeNav" Classes="deytt-button" Grid.Column="0" />
+                <Button x:Name="RoutesNav" Classes="deytt-button" Grid.Column="1" />
+                <Button x:Name="ProfileNav" Classes="deytt-button" Grid.Column="2" />
+                <Button x:Name="SettingsNav" Classes="deytt-button" Grid.Column="3" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>
