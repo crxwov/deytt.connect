@@ -18,3 +18,7 @@ ROADMAP*.md
 
 .kotlin/
 output/
+
+windows/**/bin/
+windows/**/obj/
+windows/artifacts/

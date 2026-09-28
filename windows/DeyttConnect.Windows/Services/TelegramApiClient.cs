@@ -1,0 +1,572 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using DeyttConnect.Shared;
+
+namespace DeyttConnect.Windows.Services;
+
+public sealed class TelegramApiClient
+{
+    private static readonly Uri ApiBase = new("https://deytt.space");
+    private static readonly Regex UsernamePattern = new("^[A-Za-z0-9_]{5,32}$", RegexOptions.CultureInvariant);
+    private static readonly Regex CodePattern = new("^[0-9]{6}$", RegexOptions.CultureInvariant);
+    private static readonly HttpClient Http = new(new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false,
+        AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+    })
+    {
+        Timeout = TimeSpan.FromSeconds(45),
+    };
+
+    private const string SessionHeader = "X-TG-App-Token";
+    private const string AwgServersHeader = "X-Deytt-Awg-Servers";
+    private const int MaxResponseBytes = 512 * 1024;
+    private const int MaxProfileBytes = 2 * 1024 * 1024;
+    private const int MaxAwgManifestBytes = 32 * 1024;
+    private const int MaxAwgProfilesTotalBytes = 4 * 1024 * 1024;
+
+    public async Task<PairingStart> StartPairingAsync(string username, CancellationToken cancellationToken = default)
+    {
+        var normalized = username.Trim();
+        if (normalized.StartsWith('@'))
+            normalized = normalized[1..];
+        if (!UsernamePattern.IsMatch(normalized))
+            throw new TelegramApiException("invalid_username", HttpStatusCode.UnprocessableEntity);
+
+        using var response = await SendJsonAsync(
+            "/api/tg/mobile/pair/start", HttpMethod.Post,
+            new { username = normalized }, null, cancellationToken);
+
+        var root = response.RootElement;
+        return new PairingStart(
+            RequiredString(root, "challenge"),
+            RequiredBotUrl(root, "bot_url"),
+            OptionalString(root, "delivery") ?? "start_required");
+    }
+
+    public async Task<VerifiedPairing> VerifyPairingAsync(
+        string challenge,
+        string code,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(challenge) || challenge.Length > 128 || !CodePattern.IsMatch(code))
+            throw new TelegramApiException("pair_code_invalid", HttpStatusCode.BadRequest);
+
+        using var response = await SendJsonAsync(
+            "/api/tg/mobile/pair/verify", HttpMethod.Post,
+            new { challenge, code }, null, cancellationToken);
+
+        var root = response.RootElement;
+        var token = RequiredString(root, "token");
+        if (token.Length is < 32 or > 256)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+
+        var profile = root.GetProperty("profile");
+        return new VerifiedPairing(token, TelegramAccount.ParseProfile(profile));
+    }
+
+    public async Task<TelegramAccount> GetAccountAsync(string token, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendJsonAsync(
+            "/api/tg/me", HttpMethod.Get, null, token, cancellationToken);
+        return TelegramAccount.ParseProfile(response.RootElement.GetProperty("profile"));
+    }
+
+    public async Task<TelegramKeysSnapshot> GetSubscriptionAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        using var keys = await SendJsonAsync("/api/tg/keys", HttpMethod.Get, null, token, cancellationToken);
+        var root = keys.RootElement;
+        var happ = root.GetProperty("happ");
+        if (!happ.TryGetProperty("available", out var availableValue) ||
+            availableValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+
+        var devices = ParseHappDevices(happ);
+        var awg = root.TryGetProperty("amneziawg", out var awgElement) &&
+                  awgElement.ValueKind == JsonValueKind.Object;
+        var awgActive = awg && ReadBoolean(awgElement, "active") == true;
+        var awgClients = awg ? ReadArrayCount(awgElement, "clients") : 0;
+        if (!availableValue.GetBoolean())
+            return new TelegramKeysSnapshot(false, awgActive, awgClients, devices, null, [], []);
+
+        var rawUrl = ReadString(happ, "sub_url");
+        if (!TryValidateSubscriptionUrl(rawUrl, out var subscriptionUri))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+
+        var profileUri = new UriBuilder(subscriptionUri!)
+        {
+            Query = string.IsNullOrEmpty(subscriptionUri!.Query)
+                ? "format=singbox"
+                : $"{subscriptionUri.Query.TrimStart('?')}&format=singbox",
+        }.Uri;
+        using var request = new HttpRequestMessage(HttpMethod.Get, profileUri);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
+        request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        var payload = await ReadBoundedAsync(response.Content, cancellationToken, MaxProfileBytes);
+        if (!response.IsSuccessStatusCode)
+            throw new TelegramApiException("subscription_unavailable", response.StatusCode);
+
+        try
+        {
+            using var profile = JsonDocument.Parse(payload.AsMemory());
+            var profileJson = new UTF8Encoding(false, true).GetString(payload);
+            var awgProfiles = await FetchAwgProfilesAsync(subscriptionUri!, cancellationToken);
+            var routes = WindowsRouteCatalog.Parse(profile.RootElement, awgProfiles);
+            return new TelegramKeysSnapshot(true, awgActive, awgClients, devices, profileJson, routes, awgProfiles);
+        }
+        catch (Exception error) when (error is JsonException or DecoderFallbackException or InvalidDataException)
+        {
+            throw new TelegramApiException("subscription_invalid", HttpStatusCode.BadGateway);
+        }
+    }
+
+    public async Task SetHappDeviceBlockedAsync(
+        string token,
+        long deviceId,
+        bool blocked,
+        CancellationToken cancellationToken = default)
+    {
+        if (deviceId <= 0)
+            throw new TelegramApiException("device_update_unconfirmed", HttpStatusCode.BadRequest);
+        var action = blocked ? "revoke" : "restore";
+        using var result = await SendJsonAsync(
+            $"/api/tg/happ/devices/{action}", HttpMethod.Post,
+            new { device_id = deviceId }, token, cancellationToken);
+        var root = result.RootElement;
+        if (!ReadBoolean(root, "ok") is true || ReadBoolean(root, "blocked") != blocked)
+            throw new TelegramApiException("device_update_unconfirmed", HttpStatusCode.BadGateway);
+    }
+
+    public async Task LogoutAsync(string token, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendJsonAsync(
+            "/api/tg/logout", HttpMethod.Post, new { }, token, cancellationToken);
+    }
+
+    private static async Task<JsonDocument> SendJsonAsync(
+        string path,
+        HttpMethod method,
+        object? body,
+        string? token,
+        CancellationToken cancellationToken)
+    {
+        if (!path.StartsWith("/api/tg/", StringComparison.Ordinal) || path.Contains("..", StringComparison.Ordinal))
+            throw new InvalidOperationException("Only first-party Telegram API endpoints are allowed.");
+
+        using var request = new HttpRequestMessage(method, new Uri(ApiBase, path));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
+        request.Headers.TryAddWithoutValidation("X-Deytt-Client", "deytt-connect");
+        request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+
+        if (token is not null)
+        {
+            if (token.Length is < 32 or > 256)
+                throw new TelegramApiException("session_invalid", HttpStatusCode.Unauthorized);
+            request.Headers.TryAddWithoutValidation(SessionHeader, token);
+        }
+
+        if (body is not null)
+            request.Content = new ByteArrayContent(JsonSerializer.SerializeToUtf8Bytes(body));
+        if (request.Content is not null)
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json") { CharSet = "utf-8" };
+
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        var payload = await ReadBoundedAsync(response.Content, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+            throw new TelegramApiException(ReadErrorCode(payload), response.StatusCode);
+
+        try
+        {
+            return JsonDocument.Parse(payload.Length == 0 ? "{}"u8.ToArray().AsMemory() : payload.AsMemory());
+        }
+        catch (JsonException)
+        {
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        }
+    }
+
+    private static async Task<byte[]> ReadBoundedAsync(
+        HttpContent content,
+        CancellationToken cancellationToken,
+        int maxBytes = MaxResponseBytes)
+    {
+        if (content.Headers.ContentLength is long length && length > maxBytes)
+            throw new TelegramApiException("response_too_large", HttpStatusCode.BadGateway);
+
+        await using var input = await content.ReadAsStreamAsync(cancellationToken);
+        using var output = new MemoryStream();
+        var buffer = new byte[8 * 1024];
+        while (true)
+        {
+            var count = await input.ReadAsync(buffer.AsMemory(), cancellationToken);
+            if (count == 0)
+                break;
+            if (output.Length + count > maxBytes)
+                throw new TelegramApiException("response_too_large", HttpStatusCode.BadGateway);
+            await output.WriteAsync(buffer.AsMemory(0, count), cancellationToken);
+        }
+        return output.ToArray();
+    }
+
+    private static async Task<IReadOnlyList<WindowsAwgProfile>> FetchAwgProfilesAsync(
+        Uri subscriptionUri,
+        CancellationToken cancellationToken)
+    {
+        AwgDownload? first;
+        try
+        {
+            first = await DownloadAwgProfileAsync(subscriptionUri, null, cancellationToken);
+        }
+        catch (TelegramApiException error) when (!error.IsUnauthorized)
+        {
+            return [];
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return [];
+        }
+
+        if (first is null)
+            return [];
+
+        IReadOnlyList<AwgServer> servers;
+        if (string.IsNullOrWhiteSpace(first.Manifest))
+        {
+            if (TryValidateAwg(first.Config))
+                return [CreateAwgProfile(null, "Основной", "AWG", first.Config!)];
+            return [];
+        }
+
+        try
+        {
+            if (Encoding.UTF8.GetByteCount(first.Manifest) > MaxAwgManifestBytes)
+                return [];
+            using var manifest = JsonDocument.Parse(first.Manifest);
+            if (manifest.RootElement.ValueKind != JsonValueKind.Array ||
+                manifest.RootElement.GetArrayLength() > 16)
+                return [];
+            var parsedServers = new List<AwgServer>();
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in manifest.RootElement.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object || ReadString(item, "id") is not { Length: > 0 } id ||
+                    id.Length > 128 || id.Any(char.IsControl) || !ids.Add(id))
+                    return [];
+                parsedServers.Add(new AwgServer(
+                    id,
+                    SafeLabel(ReadString(item, "label"), id),
+                    SafeLabel(ReadString(item, "short_label"), id.ToUpperInvariant())));
+            }
+            servers = parsedServers;
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
+
+        if (servers.Count == 0)
+            return TryValidateAwg(first.Config)
+                ? [CreateAwgProfile(null, "Основной", "AWG", first.Config!)]
+                : [];
+
+        var profiles = new List<WindowsAwgProfile>(servers.Count);
+        var profilesBytes = 0;
+        for (var index = 0; index < servers.Count; index++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var server = servers[index];
+            var body = index == 0 && TryValidateAwg(first.Config)
+                ? first.Config
+                : null;
+            if (body is null)
+            {
+                try
+                {
+                    var response = await DownloadAwgProfileAsync(subscriptionUri, server.Id, cancellationToken);
+                    body = response?.Config;
+                }
+                catch (TelegramApiException error) when (!error.IsUnauthorized)
+                {
+                    continue;
+                }
+                catch (Exception error) when (error is not OperationCanceledException)
+                {
+                    continue;
+                }
+            }
+            if (TryValidateAwg(body))
+            {
+                var bodyBytes = Encoding.UTF8.GetByteCount(body!);
+                if (profilesBytes + bodyBytes <= MaxAwgProfilesTotalBytes)
+                {
+                    profiles.Add(CreateAwgProfile(server.Id, server.Label, server.ShortLabel, body!));
+                    profilesBytes += bodyBytes;
+                }
+            }
+        }
+        return profiles;
+    }
+
+    private static async Task<AwgDownload?> DownloadAwgProfileAsync(
+        Uri subscriptionUri,
+        string? serverId,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildAwgUri(subscriptionUri, serverId));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
+        request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
+        request.Headers.TryAddWithoutValidation("X-Deytt-Client", "deytt-connect");
+        request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        var manifest = response.Headers.TryGetValues(AwgServersHeader, out var values)
+            ? values.FirstOrDefault()
+            : null;
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            return null;
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            throw new TelegramApiException("subscription_unavailable", response.StatusCode);
+        if (!response.IsSuccessStatusCode)
+            return null;
+
+        var bytes = await ReadBoundedAsync(response.Content, cancellationToken,
+            WindowsAwgProfileParser.MaximumProfileBytes);
+        try
+        {
+            return new AwgDownload(new UTF8Encoding(false, true).GetString(bytes), manifest);
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
+    }
+
+    private static Uri BuildAwgUri(Uri subscriptionUri, string? serverId)
+    {
+        var builder = new UriBuilder(subscriptionUri);
+        var parts = builder.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Where(part =>
+            {
+                var separator = part.IndexOf('=');
+                var key = separator < 0 ? part : part[..separator];
+                return !Uri.UnescapeDataString(key).Equals("format", StringComparison.OrdinalIgnoreCase) &&
+                       !Uri.UnescapeDataString(key).Equals("version", StringComparison.OrdinalIgnoreCase) &&
+                       !Uri.UnescapeDataString(key).Equals("server_id", StringComparison.OrdinalIgnoreCase);
+            })
+            .ToList();
+        parts.Add("format=awg");
+        parts.Add("version=31");
+        if (serverId is not null)
+            parts.Add("server_id=" + Uri.EscapeDataString(serverId));
+        builder.Query = string.Join('&', parts);
+        return builder.Uri;
+    }
+
+    private static bool TryValidateAwg(string? config)
+    {
+        try
+        {
+            _ = WindowsAwgProfileParser.Parse(config, "deytt-validation");
+            return true;
+        }
+        catch (InvalidDataException)
+        {
+            return false;
+        }
+    }
+
+    private static WindowsAwgProfile CreateAwgProfile(string? serverId, string label, string shortLabel, string config)
+    {
+        var routeId = serverId is null ? "awg31" : "awg31:" + Base64Url(Encoding.UTF8.GetBytes(serverId));
+        return new WindowsAwgProfile(routeId, serverId, label, shortLabel, config);
+    }
+
+    private static string Base64Url(byte[] value) =>
+        Convert.ToBase64String(value).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private static string SafeLabel(string? value, string fallback)
+    {
+        var normalized = value?.Trim();
+        return string.IsNullOrEmpty(normalized) || normalized.Length > 128 || normalized.Any(char.IsControl)
+            ? fallback
+            : normalized;
+    }
+
+    private static string ReadErrorCode(byte[] payload)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(payload);
+            return OptionalString(document.RootElement, "error") ?? "request_failed";
+        }
+        catch (JsonException)
+        {
+            return "request_failed";
+        }
+    }
+
+    private static string RequiredString(JsonElement element, string propertyName) =>
+        OptionalString(element, propertyName) is { Length: > 0 } value
+            ? value
+            : throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+
+    private static string? OptionalString(JsonElement element, string propertyName) =>
+        element.ValueKind == JsonValueKind.Object &&
+        element.TryGetProperty(propertyName, out var value) &&
+        value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static string RequiredBotUrl(JsonElement element, string propertyName)
+    {
+        var value = RequiredString(element, propertyName);
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            uri.Scheme != Uri.UriSchemeHttps ||
+            !uri.Host.Equals("t.me", StringComparison.OrdinalIgnoreCase) ||
+            uri.Port != 443)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        return uri.AbsoluteUri;
+    }
+
+    private static bool TryValidateSubscriptionUrl(string? value, out Uri? uri)
+    {
+        uri = null;
+        if (string.IsNullOrWhiteSpace(value) || value.Length > 2048 ||
+            !Uri.TryCreate(value.Trim(), UriKind.Absolute, out var parsed))
+            return false;
+        var host = parsed.Host.TrimEnd('.');
+        var allowedHost = host.Equals("deytt.space", StringComparison.OrdinalIgnoreCase) ||
+                          host.EndsWith(".deytt.space", StringComparison.OrdinalIgnoreCase);
+        var pathParts = parsed.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (!parsed.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !allowedHost || parsed.UserInfo.Length != 0 || parsed.Port != 443 ||
+            parsed.Fragment.Length != 0 || pathParts.Length != 3 ||
+            pathParts[0] != "sub" || pathParts[1] != "token" ||
+            !Regex.IsMatch(pathParts[2], "^[A-Za-z0-9_-]{32,128}$", RegexOptions.CultureInvariant))
+            return false;
+        uri = parsed;
+        return true;
+    }
+
+    private static IReadOnlyList<TelegramHappDevice> ParseHappDevices(JsonElement happ)
+    {
+        if (!happ.TryGetProperty("devices", out var array) || array.ValueKind != JsonValueKind.Array)
+            return [];
+        var devices = new List<TelegramHappDevice>();
+        foreach (var item in array.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object ||
+                !item.TryGetProperty("id", out var idValue) || !idValue.TryGetInt64(out var id) || id <= 0)
+                continue;
+            devices.Add(new TelegramHappDevice(
+                id,
+                ReadBoolean(item, "blocked") == true,
+                ReadString(item, "os") ?? "",
+                ReadString(item, "model") ?? "",
+                ReadString(item, "last_seen")));
+        }
+        return devices;
+    }
+
+    private static int ReadArrayCount(JsonElement element, string propertyName) =>
+        element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.Array
+            ? value.GetArrayLength()
+            : 0;
+
+    private static string? ReadString(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) &&
+        value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    private static bool? ReadBoolean(JsonElement element, string name) =>
+        element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) &&
+        value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : null;
+}
+
+public sealed record PairingStart(string Challenge, string BotUrl, string Delivery);
+public sealed record VerifiedPairing(string Token, TelegramAccount Account);
+public sealed record TelegramHappDevice(long Id, bool Blocked, string Os, string Model, string? LastSeen);
+public sealed record TelegramKeysSnapshot(
+    bool HappAvailable,
+    bool AmneziaActive,
+    int AmneziaClients,
+    IReadOnlyList<TelegramHappDevice> HappDevices,
+    string? ProfileJson,
+    IReadOnlyList<WindowsRoute> Routes,
+    IReadOnlyList<WindowsAwgProfile> AwgProfiles);
+public sealed record WindowsAwgProfile(string RouteId, string? ServerId, string Label, string ShortLabel, string Config);
+internal sealed record AwgServer(string Id, string Label, string ShortLabel);
+internal sealed record AwgDownload(string Config, string? Manifest);
+public sealed record TelegramAccount(
+    string Username,
+    string FirstName,
+    bool Blocked,
+    TelegramSubscription? Subscription)
+{
+    public static TelegramAccount ParseProfile(JsonElement profile)
+    {
+        var username = ReadString(profile, "username") ?? "";
+        var firstName = ReadString(profile, "first_name") ?? "";
+        var blocked = ReadBoolean(profile, "blocked") ?? false;
+        TelegramSubscription? subscription = null;
+        if (profile.TryGetProperty("subscription", out var value) && value.ValueKind == JsonValueKind.Object)
+        {
+            subscription = new TelegramSubscription(
+                ReadBoolean(value, "active") ?? false,
+                ReadBoolean(value, "paid_active") ?? false,
+                ReadString(value, "access_type") ?? "none",
+                ReadString(value, "tariff_name") ?? ReadString(value, "tariff_code"),
+                ReadString(value, "expires_at"),
+                ReadBoolean(value, "unlimited_time") ?? false,
+                ReadInt32(value, "device_limit"),
+                ReadInt32(value, "devices_used"),
+                ReadInt64(value, "traffic_limit_bytes"),
+                ReadInt64(value, "traffic_used_bytes"));
+        }
+        return new TelegramAccount(username, firstName, blocked, subscription);
+    }
+
+    private static string? ReadString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static bool? ReadBoolean(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False
+            ? value.GetBoolean()
+            : null;
+
+    private static int? ReadInt32(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.TryGetInt32(out var result) ? result : null;
+
+    private static long? ReadInt64(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.TryGetInt64(out var result) ? result : null;
+}
+
+public sealed record TelegramSubscription(
+    bool Active,
+    bool PaidActive,
+    string AccessType,
+    string? TariffName,
+    string? ExpiresAt,
+    bool UnlimitedTime,
+    int? DeviceLimit,
+    int? DevicesUsed,
+    long? TrafficLimitBytes,
+    long? TrafficUsedBytes);
+
+public sealed class TelegramApiException(string code, HttpStatusCode statusCode) : Exception(code)
+{
+    public string Code { get; } = code;
+    public HttpStatusCode StatusCode { get; } = statusCode;
+    public bool IsUnauthorized => StatusCode == HttpStatusCode.Unauthorized || Code is "session_invalid" or "session_expired";
+}
