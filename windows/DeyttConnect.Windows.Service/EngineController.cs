@@ -41,7 +41,7 @@ internal sealed class EngineController
             SetSnapshot(new ServiceSnapshot("starting", "Подготовка VPN…", routeTag));
 
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig);
-            var enginePath = Path.Combine(AppContext.BaseDirectory, "sing-box.exe");
+            var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return SetError("Не найдено ядро VPN. Переустановите приложение.");
             _profilePath = WritePrivateProfile(runtimeProfile);
@@ -126,7 +126,7 @@ internal sealed class EngineController
             var endpoints = CreateProbeEndpoints(routeTags, awgProfiles);
             var probeProfile = TunnelProfileBuilder.BuildProbeProfile(profile, endpoints);
             _profilePath = WritePrivateProfile(probeProfile);
-            var enginePath = Path.Combine(AppContext.BaseDirectory, "sing-box.exe");
+            var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return ProbeError("Не найдено ядро VPN. Переустановите приложение.");
 

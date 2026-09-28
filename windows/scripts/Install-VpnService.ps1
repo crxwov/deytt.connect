@@ -20,7 +20,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 
 $sid = [System.Security.Principal.SecurityIdentifier]::new($AllowedUserSid)
 $bundlePath = (Resolve-Path -LiteralPath $BundleRoot).Path
-$engineSource = Join-Path $bundlePath 'sing-box.exe'
+$engineSource = Join-Path $bundlePath 'DeyttVpnEngine.exe'
 $serviceSource = Join-Path $bundlePath 'service'
 $serviceExecutable = Join-Path $serviceSource 'DeyttConnect.Windows.Service.exe'
 if (-not (Test-Path -LiteralPath $engineSource -PathType Leaf) -or
@@ -66,7 +66,7 @@ $directorySecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccess
     [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
 Set-Acl -LiteralPath $installDirectory -AclObject $directorySecurity
 Copy-Item -Path (Join-Path $serviceSource '*') -Destination $installDirectory -Recurse -Force
-Copy-Item -LiteralPath $engineSource -Destination (Join-Path $installDirectory 'sing-box.exe') -Force
+Copy-Item -LiteralPath $engineSource -Destination (Join-Path $installDirectory 'DeyttVpnEngine.exe') -Force
 
 $registryPath = 'HKLM:\SOFTWARE\DEYTT\Connect'
 New-Item -Path $registryPath -Force | Out-Null
