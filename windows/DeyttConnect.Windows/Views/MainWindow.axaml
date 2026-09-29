@@ -3,52 +3,168 @@
         xmlns:controls="using:DeyttConnect.Windows.Controls"
         x:Class="DeyttConnect.Windows.Views.MainWindow"
         Title="deytt./connect"
-        Width="470"
-        Height="930"
-        MinWidth="410"
+        Width="1320"
+        Height="860"
+        MinWidth="980"
         MinHeight="660"
-        MaxWidth="620"
         WindowStartupLocation="CenterScreen"
         Background="#080B12"
         RequestedThemeVariant="Dark">
 
-    <Grid RowDefinitions="*,Auto">
-        <Grid Grid.RowSpan="2" IsHitTestVisible="False">
+    <Grid ColumnDefinitions="252,*">
+        <Grid Grid.ColumnSpan="2" IsHitTestVisible="False">
             <Border>
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
                         <GradientStop Color="#101426" Offset="0" />
-                        <GradientStop Color="#080B12" Offset="0.5" />
+                        <GradientStop Color="#080B12" Offset="0.52" />
                         <GradientStop Color="#07100F" Offset="1" />
                     </LinearGradientBrush>
                 </Border.Background>
             </Border>
-            <controls:StarfieldBackground />
+            <controls:StarfieldBackground x:Name="AppStarfield" Opacity="0.24" />
         </Grid>
 
-        <ScrollViewer x:Name="PageScroll"
-                      Grid.Row="0"
-                      HorizontalScrollBarVisibility="Disabled"
-                      VerticalScrollBarVisibility="Hidden">
-            <StackPanel x:Name="PageHost"
-                        MaxWidth="520"
-                        HorizontalAlignment="Center"
-                        Margin="24,18,24,28"
-                        Spacing="0" />
-        </ScrollViewer>
-
-        <Border Grid.Row="1"
-                Height="76"
-                Background="#111823"
+        <Border Grid.Column="0"
+                Background="#0D131D"
                 BorderBrush="#283548"
-                BorderThickness="0,1,0,0"
-                Padding="12,5,12,7">
-            <Grid ColumnDefinitions="*,*,*,*">
-                <Button x:Name="HomeNav" Classes="deytt-button" Grid.Column="0" />
-                <Button x:Name="RoutesNav" Classes="deytt-button" Grid.Column="1" />
-                <Button x:Name="ProfileNav" Classes="deytt-button" Grid.Column="2" />
-                <Button x:Name="SettingsNav" Classes="deytt-button" Grid.Column="3" />
+                BorderThickness="0,0,1,0"
+                Padding="20,23,18,18">
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                    <Border Width="42" Height="42"
+                            Background="#192331"
+                            BorderBrush="#34445B"
+                            BorderThickness="1"
+                            CornerRadius="15">
+                        <TextBlock Text="D"
+                                   FontFamily="fonts:DEYTT#Unbounded"
+                                   FontSize="16"
+                                   FontWeight="Bold"
+                                   Foreground="#6BDDF2"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2" VerticalAlignment="Center">
+                        <TextBlock Text="deytt./connect"
+                                   FontFamily="fonts:DEYTT#JetBrains Mono"
+                                   FontSize="14"
+                                   FontWeight="Bold"
+                                   Foreground="#F2F5FC" />
+                        <TextBlock Text="WINDOWS CLIENT"
+                                   FontFamily="fonts:DEYTT#JetBrains Mono"
+                                   FontSize="9"
+                                   Foreground="#8291A8" />
+                    </StackPanel>
+                </Grid>
+
+                <StackPanel Grid.Row="1" Margin="2,34,0,12" Spacing="8">
+                    <TextBlock x:Name="NavSectionTitle"
+                               Text="РАЗДЕЛЫ"
+                               FontFamily="fonts:DEYTT#JetBrains Mono"
+                               FontSize="10"
+                               FontWeight="SemiBold"
+                               Foreground="#8291A8" />
+                    <Border Height="1" Background="#202B38" />
+                </StackPanel>
+
+                <StackPanel Grid.Row="2" Spacing="5">
+                    <Button x:Name="HomeNav" Classes="deytt-button sidebar-nav" />
+                    <Button x:Name="RoutesNav" Classes="deytt-button sidebar-nav" />
+                    <Button x:Name="ProfileNav" Classes="deytt-button sidebar-nav" />
+                    <Button x:Name="SettingsNav" Classes="deytt-button sidebar-nav" />
+                </StackPanel>
+
+                <Border Grid.Row="3"
+                        Background="#111823"
+                        BorderBrush="#283548"
+                        BorderThickness="1"
+                        CornerRadius="17"
+                        Padding="14,13">
+                    <StackPanel Spacing="7">
+                        <TextBlock Text="СОСТОЯНИЕ"
+                                   FontFamily="fonts:DEYTT#JetBrains Mono"
+                                   FontSize="9"
+                                   FontWeight="SemiBold"
+                                   Foreground="#8291A8" />
+                        <Grid ColumnDefinitions="Auto,*">
+                            <Ellipse x:Name="SidebarStatusDot"
+                                     Width="8" Height="8"
+                                     Fill="#9AA8BC"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,9,0" />
+                            <TextBlock x:Name="SidebarVpnText"
+                                       Grid.Column="1"
+                                       Text="VPN выключен"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="#F2F5FC"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                        <TextBlock x:Name="SidebarAccountText"
+                                   Text="Telegram не подключён"
+                                   FontSize="11"
+                                   Foreground="#9AA8BC"
+                                   TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
             </Grid>
         </Border>
+
+        <Grid Grid.Column="1" RowDefinitions="72,*">
+            <Border Grid.Row="0"
+                    Background="#0A1018"
+                    BorderBrush="#202B38"
+                    BorderThickness="0,0,0,1"
+                    Padding="30,0">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Spacing="3" VerticalAlignment="Center">
+                        <TextBlock Text="DEYTT · PRIVATE NETWORK"
+                                   FontFamily="fonts:DEYTT#JetBrains Mono"
+                                   FontSize="9"
+                                   FontWeight="SemiBold"
+                                   Foreground="#8291A8" />
+                        <TextBlock x:Name="WorkspaceTitle"
+                                   Text="Ваше подключение"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   Foreground="#F2F5FC" />
+                    </StackPanel>
+                    <Border Grid.Column="1"
+                            Background="#111823"
+                            BorderBrush="#283548"
+                            BorderThickness="1"
+                            CornerRadius="14"
+                            Padding="12,8"
+                            VerticalAlignment="Center">
+                        <Grid ColumnDefinitions="Auto,Auto">
+                            <Ellipse x:Name="HeaderStatusDot"
+                                     Width="7" Height="7"
+                                     Fill="#9AA8BC"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,8,0" />
+                            <TextBlock x:Name="HeaderStatusText"
+                                       Grid.Column="1"
+                                       Text="Не подключено"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       Foreground="#9AA8BC"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <ScrollViewer x:Name="PageScroll"
+                          Grid.Row="1"
+                          HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="PageHost"
+                            MaxWidth="1360"
+                            HorizontalAlignment="Stretch"
+                            Margin="34,26,34,42"
+                            Spacing="0" />
+            </ScrollViewer>
+        </Grid>
     </Grid>
 </Window>

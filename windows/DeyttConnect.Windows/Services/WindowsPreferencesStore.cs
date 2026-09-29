@@ -6,8 +6,10 @@ public sealed record WindowsPreferences(
     string Language = "ru",
     string SelectedRoute = "auto",
     string ProbeMethod = "HEAD",
-    bool MapRegionEnabled = true,
-    bool ReduceMotion = false);
+    bool MapRegionEnabled = false,
+    bool ReduceMotion = false,
+    bool MapRegionConsentGranted = false,
+    bool MapRegionConsentAsked = false);
 
 public static class WindowsPreferencesStore
 {
@@ -34,8 +36,10 @@ public static class WindowsPreferencesStore
                 value.Language is "ru" or "en" ? value.Language : "ru",
                 IsKnownRoute(value.SelectedRoute) ? value.SelectedRoute : "auto",
                 value.ProbeMethod is "HEAD" or "GET" ? value.ProbeMethod : "HEAD",
-                value.MapRegionEnabled,
-                value.ReduceMotion);
+                value.MapRegionEnabled && value.MapRegionConsentGranted,
+                value.ReduceMotion,
+                value.MapRegionConsentGranted,
+                value.MapRegionConsentAsked);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -51,7 +55,9 @@ public static class WindowsPreferencesStore
             IsKnownRoute(preferences.SelectedRoute) ? preferences.SelectedRoute : "auto",
             preferences.ProbeMethod is "HEAD" or "GET" ? preferences.ProbeMethod : "HEAD",
             preferences.MapRegionEnabled,
-            preferences.ReduceMotion);
+            preferences.ReduceMotion,
+            preferences.MapRegionConsentGranted,
+            preferences.MapRegionConsentAsked);
         var path = PreferencesPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
