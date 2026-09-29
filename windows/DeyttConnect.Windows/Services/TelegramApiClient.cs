@@ -129,6 +129,188 @@ public sealed class TelegramApiClient
         }
     }
 
+    public async Task<IReadOnlyList<TelegramTariff>> GetTariffsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await SendJsonAsync("/api/tg/tariffs", HttpMethod.Get, null, null, cancellationToken);
+        if (!response.RootElement.TryGetProperty("tariffs", out var values) ||
+            values.ValueKind != JsonValueKind.Array || values.GetArrayLength() > 64)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+
+        var tariffs = new List<TelegramTariff>();
+        foreach (var item in values.EnumerateArray())
+        {
+            var code = ReadString(item, "code");
+            var name = ReadString(item, "name");
+            if (item.ValueKind != JsonValueKind.Object ||
+                string.IsNullOrWhiteSpace(code) || code.Length > 80 || code.Any(char.IsControl) ||
+                !TryReadInt32(item, "devices", out var devices) || devices is < 1 or > 10 ||
+                !TryReadInt32(item, "months", out var months) || months is < 1 or > 36 ||
+                !TryReadInt32(item, "rubles", out var rubles) || rubles < 0)
+                continue;
+            tariffs.Add(new TelegramTariff(code, SafeLabel(name, code), devices, months, rubles));
+        }
+        return tariffs;
+    }
+
+    public async Task<TelegramQuote> GetQuoteAsync(
+        string token,
+        string kind,
+        string? plan = null,
+        int? months = null,
+        int? devices = null,
+        int? extra = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateCheckoutKind(kind);
+        var parts = new List<string> { "kind=" + Uri.EscapeDataString(kind) };
+        if (!string.IsNullOrWhiteSpace(plan))
+        {
+            if (plan.Length > 80 || plan.Any(char.IsControl))
+                throw new TelegramApiException("invalid_response", HttpStatusCode.BadRequest);
+            parts.Add("plan=" + Uri.EscapeDataString(plan));
+        }
+        if (months is not null)
+            parts.Add("months=" + months.Value);
+        if (devices is not null)
+            parts.Add("devices=" + devices.Value);
+        if (extra is not null)
+            parts.Add("extra=" + extra.Value);
+        if (months is < 1 or > 36 || devices is < 1 or > 10 || extra is < 1 or > 10)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadRequest);
+
+        using var response = await SendJsonAsync(
+            "/api/tg/quote?" + string.Join('&', parts), HttpMethod.Get, null, token, cancellationToken);
+        var root = response.RootElement;
+        if (!TryReadInt32(root, "devices", out var quotedDevices) || quotedDevices is < 1 or > 10 ||
+            (!TryReadInt32(root, "months", out var quotedMonths) && kind != "add_devices") ||
+            quotedMonths is < 0 or > 36 || quotedMonths == 0 && kind != "add_devices" ||
+            !TryReadInt32(root, "rubles", out var rubles) || rubles < 0 ||
+            !TryReadInt32(root, "stars", out var stars) || stars < 0)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        return new TelegramQuote(ReadString(root, "name") ?? plan ?? "Подписка",
+            quotedDevices, quotedMonths, rubles, stars);
+    }
+
+    public async Task<TelegramCheckout> CreateCheckoutAsync(
+        string token,
+        string kind,
+        string method,
+        string? plan = null,
+        int? months = null,
+        int? devices = null,
+        int? extra = null,
+        CancellationToken cancellationToken = default)
+    {
+        ValidateCheckoutKind(kind);
+        if (method is not ("stars" or "platega"))
+            throw new TelegramApiException("invalid_payment_method", HttpStatusCode.BadRequest);
+        if (months is < 1 or > 36 || devices is < 1 or > 10 || extra is < 1 or > 10)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadRequest);
+
+        var body = new Dictionary<string, object?>
+        {
+            ["kind"] = kind,
+            ["method"] = method,
+        };
+        if (plan is not null) body["plan"] = plan;
+        if (months is not null) body["months"] = months.Value;
+        if (devices is not null) body["devices"] = devices.Value;
+        if (extra is not null) body["extra"] = extra.Value;
+
+        using var response = await SendJsonAsync("/api/tg/checkout", HttpMethod.Post, body, token, cancellationToken);
+        var root = response.RootElement;
+        var urlProperty = method == "stars" ? "invoice_url" : "pay_url";
+        var paymentUrl = ReadString(root, urlProperty);
+        if (!Uri.TryCreate(paymentUrl, UriKind.Absolute, out var uri) ||
+            uri.Scheme != Uri.UriSchemeHttps || uri.Port != 443 || uri.UserInfo.Length != 0)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        var externalId = ReadString(root, "external_id");
+        if (externalId is not null && !Regex.IsMatch(externalId, "^[A-Za-z0-9_-]{1,64}$", RegexOptions.CultureInvariant))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        return new TelegramCheckout(uri.AbsoluteUri, externalId);
+    }
+
+    public async Task<string> GetPaymentStatusAsync(
+        string token,
+        string externalId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Regex.IsMatch(externalId, "^[A-Za-z0-9_-]{1,64}$", RegexOptions.CultureInvariant))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadRequest);
+        using var response = await SendJsonAsync(
+            "/api/tg/payment-status?external_id=" + Uri.EscapeDataString(externalId),
+            HttpMethod.Get, null, token, cancellationToken);
+        return ReadString(response.RootElement, "status") ??
+               throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+    }
+
+    public async Task<IReadOnlyList<TelegramAppSession>> GetSessionsAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await SendJsonAsync(
+            "/api/tg/sessions", HttpMethod.Get, null, token, cancellationToken);
+        if (!response.RootElement.TryGetProperty("sessions", out var values) ||
+            values.ValueKind != JsonValueKind.Array || values.GetArrayLength() > 64)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+
+        var sessions = new List<TelegramAppSession>();
+        foreach (var item in values.EnumerateArray())
+        {
+            var id = ReadString(item, "id");
+            if (item.ValueKind != JsonValueKind.Object || string.IsNullOrWhiteSpace(id) ||
+                id.Length > 128 || id.Any(char.IsControl))
+                continue;
+            sessions.Add(new TelegramAppSession(
+                id,
+                SafeLabel(ReadString(item, "label"), "deytt.connect"),
+                ReadBoolean(item, "current") ?? false,
+                ReadString(item, "created_at"),
+                ReadString(item, "expires_at")));
+        }
+        return sessions;
+    }
+
+    public async Task RevokeSessionAsync(
+        string token,
+        string sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId) || sessionId.Length > 128 || sessionId.Any(char.IsControl))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadRequest);
+        using var response = await SendJsonAsync(
+            "/api/tg/sessions/revoke", HttpMethod.Post, new { session_id = sessionId }, token, cancellationToken);
+        if (ReadBoolean(response.RootElement, "ok") is false)
+            throw new TelegramApiException("session_revoke_unconfirmed", HttpStatusCode.BadGateway);
+    }
+
+    public async Task ResetKeysAsync(
+        string token,
+        string scope,
+        CancellationToken cancellationToken = default)
+    {
+        if (scope is not ("all" or "awg" or "happ"))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadRequest);
+        using var response = await SendJsonAsync(
+            "/api/tg/keys/reset", HttpMethod.Post, new { scope }, token, cancellationToken);
+        if (ReadBoolean(response.RootElement, "ok") is false)
+            throw new TelegramApiException("key_reset_unconfirmed", HttpStatusCode.BadGateway);
+    }
+
+    private static void ValidateCheckoutKind(string kind)
+    {
+        if (kind is not ("preset" or "custom" or "add_time" or "add_devices"))
+            throw new TelegramApiException("invalid_checkout_kind", HttpStatusCode.BadRequest);
+    }
+
+    private static bool TryReadInt32(JsonElement element, string propertyName, out int result)
+    {
+        result = 0;
+        return element.ValueKind == JsonValueKind.Object &&
+               element.TryGetProperty(propertyName, out var value) && value.TryGetInt32(out result);
+    }
+
     public async Task SetHappDeviceBlockedAsync(
         string token,
         long deviceId,
@@ -494,6 +676,10 @@ public sealed class TelegramApiClient
 
 public sealed record PairingStart(string Challenge, string BotUrl, string Delivery);
 public sealed record VerifiedPairing(string Token, TelegramAccount Account);
+public sealed record TelegramTariff(string Code, string Name, int Devices, int Months, int Rubles);
+public sealed record TelegramQuote(string Name, int Devices, int Months, int Rubles, int Stars);
+public sealed record TelegramCheckout(string PaymentUrl, string? ExternalId);
+public sealed record TelegramAppSession(string Id, string Label, bool Current, string? CreatedAt, string? ExpiresAt);
 public sealed record TelegramHappDevice(long Id, bool Blocked, string Os, string Model, string? LastSeen);
 public sealed record TelegramKeysSnapshot(
     bool HappAvailable,

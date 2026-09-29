@@ -19,10 +19,17 @@
             <Setter Property="Foreground" Value="#F2F5FC" />
         </Style>
         <Style Selector="Button.deytt-button:pointerover">
-            <Setter Property="Opacity" Value="0.92" />
+            <Setter Property="Opacity" Value="0.90" />
         </Style>
         <Style Selector="Button.deytt-button:pressed">
-            <Setter Property="Opacity" Value="0.78" />
+            <Setter Property="Opacity" Value="0.72" />
+        </Style>
+        <Style Selector="Button.deytt-button:focus">
+            <Setter Property="BorderBrush" Value="#6BDDF2" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style Selector="Button.deytt-button:disabled">
+            <Setter Property="Opacity" Value="0.56" />
         </Style>
     </Application.Styles>
 </Application>
