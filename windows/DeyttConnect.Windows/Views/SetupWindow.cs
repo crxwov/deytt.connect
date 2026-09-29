@@ -160,12 +160,9 @@ public sealed class SetupWindow : UserControl
             Color = Color.Parse("#59000000"),
         });
 
-        Content = new ScrollViewer
-        {
-            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-            Content = card,
-        };
+        // MainWindow already scrolls PageHost. A nested scroll viewer here measures the
+        // centered card against unbounded height and leaves it below the compact viewport.
+        Content = card;
 
         KeyDown += (_, args) =>
         {
@@ -435,8 +432,10 @@ public sealed class SetupWindow : UserControl
         }
         catch (Exception error) when (IsNonFatal(error))
         {
-            Render(ViewState.Code, Copy("Не удалось завершить вход. Запроси новый код и попробуй ещё раз.",
-                "Could not finish sign-in. Request a new code and try again."), DeyttTheme.Coral,
+            System.Diagnostics.Trace.TraceError("Telegram pairing flow failed ({0}).", error.GetType().Name);
+            Render(ViewState.Code, Copy(
+                "Не удалось завершить вход. Эта ошибка не означает, что код неверный. Попробуй запросить новый код.",
+                "Could not finish sign-in. This does not mean the code is wrong. Try requesting a new code."), DeyttTheme.Coral,
                 showBotButton: _botUrl.Length > 0);
         }
         finally
