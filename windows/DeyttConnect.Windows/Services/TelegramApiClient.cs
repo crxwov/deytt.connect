@@ -25,6 +25,7 @@ public sealed class TelegramApiClient
     private const string SessionHeader = "X-TG-App-Token";
     private const string AwgServersHeader = "X-Deytt-Awg-Servers";
     private const int MaxResponseBytes = 512 * 1024;
+    private const int MaxAvatarBytes = 512 * 1024;
     private const int MaxProfileBytes = 2 * 1024 * 1024;
     private const int MaxAwgManifestBytes = 32 * 1024;
     private const int MaxAwgProfilesTotalBytes = 4 * 1024 * 1024;
@@ -74,6 +75,33 @@ public sealed class TelegramApiClient
         using var response = await SendJsonAsync(
             "/api/tg/me", HttpMethod.Get, null, token, cancellationToken);
         return TelegramAccount.ParseProfile(response.RootElement.GetProperty("profile"));
+    }
+
+    public async Task<byte[]?> GetAvatarAsync(string token, CancellationToken cancellationToken = default)
+    {
+        if (token.Length is < 32 or > 256)
+            throw new TelegramApiException("session_invalid", HttpStatusCode.Unauthorized);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(ApiBase, "/api/tg/me/avatar"));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("image/*"));
+        request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
+        request.Headers.TryAddWithoutValidation("X-Deytt-Client", "deytt-connect");
+        request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+        request.Headers.TryAddWithoutValidation(SessionHeader, token);
+
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (response.StatusCode is HttpStatusCode.NoContent or HttpStatusCode.NotFound)
+            return null;
+        if (!response.IsSuccessStatusCode)
+            throw new TelegramApiException(
+                response.StatusCode == HttpStatusCode.Unauthorized ? "session_invalid" : "avatar_unavailable",
+                response.StatusCode);
+
+        var mediaType = response.Content.Headers.ContentType?.MediaType;
+        if (mediaType is null || !mediaType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            return null;
+        var bytes = await ReadBoundedAsync(response.Content, cancellationToken, MaxAvatarBytes);
+        return bytes.Length > 0 ? bytes : null;
     }
 
     public async Task<TelegramKeysSnapshot> GetSubscriptionAsync(
@@ -655,7 +683,11 @@ public sealed class TelegramApiClient
                 ReadBoolean(item, "blocked") == true,
                 ReadString(item, "os") ?? "",
                 ReadString(item, "model") ?? "",
-                ReadString(item, "last_seen")));
+                ReadString(item, "last_seen"))
+            {
+                OsVersion = ReadString(item, "os_version"),
+                BlockedAt = ReadString(item, "blocked_at"),
+            });
         }
         return devices;
     }
@@ -680,7 +712,11 @@ public sealed record TelegramTariff(string Code, string Name, int Devices, int M
 public sealed record TelegramQuote(string Name, int Devices, int Months, int Rubles, int Stars);
 public sealed record TelegramCheckout(string PaymentUrl, string? ExternalId);
 public sealed record TelegramAppSession(string Id, string Label, bool Current, string? CreatedAt, string? ExpiresAt);
-public sealed record TelegramHappDevice(long Id, bool Blocked, string Os, string Model, string? LastSeen);
+public sealed record TelegramHappDevice(long Id, bool Blocked, string Os, string Model, string? LastSeen)
+{
+    public string? OsVersion { get; init; }
+    public string? BlockedAt { get; init; }
+}
 public sealed record TelegramKeysSnapshot(
     bool HappAvailable,
     bool AmneziaActive,
@@ -698,6 +734,10 @@ public sealed record TelegramAccount(
     bool Blocked,
     TelegramSubscription? Subscription)
 {
+    public string LastName { get; init; } = "";
+    public string? RegisteredAt { get; init; }
+    public long? ServiceDays { get; init; }
+
     public static TelegramAccount ParseProfile(JsonElement profile)
     {
         var username = ReadString(profile, "username") ?? "";
@@ -718,7 +758,12 @@ public sealed record TelegramAccount(
                 ReadInt64(value, "traffic_limit_bytes"),
                 ReadInt64(value, "traffic_used_bytes"));
         }
-        return new TelegramAccount(username, firstName, blocked, subscription);
+        return new TelegramAccount(username, firstName, blocked, subscription)
+        {
+            LastName = ReadString(profile, "last_name") ?? "",
+            RegisteredAt = ReadString(profile, "registered_at"),
+            ServiceDays = ReadInt64(profile, "service_days"),
+        };
     }
 
     private static string? ReadString(JsonElement element, string name) =>
