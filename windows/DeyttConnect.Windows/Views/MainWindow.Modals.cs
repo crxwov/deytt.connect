@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using DeyttConnect.Windows.UI;
 
 namespace DeyttConnect.Windows.Views;
@@ -84,6 +85,8 @@ public partial class MainWindow
         };
         Closed += closedHandler;
         var gateAcquired = false;
+        Control? previousFocus = null;
+        (bool Sidebar, bool BottomNavigation, bool Page, bool Header) previousEnabled = default;
 
         try
         {
@@ -91,6 +94,9 @@ public partial class MainWindow
             gateAcquired = true;
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
+                previousFocus = FocusManager?.GetFocusedElement() as Control;
+                previousEnabled = (SidebarPanel.IsEnabled, BottomNavigationPanel.IsEnabled,
+                    PageScroll.IsEnabled, WorkspaceHeader.IsEnabled);
                 var close = DeyttTheme.Action(
                     DeyttTheme.TextBlock("×", 22, DeyttTheme.Muted, FontWeight.SemiBold),
                     () => modal.Close());
@@ -132,6 +138,7 @@ public partial class MainWindow
                     Background = new SolidColorBrush(Color.FromArgb(208, 3, 7, 12)),
                     Focusable = true,
                 };
+                KeyboardNavigation.SetTabNavigation(overlay, KeyboardNavigationMode.Cycle);
                 overlay.Children.Add(card);
                 overlay.KeyDown += (_, args) =>
                 {
@@ -144,10 +151,14 @@ public partial class MainWindow
 
                 configure?.Invoke(modal);
                 _activeShellContentDialog = modal;
+                SidebarPanel.IsEnabled = false;
+                BottomNavigationPanel.IsEnabled = false;
+                PageScroll.IsEnabled = false;
+                WorkspaceHeader.IsEnabled = false;
                 ModalOverlayHost.Children.Clear();
                 ModalOverlayHost.Children.Add(overlay);
                 ModalOverlayHost.IsVisible = true;
-                overlay.Focus();
+                Dispatcher.UIThread.Post(() => close.Focus(), DispatcherPriority.Input);
             });
 
             return await modal.Completion;
@@ -168,6 +179,29 @@ public partial class MainWindow
                         _activeShellContentDialog = null;
                         ModalOverlayHost.Children.Clear();
                         ModalOverlayHost.IsVisible = false;
+                        SidebarPanel.IsEnabled = previousEnabled.Sidebar;
+                        BottomNavigationPanel.IsEnabled = previousEnabled.BottomNavigation;
+                        PageScroll.IsEnabled = previousEnabled.Page;
+                        WorkspaceHeader.IsEnabled = previousEnabled.Header;
+                        var focusTarget = previousFocus is { IsVisible: true, IsEnabled: true } &&
+                                          previousFocus.IsAttachedToVisualTree()
+                            ? previousFocus
+                            : _compactLayout
+                                ? _activeTab switch
+                                {
+                                    MainTab.Routes => BottomRoutesNav,
+                                    MainTab.Profile or MainTab.Support => BottomProfileNav,
+                                    MainTab.Settings => BottomSettingsNav,
+                                    _ => BottomHomeNav,
+                                }
+                                : _activeTab switch
+                                {
+                                    MainTab.Routes => RoutesNav,
+                                    MainTab.Profile or MainTab.Support => ProfileNav,
+                                    MainTab.Settings => SettingsNav,
+                                    _ => HomeNav,
+                                };
+                        Dispatcher.UIThread.Post(() => focusTarget.Focus(), DispatcherPriority.Input);
                     }
                 });
                 _shellModalGate.Release();

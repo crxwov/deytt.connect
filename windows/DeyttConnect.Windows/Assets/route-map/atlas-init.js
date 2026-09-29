@@ -7,14 +7,55 @@
   window.deyttMapEgressCountry = null;
   window.deyttMapActiveAutoRoute = null;
   window.deyttMapTrafficActive = false;
+  window.deyttMapReducedMotion = false;
   window.deyttMapLocations = ["nl", "de", "fi", "ru"];
+  function notifyHost(message, retries) {
+    if (typeof window.invokeCSharpAction === "function") {
+      try {
+        window.invokeCSharpAction(message);
+        return;
+      } catch (_) { /* The native adapter may be detaching. */ }
+    }
+    if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === "function") {
+      try {
+        window.chrome.webview.postMessage(message);
+        return;
+      } catch (_) { /* Retry after the adapter is ready. */ }
+    }
+    if (window.DeyttAtlasBridge && typeof window.DeyttAtlasBridge.onNodeTap === "function") {
+      try {
+        window.DeyttAtlasBridge.onNodeTap(message);
+        return;
+      } catch (_) { /* Retry after the adapter is ready. */ }
+    }
+    if (retries > 0) setTimeout(function () { notifyHost(message, retries - 1); }, 100);
+  }
+  function applyReducedMotion() {
+    const canvas = root.querySelector("canvas");
+    if (canvas) {
+      canvas.style.transition = window.deyttMapReducedMotion ? "none" : "";
+      canvas.style.transform = window.deyttMapReducedMotion ? "none" : "";
+    }
+    const atlas = window.deyttMapAtlas;
+    if (!atlas) return;
+    atlas.staticDirty = true;
+    if (window.deyttMapReducedMotion) atlas.velocityLon = 0;
+    if (atlas.frame) {
+      cancelAnimationFrame(atlas.frame);
+      atlas.frame = 0;
+    }
+    atlas.lastFrame = 0;
+    atlas.start();
+  }
+  window.deyttSetMapReducedMotion = function (enabled) {
+    const next = Boolean(enabled);
+    if (window.deyttMapReducedMotion === next) return;
+    window.deyttMapReducedMotion = next;
+    applyReducedMotion();
+  };
   window.deyttMapNodeTapped = function (key) {
     const node = String(key || "").toLowerCase();
-    if (typeof window.invokeCSharpAction === "function") {
-      window.invokeCSharpAction(node);
-    } else if (window.DeyttAtlasBridge && typeof window.DeyttAtlasBridge.onNodeTap === "function") {
-      window.DeyttAtlasBridge.onNodeTap(node);
-    }
+    notifyHost(node, 0);
   };
   window.deyttSetMapRoute = function (route) {
     window.deyttMapRoute = route;
@@ -60,13 +101,20 @@
     }
   };
 
-  window.DeyttAtlas.create(root, {
-    variant: "showcase",
-    route: "auto",
-    topologyUrl: "world-land.json",
-    selectOnTap: false,
+  Promise.resolve().then(function () {
+    return window.DeyttAtlas.create(root, {
+      variant: "showcase",
+      route: "auto",
+      topologyUrl: "world-land.json",
+      selectOnTap: false,
+    });
   }).then(function (atlas) {
     window.deyttMapAtlas = atlas;
+    const systemReducedMotion = atlas.reducedMotion;
+    atlas.reducedMotion = {
+      get matches() { return window.deyttMapReducedMotion || systemReducedMotion.matches; },
+    };
+    applyReducedMotion();
     window.deyttMapAtlas.setLanguage(window.deyttMapLanguage);
     window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
     const status = root.querySelector("[data-atlas-status]");
@@ -82,11 +130,15 @@
       const location = window.deyttMapUserLocation;
       window.deyttMapAtlas.setUserLocation(location.latitude, location.longitude, location.details);
     }
+    // Navigation can finish before the asynchronous topology fetch and atlas creation.
+    // Ask the host to resend its latest state after the atlas is fully initialized.
+    notifyHost("atlas-ready", 15);
   }).catch(function () {
     const status = root.querySelector("[data-atlas-status]");
     if (status) {
       status.removeAttribute("aria-hidden");
       status.textContent = window.deyttMapLanguage === "en" ? "Map temporarily unavailable" : "карта временно недоступна";
     }
+    notifyHost("atlas-error", 15);
   });
 }());

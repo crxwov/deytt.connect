@@ -11,6 +11,9 @@ namespace DeyttConnect.Windows.Views;
 
 public partial class MainWindow
 {
+    private readonly HashSet<long> _happDeviceChangesInFlight = [];
+    private readonly HashSet<string> _sessionRevokesInFlight = new(StringComparer.Ordinal);
+
     private Control BuildTelegramIdentityEntry(TelegramAccount? account, bool signedIn, Action onClick)
     {
         var name = AccountDisplayName(account, signedIn);
@@ -205,7 +208,7 @@ public partial class MainWindow
         {
             dialog?.Close();
             if (_sessionToken == token)
-                _ = ShowSetupWindowAsync();
+                _ = ShowSetupWindowAsync(forceFreshPairing: true);
         });
         content.Children.Add(reconnect);
         var disconnect = DeyttTheme.Action(
@@ -276,13 +279,16 @@ public partial class MainWindow
                     "Blocking stops subscription refresh on this device. Downloaded keys and an active VPN connection keep working."),
             13, DeyttTheme.Muted));
         ShellContentDialog? dialog = null;
-        content.Children.Add(DeyttTheme.PrimaryButton(
-            blocked ? Copy("Восстановить доступ", "Restore access") : Copy("Заблокировать", "Block device"),
-            () =>
-            {
-                dialog?.Close();
-                _ = ToggleHappDeviceAsync(device);
-            }));
+        if (device.Id > 0)
+        {
+            content.Children.Add(DeyttTheme.PrimaryButton(
+                blocked ? Copy("Восстановить доступ", "Restore access") : Copy("Заблокировать", "Block device"),
+                () =>
+                {
+                    dialog?.Close();
+                    _ = ToggleHappDeviceAsync(device);
+                }));
+        }
         content.Children.Add(DeyttTheme.Action(
             DeyttTheme.TextBlock(Copy("Закрыть", "Close"), 13, DeyttTheme.Muted),
             () => dialog?.Close()));
@@ -301,7 +307,8 @@ public partial class MainWindow
         return parsed.ToLocalTime().ToString("g", culture);
     }
 
-    private async Task ShowHappDeviceActionErrorAsync(TelegramApiException error)
+    private async Task ShowHappDeviceActionErrorAsync(TelegramApiException error,
+        TelegramHappDevice device, string token)
     {
         var slotLimit = error.Code is "device_limit_reached" or "device_slot_limit_reached";
         var deviceMissing = error.Code is "device_not_found" or "happ_device_not_found";
@@ -319,6 +326,9 @@ public partial class MainWindow
                 : Copy("Сервер не подтвердил изменение. Проверьте подключение и обновите список.",
                     "The server did not confirm the change. Check your connection and refresh the list.");
         var retry = DeyttTheme.PrimaryButton(Copy("Обновить список", "Refresh list"), () => { });
+        var retryChange = DeyttTheme.Action(DeyttTheme.TextBlock(
+            Copy("Повторить действие", "Retry action"), 13, DeyttTheme.Sky,
+            FontWeight.SemiBold), () => { });
         var close = DeyttTheme.Action(DeyttTheme.TextBlock(Copy("Закрыть", "Close"),
             13, DeyttTheme.Muted), () => { });
         var content = new StackPanel
@@ -328,16 +338,20 @@ public partial class MainWindow
             {
                 DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
                 retry,
+                retryChange,
                 close,
             },
         };
         var result = await ShowContentInShellAsync(title, content, 500, dialog =>
         {
             if (retry.Child is Button retryButton)
-                retryButton.Click += (_, _) => dialog.Close(true);
-            close.Click += (_, _) => dialog.Close(false);
+                retryButton.Click += (_, _) => dialog.Close("refresh");
+            retryChange.Click += (_, _) => dialog.Close("retry");
+            close.Click += (_, _) => dialog.Close();
         });
-        if (result is true && _sessionToken is not null)
+        if (result is "refresh" && _sessionToken == token)
             await RefreshSignedInAccountAsync();
+        else if (result is "retry" && _sessionToken == token)
+            await ToggleHappDeviceAsync(device);
     }
 }

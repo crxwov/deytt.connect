@@ -874,7 +874,10 @@ public sealed record TelegramAccount(
                 ReadInt32(value, "device_limit"),
                 ReadInt32(value, "devices_used"),
                 ReadInt64(value, "traffic_limit_bytes"),
-                ReadInt64(value, "traffic_used_bytes"));
+                ReadInt64(value, "traffic_used_bytes"))
+            {
+                TrafficTotalBytes = ReadInt64(value, "traffic_total_bytes"),
+            };
         }
         return new TelegramAccount(username, firstName, blocked, subscription)
         {
@@ -911,7 +914,10 @@ public sealed record TelegramSubscription(
     int? DeviceLimit,
     int? DevicesUsed,
     long? TrafficLimitBytes,
-    long? TrafficUsedBytes);
+    long? TrafficUsedBytes)
+{
+    public long? TrafficTotalBytes { get; init; }
+}
 
 public sealed class TelegramApiException(string code, HttpStatusCode statusCode) : Exception(code)
 {

@@ -63,7 +63,7 @@ public partial class SupportView : UserControl, IDisposable
         RefreshButton.Click += async (_, _) => await RefreshCurrentPageAsync();
         RetryButton.Click += async (_, _) => await RefreshThreadAsync();
         DocumentRetryButton.Click += async (_, _) => await LoadDocumentAsync(CurrentDocumentKind());
-        SendButton.Click += async (_, _) => await ConfirmAndSendAsync();
+        SendButton.Click += async (_, _) => await SendMessageAsync();
         CloseTicketButton.Click += async (_, _) => await ConfirmAndCloseTicketAsync();
         SignInButton.Click += async (_, _) => await SignInAsync();
         BackButton.Click += (_, _) => BackRequested?.Invoke(this, EventArgs.Empty);
@@ -364,7 +364,7 @@ public partial class SupportView : UserControl, IDisposable
         Dispatcher.UIThread.Post(() => MessageScroll.ScrollToEnd());
     }
 
-    private async Task ConfirmAndSendAsync()
+    private async Task SendMessageAsync()
     {
         var text = Composer.Text?.Trim() ?? string.Empty;
         if (text.Length < 5)
@@ -378,13 +378,6 @@ public partial class SupportView : UserControl, IDisposable
 
         var generation = _activationGeneration;
         var accessToken = _accessToken;
-        var confirmed = await ConfirmAsync(
-            T("Отправить сообщение?", "Send this message?"),
-            T("Сообщение будет отправлено команде поддержки.", "This message will be sent to the support team."),
-            T("Отправить", "Send"));
-        if (!confirmed || !IsCurrentOperation(generation, accessToken))
-            return;
-
         var cancellationToken = ActiveToken;
         _busy = true;
         SetBusy(true);
@@ -766,7 +759,7 @@ public partial class SupportView : UserControl, IDisposable
         else if (args.Key == Key.Enter && args.KeyModifiers.HasFlag(KeyModifiers.Control) &&
                  _page == SupportPage.Thread && _accessToken is not null)
         {
-            _ = ConfirmAndSendAsync();
+            _ = SendMessageAsync();
             args.Handled = true;
         }
     }

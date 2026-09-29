@@ -24,7 +24,7 @@ public partial class MainWindow
         Timeout = TimeSpan.FromSeconds(45),
     };
 
-    private async Task ShowSetupWindowAsync(string? initialImportUrl = null)
+    private async Task ShowSetupWindowAsync(string? initialImportUrl = null, bool forceFreshPairing = false)
     {
         if (_setupFlowCompletion is not null)
         {
@@ -41,7 +41,8 @@ public partial class MainWindow
             ApiClient = _telegramApi,
             Language = _language,
             InitialImportUrl = initialImportUrl,
-            RestoreExistingSession = true,
+            RestoreExistingSession = !forceFreshPairing,
+            DeferSessionSaveUntilImport = forceFreshPairing,
             ImportUrlAsync = ImportSubscriptionUrlAsync,
             CommitImportAsync = (result, cancellationToken) =>
                 CommitSetupImportAsync(setupView!, result, cancellationToken),
@@ -56,11 +57,12 @@ public partial class MainWindow
         _activeSetupView = setup;
         _setupFlowCompletion = completion;
 
+        SetupWindowResult? completedResult = null;
         try
         {
             ShowTab(MainTab.Setup);
             await setup.ActivateAsync();
-            await completion.Task;
+            completedResult = await completion.Task;
         }
         finally
         {
@@ -68,7 +70,7 @@ public partial class MainWindow
             _activeSetupView = null;
             _setupFlowCompletion = null;
             if (IsVisible && _activeTab == MainTab.Setup)
-                ShowTab(returnTab);
+                ShowTab(completedResult is null ? returnTab : MainTab.Home);
         }
     }
 
@@ -145,8 +147,10 @@ public partial class MainWindow
         {
             if (OperatingSystem.IsWindows())
             {
-                WindowsSessionStore.Save(token);
+                // Clear the previous anonymous import before replacing the account token.
+                // A cleanup failure must leave the currently saved account untouched.
                 WindowsImportedSubscriptionStore.Clear();
+                WindowsSessionStore.Save(token);
             }
             _sessionToken = token;
         }

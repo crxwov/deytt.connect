@@ -5,14 +5,14 @@
         Title="deytt./connect"
         Width="1240"
         Height="820"
-        MinWidth="720"
-        MinHeight="520"
+        MinWidth="520"
+        MinHeight="420"
         WindowStartupLocation="CenterScreen"
         Background="#080B12"
         RequestedThemeVariant="Dark">
 
-    <Grid x:Name="ShellGrid" ColumnDefinitions="252,*">
-        <Grid Grid.ColumnSpan="2" IsHitTestVisible="False">
+    <Grid x:Name="ShellGrid" ColumnDefinitions="252,*" RowDefinitions="*,Auto">
+        <Grid Grid.ColumnSpan="2" Grid.RowSpan="2" IsHitTestVisible="False">
             <Border>
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
@@ -27,6 +27,7 @@
 
         <Border x:Name="SidebarPanel"
                 Grid.Column="0"
+                Grid.Row="0"
                 Background="#0D131D"
                 BorderBrush="#283548"
                 BorderThickness="0,0,1,0"
@@ -112,7 +113,7 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Column="1" RowDefinitions="72,*">
+        <Grid Grid.Column="1" Grid.Row="0" RowDefinitions="72,*">
             <Border x:Name="WorkspaceHeader" Grid.Row="0"
                     Background="#0A1018"
                     BorderBrush="#202B38"
@@ -167,8 +168,25 @@
             </ScrollViewer>
         </Grid>
 
+        <Border x:Name="BottomNavigationPanel"
+                Grid.Row="1"
+                Grid.ColumnSpan="2"
+                IsVisible="False"
+                Background="#0D131D"
+                BorderBrush="#283548"
+                BorderThickness="0,1,0,0"
+                Padding="6,6,6,8">
+            <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="2">
+                <Button x:Name="BottomHomeNav" Grid.Column="0" Classes="deytt-button" />
+                <Button x:Name="BottomRoutesNav" Grid.Column="1" Classes="deytt-button" />
+                <Button x:Name="BottomProfileNav" Grid.Column="2" Classes="deytt-button" />
+                <Button x:Name="BottomSettingsNav" Grid.Column="3" Classes="deytt-button" />
+            </Grid>
+        </Border>
+
         <Grid x:Name="ModalOverlayHost"
               Grid.ColumnSpan="2"
+              Grid.RowSpan="2"
               Panel.ZIndex="1000"
               IsVisible="False" />
     </Grid>
