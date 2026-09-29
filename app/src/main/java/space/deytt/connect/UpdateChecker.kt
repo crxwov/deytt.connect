@@ -93,31 +93,35 @@ object UpdateChecker {
         return try {
             check(connection.responseCode in 200..299) { "GitHub release check failed" }
             val releases = JSONArray(connection.inputStream.use { readLimited(it, MAX_RELEASE_RESPONSE_BYTES) }.toString(Charsets.UTF_8))
-            val json = (0 until releases.length())
-                .mapNotNull { releases.optJSONObject(it) }
-                .firstOrNull { !it.optBoolean("draft", true) }
-                ?: error("GitHub returned no published releases")
-            val pageUrl = json.optString("html_url")
-            check(ReleaseUrlPolicy.isOfficialPage(pageUrl)) { "Untrusted release page" }
-            val assets = json.optJSONArray("assets")
-            val candidates = (0 until (assets?.length() ?: 0))
-                .mapNotNull { assets?.optJSONObject(it) }
-                .filter { ReleaseUrlPolicy.isOfficialAsset(it.optString("browser_download_url")) }
-            val preferredName = ReleaseAssetPolicy.preferredName(
-                candidates.map { it.optString("name") }, Build.SUPPORTED_ABIS.toList(),
-            )
-            val apkAsset = candidates.firstOrNull { it.optString("name") == preferredName }
-            val apkUrl = apkAsset?.optString("browser_download_url")
-                ?.takeIf(ReleaseUrlPolicy::isOfficialAsset)
-            val assetSize = apkAsset?.optLong("size", 0L)?.takeIf { it in 1..MAX_APK_BYTES }
-            val assetDigest = apkAsset?.optString("digest")?.takeIf(String::isNotBlank)
-            ReleaseInfo(
-                tag = json.optString("tag_name").ifBlank { "unknown" },
-                pageUrl = pageUrl,
-                apkUrl = apkUrl,
-                apkSize = assetSize,
-                apkDigest = assetDigest,
-            )
+            var selectedRelease: ReleaseInfo? = null
+            for (index in 0 until releases.length()) {
+                val json = releases.optJSONObject(index) ?: continue
+                if (json.optBoolean("draft", true)) continue
+
+                val assets = json.optJSONArray("assets")
+                val candidates = (0 until (assets?.length() ?: 0))
+                    .mapNotNull { assets?.optJSONObject(it) }
+                    .filter { ReleaseUrlPolicy.isOfficialAsset(it.optString("browser_download_url")) }
+                val preferredName = ReleaseAssetPolicy.preferredName(
+                    candidates.map { it.optString("name") }, Build.SUPPORTED_ABIS.toList(),
+                ) ?: continue
+                val apkAsset = candidates.firstOrNull { it.optString("name") == preferredName } ?: continue
+                val pageUrl = json.optString("html_url")
+                check(ReleaseUrlPolicy.isOfficialPage(pageUrl)) { "Untrusted release page" }
+                val apkUrl = apkAsset.optString("browser_download_url")
+                    .takeIf(ReleaseUrlPolicy::isOfficialAsset) ?: continue
+                val assetSize = apkAsset.optLong("size", 0L).takeIf { it in 1..MAX_APK_BYTES }
+                val assetDigest = apkAsset.optString("digest").takeIf(String::isNotBlank)
+                selectedRelease = ReleaseInfo(
+                    tag = json.optString("tag_name").ifBlank { "unknown" },
+                    pageUrl = pageUrl,
+                    apkUrl = apkUrl,
+                    apkSize = assetSize,
+                    apkDigest = assetDigest,
+                )
+                break
+            }
+            selectedRelease ?: error("GitHub returned no published release with a compatible APK")
         } finally {
             connection.disconnect()
         }
