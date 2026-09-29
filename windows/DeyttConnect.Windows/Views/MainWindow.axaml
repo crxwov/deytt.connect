@@ -3,15 +3,15 @@
         xmlns:controls="using:DeyttConnect.Windows.Controls"
         x:Class="DeyttConnect.Windows.Views.MainWindow"
         Title="deytt./connect"
-        Width="1320"
-        Height="860"
-        MinWidth="980"
-        MinHeight="660"
+        Width="1240"
+        Height="820"
+        MinWidth="720"
+        MinHeight="520"
         WindowStartupLocation="CenterScreen"
         Background="#080B12"
         RequestedThemeVariant="Dark">
 
-    <Grid ColumnDefinitions="252,*">
+    <Grid x:Name="ShellGrid" ColumnDefinitions="252,*">
         <Grid Grid.ColumnSpan="2" IsHitTestVisible="False">
             <Border>
                 <Border.Background>
@@ -25,14 +25,15 @@
             <controls:StarfieldBackground x:Name="AppStarfield" Opacity="0.24" />
         </Grid>
 
-        <Border Grid.Column="0"
+        <Border x:Name="SidebarPanel"
+                Grid.Column="0"
                 Background="#0D131D"
                 BorderBrush="#283548"
                 BorderThickness="0,0,1,0"
                 Padding="20,23,18,18">
-            <Grid RowDefinitions="Auto,Auto,*,Auto">
-                <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                    <Border Width="42" Height="42"
+                <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Grid x:Name="SidebarBrandRow" ColumnDefinitions="Auto,*" VerticalAlignment="Center">
+                    <Border x:Name="SidebarBrandMark" Width="42" Height="42"
                             Background="#192331"
                             BorderBrush="#34445B"
                             BorderThickness="1"
@@ -45,7 +46,7 @@
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
                     </Border>
-                    <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2" VerticalAlignment="Center">
+                    <StackPanel x:Name="SidebarBrandCopy" Grid.Column="1" Margin="12,0,0,0" Spacing="2" VerticalAlignment="Center">
                         <TextBlock Text="deytt./connect"
                                    FontFamily="fonts:DEYTT#JetBrains Mono"
                                    FontSize="14"
@@ -58,7 +59,7 @@
                     </StackPanel>
                 </Grid>
 
-                <StackPanel Grid.Row="1" Margin="2,34,0,12" Spacing="8">
+                <StackPanel x:Name="NavSectionHeader" Grid.Row="1" Margin="2,34,0,12" Spacing="8">
                     <TextBlock x:Name="NavSectionTitle"
                                Text="РАЗДЕЛЫ"
                                FontFamily="fonts:DEYTT#JetBrains Mono"
@@ -68,14 +69,14 @@
                     <Border Height="1" Background="#202B38" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="2" Spacing="5">
+                <StackPanel x:Name="SidebarNavPanel" Grid.Row="2" Spacing="5">
                     <Button x:Name="HomeNav" Classes="deytt-button sidebar-nav" />
                     <Button x:Name="RoutesNav" Classes="deytt-button sidebar-nav" />
                     <Button x:Name="ProfileNav" Classes="deytt-button sidebar-nav" />
                     <Button x:Name="SettingsNav" Classes="deytt-button sidebar-nav" />
                 </StackPanel>
 
-                <Border Grid.Row="3"
+                <Border x:Name="SidebarStatusCard" Grid.Row="3"
                         Background="#111823"
                         BorderBrush="#283548"
                         BorderThickness="1"
@@ -112,14 +113,14 @@
         </Border>
 
         <Grid Grid.Column="1" RowDefinitions="72,*">
-            <Border Grid.Row="0"
+            <Border x:Name="WorkspaceHeader" Grid.Row="0"
                     Background="#0A1018"
                     BorderBrush="#202B38"
                     BorderThickness="0,0,0,1"
                     Padding="30,0">
                 <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Spacing="3" VerticalAlignment="Center">
-                        <TextBlock Text="DEYTT · PRIVATE NETWORK"
+                        <TextBlock x:Name="WorkspaceEyebrow" Text="DEYTT · PRIVATE NETWORK"
                                    FontFamily="fonts:DEYTT#JetBrains Mono"
                                    FontSize="9"
                                    FontWeight="SemiBold"
@@ -155,16 +156,20 @@
                 </Grid>
             </Border>
 
-            <ScrollViewer x:Name="PageScroll"
+        <ScrollViewer x:Name="PageScroll"
                           Grid.Row="1"
                           HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="PageHost"
-                            MaxWidth="1360"
-                            HorizontalAlignment="Stretch"
-                            Margin="34,26,34,42"
-                            Spacing="0" />
+                <Grid x:Name="PageHost"
+                      MaxWidth="1360"
+                      HorizontalAlignment="Center"
+                      Margin="34,26,34,42" />
             </ScrollViewer>
         </Grid>
+
+        <Grid x:Name="ModalOverlayHost"
+              Grid.ColumnSpan="2"
+              Panel.ZIndex="1000"
+              IsVisible="False" />
     </Grid>
 </Window>

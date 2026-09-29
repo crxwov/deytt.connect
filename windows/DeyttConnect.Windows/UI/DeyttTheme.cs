@@ -90,11 +90,13 @@ internal static class DeyttTheme
     public static Border PrimaryButton(string label, Action onClick)
     {
         var labelText = TextBlock(label, 16, Background, FontWeight.SemiBold, wrap: false);
+        labelText.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        labelText.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         labelText.TextAlignment = TextAlignment.Center;
         var button = Action(
             labelText,
             onClick);
-        button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
         button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
         return new Border
         {

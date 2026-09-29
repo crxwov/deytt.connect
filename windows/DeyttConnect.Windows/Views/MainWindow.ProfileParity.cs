@@ -117,7 +117,7 @@ public partial class MainWindow
         return result;
     }
 
-    private async Task RefreshTelegramAvatarAsync(string token)
+    private async Task RefreshTelegramAvatarAsync(string token, CancellationToken cancellationToken = default)
     {
         if (!string.Equals(_telegramAvatarSessionToken, token, StringComparison.Ordinal))
         {
@@ -127,9 +127,13 @@ public partial class MainWindow
 
         try
         {
-            var bytes = await _telegramApi.GetAvatarAsync(token);
+            var bytes = await _telegramApi.GetAvatarAsync(token, cancellationToken);
             if (string.Equals(_telegramAvatarSessionToken, token, StringComparison.Ordinal))
                 SetTelegramAvatar(bytes);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
@@ -183,17 +187,6 @@ public partial class MainWindow
         var username = _account is null || string.IsNullOrWhiteSpace(_account.Username)
             ? string.Empty
             : $"@{_account.Username}";
-        var window = new Window
-        {
-            Title = Copy("Telegram", "Telegram"),
-            Width = 430,
-            MinWidth = 360,
-            MaxWidth = 500,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-        };
         var content = new StackPanel { Spacing = 12 };
         content.Children.Add(DeyttTheme.TextBlock("./c · TELEGRAM", 9, DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono));
@@ -207,9 +200,10 @@ public partial class MainWindow
                 "Your profile and session are linked to Telegram. Reconnect to refresh profiles, or disconnect to end this account session."),
             13, DeyttTheme.Muted));
 
+        ShellContentDialog? dialog = null;
         var reconnect = DeyttTheme.PrimaryButton(Copy("Переподключить", "Reconnect"), () =>
         {
-            window.Close();
+            dialog?.Close();
             if (_sessionToken == token)
                 _ = ShowSetupWindowAsync();
         });
@@ -219,16 +213,15 @@ public partial class MainWindow
                 DeyttTheme.Coral, FontWeight.SemiBold),
             () =>
             {
-                window.Close();
+                dialog?.Close();
                 _ = ConfirmTelegramDisconnectAsync(token);
             });
         content.Children.Add(disconnect);
         content.Children.Add(DeyttTheme.Action(
             DeyttTheme.TextBlock(Copy("Закрыть", "Close"), 13, DeyttTheme.Muted),
-            window.Close));
-        window.Content = DeyttTheme.Card(content, DeyttTheme.Surface2, DeyttTheme.Line,
-            22, new Thickness(21));
-        window.ShowDialog(this);
+            () => dialog?.Close()));
+        _ = ShowContentInShellAsync(Copy("Telegram", "Telegram"), content, 500,
+            shellDialog => dialog = shellDialog);
     }
 
     private async Task ConfirmTelegramDisconnectAsync(string token)
@@ -260,17 +253,6 @@ public partial class MainWindow
         var state = blocked
             ? Copy("Обновления заблокированы", "Subscription updates blocked")
             : Copy("Доступ разрешён", "Access allowed");
-        var window = new Window
-        {
-            Title = name,
-            Width = 470,
-            MinWidth = 360,
-            MaxWidth = 520,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-        };
         var content = new StackPanel { Spacing = 12 };
         content.Children.Add(DeyttTheme.TextBlock("HAPP · DEVICE", 9, DeyttTheme.Sky,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono));
@@ -293,19 +275,19 @@ public partial class MainWindow
                 : Copy("Блокировка остановит обновление подписки на этом устройстве. Уже загруженные ключи и активное VPN-соединение продолжат работать.",
                     "Blocking stops subscription refresh on this device. Downloaded keys and an active VPN connection keep working."),
             13, DeyttTheme.Muted));
+        ShellContentDialog? dialog = null;
         content.Children.Add(DeyttTheme.PrimaryButton(
             blocked ? Copy("Восстановить доступ", "Restore access") : Copy("Заблокировать", "Block device"),
             () =>
             {
-                window.Close();
+                dialog?.Close();
                 _ = ToggleHappDeviceAsync(device);
             }));
         content.Children.Add(DeyttTheme.Action(
             DeyttTheme.TextBlock(Copy("Закрыть", "Close"), 13, DeyttTheme.Muted),
-            window.Close));
-        window.Content = DeyttTheme.Card(content, DeyttTheme.Surface2, DeyttTheme.Line,
-            22, new Thickness(21));
-        window.ShowDialog(this);
+            () => dialog?.Close()));
+        _ = ShowContentInShellAsync(Copy("Устройство Happ", "Happ device"), content, 520,
+            shellDialog => dialog = shellDialog);
     }
 
     private string FormatDeviceDate(string? value)
@@ -336,40 +318,26 @@ public partial class MainWindow
                     "This device is no longer registered. Refresh the list and retry the action.")
                 : Copy("Сервер не подтвердил изменение. Проверьте подключение и обновите список.",
                     "The server did not confirm the change. Check your connection and refresh the list.");
-        var retry = false;
-        var refresh = DeyttTheme.PrimaryButton(Copy("Обновить список", "Refresh list"), () =>
-        {
-            retry = true;
-        });
+        var retry = DeyttTheme.PrimaryButton(Copy("Обновить список", "Refresh list"), () => { });
         var close = DeyttTheme.Action(DeyttTheme.TextBlock(Copy("Закрыть", "Close"),
             13, DeyttTheme.Muted), () => { });
-        var window = new Window
+        var content = new StackPanel
         {
-            Title = title,
-            Width = 440,
-            MinWidth = 360,
-            MaxWidth = 500,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-            Content = DeyttTheme.Card(new StackPanel
+            Spacing = 13,
+            Children =
             {
-                Spacing = 13,
-                Children =
-                {
-                    DeyttTheme.TextBlock(title, 20, DeyttTheme.Text, FontWeight.Bold),
-                    DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
-                    refresh,
-                    close,
-                },
-            }, DeyttTheme.Surface2, DeyttTheme.Line, 21, new Thickness(20)),
+                DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
+                retry,
+                close,
+            },
         };
-        if (refresh.Child is Button refreshButton)
-            refreshButton.Click += (_, _) => window.Close();
-        close.Click += (_, _) => window.Close();
-        await window.ShowDialog(this);
-        if (retry && _sessionToken is not null)
+        var result = await ShowContentInShellAsync(title, content, 500, dialog =>
+        {
+            if (retry.Child is Button retryButton)
+                retryButton.Click += (_, _) => dialog.Close(true);
+            close.Click += (_, _) => dialog.Close(false);
+        });
+        if (result is true && _sessionToken is not null)
             await RefreshSignedInAccountAsync();
     }
 }

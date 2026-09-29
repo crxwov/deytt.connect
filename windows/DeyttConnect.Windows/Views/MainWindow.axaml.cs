@@ -16,7 +16,7 @@ namespace DeyttConnect.Windows.Views;
 
 public partial class MainWindow : Window
 {
-    private enum MainTab { Home, Routes, Profile, Settings }
+    private enum MainTab { Home, Routes, Profile, Settings, Support, Setup }
     private enum RouteCountryProbeState { Queued, Running, Cancelled, NeedsDisconnect, ServiceUnavailable, Failed }
     private sealed record RouteCountryProbeRequest(string CountryCode, string[] RouteTags);
 
@@ -67,6 +67,16 @@ public partial class MainWindow : Window
     private bool _routeProbeInProgress;
     private bool _routeProbeCancelRequested;
     private readonly string? _initialImportUrl;
+    private bool _supportViewActivated;
+    private string? _supportActivatedSessionToken;
+    private bool _startupFlowStarted;
+    private bool _compactLayout;
+    private bool _responsiveLayoutInitialized;
+    private Grid? _homeOverviewGrid;
+    private StackPanel? _homeMapColumn;
+    private StackPanel? _homeConnectionColumn;
+    private RouteGlobeWebView? _routeGlobeMap;
+    private Grid? _routeGlobeHost;
 
     public MainWindow() : this(null)
     {
@@ -90,16 +100,9 @@ public partial class MainWindow : Window
         ApplyVisualPreferences();
         ConfigureNavigation();
         ShowTab(MainTab.Home);
-        Opened += async (_, _) =>
-        {
-            await RestoreSessionAsync();
-            if (_initialImportUrl is { Length: > 0 } importUrl)
-                await ShowSetupWindowAsync(importUrl);
-            else if (_keysSnapshot?.HappAvailable != true)
-                await ShowSetupWindowAsync();
-        };
-        Opened += (_, _) => _ = RefreshVpnStatusAsync();
-        Opened += (_, _) => _ = ShowInitialMapConsentIfNeededAsync();
+        SizeChanged += (_, _) => UpdateResponsiveLayout();
+        PageScroll.SizeChanged += (_, _) => UpdatePageHostWidth();
+        Opened += async (_, _) => await RunStartupFlowAsync();
         _vpnStatusTimer.Tick += (_, _) => _ = RefreshVpnStatusAsync();
         Closed += (_, _) =>
         {
@@ -108,22 +111,68 @@ public partial class MainWindow : Window
             _telegramAvatarBitmap?.Dispose();
             _telegramAvatarBitmap = null;
         };
-        if (OperatingSystem.IsWindows())
+    }
+
+    private async Task RunStartupFlowAsync()
+    {
+        if (_startupFlowStarted)
+            return;
+        _startupFlowStarted = true;
+        UpdateResponsiveLayout();
+
+        await RestoreSessionAsync();
+        if (!IsVisible)
+            return;
+
+        if (_initialImportUrl is { Length: > 0 } importUrl)
+            await ShowSetupWindowAsync(importUrl);
+        else if (_keysSnapshot?.HappAvailable != true)
+            await ShowSetupWindowAsync();
+        if (!IsVisible)
+            return;
+
+        await ShowInitialMapConsentIfNeededAsync();
+        if (!IsVisible)
+            return;
+
+        await RefreshVpnStatusAsync();
+        if (OperatingSystem.IsWindows() && IsVisible)
             _vpnStatusTimer.Start();
     }
 
     private void ConfigureNavigation()
     {
-        HomeNav.Click += (_, _) => ShowTab(MainTab.Home);
-        RoutesNav.Click += (_, _) => ShowTab(MainTab.Routes);
-        ProfileNav.Click += (_, _) => ShowTab(MainTab.Profile);
-        SettingsNav.Click += (_, _) => ShowTab(MainTab.Settings);
+        HomeNav.Click += (_, _) => RequestNavigation(MainTab.Home);
+        RoutesNav.Click += (_, _) => RequestNavigation(MainTab.Routes);
+        ProfileNav.Click += (_, _) => RequestNavigation(MainTab.Profile);
+        SettingsNav.Click += (_, _) => RequestNavigation(MainTab.Settings);
+    }
+
+    private void RequestNavigation(MainTab destination)
+    {
+        if (_activeTab == MainTab.Setup)
+        {
+            _activeSetupView?.Cancel();
+            return;
+        }
+
+        ShowTab(destination);
     }
 
     private void ShowTab(MainTab tab)
     {
+        var previousTab = _activeTab;
+        if (previousTab == MainTab.Support && tab != MainTab.Support)
+        {
+            _supportView?.Deactivate();
+            _supportViewActivated = false;
+        }
+
         _activeTab = tab;
         _profileAvatarImage = null;
+        _homeOverviewGrid = null;
+        _homeMapColumn = null;
+        _homeConnectionColumn = null;
         PageHost.Children.Clear();
         PageHost.Children.Add(tab switch
         {
@@ -131,38 +180,62 @@ public partial class MainWindow : Window
             MainTab.Routes => BuildRoutesPage(),
             MainTab.Profile => BuildProfilePage(),
             MainTab.Settings => BuildSettingsPage(),
+            MainTab.Support => BuildSupportPage(),
+            MainTab.Setup => BuildSetupPage(),
             _ => BuildHomePage(),
         });
         SetNavigation(HomeNav, "⌂", Copy("Главная", "Home"), tab == MainTab.Home);
         SetNavigation(RoutesNav, "⌖", Copy("Маршруты", "Routes"), tab == MainTab.Routes);
-        SetNavigation(ProfileNav, "♙", Copy("Профиль", "Profile"), tab == MainTab.Profile);
+        SetNavigation(ProfileNav, "♙", Copy("Профиль", "Profile"), tab is MainTab.Profile or MainTab.Support);
         SetNavigation(SettingsNav, "⚙", Copy("Настройки", "Settings"), tab == MainTab.Settings);
         UpdateShellStatus();
+        if (tab == MainTab.Support && _supportView is not null &&
+            (!_supportViewActivated || !string.Equals(_supportActivatedSessionToken, _sessionToken,
+                StringComparison.Ordinal)))
+        {
+            _supportView?.Activate(_sessionToken);
+            _supportViewActivated = true;
+            _supportActivatedSessionToken = _sessionToken;
+        }
+        UpdateResponsiveLayout();
         PageScroll.Offset = new Vector(0, 0);
     }
 
     private void SetNavigation(Button button, string icon, string label, bool selected)
     {
-        var content = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        ToolTip.SetTip(button, label);
+        var content = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions(_compactLayout ? "*" : "Auto,*"),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+        };
         var glyph = DeyttTheme.TextBlock(icon, 19, selected ? DeyttTheme.Sky : DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.InterTight, wrap: false);
-        glyph.Width = 25;
+        glyph.Width = _compactLayout ? double.NaN : 25;
+        glyph.HorizontalAlignment = _compactLayout
+            ? Avalonia.Layout.HorizontalAlignment.Center
+            : Avalonia.Layout.HorizontalAlignment.Left;
         glyph.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         content.Children.Add(glyph);
-        var title = DeyttTheme.TextBlock(label, 14,
-            selected ? DeyttTheme.Text : DeyttTheme.Muted,
-            selected ? FontWeight.SemiBold : FontWeight.Medium, wrap: false);
-        title.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-        Grid.SetColumn(title, 1);
-        content.Children.Add(title);
+        if (!_compactLayout)
+        {
+            var title = DeyttTheme.TextBlock(label, 14,
+                selected ? DeyttTheme.Text : DeyttTheme.Muted,
+                selected ? FontWeight.SemiBold : FontWeight.Medium, wrap: false);
+            title.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+            Grid.SetColumn(title, 1);
+            content.Children.Add(title);
+        }
 
+        button.MinWidth = _compactLayout ? 52 : 0;
+        button.MinHeight = _compactLayout ? 52 : 0;
         button.Content = new Border
         {
             Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : Colors.Transparent),
             BorderBrush = DeyttTheme.Brush(selected ? DeyttTheme.SelectedLine : Colors.Transparent),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(12),
-            Padding = new Thickness(13, 11),
+            Padding = _compactLayout ? new Thickness(0, 8) : new Thickness(13, 11),
             Child = content,
         };
     }
@@ -197,9 +270,77 @@ public partial class MainWindow : Window
             MainTab.Routes => Copy("Маршруты", "Routes"),
             MainTab.Profile => Copy("Аккаунт и подписка", "Account and subscription"),
             MainTab.Settings => Copy("Настройки приложения", "App settings"),
+            MainTab.Support => Copy("Помощь и поддержка", "Help and support"),
+            MainTab.Setup => Copy("Настройка подключения", "Connection setup"),
             _ => Copy("Ваше подключение", "Your connection"),
         };
         NavSectionTitle.Text = Copy("РАЗДЕЛЫ", "WORKSPACE");
+    }
+
+    private void UpdateResponsiveLayout()
+    {
+        var compact = Bounds.Width < 1040;
+        if (_responsiveLayoutInitialized && _compactLayout == compact)
+        {
+            UpdatePageHostWidth();
+            return;
+        }
+
+        _responsiveLayoutInitialized = true;
+        _compactLayout = compact;
+        if (ShellGrid.ColumnDefinitions.Count > 0)
+            ShellGrid.ColumnDefinitions[0].Width = new GridLength(compact ? 82 : 252);
+        SidebarPanel.Padding = compact
+            ? new Thickness(11, 14, 11, 12)
+            : new Thickness(20, 23, 18, 18);
+        SidebarBrandCopy.IsVisible = !compact;
+        SidebarBrandMark.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        NavSectionHeader.IsVisible = !compact;
+        SidebarNavPanel.Spacing = compact ? 7 : 5;
+        SidebarStatusCard.IsVisible = !compact;
+        WorkspaceHeader.Padding = compact ? new Thickness(18, 0) : new Thickness(30, 0);
+        WorkspaceEyebrow.IsVisible = !compact;
+        PageHost.Margin = compact
+            ? new Thickness(18, 18, 18, 28)
+            : new Thickness(34, 26, 34, 42);
+
+        SetNavigation(HomeNav, "⌂", Copy("Главная", "Home"), _activeTab == MainTab.Home);
+        SetNavigation(RoutesNav, "⌖", Copy("Маршруты", "Routes"), _activeTab == MainTab.Routes);
+        SetNavigation(ProfileNav, "♙", Copy("Профиль", "Profile"), _activeTab is MainTab.Profile or MainTab.Support);
+        SetNavigation(SettingsNav, "⚙", Copy("Настройки", "Settings"), _activeTab == MainTab.Settings);
+        UpdatePageHostWidth();
+        UpdateHomeColumns();
+    }
+
+    private void UpdatePageHostWidth()
+    {
+        var availableWidth = PageScroll.Bounds.Width - PageHost.Margin.Left - PageHost.Margin.Right;
+        if (!double.IsFinite(availableWidth) || availableWidth <= 0)
+            return;
+
+        if (double.IsNaN(PageHost.Width) || Math.Abs(PageHost.Width - availableWidth) > 1)
+            PageHost.Width = availableWidth;
+    }
+
+    private void UpdateHomeColumns()
+    {
+        if (_homeOverviewGrid is null || _homeMapColumn is null || _homeConnectionColumn is null)
+            return;
+
+        _homeOverviewGrid.ColumnDefinitions = new ColumnDefinitions(_compactLayout ? "*" : "1.12*,0.88*");
+        _homeOverviewGrid.RowDefinitions = _compactLayout
+            ? new RowDefinitions("Auto,Auto")
+            : new RowDefinitions("Auto");
+        _homeMapColumn.Margin = _compactLayout
+            ? new Thickness(0, 0, 0, 16)
+            : new Thickness(0, 0, 10, 0);
+        _homeConnectionColumn.Margin = _compactLayout
+            ? new Thickness(0)
+            : new Thickness(10, 0, 0, 0);
+        Grid.SetColumn(_homeMapColumn, 0);
+        Grid.SetRow(_homeMapColumn, 0);
+        Grid.SetColumn(_homeConnectionColumn, _compactLayout ? 0 : 1);
+        Grid.SetRow(_homeConnectionColumn, _compactLayout ? 1 : 0);
     }
 
     private void ApplyVisualPreferences()
@@ -217,7 +358,7 @@ public partial class MainWindow : Window
             14, DeyttTheme.Muted));
         page.Children.Add(DeyttTheme.Spacer(24));
 
-        var overview = new Grid { ColumnDefinitions = new ColumnDefinitions("1.12*,0.88*") };
+        var overview = new Grid();
         var mapColumn = new StackPanel { Spacing = 16, Margin = new Thickness(0, 0, 10, 0) };
         mapColumn.Children.Add(BuildMapCard());
         mapColumn.Children.Add(BuildRouteFlow());
@@ -241,6 +382,10 @@ public partial class MainWindow : Window
         Grid.SetColumn(connectionColumn, 1);
         overview.Children.Add(mapColumn);
         overview.Children.Add(connectionColumn);
+        _homeOverviewGrid = overview;
+        _homeMapColumn = mapColumn;
+        _homeConnectionColumn = connectionColumn;
+        UpdateHomeColumns();
         page.Children.Add(overview);
         return page;
     }
@@ -280,27 +425,33 @@ public partial class MainWindow : Window
         contents.Children.Add(DeyttTheme.TextBlock(Copy("КАРТА МАРШРУТА", "ROUTE MAP"), 8,
             DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
         var availableLocations = _routes
-            .Select(route => route.CountryCode.ToLowerInvariant())
-            .Where(code => code is "nl" or "de" or "fi" or "ru")
+            .SelectMany(route => route.CountryCode.ToUpperInvariant() switch
+            {
+                "NL" => new[] { "nl" },
+                "DE" => new[] { "de" },
+                "FI" => new[] { "fi" },
+                "RU" => new[] { "ru" },
+                "RU-DE" => new[] { "ru", "de" },
+                _ => Array.Empty<string>(),
+            })
             .Distinct(StringComparer.Ordinal)
             .ToArray();
-        var map = new RouteGlobeWebView
-        {
-            MinHeight = 300,
-            Height = 330,
-            SelectedRoute = _selectedRoute,
-            Language = _language,
-            AvailableLocations = availableLocations,
-            OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted,
-            OriginLocation = _mapOriginLocation,
-            ExitCoordinate = GetMapExitCoordinate(),
-            EgressCountryCode = _vpnSnapshot.State == "connected" ? _mapEgressLocation?.CountryCode : null,
-            ActiveAutoRouteKey = _selectedRoute == "auto" ? _mapEgressLocation?.CountryCode : null,
-            TrafficActive = _vpnSnapshot.State == "connected",
-        };
-        map.NodeTapped += node => _ = ShowMapRoutePickerAsync(node);
+        var map = _routeGlobeMap ??= CreateRouteGlobe();
+        map.SelectedRoute = _selectedRoute;
+        map.Language = _language;
+        map.AvailableLocations = availableLocations;
+        map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
+        map.OriginLocation = _mapOriginLocation;
+        map.ExitCoordinate = GetMapExitCoordinate();
+        map.EgressCountryCode = _vpnSnapshot.State == "connected" ? _mapEgressLocation?.CountryCode : null;
+        map.ActiveAutoRouteKey = _selectedRoute == "auto" ? _mapEgressLocation?.CountryCode : null;
+        map.TrafficActive = _vpnSnapshot.State == "connected";
+        if (_routeGlobeHost is not null && _routeGlobeHost.Children.Contains(map))
+            _routeGlobeHost.Children.Remove(map);
         Grid.SetRow(map, 1);
         contents.Children.Add(map);
+        _routeGlobeHost = contents;
+        UpdateRouteGlobeHeight();
         var endpoints = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,*"),
@@ -331,6 +482,30 @@ public partial class MainWindow : Window
             Padding = new Thickness(18, 16),
             Child = contents,
         };
+    }
+
+    private RouteGlobeWebView CreateRouteGlobe()
+    {
+        var map = new RouteGlobeWebView
+        {
+            MinHeight = 220,
+            Height = 280,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
+        };
+        map.SizeChanged += (_, _) => UpdateRouteGlobeHeight();
+        map.NodeTapped += node => _ = ShowMapRoutePickerAsync(node);
+        return map;
+    }
+
+    private void UpdateRouteGlobeHeight()
+    {
+        if (_routeGlobeMap is null || _routeGlobeMap.Bounds.Width <= 0)
+            return;
+
+        var height = Math.Clamp(_routeGlobeMap.Bounds.Width * 0.58, 220, 360);
+        if (Math.Abs(_routeGlobeMap.Height - height) > 1)
+            _routeGlobeMap.Height = height;
     }
 
     private Control MapEndpoint(string title, string value, string hint)
@@ -1310,18 +1485,8 @@ public partial class MainWindow : Window
 
     private async Task ShowProbeMethodPickerAsync()
     {
-        var dialog = new Window
-        {
-            Title = Copy("Проверка маршрута", "Route check"),
-            Width = 520,
-            MinWidth = 420,
-            MaxWidth = 600,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-        };
         var options = new StackPanel { Spacing = 8 };
+        var optionButtons = new List<(string Method, Button Button)>();
         foreach (var option in new[]
         {
             (Method: "HEAD", Title: Copy("HEAD · только заголовки", "HEAD · headers only"),
@@ -1340,19 +1505,13 @@ public partial class MainWindow : Window
             labels.Children.Add(DeyttTheme.TextBlock(option.Detail, 12, DeyttTheme.Muted));
             var choice = DeyttTheme.Action(
                 DeyttTheme.Card(labels, selected ? DeyttTheme.Selected : DeyttTheme.Surface,
-                    selected ? DeyttTheme.SelectedLine : DeyttTheme.Line, 16, new Thickness(14, 11)),
-                () =>
-                {
-                    _probeMethod = option.Method;
-                    SavePreferences();
-                    dialog.Close();
-                    ShowTab(MainTab.Settings);
-                });
+                    selected ? DeyttTheme.SelectedLine : DeyttTheme.Line, 16, new Thickness(14, 11)), () => { });
             options.Children.Add(choice);
+            optionButtons.Add((option.Method, choice));
         }
         var close = DeyttTheme.Action(DeyttTheme.TextBlock(Copy("Отмена", "Cancel"), 14,
-            DeyttTheme.Muted, FontWeight.SemiBold), () => dialog.Close());
-        dialog.Content = DeyttTheme.Card(new StackPanel
+            DeyttTheme.Muted, FontWeight.SemiBold), () => { });
+        var content = new StackPanel
         {
             Spacing = 13,
             Children =
@@ -1364,8 +1523,21 @@ public partial class MainWindow : Window
                 options,
                 close,
             },
-        }, DeyttTheme.Surface2, DeyttTheme.Line, 22, new Thickness(18));
-        await dialog.ShowDialog(this);
+        };
+        var selectedMethod = await ShowContentInShellAsync(
+            Copy("Проверка маршрута", "Route check"), content, 600,
+            modal =>
+            {
+                foreach (var (method, button) in optionButtons)
+                    button.Click += (_, _) => modal.Close(method);
+                close.Click += (_, _) => modal.Close();
+            });
+        if (selectedMethod is not string method)
+            return;
+
+        _probeMethod = method;
+        SavePreferences();
+        ShowTab(MainTab.Settings);
     }
 
     private async Task ToggleVpnAsync()
@@ -1928,7 +2100,7 @@ public partial class MainWindow : Window
         {
             ClearLocalSession();
         }
-        catch (Exception error) when (error is TelegramApiException or HttpRequestException or TaskCanceledException or IOException)
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
             _account = null;
             _keysSnapshot = null;
@@ -1942,13 +2114,27 @@ public partial class MainWindow : Window
             ShowTab(_activeTab);
     }
 
-    private async Task<bool> RefreshAccountDataAsync(string token)
+    private async Task<bool> RefreshAccountDataAsync(
+        string token,
+        CancellationToken cancellationToken = default,
+        TelegramAccount? verifiedAccount = null,
+        IProgress<string>? progress = null)
     {
-        _account = await _telegramApi.GetAccountAsync(token);
-        await RefreshTelegramAvatarAsync(token);
+        var accountTask = verifiedAccount is null
+            ? _telegramApi.GetAccountAsync(token, cancellationToken)
+            : Task.FromResult(verifiedAccount);
+        var subscriptionTask = _telegramApi.GetSubscriptionAsync(token, cancellationToken, progress);
+        var avatarTask = RefreshTelegramAvatarAsync(token, cancellationToken);
+        var sessionsTask = LoadSessionsForRefreshAsync(token, cancellationToken);
+        if (verifiedAccount is not null)
+            _account = verifiedAccount;
+
         try
         {
-            _keysSnapshot = await _telegramApi.GetSubscriptionAsync(token);
+            await Task.WhenAll(accountTask, subscriptionTask, avatarTask, sessionsTask);
+            _account = await accountTask;
+            _keysSnapshot = await subscriptionTask;
+            _sessions = await sessionsTask ?? [];
             _routes = _keysSnapshot.Routes;
             _profileLoadIssue = _keysSnapshot.HappAvailable
                 ? null
@@ -1958,34 +2144,51 @@ public partial class MainWindow : Window
                 _selectedRoute = "auto";
                 SavePreferences();
             }
-            try
-            {
-                _sessions = await _telegramApi.GetSessionsAsync(token);
-                _sessionLoadIssue = null;
-            }
-            catch (TelegramApiException error) when (error.IsUnauthorized)
-            {
-                throw;
-            }
-            catch (Exception error) when (error is TelegramApiException or HttpRequestException or TaskCanceledException or IOException)
-            {
-                _sessions = [];
-                _sessionLoadIssue = Copy("Проверь интернет и повтори обновление.",
-                    "Check your connection and refresh again.");
-            }
             return _keysSnapshot.HappAvailable;
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
             throw;
         }
-        catch (Exception error) when (error is TelegramApiException or HttpRequestException or TaskCanceledException or IOException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            throw;
+        }
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
+        {
+            if (accountTask.IsCompletedSuccessfully)
+                _account = accountTask.Result;
             _keysSnapshot = null;
             _routes = [];
             _profileLoadIssue = Copy("Не удалось загрузить маршруты. Повтори обновление позже.",
                 "Could not load routes. Try refreshing again later.");
             return false;
+        }
+    }
+
+    private async Task<IReadOnlyList<TelegramAppSession>?> LoadSessionsForRefreshAsync(
+        string token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sessions = await _telegramApi.GetSessionsAsync(token, cancellationToken);
+            _sessionLoadIssue = null;
+            return sessions;
+        }
+        catch (TelegramApiException error) when (error.IsUnauthorized)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
+        {
+            _sessionLoadIssue = Copy("Проверь интернет и повтори обновление.",
+                "Check your connection and refresh again.");
+            return null;
         }
     }
 
@@ -2012,7 +2215,7 @@ public partial class MainWindow : Window
             ShowInfoDialog(Copy("Сеанс истёк", "Session expired"),
                 Copy("Войди через Telegram ещё раз.", "Sign in with Telegram again."));
         }
-        catch (Exception error) when (error is TelegramApiException or HttpRequestException or TaskCanceledException or IOException)
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
             ShowInfoDialog(Copy("Не удалось обновить профиль", "Could not refresh profile"),
                 Copy("Проверь интернет и повтори попытку.", "Check your connection and try again."));
@@ -2358,21 +2561,17 @@ public partial class MainWindow : Window
         string detail,
         IReadOnlyList<(string Title, string Detail, string Value)> options)
     {
-        string? selected = null;
-        Window? dialog = null;
         var choices = new StackPanel { Spacing = 7 };
+        var optionButtons = new List<(string Value, Button Button)>();
         foreach (var option in options)
         {
             var labels = new StackPanel { Spacing = 3 };
             labels.Children.Add(DeyttTheme.TextBlock(option.Title, 15, DeyttTheme.Text, FontWeight.SemiBold));
             if (!string.IsNullOrWhiteSpace(option.Detail))
                 labels.Children.Add(DeyttTheme.TextBlock(option.Detail, 12, DeyttTheme.Muted));
-            var button = DeyttTheme.Action(labels, () =>
-            {
-                selected = option.Value;
-                dialog?.Close();
-            });
+            var button = DeyttTheme.Action(labels, () => { });
             button.Padding = new Thickness(13, 10);
+            optionButtons.Add((option.Value, button));
             choices.Children.Add(new Border
             {
                 Background = DeyttTheme.Brush(DeyttTheme.Surface),
@@ -2383,39 +2582,30 @@ public partial class MainWindow : Window
             });
         }
         var cancel = DeyttTheme.Action(DeyttTheme.TextBlock(Copy("Отмена", "Cancel"), 13,
-            DeyttTheme.Muted, FontWeight.SemiBold), () => dialog?.Close());
+            DeyttTheme.Muted, FontWeight.SemiBold), () => { });
         cancel.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         cancel.Margin = new Thickness(0, 3, 0, 0);
         choices.Children.Add(cancel);
-        dialog = new Window
+        var content = new StackPanel
         {
-            Title = title,
-            Width = 520,
-            MinWidth = 380,
-            MaxWidth = 560,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-            Content = DeyttTheme.Card(new StackPanel
+            Spacing = 12,
+            Children =
             {
-                Spacing = 12,
-                Children =
-                {
-                    DeyttTheme.TextBlock(title, 21, DeyttTheme.Text, FontWeight.Bold),
-                    DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
-                    choices,
-                },
-            }, DeyttTheme.Surface2, DeyttTheme.Line, 19, new Thickness(20)),
+                DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
+                choices,
+            },
         };
-        await dialog.ShowDialog(this);
-        return selected;
+        var result = await ShowContentInShellAsync(title, content, 560, modal =>
+        {
+            foreach (var (value, button) in optionButtons)
+                button.Click += (_, _) => modal.Close(value);
+            cancel.Click += (_, _) => modal.Close();
+        });
+        return result as string;
     }
 
     private async Task<int?> ShowNumberDialogAsync(string title, string detail, int minimum, int maximum)
     {
-        int? selected = null;
-        Window? dialog = null;
         var value = new NumericUpDown
         {
             Minimum = minimum,
@@ -2425,41 +2615,31 @@ public partial class MainWindow : Window
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
         };
         var cancel = DeyttTheme.Action(DeyttTheme.TextBlock(Copy("Отмена", "Cancel"), 13,
-            DeyttTheme.Muted, FontWeight.SemiBold), () => dialog?.Close());
+            DeyttTheme.Muted, FontWeight.SemiBold), () => { });
         cancel.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         var confirm = DeyttTheme.PrimaryButton(Copy("Продолжить", "Continue"), () => { });
-        if (confirm.Child is Button confirmButton)
-            confirmButton.Click += (_, _) =>
-            {
-                if (value.Value is { } number)
-                    selected = decimal.ToInt32(number);
-                dialog?.Close();
-            };
-        dialog = new Window
+        var content = new StackPanel
         {
-            Title = title,
-            Width = 420,
-            MinWidth = 340,
-            MaxWidth = 460,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-            Content = DeyttTheme.Card(new StackPanel
+            Spacing = 13,
+            Children =
             {
-                Spacing = 13,
-                Children =
-                {
-                    DeyttTheme.TextBlock(title, 21, DeyttTheme.Text, FontWeight.Bold),
-                    DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
-                    value,
-                    cancel,
-                    confirm,
-                },
-            }, DeyttTheme.Surface2, DeyttTheme.Line, 19, new Thickness(20)),
+                DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
+                value,
+                cancel,
+                confirm,
+            },
         };
-        await dialog.ShowDialog(this);
-        return selected;
+        var result = await ShowContentInShellAsync(title, content, 460, modal =>
+        {
+            cancel.Click += (_, _) => modal.Close();
+            if (confirm.Child is Button confirmButton)
+                confirmButton.Click += (_, _) =>
+                {
+                    if (value.Value is { } number)
+                        modal.Close(decimal.ToInt32(number));
+                };
+        });
+        return result is int selected ? selected : null;
     }
 
     private async Task ToggleHappDeviceAsync(TelegramHappDevice device)
@@ -2521,42 +2701,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<bool> ConfirmDialogAsync(string title, string message, string confirmLabel,
-        string? cancelLabel = null)
-    {
-        var confirmed = false;
-        var cancel = DeyttTheme.Action(DeyttTheme.TextBlock(cancelLabel ?? Copy("Отмена", "Cancel"), 14,
-            DeyttTheme.Muted, FontWeight.SemiBold), () => { });
-        var confirm = DeyttTheme.PrimaryButton(confirmLabel, () => { });
-        var dialog = new Window
-        {
-            Title = title,
-            Width = 410,
-            MinWidth = 340,
-            MaxWidth = 460,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-            Content = DeyttTheme.Card(new StackPanel
-            {
-                Spacing = 14,
-                Children =
-                {
-                    DeyttTheme.TextBlock(title, 21, DeyttTheme.Text, FontWeight.Bold),
-                    DeyttTheme.TextBlock(message, 13, DeyttTheme.Muted),
-                    cancel,
-                    confirm,
-                },
-            }, DeyttTheme.Surface2, DeyttTheme.Line, 21, new Thickness(20)),
-        };
-        if (cancel is Button cancelButton)
-            cancelButton.Click += (_, _) => dialog.Close();
-        if (confirm.Child is Button confirmButton)
-            confirmButton.Click += (_, _) => { confirmed = true; dialog.Close(); };
-        await dialog.ShowDialog(this);
-        return confirmed;
-    }
+    private Task<bool> ConfirmDialogAsync(string title, string message, string confirmLabel,
+        string? cancelLabel = null) =>
+        ConfirmInShellAsync(title, message, confirmLabel, cancelLabel);
 
     private async Task ManageSessionAsync(TelegramAppSession session)
     {
@@ -2713,25 +2860,12 @@ public partial class MainWindow : Window
         var primaryButton = (Button)primary.Child!;
         var primaryLabel = (TextBlock)primaryButton.Content!;
 
+        using var pairingCancellation = new CancellationTokenSource();
+        ShellContentDialog? pairingDialog = null;
         var content = new StackPanel
         {
             Spacing = 13,
             Children = { title, detail, usernameInput, codeInput, status, openBot, primary },
-        };
-        var dialog = new Window
-        {
-            Title = Copy("Вход через Telegram", "Sign in with Telegram"),
-            Width = 430,
-            MinWidth = 350,
-            MaxWidth = 500,
-            MinHeight = 300,
-            MaxHeight = 560,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-            Content = DeyttTheme.Card(content, DeyttTheme.Surface2, DeyttTheme.Line, 22,
-                new Thickness(22)),
         };
 
         var step = 0;
@@ -2784,7 +2918,7 @@ public partial class MainWindow : Window
         {
             if (step == 2)
             {
-                dialog.Close();
+                pairingDialog?.Close();
                 return;
             }
 
@@ -2795,8 +2929,8 @@ public partial class MainWindow : Window
                 {
                     var username = usernameInput.Text?.Trim() ?? "";
                     SetStatus(Copy("Создаю запрос на вход…", "Starting sign-in…"), DeyttTheme.Blue);
-                    var pairing = await _telegramApi.StartPairingAsync(username);
-                    if (!dialog.IsVisible)
+                    var pairing = await _telegramApi.StartPairingAsync(username, pairingCancellation.Token);
+                    if (pairingCancellation.IsCancellationRequested || pairingDialog?.Completion.IsCompleted == true)
                         return;
                     challenge = pairing.Challenge;
                     botUrl = pairing.BotUrl;
@@ -2817,7 +2951,9 @@ public partial class MainWindow : Window
                     var code = codeInput.Text?.Trim() ?? "";
                     SetStatus(Copy("Проверяю код и загружаю профиль…", "Verifying the code and loading your profile…"),
                         DeyttTheme.Blue);
-                    var pairing = await _telegramApi.VerifyPairingAsync(challenge, code);
+                    var pairing = await _telegramApi.VerifyPairingAsync(challenge, code, pairingCancellation.Token);
+                    if (pairingCancellation.IsCancellationRequested || pairingDialog?.Completion.IsCompleted == true)
+                        return;
                     WindowsSessionStore.Save(pairing.Token);
                     _sessionToken = pairing.Token;
                     _account = pairing.Account;
@@ -2825,14 +2961,36 @@ public partial class MainWindow : Window
                     var refreshFailed = false;
                     try
                     {
-                        refreshFailed = !await RefreshAccountDataAsync(pairing.Token);
+                        SetStatus(Copy("Код подтверждён. Загружаю подписку и маршруты…",
+                            "Code verified. Loading your subscription and routes…"), DeyttTheme.Blue);
+                        var progress = new Progress<string>(stage =>
+                        {
+                            if (pairingCancellation.IsCancellationRequested ||
+                                pairingDialog?.Completion.IsCompleted == true)
+                                return;
+                            var message = stage switch
+                            {
+                                "metadata" => Copy("Проверяю подписку…", "Checking your subscription…"),
+                                "profile" => Copy("Загружаю маршруты…", "Loading routes…"),
+                                "optional" => Copy("Проверяю дополнительные маршруты…", "Checking optional routes…"),
+                                "ready" => Copy("Маршруты готовы. Завершаю вход…", "Routes are ready. Finishing sign-in…"),
+                                _ => Copy("Загружаю данные аккаунта…", "Loading account data…"),
+                            };
+                            SetStatus(message, DeyttTheme.Blue);
+                        });
+                        refreshFailed = !await RefreshAccountDataAsync(
+                            pairing.Token, pairingCancellation.Token, pairing.Account, progress);
                     }
                     catch (TelegramApiException error) when (error.IsUnauthorized)
                     {
                         ClearLocalSession();
                         throw;
                     }
-                    catch (Exception error) when (error is TelegramApiException or HttpRequestException or TaskCanceledException or IOException)
+                    catch (OperationCanceledException) when (pairingCancellation.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
                     {
                         refreshFailed = true;
                         _profileLoadIssue = Copy("Аккаунт подключён, но данные профиля не загрузились.",
@@ -2863,7 +3021,12 @@ public partial class MainWindow : Window
                     ? Copy("Получить код", "Get code")
                     : Copy("Подтвердить код", "Verify code");
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException) when (pairingCancellation.IsCancellationRequested ||
+                                                       pairingDialog?.Completion.IsCompleted == true)
+            {
+                // Closing the dialog cancels its in-flight request; it is not a timeout.
+            }
+            catch (OperationCanceledException)
             {
                 SetStatus(Copy("Запрос занял слишком много времени. Повтори попытку.",
                     "The request timed out. Please retry."), DeyttTheme.Coral);
@@ -2885,13 +3048,27 @@ public partial class MainWindow : Window
             }
             finally
             {
-                if (dialog.IsVisible)
+                if (!pairingCancellation.IsCancellationRequested && pairingDialog?.Completion.IsCompleted != true)
                     primaryButton.IsEnabled = true;
             }
         };
 
         SetStep(0);
-        await dialog.ShowDialog(this);
+        try
+        {
+            await ShowContentInShellAsync(
+                Copy("Вход через Telegram", "Telegram sign-in"), content, 500,
+                modal =>
+                {
+                    pairingDialog = modal;
+                    modal.Closed += () => pairingCancellation.Cancel();
+                });
+        }
+        finally
+        {
+            if (!pairingCancellation.IsCancellationRequested)
+                pairingCancellation.Cancel();
+        }
     }
 
     private string PairingError(TelegramApiException error) => error.Code switch
@@ -2977,36 +3154,8 @@ public partial class MainWindow : Window
             ShowInfoDialog(Copy("Сеанс завершён", "Session signed out"), _profileLoadIssue ?? "");
     }
 
-    private async void ShowInfoDialog(string title, string message)
-    {
-        var close = DeyttTheme.PrimaryButton(Copy("Понятно", "Got it"), () => { });
-        var dialog = new Window
-        {
-            Title = title,
-            Width = 390,
-            MinWidth = 320,
-            MaxWidth = 460,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-            Content = DeyttTheme.Card(new StackPanel
-            {
-                Spacing = 14,
-                Children =
-                {
-                    DeyttTheme.TextBlock(title, 22, DeyttTheme.Text, FontWeight.Bold),
-                    DeyttTheme.TextBlock(message, 14, DeyttTheme.Muted),
-                    close,
-                },
-            }, DeyttTheme.Surface2, DeyttTheme.Line, 21, new Thickness(20)),
-        };
-        if (close.Child is Button button)
-            button.Click += (_, _) => dialog.Close();
-        else
-            dialog.PointerPressed += (_, _) => dialog.Close();
-        await dialog.ShowDialog(this);
-    }
+    private async void ShowInfoDialog(string title, string message) =>
+        await ShowInfoInShellAsync(title, message);
 
     private void OpenExternal(string url)
     {
