@@ -83,20 +83,10 @@ public partial class MainWindow
             }, DeyttTheme.Surface, DeyttTheme.Line, 14, new Thickness(12, 10)));
         }
 
-        var dialog = new Window
-        {
-            Title = Copy("Без VPN", "Without VPN"),
-            Width = 600,
-            MinWidth = 460,
-            MaxWidth = 720,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-        };
-        var close = DeyttTheme.PrimaryButton(Copy("Понятно", "Got it"), () => dialog.Close());
+        ShellContentDialog? dialog = null;
+        var close = DeyttTheme.PrimaryButton(Copy("Понятно", "Got it"), () => dialog?.Close());
         content.Children.Add(close);
-        dialog.Content = DeyttTheme.Card(new StackPanel
+        var body = new StackPanel
         {
             Spacing = 14,
             Children =
@@ -105,7 +95,8 @@ public partial class MainWindow
                     21, DeyttTheme.Text, FontWeight.Bold),
                 content,
             },
-        }, DeyttTheme.Surface2, DeyttTheme.Line, 22, new Thickness(18));
-        _ = dialog.ShowDialog(this);
+        };
+        _ = ShowContentInShellAsync(Copy("Без VPN", "Without VPN"), body, 720,
+            shellDialog => dialog = shellDialog);
     }
 }

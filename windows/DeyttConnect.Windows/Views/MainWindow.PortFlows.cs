@@ -24,24 +24,54 @@ public partial class MainWindow
         Timeout = TimeSpan.FromSeconds(45),
     };
 
-    private async Task ShowSetupWindowAsync(string? initialImportUrl = null)
+    private async Task ShowSetupWindowAsync(string? initialImportUrl = null, bool forceFreshPairing = false)
     {
-        SetupWindow? setupWindow = null;
+        if (_setupFlowCompletion is not null)
+        {
+            await _setupFlowCompletion.Task;
+            return;
+        }
+
+        var returnTab = _activeTab == MainTab.Setup ? _setupReturnTab : _activeTab;
+        var completion = new TaskCompletionSource<SetupWindowResult?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        SetupWindow? setupView = null;
         var setup = new SetupWindow(new SetupWindowOptions
         {
             ApiClient = _telegramApi,
             Language = _language,
             InitialImportUrl = initialImportUrl,
-            RestoreExistingSession = true,
+            RestoreExistingSession = !forceFreshPairing,
+            DeferSessionSaveUntilImport = forceFreshPairing,
             ImportUrlAsync = ImportSubscriptionUrlAsync,
             CommitImportAsync = (result, cancellationToken) =>
-                CommitSetupImportAsync(setupWindow!, result, cancellationToken),
+                CommitSetupImportAsync(setupView!, result, cancellationToken),
+            ConfirmAsync = (title, message, label) => ConfirmInShellAsync(title, message, label),
         });
-        setupWindow = setup;
+        setupView = setup;
+        setup.Completed += (_, args) => completion.TrySetResult(args.Result);
+        setup.BackRequested += (_, _) => completion.TrySetResult(null);
 
-        await setup.ShowDialog(this);
-        if (setup.Result is not null)
-            ShowTab(_activeTab);
+        EnsureHostedViewLifecycle();
+        _setupReturnTab = returnTab;
+        _activeSetupView = setup;
+        _setupFlowCompletion = completion;
+
+        SetupWindowResult? completedResult = null;
+        try
+        {
+            ShowTab(MainTab.Setup);
+            await setup.ActivateAsync();
+            completedResult = await completion.Task;
+        }
+        finally
+        {
+            setup.Cancel();
+            _activeSetupView = null;
+            _setupFlowCompletion = null;
+            if (IsVisible && _activeTab == MainTab.Setup)
+                ShowTab(completedResult is null ? returnTab : MainTab.Home);
+        }
     }
 
     private async Task<SetupSubscriptionPayload> ImportSubscriptionUrlAsync(
@@ -117,8 +147,10 @@ public partial class MainWindow
         {
             if (OperatingSystem.IsWindows())
             {
-                WindowsSessionStore.Save(token);
+                // Clear the previous anonymous import before replacing the account token.
+                // A cleanup failure must leave the currently saved account untouched.
                 WindowsImportedSubscriptionStore.Clear();
+                WindowsSessionStore.Save(token);
             }
             _sessionToken = token;
         }
@@ -164,47 +196,12 @@ public partial class MainWindow
 
     private async Task<bool> ConfirmImportTunnelDisconnectAsync(SetupWindow owner)
     {
-        var confirmed = false;
-        var dialog = new Window
-        {
-            Title = Copy("Отключить VPN для импорта?", "Disconnect VPN to import?"),
-            Width = 420,
-            MinWidth = 340,
-            MaxWidth = 470,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-        };
-        var cancel = DeyttTheme.Action(
-            DeyttTheme.TextBlock(Copy("Отменить импорт", "Cancel import"), 14,
-                DeyttTheme.Muted, FontWeight.SemiBold),
-            () => dialog.Close());
-        var disconnect = DeyttTheme.PrimaryButton(
+        return await ConfirmInShellAsync(
+            Copy("VPN-соединение активно", "VPN connection is active"),
+            Copy("Чтобы сохранить новую подписку и маршрут, нужно остановить текущий туннель. После импорта VPN останется выключенным.",
+                "The current tunnel must stop before the new subscription and route can be applied. VPN will remain off after import."),
             Copy("Отключить и продолжить", "Disconnect and continue"),
-            () =>
-            {
-                confirmed = true;
-                dialog.Close();
-            });
-        dialog.Content = DeyttTheme.Card(new StackPanel
-        {
-            Spacing = 14,
-            Children =
-            {
-                DeyttTheme.TextBlock(Copy("VPN-соединение активно", "VPN connection is active"),
-                    21, DeyttTheme.Text, FontWeight.Bold),
-                DeyttTheme.TextBlock(Copy(
-                    "Чтобы сохранить новую подписку и маршрут, нужно остановить текущий туннель. После импорта VPN останется выключенным.",
-                    "The current tunnel must stop before the new subscription and route can be applied. VPN will remain off after import."),
-                    13, DeyttTheme.Muted),
-                cancel,
-                disconnect,
-            },
-        }, DeyttTheme.Surface, DeyttTheme.Line, 20);
-
-        await dialog.ShowDialog(owner);
-        return confirmed;
+            Copy("Отменить импорт", "Cancel import"));
     }
 
     private static bool IsInactiveTunnelState(string state) =>
@@ -300,6 +297,7 @@ public partial class MainWindow
         };
         if (choices.Count == 0)
         {
+            ShellContentDialog? noRoutesDialog = null;
             var content = new StackPanel
             {
                 Spacing = 11,
@@ -308,27 +306,18 @@ public partial class MainWindow
                     DeyttTheme.TextBlock(Copy("Для этой точки нет маршрута в подписке.",
                         "Your subscription has no route for this location."), 14, DeyttTheme.Muted),
                     DeyttTheme.PrimaryButton(Copy("Открыть маршруты", "Open routes"),
-                        () => ShowTab(MainTab.Routes)),
+                        () => noRoutesDialog?.Close(MainTab.Routes)),
                 },
             };
-            ShowSmallDialog(countryName, content, 390);
+            var noRoutesResult = await ShowSmallDialog(countryName, content, 390,
+                dialog => noRoutesDialog = dialog);
+            if (noRoutesResult is MainTab.Routes)
+                ShowTab(MainTab.Routes);
             return;
         }
 
         var options = new StackPanel { Spacing = 8 };
-        var picker = new Window
-        {
-            Title = countryName,
-            Width = 520,
-            MinWidth = 380,
-            MaxWidth = 620,
-            Height = 600,
-            MinHeight = 420,
-            MaxHeight = 760,
-            CanResize = true,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-        };
+        ShellContentDialog? pickerDialog = null;
         foreach (var route in choices)
         {
             var detail = route.Protocol switch
@@ -362,10 +351,7 @@ public partial class MainWindow
                 row.Children.Add(current);
             }
             var button = DeyttTheme.Action(row, () =>
-            {
-                picker.Close();
-                SelectRoute(route.Id);
-            });
+                pickerDialog?.Close(route.Id));
             button.Padding = new Thickness(12, 8);
             button.Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : DeyttTheme.Surface2);
             options.Children.Add(button);
@@ -394,46 +380,29 @@ public partial class MainWindow
             body.Children.Add(DeyttTheme.Action(
                 DeyttTheme.TextBlock(Copy("Сравнить протоколы", "Compare protocols"), 13,
                     DeyttTheme.Sky, FontWeight.SemiBold),
-                () =>
-                {
-                    picker.Close();
-                    ShowTab(MainTab.Routes);
-                }));
-        picker.Content = new ScrollViewer
-        {
-            Content = DeyttTheme.Card(body, DeyttTheme.Surface, DeyttTheme.Line, 22,
-                new Thickness(22)),
-            Margin = new Thickness(18),
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-        };
-        await picker.ShowDialog(this);
+                () => pickerDialog?.Close(MainTab.Routes)));
+
+        var result = await ShowContentInShellAsync(countryName, body, 620,
+            dialog => pickerDialog = dialog);
+        if (result is string routeId && choices.Any(route => route.Id == routeId))
+            SelectRoute(routeId);
+        else if (result is MainTab.Routes)
+            ShowTab(MainTab.Routes);
     }
 
-    private void ShowSmallDialog(string title, Control content, double width)
-    {
-        var dialog = new Window
-        {
-            Title = title,
-            Width = width,
-            SizeToContent = SizeToContent.Height,
-            MaxHeight = 560,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-            Content = DeyttTheme.Card(content, DeyttTheme.Surface, DeyttTheme.Line, 20,
-                new Thickness(22)),
-        };
-        _ = dialog.ShowDialog(this);
-    }
+    private Task<object?> ShowSmallDialog(
+        string title,
+        Control content,
+        double maxWidth,
+        Action<ShellContentDialog>? configure = null) =>
+        ShowContentInShellAsync(title, content, maxWidth, configure);
 
     private Task ShowSupportWindowAsync()
     {
-        var support = new SupportWindow(_sessionToken, async () =>
-        {
-            await ShowTelegramPairingDialogAsync();
-            return _sessionToken;
-        }, _language);
-        support.Show(this);
+        _supportReturnTab = _activeTab is MainTab.Support or MainTab.Setup
+            ? MainTab.Profile
+            : _activeTab;
+        ShowTab(MainTab.Support);
         return Task.CompletedTask;
     }
 
@@ -493,17 +462,6 @@ public partial class MainWindow
             Copy("Открыть проверенный архив", "Open verified package"), () => { });
         openPackageButton.IsVisible = false;
         var openPackage = (Button)openPackageButton.Child!;
-        var dialog = new Window
-        {
-            Title = Copy("Обновления", "Updates"),
-            Width = 460,
-            MinWidth = 360,
-            MaxWidth = 540,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-        };
         var body = new StackPanel
         {
             Spacing = 13,
@@ -519,14 +477,12 @@ public partial class MainWindow
                 openRelease,
             },
         };
-        dialog.Content = DeyttTheme.Card(body, DeyttTheme.Surface, DeyttTheme.Line, 20,
-            new Thickness(22));
         using var cancellation = new CancellationTokenSource();
-        dialog.Closed += (_, _) => cancellation.Cancel();
 
         WindowsUpdateRelease? release = null;
         VerifiedWindowsUpdatePackage? verifiedPackage = null;
         var downloadInFlight = false;
+        var dialogIsOpen = false;
 
         openPackage.Click += async (_, _) =>
         {
@@ -546,13 +502,13 @@ public partial class MainWindow
                                           System.ComponentModel.Win32Exception or PlatformNotSupportedException or
                                           InvalidDataException or System.Security.SecurityException)
             {
-                if (dialog.IsVisible)
+                if (dialogIsOpen)
                     status.Text = Copy("Архив изменился после проверки или не открылся в Проводнике.",
                         "The package changed after verification or File Explorer could not open it.");
             }
             finally
             {
-                if (dialog.IsVisible)
+                if (dialogIsOpen)
                     openPackage.IsEnabled = true;
             }
         };
@@ -570,7 +526,7 @@ public partial class MainWindow
                 var package = await WindowsUpdateClient.DownloadAndVerifyAsync(release,
                     (received, total) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
-                        if (dialog.IsVisible)
+                        if (dialogIsOpen)
                         {
                             var percent = total > 0 ? Math.Clamp(received * 100 / total, 0, 100) : 0;
                             status.Text = Copy($"Загрузка и проверка · {percent}%",
@@ -578,7 +534,7 @@ public partial class MainWindow
                         }
                     }), cancellation.Token);
 
-                if (!dialog.IsVisible)
+                if (!dialogIsOpen)
                     return;
 
                 verifiedPackage = package;
@@ -591,20 +547,20 @@ public partial class MainWindow
             }
             catch (OperationCanceledException)
             {
-                if (dialog.IsVisible)
+                if (dialogIsOpen)
                     status.Text = Copy("Загрузка отменена. Можно попробовать ещё раз.",
                         "Download cancelled. You can try again.");
             }
             catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
                                           UnauthorizedAccessException or JsonException)
             {
-                if (dialog.IsVisible)
+                if (dialogIsOpen)
                     status.Text = Copy("Не удалось загрузить или проверить ZIP. Файл не будет открыт.",
                         "Could not download or verify the ZIP. The file will not be opened.");
             }
             finally
             {
-                if (dialog.IsVisible)
+                if (dialogIsOpen)
                 {
                     download.IsEnabled = true;
                     downloadInFlight = false;
@@ -612,12 +568,12 @@ public partial class MainWindow
             }
         };
 
-        dialog.Opened += async (_, _) =>
+        async Task LoadLatestReleaseAsync()
         {
             try
             {
                 release = await WindowsUpdateClient.FindLatestWindowsReleaseAsync(cancellation.Token);
-                if (!dialog.IsVisible)
+                if (!dialogIsOpen)
                     return;
                 if (release is null)
                 {
@@ -644,16 +600,28 @@ public partial class MainWindow
             }
             catch (OperationCanceledException)
             {
-                // Closing the dialog cancels the outstanding release request.
+                // Dismissing the shell modal cancels the outstanding release request.
             }
             catch (Exception error) when (error is HttpRequestException or JsonException or IOException)
             {
-                if (dialog.IsVisible)
+                if (dialogIsOpen)
                     status.Text = Copy("Не удалось проверить релизы. Проверьте подключение и повторите.",
                         "Could not check releases. Check the connection and try again.");
             }
-        };
-        await dialog.ShowDialog(this);
+        }
+
+        var releaseLookup = Task.CompletedTask;
+        await ShowContentInShellAsync(Copy("Обновления", "Updates"), body, 540, modal =>
+        {
+            dialogIsOpen = true;
+            modal.Closed += () =>
+            {
+                dialogIsOpen = false;
+                cancellation.Cancel();
+            };
+            releaseLookup = LoadLatestReleaseAsync();
+        });
+        await releaseLookup;
     }
 
     private static async Task<string> ReadBoundedTextAsync(

@@ -1,103 +1,17 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        x:Class="DeyttConnect.Windows.Views.SupportWindow"
-        Title="DEYTT · Помощь и документы"
-        Width="1050"
-        Height="760"
-        MinWidth="820"
-        MinHeight="610"
-        WindowStartupLocation="CenterOwner"
-        Background="#080B12"
-        RequestedThemeVariant="Dark">
-    <Grid ColumnDefinitions="232,*">
-        <Border Grid.Column="0"
-                Background="#0D131D"
-                BorderBrush="#283548"
-                BorderThickness="0,0,1,0"
-                Padding="20,23,18,18">
-            <Grid RowDefinitions="Auto,Auto,*,Auto">
-                <Grid ColumnDefinitions="Auto,*" VerticalAlignment="Center">
-                    <Border Width="42" Height="42"
-                            Background="#192331"
-                            BorderBrush="#34445B"
-                            BorderThickness="1"
-                            CornerRadius="15">
-                        <TextBlock Text="D"
-                                   FontFamily="fonts:DEYTT#Unbounded"
-                                   FontSize="16"
-                                   FontWeight="Bold"
-                                   Foreground="#6BDDF2"
-                                   HorizontalAlignment="Center"
-                                   VerticalAlignment="Center" />
-                    </Border>
-                    <StackPanel Grid.Column="1" Margin="12,0,0,0" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="deytt./connect"
-                                   FontFamily="fonts:DEYTT#JetBrains Mono"
-                                   FontSize="13"
-                                   FontWeight="Bold"
-                                   Foreground="#F2F5FC" />
-                        <TextBlock x:Name="SidebarKicker"
-                                   Text="ЦЕНТР ПОМОЩИ"
-                                   FontFamily="fonts:DEYTT#JetBrains Mono"
-                                   FontSize="9"
-                                   Foreground="#8291A8" />
-                    </StackPanel>
-                </Grid>
-
-                <StackPanel Grid.Row="1" Margin="2,34,0,12" Spacing="8">
-                    <TextBlock x:Name="NavSectionTitle"
-                               Text="ПОМОЩЬ И ДОКУМЕНТЫ"
-                               FontFamily="fonts:DEYTT#JetBrains Mono"
-                               FontSize="9"
-                               FontWeight="SemiBold"
-                               Foreground="#8291A8" />
-                    <Border Height="1" Background="#202B38" />
-                </StackPanel>
-
-                <StackPanel Grid.Row="2" Spacing="6">
-                    <Button x:Name="SupportNavButton" Classes="deytt-button support-nav" />
-                    <Button x:Name="TermsNavButton" Classes="deytt-button support-nav" />
-                    <Button x:Name="PrivacyNavButton" Classes="deytt-button support-nav" />
-                    <Button x:Name="TelegramNavButton" Classes="deytt-button support-nav" />
-                </StackPanel>
-
-                <Border Grid.Row="3"
-                        Background="#111823"
-                        BorderBrush="#283548"
-                        BorderThickness="1"
-                        CornerRadius="17"
-                        Padding="14,13">
-                    <StackPanel Spacing="7">
-                        <TextBlock Text="DEYTT · OFFICIAL"
-                                   FontFamily="fonts:DEYTT#JetBrains Mono"
-                                   FontSize="9"
-                                   FontWeight="SemiBold"
-                                   Foreground="#8291A8" />
-                        <TextBlock x:Name="SourceText"
-                                   Text="Текущие документы deytt.space"
-                                   FontSize="12"
-                                   Foreground="#F2F5FC"
-                                   TextWrapping="Wrap" />
-                        <TextBlock Text="https://deytt.space/info/"
-                                   FontFamily="fonts:DEYTT#JetBrains Mono"
-                                   FontSize="9"
-                                   Foreground="#6BDDF2"
-                                   TextWrapping="Wrap" />
-                    </StackPanel>
-                </Border>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Column="1" RowDefinitions="82,*">
-            <Border Grid.Row="0"
-                    Background="#0A1018"
-                    BorderBrush="#202B38"
-                    BorderThickness="0,0,0,1"
-                    Padding="28,0">
-                <Grid ColumnDefinitions="*,Auto,Auto" VerticalAlignment="Center">
-                    <StackPanel Spacing="4" VerticalAlignment="Center">
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="DeyttConnect.Windows.Views.SupportView">
+    <Grid RowDefinitions="Auto,*" Background="#080B12">
+        <Border Grid.Row="0"
+                Background="#0A1018"
+                BorderBrush="#202B38"
+                BorderThickness="0,0,0,1"
+                Padding="22,17">
+            <Grid RowDefinitions="Auto,Auto">
+                <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
+                    <StackPanel Spacing="3" VerticalAlignment="Center">
                         <TextBlock x:Name="HeaderKicker"
-                                   Text="DEYTT · SUPPORT"
+                                   Text="SUPPORT"
                                    FontFamily="fonts:DEYTT#JetBrains Mono"
                                    FontSize="9"
                                    FontWeight="SemiBold"
@@ -118,7 +32,7 @@
                             BorderThickness="1"
                             CornerRadius="12"
                             Content="Обновить" />
-                    <Button x:Name="WindowCloseButton"
+                    <Button x:Name="BackButton"
                             Grid.Column="2"
                             Classes="deytt-button"
                             Padding="13,9"
@@ -126,190 +40,197 @@
                             BorderBrush="#283548"
                             BorderThickness="1"
                             CornerRadius="12"
-                            Content="Закрыть" />
+                            Content="Назад" />
                 </Grid>
-            </Border>
 
-            <Grid Grid.Row="1" Margin="28,22,28,24">
-                <Grid x:Name="SupportPane" RowDefinitions="Auto,*,Auto" IsVisible="True">
-                    <Border Grid.Row="0"
-                            Background="#111823"
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6">
+                    <Button x:Name="SupportNavButton" Classes="deytt-button support-nav" Padding="10,7" />
+                    <Button x:Name="TermsNavButton" Classes="deytt-button support-nav" Padding="10,7" />
+                    <Button x:Name="PrivacyNavButton" Classes="deytt-button support-nav" Padding="10,7" />
+                    <Button x:Name="TelegramNavButton" Classes="deytt-button support-nav" Padding="10,7" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="22,18,22,20">
+            <Grid x:Name="SupportPane" RowDefinitions="Auto,*,Auto" IsVisible="True">
+                <Border Grid.Row="0"
+                        Background="#111823"
+                        BorderBrush="#283548"
+                        BorderThickness="1"
+                        CornerRadius="14"
+                        Padding="14,10"
+                        Margin="0,0,0,14">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Ellipse x:Name="StatusDot"
+                                 Width="8"
+                                 Height="8"
+                                 Fill="#9AA8BC"
+                                 VerticalAlignment="Center"
+                                 Margin="0,0,10,0" />
+                        <TextBlock x:Name="StatusText"
+                                   Grid.Column="1"
+                                   Text="Загрузка приостановлена"
+                                   FontSize="12"
+                                   Foreground="#9AA8BC"
+                                   TextWrapping="Wrap"
+                                   VerticalAlignment="Center" />
+                        <Button x:Name="RetryButton"
+                                Grid.Column="2"
+                                Classes="deytt-button"
+                                Padding="10,5"
+                                Content="Повторить"
+                                Foreground="#6BDDF2" />
+                    </Grid>
+                </Border>
+
+                <ScrollViewer x:Name="MessageScroll"
+                              Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              IsVisible="True">
+                    <StackPanel x:Name="MessageStack" Spacing="9" />
+                </ScrollViewer>
+
+                <Grid x:Name="SignedOutPanel" Grid.Row="1" IsVisible="False">
+                    <Border Background="#111823"
                             BorderBrush="#283548"
                             BorderThickness="1"
-                            CornerRadius="14"
-                            Padding="14,10"
-                            Margin="0,0,0,14">
-                        <Grid ColumnDefinitions="Auto,*,Auto">
-                            <Ellipse x:Name="StatusDot"
-                                     Width="8"
-                                     Height="8"
-                                     Fill="#9AA8BC"
-                                     VerticalAlignment="Center"
-                                     Margin="0,0,10,0" />
-                            <TextBlock x:Name="StatusText"
-                                       Grid.Column="1"
-                                       Text="Загружаем переписку…"
-                                       FontSize="12"
+                            CornerRadius="22"
+                            Padding="30"
+                            MaxWidth="580"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center">
+                        <StackPanel Spacing="12">
+                            <TextBlock Text="Аккаунт Telegram"
+                                       FontSize="21"
+                                       FontWeight="SemiBold" />
+                            <TextBlock x:Name="SignInDescription"
+                                       Text="Подключите Telegram, чтобы написать команде и посмотреть историю обращений."
+                                       FontSize="14"
                                        Foreground="#9AA8BC"
-                                       TextWrapping="Wrap"
-                                       VerticalAlignment="Center" />
-                            <Button x:Name="RetryButton"
-                                    Grid.Column="2"
+                                       TextWrapping="Wrap" />
+                            <Button x:Name="SignInButton"
                                     Classes="deytt-button"
-                                    Padding="10,5"
-                                    Content="Повторить"
-                                    Foreground="#6BDDF2" />
-                        </Grid>
+                                    HorizontalAlignment="Stretch"
+                                    Padding="16,13"
+                                    Background="#1B303D"
+                                    BorderBrush="#2F5A69"
+                                    BorderThickness="1"
+                                    CornerRadius="14"
+                                    Content="Подключить Telegram" />
+                        </StackPanel>
                     </Border>
+                </Grid>
 
-                    <ScrollViewer x:Name="MessageScroll"
-                                  Grid.Row="1"
-                                  VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled"
-                                  IsVisible="True">
-                        <StackPanel x:Name="MessageStack" Spacing="9" />
-                    </ScrollViewer>
-
-                    <Grid x:Name="SignedOutPanel" Grid.Row="1" IsVisible="False">
-                        <Border Background="#111823"
-                                BorderBrush="#283548"
-                                BorderThickness="1"
-                                CornerRadius="22"
-                                Padding="30"
-                                MaxWidth="580"
-                                HorizontalAlignment="Center"
-                                VerticalAlignment="Center">
-                            <StackPanel Spacing="12">
-                                <TextBlock Text="Аккаунт Telegram"
-                                           FontSize="21"
-                                           FontWeight="SemiBold" />
-                                <TextBlock x:Name="SignInDescription"
-                                           Text="Подключите Telegram, чтобы написать команде и посмотреть историю обращений."
-                                           FontSize="14"
-                                           Foreground="#9AA8BC"
-                                           TextWrapping="Wrap" />
-                                <Button x:Name="SignInButton"
-                                        Classes="deytt-button"
-                                        HorizontalAlignment="Stretch"
-                                        Padding="16,13"
-                                        Background="#1B303D"
-                                        BorderBrush="#2F5A69"
-                                        BorderThickness="1"
-                                        CornerRadius="14"
-                                        Content="Подключить Telegram" />
-                            </StackPanel>
-                        </Border>
+                <Border x:Name="ComposerCard"
+                        Grid.Row="2"
+                        Background="#111823"
+                        BorderBrush="#283548"
+                        BorderThickness="1"
+                        CornerRadius="19"
+                        Padding="15,13"
+                        Margin="0,14,0,0">
+                    <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
+                        <TextBlock x:Name="ComposerLabel"
+                                   Text="СООБЩЕНИЕ КОМАНДЕ"
+                                   FontFamily="fonts:DEYTT#JetBrains Mono"
+                                   FontSize="9"
+                                   FontWeight="SemiBold"
+                                   Foreground="#8291A8"
+                                   VerticalAlignment="Center" />
+                        <TextBlock x:Name="CharacterCount"
+                                   Grid.Column="1"
+                                   Text="0 / 4000"
+                                   FontFamily="fonts:DEYTT#JetBrains Mono"
+                                   FontSize="9"
+                                   Foreground="#8291A8"
+                                   VerticalAlignment="Center" />
+                        <TextBox x:Name="Composer"
+                                 Grid.Row="1"
+                                 Grid.ColumnSpan="2"
+                                 Margin="0,9,0,10"
+                                 MinHeight="76"
+                                 MaxHeight="118"
+                                 AcceptsReturn="True"
+                                 TextWrapping="Wrap"
+                                 MaxLength="4000"
+                                 PlaceholderText="Опишите вопрос минимум в пяти символах"
+                                 Background="#192331"
+                                 BorderBrush="#283548"
+                                 BorderThickness="1"
+                                 CornerRadius="13"
+                                 Padding="12,10"
+                                 FontSize="14"
+                                 Foreground="#F2F5FC" />
+                        <StackPanel Grid.Row="2"
+                                    Grid.ColumnSpan="2"
+                                    Orientation="Horizontal"
+                                    HorizontalAlignment="Right"
+                                    Spacing="8">
+                            <Button x:Name="CloseTicketButton"
+                                    Classes="deytt-button"
+                                    Padding="13,9"
+                                    Background="#192331"
+                                    BorderBrush="#283548"
+                                    BorderThickness="1"
+                                    CornerRadius="12"
+                                    Content="Закрыть обращение"
+                                    IsVisible="False" />
+                            <Button x:Name="SendButton"
+                                    Classes="deytt-button"
+                                    Padding="16,9"
+                                    Background="#1B303D"
+                                    BorderBrush="#2F5A69"
+                                    BorderThickness="1"
+                                    CornerRadius="12"
+                                    Content="Отправить · Ctrl+Enter" />
+                        </StackPanel>
                     </Grid>
+                </Border>
+            </Grid>
 
-                    <Border x:Name="ComposerCard"
-                            Grid.Row="2"
-                            Background="#111823"
+            <Grid x:Name="DocumentPane" RowDefinitions="Auto,*" IsVisible="False">
+                <Border Grid.Row="0"
+                        Background="#111823"
+                        BorderBrush="#283548"
+                        BorderThickness="1"
+                        CornerRadius="17"
+                        Padding="17,13"
+                        Margin="0,0,0,14">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Spacing="4" VerticalAlignment="Center">
+                            <TextBlock x:Name="DocumentTitle"
+                                       Text="Условия использования"
+                                       FontSize="18"
+                                       FontWeight="SemiBold" />
+                            <TextBlock x:Name="DocumentStatus"
+                                       Text="Загрузка приостановлена"
+                                       FontSize="11"
+                                       Foreground="#9AA8BC"
+                                       TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Button x:Name="DocumentRetryButton"
+                                Grid.Column="1"
+                                Classes="deytt-button"
+                                Padding="12,8"
+                                Content="Повторить"
+                                Foreground="#6BDDF2"
+                                VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <ScrollViewer Grid.Row="1"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <Border Background="#111823"
                             BorderBrush="#283548"
                             BorderThickness="1"
                             CornerRadius="19"
-                            Padding="15,13"
-                            Margin="0,14,0,0">
-                        <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
-                            <TextBlock x:Name="ComposerLabel"
-                                       Text="СООБЩЕНИЕ КОМАНДЕ"
-                                       FontFamily="fonts:DEYTT#JetBrains Mono"
-                                       FontSize="9"
-                                       FontWeight="SemiBold"
-                                       Foreground="#8291A8"
-                                       VerticalAlignment="Center" />
-                            <TextBlock x:Name="CharacterCount"
-                                       Grid.Column="1"
-                                       Text="0 / 4000"
-                                       FontFamily="fonts:DEYTT#JetBrains Mono"
-                                       FontSize="9"
-                                       Foreground="#8291A8"
-                                       VerticalAlignment="Center" />
-                            <TextBox x:Name="Composer"
-                                     Grid.Row="1"
-                                     Grid.ColumnSpan="2"
-                                     Margin="0,9,0,10"
-                                     MinHeight="76"
-                                     MaxHeight="118"
-                                     AcceptsReturn="True"
-                                     TextWrapping="Wrap"
-                                     MaxLength="4000"
-                                     PlaceholderText="Опишите вопрос минимум в пяти символах"
-                                     Background="#192331"
-                                     BorderBrush="#283548"
-                                     BorderThickness="1"
-                                     CornerRadius="13"
-                                     Padding="12,10"
-                                     FontSize="14"
-                                     Foreground="#F2F5FC" />
-                            <StackPanel Grid.Row="2"
-                                        Grid.ColumnSpan="2"
-                                        Orientation="Horizontal"
-                                        HorizontalAlignment="Right"
-                                        Spacing="8">
-                                <Button x:Name="CloseTicketButton"
-                                        Classes="deytt-button"
-                                        Padding="13,9"
-                                        Background="#192331"
-                                        BorderBrush="#283548"
-                                        BorderThickness="1"
-                                        CornerRadius="12"
-                                        Content="Закрыть обращение"
-                                        IsVisible="False" />
-                                <Button x:Name="SendButton"
-                                        Classes="deytt-button"
-                                        Padding="16,9"
-                                        Background="#1B303D"
-                                        BorderBrush="#2F5A69"
-                                        BorderThickness="1"
-                                        CornerRadius="12"
-                                        Content="Отправить · Ctrl+Enter" />
-                            </StackPanel>
-                        </Grid>
+                            Padding="24,22">
+                        <StackPanel x:Name="DocumentStack" Spacing="10" />
                     </Border>
-                </Grid>
-
-                <Grid x:Name="DocumentPane" RowDefinitions="Auto,*" IsVisible="False">
-                    <Border Grid.Row="0"
-                            Background="#111823"
-                            BorderBrush="#283548"
-                            BorderThickness="1"
-                            CornerRadius="17"
-                            Padding="17,13"
-                            Margin="0,0,0,14">
-                        <Grid ColumnDefinitions="*,Auto">
-                            <StackPanel Spacing="4" VerticalAlignment="Center">
-                                <TextBlock x:Name="DocumentTitle"
-                                           Text="Условия использования"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
-                                <TextBlock x:Name="DocumentStatus"
-                                           Text="Загружаем актуальный документ…"
-                                           FontSize="11"
-                                           Foreground="#9AA8BC"
-                                           TextWrapping="Wrap" />
-                            </StackPanel>
-                            <Button x:Name="DocumentRetryButton"
-                                    Grid.Column="1"
-                                    Classes="deytt-button"
-                                    Padding="12,8"
-                                    Content="Повторить"
-                                    Foreground="#6BDDF2"
-                                    VerticalAlignment="Center" />
-                        </Grid>
-                    </Border>
-                    <ScrollViewer Grid.Row="1"
-                                  VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <Border Background="#111823"
-                                BorderBrush="#283548"
-                                BorderThickness="1"
-                                CornerRadius="19"
-                                Padding="24,22">
-                            <StackPanel x:Name="DocumentStack" Spacing="10" />
-                        </Border>
-                    </ScrollViewer>
-                </Grid>
+                </ScrollViewer>
             </Grid>
         </Grid>
     </Grid>
-</Window>
+</UserControl>

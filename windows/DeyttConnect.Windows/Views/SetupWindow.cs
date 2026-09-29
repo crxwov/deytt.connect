@@ -30,8 +30,12 @@ public sealed record SetupWindowOptions
     public string Language { get; init; } = "ru";
     public string? InitialImportUrl { get; init; }
     public bool RestoreExistingSession { get; init; } = true;
+    /// <summary>Keep the current account intact until a fresh pairing imports usable routes.</summary>
+    public bool DeferSessionSaveUntilImport { get; init; }
     public SetupUrlImportHandler? ImportUrlAsync { get; init; }
     public SetupImportCommitHandler? CommitImportAsync { get; init; }
+    /// <summary>Host-owned confirmation callback: title, message, and primary-button label.</summary>
+    public Func<string, string, string, Task<bool>>? ConfirmAsync { get; init; }
 }
 
 public sealed record SetupSubscriptionPayload(
@@ -50,10 +54,10 @@ public sealed class SetupWindowCompletedEventArgs(SetupWindowResult result) : Ev
 }
 
 /// <summary>
-/// Standalone Telegram sign-in and subscription import flow. The host owns committing
+/// Hostable Telegram sign-in and subscription import flow. The host owns committing
 /// the returned profile into its active route/tunnel state through CommitImportAsync.
 /// </summary>
-public sealed class SetupWindow : Window
+public sealed class SetupWindow : UserControl
 {
     private enum ViewState
     {
@@ -75,6 +79,7 @@ public sealed class SetupWindow : Window
     private readonly WindowsSupportClient _support = new();
     private readonly string _language;
     private readonly CancellationTokenSource _lifetime = new();
+    private Task? _activationTask;
     private readonly StackPanel _body = new() { Spacing = 15 };
     private readonly TextBlock _headline;
     private readonly TextBlock _intro;
@@ -99,6 +104,9 @@ public sealed class SetupWindow : Window
     private string? _resolvedImportUrl;
     private bool _busy;
     private bool _transferRequestSent;
+    private bool _completeAfterPairing;
+    private bool _completed;
+    private bool _backRequested;
 
     public SetupWindow(SetupWindowOptions? options = null)
     {
@@ -106,22 +114,11 @@ public sealed class SetupWindow : Window
         _api = _options.ApiClient ?? new TelegramApiClient();
         _language = string.Equals(_options.Language, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "ru";
 
-        Title = Copy("DEYTT Connect — подключение", "DEYTT Connect — setup");
-        Width = 760;
-        Height = 720;
-        MinWidth = 500;
-        MinHeight = 600;
-        MaxWidth = 980;
-        MaxHeight = 900;
-        CanResize = true;
-        WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = DeyttTheme.Brush(DeyttTheme.Background);
-
         _headline = DeyttTheme.TextBlock(Copy("Подключите DEYTT", "Set up DEYTT"), 25, DeyttTheme.Text, FontWeight.Bold,
             DeyttTheme.Unbounded);
         _intro = DeyttTheme.TextBlock(
-            Copy("Войдите через Telegram, чтобы загрузить подписку и выбрать первый маршрут.",
-                "Sign in with Telegram to load your subscription and choose the first route."),
+            Copy("Войдите через Telegram, чтобы загрузить подписку и маршруты.",
+                "Sign in with Telegram to load your subscription and routes."),
             14, DeyttTheme.Muted);
         _statusText = DeyttTheme.TextBlock("", 13, DeyttTheme.Muted);
         _statusPanel = new Border
@@ -140,7 +137,6 @@ public sealed class SetupWindow : Window
         var content = new StackPanel
         {
             Spacing = 20,
-            Width = 620,
             MaxWidth = 620,
             Children =
             {
@@ -171,15 +167,49 @@ public sealed class SetupWindow : Window
             Content = card,
         };
 
-        Opened += OnOpened;
-        Closed += (_, _) => _lifetime.Cancel();
+        KeyDown += (_, args) =>
+        {
+            if (args.Key != Key.Escape)
+                return;
+            Cancel();
+            args.Handled = true;
+        };
+
         Render(ViewState.Username);
     }
+
+    /// <summary>Raised when the user asks the host to leave the setup flow.</summary>
+    public event EventHandler? BackRequested;
 
     public event EventHandler<SetupWindowCompletedEventArgs>? Completed;
 
     /// <summary>The result becomes available after the import callback succeeds.</summary>
     public SetupWindowResult? Result { get; private set; }
+
+    /// <summary>
+    /// Starts initial-link processing or saved-session restoration once. Call on the UI thread
+    /// whenever the host activates this view; repeated calls return the same task.
+    /// </summary>
+    public Task ActivateAsync()
+    {
+        if (!Dispatcher.UIThread.CheckAccess())
+            throw new InvalidOperationException("SetupWindow must be activated on the UI thread.");
+        if (_backRequested)
+            throw new InvalidOperationException("A cancelled setup view cannot be activated again.");
+
+        return _activationTask ??= ActivateCoreAsync();
+    }
+
+    /// <summary>Cancels in-flight setup work and asks the host to leave this view once.</summary>
+    public void Cancel()
+    {
+        if (_backRequested || _completed)
+            return;
+
+        _backRequested = true;
+        _lifetime.Cancel();
+        BackRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     /// <summary>
     /// Accepts a first-party subscription URL or an Android-compatible
@@ -218,7 +248,7 @@ public sealed class SetupWindow : Window
         return true;
     }
 
-    private void OnOpened(object? sender, EventArgs args)
+    private async Task ActivateCoreAsync()
     {
         if (_options.InitialImportUrl is { Length: > 0 } initialUrl)
         {
@@ -237,12 +267,12 @@ public sealed class SetupWindow : Window
                 _urlInput!.Text = parsedUrl;
                 return;
             }
-            _ = ImportUrlAsync(parsedUrl);
+            await ImportUrlAsync(parsedUrl);
             return;
         }
 
         if (_options.RestoreExistingSession && OperatingSystem.IsWindows())
-            _ = RestoreSessionAsync();
+            await RestoreSessionAsync();
         else
             FocusLater(_usernameInput);
     }
@@ -272,6 +302,7 @@ public sealed class SetupWindow : Window
     {
         if (_busy)
             return;
+        _completeAfterPairing = false;
         _username = _usernameInput?.Text?.Trim() ?? _username;
         if (_username.Length == 0)
         {
@@ -318,10 +349,19 @@ public sealed class SetupWindow : Window
             Render(ViewState.Username, Copy("Не удалось связаться с сервером. Проверь интернет и повтори.",
                 "Could not reach the server. Check your connection and retry."), DeyttTheme.Coral);
         }
-        catch (TaskCanceledException) when (!_lifetime.IsCancellationRequested)
+        catch (OperationCanceledException) when (!_lifetime.IsCancellationRequested)
         {
             Render(ViewState.Username, Copy("Запрос занял слишком много времени. Повтори попытку.",
                 "The request timed out. Please try again."), DeyttTheme.Coral);
+        }
+        catch (Exception error) when (_lifetime.IsCancellationRequested && IsNonFatal(error))
+        {
+            // The host has left the setup view, so there is no UI left to update.
+        }
+        catch (Exception error) when (IsNonFatal(error))
+        {
+            Render(ViewState.Username, Copy("Не удалось обработать ответ сервера. Попробуй ещё раз.",
+                "Could not process the server response. Please try again."), DeyttTheme.Coral);
         }
         finally
         {
@@ -342,13 +382,14 @@ public sealed class SetupWindow : Window
         }
 
         SetBusy(true);
-        Render(ViewState.Refreshing, Copy("Проверяем код и загружаем профиль…", "Verifying the code and loading your account…"), DeyttTheme.Blue);
+        Render(ViewState.Refreshing, Copy("Проверяем код…", "Verifying the code…"), DeyttTheme.Blue);
         try
         {
             var paired = await _api.VerifyPairingAsync(_challenge, code, _lifetime.Token);
             try
             {
-                WindowsSessionStore.Save(paired.Token);
+                if (!_options.DeferSessionSaveUntilImport)
+                    WindowsSessionStore.Save(paired.Token);
             }
             catch (Exception error) when (error is CryptographicException or IOException or UnauthorizedAccessException)
             {
@@ -359,7 +400,8 @@ public sealed class SetupWindow : Window
 
             _sessionToken = paired.Token;
             _account = paired.Account;
-            await RefreshSubscriptionAsync(paired.Token);
+            _completeAfterPairing = true;
+            await RefreshSubscriptionAsync(paired.Token, paired.Account, completeAfterVerification: true);
         }
         catch (TelegramApiException error)
         {
@@ -381,10 +423,20 @@ public sealed class SetupWindow : Window
                 "Could not reach the server. Check your connection and retry."), DeyttTheme.Coral,
                 showBotButton: _botUrl.Length > 0);
         }
-        catch (TaskCanceledException) when (!_lifetime.IsCancellationRequested)
+        catch (OperationCanceledException) when (!_lifetime.IsCancellationRequested)
         {
             Render(ViewState.Code, Copy("Запрос занял слишком много времени. Повтори попытку.",
                 "The request timed out. Please try again."), DeyttTheme.Coral,
+                showBotButton: _botUrl.Length > 0);
+        }
+        catch (Exception error) when (_lifetime.IsCancellationRequested && IsNonFatal(error))
+        {
+            // The host has left the setup view, so there is no UI left to update.
+        }
+        catch (Exception error) when (IsNonFatal(error))
+        {
+            Render(ViewState.Code, Copy("Не удалось завершить вход. Запроси новый код и попробуй ещё раз.",
+                "Could not finish sign-in. Request a new code and try again."), DeyttTheme.Coral,
                 showBotButton: _botUrl.Length > 0);
         }
         finally
@@ -393,28 +445,59 @@ public sealed class SetupWindow : Window
         }
     }
 
-    private async Task RefreshSubscriptionAsync(string token)
+    private async Task RefreshSubscriptionAsync(string token, TelegramAccount? verifiedAccount = null,
+        bool completeAfterVerification = false)
     {
         SetBusy(true);
-        Render(ViewState.Refreshing, Copy("Обновляем аккаунт и получаем маршруты…", "Refreshing your account and loading routes…"), DeyttTheme.Blue);
+        Render(ViewState.Refreshing,
+            Copy("Код подтверждён. Загружаю подписку и маршруты…", "Code verified. Loading your subscription and routes…"),
+            DeyttTheme.Blue);
         try
         {
-            _account = await _api.GetAccountAsync(token, _lifetime.Token);
-            _subscription = await _api.GetSubscriptionAsync(token, _lifetime.Token);
+            var progress = new Progress<string>(stage =>
+            {
+                if (_lifetime.IsCancellationRequested || !IsVisible)
+                    return;
+                var message = stage switch
+                {
+                    "metadata" => Copy("Получаю данные подписки…", "Fetching subscription details…"),
+                    "profile" => Copy("Загружаю маршруты…", "Loading routes…"),
+                    "optional" => Copy("Проверяю дополнительные маршруты…", "Checking optional routes…"),
+                    "ready" => Copy("Маршруты готовы. Завершаю вход…", "Routes are ready. Finishing sign-in…"),
+                    _ => Copy("Загружаю подписку…", "Loading your subscription…"),
+                };
+                SetStatus(message, DeyttTheme.Blue);
+            });
+            var accountTask = verifiedAccount is null
+                ? _api.GetAccountAsync(token, _lifetime.Token)
+                : Task.FromResult(verifiedAccount);
+            var subscriptionTask = _api.GetSubscriptionAsync(token, _lifetime.Token, progress);
+            await Task.WhenAll(accountTask, subscriptionTask);
+            _account = await accountTask;
+            _subscription = await subscriptionTask;
             if (!_subscription.HappAvailable || _subscription.Routes.Count == 0)
             {
-                Render(ViewState.NoSubscription, Copy(
-                    "Аккаунт подключён, но активная подписка не найдена. Можно обновить данные или импортировать ссылку подписки.",
-                    "The account is connected, but no active subscription was found. Refresh or import a subscription link."),
+                Render(ViewState.NoSubscription, _options.DeferSessionSaveUntilImport
+                    ? Copy("Код подтверждён, но активная подписка не найдена. Текущий аккаунт не изменён.",
+                        "The code was verified, but no active subscription was found. Your current account is unchanged.")
+                    : Copy("Аккаунт подключён, но активная подписка не найдена. Можно обновить данные или импортировать ссылку подписки.",
+                        "The account is connected, but no active subscription was found. Refresh or import a subscription link."),
                     DeyttTheme.Amber);
                 return;
             }
 
             _payload = new SetupSubscriptionPayload(token, _account, _subscription);
             _selectedRoute = ChooseInitialRoute(_subscription.Routes);
-            Render(ViewState.Success,
-                Copy($"Подписка загружена: {_subscription.Routes.Count} маршрутов готовы к импорту.",
-                    $"Subscription loaded: {_subscription.Routes.Count} routes are ready to import."), DeyttTheme.Mint);
+            if (completeAfterVerification)
+            {
+                await CompleteImportAsync(automatic: true);
+            }
+            else
+            {
+                Render(ViewState.Success,
+                    Copy($"Подписка загружена: {_subscription.Routes.Count} маршрутов готовы к импорту.",
+                        $"Subscription loaded: {_subscription.Routes.Count} routes are ready to import."), DeyttTheme.Mint);
+            }
         }
         catch (TelegramApiException error) when (IsDeviceSlotConflict(error))
         {
@@ -426,16 +509,43 @@ public sealed class SetupWindow : Window
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
             _sessionToken = null;
-            try { WindowsSessionStore.Clear(); }
-            catch (Exception clearError) when (clearError is IOException or UnauthorizedAccessException) { }
+            if (!_options.DeferSessionSaveUntilImport)
+            {
+                try { WindowsSessionStore.Clear(); }
+                catch (Exception clearError) when (clearError is IOException or UnauthorizedAccessException) { }
+            }
             Render(ViewState.Username, Copy("Сеанс Telegram истёк. Войди ещё раз, чтобы обновить подписку.",
                 "Your Telegram session expired. Sign in again to refresh the subscription."), DeyttTheme.Amber);
         }
-        catch (Exception error) when (error is TelegramApiException or HttpRequestException or TaskCanceledException or IOException)
+        catch (OperationCanceledException) when (!_lifetime.IsCancellationRequested)
         {
-            Render(ViewState.RefreshError, Copy(
-                "Не удалось обновить подписку. Проверь интернет и повтори; сохранённый сеанс останется на устройстве.",
-                "Could not refresh the subscription. Check your connection and retry; the saved session will stay on this device."),
+            Render(ViewState.RefreshError, _options.DeferSessionSaveUntilImport
+                ? Copy("Обновление заняло слишком много времени. Текущий аккаунт не изменён; повтори попытку.",
+                    "The refresh took too long. Your current account is unchanged; please retry.")
+                : Copy("Обновление заняло слишком много времени. Сеанс сохранён; попробуй ещё раз позже.",
+                    "The refresh took too long. Your session is saved; please retry later."),
+                DeyttTheme.Coral);
+        }
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or IOException)
+        {
+            Render(ViewState.RefreshError, _options.DeferSessionSaveUntilImport
+                ? Copy("Не удалось загрузить подписку. Текущий аккаунт не изменён; проверь интернет и повтори.",
+                    "Could not load the subscription. Your current account is unchanged; check your connection and retry.")
+                : Copy("Не удалось обновить подписку. Проверь интернет и повтори; сохранённый сеанс останется на устройстве.",
+                    "Could not refresh the subscription. Check your connection and retry; the saved session will stay on this device."),
+                DeyttTheme.Coral);
+        }
+        catch (Exception error) when (_lifetime.IsCancellationRequested && IsNonFatal(error))
+        {
+            // Ignore failures raised while the host is leaving this view.
+        }
+        catch (Exception error) when (IsNonFatal(error))
+        {
+            Render(ViewState.RefreshError, _options.DeferSessionSaveUntilImport
+                ? Copy("Не удалось обработать данные подписки. Текущий аккаунт не изменён; повтори попытку.",
+                    "Could not process the subscription. Your current account is unchanged; please retry.")
+                : Copy("Не удалось обработать данные подписки. Сеанс сохранён; повтори обновление позже.",
+                    "Could not process the subscription data. Your session is saved; retry the refresh later."),
                 DeyttTheme.Coral);
         }
         finally
@@ -503,28 +613,37 @@ public sealed class SetupWindow : Window
         }
     }
 
-    private async Task CompleteImportAsync()
+    private async Task CompleteImportAsync(bool automatic = false)
     {
-        if (_busy || _payload is null || _selectedRoute is null)
+        if ((_busy && !automatic) || _completed || _payload is null || _selectedRoute is null)
             return;
         var result = new SetupWindowResult(_payload, _selectedRoute);
+        if (automatic)
+            Render(ViewState.Refreshing,
+                Copy("Сохраняем подписку и открываем главную…", "Saving your subscription and opening Home…"),
+                DeyttTheme.Blue);
         SetBusy(true);
         SetStatus(Copy("Сохраняем подписку и выбранный маршрут…", "Saving the subscription and selected route…"), DeyttTheme.Blue);
         try
         {
             if (_options.CommitImportAsync is not null)
                 await _options.CommitImportAsync(result, _lifetime.Token);
+            _completed = true;
             Result = result;
             Completed?.Invoke(this, new SetupWindowCompletedEventArgs(result));
-            Close();
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+                                      InvalidDataException or InvalidOperationException or CryptographicException)
         {
-            SetStatus(Copy("Не удалось сохранить подписку в приложении. Повтори импорт.",
-                "The app could not save the subscription. Retry the import."), DeyttTheme.Coral);
+            var message = Copy("Не удалось сохранить подписку в приложении. Повтори импорт.",
+                "The app could not save the subscription. Retry the import.");
+            if (automatic)
+                Render(ViewState.Success, message, DeyttTheme.Coral);
+            else
+                SetStatus(message, DeyttTheme.Coral);
         }
         finally
         {
@@ -539,6 +658,8 @@ public sealed class SetupWindow : Window
         bool showBotButton = false)
     {
         _state = state;
+        if (state == ViewState.Username)
+            _completeAfterPairing = false;
         _busy = state is ViewState.Refreshing or ViewState.ImportingUrl;
         _body.Children.Clear();
         _usernameInput = null;
@@ -666,15 +787,16 @@ public sealed class SetupWindow : Window
             : Copy("Обновляем аккаунт, профиль и список маршрутов…", "Refreshing your account, profile, and routes…"),
             15, DeyttTheme.Text, FontWeight.SemiBold));
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
-            "Загрузка может занять несколько секунд. Не закрывай это окно.",
-            "This may take a few seconds. Keep this window open."), 13, DeyttTheme.Muted));
+            "Загрузка может занять несколько секунд. Не закрывай приложение.",
+            "This may take a few seconds. Keep the app open."), 13, DeyttTheme.Muted));
     }
 
     private void BuildRefreshErrorView()
     {
         _body.Children.Add(DeyttTheme.SectionLabel(Copy("02 / ОБНОВЛЕНИЕ", "02 / REFRESH")));
-        _body.Children.Add(DeyttTheme.TextBlock(Copy("Сеанс сохранён на этом устройстве.",
-            "Your session is saved on this device."), 15,
+        _body.Children.Add(DeyttTheme.TextBlock(_options.DeferSessionSaveUntilImport
+            ? Copy("Текущий аккаунт пока не изменён.", "Your current account is unchanged.")
+            : Copy("Сеанс сохранён на этом устройстве.", "Your session is saved on this device."), 15,
             DeyttTheme.Text, FontWeight.SemiBold));
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
             "Повтори запрос. Если соединение снова не установится, проверь сеть и попробуй позже.",
@@ -683,7 +805,7 @@ public sealed class SetupWindow : Window
         _body.Children.Add(BuildPrimary(Copy("Повторить", "Retry"), () =>
         {
             if (_sessionToken is { } token)
-                _ = RefreshSubscriptionAsync(token);
+                _ = RefreshSubscriptionAsync(token, completeAfterVerification: _completeAfterPairing);
         }));
         _body.Children.Add(BuildTextButton(Copy("Войти в другой аккаунт", "Sign in to another account"), () =>
         {
@@ -696,9 +818,11 @@ public sealed class SetupWindow : Window
     {
         _body.Children.Add(DeyttTheme.SectionLabel(Copy("02 / ПОДПИСКА", "02 / SUBSCRIPTION")));
         var accountName = _account?.FirstName is { Length: > 0 } name ? name : _account?.Username;
-        _body.Children.Add(DeyttTheme.TextBlock(Copy(
-            accountName is { Length: > 0 } ? $"Аккаунт {accountName} подключён." : "Аккаунт подключён.",
-            accountName is { Length: > 0 } ? $"Account {accountName} is connected." : "Account is connected."),
+        _body.Children.Add(DeyttTheme.TextBlock(_options.DeferSessionSaveUntilImport
+            ? Copy("Код подтверждён. Текущий аккаунт пока не изменён.",
+                "The code is verified. Your current account is unchanged.")
+            : Copy(accountName is { Length: > 0 } ? $"Аккаунт {accountName} подключён." : "Аккаунт подключён.",
+                accountName is { Length: > 0 } ? $"Account {accountName} is connected." : "Account is connected."),
             15, DeyttTheme.Text, FontWeight.SemiBold));
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
             "Активная подписка не найдена. Обнови аккаунт или импортируй ссылку подписки, если она у тебя есть.",
@@ -707,7 +831,7 @@ public sealed class SetupWindow : Window
         _body.Children.Add(BuildPrimary(Copy("Обновить подписку", "Refresh subscription"), () =>
         {
             if (_sessionToken is { } token)
-                _ = RefreshSubscriptionAsync(token);
+                _ = RefreshSubscriptionAsync(token, completeAfterVerification: _completeAfterPairing);
         }));
         if (_options.ImportUrlAsync is not null)
             _body.Children.Add(BuildTextButton(Copy("Импортировать ссылку", "Import a link"), () => Render(ViewState.ImportUrl)));
@@ -727,8 +851,8 @@ public sealed class SetupWindow : Window
         if (_sessionToken is { Length: > 0 })
         {
             _body.Children.Add(DeyttTheme.TextBlock(Copy(
-                "Попроси поддержку перенести deytt.connect на это устройство. После переноса повтори проверку. Это окно само не отключает устройства.",
-                "Ask support to transfer deytt.connect to this device. Retry the check after the transfer. This window does not disconnect devices."),
+                "Попроси поддержку перенести deytt.connect на это устройство. После переноса повтори проверку. Приложение само не отключает устройства.",
+                "Ask support to transfer deytt.connect to this device. Retry after the transfer. The app does not disconnect devices."),
                 13, DeyttTheme.Muted));
             _body.Children.Add(BuildPrimary(
                 _transferRequestSent
@@ -737,7 +861,7 @@ public sealed class SetupWindow : Window
                 () =>
                 {
                     if (_transferRequestSent && _sessionToken is { } token)
-                        _ = RefreshSubscriptionAsync(token);
+                        _ = RefreshSubscriptionAsync(token, completeAfterVerification: _completeAfterPairing);
                     else
                         _ = RequestDeviceTransferAsync();
                 }));
@@ -813,69 +937,32 @@ public sealed class SetupWindow : Window
     private async Task<bool> ConfirmDeviceTransferAsync()
     {
         var title = Copy("Перенос приложения", "Transfer the app");
-        var dialog = new Window
+        var confirm = _options.ConfirmAsync;
+        if (confirm is null)
         {
-            Title = title,
-            Width = 440,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 210,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-            RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark,
-        };
-        var cancelButton = new Button
+            SetStatus(Copy("Подтверждение недоступно. Вернись и попробуй ещё раз позже.",
+                "Confirmation is unavailable. Return and try again later."), DeyttTheme.Amber);
+            return false;
+        }
+
+        try
         {
-            Content = Copy("Отмена", "Cancel"),
-            MinWidth = 100,
-            Padding = new Thickness(13, 9),
-            Background = DeyttTheme.Brush(DeyttTheme.Surface2),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(11),
-            IsCancel = true,
-        };
-        var confirmButton = new Button
+            return await confirm(
+                title,
+                Copy("Отправить в поддержку обращение с просьбой перенести deytt.connect на это устройство?",
+                    "Send support a request to transfer deytt.connect to this device?"),
+                Copy("Отправить обращение", "Send request"));
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
-            Content = Copy("Отправить обращение", "Send request"),
-            MinWidth = 145,
-            Padding = new Thickness(13, 9),
-            Background = DeyttTheme.Brush(DeyttTheme.SkySurface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Sky),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(11),
-            IsDefault = true,
-        };
-        cancelButton.Click += (_, _) => dialog.Close(false);
-        confirmButton.Click += (_, _) => dialog.Close(true);
-        var buttons = new StackPanel
+            return false;
+        }
+        catch (Exception error) when (IsNonFatal(error))
         {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 9,
-            Children = { cancelButton, confirmButton },
-        };
-        dialog.Content = new Border
-        {
-            Background = DeyttTheme.Brush(DeyttTheme.Surface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(21),
-            Padding = new Thickness(24),
-            Child = new StackPanel
-            {
-                Spacing = 17,
-                Children =
-                {
-                    DeyttTheme.TextBlock(title, 19, DeyttTheme.Text, FontWeight.SemiBold),
-                    DeyttTheme.TextBlock(Copy(
-                        "Отправить в поддержку обращение с просьбой перенести deytt.connect на это устройство?",
-                        "Send support a request to transfer deytt.connect to this device?"), 14, DeyttTheme.Muted),
-                    buttons,
-                },
-            },
-        };
-        return await dialog.ShowDialog<bool>(this);
+            SetStatus(Copy("Не удалось открыть подтверждение. Попробуй ещё раз.",
+                "Could not open the confirmation. Please try again."), DeyttTheme.Coral);
+            return false;
+        }
     }
 
     private void BuildImportUrlView()
@@ -929,8 +1016,8 @@ public sealed class SetupWindow : Window
         });
         _body.Children.Add(BuildPrimary(Copy("Импортировать подписку", "Import subscription"), () => _ = CompleteImportAsync()));
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
-            "Первым выбран «Автоподбор». Выбор можно изменить позже в разделе маршрутов.",
-            "Automatic selection is chosen first. You can change it later in Routes."),
+            "Выбранный маршрут можно изменить позже в разделе маршрутов.",
+            "You can change the selected route later in Routes."),
             11, DeyttTheme.Muted));
     }
 
@@ -987,9 +1074,11 @@ public sealed class SetupWindow : Window
     private Border BuildPrimary(string label, Action action)
     {
         var text = DeyttTheme.TextBlock(label, 15, DeyttTheme.Background, FontWeight.SemiBold, wrap: false);
+        text.HorizontalAlignment = HorizontalAlignment.Stretch;
         text.TextAlignment = TextAlignment.Center;
         var button = DeyttTheme.Action(text, action);
-        button.HorizontalContentAlignment = HorizontalAlignment.Center;
+        button.HorizontalAlignment = HorizontalAlignment.Stretch;
+        button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         button.MinHeight = 52;
         _primaryButton = button;
         _primaryLabel = text;
@@ -1049,16 +1138,33 @@ public sealed class SetupWindow : Window
         heading.Children.Add(brandLine);
         heading.Children.Add(_headline);
         heading.Children.Add(_intro);
-        return heading;
+
+        var header = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 14,
+        };
+        Grid.SetColumn(heading, 0);
+        header.Children.Add(heading);
+
+        var backButton = BuildTextButton(Copy("← Назад", "← Back"), Cancel);
+        backButton.VerticalAlignment = VerticalAlignment.Top;
+        Grid.SetColumn(backButton, 1);
+        header.Children.Add(backButton);
+        return header;
     }
 
     private Control BuildSteps()
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7 };
+        var row = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,*,*"),
+            ColumnSpacing = 7,
+        };
         var labels = new[] { "TELEGRAM", Copy("ПОДПИСКА", "SUBSCRIPTION"), Copy("МАРШРУТ", "ROUTE") };
         for (var index = 0; index < labels.Length; index++)
         {
-            var segment = new StackPanel { Spacing = 7, Width = 190 };
+            var segment = new StackPanel { Spacing = 7 };
             var bar = new Border
             {
                 Height = 3,
@@ -1069,6 +1175,7 @@ public sealed class SetupWindow : Window
             segment.Children.Add(bar);
             segment.Children.Add(DeyttTheme.TextBlock(labels[index], 9, DeyttTheme.Muted,
                 FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
+            Grid.SetColumn(segment, index);
             row.Children.Add(segment);
         }
         return row;
@@ -1135,6 +1242,9 @@ public sealed class SetupWindow : Window
         if (_urlInput is not null) _urlInput.IsEnabled = !busy;
     }
 
+    private static bool IsNonFatal(Exception error) =>
+        error is not (OutOfMemoryException or StackOverflowException or AccessViolationException);
+
     private void OpenBot()
     {
         if (!Uri.TryCreate(_botUrl, UriKind.Absolute, out var uri) ||
@@ -1151,8 +1261,8 @@ public sealed class SetupWindow : Window
         }
         catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            SetStatus(Copy("Не удалось открыть Telegram. Открой бота вручную и вернись к этому окну.",
-                "Could not open Telegram. Open the bot manually, then return to this window."), DeyttTheme.Amber);
+            SetStatus(Copy("Не удалось открыть Telegram. Открой бота вручную и вернись в приложение.",
+                "Could not open Telegram. Open the bot manually, then return to the app."), DeyttTheme.Amber);
         }
     }
 

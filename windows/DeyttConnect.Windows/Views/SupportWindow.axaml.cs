@@ -14,7 +14,7 @@ using DeyttConnect.Windows.UI;
 
 namespace DeyttConnect.Windows.Views;
 
-public partial class SupportWindow : Window
+public partial class SupportView : UserControl, IDisposable
 {
     private enum SupportPage { Thread, Terms, Privacy }
 
@@ -23,28 +23,36 @@ public partial class SupportWindow : Window
     private readonly WindowsSupportClient _client = new();
     private readonly DispatcherTimer _refreshTimer = new() { Interval = RefreshInterval };
     private readonly CancellationTokenSource _lifetime = new();
-    private readonly Func<Task<string?>>? _onSignInRequested;
+    private readonly Func<Task<string?>> _onSignInRequested;
+    private readonly Func<string, string, string, Task<bool>> _confirmAsync;
+    private CancellationTokenSource? _activationLifetime;
     private CancellationTokenSource? _documentLoad;
     private string? _accessToken;
     private string _language;
     private SupportTicket? _ticket;
     private bool _busy;
-    private bool _closingPromptVisible;
-    private bool _allowWindowClose;
+    private bool _isActive;
+    private bool _disposed;
+    private int _activationGeneration;
     private SupportPage _page = SupportPage.Thread;
 
-    public SupportWindow() : this(null)
+    public SupportView()
+        : this(null,
+            static () => Task.FromResult<string?>(null),
+            static (_, _, _) => Task.FromResult(false))
     {
     }
 
-    public SupportWindow(
+    public SupportView(
         string? accessToken,
-        Func<Task<string?>>? onSignInRequested = null,
+        Func<Task<string?>> onSignInRequested,
+        Func<string, string, string, Task<bool>> confirmAsync,
         string language = "ru")
     {
         InitializeComponent();
         _accessToken = accessToken;
-        _onSignInRequested = onSignInRequested;
+        _onSignInRequested = onSignInRequested ?? throw new ArgumentNullException(nameof(onSignInRequested));
+        _confirmAsync = confirmAsync ?? throw new ArgumentNullException(nameof(confirmAsync));
         _language = language is "en" ? "en" : "ru";
         SetCopy();
 
@@ -55,16 +63,61 @@ public partial class SupportWindow : Window
         RefreshButton.Click += async (_, _) => await RefreshCurrentPageAsync();
         RetryButton.Click += async (_, _) => await RefreshThreadAsync();
         DocumentRetryButton.Click += async (_, _) => await LoadDocumentAsync(CurrentDocumentKind());
-        SendButton.Click += async (_, _) => await ConfirmAndSendAsync();
+        SendButton.Click += async (_, _) => await SendMessageAsync();
         CloseTicketButton.Click += async (_, _) => await ConfirmAndCloseTicketAsync();
         SignInButton.Click += async (_, _) => await SignInAsync();
-        WindowCloseButton.Click += (_, _) => Close();
+        BackButton.Click += (_, _) => BackRequested?.Invoke(this, EventArgs.Empty);
         Composer.PropertyChanged += (_, args) =>
         {
             if (args.Property == TextBox.TextProperty)
                 CharacterCount.Text = $"{Composer.Text?.Length ?? 0} / {MaximumMessageLength}";
         };
-        Opened += async (_, _) =>
+        _refreshTimer.Tick += async (_, _) => await RefreshThreadAsync();
+        KeyDown += OnKeyDown;
+        ShowSignedOutState();
+    }
+
+    public event EventHandler? BackRequested;
+
+    private bool IsRussian => _language == "ru";
+
+    private bool IsActive => _isActive && !_disposed &&
+        _activationLifetime is { IsCancellationRequested: false };
+
+    private CancellationToken ActiveToken => IsActive
+        ? _activationLifetime!.Token
+        : new CancellationToken(canceled: true);
+
+    private bool IsCurrentActivation(int generation) =>
+        IsActive && _activationGeneration == generation;
+
+    private bool IsCurrentOperation(int generation, string? accessToken) =>
+        IsCurrentActivation(generation) &&
+        string.Equals(_accessToken, accessToken, StringComparison.Ordinal);
+
+    public void Activate(string? accessToken)
+    {
+        if (_disposed)
+            return;
+
+        if (_isActive && string.Equals(_accessToken, accessToken, StringComparison.Ordinal))
+            return;
+
+        if (_isActive)
+            Deactivate();
+
+        var accountChanged = !string.Equals(_accessToken, accessToken, StringComparison.Ordinal);
+        _accessToken = accessToken;
+        if (accountChanged)
+            ResetAccountState();
+
+        _activationLifetime = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        _activationGeneration++;
+        _isActive = true;
+        _busy = false;
+        SetBusy(false);
+
+        if (_page == SupportPage.Thread)
         {
             if (_accessToken is null)
             {
@@ -73,36 +126,75 @@ public partial class SupportWindow : Window
             }
             else
             {
-                Composer.Focus();
+                MessageScroll.IsVisible = true;
+                SignedOutPanel.IsVisible = false;
+                ComposerCard.IsVisible = true;
+                RetryButton.IsVisible = true;
                 _ = RefreshThreadAsync();
                 _refreshTimer.Start();
             }
-        };
-        _refreshTimer.Tick += async (_, _) => await RefreshThreadAsync();
-        KeyDown += OnKeyDown;
-        Closing += OnClosing;
-        Closed += (_, _) =>
+        }
+        else
         {
-            _refreshTimer.Stop();
-            _lifetime.Cancel();
-            _documentLoad?.Cancel();
-            _lifetime.Dispose();
-        };
+            _ = LoadDocumentAsync(CurrentDocumentKind());
+        }
     }
 
-    private bool IsRussian => _language == "ru";
+    public void Deactivate()
+    {
+        if (!_isActive)
+            return;
+
+        _isActive = false;
+        _activationGeneration++;
+        _refreshTimer.Stop();
+        _documentLoad?.Cancel();
+        _documentLoad = null;
+        _activationLifetime?.Cancel();
+        _activationLifetime?.Dispose();
+        _activationLifetime = null;
+        _busy = false;
+        SetBusy(false);
+
+        if (_page != SupportPage.Thread)
+        {
+            DocumentStatus.Text = T("Загрузка приостановлена до возвращения на экран.", "Loading paused until you return to this screen.");
+            DocumentStatus.Foreground = DeyttTheme.Brush(DeyttTheme.Muted);
+            DocumentRetryButton.IsVisible = true;
+            DocumentRetryButton.IsEnabled = true;
+        }
+    }
+
+    public async Task<bool> ConfirmDiscardDraftAsync()
+    {
+        var draft = Composer.Text?.Trim();
+        if (string.IsNullOrEmpty(draft))
+            return true;
+
+        return await ConfirmAsync(
+            T("Закрыть приложение?", "Close the app?"),
+            T("Черновик сообщения будет удалён.", "Your unsent message draft will be discarded."),
+            T("Закрыть", "Close"));
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        Deactivate();
+        _disposed = true;
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+    }
 
     private void SetCopy()
     {
-        Title = T("DEYTT · Помощь и документы", "DEYTT · Help and documents");
-        SidebarKicker.Text = T("ЦЕНТР ПОМОЩИ", "HELP CENTER");
-        NavSectionTitle.Text = T("ПОМОЩЬ И ДОКУМЕНТЫ", "HELP AND DOCUMENTS");
-        SourceText.Text = T("Текущие документы deytt.space", "Current documents from deytt.space");
         SupportNavButton.Content = NavContent("◉", T("Поддержка", "Support"), _page == SupportPage.Thread);
-        TermsNavButton.Content = NavContent("§", T("Условия использования", "Terms of use"), _page == SupportPage.Terms);
-        PrivacyNavButton.Content = NavContent("◇", T("Конфиденциальность", "Privacy"), _page == SupportPage.Privacy);
+        TermsNavButton.Content = NavContent("§", T("Условия", "Terms"), _page == SupportPage.Terms);
+        PrivacyNavButton.Content = NavContent("◇", T("Приватность", "Privacy"), _page == SupportPage.Privacy);
         TelegramNavButton.Content = NavContent("↗", T("Открыть Telegram", "Open Telegram"), false);
-        HeaderKicker.Text = _page == SupportPage.Thread ? "DEYTT · SUPPORT" : "DEYTT · DOCUMENTS";
+        HeaderKicker.Text = _page == SupportPage.Thread ? "SUPPORT" : "DOCUMENTS";
         HeaderTitle.Text = _page switch
         {
             SupportPage.Terms => T("Условия использования", "Terms of use"),
@@ -110,7 +202,7 @@ public partial class SupportWindow : Window
             _ => T("Поддержка", "Support"),
         };
         RefreshButton.Content = T("Обновить", "Refresh");
-        WindowCloseButton.Content = T("Закрыть", "Close");
+        BackButton.Content = T("Назад", "Back");
         RetryButton.Content = T("Повторить", "Retry");
         DocumentRetryButton.Content = T("Повторить", "Retry");
         ComposerLabel.Text = T("СООБЩЕНИЕ КОМАНДЕ", "MESSAGE THE TEAM");
@@ -122,6 +214,15 @@ public partial class SupportWindow : Window
             "Подключите Telegram, чтобы написать команде и посмотреть историю обращений.",
             "Connect Telegram to message support and view your ticket history.");
         CharacterCount.Text = $"{Composer.Text?.Length ?? 0} / {MaximumMessageLength}";
+    }
+
+    private void ResetAccountState()
+    {
+        _ticket = null;
+        MessageStack.Children.Clear();
+        CloseTicketButton.IsVisible = false;
+        Composer.Text = string.Empty;
+        CharacterCount.Text = $"0 / {MaximumMessageLength}";
     }
 
     private void OpenTelegram()
@@ -175,14 +276,19 @@ public partial class SupportWindow : Window
 
     private async Task RefreshThreadAsync()
     {
-        if (_busy || _accessToken is null || _page != SupportPage.Thread || _lifetime.IsCancellationRequested)
+        if (_busy || !IsActive || _accessToken is null || _page != SupportPage.Thread)
             return;
+        var generation = _activationGeneration;
+        var accessToken = _accessToken;
+        var cancellationToken = ActiveToken;
         _busy = true;
         SetStatus(T("Загружаем переписку…", "Loading conversation…"));
         SetBusy(true);
         try
         {
-            var snapshot = await _client.GetThreadAsync(_accessToken, _lifetime.Token);
+            var snapshot = await _client.GetThreadAsync(accessToken, cancellationToken);
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
             _ticket = snapshot.Ticket;
             RenderMessages(snapshot.Messages);
             CloseTicketButton.IsVisible = _ticket?.IsOpen == true;
@@ -194,18 +300,23 @@ public partial class SupportWindow : Window
             };
             SetStatus(status);
         }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        catch (OperationCanceledException) when (!IsCurrentOperation(generation, accessToken))
         {
         }
         catch (Exception error)
         {
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
             if (!ShowReauthenticationIfNeeded(error))
                 SetStatus(ErrorText(error) + " · " + T("нажмите, чтобы повторить", "click to retry"), isError: true);
         }
         finally
         {
-            _busy = false;
-            SetBusy(false);
+            if (IsCurrentActivation(generation))
+            {
+                _busy = false;
+                SetBusy(false);
+            }
         }
     }
 
@@ -253,7 +364,7 @@ public partial class SupportWindow : Window
         Dispatcher.UIThread.Post(() => MessageScroll.ScrollToEnd());
     }
 
-    private async Task ConfirmAndSendAsync()
+    private async Task SendMessageAsync()
     {
         var text = Composer.Text?.Trim() ?? string.Empty;
         if (text.Length < 5)
@@ -262,16 +373,12 @@ public partial class SupportWindow : Window
             Composer.Focus();
             return;
         }
-        if (text.Length > MaximumMessageLength || _busy || _accessToken is null)
+        if (text.Length > MaximumMessageLength || _busy || !IsActive || _accessToken is null)
             return;
 
-        var confirmed = await ConfirmAsync(
-            T("Отправить сообщение?", "Send this message?"),
-            T("Сообщение будет отправлено команде поддержки.", "This message will be sent to the support team."),
-            T("Отправить", "Send"));
-        if (!confirmed || _accessToken is null || _lifetime.IsCancellationRequested)
-            return;
-
+        var generation = _activationGeneration;
+        var accessToken = _accessToken;
+        var cancellationToken = ActiveToken;
         _busy = true;
         SetBusy(true);
         SetStatus(T("Отправляем сообщение…", "Sending message…"));
@@ -279,34 +386,46 @@ public partial class SupportWindow : Window
         {
             var ticket = _ticket;
             if (ticket?.IsOpen == true)
-                await _client.SendMessageAsync(_accessToken, ticket.Id, text, _lifetime.Token);
+                await _client.SendMessageAsync(accessToken, ticket.Id, text, cancellationToken);
             else
-                await _client.CreateTicketAsync(_accessToken, text, _lifetime.Token);
+                await _client.CreateTicketAsync(accessToken, text, cancellationToken);
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
             Composer.Text = string.Empty;
-            await RefreshThreadAsyncWhileBusy();
+            await RefreshThreadAsyncWhileBusy(generation, accessToken, cancellationToken);
         }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        catch (OperationCanceledException) when (!IsCurrentOperation(generation, accessToken))
         {
         }
         catch (Exception error)
         {
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
             if (!ShowReauthenticationIfNeeded(error))
                 SetStatus(ErrorText(error) + " · " + T("нажмите, чтобы повторить", "click to retry"), isError: true);
         }
         finally
         {
-            _busy = false;
-            SetBusy(false);
+            if (IsCurrentActivation(generation))
+            {
+                _busy = false;
+                SetBusy(false);
+            }
         }
     }
 
-    private async Task RefreshThreadAsyncWhileBusy()
+    private async Task RefreshThreadAsyncWhileBusy(
+        int generation,
+        string accessToken,
+        CancellationToken cancellationToken)
     {
-        if (_accessToken is null || _lifetime.IsCancellationRequested)
+        if (!IsCurrentOperation(generation, accessToken) || cancellationToken.IsCancellationRequested)
             return;
         try
         {
-            var snapshot = await _client.GetThreadAsync(_accessToken, _lifetime.Token);
+            var snapshot = await _client.GetThreadAsync(accessToken, cancellationToken);
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
             _ticket = snapshot.Ticket;
             RenderMessages(snapshot.Messages);
             CloseTicketButton.IsVisible = _ticket?.IsOpen == true;
@@ -319,6 +438,8 @@ public partial class SupportWindow : Window
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
             if (!ShowReauthenticationIfNeeded(error))
                 SetStatus(ErrorText(error) + " · " + T("нажмите, чтобы повторить", "click to retry"), isError: true);
         }
@@ -326,78 +447,99 @@ public partial class SupportWindow : Window
 
     private async Task ConfirmAndCloseTicketAsync()
     {
-        if (_ticket is not { IsOpen: true } ticket || _accessToken is null || _busy)
+        if (_ticket is not { IsOpen: true } ticket || _accessToken is null || _busy || !IsActive)
             return;
+        var generation = _activationGeneration;
+        var accessToken = _accessToken;
         var confirmed = await ConfirmAsync(
             T("Закрыть обращение?", "Close this ticket?"),
             T("Новые ответы не будут приниматься. При необходимости вы сможете создать новое обращение.",
                 "New replies will no longer be accepted. You can create another ticket when needed."),
             T("Закрыть обращение", "Close ticket"));
-        if (!confirmed || _accessToken is null || _lifetime.IsCancellationRequested)
+        if (!confirmed || !IsCurrentOperation(generation, accessToken))
             return;
 
+        var cancellationToken = ActiveToken;
         _busy = true;
         SetBusy(true);
         SetStatus(T("Закрываем обращение…", "Closing ticket…"));
         try
         {
-            await _client.CloseTicketAsync(_accessToken, ticket.Id, _lifetime.Token);
-            await RefreshThreadAsyncWhileBusy();
+            await _client.CloseTicketAsync(accessToken, ticket.Id, cancellationToken);
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
+            await RefreshThreadAsyncWhileBusy(generation, accessToken, cancellationToken);
         }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        catch (OperationCanceledException) when (!IsCurrentOperation(generation, accessToken))
         {
         }
         catch (Exception error)
         {
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
             if (!ShowReauthenticationIfNeeded(error))
                 SetStatus(ErrorText(error) + " · " + T("нажмите, чтобы повторить", "click to retry"), isError: true);
         }
         finally
         {
-            _busy = false;
-            SetBusy(false);
+            if (IsCurrentActivation(generation))
+            {
+                _busy = false;
+                SetBusy(false);
+            }
         }
     }
 
     private async Task SignInAsync()
     {
-        if (_onSignInRequested is null || _busy)
+        if (_busy || !IsActive)
             return;
+        var generation = _activationGeneration;
         _busy = true;
         SetBusy(true);
         try
         {
-            _accessToken = await _onSignInRequested();
-            if (_accessToken is null)
+            var accessToken = await _onSignInRequested();
+            if (!IsCurrentActivation(generation))
+                return;
+            if (accessToken is null)
             {
                 SetStatus(T("Подключите Telegram, чтобы открыть поддержку.", "Connect Telegram to use support."));
                 return;
             }
+
+            if (!string.Equals(_accessToken, accessToken, StringComparison.Ordinal))
+                ResetAccountState();
+            _accessToken = accessToken;
             _busy = false;
             SetBusy(false);
             ShowThread();
             Composer.Focus();
-            _refreshTimer.Start();
         }
         catch (Exception error)
         {
-            SetStatus(ErrorText(error), isError: true);
+            if (IsCurrentActivation(generation))
+                SetStatus(ErrorText(error), isError: true);
         }
         finally
         {
-            _busy = false;
-            SetBusy(false);
+            if (IsCurrentActivation(generation))
+            {
+                _busy = false;
+                SetBusy(false);
+            }
         }
     }
 
     private void ShowSignedOutState(Exception? sessionError = null)
     {
+        _refreshTimer.Stop();
         MessageScroll.IsVisible = false;
         SignedOutPanel.IsVisible = true;
         ComposerCard.IsVisible = false;
         RetryButton.IsVisible = false;
         RefreshButton.IsEnabled = false;
-        SignInButton.IsVisible = _onSignInRequested is not null;
+        SignInButton.IsVisible = true;
         var message = sessionError is null
             ? T("Подключите Telegram, чтобы открыть историю обращений.", "Connect Telegram to open your ticket history.")
             : ErrorText(sessionError);
@@ -415,6 +557,8 @@ public partial class SupportWindow : Window
 
         _accessToken = null;
         _ticket = null;
+        MessageStack.Children.Clear();
+        CloseTicketButton.IsVisible = false;
         _refreshTimer.Stop();
         if (_page == SupportPage.Thread)
             ShowSignedOutState(error);
@@ -436,9 +580,12 @@ public partial class SupportWindow : Window
             SignedOutPanel.IsVisible = false;
             ComposerCard.IsVisible = true;
             RetryButton.IsVisible = true;
-            RefreshButton.IsEnabled = true;
-            _ = RefreshThreadAsync();
-            _refreshTimer.Start();
+            if (IsActive)
+            {
+                RefreshButton.IsEnabled = true;
+                _ = RefreshThreadAsync();
+                _refreshTimer.Start();
+            }
         }
     }
 
@@ -453,15 +600,16 @@ public partial class SupportWindow : Window
         DocumentTitle.Text = kind == SupportDocumentKind.Terms
             ? T("Условия использования", "Terms of use")
             : T("Конфиденциальность", "Privacy");
-        await LoadDocumentAsync(kind);
+        if (IsActive)
+            await LoadDocumentAsync(kind);
     }
 
     private async Task LoadDocumentAsync(SupportDocumentKind kind)
     {
-        if (_lifetime.IsCancellationRequested)
+        if (!IsActive || _page == SupportPage.Thread)
             return;
 
-        var request = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var request = CancellationTokenSource.CreateLinkedTokenSource(ActiveToken);
         _documentLoad?.Cancel();
         _documentLoad = request;
         DocumentStack.Children.Clear();
@@ -569,6 +717,7 @@ public partial class SupportWindow : Window
     }
 
     private bool IsCurrentDocumentLoad(CancellationTokenSource request, SupportDocumentKind kind) =>
+        IsActive &&
         ReferenceEquals(_documentLoad, request) &&
         !request.IsCancellationRequested &&
         _page == (kind == SupportDocumentKind.Terms ? SupportPage.Terms : SupportPage.Privacy);
@@ -589,7 +738,7 @@ public partial class SupportWindow : Window
         CloseTicketButton.IsEnabled = !busy;
         RetryButton.IsEnabled = !busy;
         RefreshButton.IsEnabled = !busy && (_page != SupportPage.Thread || _accessToken is not null);
-        SignInButton.IsEnabled = !busy && _onSignInRequested is not null;
+        SignInButton.IsEnabled = !busy;
         DocumentRetryButton.IsEnabled = !busy;
         Composer.IsEnabled = !busy && _accessToken is not null;
         StatusDot.Fill = DeyttTheme.Brush(busy ? DeyttTheme.Amber : DeyttTheme.Muted);
@@ -597,108 +746,21 @@ public partial class SupportWindow : Window
 
     private async Task<bool> ConfirmAsync(string title, string message, string confirmLabel)
     {
-        var dialog = new Window
-        {
-            Title = title,
-            Width = 440,
-            SizeToContent = SizeToContent.Height,
-            MinHeight = 210,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Background = DeyttTheme.Brush(DeyttTheme.Background),
-            RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark,
-        };
-        var cancelButton = new Button
-        {
-            Content = T("Отмена", "Cancel"),
-            MinWidth = 100,
-            Padding = new Thickness(13, 9),
-            Background = DeyttTheme.Brush(DeyttTheme.Surface2),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(11),
-            IsCancel = true,
-        };
-        var confirmButton = new Button
-        {
-            Content = confirmLabel,
-            MinWidth = 120,
-            Padding = new Thickness(13, 9),
-            Background = DeyttTheme.Brush(DeyttTheme.SkySurface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Sky),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(11),
-            IsDefault = true,
-        };
-        cancelButton.Click += (_, _) => dialog.Close(false);
-        confirmButton.Click += (_, _) => dialog.Close(true);
-        var buttons = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Spacing = 9,
-            Children = { cancelButton, confirmButton },
-        };
-        dialog.Content = new Border
-        {
-            Background = DeyttTheme.Brush(DeyttTheme.Surface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(21),
-            Padding = new Thickness(24),
-            Child = new StackPanel
-            {
-                Spacing = 17,
-                Children =
-                {
-                    DeyttTheme.TextBlock(title, 19, DeyttTheme.Text, FontWeight.SemiBold),
-                    DeyttTheme.TextBlock(message, 14, DeyttTheme.Muted),
-                    buttons,
-                },
-            },
-        };
-        return await dialog.ShowDialog<bool>(this);
+        return await _confirmAsync(title, message, confirmLabel);
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs args)
     {
         if (args.Key == Key.Escape)
         {
-            Close();
+            BackRequested?.Invoke(this, EventArgs.Empty);
             args.Handled = true;
         }
         else if (args.Key == Key.Enter && args.KeyModifiers.HasFlag(KeyModifiers.Control) &&
                  _page == SupportPage.Thread && _accessToken is not null)
         {
-            _ = ConfirmAndSendAsync();
+            _ = SendMessageAsync();
             args.Handled = true;
-        }
-    }
-
-    private async void OnClosing(object? sender, WindowClosingEventArgs args)
-    {
-        if (_allowWindowClose)
-            return;
-        args.Cancel = true;
-        if (_closingPromptVisible)
-            return;
-        _closingPromptVisible = true;
-        try
-        {
-            var draft = Composer.Text?.Trim();
-            var canClose = string.IsNullOrEmpty(draft) || await ConfirmAsync(
-                T("Закрыть окно?", "Close this window?"),
-                T("Черновик сообщения будет удалён.", "Your unsent message draft will be discarded."),
-                T("Закрыть окно", "Close window"));
-            if (canClose)
-            {
-                _allowWindowClose = true;
-                Close();
-            }
-        }
-        finally
-        {
-            _closingPromptVisible = false;
         }
     }
 
