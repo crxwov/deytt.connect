@@ -25,6 +25,8 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.401
+        env:
+          DOTNET_INSTALL_DIR: ${{ github.workspace }}/.dotnet
 
       - name: Run local fast verification
         run: bash windows/scripts/verify-fast.sh
