@@ -28,6 +28,7 @@ phase() {
 }
 
 phase "Restore Windows app test graph" restore "$WINDOWS_TESTS" --nologo
+phase "Restore protocol test graph" restore "$PROTOCOL_TESTS" --nologo
 phase "Restore Windows headless UI test graph" restore "$WINDOWS_HEADLESS_TESTS" --nologo
 phase "Restore Windows service" restore "$WINDOWS_SERVICE" --nologo
 phase "Protocol tests" test "$PROTOCOL_TESTS" --no-restore --configuration Release --nologo
