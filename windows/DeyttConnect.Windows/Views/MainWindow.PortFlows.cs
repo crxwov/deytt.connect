@@ -131,10 +131,18 @@ public partial class MainWindow
             {
                 await EnsureTunnelStoppedBeforeImportAsync(owner, cancellationToken);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception error) when (IsTunnelTransportError(error))
             {
                 _vpnServiceAvailable = false;
-                throw new IOException("Could not verify or stop the active VPN tunnel before importing.", error);
+                if (!IsInactiveTunnelState(_vpnSnapshot.State))
+                    throw new IOException("Could not verify or stop the active VPN tunnel before importing.", error);
+
+                // Saving an account does not need the optional VPN service; connection setup can follow later.
+                _vpnSnapshot = VpnServiceUnavailableSnapshot();
             }
             finally
             {
