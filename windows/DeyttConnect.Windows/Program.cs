@@ -1,9 +1,24 @@
 ﻿using Avalonia;
 using Avalonia.Media.Fonts;
 using System;
+using DeyttConnect.Protocol;
+using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.Views;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DeyttConnect.Windows.QA")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DeyttConnect.Windows.HeadlessTests")]
+
 namespace DeyttConnect.Windows;
+
+internal sealed record QaHomeFixture(
+    bool SignedIn,
+    string Language,
+    string SelectedRoute,
+    string Tab,
+    TelegramAccount? Account,
+    TelegramKeysSnapshot? Subscription,
+    IReadOnlyList<WindowsRoute> Routes,
+    WindowsTunnelSnapshot Tunnel);
 
 sealed class Program
 {
@@ -29,9 +44,6 @@ sealed class Program
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
-#if DEBUG
-            .WithDeveloperTools()
-#endif
             .ConfigureFonts(fontManager => fontManager.AddFontCollection(new DeyttFontCollection()))
             .LogToTrace();
 }

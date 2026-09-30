@@ -638,8 +638,7 @@ public sealed class SetupWindow : UserControl
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
-                                      InvalidDataException or InvalidOperationException or CryptographicException)
+        catch (Exception error) when (IsNonFatal(error))
         {
             var diagnostic = $"{error.GetType().Name}/{DiagnosticOrigin(error.InnerException ?? error)}/0x{error.HResult:X8}";
             System.Diagnostics.Trace.TraceError("Subscription import commit failed ({0}).", diagnostic);

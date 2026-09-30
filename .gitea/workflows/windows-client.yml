@@ -1,0 +1,23 @@
+name: Windows client fast verification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "windows/**"
+      - ".gitea/workflows/windows-client.yml"
+jobs:
+  fast-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install pinned .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.401
+
+      - name: Run local fast verification
+        run: bash windows/scripts/verify-fast.sh

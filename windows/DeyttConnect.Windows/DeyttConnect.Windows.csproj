@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <Folder Include="Models\" />
+    <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
     <Compile Include="..\DeyttConnect.Shared\WindowsAwgProfileParser.cs" Link="Shared\WindowsAwgProfileParser.cs" />
     <AvaloniaResource Include="Assets\**" Exclude="Assets\route-map\**" />
     <Content Include="Assets\route-map\**\*"

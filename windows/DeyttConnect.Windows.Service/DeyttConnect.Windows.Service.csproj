@@ -8,6 +8,7 @@
     <AssemblyName>DeyttConnect.Windows.Service</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
     <Compile Include="..\DeyttConnect.Shared\WindowsAwgProfileParser.cs" Link="Shared\WindowsAwgProfileParser.cs" />
   </ItemGroup>
 </Project>

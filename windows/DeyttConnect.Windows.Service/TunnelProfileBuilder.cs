@@ -20,6 +20,28 @@ internal static class TunnelProfileBuilder
     private static readonly HashSet<string> DomainOnlyKeys =
         ["domain", "domain_suffix", "domain_keyword", "domain_regex"];
 
+    public static IReadOnlyList<string> GetTunAddresses(string runtimeProfile)
+    {
+        var root = JsonNode.Parse(runtimeProfile) as JsonObject
+                   ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
+        var inbounds = root["inbounds"] as JsonArray;
+        if (inbounds is not { Count: 1 } || inbounds[0] is not JsonObject tun ||
+            tun["address"] is not JsonArray addresses)
+            throw new InvalidDataException("Windows tunnel profile has no TUN address.");
+
+        var result = new List<string>(addresses.Count);
+        foreach (var node in addresses)
+        {
+            if (node is not JsonValue value || !value.TryGetValue<string>(out var address) ||
+                string.IsNullOrWhiteSpace(address))
+                throw new InvalidDataException("Windows tunnel profile has an invalid TUN address.");
+            result.Add(address);
+        }
+        if (result.Count == 0)
+            throw new InvalidDataException("Windows tunnel profile has no TUN address.");
+        return result;
+    }
+
     public static string Build(string profileJson, string selectedTag, string? awgConfig = null)
     {
         JsonObject root;

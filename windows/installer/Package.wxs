@@ -1,0 +1,95 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Id="DEYTT.Connect.Windows"
+           Name="DEYTT Connect"
+           Manufacturer="DEYTT"
+           Version="$(var.ProductVersion)"
+           Scope="perMachine">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of DEYTT Connect is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ALLOWEDUSERSID" Secure="yes">
+      <RegistrySearch Id="FindExistingAllowedUserSid"
+                      Root="HKLM"
+                      Key="SOFTWARE\DEYTT\Connect"
+                      Name="AllowedUserSid"
+                      Type="raw" />
+    </Property>
+    <Property Id="EXISTING_SERVICE_PATH">
+      <RegistrySearch Id="FindExistingVpnService"
+                      Root="HKLM"
+                      Key="SYSTEM\CurrentControlSet\Services\DEYTTConnectVpn"
+                      Name="ImagePath"
+                      Type="raw" />
+    </Property>
+
+    <Launch Condition="ALLOWEDUSERSID &gt;&lt; &quot;S-1-&quot;"
+            Message="Supply ALLOWEDUSERSID as the interactive Windows user's SID when installing the first MSI. For example, run msiexec /i package.msi ALLOWEDUSERSID=S-1-... from that user's PowerShell session." />
+    <Launch Condition="NOT EXISTING_SERVICE_PATH OR Installed OR WIX_UPGRADE_DETECTED"
+            Message="A DEYTT VPN service is already installed outside this MSI. Remove it with the existing service uninstaller before installing this MSI." />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="DEYTTDIR" Name="DEYTT">
+        <Directory Id="INSTALLFOLDER" Name="Connect">
+          <Component Id="VpnServiceComponent" Guid="7AC61332-77E2-4B5A-B098-16BD7EC4C621" Bitness="always64">
+            <File Id="VpnServiceExecutable"
+                  Source="$(var.PackageStageDir)/DeyttConnect.Windows.Service.exe"
+                  KeyPath="yes" />
+            <ServiceInstall Id="VpnServiceInstall"
+                            Name="DEYTTConnectVpn"
+                            DisplayName="DEYTT Connect VPN"
+                            Description="Runs the DEYTT Connect Windows VPN tunnel."
+                            Type="ownProcess"
+                            Start="auto"
+                            ErrorControl="normal"
+                            Account="LocalSystem"
+                            Arguments="--service" />
+            <ServiceControl Id="VpnServiceControl"
+                            Name="DEYTTConnectVpn"
+                            Start="install"
+                            Stop="both"
+                            Remove="uninstall"
+                            Wait="yes" />
+          </Component>
+
+          <Component Id="AllowedUserSidComponent" Guid="9F38881C-88D8-4A09-B682-94A2CF4BE8CC" Bitness="always64">
+            <RegistryValue Root="HKLM"
+                           Key="SOFTWARE\DEYTT\Connect"
+                           Name="AllowedUserSid"
+                           Type="string"
+                           Value="[ALLOWEDUSERSID]"
+                           KeyPath="yes" />
+          </Component>
+
+          <Component Id="UiExecutableComponent" Guid="F58356B8-3B93-445A-B003-F5E1E863B435" Bitness="always64">
+            <File Id="UiExecutable"
+                  Source="$(var.PackageStageDir)/DeyttConnect.Windows.exe"
+                  KeyPath="yes">
+              <Shortcut Id="UiStartMenuShortcut"
+                        Directory="ApplicationProgramsFolder"
+                        Name="DEYTT Connect"
+                        WorkingDirectory="INSTALLFOLDER" />
+            </File>
+            <RemoveFolder Id="RemoveApplicationProgramsFolder"
+                          Directory="ApplicationProgramsFolder"
+                          On="uninstall" />
+          </Component>
+
+          <Files Include="$(var.PackageStageDir)/**" Directory="INSTALLFOLDER">
+            <Exclude Files="$(var.PackageStageDir)/DeyttConnect.Windows.Service.exe" />
+          </Files>
+        </Directory>
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="MainFeature" Title="DEYTT Connect" Level="1">
+      <ComponentRef Id="VpnServiceComponent" />
+      <ComponentRef Id="AllowedUserSidComponent" />
+      <ComponentRef Id="UiExecutableComponent" />
+    </Feature>
+  </Package>
+  <Fragment>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="DEYTT Connect" />
+    </StandardDirectory>
+  </Fragment>
+</Wix>
