@@ -1250,15 +1250,31 @@ public sealed class SetupWindow : UserControl
 
     private static string DiagnosticOrigin(Exception error)
     {
-        var method = new StackTrace(error, false).GetFrames()?
+        var methods = new StackTrace(error, false).GetFrames()?
             .Select(frame => frame.GetMethod())
-            .FirstOrDefault(candidate => candidate is not null && candidate.Name != "MoveNext" &&
-                (candidate.DeclaringType?.Namespace?.StartsWith("DeyttConnect.", StringComparison.Ordinal) == true ||
-                 candidate.DeclaringType?.Namespace?.StartsWith("System.Net.Http", StringComparison.Ordinal) == true ||
-                 candidate.DeclaringType?.Namespace?.StartsWith("System.Text.Json", StringComparison.Ordinal) == true));
-        if (method is null)
+            .OfType<System.Reflection.MethodBase>()
+            .Where(candidate => candidate.Name != "MoveNext")
+            .ToArray();
+        if (methods is null)
             return "unknown";
 
+        var appMethods = methods
+            .Where(candidate => candidate.DeclaringType?.Namespace?.StartsWith("DeyttConnect.", StringComparison.Ordinal) == true)
+            .Select(FormatDiagnosticMethod)
+            .Distinct(StringComparer.Ordinal)
+            .Take(2)
+            .ToArray();
+        if (appMethods.Length > 0)
+            return string.Join(">", appMethods);
+
+        var frameworkMethod = methods.FirstOrDefault(candidate =>
+            candidate.DeclaringType?.Namespace?.StartsWith("System.Text.Json", StringComparison.Ordinal) == true ||
+            candidate.DeclaringType?.Namespace?.StartsWith("System.Net.Http", StringComparison.Ordinal) == true);
+        return frameworkMethod is null ? "unknown" : FormatDiagnosticMethod(frameworkMethod);
+    }
+
+    private static string FormatDiagnosticMethod(System.Reflection.MethodBase method)
+    {
         var name = $"{method.DeclaringType?.Name}.{method.Name}";
         return new string(name.Where(character => char.IsLetterOrDigit(character) || character is '.' or '_' or '+')
             .Take(64)
