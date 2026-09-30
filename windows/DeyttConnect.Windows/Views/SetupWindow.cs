@@ -641,8 +641,10 @@ public sealed class SetupWindow : UserControl
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or
                                       InvalidDataException or InvalidOperationException or CryptographicException)
         {
-            var message = Copy("Не удалось сохранить подписку в приложении. Повтори импорт.",
-                "The app could not save the subscription. Retry the import.");
+            var diagnostic = $"{error.GetType().Name}/{DiagnosticOrigin(error.InnerException ?? error)}/0x{error.HResult:X8}";
+            System.Diagnostics.Trace.TraceError("Subscription import commit failed ({0}).", diagnostic);
+            var message = Copy($"Не удалось сохранить подписку в приложении. Диагностика: {diagnostic}. Повтори импорт.",
+                $"The app could not save the subscription. Diagnostic: {diagnostic}. Retry the import.");
             if (automatic)
                 Render(ViewState.Success, message, DeyttTheme.Coral);
             else
