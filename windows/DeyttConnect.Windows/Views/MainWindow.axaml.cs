@@ -16,6 +16,9 @@ namespace DeyttConnect.Windows.Views;
 
 public partial class MainWindow : Window
 {
+    private const double WorkAreaWidthInset = 32;
+    private const double WorkAreaHeightInset = 48;
+
     private enum MainTab { Home, Routes, Profile, Settings, Support, Setup }
     private enum RouteCountryProbeState { Queued, Running, Cancelled, NeedsDisconnect, ServiceUnavailable, Failed }
     private sealed record RouteCountryProbeRequest(string CountryCode, string[] RouteTags);
@@ -112,7 +115,11 @@ public partial class MainWindow : Window
         ShowTab(MainTab.Home);
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         PageScroll.SizeChanged += (_, _) => UpdatePageHostWidth();
-        Opened += async (_, _) => await RunStartupFlowAsync();
+        Opened += async (_, _) =>
+        {
+            FitInitialWindowToWorkArea();
+            await RunStartupFlowAsync();
+        };
         _vpnStatusTimer.Tick += (_, _) => _ = RefreshVpnStatusAsync();
         Closed += (_, _) =>
         {
@@ -121,6 +128,31 @@ public partial class MainWindow : Window
             _telegramAvatarBitmap?.Dispose();
             _telegramAvatarBitmap = null;
         };
+    }
+
+    private void FitInitialWindowToWorkArea()
+    {
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        if (screen is null || screen.Scaling <= 0 ||
+            screen.WorkingArea.Width <= 0 || screen.WorkingArea.Height <= 0)
+            return;
+
+        var scale = screen.Scaling;
+        var availableWidth = screen.WorkingArea.Width / scale;
+        var availableHeight = screen.WorkingArea.Height / scale;
+        var width = Math.Min(Width, Math.Max(360, availableWidth - WorkAreaWidthInset));
+        var height = Math.Min(Height, Math.Max(320, availableHeight - WorkAreaHeightInset));
+
+        MinWidth = Math.Min(MinWidth, width);
+        MinHeight = Math.Min(MinHeight, height);
+        Width = width;
+        Height = height;
+
+        var pixelWidth = (int)Math.Round(width * scale);
+        var pixelHeight = (int)Math.Round(height * scale);
+        Position = new PixelPoint(
+            screen.WorkingArea.X + Math.Max(0, (screen.WorkingArea.Width - pixelWidth) / 2),
+            screen.WorkingArea.Y + Math.Max(0, (screen.WorkingArea.Height - pixelHeight) / 2));
     }
 
     private async Task RunStartupFlowAsync()
