@@ -898,10 +898,12 @@ public sealed record TelegramAccount(
             : null;
 
     private static int? ReadInt32(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.TryGetInt32(out var result) ? result : null;
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number &&
+        value.TryGetInt32(out var result) ? result : null;
 
     private static long? ReadInt64(JsonElement element, string name) =>
-        element.TryGetProperty(name, out var value) && value.TryGetInt64(out var result) ? result : null;
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number &&
+        value.TryGetInt64(out var result) ? result : null;
 }
 
 public sealed record TelegramSubscription(
