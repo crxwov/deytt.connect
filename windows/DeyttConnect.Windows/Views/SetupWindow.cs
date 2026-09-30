@@ -380,9 +380,11 @@ public sealed class SetupWindow : UserControl
 
         SetBusy(true);
         Render(ViewState.Refreshing, Copy("Проверяем код…", "Verifying the code…"), DeyttTheme.Blue);
+        var pairingStage = "verify";
         try
         {
             var paired = await _api.VerifyPairingAsync(_challenge, code, _lifetime.Token);
+            pairingStage = "save_session";
             try
             {
                 if (!_options.DeferSessionSaveUntilImport)
@@ -398,6 +400,7 @@ public sealed class SetupWindow : UserControl
             _sessionToken = paired.Token;
             _account = paired.Account;
             _completeAfterPairing = true;
+            pairingStage = "load_subscription";
             await RefreshSubscriptionAsync(paired.Token, paired.Account, completeAfterVerification: true);
         }
         catch (TelegramApiException error)
@@ -432,10 +435,11 @@ public sealed class SetupWindow : UserControl
         }
         catch (Exception error) when (IsNonFatal(error))
         {
-            System.Diagnostics.Trace.TraceError("Telegram pairing flow failed ({0}).", error.GetType().Name);
+            var diagnostic = $"{pairingStage}/{error.GetType().Name}/0x{error.HResult:X8}";
+            System.Diagnostics.Trace.TraceError("Telegram pairing flow failed ({0}).", diagnostic);
             Render(ViewState.Code, Copy(
-                "Не удалось завершить вход. Эта ошибка не означает, что код неверный. Попробуй запросить новый код.",
-                "Could not finish sign-in. This does not mean the code is wrong. Try requesting a new code."), DeyttTheme.Coral,
+                $"Не удалось завершить вход. Диагностика: {diagnostic}. Это не подтверждает, что код неверный. Запроси новый код.",
+                $"Could not finish sign-in. Diagnostic: {diagnostic}. This does not mean the code is wrong. Request a new code."), DeyttTheme.Coral,
                 showBotButton: _botUrl.Length > 0);
         }
         finally
