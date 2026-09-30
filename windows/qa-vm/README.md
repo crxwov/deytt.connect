@@ -17,6 +17,16 @@ never attempted while the fixture may still be active. It never reads guest
 credentials, clipboard contents, or user files and does not run a live
 account/tunnel test.
 
+`--installer-smoke` is the fixed native WiX 6/MSI install-uninstall mode. Its
+guest runner accepts no parameters, verifies a SHA-256 manifest, builds only
+the pinned installer project, uses a fixed `1.0.0` package identity and SYSTEM
+SID, checks fixed install footprints, then uninstalls only the matching DEYTT
+product. It never launches the app or connects a tunnel. Logs stay in a unique
+guest temp directory and are not returned; the host receives only a bounded
+sanitized JSON report. The mode currently fails closed before changing VM state
+because an elevated guest launch path has not yet passed independent review.
+Do not treat preflight as MSI installation evidence.
+
 Host artifacts are created in a mode-0700 run directory under
 `/mnt/data/deytt-win10-qa` by default; reports, logs, and screenshots are
 mode-0600. Set `DEYTT_QA_ARTIFACT_ROOT` to choose another local directory. The
@@ -51,6 +61,9 @@ publish log is private and is not copied into the guest or smoke report.
 
 ## Bounded diagnostic retry (2026-09-30)
 
+This section records a failed diagnostic attempt; its VM-state description was
+superseded by the successful smoke below.
+
 - Added an opt-in QA-only crash report that records exception type and up to 16
   stack method names, excluding exception messages, source paths, and process
   environment. The new diagnostic reported `InvalidOperationException` from
@@ -65,6 +78,18 @@ publish log is private and is not copied into the guest or smoke report.
   report. No further retry, shutdown, or snapshot restore was attempted.
 - VM remains running on the GA snapshot. The QA smoke is not stable, so no MSI
   install test or logon automation should run yet.
+
+## Latest synthetic smoke (2026-09-30)
+
+- The synthetic QA fixture smoke passed after the diagnostic retry: host-side
+  screenshot capture succeeded and the fixture exited gracefully with exit
+  code `0`.
+- The VM snapshot was restored and the VM is powered off. The earlier
+  guest-side GDI capture failure and CLR close crash are historical failed
+  attempts, not the result of the latest smoke.
+- This validates only the synthetic fixture lifecycle and screenshot path. It
+  does not validate MSI installation, native WebView2 behavior, a real account,
+  VPN routes, tunnel health, or HTTPS egress.
 
 Run manually:
 
