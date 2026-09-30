@@ -14,6 +14,12 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          github-server-url: https://ru.deytt.space
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: url.https://ru.deytt.space/git/.insteadOf
+          GIT_CONFIG_VALUE_0: https://ru.deytt.space/
 
       - name: Install pinned .NET SDK
         uses: actions/setup-dotnet@v4
