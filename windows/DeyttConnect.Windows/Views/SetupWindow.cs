@@ -435,7 +435,7 @@ public sealed class SetupWindow : UserControl
         }
         catch (Exception error) when (IsNonFatal(error))
         {
-            var diagnostic = $"{pairingStage}/{error.GetType().Name}/0x{error.HResult:X8}";
+            var diagnostic = $"{pairingStage}/{error.GetType().Name}/{DiagnosticOrigin(error)}/0x{error.HResult:X8}";
             System.Diagnostics.Trace.TraceError("Telegram pairing flow failed ({0}).", diagnostic);
             Render(ViewState.Code, Copy(
                 $"Не удалось завершить вход. Диагностика: {diagnostic}. Это не подтверждает, что код неверный. Запроси новый код.",
@@ -1247,6 +1247,23 @@ public sealed class SetupWindow : UserControl
 
     private static bool IsNonFatal(Exception error) =>
         error is not (OutOfMemoryException or StackOverflowException or AccessViolationException);
+
+    private static string DiagnosticOrigin(Exception error)
+    {
+        var method = new StackTrace(error, false).GetFrames()?
+            .Select(frame => frame.GetMethod())
+            .FirstOrDefault(candidate => candidate is not null && candidate.Name != "MoveNext" &&
+                (candidate.DeclaringType?.Namespace?.StartsWith("DeyttConnect.", StringComparison.Ordinal) == true ||
+                 candidate.DeclaringType?.Namespace?.StartsWith("System.Net.Http", StringComparison.Ordinal) == true ||
+                 candidate.DeclaringType?.Namespace?.StartsWith("System.Text.Json", StringComparison.Ordinal) == true));
+        if (method is null)
+            return "unknown";
+
+        var name = $"{method.DeclaringType?.Name}.{method.Name}";
+        return new string(name.Where(character => char.IsLetterOrDigit(character) || character is '.' or '_' or '+')
+            .Take(64)
+            .ToArray());
+    }
 
     private void OpenBot()
     {
