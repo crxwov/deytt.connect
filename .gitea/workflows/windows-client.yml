@@ -1,6 +1,7 @@
 name: Windows client fast verification
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
