@@ -20,7 +20,7 @@ public partial class SupportView : UserControl, IDisposable
 
     private const int MaximumMessageLength = 4000;
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(30);
-    private readonly WindowsSupportClient _client = new();
+    private readonly IWindowsSupportClient _client;
     private readonly DispatcherTimer _refreshTimer = new() { Interval = RefreshInterval };
     private readonly CancellationTokenSource _lifetime = new();
     private readonly Func<Task<string?>> _onSignInRequested;
@@ -33,6 +33,17 @@ public partial class SupportView : UserControl, IDisposable
     private bool _busy;
     private bool _isActive;
     private bool _disposed;
+    private bool _retrySend;
+    private bool _retryNeedsConfirmation;
+    private long? _accountId;
+    private long? _reauthAccountId;
+    private string? _reauthDraft;
+    private string? _reauthUncertainText;
+    private string? _uncertainSendText;
+    private int? _uncertainTicketId;
+    private int _uncertainBaselineCount;
+    private bool _uncertainExistingTicket;
+    private IReadOnlyList<SupportMessage> _threadMessages = [];
     private int _activationGeneration;
     private SupportPage _page = SupportPage.Thread;
 
@@ -47,9 +58,11 @@ public partial class SupportView : UserControl, IDisposable
         string? accessToken,
         Func<Task<string?>> onSignInRequested,
         Func<string, string, string, Task<bool>> confirmAsync,
-        string language = "ru")
+        string language = "ru",
+        IWindowsSupportClient? client = null)
     {
         InitializeComponent();
+        _client = client ?? new WindowsSupportClient();
         _accessToken = accessToken;
         _onSignInRequested = onSignInRequested ?? throw new ArgumentNullException(nameof(onSignInRequested));
         _confirmAsync = confirmAsync ?? throw new ArgumentNullException(nameof(confirmAsync));
@@ -61,7 +74,15 @@ public partial class SupportView : UserControl, IDisposable
         PrivacyNavButton.Click += async (_, _) => await ShowDocumentAsync(SupportDocumentKind.Privacy);
         TelegramNavButton.Click += (_, _) => OpenTelegram();
         RefreshButton.Click += async (_, _) => await RefreshCurrentPageAsync();
-        RetryButton.Click += async (_, _) => await RefreshThreadAsync();
+        RetryButton.Click += async (_, _) =>
+        {
+            if (_retryNeedsConfirmation)
+                await ConfirmAmbiguousRetryAsync();
+            else if (_retrySend)
+                await SendMessageAsync();
+            else
+                await RefreshThreadAsync();
+        };
         DocumentRetryButton.Click += async (_, _) => await LoadDocumentAsync(CurrentDocumentKind());
         SendButton.Click += async (_, _) => await SendMessageAsync();
         CloseTicketButton.Click += async (_, _) => await ConfirmAndCloseTicketAsync();
@@ -130,6 +151,7 @@ public partial class SupportView : UserControl, IDisposable
                 SignedOutPanel.IsVisible = false;
                 ComposerCard.IsVisible = true;
                 RetryButton.IsVisible = true;
+                _ = LoadAccountIdentityAsync(_accessToken, _activationGeneration);
                 _ = RefreshThreadAsync();
                 _refreshTimer.Start();
             }
@@ -203,7 +225,10 @@ public partial class SupportView : UserControl, IDisposable
         };
         RefreshButton.Content = T("Обновить", "Refresh");
         BackButton.Content = T("Назад", "Back");
-        RetryButton.Content = T("Повторить", "Retry");
+        if (_uncertainSendText is not null)
+            SetUncertainRetryAction();
+        else
+            SetRetryAction(_retrySend);
         DocumentRetryButton.Content = T("Повторить", "Retry");
         ComposerLabel.Text = T("СООБЩЕНИЕ КОМАНДЕ", "MESSAGE THE TEAM");
         Composer.PlaceholderText = T("Опишите вопрос минимум в пяти символах", "Describe the issue in at least five characters");
@@ -218,6 +243,13 @@ public partial class SupportView : UserControl, IDisposable
 
     private void ResetAccountState()
     {
+        _accountId = null;
+        _reauthAccountId = null;
+        _reauthDraft = null;
+        _reauthUncertainText = null;
+        _uncertainSendText = null;
+        _retryNeedsConfirmation = false;
+        _threadMessages = [];
         _ticket = null;
         MessageStack.Children.Clear();
         CloseTicketButton.IsVisible = false;
@@ -278,6 +310,7 @@ public partial class SupportView : UserControl, IDisposable
     {
         if (_busy || !IsActive || _accessToken is null || _page != SupportPage.Thread)
             return;
+        SetRetryAction(retrySend: false);
         var generation = _activationGeneration;
         var accessToken = _accessToken;
         var cancellationToken = ActiveToken;
@@ -290,8 +323,28 @@ public partial class SupportView : UserControl, IDisposable
             if (!IsCurrentOperation(generation, accessToken))
                 return;
             _ticket = snapshot.Ticket;
+            _threadMessages = snapshot.Messages;
             RenderMessages(snapshot.Messages);
             CloseTicketButton.IsVisible = _ticket?.IsOpen == true;
+            if (_uncertainSendText is not null)
+            {
+                if (SnapshotConfirmsUncertainSend(snapshot))
+                {
+                    if (string.Equals(Composer.Text?.Trim(), _uncertainSendText, StringComparison.Ordinal))
+                        Composer.Text = string.Empty;
+                    _uncertainSendText = null;
+                    SetRetryAction(retrySend: false);
+                    SetStatus(T("Сообщение отправлено.", "Message sent."));
+                }
+                else
+                {
+                    SetUncertainRetryAction();
+                    SetStatus(T(
+                        "Не удалось подтвердить отправку. Сообщение могло дойти; повтор может создать копию. Проверьте историю и подтвердите повтор отдельно.",
+                        "Could not confirm delivery. The message may have arrived; retrying could create a duplicate. Check history and confirm a separate retry."), isError: true);
+                }
+                return;
+            }
             var status = _ticket switch
             {
                 null => T("Новое обращение создастся после первого сообщения.", "A new ticket will be created with your first message."),
@@ -366,6 +419,11 @@ public partial class SupportView : UserControl, IDisposable
 
     private async Task SendMessageAsync()
     {
+        if (_uncertainSendText is not null)
+        {
+            await ConfirmAmbiguousRetryAsync();
+            return;
+        }
         var text = Composer.Text?.Trim() ?? string.Empty;
         if (text.Length < 5)
         {
@@ -381,28 +439,66 @@ public partial class SupportView : UserControl, IDisposable
         var cancellationToken = ActiveToken;
         _busy = true;
         SetBusy(true);
+        SetRetryAction(retrySend: false);
         SetStatus(T("Отправляем сообщение…", "Sending message…"));
+        var ticket = _ticket;
+        var sendsToExistingTicket = ticket?.IsOpen == true;
+        var baselineTicketId = ticket?.Id;
+        var baselineCount = CountMatchingUserMessages(_threadMessages, text);
+        var postStarted = false;
+        long? operationAccountId = _accountId;
         try
         {
-            var ticket = _ticket;
+            if (_accountId is null)
+            {
+                try { _accountId = await _client.GetAccountIdAsync(accessToken, cancellationToken); }
+                catch (Exception identityError) when (identityError is not OperationCanceledException)
+                {
+                    if (ShowReauthenticationIfNeeded(identityError))
+                        return;
+                }
+            }
+            operationAccountId = _accountId;
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
+            postStarted = true;
             if (ticket?.IsOpen == true)
                 await _client.SendMessageAsync(accessToken, ticket.Id, text, cancellationToken);
             else
                 await _client.CreateTicketAsync(accessToken, text, cancellationToken);
             if (!IsCurrentOperation(generation, accessToken))
+            {
+                await HandleLatePostOutcomeAsync(operationAccountId, accessToken, text,
+                    sendsToExistingTicket, baselineTicketId, baselineCount);
                 return;
+            }
             Composer.Text = string.Empty;
             await RefreshThreadAsyncWhileBusy(generation, accessToken, cancellationToken);
         }
         catch (OperationCanceledException) when (!IsCurrentOperation(generation, accessToken))
         {
+            if (postStarted && IsSameAccountForLateOperation(operationAccountId, accessToken))
+            {
+                MarkUncertainSend(text, sendsToExistingTicket, baselineTicketId, baselineCount);
+                await ReconcileLatePostIfActiveAsync(operationAccountId, accessToken, text,
+                    sendsToExistingTicket, baselineTicketId, baselineCount);
+            }
         }
         catch (Exception error)
         {
             if (!IsCurrentOperation(generation, accessToken))
                 return;
-            if (!ShowReauthenticationIfNeeded(error))
-                SetStatus(ErrorText(error) + " · " + T("нажмите, чтобы повторить", "click to retry"), isError: true);
+            if (ShowReauthenticationIfNeeded(error))
+                return;
+            if (postStarted && IsAmbiguousSendOutcome(error))
+            {
+                MarkUncertainSend(text, sendsToExistingTicket, baselineTicketId, baselineCount);
+                await ReconcileAmbiguousSendAsync(generation, accessToken, cancellationToken,
+                    text, sendsToExistingTicket, baselineTicketId, baselineCount);
+                return;
+            }
+            SetRetryAction(retrySend: true);
+            SetStatus(ErrorText(error) + " · " + T("черновик сохранён — можно отправить ещё раз", "draft kept — you can retry sending"), isError: true);
         }
         finally
         {
@@ -427,6 +523,7 @@ public partial class SupportView : UserControl, IDisposable
             if (!IsCurrentOperation(generation, accessToken))
                 return;
             _ticket = snapshot.Ticket;
+            _threadMessages = snapshot.Messages;
             RenderMessages(snapshot.Messages);
             CloseTicketButton.IsVisible = _ticket?.IsOpen == true;
             SetStatus(_ticket switch
@@ -440,10 +537,175 @@ public partial class SupportView : UserControl, IDisposable
         {
             if (!IsCurrentOperation(generation, accessToken))
                 return;
-            if (!ShowReauthenticationIfNeeded(error))
-                SetStatus(ErrorText(error) + " · " + T("нажмите, чтобы повторить", "click to retry"), isError: true);
+            var reauthenticationRequired = ShowReauthenticationIfNeeded(error);
+            if (IsCurrentActivation(generation))
+            {
+                SetRetryAction(retrySend: false);
+                SetStatus(reauthenticationRequired
+                    ? T("Сообщение отправлено, но историю не удалось обновить. Подключите Telegram повторно.",
+                        "Message sent, but conversation could not be refreshed. Reconnect Telegram to continue.")
+                    : T("Сообщение отправлено, историю обновить не удалось. Нажмите «Обновить».",
+                        "Message sent, but conversation could not be refreshed. Press Refresh."),
+                    isError: true);
+            }
         }
     }
+
+    private async Task LoadAccountIdentityAsync(string accessToken, int generation)
+    {
+        try
+        {
+            var accountId = await _client.GetAccountIdAsync(accessToken, ActiveToken);
+            if (IsCurrentOperation(generation, accessToken))
+                _accountId = accountId;
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            if (IsCurrentOperation(generation, accessToken) && ShowReauthenticationIfNeeded(error))
+                return;
+        }
+    }
+
+    private async Task ReconcileAmbiguousSendAsync(
+        int generation,
+        string accessToken,
+        CancellationToken cancellationToken,
+        string text,
+        bool sendsToExistingTicket,
+        int? baselineTicketId,
+        int baselineCount)
+    {
+        try
+        {
+            var snapshot = await _client.GetThreadAsync(accessToken, cancellationToken);
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
+            var matchingCount = CountMatchingUserMessages(snapshot.Messages, text);
+            var confirmed = matchingCount > 0 && (sendsToExistingTicket
+                ? snapshot.Ticket?.Id == baselineTicketId && matchingCount > baselineCount
+                : snapshot.Ticket?.Id != baselineTicketId);
+            _ticket = snapshot.Ticket;
+            _threadMessages = snapshot.Messages;
+            RenderMessages(snapshot.Messages);
+            CloseTicketButton.IsVisible = _ticket?.IsOpen == true;
+            if (confirmed)
+            {
+                if (string.Equals(Composer.Text?.Trim(), text, StringComparison.Ordinal))
+                    Composer.Text = string.Empty;
+                _uncertainSendText = null;
+                _retryNeedsConfirmation = false;
+                SetRetryAction(retrySend: false);
+                SetStatus(T("Сообщение отправлено.", "Message sent."));
+                return;
+            }
+
+            SetUncertainRetryAction();
+            SetStatus(T(
+                "Не удалось подтвердить отправку. Сообщение могло дойти; повтор может создать копию. Проверьте историю и подтвердите повтор отдельно.",
+                "Could not confirm delivery. The message may have arrived; retrying could create a duplicate. Check history and confirm a separate retry."), isError: true);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            if (!IsCurrentOperation(generation, accessToken))
+                return;
+            if (ShowReauthenticationIfNeeded(error))
+                return;
+            SetUncertainRetryAction();
+            SetStatus(T(
+                "Не удалось узнать, отправлено ли сообщение. Оно могло дойти; проверьте подключение и историю перед подтверждённым повтором.",
+                "Could not determine whether the message was sent. It may have arrived; check the connection and history before confirming a retry."), isError: true);
+        }
+    }
+
+    private void MarkUncertainSend(string text, bool existingTicket, int? ticketId, int baselineCount)
+    {
+        _uncertainSendText = text;
+        _uncertainExistingTicket = existingTicket;
+        _uncertainTicketId = ticketId;
+        _uncertainBaselineCount = baselineCount;
+        if (_reauthAccountId.HasValue && _reauthAccountId == _accountId)
+        {
+            _reauthDraft ??= text;
+            _reauthUncertainText = text;
+        }
+    }
+
+    private bool IsSameAccountForLateOperation(long? operationAccountId, string operationToken) =>
+        operationAccountId.HasValue
+            ? _accountId == operationAccountId || _reauthAccountId == operationAccountId
+            : string.Equals(_accessToken, operationToken, StringComparison.Ordinal);
+
+    private async Task HandleLatePostOutcomeAsync(
+        long? operationAccountId,
+        string operationToken,
+        string text,
+        bool existingTicket,
+        int? ticketId,
+        int baselineCount)
+    {
+        if (!IsSameAccountForLateOperation(operationAccountId, operationToken))
+            return;
+        MarkUncertainSend(text, existingTicket, ticketId, baselineCount);
+        await ReconcileLatePostIfActiveAsync(operationAccountId, operationToken, text,
+            existingTicket, ticketId, baselineCount);
+    }
+
+    private async Task ReconcileLatePostIfActiveAsync(
+        long? operationAccountId,
+        string operationToken,
+        string text,
+        bool existingTicket,
+        int? ticketId,
+        int baselineCount)
+    {
+        if (!IsActive || !IsSameAccountForLateOperation(operationAccountId, operationToken) || _accessToken is null)
+            return;
+        await ReconcileAmbiguousSendAsync(_activationGeneration, _accessToken, ActiveToken,
+            text, existingTicket, ticketId, baselineCount);
+    }
+
+    private async Task ConfirmAmbiguousRetryAsync()
+    {
+        var text = _uncertainSendText;
+        if (text is null || _busy || !IsActive || _accessToken is null)
+            return;
+        var confirmed = await ConfirmAsync(
+            T("Повторить отправку?", "Retry sending?"),
+            T("Предыдущая попытка могла быть принята. Повтор может создать дубликат.",
+                "The previous attempt may have been accepted. Retrying may create a duplicate."),
+            T("Всё равно отправить", "Send anyway"));
+        if (!confirmed || !IsActive || _accessToken is null || _uncertainSendText != text)
+            return;
+        Composer.Text = text;
+        _uncertainSendText = null;
+        _retryNeedsConfirmation = false;
+        await SendMessageAsync();
+    }
+
+    private void SetUncertainRetryAction()
+    {
+        _retrySend = false;
+        _retryNeedsConfirmation = true;
+        RetryButton.Content = T("Подтвердить повтор…", "Confirm retry…");
+    }
+
+    private static int CountMatchingUserMessages(IReadOnlyList<SupportMessage> messages, string text) =>
+        messages.Count(message => !message.IsFromSupport &&
+                                  string.Equals(message.Text.Trim(), text, StringComparison.Ordinal));
+
+    private bool SnapshotConfirmsUncertainSend(SupportThreadSnapshot snapshot)
+    {
+        if (_uncertainSendText is null)
+            return false;
+        var count = CountMatchingUserMessages(snapshot.Messages, _uncertainSendText);
+        return count > 0 && (_uncertainExistingTicket
+            ? snapshot.Ticket?.Id == _uncertainTicketId && count > _uncertainBaselineCount
+            : snapshot.Ticket?.Id != _uncertainTicketId);
+    }
+
+    private static bool IsAmbiguousSendOutcome(Exception error) =>
+        error is not WindowsSupportException supportError ||
+        (int)supportError.StatusCode >= 500;
 
     private async Task ConfirmAndCloseTicketAsync()
     {
@@ -508,9 +770,29 @@ public partial class SupportView : UserControl, IDisposable
                 return;
             }
 
-            if (!string.Equals(_accessToken, accessToken, StringComparison.Ordinal))
+            var previousAccountId = _reauthAccountId;
+            var draftToRestore = _reauthDraft;
+            var uncertainTextToRestore = _reauthUncertainText;
+            long? newAccountId = null;
+            try { newAccountId = await _client.GetAccountIdAsync(accessToken, ActiveToken); }
+            catch (Exception identityError) when (identityError is not OperationCanceledException) { }
+            if (!IsCurrentActivation(generation))
+                return;
+            var sameAccount = previousAccountId.HasValue && newAccountId == previousAccountId;
+            if (previousAccountId.HasValue || !string.Equals(_accessToken, accessToken, StringComparison.Ordinal))
                 ResetAccountState();
+            _accountId = newAccountId;
             _accessToken = accessToken;
+            if (sameAccount && draftToRestore is not null)
+            {
+                Composer.Text = draftToRestore;
+                _uncertainSendText = uncertainTextToRestore;
+                if (_uncertainSendText is not null)
+                    SetUncertainRetryAction();
+            }
+            _reauthAccountId = null;
+            _reauthDraft = null;
+            _reauthUncertainText = null;
             _busy = false;
             SetBusy(false);
             ShowThread();
@@ -555,6 +837,19 @@ public partial class SupportView : UserControl, IDisposable
                  "session_expired" or "auth_required")))
             return false;
 
+        if (_accountId.HasValue && !string.IsNullOrWhiteSpace(Composer.Text))
+        {
+            _reauthAccountId = _accountId;
+            _reauthDraft = Composer.Text;
+            _reauthUncertainText = _uncertainSendText;
+        }
+        else
+        {
+            _reauthAccountId = null;
+            _reauthDraft = null;
+            _reauthUncertainText = null;
+        }
+        Composer.Text = string.Empty;
         _accessToken = null;
         _ticket = null;
         MessageStack.Children.Clear();
@@ -742,6 +1037,15 @@ public partial class SupportView : UserControl, IDisposable
         DocumentRetryButton.IsEnabled = !busy;
         Composer.IsEnabled = !busy && _accessToken is not null;
         StatusDot.Fill = DeyttTheme.Brush(busy ? DeyttTheme.Amber : DeyttTheme.Muted);
+    }
+
+    private void SetRetryAction(bool retrySend)
+    {
+        _retrySend = retrySend;
+        _retryNeedsConfirmation = false;
+        RetryButton.Content = retrySend
+            ? T("Отправить ещё раз", "Retry sending")
+            : T("Повторить", "Retry");
     }
 
     private async Task<bool> ConfirmAsync(string title, string message, string confirmLabel)
