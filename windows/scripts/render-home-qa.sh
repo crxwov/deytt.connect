@@ -5,6 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 signed_in="false"
 state="disconnected"
 tab="home"
+width="1240"
+height="820"
 output="/tmp/deytt-connect-qa.png"
 
 while (($#)); do
@@ -12,6 +14,8 @@ while (($#)); do
         --signed-in) signed_in="true"; shift ;;
         --state) state="${2:?--state requires a value}"; shift 2 ;;
         --tab) tab="${2:?--tab requires a value}"; shift 2 ;;
+        --width) width="${2:?--width requires a value}"; shift 2 ;;
+        --height) height="${2:?--height requires a value}"; shift 2 ;;
         --output) output="${2:?--output requires a path}"; shift 2 ;;
         *) printf 'Unknown option: %s\n' "$1" >&2; exit 2 ;;
     esac
@@ -24,10 +28,10 @@ done
 mkdir -p "$(dirname "$output")"
 xvfb-run -a --server-args='-screen 0 1600x1100x24' bash -c '
     set -euo pipefail
-    root="$1"; out="$2"; signed="$3"; state="$4"; tab="$5"
-    qa_args=(--state "$state" --tab "$tab")
+    root="$1"; out="$2"; signed="$3"; state="$4"; tab="$5"; width="$6"; height="$7"
+    qa_args=(--state "$state" --tab "$tab" --width "$width" --height "$height")
     [[ "$signed" == true ]] && qa_args+=(--signed-in)
-    "$root/.toolchain/dotnet/dotnet" run --no-build --project "$root/windows/DeyttConnect.Windows.QA/DeyttConnect.Windows.QA.csproj" -- "${qa_args[@]}" &
+    "$root/.toolchain/dotnet/dotnet" run --configuration Release --no-build --project "$root/windows/DeyttConnect.Windows.QA/DeyttConnect.Windows.QA.csproj" -- "${qa_args[@]}" &
     app_pid=$!
     trap "kill $app_pid 2>/dev/null || true" EXIT
     window_id=""
@@ -44,4 +48,4 @@ xvfb-run -a --server-args='-screen 0 1600x1100x24' bash -c '
     sleep 2
     import -window "$window_id" "$out"
     file "$out"
-' _ "$repo_root" "$output" "$signed_in" "$state" "$tab"
+' _ "$repo_root" "$output" "$signed_in" "$state" "$tab" "$width" "$height"

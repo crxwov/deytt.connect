@@ -70,6 +70,8 @@ internal sealed class QaApp : Application
         var window = new MainWindow(fixture)
         {
             Title = $"deytt./connect · QA fixture ({(options.SignedIn ? "signed-in" : "signed-out")}, {options.State})",
+            Width = options.Width,
+            Height = options.Height,
         };
 
         var content = (Control)window.Content!;
@@ -95,7 +97,8 @@ internal sealed class QaApp : Application
         return window;
     }
 
-    private sealed record QaOptions(bool SignedIn, string State, string Tab, string? ProbeStage)
+    private sealed record QaOptions(bool SignedIn, string State, string Tab, string? ProbeStage,
+        int Width, int Height)
     {
         public static QaOptions Parse(string[] args)
         {
@@ -109,7 +112,19 @@ internal sealed class QaApp : Application
             var probeStage = Value(args, "--probe-stage");
             if (probeStage is not (null or "latency" or "retry" or "waiting_speed" or "download" or "error" or "cancelled" or "complete"))
                 throw new ArgumentException("--probe-stage must be latency, retry, waiting_speed, download, error, cancelled, or complete.");
-            return new QaOptions(signedIn, state, tab, probeStage);
+            var width = Dimension(args, "--width", 1240, 520);
+            var height = Dimension(args, "--height", 820, 420);
+            return new QaOptions(signedIn, state, tab, probeStage, width, height);
+        }
+
+        private static int Dimension(string[] args, string key, int defaultValue, int minimum)
+        {
+            var value = Value(args, key);
+            if (value is null)
+                return defaultValue;
+            if (!int.TryParse(value, out var dimension) || dimension < minimum)
+                throw new ArgumentException($"{key} must be an integer of at least {minimum}.");
+            return dimension;
         }
 
         private static string? Value(string[] args, string key)

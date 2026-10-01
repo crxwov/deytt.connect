@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Automation;
 using Avalonia.Headless;
@@ -209,6 +210,81 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaTheory]
+    [InlineData(720d, 520d, true)]
+    [InlineData(1440d, 900d, false)]
+    public void Signed_in_profile_keeps_one_tariff_action_in_the_expected_hierarchy(
+        double width, double height, bool compact)
+    {
+        var window = new MainWindow(Fixture(tab: "profile", signedIn: true))
+        {
+            Width = width,
+            Height = height,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var pageHost = Required<Grid>(window, "PageHost");
+            var tariffActions = Descendants(pageHost).OfType<Button>()
+                .Where(button => Descendants(button).OfType<TextBlock>()
+                    .Any(text => text.Text == "Тарифы и оплата"))
+                .ToArray();
+            var tariffAction = Assert.Single(tariffActions);
+            var tariffRow = Assert.IsType<Border>(tariffAction.GetVisualParent());
+            var subscriptionHeading = Descendants(pageHost).OfType<TextBlock>()
+                .Single(text => text.Text == "ПОДПИСКА");
+            var pageScroll = Required<ScrollViewer>(window, "PageScroll");
+            var tariffTop = tariffRow.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
+            var subscriptionTop = subscriptionHeading.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
+
+            Assert.True(tariffAction.IsEffectivelyVisible);
+            Assert.True(IsFullyWithinViewport(tariffRow, Required<ScrollViewer>(window, "PageScroll")));
+            Assert.Equal(compact, tariffTop < subscriptionTop);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Signed_out_settings_login_row_scrolls_fully_into_view_on_keyboard_focus()
+    {
+        var window = new MainWindow(Fixture(tab: "settings")) { Width = 720, Height = 520 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var pageScroll = Required<ScrollViewer>(window, "PageScroll");
+            Assert.True(pageScroll.BringIntoViewOnFocusChange);
+            var pageHost = Required<Grid>(window, "PageHost");
+            var loginAction = Descendants(pageHost).OfType<Button>()
+                .Single(button => Descendants(button).OfType<TextBlock>()
+                    .Any(text => text.Text == "Войти через Telegram"));
+            var loginRow = Assert.IsType<Border>(loginAction.GetVisualParent());
+            Assert.True(IsFullyWithinViewport(loginRow, pageScroll), "Login action should start fully visible at 720x520.");
+            pageScroll.ScrollToEnd();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(pageScroll.Offset.Y > 0);
+
+            Assert.True(loginAction.Focus());
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.True(loginAction.IsFocused);
+            var loginOrigin = loginRow.TranslatePoint(new Point(0, 0), pageScroll);
+            Assert.True(IsFullyWithinViewport(loginRow, pageScroll),
+                $"offset={pageScroll.Offset.Y}, origin={loginOrigin}, rowHeight={loginRow.Bounds.Height}, viewport={pageScroll.Viewport.Height}");
+            Assert.True(loginRow.Bounds.Height > 0);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
     public void Unlimited_profile_shows_total_transferred_without_quota_usage_or_percentage(double width)
@@ -334,6 +410,13 @@ public sealed class HomeWindowTests
 
     private static T Required<T>(Control control, string name) where T : Control =>
         control.FindControl<T>(name) ?? throw new Xunit.Sdk.XunitException($"Missing control: {name}");
+
+    private static bool IsFullyWithinViewport(Control control, ScrollViewer scrollViewer)
+    {
+        var origin = control.TranslatePoint(new Point(0, 0), scrollViewer);
+        return origin is { } point && point.Y >= -1.5 &&
+            point.Y + control.Bounds.Height <= scrollViewer.Viewport.Height + 1.5;
+    }
 
     private static IEnumerable<Control> Descendants(Control root)
     {

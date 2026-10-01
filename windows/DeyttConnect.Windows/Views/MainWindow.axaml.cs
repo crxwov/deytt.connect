@@ -443,7 +443,7 @@ public partial class MainWindow : Window
         WorkspaceHeader.Padding = compact ? new Thickness(16, 0) : new Thickness(30, 0);
         WorkspaceEyebrow.IsVisible = !compact;
         PageHost.Margin = compact
-            ? new Thickness(16, 18, 16, 28)
+            ? new Thickness(16, 18, 16, 56)
             : new Thickness(34, 26, 34, 42);
 
         SetNavigation(HomeNav, "⌂", Copy("Главная", "Home"), _activeTab == MainTab.Home);
@@ -1552,6 +1552,15 @@ public partial class MainWindow : Window
         };
 
         accountColumn.Children.Add(BuildProfileIdentityCard(account, signedIn, loading));
+        var planPaymentEntry = SettingsEntry("₽", Copy("Тарифы и оплата", "Plans and payment"),
+            Copy("Стоимость подтвердит сервер до оформления", "The server confirms the total before checkout"),
+            Copy("открыть", "open"), () => _ = ShowPlanPickerAsync(), emphasis: compact && signedIn);
+        if (compact && signedIn)
+        {
+            // Keep the account's main billing action beside its identity on short windows.
+            accountColumn.Children.Add(DeyttTheme.Spacer(8));
+            accountColumn.Children.Add(planPaymentEntry);
+        }
         AddSection(accountColumn, Copy("ПОДПИСКА", "SUBSCRIPTION"));
         var subscription = account?.Subscription;
         var subscriptionTitle = !signedIn
@@ -1594,10 +1603,11 @@ public partial class MainWindow : Window
         }
         accountColumn.Children.Add(DeyttTheme.Card(subscriptionCard,
             DeyttTheme.Surface, DeyttTheme.Line, 22, new Thickness(18)));
-        accountColumn.Children.Add(DeyttTheme.Spacer(8));
-        accountColumn.Children.Add(SettingsEntry("₽", Copy("Тарифы и оплата", "Plans and payment"),
-            Copy("Стоимость подтвердит сервер до оформления", "The server confirms the total before checkout"),
-            Copy("открыть", "open"), () => _ = ShowPlanPickerAsync()));
+        if (!compact || !signedIn)
+        {
+            accountColumn.Children.Add(DeyttTheme.Spacer(8));
+            accountColumn.Children.Add(planPaymentEntry);
+        }
         if (_pendingPaymentId is not null)
         {
             accountColumn.Children.Add(DeyttTheme.Spacer(6));
@@ -1828,15 +1838,12 @@ public partial class MainWindow : Window
             Margin = compact ? new Thickness(0, 4, 0, 0) : new Thickness(10, 0, 0, 0),
         };
         AddSection(generalColumn, Copy("ЯЗЫК И АККАУНТ", "LANGUAGE AND ACCOUNT"));
-        generalColumn.Children.Add(SettingsEntry("Aa", Copy("Язык приложения", "App language"),
-            _language == "ru" ? "Русский" : "English", "›", () => _ = ShowLanguagePickerAsync()));
-        generalColumn.Children.Add(DeyttTheme.Spacer(6));
         var accountDetail = _sessionToken is null
             ? Copy("Подписка и устройства", "Subscription and devices")
             : string.IsNullOrWhiteSpace(_account?.Username)
                 ? Copy("Аккаунт подключён", "Account connected")
                 : $"@{_account!.Username}";
-        generalColumn.Children.Add(SettingsEntry("✓", _sessionToken is null
+        var accountEntry = SettingsEntry("✓", _sessionToken is null
                 ? Copy("Войти через Telegram", "Sign in with Telegram")
                 : Copy("Telegram подключён", "Telegram connected"),
             accountDetail,
@@ -1846,7 +1853,17 @@ public partial class MainWindow : Window
                     ShowSignInDialog();
                 else
                     ShowTab(MainTab.Profile);
-            }, true));
+            }, emphasis: true);
+        var accountEntryShownFirst = compact && _sessionToken is null;
+        if (accountEntryShownFirst)
+            generalColumn.Children.Add(accountEntry);
+        generalColumn.Children.Add(SettingsEntry("Aa", Copy("Язык приложения", "App language"),
+            _language == "ru" ? "Русский" : "English", "›", () => _ = ShowLanguagePickerAsync()));
+        if (!accountEntryShownFirst)
+        {
+            generalColumn.Children.Add(DeyttTheme.Spacer(6));
+            generalColumn.Children.Add(accountEntry);
+        }
         generalColumn.Children.Add(DeyttTheme.Spacer(4));
         generalColumn.Children.Add(SettingsEntry("↓", Copy("Импорт подписки", "Import subscription"),
             Copy("Вставить ссылку или подключить аккаунт", "Paste a link or connect your account"), "›",
