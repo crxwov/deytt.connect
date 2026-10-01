@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using System.Net;
 using DeyttConnect.Protocol;
+using DeyttConnect.Windows.Service;
 using Xunit;
 
 namespace DeyttConnect.Protocol.Tests;
@@ -121,6 +122,43 @@ public sealed class WindowsPipeProtocolTests
     }
 
     [Fact]
+    public void CanaryLossAndRecoveryNeverReportFreshConnectedUntilTunnelBoundSuccess()
+    {
+        var now = DateTimeOffset.Parse("2026-10-01T12:00:00+00:00");
+        var connectedAt = now - TimeSpan.FromMinutes(5);
+        var failures = 0;
+
+        var initial = WindowsTunnelHealth.ApplyCanaryResult(true, failures, tunnelRouteProven: true);
+        failures = initial.ConsecutiveFailures;
+        var initialSnapshot = new WindowsTunnelSnapshot(initial.State, "Connected", "nl-vless",
+            connectedAt, HealthCheckedAt: now);
+        Assert.True(WindowsTunnelHealth.IsFreshlyConnected(initialSnapshot, now));
+
+        var firstMiss = WindowsTunnelHealth.ApplyCanaryResult(false, failures);
+        failures = firstMiss.ConsecutiveFailures;
+        var checking = new WindowsTunnelSnapshot(firstMiss.State, "Retrying HTTPS", "nl-vless",
+            connectedAt, HealthCheckedAt: now + TimeSpan.FromSeconds(60));
+        Assert.Equal("health_checking", checking.State);
+        Assert.False(WindowsTunnelHealth.IsFreshlyConnected(checking, now + TimeSpan.FromSeconds(60)));
+
+        var secondMiss = WindowsTunnelHealth.ApplyCanaryResult(false, failures);
+        failures = secondMiss.ConsecutiveFailures;
+        var degraded = new WindowsTunnelSnapshot(secondMiss.State, "HTTPS failed", "nl-vless",
+            connectedAt, HealthCheckedAt: now + TimeSpan.FromSeconds(120));
+        Assert.Equal("degraded", degraded.State);
+        Assert.False(WindowsTunnelHealth.IsFreshlyConnected(degraded, now + TimeSpan.FromSeconds(120)));
+
+        var recovery = WindowsTunnelHealth.ApplyCanaryResult(true, failures, tunnelRouteProven: true);
+        var recovered = new WindowsTunnelSnapshot(recovery.State, "HTTPS verified through TUN", "nl-vless",
+            connectedAt, HealthCheckedAt: now + TimeSpan.FromSeconds(180));
+        Assert.Equal(0, recovery.ConsecutiveFailures);
+        Assert.True(WindowsTunnelHealth.IsFreshlyConnected(recovered, now + TimeSpan.FromSeconds(180)));
+
+        var roundTrip = WindowsPipeProtocol.DeserializeResponse(WindowsPipeProtocol.SerializeResponse(degraded));
+        Assert.Equal(degraded, roundTrip);
+    }
+
+    [Fact]
     public void CanarySourceSelectionRequiresConfiguredAddressOnAnActiveInterface()
     {
         var configured = new[] { "172.19.0.1/30", "fd00::1/126" };
@@ -189,6 +227,113 @@ public sealed class WindowsPipeProtocolTests
             lifetime.Stop();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => backgroundWork);
+    }
+
+    [Fact]
+    public async Task ReplacingHealthMonitorLifetimeCancelsPreviousMonitorOnly()
+    {
+        using var previous = new DeyttConnect.Windows.Service.TunnelHealthMonitorLifetime();
+        var previousWork = Task.Delay(Timeout.InfiniteTimeSpan, previous.Token);
+        previous.Stop();
+
+        using var replacement = new DeyttConnect.Windows.Service.TunnelHealthMonitorLifetime();
+        Assert.True(previous.Token.IsCancellationRequested);
+        Assert.False(replacement.Token.IsCancellationRequested);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => previousWork);
+    }
+
+    [Fact]
+    public async Task NetworkWakeDrainsIntervalWaitBeforeReturning()
+    {
+        var networkChanged = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var intervalDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var wait = TunnelHealthMonitorWait.WaitAsync(
+            token => WaitForIntervalUntilCancelledAsync(token, intervalDrained),
+            token => networkChanged.Task.WaitAsync(token), CancellationToken.None);
+        networkChanged.SetResult();
+
+        Assert.Equal(TunnelHealthWake.NetworkChanged, await wait);
+        Assert.True(intervalDrained.Task.IsCompleted);
+    }
+
+    [Fact]
+    public async Task IntervalWakeDrainsNetworkWaitBeforeReturning()
+    {
+        var intervalElapsed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var networkDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var wait = TunnelHealthMonitorWait.WaitAsync(
+            _ => intervalElapsed.Task,
+            token => WaitUntilCancelledAsync(token, networkDrained), CancellationToken.None);
+        intervalElapsed.SetResult(true);
+
+        Assert.Equal(TunnelHealthWake.Interval, await wait);
+        Assert.True(networkDrained.Task.IsCompleted);
+    }
+
+    [Fact]
+    public async Task CancelledMonitorWaitCannotCancelOrPublishThroughReplacementWait()
+    {
+        using var previous = new DeyttConnect.Windows.Service.TunnelHealthMonitorLifetime();
+        var previousIntervalDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var previousNetworkDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stalePublished = false;
+        var previousWait = TunnelHealthMonitorWait.WaitAsync(
+            token => WaitForIntervalUntilCancelledAsync(token, previousIntervalDrained),
+            token => WaitUntilCancelledAsync(token, previousNetworkDrained), previous.Token);
+        var previousMonitor = PublishWhenReadyAsync(previousWait, () => stalePublished = true);
+
+        previous.Stop();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => previousMonitor);
+        Assert.False(stalePublished);
+        Assert.True(previousIntervalDrained.Task.IsCompleted);
+        Assert.True(previousNetworkDrained.Task.IsCompleted);
+
+        using var replacement = new DeyttConnect.Windows.Service.TunnelHealthMonitorLifetime();
+        var replacementTick = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var replacementNetworkDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var replacementWait = TunnelHealthMonitorWait.WaitAsync(
+            _ => replacementTick.Task,
+            token => WaitUntilCancelledAsync(token, replacementNetworkDrained), replacement.Token);
+        replacementTick.SetResult(true);
+
+        Assert.Equal(TunnelHealthWake.Interval, await replacementWait);
+        Assert.True(replacementNetworkDrained.Task.IsCompleted);
+        Assert.False(replacement.Token.IsCancellationRequested);
+
+        static async Task PublishWhenReadyAsync(Task<TunnelHealthWake?> wait, Action publish)
+        {
+            await wait;
+            publish();
+        }
+    }
+
+    private static async Task WaitUntilCancelledAsync(CancellationToken cancellationToken,
+        TaskCompletionSource drained)
+    {
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        }
+        finally
+        {
+            drained.TrySetResult();
+        }
+    }
+
+    private static async Task<bool> WaitForIntervalUntilCancelledAsync(CancellationToken cancellationToken,
+        TaskCompletionSource drained)
+    {
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            return false;
+        }
+        finally
+        {
+            drained.TrySetResult();
+        }
     }
 
     [Theory]

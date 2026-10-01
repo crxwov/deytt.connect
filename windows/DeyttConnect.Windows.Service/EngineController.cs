@@ -346,16 +346,12 @@ internal sealed class EngineController
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                using var wait = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                var tick = timer.WaitForNextTickAsync(wait.Token).AsTask();
-                var network = _healthRecheck.WaitAsync(wait.Token);
-                var winner = await Task.WhenAny(tick, network).ConfigureAwait(false);
-                wait.Cancel();
-                try { await winner.ConfigureAwait(false); }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
-                if (cancellationToken.IsCancellationRequested || process.HasExited)
+                var wake = await TunnelHealthMonitorWait.WaitAsync(
+                    token => timer.WaitForNextTickAsync(token).AsTask(),
+                    token => _healthRecheck.WaitAsync(token), cancellationToken).ConfigureAwait(false);
+                if (wake is null || process.HasExited)
                     return;
-                if (winner == network)
+                if (wake == TunnelHealthWake.NetworkChanged)
                     await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
 
                 await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
