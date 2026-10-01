@@ -88,10 +88,6 @@ public partial class MainWindow : Window
     private bool _qaFixture;
     private bool _compactLayout;
     private bool _responsiveLayoutInitialized;
-    private Grid? _homeOverviewGrid;
-    private StackPanel? _homeMapColumn;
-    private StackPanel? _homeDetailsColumn;
-    private StackPanel? _homeConnectionColumn;
     private Border? _homeConnectionCard;
     private Grid? _homeConnectionLayout;
     private Grid? _homeConnectionStatus;
@@ -99,8 +95,6 @@ public partial class MainWindow : Window
     private StackPanel? _homeConnectionStatusText;
     private TextBlock? _homeConnectionStateTitle;
     private Border? _homeConnectionPrimaryAction;
-    private RouteGlobeWebView? _routeGlobeMap;
-    private Grid? _routeGlobeHost;
 
     public MainWindow() : this((string?)null)
     {
@@ -259,10 +253,6 @@ public partial class MainWindow : Window
 
         _activeTab = tab;
         _profileAvatarImage = null;
-        _homeOverviewGrid = null;
-        _homeMapColumn = null;
-        _homeDetailsColumn = null;
-        _homeConnectionColumn = null;
         PageHost.Children.Clear();
         PageHost.Children.Add(tab switch
         {
@@ -469,32 +459,7 @@ public partial class MainWindow : Window
 
     private void UpdateHomeColumns()
     {
-        if (_homeOverviewGrid is null || _homeMapColumn is null ||
-            _homeDetailsColumn is null || _homeConnectionColumn is null)
-            return;
-
-        _homeOverviewGrid.ColumnDefinitions = new ColumnDefinitions(_compactLayout ? "*" : "1.12*,0.88*");
-        _homeOverviewGrid.RowDefinitions = _compactLayout
-            ? new RowDefinitions("Auto,Auto,Auto")
-            : new RowDefinitions("Auto,Auto");
-        _homeMapColumn.Margin = _compactLayout
-            ? new Thickness(0)
-            : new Thickness(0, 0, 10, 0);
-        _homeDetailsColumn.Margin = _compactLayout
-            ? new Thickness(0, 0, 0, 12)
-            : new Thickness(10, 0, 0, 16);
-        _homeConnectionColumn.Margin = _compactLayout
-            ? new Thickness(0, 0, 0, 12)
-            : new Thickness(10, 0, 0, 0);
-        Grid.SetColumn(_homeConnectionColumn, _compactLayout ? 0 : 1);
-        Grid.SetRow(_homeConnectionColumn, _compactLayout ? 0 : 1);
-        Grid.SetColumn(_homeMapColumn, 0);
-        Grid.SetRow(_homeMapColumn, _compactLayout ? 2 : 0);
-        Grid.SetRowSpan(_homeMapColumn, _compactLayout ? 1 : 2);
-        Grid.SetColumn(_homeDetailsColumn, _compactLayout ? 0 : 1);
-        Grid.SetRow(_homeDetailsColumn, _compactLayout ? 1 : 0);
         UpdateHomeConnectionLayout();
-        UpdateRouteGlobeHeight();
     }
 
     private void UpdateHomeConnectionLayout()
@@ -505,41 +470,21 @@ public partial class MainWindow : Window
             _homeConnectionPrimaryAction is null)
             return;
 
-        if (_compactLayout)
-        {
-            _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*,Auto");
-            _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto");
-            _homeConnectionStatus.ColumnDefinitions = new ColumnDefinitions("*");
-            _homeConnectionStatusDot.IsVisible = false;
-            _homeConnectionStateTitle.IsVisible = false;
-            Grid.SetColumn(_homeConnectionStatusText, 0);
-            Grid.SetColumn(_homeConnectionStatus, 0);
-            Grid.SetRow(_homeConnectionStatus, 0);
-            Grid.SetColumn(_homeConnectionPrimaryAction, 1);
-            Grid.SetRow(_homeConnectionPrimaryAction, 0);
-            _homeConnectionPrimaryAction.MinWidth = 156;
-            _homeConnectionPrimaryAction.Height = 48;
-            _homeConnectionPrimaryAction.Margin = new Thickness(0);
-            _homeConnectionCard.Padding = new Thickness(13, 10);
-            _homeConnectionCard.CornerRadius = new CornerRadius(18);
-            return;
-        }
-
-        _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*");
-        _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto,Auto");
+        _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*,Auto");
+        _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto");
         _homeConnectionStatus.ColumnDefinitions = new ColumnDefinitions("Auto,*");
         _homeConnectionStatusDot.IsVisible = true;
         _homeConnectionStateTitle.IsVisible = true;
         Grid.SetColumn(_homeConnectionStatusText, 1);
         Grid.SetColumn(_homeConnectionStatus, 0);
         Grid.SetRow(_homeConnectionStatus, 0);
-        Grid.SetColumn(_homeConnectionPrimaryAction, 0);
-        Grid.SetRow(_homeConnectionPrimaryAction, 1);
-        _homeConnectionPrimaryAction.MinWidth = 0;
-        _homeConnectionPrimaryAction.Height = 56;
-        _homeConnectionPrimaryAction.Margin = new Thickness(0, 18, 0, 0);
-        _homeConnectionCard.Padding = new Thickness(19);
-        _homeConnectionCard.CornerRadius = new CornerRadius(23);
+        Grid.SetColumn(_homeConnectionPrimaryAction, 1);
+        Grid.SetRow(_homeConnectionPrimaryAction, 0);
+        _homeConnectionPrimaryAction.MinWidth = _compactLayout ? 156 : 200;
+        _homeConnectionPrimaryAction.Height = _compactLayout ? 48 : 56;
+        _homeConnectionPrimaryAction.Margin = new Thickness(_compactLayout ? 12 : 24, 0, 0, 0);
+        _homeConnectionCard.Padding = _compactLayout ? new Thickness(17, 14) : new Thickness(24, 20);
+        _homeConnectionCard.CornerRadius = new CornerRadius(20);
     }
 
     private void ApplyVisualPreferences()
@@ -551,33 +496,10 @@ public partial class MainWindow : Window
     {
         var page = new StackPanel { Spacing = 0 };
         page.Children.Add(BuildBrandHeader());
-        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 10 : 22));
-
-        var overview = new Grid();
-        var mapColumn = new StackPanel { Spacing = 0, Margin = new Thickness(0, 0, 10, 0) };
-        mapColumn.Children.Add(BuildMapCard());
-        var detailsColumn = new StackPanel { Spacing = 0 };
-        var routeTitle = DeyttTheme.Action(
-            DeyttTheme.TextBlock(RouteTitle(), _compactLayout ? 19 : 26, DeyttTheme.Text, FontWeight.Bold,
-                DeyttTheme.InterTight),
-            () => ShowTab(MainTab.Routes));
-        routeTitle.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
-        routeTitle.Margin = new Thickness(2, 0, 0, _compactLayout ? 6 : 12);
-        detailsColumn.Children.Add(routeTitle);
-        detailsColumn.Children.Add(BuildRouteFlow());
-        detailsColumn.Children.Add(DeyttTheme.Spacer(_compactLayout ? 6 : 16));
-        detailsColumn.Children.Add(BuildQualityStrip());
-        var connectionColumn = new StackPanel { Spacing = 16, Margin = new Thickness(10, 0, 0, 0) };
-        connectionColumn.Children.Add(BuildConnectionCard());
-        overview.Children.Add(mapColumn);
-        overview.Children.Add(detailsColumn);
-        overview.Children.Add(connectionColumn);
-        _homeOverviewGrid = overview;
-        _homeMapColumn = mapColumn;
-        _homeDetailsColumn = detailsColumn;
-        _homeConnectionColumn = connectionColumn;
-        UpdateHomeColumns();
-        page.Children.Add(overview);
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 14 : 24));
+        page.Children.Add(BuildConnectionCard());
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 17 : 24));
+        page.Children.Add(BuildHomeRouteStage());
         return page;
     }
 
@@ -626,163 +548,6 @@ public partial class MainWindow : Window
         return grid;
     }
 
-    private Control BuildMapCard()
-    {
-        var contents = new Grid();
-        var availableLocations = _routes
-            .SelectMany(route => route.CountryCode.ToUpperInvariant() switch
-            {
-                "NL" => new[] { "nl" },
-                "DE" => new[] { "de" },
-                "FI" => new[] { "fi" },
-                "RU" => new[] { "ru" },
-                "RU-DE" => new[] { "ru", "de" },
-                _ => Array.Empty<string>(),
-            })
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        if (_qaFixture)
-        {
-            contents.Children.Add(BuildQaMapPlaceholder());
-        }
-        else
-        {
-            var map = _routeGlobeMap ??= CreateRouteGlobe();
-            map.SelectedRoute = _selectedRoute;
-            map.Language = _language;
-            map.ReducedMotion = _reduceMotion;
-            map.AvailableLocations = availableLocations;
-            map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
-            map.OriginLocation = _mapOriginLocation;
-            map.ExitCoordinate = GetMapExitCoordinate();
-            map.EgressCountryCode = IsVpnDisplayConnected() ? _mapEgressLocation?.CountryCode : null;
-            // The service does not report the active Auto outbound or byte counters yet.
-            // A public egress IP alone cannot establish either of those facts.
-            map.ActiveAutoRouteKey = null;
-            map.TrafficActive = false;
-            if (_routeGlobeHost is not null && _routeGlobeHost.Children.Contains(map))
-                _routeGlobeHost.Children.Remove(map);
-            contents.Children.Add(map);
-            _routeGlobeHost = contents;
-            UpdateRouteGlobeHeight();
-        }
-
-        return new Border
-        {
-            Background = DeyttTheme.Brush(DeyttTheme.MapSurface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(25),
-            ClipToBounds = true,
-            Padding = new Thickness(0),
-            Child = contents,
-        };
-    }
-
-    private static Control BuildQaMapPlaceholder()
-    {
-        const double canvasWidth = 580;
-        const double canvasHeight = 300;
-        var canvas = new Canvas { Width = canvasWidth, Height = canvasHeight };
-        var guide = new Polyline
-        {
-            Points = new Avalonia.Collections.AvaloniaList<Point>
-            {
-                new(30, 220), new(95, 170), new(185, 206), new(272, 143),
-                new(350, 174), new(442, 115), new(550, 140),
-            },
-            Stroke = DeyttTheme.Brush(Color.Parse("#263A4C")),
-            StrokeThickness = 1,
-        };
-        canvas.Children.Add(guide);
-        var route = new Polyline
-        {
-            Points = new Avalonia.Collections.AvaloniaList<Point> { new(150, 171), new(420, 132) },
-            Stroke = DeyttTheme.Brush(DeyttTheme.Sky),
-            StrokeThickness = 2,
-            StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 5, 5 },
-        };
-        canvas.Children.Add(route);
-        AddNode(150, 171, "QA origin", "synthetic");
-        AddNode(420, 132, "QA exit", "NL · VLESS");
-        var marker = DeyttTheme.TextBlock("STATIC QA MAP · NO LIVE GEO", 11,
-            DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false);
-        Canvas.SetLeft(marker, 18);
-        Canvas.SetTop(marker, 18);
-        canvas.Children.Add(marker);
-        return new Viewbox
-        {
-            Stretch = Avalonia.Media.Stretch.Fill,
-            MinHeight = 200,
-            Height = 260,
-            Child = canvas,
-        };
-
-        void AddNode(double x, double y, string title, string detail)
-        {
-            var halo = new Ellipse
-            {
-                Width = 30,
-                Height = 30,
-                Fill = DeyttTheme.Brush(Color.Parse("#356BDDF2")),
-            };
-            Canvas.SetLeft(halo, x - 15);
-            Canvas.SetTop(halo, y - 15);
-            canvas.Children.Add(halo);
-            var dot = new Ellipse
-            {
-                Width = 10,
-                Height = 10,
-                Fill = DeyttTheme.Brush(DeyttTheme.Mint),
-            };
-            Canvas.SetLeft(dot, x - 5);
-            Canvas.SetTop(dot, y - 5);
-            canvas.Children.Add(dot);
-            var label = new StackPanel { Spacing = 1 };
-            label.Children.Add(DeyttTheme.TextBlock(title, 12, DeyttTheme.Text, FontWeight.SemiBold, wrap: false));
-            label.Children.Add(DeyttTheme.TextBlock(detail, 9, DeyttTheme.Muted, wrap: false));
-            var card = new Border
-            {
-                Background = DeyttTheme.Brush(DeyttTheme.Surface2),
-                BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(9),
-                Padding = new Thickness(10, 6),
-                Child = label,
-            };
-            Canvas.SetLeft(card, x - (title == "QA origin" ? 105 : -18));
-            Canvas.SetTop(card, y + 17);
-            canvas.Children.Add(card);
-        }
-    }
-
-    private RouteGlobeWebView CreateRouteGlobe()
-    {
-        var map = new RouteGlobeWebView
-        {
-            MinHeight = _compactLayout ? 200 : 280,
-            Height = _compactLayout ? 240 : 360,
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
-        };
-        map.SizeChanged += (_, _) => UpdateRouteGlobeHeight();
-        map.NodeTapped += node => _ = ShowMapRoutePickerAsync(node);
-        return map;
-    }
-
-    private void UpdateRouteGlobeHeight()
-    {
-        if (_routeGlobeMap is null || _routeGlobeMap.Bounds.Width <= 0)
-            return;
-
-        _routeGlobeMap.MinHeight = _compactLayout ? 200 : 280;
-        var height = _compactLayout
-            ? Math.Clamp(_routeGlobeMap.Bounds.Width * 0.31, 210, 290)
-            : Math.Clamp(_routeGlobeMap.Bounds.Width * 0.72, 280, 520);
-        if (Math.Abs(_routeGlobeMap.Height - height) > 1)
-            _routeGlobeMap.Height = height;
-    }
-
     private string GetMapOriginLabel()
     {
         if (!_mapRegionEnabled)
@@ -815,8 +580,8 @@ public partial class MainWindow : Window
 
     private string GetMapEgressHint()
     {
-        if (!_mapRegionEnabled || !IsVpnDisplayConnected())
-            return Copy("выбранный выход", "selected route");
+        if (!_mapRegionEnabled)
+            return Copy("VPN-трафик проверен · регион скрыт", "VPN traffic verified · region hidden");
         if (_mapEgressLocation is { } egress && !string.IsNullOrWhiteSpace(egress.PlaceLabel))
             return $"{Copy("выход по IP", "IP egress")}: {egress.PlaceLabel}";
         if (_mapLocationCancellation is not null && _mapLocationRequestIsEgress)
@@ -826,78 +591,6 @@ public partial class MainWindow : Window
             : Copy("место определяется после подключения", "location resolves after connecting");
     }
 
-    private MapCoordinate? GetMapExitCoordinate()
-    {
-        if (IsVpnDisplayConnected() && _mapEgressLocation is { } egress)
-            return new MapCoordinate(egress.Latitude, egress.Longitude);
-        var route = _routes.FirstOrDefault(value => value.Id == _selectedRoute);
-        var country = route?.CountryCode ?? (_selectedRoute == "ru-de" ? "RU-DE" : string.Empty);
-        return country switch
-        {
-            "NL" => new MapCoordinate(52.37, 4.90),
-            "DE" or "RU-DE" => new MapCoordinate(52.52, 13.40),
-            "FI" => new MapCoordinate(60.17, 24.94),
-            "RU" => new MapCoordinate(55.75, 37.62),
-            _ => null,
-        };
-    }
-
-    private Control BuildRouteFlow()
-    {
-        var grid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,*"),
-            MinHeight = _compactLayout ? 58 : 108,
-        };
-        grid.Children.Add(RouteNode(MapCountryFlag(_mapRegionEnabled ? _mapOriginLocation?.CountryCode : null),
-            GetMapOriginLabel(), GetMapOriginHint()));
-        var arrow = DeyttTheme.TextBlock("→", 25, DeyttTheme.Sky, FontWeight.Normal, wrap: false);
-        arrow.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
-        arrow.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-        arrow.Margin = new Thickness(14, 0);
-        Grid.SetColumn(arrow, 1);
-        grid.Children.Add(arrow);
-        var selected = _routes.FirstOrDefault(route => route.Id == _selectedRoute);
-        var destination = RouteNode(MapCountryFlag(selected?.CountryCode == "RU-DE" ? "DE" : selected?.CountryCode),
-            SelectedExitPlaceLabel(selected), GetMapEgressHint());
-        Grid.SetColumn(destination, 2);
-        grid.Children.Add(destination);
-        return DeyttTheme.Card(grid, DeyttTheme.Surface, DeyttTheme.Line,
-            _compactLayout ? 18 : 23,
-            _compactLayout ? new Thickness(13, 8) : new Thickness(20, 17));
-    }
-
-    private Control RouteNode(string icon, string title, string note)
-    {
-        var stack = new StackPanel { HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center, Spacing = 4 };
-        var iconText = DeyttTheme.TextBlock(icon, _compactLayout ? 19 : 24,
-            DeyttTheme.Text, FontWeight.Normal, wrap: false);
-        iconText.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
-        stack.Children.Add(iconText);
-        var titleText = DeyttTheme.TextBlock(title, _compactLayout ? 12 : 15,
-            DeyttTheme.Text, FontWeight.SemiBold);
-        titleText.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
-        titleText.TextAlignment = TextAlignment.Center;
-        stack.Children.Add(titleText);
-
-        var noteText = DeyttTheme.TextBlock(note, _compactLayout ? 9 : 10,
-            DeyttTheme.Muted, FontWeight.Normal);
-        noteText.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
-        noteText.TextAlignment = TextAlignment.Center;
-        stack.Children.Add(noteText);
-        return stack;
-    }
-
-    private static string MapCountryFlag(string? countryCode) => countryCode?.ToUpperInvariant() switch
-    {
-        "NL" => "🇳🇱",
-        "DE" => "🇩🇪",
-        "FI" => "🇫🇮",
-        "RU" => "🇷🇺",
-        _ => "◎",
-    };
-
     private string SelectedExitPlaceLabel(WindowsRoute? route) => route?.CountryCode switch
     {
         "NL" => Copy("Амстердам", "Amsterdam"),
@@ -906,36 +599,6 @@ public partial class MainWindow : Window
         "RU" => Copy("Санкт-Петербург", "Saint Petersburg"),
         _ => RouteTitle(),
     };
-
-    private Control BuildQualityStrip()
-    {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
-        var selectedTag = _routes.FirstOrDefault(route => route.Id == _selectedRoute)?.Tag;
-        var quality = selectedTag is not null && _routeProbeResults.TryGetValue(selectedTag, out var sample)
-            ? sample
-            : null;
-        var latency = quality?.LatencyMilliseconds is { } latencyMs ? latencyMs.ToString() : "—";
-        var speedValue = quality?.BytesPerSecond is { } bytesPerSecond
-            ? (bytesPerSecond * 8d / 1_000_000d).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)
-            : "—";
-        var speed = Metric(Copy("СКОРОСТЬ", "SPEED"), speedValue, "Mbps");
-        grid.Children.Add(speed);
-        var ping = Metric(Copy("ПИНГ", "PING"), latency, "ms");
-        ping.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
-        Grid.SetColumn(ping, 1);
-        grid.Children.Add(ping);
-        return grid;
-    }
-
-    private Control Metric(string label, string value, string unit)
-    {
-        var stack = new StackPanel { Spacing = 3 };
-        stack.Children.Add(DeyttTheme.TextBlock(label, 8, DeyttTheme.Muted, FontWeight.SemiBold,
-            DeyttTheme.JetBrainsMono, wrap: false));
-        stack.Children.Add(DeyttTheme.TextBlock(value == "—" ? value : $"{value} {unit}", 14, DeyttTheme.Muted,
-            FontWeight.SemiBold, wrap: false));
-        return stack;
-    }
 
     private Control BuildConnectionCard()
     {
@@ -1119,8 +782,7 @@ public partial class MainWindow : Window
                 quick.Children.Add(QuickOption(chainRoute, "🇷🇺🇩🇪",
                     Copy("LTE + белые списки", "LTE + whitelist"),
                     Copy("Россия → Германия · двойной маршрут", "Russia → Germany · double route")));
-            routeColumn.Children.Add(DeyttTheme.Card(quick, DeyttTheme.Surface, DeyttTheme.Line, 20,
-                new Thickness(8)));
+            routeColumn.Children.Add(quick);
         }
         AddSection(routeColumn, Copy("СТРАНЫ", "COUNTRIES"));
 
@@ -1177,7 +839,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            var countryList = new StackPanel { Spacing = 8 };
+            var countryList = new StackPanel { Spacing = 0 };
             var countryOrder = new[] { "NL", "DE", "RU", "FI", "AWG_UNKNOWN" };
             var countries = _routes.Where(route => route.CountryCode is "NL" or "RU" or "DE" or "FI" or "AWG_UNKNOWN")
                 .GroupBy(route => route.CountryCode)
@@ -1196,7 +858,7 @@ public partial class MainWindow : Window
                 var headerLabels = new StackPanel { Spacing = 3 };
                 headerLabels.Children.Add(DeyttTheme.TextBlock(
                     RouteCountryName(first), 17,
-                    DeyttTheme.Text, FontWeight.SemiBold));
+                    selectedCountry ? DeyttTheme.Sky : DeyttTheme.Text, FontWeight.SemiBold));
                 headerLabels.Children.Add(DeyttTheme.TextBlock(summary, 11,
                     DeyttTheme.Muted));
                 if (quality.LatencySummary is { } latencySummary)
@@ -1206,9 +868,12 @@ public partial class MainWindow : Window
                     headerLabels.Children.Add(DeyttTheme.TextBlock(probeStatus, 10,
                         _routeCountryProbeStates.GetValueOrDefault(country.Key) == RouteCountryProbeState.Failed
                             ? DeyttTheme.Coral : DeyttTheme.Muted));
-                var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 62 };
-                header.Children.Add(DeyttTheme.IconTile(first.Flag, 48));
-                headerLabels.Margin = new Thickness(13, 0, 8, 0);
+                var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 60 };
+                var flag = DeyttTheme.TextBlock(first.Flag, 26, DeyttTheme.Text, wrap: false);
+                flag.Width = 36;
+                flag.TextAlignment = TextAlignment.Center;
+                header.Children.Add(flag);
+                headerLabels.Margin = new Thickness(12, 0, 8, 0);
                 headerLabels.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
                 Grid.SetColumn(headerLabels, 1);
                 header.Children.Add(headerLabels);
@@ -1234,7 +899,8 @@ public partial class MainWindow : Window
                         QueueRouteCountryProbe(country.Key,
                             countryRoutes.Select(route => route.Tag).Distinct(StringComparer.Ordinal).ToArray());
                 });
-                headerButton.Padding = new Thickness(3);
+                headerButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+                headerButton.Padding = new Thickness(3, 7);
                 var countryContents = new StackPanel { Spacing = 8, Children = { headerButton } };
                 if (expanded)
                 {
@@ -1245,11 +911,10 @@ public partial class MainWindow : Window
                 }
                 countryList.Children.Add(new Border
                 {
-                    Background = DeyttTheme.Brush(selectedCountry ? DeyttTheme.Selected : Colors.Transparent),
-                    BorderBrush = DeyttTheme.Brush(selectedCountry ? DeyttTheme.SelectedLine : Colors.Transparent),
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(18),
-                    Padding = new Thickness(8, 6),
+                    Background = DeyttTheme.Brush(Colors.Transparent),
+                    BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+                    BorderThickness = new Thickness(0, 0, 0, 1),
+                    Padding = new Thickness(3, 0),
                     Child = countryContents,
                 });
             }
@@ -1498,8 +1163,11 @@ public partial class MainWindow : Window
     private Control QuickOption(WindowsRoute route, string glyph, string title, string subtitle)
     {
         var selected = _selectedRoute == route.Id;
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 62 };
-        body.Children.Add(DeyttTheme.IconTile(glyph, 44));
+        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 60 };
+        var icon = DeyttTheme.TextBlock(glyph, 23, DeyttTheme.Sky, wrap: false);
+        icon.Width = 36;
+        icon.TextAlignment = TextAlignment.Center;
+        body.Children.Add(icon);
         var labels = new StackPanel { Spacing = 3, Margin = new Thickness(12, 0, 8, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
         labels.Children.Add(DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
         labels.Children.Add(DeyttTheme.TextBlock(subtitle, 11, DeyttTheme.Muted));
@@ -1511,7 +1179,8 @@ public partial class MainWindow : Window
         Grid.SetColumn(action, 2);
         body.Children.Add(action);
         var button = DeyttTheme.Action(body, () => SelectRoute(route.Id));
-        button.Padding = new Thickness(10, 5);
+        button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        button.Padding = new Thickness(6, 6);
         return button;
     }
 
@@ -1730,10 +1399,15 @@ public partial class MainWindow : Window
         Grid.SetColumn(indicator, 1);
         header.Children.Add(indicator);
         var button = DeyttTheme.Action(header, onToggle);
-        button.Padding = new Thickness(15, 9);
+        button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        button.Padding = new Thickness(2, 9);
         var group = new StackPanel { Spacing = 7 };
-        group.Children.Add(DeyttTheme.Card(button, DeyttTheme.Surface, DeyttTheme.Line,
-            20, new Thickness(0)));
+        group.Children.Add(new Border
+        {
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = button,
+        });
         if (expanded && details is not null)
             group.Children.Add(details);
         return group;
@@ -1900,19 +1574,17 @@ public partial class MainWindow : Window
             Copy("Другие действия в Telegram", "More actions in Telegram"), "›", () => OpenExternal("https://t.me/deyttbot")));
 
         AddSection(privacyColumn, Copy("ВИД И ПРИВАТНОСТЬ", "APPEARANCE AND PRIVACY"));
-        privacyColumn.Children.Add(ToggleEntry(Copy("Регион на карте", "Region on map"),
+        privacyColumn.Children.Add(ToggleEntry(Copy("Показывать мой регион", "Show my region"),
             Copy("IP · ipinfo.io · не GPS · только в памяти",
                 "IP via ipinfo.io · no GPS · memory only"),
             _mapRegionEnabled, UpdateMapRegionEnabledAsync));
         privacyColumn.Children.Add(DeyttTheme.Spacer(8));
         privacyColumn.Children.Add(ToggleEntry(Copy("Уменьшить движение", "Reduce motion"),
-            Copy("Остановить анимацию карты и скрыть звёздный фон",
-                "Pause map animation and hide the starfield"),
+            Copy("Скрыть звёздный фон и анимации",
+                "Hide the starfield and animations"),
             _reduceMotion, value =>
             {
                 _reduceMotion = value;
-                if (_routeGlobeMap is not null)
-                    _routeGlobeMap.ReducedMotion = value;
                 return Task.CompletedTask;
             }));
 
@@ -1936,8 +1608,12 @@ public partial class MainWindow : Window
     private Control SettingsEntry(string glyph, string title, string subtitle, string trailing,
         Action onClick, bool emphasis = false)
     {
-        var content = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 66 };
-        content.Children.Add(DeyttTheme.IconTile(glyph, 42));
+        var content = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 58 };
+        var icon = DeyttTheme.TextBlock(glyph, 19, DeyttTheme.Sky,
+            FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false);
+        icon.Width = 28;
+        icon.TextAlignment = TextAlignment.Center;
+        content.Children.Add(icon);
         var labels = new StackPanel { Spacing = 3, Margin = new Thickness(12, 0, 6, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
         labels.Children.Add(DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
         labels.Children.Add(DeyttTheme.TextBlock(subtitle, 11, DeyttTheme.Muted));
@@ -1950,45 +1626,64 @@ public partial class MainWindow : Window
         content.Children.Add(arrow);
         var button = DeyttTheme.Action(content, onClick);
         button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-        button.Padding = new Thickness(5, 4);
+        button.Padding = new Thickness(5, 5);
         return new Border
         {
-            Background = DeyttTheme.Brush(emphasis ? DeyttTheme.Surface2 : Colors.Transparent),
-            BorderBrush = DeyttTheme.Brush(emphasis ? DeyttTheme.SelectedLine : Colors.Transparent),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(16),
+            Background = DeyttTheme.Brush(Colors.Transparent),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Thickness(0, 0, 0, 1),
             Child = button,
         };
     }
 
     private Control ToggleEntry(string title, string subtitle, bool value, Func<bool, Task> update)
     {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), MinHeight = 68 };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), MinHeight = 60 };
         var labels = new StackPanel { Spacing = 3, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        labels.Children.Add(DeyttTheme.TextBlock(title, 17, DeyttTheme.Text, FontWeight.SemiBold));
-        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 12, DeyttTheme.Muted));
+        labels.Children.Add(DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
+        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 11, DeyttTheme.Muted));
         grid.Children.Add(labels);
         var knob = new Grid
         {
-            Width = 48,
-            Height = 27,
-            Background = DeyttTheme.Brush(value ? DeyttTheme.MintSurface : DeyttTheme.Surface2),
+            Width = 46,
+            Height = 25,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
         knob.Children.Add(new Ellipse
         {
-            Width = 21,
-            Height = 21,
-            Fill = DeyttTheme.Brush(value ? DeyttTheme.Mint : DeyttTheme.Muted),
+            Width = 19,
+            Height = 19,
+            Fill = DeyttTheme.Brush(value ? DeyttTheme.Mint : DeyttTheme.Text),
             HorizontalAlignment = value ? Avalonia.Layout.HorizontalAlignment.Right : Avalonia.Layout.HorizontalAlignment.Left,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             Margin = new Thickness(3),
         });
-        var toggle = new Border { Child = knob, CornerRadius = new CornerRadius(15) };
+        var toggle = new Border
+        {
+            Child = knob,
+            Width = 48,
+            Height = 27,
+            Background = DeyttTheme.Brush(value ? DeyttTheme.MintSurface : DeyttTheme.Surface2),
+            BorderBrush = DeyttTheme.Brush(value ? DeyttTheme.Mint : DeyttTheme.Line),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(15),
+            ClipToBounds = true,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            Margin = new Thickness(14, 0, 4, 0),
+        };
         Grid.SetColumn(toggle, 1);
         grid.Children.Add(toggle);
         var button = DeyttTheme.Action(grid, () => _ = ApplyToggleAsync(!value, update));
-        return DeyttTheme.Card(button, DeyttTheme.Surface, DeyttTheme.Line, 22, new Thickness(18, 8));
+        button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        button.Padding = new Thickness(5, 6);
+        AutomationProperties.SetName(button, $"{title}: {(value ? Copy("включено", "on") : Copy("выключено", "off"))}");
+        return new Border
+        {
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Child = button,
+        };
     }
 
     private async Task ApplyToggleAsync(bool value, Func<bool, Task> update)
