@@ -2,12 +2,14 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using DeyttConnect.Windows.Controls;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Protocol;
@@ -149,8 +151,15 @@ public partial class MainWindow : Window
         _account = fixture.Account;
         _keysSnapshot = fixture.Subscription;
         _routes = fixture.Routes;
+        if (fixture.ProbeResult is { } probeResult)
+            _routeProbeResults = new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal)
+            {
+                [probeResult.RouteTag] = probeResult,
+            };
         _vpnSnapshot = fixture.Tunnel;
         _vpnServiceAvailable = false;
+        _routeProbeInProgress = fixture.RouteProbeInProgress;
+        _routeProbeCancelRequested = fixture.RouteProbeCancelRequested;
         ShowTab(fixture.Tab switch
         {
             "routes" => MainTab.Routes,
@@ -1280,6 +1289,8 @@ public partial class MainWindow : Window
                     else
                         _ = ProbeRoutesAsync();
                 });
+            if (diagnosticAction.Child is Control diagnosticButton)
+                AutomationProperties.SetAutomationId(diagnosticButton, "RouteDiagnosticsAction");
             diagnosticAction.IsEnabled = _routeProbeInProgress
                 ? !_routeProbeCancelRequested
                 : !WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State);
@@ -1397,12 +1408,22 @@ public partial class MainWindow : Window
             11, DeyttTheme.Muted));
         if (_routeProbeResults.TryGetValue(route.Tag, out var probe))
         {
-            var probeLabel = probe.LatencyMilliseconds is { } latency
+            var probeLabel = probe.Stage switch
+            {
+                "latency" => Copy($"Пинг · попытка {probe.Attempt ?? 1}/3", $"Latency · attempt {probe.Attempt ?? 1}/3"),
+                "retry" => Copy($"Повтор пинга · {probe.Attempt ?? 2}/3", $"Retrying latency · {probe.Attempt ?? 2}/3"),
+                "waiting_speed" => Copy("Пинг готов · ждём измерение скорости", "Latency ready · waiting for speed test"),
+                "download" => FormatProbeDownloadProgress(probe),
+                "error" => probe.Error ?? Copy("Проверка маршрута не завершилась", "Route check failed"),
+                "cancelled" => Copy("Проверка отменена", "Check cancelled"),
+                "complete" or null => probe.LatencyMilliseconds is { } latency
                 ? $"{Copy("Пинг", "Ping")}: {latency} ms · {Copy("Скорость", "Speed")}: " +
                   (probe.BytesPerSecond is { } bps
                       ? $"{(bps * 8d / 1_000_000d).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} Mbps"
                       : "—")
-                : probe.Error ?? Copy("Нет ответа", "No response");
+                : probe.Error ?? Copy("Нет ответа", "No response"),
+                _ => Copy("Проверка маршрута…", "Checking route…"),
+            };
             if (probe.LatencyMilliseconds is not null && !HasProbeSpeedToken())
                 probeLabel += " · " + Copy("войдите для проверки скорости", "sign in to measure speed");
             if (quality.BestTag == route.Tag)
@@ -1488,6 +1509,16 @@ public partial class MainWindow : Window
         var button = DeyttTheme.Action(body, () => SelectRoute(route.Id));
         button.Padding = new Thickness(10, 5);
         return button;
+    }
+
+    private string FormatProbeDownloadProgress(WindowsRouteProbeResult probe)
+    {
+        var received = probe.BytesReceived ?? 0;
+        var total = probe.TotalBytes ?? 0;
+        var progress = total > 0
+            ? $"{received / (1024d * 1024d):0.#}/{total / (1024d * 1024d):0.#} MB"
+            : $"{received / (1024d * 1024d):0.#} MB";
+        return Copy($"Скорость · получено {progress}", $"Speed · received {progress}");
     }
 
     private Control BuildProfilePage()
@@ -2515,7 +2546,8 @@ public partial class MainWindow : Window
 
         _routeProbeInProgress = true;
         _routeProbeCancelRequested = false;
-        RenderActiveTabPreservingScroll();
+        RenderProbeProgressPreservingFocus();
+        string[]? activeRouteTags = null;
         try
         {
             var availableTags = _routes.Select(route => route.Tag).ToHashSet(StringComparer.Ordinal);
@@ -2524,14 +2556,36 @@ public partial class MainWindow : Window
                 : availableTags.ToArray();
             if (routeTags.Length == 0)
                 return;
+            activeRouteTags = routeTags;
             var awgProfiles = (_keysSnapshot?.AwgProfiles ?? [])
                 .ToDictionary(item => item.RouteId, item => item.Config, StringComparer.Ordinal);
             var speedToken = HasProbeSpeedToken() ? _sessionToken! : string.Empty;
-            var result = await _tunnelClient.ProbeAsync(profile, routeTags, _probeMethod, speedToken,
+            var probeTask = _tunnelClient.ProbeAsync(profile, routeTags, _probeMethod, speedToken,
                 awgProfiles);
+            while (!probeTask.IsCompleted)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(400));
+                if (probeTask.IsCompleted)
+                    break;
+                try
+                {
+                    var progress = await _tunnelClient.GetProbeProgressAsync();
+                    if (progress.State == "probe_progress" && progress.ProbeResults is { } current &&
+                        (countryCode is null || countryProbeGeneration == _routeCountryProbeGeneration))
+                        ApplyProbeProgress(current, routeTags);
+                }
+                catch (Exception error) when (IsTunnelTransportError(error))
+                {
+                    // The long-running probe result remains authoritative if a progress poll is missed.
+                }
+            }
+            var result = await probeTask;
             if (countryCode is not null &&
                 (countryProbeGeneration != _routeCountryProbeGeneration || _activeTab != MainTab.Routes))
+            {
+                ClearProbeProgress(routeTags);
                 return;
+            }
             if (result.State == "probe_complete" && result.ProbeResults is { } probes)
             {
                 var updatedResults = requestedRouteTags is null
@@ -2541,8 +2595,18 @@ public partial class MainWindow : Window
                     updatedResults[probe.RouteTag] = probe;
                 _routeProbeResults = updatedResults;
             }
-            else if (result.State != "probe_cancelled")
+            else if (result.State == "probe_cancelled")
             {
+                var updatedResults = new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults,
+                    StringComparer.Ordinal);
+                foreach (var routeTag in routeTags)
+                    updatedResults[routeTag] = new WindowsRouteProbeResult(routeTag, null, null, null,
+                        "cancelled");
+                _routeProbeResults = updatedResults;
+            }
+            else
+            {
+                ClearProbeProgress(routeTags);
                 if (countryCode is null)
                     ShowInfoDialog(Copy("Не удалось проверить маршруты", "Could not check routes"),
                         result.Detail);
@@ -2552,6 +2616,8 @@ public partial class MainWindow : Window
         }
         catch (Exception error) when (IsTunnelTransportError(error))
         {
+            if (activeRouteTags is not null)
+                ClearProbeProgress(activeRouteTags);
             if (countryCode is not null &&
                 (countryProbeGeneration != _routeCountryProbeGeneration || _activeTab != MainTab.Routes))
                 return;
@@ -2572,7 +2638,7 @@ public partial class MainWindow : Window
                 if (_routeCountryProbeStates.GetValueOrDefault(countryCode) == RouteCountryProbeState.Running)
                     _routeCountryProbeStates.Remove(countryCode);
             }
-            RenderActiveTabPreservingScroll();
+            RenderProbeProgressPreservingFocus();
             StartNextCountryProbe();
         }
     }
@@ -2581,8 +2647,7 @@ public partial class MainWindow : Window
     {
         if (!_routeProbeInProgress || _routeProbeCancelRequested)
             return;
-        _routeProbeCancelRequested = true;
-        RenderActiveTabPreservingScroll();
+        MarkProbeCancellationRequested();
         try
         {
             await _tunnelClient.CancelProbeAsync();
@@ -2590,6 +2655,97 @@ public partial class MainWindow : Window
         catch (Exception error) when (IsTunnelTransportError(error))
         {
         }
+    }
+
+    internal void MarkProbeCancellationRequested()
+    {
+        if (!_routeProbeInProgress || _routeProbeCancelRequested)
+            return;
+        _routeProbeCancelRequested = true;
+        RenderProbeProgressPreservingFocus();
+    }
+
+    internal bool ApplyProbeProgress(IReadOnlyList<WindowsRouteProbeResult> progress,
+        IReadOnlyCollection<string> requestedRouteTags)
+    {
+        var updated = new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal);
+        var changed = false;
+        foreach (var item in progress)
+        {
+            if (!requestedRouteTags.Contains(item.RouteTag, StringComparer.Ordinal))
+                continue;
+            if (updated.TryGetValue(item.RouteTag, out var previous) && previous == item)
+                continue;
+            updated[item.RouteTag] = item;
+            changed = true;
+        }
+
+        if (!changed)
+            return false;
+        _routeProbeResults = updated;
+        RenderProbeProgressPreservingFocus();
+        return true;
+    }
+
+    private void ClearProbeProgress(IEnumerable<string> routeTags)
+    {
+        var updated = new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal);
+        var changed = false;
+        foreach (var routeTag in routeTags)
+        {
+            if (!updated.TryGetValue(routeTag, out var result) ||
+                result.Stage is not ("latency" or "retry" or "waiting_speed" or "download"))
+                continue;
+            updated.Remove(routeTag);
+            changed = true;
+        }
+        if (changed)
+            _routeProbeResults = updated;
+    }
+
+    private void RenderProbeProgressPreservingFocus()
+    {
+        var focused = FocusManager?.GetFocusedElement() as Control;
+        var focusableButtons = PageHost.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.Focusable && button.IsEffectivelyVisible).ToArray();
+        var focusIndex = focused is Button focusedButton
+            ? Array.IndexOf(focusableButtons, focusedButton)
+            : -1;
+        var focusAutomationId = focused is Button
+            ? AutomationProperties.GetAutomationId(focused)
+            : null;
+        var offset = PageScroll.Offset;
+        ShowTab(_activeTab);
+        PageScroll.Offset = offset;
+        if (focusIndex < 0)
+            return;
+        var renderedTab = _activeTab;
+        var renderedPage = PageHost.Children.OfType<Control>().SingleOrDefault();
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_activeTab != renderedTab || renderedPage is null || PageHost.Children.Count != 1 ||
+                !ReferenceEquals(PageHost.Children[0], renderedPage))
+                return;
+
+            var buttons = PageHost.GetVisualDescendants().OfType<Button>()
+                .Where(button => button.Focusable && button.IsEffectivelyVisible).ToArray();
+            var stableTargetIndex = string.IsNullOrEmpty(focusAutomationId)
+                ? -1
+                : Array.FindIndex(buttons, button => AutomationProperties.GetAutomationId(button) == focusAutomationId);
+            var targetIndex = stableTargetIndex >= 0 ? stableTargetIndex : focusIndex;
+            if (targetIndex < 0 || buttons.Length == 0)
+                return;
+            targetIndex = Math.Clamp(targetIndex, 0, buttons.Length - 1);
+            var focusTarget = buttons[targetIndex];
+            if (!focusTarget.IsEffectivelyEnabled)
+                focusTarget = buttons.Select((button, index) => (button, index))
+                    .Where(item => item.button.IsEffectivelyEnabled)
+                    .OrderBy(item => Math.Abs(item.index - targetIndex))
+                    .Select(item => item.button)
+                    .FirstOrDefault()!;
+            focusTarget?.Focus();
+        }, DispatcherPriority.Input);
     }
 
     private async Task RefreshVpnStatusAsync()

@@ -11,6 +11,7 @@ public sealed class WindowsPipeProtocolTests
     [Theory]
     [InlineData(WindowsPipeCommand.Status, "{\"command\":\"status\"}")]
     [InlineData(WindowsPipeCommand.CancelProbe, "{\"command\":\"cancel-probe\"}")]
+    [InlineData(WindowsPipeCommand.ProbeProgress, "{\"command\":\"probe-progress\"}")]
     public void Request_UsesExistingCommandWireNames(WindowsPipeCommand command, string expected)
     {
         var json = Encoding.UTF8.GetString(WindowsPipeProtocol.SerializeRequest(new WindowsPipeRequest
@@ -66,6 +67,18 @@ public sealed class WindowsPipeProtocolTests
         Assert.Equal(snapshot.State, restored.State);
         Assert.Equal(snapshot.Detail, restored.Detail);
         Assert.Equal(snapshot.ProbeResults![0], restored.ProbeResults![0]);
+    }
+
+    [Fact]
+    public void Snapshot_RoundTripsOptionalProbeProgressFields()
+    {
+        var snapshot = new WindowsTunnelSnapshot("probe_progress", "Working", ProbeResults:
+        [new WindowsRouteProbeResult("nl-vless", null, null, null, "download", 1,
+            1024 * 1024, 32 * 1024 * 1024)]);
+
+        var restored = WindowsPipeProtocol.DeserializeResponse(WindowsPipeProtocol.SerializeResponse(snapshot));
+
+        Assert.Equal(snapshot.ProbeResults, restored.ProbeResults);
     }
 
     [Fact]

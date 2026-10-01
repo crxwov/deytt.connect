@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Automation;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -77,15 +78,130 @@ public sealed class HomeWindowTests
         }
     }
 
-    private static QaHomeFixture Fixture(string tab = "home")
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Route_progress_only_renders_when_content_changes_and_restores_keyboard_focus(double width)
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true)) { Width = width, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var pageHost = Required<Grid>(window, "PageHost");
+            var focusableButtons = Descendants(pageHost).OfType<Button>()
+                .Where(button => button.IsEnabled && button.IsEffectivelyVisible).ToArray();
+            Assert.NotEmpty(focusableButtons);
+            var focusIndex = Math.Min(2, focusableButtons.Length - 1);
+            Assert.True(focusableButtons[focusIndex].Focus());
+            Dispatcher.UIThread.RunJobs();
+
+            var snapshot = new WindowsRouteProbeResult("qa:nl-vless", null, null, null, "retry", 2);
+            Assert.True(window.ApplyProbeProgress([snapshot], [snapshot.RouteTag]));
+            Dispatcher.UIThread.RunJobs();
+            var changedPage = Assert.Single(pageHost.Children);
+            var focusedAfterChange = Assert.IsType<Button>(window.FocusManager?.GetFocusedElement());
+            var buttonsAfterChange = Descendants(pageHost).OfType<Button>()
+                .Where(button => button.IsEnabled && button.IsEffectivelyVisible).ToArray();
+            Assert.True(buttonsAfterChange[focusIndex].IsFocused);
+
+            Assert.False(window.ApplyProbeProgress([snapshot], [snapshot.RouteTag]));
+            Assert.Same(changedPage, Assert.Single(pageHost.Children));
+            Assert.Same(focusedAfterChange, window.FocusManager?.GetFocusedElement());
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Stop_button_cancel_transition_moves_focus_to_nearest_enabled_control(double width)
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, routeProbeInProgress: true))
+        {
+            Width = width,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var stopButton = Descendants(Required<Grid>(window, "PageHost")).OfType<Button>()
+                .Single(button => AutomationProperties.GetAutomationId(button) == "RouteDiagnosticsAction");
+            Assert.Equal("Остановить проверку", Assert.IsType<TextBlock>(stopButton.Content).Text);
+            Assert.True(stopButton.IsEnabled);
+            Assert.True(stopButton.Focus());
+            Dispatcher.UIThread.RunJobs();
+
+            window.MarkProbeCancellationRequested();
+            Dispatcher.UIThread.RunJobs();
+
+            var stoppingButton = Descendants(Required<Grid>(window, "PageHost")).OfType<Button>()
+                .Single(button => AutomationProperties.GetAutomationId(button) == "RouteDiagnosticsAction");
+            Assert.Equal("Останавливаем…", Assert.IsType<TextBlock>(stoppingButton.Content).Text);
+            Assert.False(stoppingButton.IsEffectivelyEnabled);
+            var focused = Assert.IsType<Button>(window.FocusManager?.GetFocusedElement());
+            Assert.NotSame(stoppingButton, focused);
+            Assert.True(focused.IsEffectivelyEnabled);
+            Assert.True(focused.IsEffectivelyVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d, "BottomHomeNav")]
+    [InlineData(1360d, "HomeNav")]
+    public void Pending_route_focus_restore_does_not_override_navigation(double width, string homeNavigationName)
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true)) { Width = width, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var snapshot = new WindowsRouteProbeResult("qa:nl-vless", null, null, null, "retry", 2);
+            Assert.True(window.ApplyProbeProgress([snapshot], [snapshot.RouteTag]));
+
+            var homeNavigation = Required<Button>(window, homeNavigationName);
+            Assert.True(homeNavigation.Focus());
+            window.KeyReleaseQwerty(PhysicalKey.Space, RawInputModifiers.None);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal("Ваше подключение", Required<TextBlock>(window, "WorkspaceTitle").Text);
+            Assert.Same(homeNavigation, window.FocusManager?.GetFocusedElement());
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static QaHomeFixture Fixture(string tab = "home", bool signedIn = false,
+        bool routeProbeInProgress = false)
     {
         var routes = new[]
         {
             new WindowsRoute("auto", "qa:auto", "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
             new WindowsRoute("nl-vless", "qa:nl-vless", "NL", "Нидерланды", "🇳🇱", "VLESS", "VLESS"),
         };
-        return new QaHomeFixture(false, "ru", "auto", tab, null, null, routes,
-            new WindowsTunnelSnapshot("disconnected", "Synthetic only"));
+        var account = signedIn
+            ? new TelegramAccount("qa_fixture", "QA Demo", false,
+                new TelegramSubscription(true, true, "qa", "QA Demo", "2099-12-31T00:00:00Z",
+                    false, 3, 1, null, null))
+            : null;
+        var subscription = signedIn
+            ? new TelegramKeysSnapshot(true, false, 0,
+                [new TelegramHappDevice(0, false, "QA fixture", "Synthetic desktop", "now")],
+                "{\"qa_fixture\":true}", routes, [])
+            : null;
+        return new QaHomeFixture(signedIn, "ru", "auto", tab, account, subscription, routes,
+            new WindowsTunnelSnapshot("disconnected", "Synthetic only"),
+            RouteProbeInProgress: routeProbeInProgress);
     }
 
     private static T Required<T>(Control control, string name) where T : Control =>

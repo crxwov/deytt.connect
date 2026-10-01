@@ -13,6 +13,7 @@ public enum WindowsPipeCommand
     Connect,
     Probe,
     CancelProbe,
+    ProbeProgress,
 }
 
 public sealed record WindowsPipeRequest
@@ -55,7 +56,11 @@ public sealed record WindowsRouteProbeResult(
     string RouteTag,
     long? LatencyMilliseconds,
     long? BytesPerSecond,
-    string? Error);
+    string? Error,
+    string? Stage = null,
+    int? Attempt = null,
+    long? BytesReceived = null,
+    long? TotalBytes = null);
 
 public static class WindowsPipeProtocol
 {
@@ -90,6 +95,8 @@ public static class WindowsPipeProtocol
                 method = request.Method, token = request.Token, awgProfiles = request.AwgProfiles,
             }, RequestOptions, MaximumRequestBytes),
             WindowsPipeCommand.CancelProbe => Serialize(new { command = "cancel-probe" }, RequestOptions,
+                MaximumRequestBytes),
+            WindowsPipeCommand.ProbeProgress => Serialize(new { command = "probe-progress" }, RequestOptions,
                 MaximumRequestBytes),
             _ => throw new JsonException("Unsupported pipe command."),
         };
@@ -230,6 +237,7 @@ public sealed class WindowsPipeCommandJsonConverter : JsonConverter<WindowsPipeC
             "connect" => WindowsPipeCommand.Connect,
             "probe" => WindowsPipeCommand.Probe,
             "cancel-probe" => WindowsPipeCommand.CancelProbe,
+            "probe-progress" => WindowsPipeCommand.ProbeProgress,
             _ => throw new JsonException("Unsupported pipe command."),
         };
     }
@@ -242,6 +250,7 @@ public sealed class WindowsPipeCommandJsonConverter : JsonConverter<WindowsPipeC
             WindowsPipeCommand.Connect => "connect",
             WindowsPipeCommand.Probe => "probe",
             WindowsPipeCommand.CancelProbe => "cancel-probe",
+            WindowsPipeCommand.ProbeProgress => "probe-progress",
             _ => throw new JsonException("Unsupported pipe command."),
         });
 }

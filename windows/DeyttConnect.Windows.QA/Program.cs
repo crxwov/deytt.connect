@@ -55,8 +55,17 @@ internal sealed class QaApp : Application
             "error" => new WindowsTunnelSnapshot("error", "QA fixture · synthetic error"),
             _ => new WindowsTunnelSnapshot("disconnected", "QA fixture · synthetic state"),
         };
+        var probeResult = options.ProbeStage is { } stage
+            ? new WindowsRouteProbeResult("qa:nl-vless",
+                stage is "waiting_speed" or "download" or "complete" ? 42 : null,
+                stage == "complete" ? 4_000_000 : null,
+                stage == "error" ? "Synthetic route check error." : null, stage,
+                stage is "latency" or "retry" ? 2 : null,
+                stage == "download" ? 5 * 1024 * 1024 : null,
+                stage == "download" ? 32 * 1024 * 1024 : null)
+            : null;
         var fixture = new QaHomeFixture(options.SignedIn, "ru", "nl-vless", options.Tab,
-            account, subscription, routes, tunnel);
+            account, subscription, routes, tunnel, probeResult);
         var window = new MainWindow(fixture)
         {
             Title = $"deytt./connect · QA fixture ({(options.SignedIn ? "signed-in" : "signed-out")}, {options.State})",
@@ -85,7 +94,7 @@ internal sealed class QaApp : Application
         return window;
     }
 
-    private sealed record QaOptions(bool SignedIn, string State, string Tab)
+    private sealed record QaOptions(bool SignedIn, string State, string Tab, string? ProbeStage)
     {
         public static QaOptions Parse(string[] args)
         {
@@ -96,7 +105,10 @@ internal sealed class QaApp : Application
             var tab = Value(args, "--tab") ?? "home";
             if (tab is not ("home" or "routes" or "profile" or "settings"))
                 throw new ArgumentException("--tab must be home, routes, profile, or settings.");
-            return new QaOptions(signedIn, state, tab);
+            var probeStage = Value(args, "--probe-stage");
+            if (probeStage is not (null or "latency" or "retry" or "waiting_speed" or "download" or "error" or "cancelled" or "complete"))
+                throw new ArgumentException("--probe-stage must be latency, retry, waiting_speed, download, error, cancelled, or complete.");
+            return new QaOptions(signedIn, state, tab, probeStage);
         }
 
         private static string? Value(string[] args, string key)

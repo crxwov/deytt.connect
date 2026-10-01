@@ -124,13 +124,17 @@ internal static class PipeServer
             case WindowsPipeCommand.CancelProbe:
                 result = engine.CancelProbe();
                 break;
+            case WindowsPipeCommand.ProbeProgress:
+                result = engine.GetProbeProgress();
+                break;
             default:
                 throw new JsonException("Unsupported command.");
         }
 
         var response = new WindowsTunnelSnapshot(result.State, result.Detail, result.RouteTag,
             result.ConnectedAt, result.ProbeResults?.Select(probe => new WindowsRouteProbeResult(
-                probe.RouteTag, probe.LatencyMilliseconds, probe.BytesPerSecond, probe.Error)).ToArray(),
+                probe.RouteTag, probe.LatencyMilliseconds, probe.BytesPerSecond, probe.Error,
+                probe.Stage, probe.Attempt, probe.BytesReceived, probe.TotalBytes)).ToArray(),
             result.HealthCheckedAt);
         var responsePayload = WindowsPipeProtocol.SerializeResponse(response);
         await WindowsPipeProtocol.WriteFrameAsync(pipe, responsePayload, WindowsPipeProtocol.MaximumResponseBytes,

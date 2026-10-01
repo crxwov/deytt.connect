@@ -29,6 +29,9 @@ public sealed class WindowsTunnelClient
     public Task<WindowsTunnelSnapshot> CancelProbeAsync(CancellationToken cancellationToken = default) =>
         SendAsync(new WindowsPipeRequest { Command = WindowsPipeCommand.CancelProbe }, cancellationToken, 5);
 
+    public Task<WindowsTunnelSnapshot> GetProbeProgressAsync(CancellationToken cancellationToken = default) =>
+        SendAsync(new WindowsPipeRequest { Command = WindowsPipeCommand.ProbeProgress }, cancellationToken, 5);
+
     private static async Task<WindowsTunnelSnapshot> SendAsync(WindowsPipeRequest request,
         CancellationToken cancellationToken, int timeoutSeconds)
     {

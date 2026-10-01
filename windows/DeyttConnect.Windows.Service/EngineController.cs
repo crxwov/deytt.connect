@@ -30,9 +30,18 @@ internal sealed class EngineController
     private string? _profilePath;
     private string? _routeTag;
     private ServiceSnapshot _snapshot = new("disconnected", "VPN выключен");
+    private readonly object _probeProgressLock = new();
+    private readonly Dictionary<string, ServiceProbeResult> _probeProgress = new(StringComparer.Ordinal);
     private int _consecutiveHealthFailures;
 
     public ServiceSnapshot Snapshot => Volatile.Read(ref _snapshot);
+
+    public ServiceSnapshot GetProbeProgress()
+    {
+        lock (_probeProgressLock)
+            return new ServiceSnapshot("probe_progress", "Проверка маршрутов выполняется.",
+                ProbeResults: _probeProgress.Values.Take(32).ToArray());
+    }
 
     public async Task<ServiceSnapshot> ConnectAsync(string profile, string routeTag, string? awgConfig,
         CancellationToken cancellationToken)
@@ -133,6 +142,13 @@ internal sealed class EngineController
             var probeToken = probeCancellation.Token;
 
             var endpoints = CreateProbeEndpoints(routeTags, awgProfiles);
+            lock (_probeProgressLock)
+            {
+                _probeProgress.Clear();
+                foreach (var endpoint in endpoints)
+                    _probeProgress[endpoint.RouteTag] = new ServiceProbeResult(endpoint.RouteTag, null, null, null,
+                        "latency", 1);
+            }
             var probeProfile = TunnelProfileBuilder.BuildProbeProfile(profile, endpoints);
             _profilePath = WritePrivateProfile(probeProfile);
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
@@ -162,8 +178,10 @@ internal sealed class EngineController
             if (process.HasExited)
                 return ProbeError("Ядро VPN остановилось до начала диагностики.");
 
-            var results = await MeasureRoutesAsync(endpoints, method, token, probeToken)
+            var results = await MeasureRoutesAsync(endpoints, method, token, probeToken, PublishProbeProgress)
                 .ConfigureAwait(false);
+            lock (_probeProgressLock)
+                _probeProgress.Clear();
             return new ServiceSnapshot("probe_complete", "Проверка маршрутов завершена.",
                 ProbeResults: results);
         }
@@ -177,6 +195,8 @@ internal sealed class EngineController
         }
         catch (OperationCanceledException)
         {
+            lock (_probeProgressLock)
+                _probeProgress.Clear();
             return new ServiceSnapshot("probe_cancelled", "Проверка маршрутов остановлена.", ProbeResults: []);
         }
         catch
@@ -185,6 +205,8 @@ internal sealed class EngineController
         }
         finally
         {
+            lock (_probeProgressLock)
+                _probeProgress.Clear();
             Interlocked.Exchange(ref _probeCancellation, null);
             StopCore();
             SetSnapshot(new ServiceSnapshot("disconnected", "VPN выключен"));
@@ -531,9 +553,11 @@ internal sealed class EngineController
 
     private static async Task<IReadOnlyList<ServiceProbeResult>> MeasureRoutesAsync(
         IReadOnlyList<ProbeRouteEndpoint> endpoints, string method, string token,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Action<ServiceProbeResult> publish)
     {
-        var latencyTasks = endpoints.Select(endpoint => MeasureLatencyAsync(endpoint, method, cancellationToken));
+        var latencyTasks = endpoints.Select(endpoint => MeasureLatencyAsync(endpoint, method, cancellationToken,
+            attempt => publish(new ServiceProbeResult(endpoint.RouteTag, null, null, null,
+                attempt == 1 ? "latency" : "retry", attempt))));
         var latencies = await Task.WhenAll(latencyTasks).ConfigureAwait(false);
         var results = new List<ServiceProbeResult>(endpoints.Count);
         for (var index = 0; index < endpoints.Count; index++)
@@ -545,9 +569,12 @@ internal sealed class EngineController
             if (latency is not null && token.Length is >= 32 and <= 256 &&
                 token.All(character => character is >= '\x21' and <= '\x7e'))
             {
+                publish(new ServiceProbeResult(endpoint.RouteTag, latency, null, null, "waiting_speed", 1));
                 try
                 {
-                    speed = await MeasureDownloadAsync(endpoint, token, cancellationToken).ConfigureAwait(false);
+                    speed = await MeasureDownloadAsync(endpoint, token, cancellationToken,
+                        (received, total) => publish(new ServiceProbeResult(endpoint.RouteTag, latency, null, null,
+                            "download", 1, received, total))).ConfigureAwait(false);
                     if (speed is null)
                         error = "Сервер скорости не ответил.";
                 }
@@ -566,16 +593,19 @@ internal sealed class EngineController
             }
 
             results.Add(new ServiceProbeResult(endpoint.RouteTag, latency, speed, error));
+            publish(new ServiceProbeResult(endpoint.RouteTag, latency, speed, error,
+                error is null ? "complete" : "error", null));
         }
         return results;
     }
 
     private static async Task<long?> MeasureLatencyAsync(ProbeRouteEndpoint endpoint, string method,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Action<int> reportAttempt)
     {
         var samples = new List<long>(3);
         for (var sample = 0; sample < 3; sample++)
         {
+            reportAttempt(sample + 1);
             try
             {
                 using var handler = CreateProxyHandler(endpoint);
@@ -601,7 +631,7 @@ internal sealed class EngineController
     }
 
     private static async Task<long?> MeasureDownloadAsync(ProbeRouteEndpoint endpoint, string token,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Action<long, long> reportProgress)
     {
         using var handler = CreateProxyHandler(endpoint);
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
@@ -637,12 +667,33 @@ internal sealed class EngineController
             if (firstByte == 0)
                 firstByte = Stopwatch.GetTimestamp();
             received += count;
+            reportProgress(received, Math.Min(response.Content.Headers.ContentLength ?? 32L * 1024 * 1024,
+                32L * 1024 * 1024));
         }
 
         if (received == 0 || firstByte == 0)
             return null;
         var elapsed = Math.Max(1, Stopwatch.GetElapsedTime(firstByte).TotalMilliseconds);
         return (long)(received * 1000d / elapsed);
+    }
+
+    private void PublishProbeProgress(ServiceProbeResult result)
+    {
+        if (result.RouteTag.Length is < 1 or > 64 || result.RouteTag.Any(character =>
+                !(char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')))
+            return;
+        var safe = result with
+        {
+            Stage = result.Stage is "latency" or "retry" or "waiting_speed" or "download" or "complete" or "error" or "cancelled"
+                ? result.Stage : null,
+            Attempt = result.Attempt is { } attempt ? Math.Clamp(attempt, 1, 3) : null,
+            BytesReceived = result.BytesReceived is { } received ? Math.Clamp(received, 0, 32L * 1024 * 1024) : null,
+            TotalBytes = result.TotalBytes is { } total ? Math.Clamp(total, 0, 32L * 1024 * 1024) : null,
+            Error = result.Error is null ? null : result.Error.Length <= 120 ? result.Error : result.Error[..120],
+        };
+        lock (_probeProgressLock)
+            if (_probeProgress.Count < 32 || _probeProgress.ContainsKey(safe.RouteTag))
+                _probeProgress[safe.RouteTag] = safe;
     }
 
     private static HttpClientHandler CreateProxyHandler(ProbeRouteEndpoint endpoint) => new()

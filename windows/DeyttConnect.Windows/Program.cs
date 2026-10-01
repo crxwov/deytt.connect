@@ -18,7 +18,10 @@ internal sealed record QaHomeFixture(
     TelegramAccount? Account,
     TelegramKeysSnapshot? Subscription,
     IReadOnlyList<WindowsRoute> Routes,
-    WindowsTunnelSnapshot Tunnel);
+    WindowsTunnelSnapshot Tunnel,
+    WindowsRouteProbeResult? ProbeResult = null,
+    bool RouteProbeInProgress = false,
+    bool RouteProbeCancelRequested = false);
 
 sealed class Program
 {
