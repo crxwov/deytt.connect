@@ -17,15 +17,40 @@ never attempted while the fixture may still be active. It never reads guest
 credentials, clipboard contents, or user files and does not run a live
 account/tunnel test.
 
-`--installer-smoke` is the fixed native WiX 6/MSI install-uninstall mode. Its
-guest runner accepts no parameters, verifies a SHA-256 manifest, builds only
-the pinned installer project, uses a fixed `1.0.0` package identity and SYSTEM
-SID, checks fixed install footprints, then uninstalls only the matching DEYTT
-product. It never launches the app or connects a tunnel. Logs stay in a unique
-guest temp directory and are not returned; the host receives only a bounded
-sanitized JSON report. The mode currently fails closed before changing VM state
-because an elevated guest launch path has not yet passed independent review.
-Do not treat preflight as MSI installation evidence.
+`--installer-prepare` builds the fixed package and copies its manifest-verified
+files from the non-elevated VirtualBox share into the logged-in user's local
+`%TEMP%` directory. The host prints a fixed manual bootstrap command for an
+Administrator PowerShell target under the same Windows account that ran the
+stager; it never types into a guest window after the
+`-NoExit` stager, because that console may still have focus. The command pins
+both the host-generated manifest SHA-256 and runner SHA-256. It reads runner
+bytes once, verifies them against the host digest, and executes those exact
+verified bytes. The runner then verifies the manifest digest, rejects reparse
+points and path escapes, copies every manifest-listed input into an
+Administrators/SYSTEM-only protected directory under ProgramData, and
+rehashes the protected copies before invoking fixed WiX/MSI operations from
+that protected tree. It accepts only the expected digest argument; paths and
+commands are fixed in the runner. It does not launch the app or connect a
+tunnel. Logs stay in the protected guest staging directory.
+
+`--installer-smoke` remains blocked while the source review gate in
+`installer-smoke-host.sh` is `pending`. Package staging, a printed command, or
+static checks do not count as MSI/install acceptance. Do not run the displayed
+command until independent source review approves it and you have opened the
+intended elevated PowerShell console yourself. Native MSI build/install,
+uninstall, ACL behavior, UAC and focus behavior still require the user's later
+Windows session.
+
+The runner reports the SHA-256 digest of its locally built MSI. The collector
+accepts it only as a 64-character lowercase hex digest and only reports a
+passed run when install, uninstall, cleanup, and child-process fields all pass.
+It reads the report only after the local `installer-complete.txt` marker is
+present and contains the exact expected value.
+
+The earlier membership-probe attempt did not produce its start sentinel; that
+failure was superseded by a later elevated PowerShell probe, which confirmed
+Windows 10 x64 and administrator membership. This validates only the current
+interactive elevation prerequisite. No MSI build/install has run.
 
 Host artifacts are created in a mode-0700 run directory under
 `/mnt/data/deytt-win10-qa` by default; reports, logs, and screenshots are
@@ -98,3 +123,14 @@ windows/scripts/qa-vm.sh --preflight
 windows/scripts/qa-vm.sh --dry-run
 windows/scripts/qa-vm.sh --smoke
 ```
+
+The one-time SSH bootstrap and its two-step verified guest action are
+documented in [SSH-BOOTSTRAP.md](SSH-BOOTSTRAP.md). Run the offline source
+guardrails for the SSH bootstrap and gated MSI staging/runner with:
+
+```sh
+python3 windows/qa-vm/test-bootstrap-static.py
+```
+
+The static check does not parse or execute PowerShell, build a package, or
+change VirtualBox or guest state.

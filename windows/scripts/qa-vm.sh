@@ -18,12 +18,15 @@ readonly SHUTDOWN_TIMEOUT=180
 
 usage() {
   cat <<'EOF'
-Usage: qa-vm.sh [--preflight | --dry-run | --smoke]
+Usage: qa-vm.sh [--preflight | --dry-run | --smoke | --installer-dry-run | --installer-prepare | --installer-smoke]
 
 --preflight  Read sanitized VM/snapshot/Guest Additions and disk-filesystem status.
 --dry-run    Print the bounded fixed-fixture smoke plan without VM changes.
 --smoke      Publish and run only DeyttConnect.Windows.QA, collect its synthetic
              window screenshot/report, ACPI-shutdown, then restore the named GA snapshot.
+--installer-prepare  Build and stage the fixed, hashed installer payload in the guest.
+--installer-smoke  Hard blocked pending independent review of the elevated MSI runner.
+--installer-dry-run Run the local staging/orchestration dry-run without VirtualBox or CI.
 
 The smoke does not read guest credentials, clipboard contents, or user files and
 does not run guest commands from external input. On any failed gate it leaves the
@@ -32,8 +35,14 @@ EOF
 }
 
 mode="${1:---preflight}"
-case "$mode" in --preflight|--dry-run|--smoke) ;; -h|--help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
+case "$mode" in --preflight|--dry-run|--smoke|--installer-dry-run|--installer-prepare|--installer-smoke) ;; -h|--help) usage; exit 0 ;; *) usage >&2; exit 64 ;; esac
 if (($# > 1)); then usage >&2; exit 64; fi
+
+if [[ "$mode" == --installer-dry-run ]]; then
+  printf 'Offline installer orchestration dry-run; no VirtualBox, guest, CI, or network commands are used.\n'
+  DEYTT_QA_INSTALLER_MODE=dry-run bash "$REPO_ROOT/windows/qa-vm/installer-smoke-host.sh"
+  exit $?
+fi
 
 for utility in VBoxManage timeout df awk date mkdir grep python3 chmod find sha256sum xdotool; do
   command -v "$utility" >/dev/null 2>&1 || { printf 'BLOCKED: required utility unavailable (%s)\n' "$utility" >&2; exit 2; }
@@ -82,6 +91,18 @@ if [[ "$mode" == --dry-run ]]; then
   exit 0
 fi
 
+if [[ "$mode" == --installer-smoke ]]; then
+  DEYTT_QA_VM_NAME="$VM_NAME" DEYTT_QA_ARTIFACT_ROOT="$ARTIFACT_ROOT" \
+    DEYTT_QA_COMMAND_TIMEOUT_SECONDS="$VBOX_TIMEOUT" DEYTT_QA_MIN_FREE_KIB="$MIN_FREE_KIB" \
+    DEYTT_QA_INSTALLER_MODE=smoke bash "$REPO_ROOT/windows/qa-vm/installer-smoke-host.sh"
+  exit $?
+fi
+if [[ "$mode" == --installer-prepare ]]; then
+  DEYTT_QA_VM_NAME="$VM_NAME" DEYTT_QA_ARTIFACT_ROOT="$ARTIFACT_ROOT" \
+    DEYTT_QA_COMMAND_TIMEOUT_SECONDS="$VBOX_TIMEOUT" DEYTT_QA_MIN_FREE_KIB="$MIN_FREE_KIB" \
+    bash "$REPO_ROOT/windows/qa-vm/installer-smoke-host.sh"
+  exit $?
+fi
 if [[ "$mode" == --smoke ]]; then
   [[ -x "$DOTNET" && -f "$QA_PROJECT" && -f "$RUNNER" && -f "$CROP_HELPER" ]] || { printf 'BLOCKED: fixed QA fixture/toolchain/runner unavailable.\n' >&2; exit 2; }
   python3 -c 'import PIL' >/dev/null 2>&1 || { printf 'BLOCKED: Pillow is required for the bounded fixture-window crop.\n' >&2; exit 2; }
