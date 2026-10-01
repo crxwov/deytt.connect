@@ -4127,11 +4127,19 @@ public partial class MainWindow : Window
             details.Add($"{Copy("устройства", "devices")}: {subscription.DevicesUsed?.ToString() ?? "0"}/{deviceLimit}");
         if (subscription.TrafficLimitBytes is > 0 and long trafficLimit)
             details.Add($"{FormatBytes(subscription.TrafficUsedBytes ?? 0)} / {FormatBytes(trafficLimit)}");
-        if (subscription.TrafficTotalBytes is >= 0 and long trafficTotal)
-            details.Add($"{Copy("всего передано", "total transferred")}: {FormatBytes(trafficTotal)}");
-        else if (subscription.TrafficLimitBytes is not > 0 &&
-                 subscription.TrafficUsedBytes is >= 0 and long trafficUsed)
-            details.Add($"{Copy("передано", "transferred")}: {FormatBytes(trafficUsed)}");
+        if (subscription.TrafficLimitBytes is > 0)
+        {
+            if (subscription.TrafficTotalBytes is >= 0 and long trafficTotal)
+                details.Add($"{Copy("всего передано", "total transferred")}: {FormatBytes(trafficTotal)}");
+        }
+        else
+        {
+            var trafficUsed = Math.Max(0, subscription.TrafficUsedBytes ?? 0);
+            var trafficTotal = Math.Max(0, subscription.TrafficTotalBytes ?? 0);
+            var transferred = trafficTotal > 0 ? trafficTotal : trafficUsed;
+            if (transferred > 0)
+                details.Add($"{Copy("передано", "transferred")}: {FormatBytes(transferred)} · {Copy("без установленного лимита", "no quota limit")}");
+        }
         return details.Count > 0 ? string.Join(" · ", details) : Copy("Подписка активна", "Subscription active");
     }
 

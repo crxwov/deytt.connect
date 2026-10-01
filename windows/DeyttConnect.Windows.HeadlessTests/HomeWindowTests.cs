@@ -181,8 +181,91 @@ public sealed class HomeWindowTests
         }
     }
 
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Unlimited_profile_shows_total_transferred_without_quota_usage_or_percentage(double width)
+    {
+        var subscription = ProfileSubscription(trafficLimit: null, trafficUsed: 64L * 1024 * 1024,
+            trafficTotal: 128L * 1024 * 1024);
+        var window = new MainWindow(Fixture(tab: "profile", signedIn: true, profileSubscription: subscription))
+        {
+            Width = width,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var summary = ProfileSummary(window);
+            Assert.Contains("передано: 128 MB", summary);
+            Assert.Contains("без установленного лимита", summary);
+            Assert.DoesNotContain("64 MB /", summary);
+            Assert.DoesNotContain('%', summary);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Unlimited_profile_hides_transfer_line_when_usage_is_zero(double width)
+    {
+        var subscription = ProfileSubscription(trafficLimit: null, trafficUsed: 0, trafficTotal: null);
+        var window = new MainWindow(Fixture(tab: "profile", signedIn: true, profileSubscription: subscription))
+        {
+            Width = width,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var summary = ProfileSummary(window);
+            Assert.DoesNotContain("передано:", summary);
+            Assert.DoesNotContain("без установленного лимита", summary);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Limited_profile_keeps_used_over_limit_summary(double width)
+    {
+        var subscription = ProfileSubscription(trafficLimit: 1024L * 1024 * 1024,
+            trafficUsed: 512L * 1024 * 1024, trafficTotal: null);
+        var window = new MainWindow(Fixture(tab: "profile", signedIn: true, profileSubscription: subscription))
+        {
+            Width = width,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var summary = ProfileSummary(window);
+            Assert.Contains("512 MB / 1 GB", summary);
+            Assert.DoesNotContain("без установленного лимита", summary);
+            Assert.DoesNotContain('%', summary);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     private static QaHomeFixture Fixture(string tab = "home", bool signedIn = false,
-        bool routeProbeInProgress = false)
+        bool routeProbeInProgress = false, TelegramSubscription? profileSubscription = null)
     {
         var routes = new[]
         {
@@ -191,8 +274,7 @@ public sealed class HomeWindowTests
         };
         var account = signedIn
             ? new TelegramAccount("qa_fixture", "QA Demo", false,
-                new TelegramSubscription(true, true, "qa", "QA Demo", "2099-12-31T00:00:00Z",
-                    false, 3, 1, null, null))
+                profileSubscription ?? ProfileSubscription(trafficLimit: null, trafficUsed: null, trafficTotal: null))
             : null;
         var subscription = signedIn
             ? new TelegramKeysSnapshot(true, false, 0,
@@ -203,6 +285,16 @@ public sealed class HomeWindowTests
             new WindowsTunnelSnapshot("disconnected", "Synthetic only"),
             RouteProbeInProgress: routeProbeInProgress);
     }
+
+    private static TelegramSubscription ProfileSubscription(long? trafficLimit, long? trafficUsed, long? trafficTotal) =>
+        new(true, true, "qa", "QA Demo", "2099-12-31T00:00:00Z",
+            false, 3, 1, trafficLimit, trafficUsed)
+        {
+            TrafficTotalBytes = trafficTotal,
+        };
+
+    private static string ProfileSummary(MainWindow window) => string.Join(" ",
+        Descendants(Required<Grid>(window, "PageHost")).OfType<TextBlock>().Select(text => text.Text));
 
     private static T Required<T>(Control control, string name) where T : Control =>
         control.FindControl<T>(name) ?? throw new Xunit.Sdk.XunitException($"Missing control: {name}");
