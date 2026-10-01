@@ -16,6 +16,33 @@ namespace DeyttConnect.Windows.HeadlessTests;
 public sealed class HomeWindowTests
 {
     [AvaloniaTheory]
+    [InlineData("disconnected", "Не подключено", "Не подключено", "Подключить")]
+    [InlineData("connecting", "Подключаемся…", "Подключаем VPN…", "Отменить подключение")]
+    [InlineData("error", "Ошибка VPN", "Ошибка VPN", "Подключить")]
+    [InlineData("connected", "VPN подключён", "Подключено", "Отключить")]
+    public void Vpn_fixture_renders_truthful_state_across_header_rail_home_and_action(
+        string state, string expectedHeader, string expectedHome, string expectedAction)
+    {
+        var window = new MainWindow(Fixture(signedIn: true, state: state)) { Width = 1360, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(expectedHeader, Required<TextBlock>(window, "HeaderStatusText").Text);
+            Assert.Equal(expectedHeader, Required<TextBlock>(window, "SidebarVpnText").Text);
+            var pageText = Descendants(Required<Grid>(window, "PageHost")).OfType<TextBlock>()
+                .Select(text => text.Text).ToArray();
+            Assert.Contains(expectedHome, pageText);
+            Assert.Contains(expectedAction, pageText);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
     [InlineData(720d, true)]
     [InlineData(1360d, false)]
     public void Home_navigation_and_controls_remain_reachable_at_supported_widths(double width, bool compact)
@@ -265,7 +292,8 @@ public sealed class HomeWindowTests
     }
 
     private static QaHomeFixture Fixture(string tab = "home", bool signedIn = false,
-        bool routeProbeInProgress = false, TelegramSubscription? profileSubscription = null)
+        bool routeProbeInProgress = false, TelegramSubscription? profileSubscription = null,
+        string state = "disconnected")
     {
         var routes = new[]
         {
@@ -281,8 +309,16 @@ public sealed class HomeWindowTests
                 [new TelegramHappDevice(0, false, "QA fixture", "Synthetic desktop", "now")],
                 "{\"qa_fixture\":true}", routes, [])
             : null;
+        var tunnel = state switch
+        {
+            "connected" => new WindowsTunnelSnapshot("connected", "Synthetic only", "qa:nl-vless",
+                HealthCheckedAt: DateTimeOffset.UtcNow),
+            "connecting" => new WindowsTunnelSnapshot("starting", "Synthetic only"),
+            "error" => new WindowsTunnelSnapshot("error", "Synthetic VPN error"),
+            _ => new WindowsTunnelSnapshot("disconnected", "Synthetic only"),
+        };
         return new QaHomeFixture(signedIn, "ru", "auto", tab, account, subscription, routes,
-            new WindowsTunnelSnapshot("disconnected", "Synthetic only"),
+            tunnel,
             RouteProbeInProgress: routeProbeInProgress);
     }
 

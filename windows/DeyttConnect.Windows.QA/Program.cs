@@ -50,7 +50,8 @@ internal sealed class QaApp : Application
             : null;
         var tunnel = options.State switch
         {
-            "connected" => new WindowsTunnelSnapshot("connected", "QA fixture · synthetic state", "qa:nl-vless"),
+            "connected" => new WindowsTunnelSnapshot("connected", "QA fixture · synthetic state", "qa:nl-vless",
+                HealthCheckedAt: DateTimeOffset.UtcNow),
             "connecting" => new WindowsTunnelSnapshot("starting", "QA fixture · synthetic state", "qa:nl-vless"),
             "error" => new WindowsTunnelSnapshot("error", "QA fixture · synthetic error"),
             _ => new WindowsTunnelSnapshot("disconnected", "QA fixture · synthetic state"),
@@ -80,7 +81,7 @@ internal sealed class QaApp : Application
             Padding = new Thickness(16, 8),
             Child = new TextBlock
             {
-                Text = "QA FIXTURE · SYNTHETIC ACCOUNT / ROUTES / VPN · NO LIVE SESSION",
+                Text = $"QA FIXTURE · VPN: {options.State.ToUpperInvariant()} · SYNTHETIC · NO LIVE SESSION",
                 FontFamily = "fonts:DEYTT#JetBrains Mono",
                 FontSize = 12,
                 FontWeight = FontWeight.SemiBold,

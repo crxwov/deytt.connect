@@ -157,7 +157,9 @@ public partial class MainWindow : Window
                 [probeResult.RouteTag] = probeResult,
             };
         _vpnSnapshot = fixture.Tunnel;
-        _vpnServiceAvailable = false;
+        // The fixture models a local synthetic service so each displayed tunnel state
+        // can exercise the same action mapping without contacting the real service.
+        _vpnServiceAvailable = true;
         _routeProbeInProgress = fixture.RouteProbeInProgress;
         _routeProbeCancelRequested = fixture.RouteProbeCancelRequested;
         ShowTab(fixture.Tab switch
@@ -409,7 +411,7 @@ public partial class MainWindow : Window
     }
 
     private bool IsVpnDisplayConnected() =>
-        _qaFixture || WindowsTunnelHealth.IsFreshlyConnected(_vpnSnapshot, DateTimeOffset.UtcNow);
+        WindowsTunnelHealth.IsFreshlyConnected(_vpnSnapshot, DateTimeOffset.UtcNow);
 
     private static bool IsVpnTunnelActive(string state) =>
         state is "connected" or "health_checking" or "degraded" or "unknown";
@@ -966,7 +968,9 @@ public partial class MainWindow : Window
         };
         status.Children.Add(statusDot);
         var text = new StackPanel { Spacing = 4 };
-        var stateTitle = !_vpnServiceAvailable && isError
+        var stateTitle = _qaFixture && isError
+            ? Copy("Ошибка VPN", "VPN error")
+            : !_vpnServiceAvailable && isError
             ? Copy("Статус VPN неизвестен", "VPN status unknown")
             : healthUnknown
             ? Copy("Проверяем VPN-трафик…", "Checking VPN traffic…")
