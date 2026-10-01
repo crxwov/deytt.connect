@@ -1,9 +1,8 @@
-using System.Buffers.Binary;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using DeyttConnect.Protocol;
 using Microsoft.Win32.SafeHandles;
 
 namespace DeyttConnect.Windows.Service;
@@ -11,7 +10,6 @@ namespace DeyttConnect.Windows.Service;
 internal static class PipeServer
 {
     private const string PipeName = @"\\.\pipe\DEYTT.Connect.v1";
-    private const int MaximumRequestBytes = 12 * 1024 * 1024;
     private const uint PipeAccessDuplex = 0x00000003;
     private const uint FileFlagFirstPipeInstance = 0x00080000;
     private const uint FileFlagOverlapped = 0x40000000;
@@ -20,12 +18,6 @@ internal static class PipeServer
     private const uint PipeWait = 0;
     private const uint PipeRejectRemoteClients = 0x00000008;
     private const uint SecurityDescriptorRevision = 1;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
 
     public static async Task RunAsync(string allowedUserSid, EngineController engine,
         CancellationToken cancellationToken)
@@ -99,99 +91,54 @@ internal static class PipeServer
     private static async Task HandleClientAsync(NamedPipeServerStream pipe, EngineController engine,
         CancellationToken cancellationToken)
     {
-        var header = new byte[sizeof(int)];
-        await pipe.ReadExactlyAsync(header, cancellationToken).ConfigureAwait(false);
-        var length = BinaryPrimitives.ReadInt32LittleEndian(header);
-        if (length is <= 0 or > MaximumRequestBytes)
-            throw new IOException("Invalid request length.");
-
-        var payload = new byte[length];
-        await pipe.ReadExactlyAsync(payload, cancellationToken).ConfigureAwait(false);
-        using var document = JsonDocument.Parse(payload);
-        var root = document.RootElement;
-        if (root.ValueKind != JsonValueKind.Object ||
-            !root.TryGetProperty("command", out var commandValue) ||
-            commandValue.ValueKind != JsonValueKind.String)
-            throw new JsonException("Invalid request.");
+        var payload = await WindowsPipeProtocol.ReadFrameAsync(pipe, WindowsPipeProtocol.MaximumRequestBytes,
+            cancellationToken).ConfigureAwait(false);
+        var request = WindowsPipeProtocol.DeserializeRequest(payload);
 
         ServiceSnapshot result;
-        switch (commandValue.GetString())
+        switch (request.Command)
         {
-            case "status":
+            case WindowsPipeCommand.Status:
                 result = engine.Snapshot;
                 break;
-            case "disconnect":
+            case WindowsPipeCommand.Disconnect:
                 engine.Stop();
                 result = engine.Snapshot;
                 break;
-            case "connect":
-                if (!root.TryGetProperty("profile", out var profileValue) ||
-                    profileValue.ValueKind != JsonValueKind.String ||
-                    !root.TryGetProperty("routeTag", out var routeValue) ||
-                    routeValue.ValueKind != JsonValueKind.String)
+            case WindowsPipeCommand.Connect:
+                if (request.Profile is null || request.RouteTag is null)
                     throw new JsonException("Missing connection details.");
-                string? awgConfig = null;
-                if (root.TryGetProperty("awgConfig", out var awgValue) && awgValue.ValueKind != JsonValueKind.Null)
-                {
-                    if (awgValue.ValueKind != JsonValueKind.String)
-                        throw new JsonException("Invalid AmneziaWG profile.");
-                    awgConfig = awgValue.GetString();
-                }
-                result = await engine.ConnectAsync(profileValue.GetString()!, routeValue.GetString()!, awgConfig,
+                result = await engine.ConnectAsync(request.Profile, request.RouteTag, request.AwgConfig,
                     cancellationToken).ConfigureAwait(false);
                 break;
-            case "probe":
-                if (!root.TryGetProperty("profile", out var probeProfileValue) ||
-                    probeProfileValue.ValueKind != JsonValueKind.String ||
-                    !root.TryGetProperty("routeTags", out var routesValue) ||
-                    routesValue.ValueKind != JsonValueKind.Array ||
-                    !root.TryGetProperty("method", out var methodValue) ||
-                    methodValue.ValueKind != JsonValueKind.String ||
-                    !root.TryGetProperty("token", out var tokenValue) ||
-                    tokenValue.ValueKind != JsonValueKind.String)
+            case WindowsPipeCommand.Probe:
+                if (request.Profile is null || request.RouteTags is null || request.Method is null ||
+                    request.Token is null)
                     throw new JsonException("Missing diagnostic details.");
-                var routeTags = new List<string>();
-                foreach (var routeTag in routesValue.EnumerateArray())
-                {
-                    if (routeTag.ValueKind != JsonValueKind.String || routeTags.Count == 32)
-                        throw new JsonException("Invalid diagnostic routes.");
-                    routeTags.Add(routeTag.GetString()!);
-                }
-                var awgProfiles = new Dictionary<string, string>(StringComparer.Ordinal);
-                if (root.TryGetProperty("awgProfiles", out var awgProfilesValue) &&
-                    awgProfilesValue.ValueKind != JsonValueKind.Null)
-                {
-                    if (awgProfilesValue.ValueKind != JsonValueKind.Object)
-                        throw new JsonException("Invalid AmneziaWG diagnostic profiles.");
-                    foreach (var item in awgProfilesValue.EnumerateObject())
-                    {
-                        if (item.Value.ValueKind != JsonValueKind.String || awgProfiles.Count == 16)
-                            throw new JsonException("Invalid AmneziaWG diagnostic profile.");
-                        awgProfiles.Add(item.Name, item.Value.GetString()!);
-                    }
-                }
-                result = await engine.ProbeAsync(probeProfileValue.GetString()!, routeTags, awgProfiles,
-                    methodValue.GetString()!, tokenValue.GetString()!, cancellationToken).ConfigureAwait(false);
+                if (request.RouteTags.Count > 32 || request.AwgProfiles?.Count > 16)
+                    throw new JsonException("Invalid diagnostic details.");
+                result = await engine.ProbeAsync(request.Profile, request.RouteTags,
+                    request.AwgProfiles ?? new Dictionary<string, string>(StringComparer.Ordinal),
+                    request.Method, request.Token, cancellationToken).ConfigureAwait(false);
                 break;
-            case "cancel-probe":
+            case WindowsPipeCommand.CancelProbe:
                 result = engine.CancelProbe();
+                break;
+            case WindowsPipeCommand.ProbeProgress:
+                result = engine.GetProbeProgress();
                 break;
             default:
                 throw new JsonException("Unsupported command.");
         }
 
-        await WriteResponseAsync(pipe, result, cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WriteResponseAsync(NamedPipeServerStream pipe, ServiceSnapshot result,
-        CancellationToken cancellationToken)
-    {
-        var payload = JsonSerializer.SerializeToUtf8Bytes(result, JsonOptions);
-        var header = new byte[sizeof(int)];
-        BinaryPrimitives.WriteInt32LittleEndian(header, payload.Length);
-        await pipe.WriteAsync(header, cancellationToken).ConfigureAwait(false);
-        await pipe.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
-        await pipe.FlushAsync(cancellationToken).ConfigureAwait(false);
+        var response = new WindowsTunnelSnapshot(result.State, result.Detail, result.RouteTag,
+            result.ConnectedAt, result.ProbeResults?.Select(probe => new WindowsRouteProbeResult(
+                probe.RouteTag, probe.LatencyMilliseconds, probe.BytesPerSecond, probe.Error,
+                probe.Stage, probe.Attempt, probe.BytesReceived, probe.TotalBytes)).ToArray(),
+            result.HealthCheckedAt);
+        var responsePayload = WindowsPipeProtocol.SerializeResponse(response);
+        await WindowsPipeProtocol.WriteFrameAsync(pipe, responsePayload, WindowsPipeProtocol.MaximumResponseBytes,
+            cancellationToken).ConfigureAwait(false);
     }
 
     private static NamedPipeServerStream CreateServerPipe(string allowedUserSid, bool firstInstance)

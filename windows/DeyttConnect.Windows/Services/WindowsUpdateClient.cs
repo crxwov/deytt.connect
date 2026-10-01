@@ -4,6 +4,8 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text.Json;
 
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DeyttConnect.Windows.Tests")]
+
 namespace DeyttConnect.Windows.Services;
 
 public sealed record WindowsUpdateRelease(
@@ -56,13 +58,19 @@ public static class WindowsUpdateClient
         response.EnsureSuccessStatusCode();
 
         var json = await ReadBoundedTextAsync(response.Content, MaximumReleaseResponseBytes, timeout.Token);
+        return ParseLatestWindowsReleaseResponse(json);
+    }
+
+    internal static WindowsUpdateRelease? ParseLatestWindowsReleaseResponse(string json)
+    {
         using var releases = JsonDocument.Parse(json);
         if (releases.RootElement.ValueKind != JsonValueKind.Array)
             throw new JsonException("The GitHub release response was not a list.");
 
         foreach (var release in releases.RootElement.EnumerateArray())
         {
-            if (GetJsonBoolean(release, "draft") == true)
+            // Stable-channel selection fails closed when GitHub omits or malforms channel metadata.
+            if (GetJsonBoolean(release, "draft") != false || GetJsonBoolean(release, "prerelease") != false)
                 continue;
 
             var tag = GetJsonString(release, "tag_name");

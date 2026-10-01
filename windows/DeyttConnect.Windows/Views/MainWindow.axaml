@@ -164,6 +164,7 @@
 
         <ScrollViewer x:Name="PageScroll"
                           Grid.Row="1"
+                          BringIntoViewOnFocusChange="True"
                           HorizontalScrollBarVisibility="Disabled"
                           VerticalScrollBarVisibility="Auto">
                 <Grid x:Name="PageHost"

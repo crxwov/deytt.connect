@@ -1,0 +1,27 @@
+name: Предложение по приложению
+description: Предложить понятное улучшение клиента
+title: "[Предложение] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Не добавляйте личные данные, коды входа, ссылки подписки, VPN-ключи или конфигурации.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Что сейчас неудобно?
+      description: Опишите задачу, которую вы пытаетесь выполнить.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Как приложение могло бы помочь?
+      description: Расскажите, какое поведение вы ожидаете.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Как вы решаете это сейчас?
+      description: Необязательное поле.

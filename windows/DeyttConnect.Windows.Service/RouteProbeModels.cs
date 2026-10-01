@@ -12,4 +12,8 @@ internal sealed record ServiceProbeResult(
     string RouteTag,
     long? LatencyMilliseconds,
     long? BytesPerSecond,
-    string? Error);
+    string? Error,
+    string? Stage = null,
+    int? Attempt = null,
+    long? BytesReceived = null,
+    long? TotalBytes = null);

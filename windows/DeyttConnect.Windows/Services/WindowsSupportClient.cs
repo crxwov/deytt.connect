@@ -30,6 +30,16 @@ public sealed record SupportDocument(
     SupportDocumentKind Kind,
     IReadOnlyList<SupportDocumentBlock> Blocks);
 
+public interface IWindowsSupportClient
+{
+    Task<long> GetAccountIdAsync(string token, CancellationToken cancellationToken = default);
+    Task<SupportThreadSnapshot> GetThreadAsync(string token, CancellationToken cancellationToken = default);
+    Task CreateTicketAsync(string token, string text, CancellationToken cancellationToken = default);
+    Task SendMessageAsync(string token, int ticketId, string text, CancellationToken cancellationToken = default);
+    Task CloseTicketAsync(string token, int ticketId, CancellationToken cancellationToken = default);
+    Task<SupportDocument> GetDocumentAsync(SupportDocumentKind kind, CancellationToken cancellationToken = default);
+}
+
 public sealed class WindowsSupportException(string code, HttpStatusCode statusCode) : Exception(code)
 {
     public string Code { get; } = code;
@@ -37,7 +47,7 @@ public sealed class WindowsSupportException(string code, HttpStatusCode statusCo
 }
 
 /// <summary>First-party support API and the canonical legal document source.</summary>
-public sealed class WindowsSupportClient
+public sealed class WindowsSupportClient : IWindowsSupportClient
 {
     private static readonly Uri ApiBase = new("https://deytt.space");
     private static readonly HttpClient Http = new(new SocketsHttpHandler
@@ -70,6 +80,16 @@ public sealed class WindowsSupportClient
     private static readonly Regex ExcessNewlinesPattern = new("\\n{3,}", RegexOptions.Compiled);
     private const char LinkStartMarker = '\uE000';
     private const char LinkValueSeparator = '\u001F';
+
+    public async Task<long> GetAccountIdAsync(string token, CancellationToken cancellationToken = default)
+    {
+        using var response = await SendApiAsync("/api/tg/me", HttpMethod.Get, null, token, cancellationToken);
+        if (!response.RootElement.TryGetProperty("profile", out var profile) ||
+            profile.ValueKind != JsonValueKind.Object ||
+            !profile.TryGetProperty("tg_id", out var id) || !id.TryGetInt64(out var accountId) || accountId <= 0)
+            throw new WindowsSupportException("invalid_response", HttpStatusCode.BadGateway);
+        return accountId;
+    }
 
     public async Task<SupportThreadSnapshot> GetThreadAsync(
         string token,
@@ -199,7 +219,7 @@ public sealed class WindowsSupportClient
         string token,
         CancellationToken cancellationToken)
     {
-        if (path is not ("/api/tg/support" or "/api/tg/support/messages" or "/api/tg/support/close"))
+        if (path is not ("/api/tg/me" or "/api/tg/support" or "/api/tg/support/messages" or "/api/tg/support/close"))
             throw new InvalidOperationException("Only the support API endpoints are allowed.");
         if (token.Length is < 32 or > 256)
             throw new WindowsSupportException("session_invalid", HttpStatusCode.Unauthorized);

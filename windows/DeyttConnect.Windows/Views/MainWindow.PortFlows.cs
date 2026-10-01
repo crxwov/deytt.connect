@@ -7,6 +7,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using DeyttConnect.Protocol;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
 
@@ -129,20 +130,36 @@ public partial class MainWindow
             _vpnActionInProgress = true;
             try
             {
-                await EnsureTunnelStoppedBeforeImportAsync(owner, cancellationToken);
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (Exception error) when (IsTunnelTransportError(error))
-            {
-                _vpnServiceAvailable = false;
-                if (!IsInactiveTunnelState(_vpnSnapshot.State))
-                    throw new IOException("Could not verify or stop the active VPN tunnel before importing.", error);
-
-                // Saving an account does not need the optional VPN service; connection setup can follow later.
-                _vpnSnapshot = VpnServiceUnavailableSnapshot();
+                var coordinator = new WindowsSubscriptionImportCoordinator(
+                    _tunnelClient.GetStatusAsync,
+                    _tunnelClient.DisconnectAsync,
+                    IsTunnelTransportError);
+                await coordinator.CommitAsync(
+                    _vpnSnapshot,
+                    () => ConfirmImportTunnelDisconnectAsync(owner),
+                    _ =>
+                    {
+                        if (payload.SessionToken is { Length: > 0 } token)
+                        {
+                            // Clear the previous anonymous import before replacing the account token.
+                            // A cleanup failure must leave the currently saved account untouched.
+                            WindowsImportedSubscriptionStore.Clear();
+                            WindowsSessionStore.Save(token);
+                        }
+                        else
+                        {
+                            WindowsImportedSubscriptionStore.Save(profile);
+                        }
+                        return Task.CompletedTask;
+                    },
+                    state =>
+                    {
+                        var previousState = _vpnSnapshot.State;
+                        _vpnServiceAvailable = state.ServiceAvailable;
+                        _vpnSnapshot = state.ServiceAvailable ? state.Snapshot : VpnServiceUnavailableSnapshot();
+                        UpdateMapLocationForVpnState(previousState, _vpnSnapshot.State);
+                    },
+                    cancellationToken);
             }
             finally
             {
@@ -152,20 +169,7 @@ public partial class MainWindow
         }
 
         if (payload.SessionToken is { Length: > 0 } token)
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                // Clear the previous anonymous import before replacing the account token.
-                // A cleanup failure must leave the currently saved account untouched.
-                WindowsImportedSubscriptionStore.Clear();
-                WindowsSessionStore.Save(token);
-            }
             _sessionToken = token;
-        }
-        else if (OperatingSystem.IsWindows())
-        {
-            WindowsImportedSubscriptionStore.Save(profile);
-        }
 
         _account = payload.Account;
         _keysSnapshot = payload.Subscription;
@@ -177,31 +181,6 @@ public partial class MainWindow
         ShowTab(_activeTab);
     }
 
-    private async Task EnsureTunnelStoppedBeforeImportAsync(SetupWindow owner,
-        CancellationToken cancellationToken)
-    {
-        var previousSnapshot = _vpnSnapshot;
-        _vpnSnapshot = await _tunnelClient.GetStatusAsync(cancellationToken);
-        _vpnServiceAvailable = true;
-        UpdateMapLocationForVpnState(previousSnapshot.State, _vpnSnapshot.State);
-
-        if (IsInactiveTunnelState(_vpnSnapshot.State))
-            return;
-
-        if (!await ConfirmImportTunnelDisconnectAsync(owner))
-            throw new InvalidOperationException("The subscription import was canceled because the VPN remains active.");
-
-        previousSnapshot = _vpnSnapshot;
-        _vpnSnapshot = await _tunnelClient.DisconnectAsync(cancellationToken);
-        if (!IsInactiveTunnelState(_vpnSnapshot.State))
-            _vpnSnapshot = await _tunnelClient.GetStatusAsync(cancellationToken);
-        _vpnServiceAvailable = true;
-        UpdateMapLocationForVpnState(previousSnapshot.State, _vpnSnapshot.State);
-
-        if (!IsInactiveTunnelState(_vpnSnapshot.State))
-            throw new IOException("The VPN service did not confirm that the tunnel stopped.");
-    }
-
     private async Task<bool> ConfirmImportTunnelDisconnectAsync(SetupWindow owner)
     {
         return await ConfirmInShellAsync(
@@ -211,9 +190,6 @@ public partial class MainWindow
             Copy("Отключить и продолжить", "Disconnect and continue"),
             Copy("Отменить импорт", "Cancel import"));
     }
-
-    private static bool IsInactiveTunnelState(string state) =>
-        state is "disconnected" or "idle" or "error";
 
     private bool RestoreImportedSubscription()
     {
@@ -372,7 +348,7 @@ public partial class MainWindow
         body.Children.Add(DeyttTheme.TextBlock(
             Copy("Выберите маршрут или сравните протоколы.", "Choose a route or compare protocols."),
             13, DeyttTheme.Muted));
-        if (_vpnSnapshot.State is "connected" or "starting" or "checking")
+        if (WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
             body.Children.Add(DeyttTheme.TextBlock(
                 Copy("Смена выхода остановит соединение. Новый маршрут нужно запустить отдельно.",
                     "Changing the exit stops the current connection. Start the new route separately."),

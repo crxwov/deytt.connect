@@ -1,0 +1,6 @@
+<Project Sdk="WixToolset.Sdk/6.0.0">
+  <PropertyGroup>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <DefineConstants>$(DefineConstants);PackageStageDir=$(PackageStageDir);ProductVersion=$(ProductVersion)</DefineConstants>
+  </PropertyGroup>
+</Project>

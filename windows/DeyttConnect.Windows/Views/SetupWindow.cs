@@ -53,6 +53,15 @@ public sealed class SetupWindowCompletedEventArgs(SetupWindowResult result) : Ev
     public SetupWindowResult Result { get; } = result;
 }
 
+internal sealed class SetupImportCommitGate
+{
+    private int _inProgress;
+
+    public bool TryEnter() => Interlocked.CompareExchange(ref _inProgress, 1, 0) == 0;
+
+    public void Exit() => Volatile.Write(ref _inProgress, 0);
+}
+
 /// <summary>
 /// Hostable Telegram sign-in and subscription import flow. The host owns committing
 /// the returned profile into its active route/tunnel state through CommitImportAsync.
@@ -79,6 +88,7 @@ public sealed class SetupWindow : UserControl
     private readonly WindowsSupportClient _support = new();
     private readonly string _language;
     private readonly CancellationTokenSource _lifetime = new();
+    private readonly SetupImportCommitGate _importCommitGate = new();
     private Task? _activationTask;
     private readonly StackPanel _body = new() { Spacing = 15 };
     private readonly TextBlock _headline;
@@ -618,7 +628,8 @@ public sealed class SetupWindow : UserControl
 
     private async Task CompleteImportAsync(bool automatic = false)
     {
-        if ((_busy && !automatic) || _completed || _payload is null || _selectedRoute is null)
+        if ((_busy && !automatic) || _completed || _payload is null || _selectedRoute is null ||
+            !_importCommitGate.TryEnter())
             return;
         var result = new SetupWindowResult(_payload, _selectedRoute);
         if (automatic)
@@ -638,8 +649,7 @@ public sealed class SetupWindow : UserControl
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
         }
-        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
-                                      InvalidDataException or InvalidOperationException or CryptographicException)
+        catch (Exception error) when (IsNonFatal(error))
         {
             var diagnostic = $"{error.GetType().Name}/{DiagnosticOrigin(error.InnerException ?? error)}/0x{error.HResult:X8}";
             System.Diagnostics.Trace.TraceError("Subscription import commit failed ({0}).", diagnostic);
@@ -652,6 +662,7 @@ public sealed class SetupWindow : UserControl
         }
         finally
         {
+            _importCommitGate.Exit();
             SetBusy(false);
         }
     }

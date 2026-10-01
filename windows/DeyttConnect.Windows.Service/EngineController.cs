@@ -2,14 +2,19 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
+using System.Net.NetworkInformation;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 using System.Security.AccessControl;
 using System.Security.Principal;
+using DeyttConnect.Protocol;
 
 namespace DeyttConnect.Windows.Service;
 
 internal sealed record ServiceSnapshot(string State, string Detail,
     string? RouteTag = null, DateTimeOffset? ConnectedAt = null,
-    IReadOnlyList<ServiceProbeResult>? ProbeResults = null);
+    IReadOnlyList<ServiceProbeResult>? ProbeResults = null,
+    DateTimeOffset? HealthCheckedAt = null);
 
 internal sealed class EngineController
 {
@@ -17,14 +22,26 @@ internal sealed class EngineController
     private const int MaximumAwgProfileBytes = 512 * 1024;
     private const int MaximumAwgProfilesTotalBytes = 4 * 1024 * 1024;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly SemaphoreSlim _healthRecheck = new(0, 1);
     private Process? _engine;
     private CancellationTokenSource? _verification;
     private CancellationTokenSource? _probeCancellation;
+    private TunnelHealthMonitorLifetime? _healthMonitor;
     private string? _profilePath;
     private string? _routeTag;
     private ServiceSnapshot _snapshot = new("disconnected", "VPN выключен");
+    private readonly object _probeProgressLock = new();
+    private readonly Dictionary<string, ServiceProbeResult> _probeProgress = new(StringComparer.Ordinal);
+    private int _consecutiveHealthFailures;
 
     public ServiceSnapshot Snapshot => Volatile.Read(ref _snapshot);
+
+    public ServiceSnapshot GetProbeProgress()
+    {
+        lock (_probeProgressLock)
+            return new ServiceSnapshot("probe_progress", "Проверка маршрутов выполняется.",
+                ProbeResults: _probeProgress.Values.Take(32).ToArray());
+    }
 
     public async Task<ServiceSnapshot> ConnectAsync(string profile, string routeTag, string? awgConfig,
         CancellationToken cancellationToken)
@@ -41,6 +58,7 @@ internal sealed class EngineController
             SetSnapshot(new ServiceSnapshot("starting", "Подготовка VPN…", routeTag));
 
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig);
+            var tunAddresses = TunnelProfileBuilder.GetTunAddresses(runtimeProfile);
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return SetError("Не найдено ядро VPN. Переустановите приложение.");
@@ -77,7 +95,7 @@ internal sealed class EngineController
             _verification = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var verification = _verification;
             SetSnapshot(new ServiceSnapshot("checking", "Проверяем VPN-трафик…", routeTag));
-            _ = VerifyTunnelAsync(process, routeTag, verification.Token);
+            _ = VerifyTunnelAsync(process, routeTag, tunAddresses, verification.Token);
             return Snapshot;
         }
         catch (InvalidDataException)
@@ -124,6 +142,13 @@ internal sealed class EngineController
             var probeToken = probeCancellation.Token;
 
             var endpoints = CreateProbeEndpoints(routeTags, awgProfiles);
+            lock (_probeProgressLock)
+            {
+                _probeProgress.Clear();
+                foreach (var endpoint in endpoints)
+                    _probeProgress[endpoint.RouteTag] = new ServiceProbeResult(endpoint.RouteTag, null, null, null,
+                        "latency", 1);
+            }
             var probeProfile = TunnelProfileBuilder.BuildProbeProfile(profile, endpoints);
             _profilePath = WritePrivateProfile(probeProfile);
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
@@ -153,8 +178,10 @@ internal sealed class EngineController
             if (process.HasExited)
                 return ProbeError("Ядро VPN остановилось до начала диагностики.");
 
-            var results = await MeasureRoutesAsync(endpoints, method, token, probeToken)
+            var results = await MeasureRoutesAsync(endpoints, method, token, probeToken, PublishProbeProgress)
                 .ConfigureAwait(false);
+            lock (_probeProgressLock)
+                _probeProgress.Clear();
             return new ServiceSnapshot("probe_complete", "Проверка маршрутов завершена.",
                 ProbeResults: results);
         }
@@ -168,6 +195,8 @@ internal sealed class EngineController
         }
         catch (OperationCanceledException)
         {
+            lock (_probeProgressLock)
+                _probeProgress.Clear();
             return new ServiceSnapshot("probe_cancelled", "Проверка маршрутов остановлена.", ProbeResults: []);
         }
         catch
@@ -176,6 +205,8 @@ internal sealed class EngineController
         }
         finally
         {
+            lock (_probeProgressLock)
+                _probeProgress.Clear();
             Interlocked.Exchange(ref _probeCancellation, null);
             StopCore();
             SetSnapshot(new ServiceSnapshot("disconnected", "VPN выключен"));
@@ -209,12 +240,11 @@ internal sealed class EngineController
         }
     }
 
-    private async Task VerifyTunnelAsync(Process process, string routeTag, CancellationToken cancellationToken)
+    private async Task VerifyTunnelAsync(Process process, string routeTag,
+        IReadOnlyList<string> tunAddresses, CancellationToken cancellationToken)
     {
         try
         {
-            using var handler = new HttpClientHandler { UseProxy = false, AllowAutoRedirect = false };
-            using var http = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(5) };
             var passed = false;
             Exception? lastError = null;
             for (var attempt = 0; attempt < 3; attempt++)
@@ -224,6 +254,10 @@ internal sealed class EngineController
                 {
                     if (process.HasExited)
                         throw new InvalidOperationException("VPN engine exited before traffic verification.");
+
+                    var tunnelInterface = FindTunInterface(tunAddresses)
+                        ?? throw new InvalidOperationException("The configured TUN address is not assigned to an active interface.");
+                    using var http = CreateTunnelHttpClient(tunnelInterface, TimeSpan.FromSeconds(5));
 
                     using var transport = await http.GetAsync(
                         "https://www.cloudflare.com/cdn-cgi/trace", cancellationToken).ConfigureAwait(false);
@@ -252,8 +286,21 @@ internal sealed class EngineController
             try
             {
                 if (ReferenceEquals(_engine, process) && !process.HasExited)
-                    SetSnapshot(new ServiceSnapshot("connected", "Подключено через VPN", routeTag,
-                        DateTimeOffset.UtcNow));
+                {
+                    var checkedAt = DateTimeOffset.UtcNow;
+                    var transition = WindowsTunnelHealth.ApplyCanaryResult(true, _consecutiveHealthFailures,
+                        tunnelRouteProven: true);
+                    _consecutiveHealthFailures = transition.ConsecutiveFailures;
+                    SetSnapshot(new ServiceSnapshot(transition.State, "VPN подключён; HTTPS проверен через TUN.",
+                        routeTag, checkedAt, HealthCheckedAt: checkedAt));
+                }
+                if (ReferenceEquals(_engine, process) && !process.HasExited)
+                {
+                    _healthMonitor?.Stop();
+                    _healthMonitor?.Dispose();
+                    _healthMonitor = new TunnelHealthMonitorLifetime();
+                    _ = MonitorTunnelHealthAsync(process, routeTag, tunAddresses, _healthMonitor.Token);
+                }
             }
             finally
             {
@@ -280,6 +327,179 @@ internal sealed class EngineController
             }
         }
     }
+
+    private async Task MonitorTunnelHealthAsync(Process process, string routeTag,
+        IReadOnlyList<string> tunAddresses,
+        CancellationToken cancellationToken)
+    {
+        const int intervalSeconds = 60;
+        const int canaryTimeoutSeconds = 5;
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(intervalSeconds));
+        void OnNetworkChanged(object? _, EventArgs __)
+        {
+            try { _healthRecheck.Release(); }
+            catch (SemaphoreFullException) { }
+        }
+
+        NetworkChange.NetworkAddressChanged += OnNetworkChanged;
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var wake = await TunnelHealthMonitorWait.WaitAsync(
+                    token => timer.WaitForNextTickAsync(token).AsTask(),
+                    token => _healthRecheck.WaitAsync(token), cancellationToken).ConfigureAwait(false);
+                if (wake is null || process.HasExited)
+                    return;
+                if (wake == TunnelHealthWake.NetworkChanged)
+                    await Task.Delay(TimeSpan.FromSeconds(3), cancellationToken).ConfigureAwait(false);
+
+                await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    if (!ReferenceEquals(_engine, process) || process.HasExited)
+                        return;
+                    SetSnapshot(new ServiceSnapshot("health_checking", "Повторно проверяем VPN-трафик…",
+                        routeTag, Snapshot.ConnectedAt, HealthCheckedAt: Snapshot.HealthCheckedAt));
+                }
+                finally { _gate.Release(); }
+
+                var passed = false;
+                try
+                {
+                    var tunnelInterface = FindTunInterface(tunAddresses)
+                        ?? throw new InvalidOperationException("The configured TUN address is unavailable.");
+                    using var http = CreateTunnelHttpClient(tunnelInterface,
+                        TimeSpan.FromSeconds(canaryTimeoutSeconds));
+                    using var response = await http.GetAsync("https://www.gstatic.com/generate_204",
+                        cancellationToken).ConfigureAwait(false);
+                    passed = response.StatusCode == HttpStatusCode.NoContent && !process.HasExited;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
+                catch { }
+
+                await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    if (!ReferenceEquals(_engine, process) || process.HasExited)
+                        return;
+                    var checkedAt = DateTimeOffset.UtcNow;
+                    var transition = WindowsTunnelHealth.ApplyCanaryResult(passed, _consecutiveHealthFailures,
+                        tunnelRouteProven: passed);
+                    _consecutiveHealthFailures = transition.ConsecutiveFailures;
+                    var detail = transition.State switch
+                    {
+                        "connected" => "HTTPS проверен через TUN.",
+                        "unknown" => "HTTPS доступен, но маршрут через TUN не подтверждён.",
+                        "health_checking" => "Проверка временно не прошла; повторяем проверку VPN-трафика.",
+                        _ => "Проверка VPN-трафика не прошла; соединение оставлено включённым.",
+                    };
+                    SetSnapshot(new ServiceSnapshot(transition.State, detail, routeTag,
+                        Snapshot.ConnectedAt, HealthCheckedAt: transition.State == "unknown" ? null : checkedAt));
+                }
+                finally { _gate.Release(); }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        finally { NetworkChange.NetworkAddressChanged -= OnNetworkChanged; }
+    }
+
+    private static WindowsTunnelCanaryInterface? FindTunInterface(IReadOnlyList<string> configuredAddresses)
+    {
+        var interfaceAddresses = new List<WindowsTunnelCanaryInterface>();
+        foreach (var networkInterface in NetworkInterface.GetAllNetworkInterfaces())
+        {
+            if (networkInterface.OperationalStatus != OperationalStatus.Up)
+                continue;
+            try
+            {
+                var properties = networkInterface.GetIPProperties();
+                foreach (var unicast in properties.UnicastAddresses)
+                {
+                    var interfaceIndex = unicast.Address.AddressFamily switch
+                    {
+                        AddressFamily.InterNetwork => properties.GetIPv4Properties()?.Index ?? 0,
+                        AddressFamily.InterNetworkV6 => properties.GetIPv6Properties()?.Index ?? 0,
+                        _ => 0,
+                    };
+                    if (interfaceIndex > 0)
+                        interfaceAddresses.Add(new WindowsTunnelCanaryInterface(unicast.Address, interfaceIndex));
+                }
+            }
+            catch (Exception error) when (error is NetworkInformationException or PlatformNotSupportedException)
+            {
+                // An interface can disappear or lack index data while Windows rebuilds routes.
+            }
+        }
+        return WindowsTunnelCanaryRoute.SelectInterface(configuredAddresses, interfaceAddresses);
+    }
+
+    private static HttpClient CreateTunnelHttpClient(WindowsTunnelCanaryInterface tunnelInterface,
+        TimeSpan timeout)
+    {
+        var handler = new SocketsHttpHandler
+        {
+            UseProxy = false,
+            AllowAutoRedirect = false,
+            ConnectCallback = async (context, cancellationToken) =>
+            {
+                var destinationAddresses = await Dns.GetHostAddressesAsync(
+                    context.DnsEndPoint.Host, cancellationToken).ConfigureAwait(false);
+                Exception? lastError = null;
+                foreach (var destinationAddress in destinationAddresses.Where(address =>
+                             address.AddressFamily == tunnelInterface.Address.AddressFamily))
+                {
+                    var socket = new Socket(tunnelInterface.Address.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+                    try
+                    {
+                        socket.Bind(new IPEndPoint(tunnelInterface.Address, 0));
+                        SetOutgoingInterface(socket, tunnelInterface);
+                        await socket.ConnectAsync(new IPEndPoint(destinationAddress, context.DnsEndPoint.Port),
+                            cancellationToken).ConfigureAwait(false);
+                        return new NetworkStream(socket, ownsSocket: true);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        socket.Dispose();
+                        throw;
+                    }
+                    catch (Exception error)
+                    {
+                        lastError = error;
+                        socket.Dispose();
+                    }
+                }
+                throw new HttpRequestException("No HTTPS destination could be reached through TUN.", lastError);
+            },
+        };
+        return new HttpClient(handler) { Timeout = timeout };
+    }
+
+    private static void SetOutgoingInterface(Socket socket, WindowsTunnelCanaryInterface tunnelInterface)
+    {
+        const int ipProtocol = 0;
+        const int ipv6Protocol = 41;
+        const int unicastInterfaceOption = 31;
+        var addressFamily = tunnelInterface.Address.AddressFamily;
+        var optionLevel = addressFamily switch
+        {
+            AddressFamily.InterNetwork => ipProtocol,
+            AddressFamily.InterNetworkV6 => ipv6Protocol,
+            _ => throw new SocketException((int)SocketError.AddressFamilyNotSupported),
+        };
+        var optionValue = WindowsTunnelCanaryRoute.EncodeInterfaceIndex(
+            tunnelInterface.Address, tunnelInterface.InterfaceIndex);
+        if (SetSocketOptionNative(socket.SafeHandle, optionLevel, unicastInterfaceOption,
+                optionValue, optionValue.Length) != 0)
+            throw new SocketException(GetSocketErrorNative());
+    }
+
+    [DllImport("Ws2_32.dll", EntryPoint = "setsockopt")]
+    private static extern int SetSocketOptionNative(SafeSocketHandle socket, int level, int optionName,
+        byte[] optionValue, int optionLength);
+
+    [DllImport("Ws2_32.dll", EntryPoint = "WSAGetLastError")]
+    private static extern int GetSocketErrorNative();
 
     private async Task MonitorEngineAsync(Process process)
     {
@@ -329,9 +549,11 @@ internal sealed class EngineController
 
     private static async Task<IReadOnlyList<ServiceProbeResult>> MeasureRoutesAsync(
         IReadOnlyList<ProbeRouteEndpoint> endpoints, string method, string token,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Action<ServiceProbeResult> publish)
     {
-        var latencyTasks = endpoints.Select(endpoint => MeasureLatencyAsync(endpoint, method, cancellationToken));
+        var latencyTasks = endpoints.Select(endpoint => MeasureLatencyAsync(endpoint, method, cancellationToken,
+            attempt => publish(new ServiceProbeResult(endpoint.RouteTag, null, null, null,
+                attempt == 1 ? "latency" : "retry", attempt))));
         var latencies = await Task.WhenAll(latencyTasks).ConfigureAwait(false);
         var results = new List<ServiceProbeResult>(endpoints.Count);
         for (var index = 0; index < endpoints.Count; index++)
@@ -343,9 +565,12 @@ internal sealed class EngineController
             if (latency is not null && token.Length is >= 32 and <= 256 &&
                 token.All(character => character is >= '\x21' and <= '\x7e'))
             {
+                publish(new ServiceProbeResult(endpoint.RouteTag, latency, null, null, "waiting_speed", 1));
                 try
                 {
-                    speed = await MeasureDownloadAsync(endpoint, token, cancellationToken).ConfigureAwait(false);
+                    speed = await MeasureDownloadAsync(endpoint, token, cancellationToken,
+                        (received, total) => publish(new ServiceProbeResult(endpoint.RouteTag, latency, null, null,
+                            "download", 1, received, total))).ConfigureAwait(false);
                     if (speed is null)
                         error = "Сервер скорости не ответил.";
                 }
@@ -364,16 +589,19 @@ internal sealed class EngineController
             }
 
             results.Add(new ServiceProbeResult(endpoint.RouteTag, latency, speed, error));
+            publish(new ServiceProbeResult(endpoint.RouteTag, latency, speed, error,
+                error is null ? "complete" : "error", null));
         }
         return results;
     }
 
     private static async Task<long?> MeasureLatencyAsync(ProbeRouteEndpoint endpoint, string method,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Action<int> reportAttempt)
     {
         var samples = new List<long>(3);
         for (var sample = 0; sample < 3; sample++)
         {
+            reportAttempt(sample + 1);
             try
             {
                 using var handler = CreateProxyHandler(endpoint);
@@ -399,7 +627,7 @@ internal sealed class EngineController
     }
 
     private static async Task<long?> MeasureDownloadAsync(ProbeRouteEndpoint endpoint, string token,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, Action<long, long> reportProgress)
     {
         using var handler = CreateProxyHandler(endpoint);
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
@@ -435,12 +663,33 @@ internal sealed class EngineController
             if (firstByte == 0)
                 firstByte = Stopwatch.GetTimestamp();
             received += count;
+            reportProgress(received, Math.Min(response.Content.Headers.ContentLength ?? 32L * 1024 * 1024,
+                32L * 1024 * 1024));
         }
 
         if (received == 0 || firstByte == 0)
             return null;
         var elapsed = Math.Max(1, Stopwatch.GetElapsedTime(firstByte).TotalMilliseconds);
         return (long)(received * 1000d / elapsed);
+    }
+
+    private void PublishProbeProgress(ServiceProbeResult result)
+    {
+        if (result.RouteTag.Length is < 1 or > 64 || result.RouteTag.Any(character =>
+                !(char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')))
+            return;
+        var safe = result with
+        {
+            Stage = result.Stage is "latency" or "retry" or "waiting_speed" or "download" or "complete" or "error" or "cancelled"
+                ? result.Stage : null,
+            Attempt = result.Attempt is { } attempt ? Math.Clamp(attempt, 1, 3) : null,
+            BytesReceived = result.BytesReceived is { } received ? Math.Clamp(received, 0, 32L * 1024 * 1024) : null,
+            TotalBytes = result.TotalBytes is { } total ? Math.Clamp(total, 0, 32L * 1024 * 1024) : null,
+            Error = result.Error is null ? null : result.Error.Length <= 120 ? result.Error : result.Error[..120],
+        };
+        lock (_probeProgressLock)
+            if (_probeProgress.Count < 32 || _probeProgress.ContainsKey(safe.RouteTag))
+                _probeProgress[safe.RouteTag] = safe;
     }
 
     private static HttpClientHandler CreateProxyHandler(ProbeRouteEndpoint endpoint) => new()
@@ -522,6 +771,9 @@ internal sealed class EngineController
 
     private void StopCore()
     {
+        _healthMonitor?.Stop();
+        _healthMonitor?.Dispose();
+        _healthMonitor = null;
         _verification?.Cancel();
         _verification?.Dispose();
         _verification = null;
