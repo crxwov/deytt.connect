@@ -24,7 +24,9 @@ if [[ ! -d "$source_dir/.git" ]]; then
   git clone --filter=blob:none --no-checkout "$engine_url" "$source_dir"
 fi
 
-git -C "$source_dir" fetch --quiet --depth 1 origin "$commit"
+if ! git -C "$source_dir" cat-file -e "$commit^{commit}" 2>/dev/null; then
+  git -C "$source_dir" fetch --quiet --depth 1 origin "$commit"
+fi
 git -C "$source_dir" checkout --quiet --detach "$commit"
 if [[ "$(git -C "$source_dir" rev-parse HEAD)" != "$commit" ]]; then
   echo "The VPN engine checkout does not match the pinned source commit." >&2

@@ -20,7 +20,12 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 
 $sid = [System.Security.Principal.SecurityIdentifier]::new($AllowedUserSid)
 $bundlePath = (Resolve-Path -LiteralPath $BundleRoot).Path
-$engineSource = Join-Path $bundlePath 'DeyttVpnEngine.exe'
+$portableEngineSource = Join-Path $bundlePath 'vpn\DeyttVpnEngine.exe'
+$engineSource = if (Test-Path -LiteralPath $portableEngineSource -PathType Leaf) {
+    $portableEngineSource
+} else {
+    Join-Path $bundlePath 'DeyttVpnEngine.exe'
+}
 $serviceSource = Join-Path $bundlePath 'service'
 $serviceExecutable = Join-Path $serviceSource 'DeyttConnect.Windows.Service.exe'
 if (-not (Test-Path -LiteralPath $engineSource -PathType Leaf) -or

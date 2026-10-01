@@ -682,14 +682,14 @@ public partial class MainWindow : Window
     private static Control BuildQaMapPlaceholder()
     {
         const double canvasWidth = 580;
-        const double canvasHeight = 420;
+        const double canvasHeight = 300;
         var canvas = new Canvas { Width = canvasWidth, Height = canvasHeight };
         var guide = new Polyline
         {
             Points = new Avalonia.Collections.AvaloniaList<Point>
             {
-                new(30, 260), new(95, 210), new(185, 246), new(272, 183),
-                new(350, 214), new(442, 155), new(550, 180),
+                new(30, 220), new(95, 170), new(185, 206), new(272, 143),
+                new(350, 174), new(442, 115), new(550, 140),
             },
             Stroke = DeyttTheme.Brush(Color.Parse("#263A4C")),
             StrokeThickness = 1,
@@ -697,14 +697,14 @@ public partial class MainWindow : Window
         canvas.Children.Add(guide);
         var route = new Polyline
         {
-            Points = new Avalonia.Collections.AvaloniaList<Point> { new(150, 211), new(420, 172) },
+            Points = new Avalonia.Collections.AvaloniaList<Point> { new(150, 171), new(420, 132) },
             Stroke = DeyttTheme.Brush(DeyttTheme.Sky),
             StrokeThickness = 2,
             StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 5, 5 },
         };
         canvas.Children.Add(route);
-        AddNode(150, 211, "QA origin", "synthetic");
-        AddNode(420, 172, "QA exit", "NL · VLESS");
+        AddNode(150, 171, "QA origin", "synthetic");
+        AddNode(420, 132, "QA exit", "NL · VLESS");
         var marker = DeyttTheme.TextBlock("STATIC QA MAP · NO LIVE GEO", 11,
             DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false);
         Canvas.SetLeft(marker, 18);
@@ -712,9 +712,9 @@ public partial class MainWindow : Window
         canvas.Children.Add(marker);
         return new Viewbox
         {
-            Stretch = Avalonia.Media.Stretch.UniformToFill,
-            MinHeight = 230,
-            Height = 360,
+            Stretch = Avalonia.Media.Stretch.Fill,
+            MinHeight = 200,
+            Height = 260,
             Child = canvas,
         };
 
@@ -760,8 +760,8 @@ public partial class MainWindow : Window
     {
         var map = new RouteGlobeWebView
         {
-            MinHeight = _compactLayout ? 120 : 280,
-            Height = _compactLayout ? 150 : 360,
+            MinHeight = _compactLayout ? 200 : 280,
+            Height = _compactLayout ? 240 : 360,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
         };
@@ -775,9 +775,9 @@ public partial class MainWindow : Window
         if (_routeGlobeMap is null || _routeGlobeMap.Bounds.Width <= 0)
             return;
 
-        _routeGlobeMap.MinHeight = _compactLayout ? 120 : 280;
+        _routeGlobeMap.MinHeight = _compactLayout ? 200 : 280;
         var height = _compactLayout
-            ? Math.Clamp(_routeGlobeMap.Bounds.Width * 0.22, 128, 170)
+            ? Math.Clamp(_routeGlobeMap.Bounds.Width * 0.31, 210, 290)
             : Math.Clamp(_routeGlobeMap.Bounds.Width * 0.72, 280, 520);
         if (Math.Abs(_routeGlobeMap.Height - height) > 1)
             _routeGlobeMap.Height = height;
@@ -1078,12 +1078,12 @@ public partial class MainWindow : Window
         var page = NewPage(Copy("ВЫХОДЫ · ВЫБОР · ДИАГНОСТИКА", "EXITS · SELECTION · DIAGNOSTICS"), Copy("Маршруты", "Routes"));
         page.Children.Add(DeyttTheme.TextBlock(
             HasProbeSpeedToken()
-                ? Copy("Откройте страну: пинги маршрутов идут параллельно, скорость измеряется по очереди.",
-                    "Open a country: route pings run in parallel, then speed is measured one route at a time.")
-                : Copy("Откройте страну: проверим пинг. Для замера скорости войдите через Telegram.",
-                    "Open a country to check latency. Sign in with Telegram to measure speed."),
+                ? Copy("Выберите выход. Проверка покажет пинг и скорость каждого маршрута.",
+                    "Choose an exit. Diagnostics show each route's latency and speed.")
+                : Copy("Выберите выход. Войдите через Telegram для проверки скорости.",
+                    "Choose an exit. Sign in with Telegram to measure speed."),
             13, DeyttTheme.Muted));
-        page.Children.Add(DeyttTheme.Spacer(24));
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 14 : 24));
 
         var showDiagnostics = _keysSnapshot?.ProfileJson is { Length: > 0 } && _routes.Count > 0;
         var diagnosticsBesideRoutes = showDiagnostics && !_compactLayout;
@@ -1249,7 +1249,7 @@ public partial class MainWindow : Window
                     BorderBrush = DeyttTheme.Brush(selectedCountry ? DeyttTheme.SelectedLine : Colors.Transparent),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(18),
-                    Padding = new Thickness(9, 8),
+                    Padding = new Thickness(8, 6),
                     Child = countryContents,
                 });
             }
@@ -1382,7 +1382,7 @@ public partial class MainWindow : Window
     private Control RouteOption(WindowsRoute route, RouteCountryQuality quality)
     {
         var selected = _selectedRoute == route.Id;
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 62 };
+        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 58 };
         var protocolMark = route.Protocol switch
         {
             "VLESS" => "V",
@@ -1391,7 +1391,7 @@ public partial class MainWindow : Window
             "AWG31" => "A",
             _ => "•",
         };
-        body.Children.Add(DeyttTheme.IconTile(protocolMark, 42));
+        body.Children.Add(DeyttTheme.IconTile(protocolMark, 38));
         var labels = new StackPanel
         {
             Spacing = 3,
@@ -1400,7 +1400,7 @@ public partial class MainWindow : Window
         };
         labels.Children.Add(DeyttTheme.TextBlock(route.ProfileName ??
             (route.Protocol == "AWG31" ? "AmneziaWG 3.1" : route.ProtocolName),
-            15, DeyttTheme.Text, FontWeight.SemiBold));
+            14, DeyttTheme.Text, FontWeight.SemiBold));
         var detail = route.Protocol switch
         {
             "VLESS" or "TROJAN" => "WebSocket + TLS",
@@ -1459,10 +1459,10 @@ public partial class MainWindow : Window
         button.Padding = new Thickness(8, 4);
         return new Border
         {
-            Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : DeyttTheme.Surface2),
-            BorderBrush = DeyttTheme.Brush(selected ? DeyttTheme.SelectedLine : DeyttTheme.Line),
+            Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : Colors.Transparent),
+            BorderBrush = DeyttTheme.Brush(selected ? DeyttTheme.SelectedLine : Colors.Transparent),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(15),
+            CornerRadius = new CornerRadius(12),
             Child = button,
         };
     }
@@ -1498,15 +1498,15 @@ public partial class MainWindow : Window
     private Control QuickOption(WindowsRoute route, string glyph, string title, string subtitle)
     {
         var selected = _selectedRoute == route.Id;
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 72 };
-        body.Children.Add(DeyttTheme.IconTile(glyph, 52));
-        var labels = new StackPanel { Spacing = 3, Margin = new Thickness(14, 0, 8, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        labels.Children.Add(DeyttTheme.TextBlock(title, 17, DeyttTheme.Text, FontWeight.SemiBold));
-        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 12, DeyttTheme.Muted));
+        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 62 };
+        body.Children.Add(DeyttTheme.IconTile(glyph, 44));
+        var labels = new StackPanel { Spacing = 3, Margin = new Thickness(12, 0, 8, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        labels.Children.Add(DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
+        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 11, DeyttTheme.Muted));
         Grid.SetColumn(labels, 1);
         body.Children.Add(labels);
         var action = DeyttTheme.TextBlock(selected ? Copy("ВЫБРАН", "SELECTED") : Copy("выбрать", "select"),
-            13, selected ? DeyttTheme.Mint : DeyttTheme.Muted,
+            12, selected ? DeyttTheme.Mint : DeyttTheme.Muted,
             FontWeight.SemiBold, wrap: false);
         Grid.SetColumn(action, 2);
         body.Children.Add(action);
@@ -1548,7 +1548,7 @@ public partial class MainWindow : Window
         var managementColumn = new StackPanel
         {
             Spacing = 10,
-            Margin = compact ? new Thickness(0, 14, 0, 0) : new Thickness(10, 14, 0, 0),
+            Margin = compact ? new Thickness(0, 8, 0, 0) : new Thickness(10, 14, 0, 0),
         };
 
         accountColumn.Children.Add(BuildProfileIdentityCard(account, signedIn, loading));
@@ -1718,19 +1718,19 @@ public partial class MainWindow : Window
     private Control BuildProfileDisclosure(string title, string subtitle, bool expanded,
         Action onToggle, Control? details)
     {
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), MinHeight = 72 };
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), MinHeight = 58 };
         var labels = new StackPanel { Spacing = 4,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        labels.Children.Add(DeyttTheme.TextBlock(title, 17, DeyttTheme.Text, FontWeight.SemiBold));
-        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 12, DeyttTheme.Muted));
+        labels.Children.Add(DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
+        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 11, DeyttTheme.Muted));
         header.Children.Add(labels);
-        var indicator = DeyttTheme.TextBlock(expanded ? "−" : "+", 25,
+        var indicator = DeyttTheme.TextBlock(expanded ? "−" : "+", 20,
             DeyttTheme.Muted, FontWeight.Normal, wrap: false);
         indicator.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         Grid.SetColumn(indicator, 1);
         header.Children.Add(indicator);
         var button = DeyttTheme.Action(header, onToggle);
-        button.Padding = new Thickness(17, 12);
+        button.Padding = new Thickness(15, 9);
         var group = new StackPanel { Spacing = 7 };
         group.Children.Add(DeyttTheme.Card(button, DeyttTheme.Surface, DeyttTheme.Line,
             20, new Thickness(0)));
@@ -1936,11 +1936,11 @@ public partial class MainWindow : Window
     private Control SettingsEntry(string glyph, string title, string subtitle, string trailing,
         Action onClick, bool emphasis = false)
     {
-        var content = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 84 };
-        content.Children.Add(DeyttTheme.IconTile(glyph, 52, emphasis ? DeyttTheme.Sky : DeyttTheme.Sky));
-        var labels = new StackPanel { Spacing = 3, Margin = new Thickness(14, 0, 6, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        labels.Children.Add(DeyttTheme.TextBlock(title, 17, DeyttTheme.Text, FontWeight.SemiBold));
-        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 12, DeyttTheme.Muted));
+        var content = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 66 };
+        content.Children.Add(DeyttTheme.IconTile(glyph, 42));
+        var labels = new StackPanel { Spacing = 3, Margin = new Thickness(12, 0, 6, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        labels.Children.Add(DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
+        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 11, DeyttTheme.Muted));
         Grid.SetColumn(labels, 1);
         content.Children.Add(labels);
         var arrow = DeyttTheme.TextBlock(trailing, 13, emphasis ? DeyttTheme.Sky : DeyttTheme.Muted,
@@ -1950,20 +1950,20 @@ public partial class MainWindow : Window
         content.Children.Add(arrow);
         var button = DeyttTheme.Action(content, onClick);
         button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-        button.Padding = new Thickness(5, 5);
+        button.Padding = new Thickness(5, 4);
         return new Border
         {
-            Background = DeyttTheme.Brush(emphasis ? DeyttTheme.Selected : Colors.Transparent),
+            Background = DeyttTheme.Brush(emphasis ? DeyttTheme.Surface2 : Colors.Transparent),
             BorderBrush = DeyttTheme.Brush(emphasis ? DeyttTheme.SelectedLine : Colors.Transparent),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(19),
+            CornerRadius = new CornerRadius(16),
             Child = button,
         };
     }
 
     private Control ToggleEntry(string title, string subtitle, bool value, Func<bool, Task> update)
     {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), MinHeight = 86 };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), MinHeight = 68 };
         var labels = new StackPanel { Spacing = 3, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
         labels.Children.Add(DeyttTheme.TextBlock(title, 17, DeyttTheme.Text, FontWeight.SemiBold));
         labels.Children.Add(DeyttTheme.TextBlock(subtitle, 12, DeyttTheme.Muted));
@@ -2055,20 +2055,20 @@ public partial class MainWindow : Window
     private StackPanel NewPage(string kicker, string title)
     {
         var page = new StackPanel { Spacing = 0 };
-        page.Children.Add(DeyttTheme.TextBlock(kicker, 12, DeyttTheme.Sky,
+        page.Children.Add(DeyttTheme.TextBlock(kicker, _compactLayout ? 10 : 12, DeyttTheme.Sky,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono));
-        page.Children.Add(DeyttTheme.Spacer(8));
-        page.Children.Add(DeyttTheme.TextBlock(title, 36, DeyttTheme.Text,
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 5 : 8));
+        page.Children.Add(DeyttTheme.TextBlock(title, _compactLayout ? 29 : 36, DeyttTheme.Text,
             FontWeight.Bold, DeyttTheme.InterTight));
-        page.Children.Add(DeyttTheme.Spacer(22));
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 14 : 22));
         return page;
     }
 
-    private static void AddSection(StackPanel page, string title)
+    private void AddSection(StackPanel page, string title)
     {
-        page.Children.Add(DeyttTheme.Spacer(24));
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 17 : 24));
         page.Children.Add(DeyttTheme.SectionLabel(title));
-        page.Children.Add(DeyttTheme.Spacer(10));
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 8 : 10));
     }
 
     private string RouteTitle() => _routes.FirstOrDefault(route => route.Id == _selectedRoute) is { } route
@@ -2963,10 +2963,11 @@ public partial class MainWindow : Window
 
             var powerShellPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
                 "WindowsPowerShell", "v1.0", "powershell.exe");
+            var bundleRoot = WindowsPortableLayout.ResolveBundleRoot(AppContext.BaseDirectory);
             var start = new ProcessStartInfo
             {
                 FileName = powerShellPath,
-                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{installerPath}\" -AllowedUserSid \"{sid}\" -BundleRoot \"{AppContext.BaseDirectory.TrimEnd(System.IO.Path.DirectorySeparatorChar)}\"",
+                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{installerPath}\" -AllowedUserSid \"{sid}\" -BundleRoot \"{bundleRoot}\"",
                 UseShellExecute = true,
                 Verb = "runas",
                 WindowStyle = ProcessWindowStyle.Hidden,
