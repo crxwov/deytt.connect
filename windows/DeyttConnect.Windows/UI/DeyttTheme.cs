@@ -119,6 +119,10 @@ internal static class DeyttTheme
 
     public static Border IconTile(string glyph, double size = 56, Color? color = null)
     {
+        var icon = TextBlock(glyph, size <= 44 ? 18 : 22,
+            color ?? Sky, FontWeight.SemiBold, JetBrainsMono, wrap: false);
+        icon.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        icon.TextAlignment = TextAlignment.Center;
         return new Border
         {
             Width = size,
@@ -127,7 +131,7 @@ internal static class DeyttTheme
             BorderBrush = Brush(Line),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(17),
-            Child = TextBlock(glyph, 22, color ?? Sky, FontWeight.SemiBold, JetBrainsMono, wrap: false),
+            Child = icon,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };

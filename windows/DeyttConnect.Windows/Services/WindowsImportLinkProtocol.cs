@@ -45,6 +45,9 @@ public static class WindowsImportLinkProtocol
 
     private static string GetCurrentExecutablePath()
     {
+        if (WindowsPortableLayout.FindPortableRoot(AppContext.BaseDirectory) is { } portableRoot)
+            return Path.Combine(portableRoot, "deyttconnect.exe");
+
         var path = Environment.ProcessPath;
         if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
             throw new IOException("Could not locate the Windows app executable.");

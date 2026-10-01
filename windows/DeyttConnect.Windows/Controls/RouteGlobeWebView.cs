@@ -32,6 +32,7 @@ public sealed class RouteGlobeWebView : ContentControl
     };
 
     private NativeWebView? _webView;
+    private RouteMapIllustration? _fallbackMap;
     private AtlasLoopbackAssetHost? _linuxAssetHost;
     private Uri _atlasUri = AtlasUri;
     private string _selectedRoute = "auto";
@@ -133,6 +134,7 @@ public sealed class RouteGlobeWebView : ContentControl
             _originConsentGranted = value;
             if (!value)
                 _originLocation = null;
+            UpdateFallbackMap();
             QueueStateUpdate();
         }
     }
@@ -147,6 +149,7 @@ public sealed class RouteGlobeWebView : ContentControl
             if (_originLocation == next)
                 return;
             _originLocation = next;
+            UpdateFallbackMap();
             QueueStateUpdate();
         }
     }
@@ -161,6 +164,7 @@ public sealed class RouteGlobeWebView : ContentControl
             if (_exitCoordinate == next)
                 return;
             _exitCoordinate = next;
+            UpdateFallbackMap();
             QueueStateUpdate();
         }
     }
@@ -303,6 +307,7 @@ public sealed class RouteGlobeWebView : ContentControl
             webView.NewWindowRequested += OnNewWindowRequested;
             webView.WebMessageReceived += OnWebMessageReceived;
             _webView = webView;
+            _fallbackMap = null;
             Content = webView;
         }
         catch (Exception exception)
@@ -551,8 +556,8 @@ public sealed class RouteGlobeWebView : ContentControl
         var retry = new Button
         {
             Content = english ? "Retry" : "Повторить",
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-            Padding = new Avalonia.Thickness(18, 8),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+            Padding = new Avalonia.Thickness(13, 7),
             CornerRadius = new Avalonia.CornerRadius(10),
             Foreground = Brushes.White,
             Background = new SolidColorBrush(Avalonia.Media.Color.Parse("#24354B")),
@@ -560,24 +565,53 @@ public sealed class RouteGlobeWebView : ContentControl
             BorderThickness = new Avalonia.Thickness(1),
         };
         retry.Click += (_, _) => TryInitializeWebView();
-        Content = new StackPanel
+        var fallback = new RouteMapIllustration();
+        _fallbackMap = fallback;
+        UpdateFallbackMap();
+        var summary = reason == "runtime" && OperatingSystem.IsWindows()
+            ? english ? "Interactive map needs WebView2 Runtime" : "Для интерактивной карты нужен WebView2 Runtime"
+            : english ? "Interactive map is unavailable" : "Интерактивная карта недоступна";
+        var caption = new StackPanel { Spacing = 2,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        caption.Children.Add(new TextBlock
         {
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            MaxWidth = 360,
-            Spacing = 14,
-            Children =
-            {
-                new TextBlock
-                {
-                    Text = message,
-                    TextWrapping = TextWrapping.Wrap,
-                    TextAlignment = TextAlignment.Center,
-                    Foreground = new SolidColorBrush(Avalonia.Media.Color.Parse("#AAB8CD")),
-                },
-                retry,
-            },
-        };
+            Text = summary,
+            TextWrapping = TextWrapping.Wrap,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = Brushes.White,
+        });
+        caption.Children.Add(new TextBlock
+        {
+            Text = english ? "Your route remains available." : "Маршрут остаётся доступен.",
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Avalonia.Media.Color.Parse("#AAB8CD")),
+        });
+        var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        actions.Children.Add(caption);
+        Grid.SetColumn(retry, 1);
+        actions.Children.Add(retry);
+        var fallbackPanel = new Grid();
+        fallbackPanel.Children.Add(fallback);
+        fallbackPanel.Children.Add(new Border
+        {
+            Background = new SolidColorBrush(Avalonia.Media.Color.Parse("#E60A1018")),
+            Padding = new Avalonia.Thickness(15, 10),
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
+            Child = actions,
+        });
+        ToolTip.SetTip(fallbackPanel, message);
+        Content = fallbackPanel;
+    }
+
+    private void UpdateFallbackMap()
+    {
+        if (_fallbackMap is null)
+            return;
+        _fallbackMap.ExitCoordinate = _exitCoordinate;
+        _fallbackMap.OriginCoordinate = _originConsentGranted && _originLocation is { } location
+            ? new MapCoordinate(location.Latitude, location.Longitude)
+            : null;
+        _fallbackMap.InvalidateVisual();
     }
 
     private void OnProcessExit(object? sender, EventArgs args) => _linuxAssetHost?.Dispose();
