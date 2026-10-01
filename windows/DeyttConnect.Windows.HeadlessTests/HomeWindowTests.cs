@@ -10,6 +10,7 @@ using DeyttConnect.Protocol;
 using DeyttConnect.Windows;
 using DeyttConnect.Windows.Views;
 using DeyttConnect.Windows.Services;
+using DeyttConnect.Windows.Controls;
 using Xunit;
 
 namespace DeyttConnect.Windows.HeadlessTests;
@@ -80,7 +81,7 @@ public sealed class HomeWindowTests
 
     [AvaloniaTheory]
     [InlineData(720d, 156d, 48d)]
-    [InlineData(1360d, 0d, 56d)]
+    [InlineData(1360d, 200d, 56d)]
     public void Home_connection_action_keeps_a_usable_hit_target(double width, double expectedMinWidth, double expectedHeight)
     {
         var window = new MainWindow(Fixture()) { Width = width, Height = 820 };
@@ -99,6 +100,52 @@ public sealed class HomeWindowTests
             Assert.Equal(expectedHeight, hitTarget.Height);
             Assert.True(action.Focus());
             Assert.True(action.IsFocused);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Home_route_overview_is_native_and_never_an_empty_webview(double width)
+    {
+        var window = new MainWindow(Fixture(signedIn: true)) { Width = width, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var controls = Descendants(Required<Grid>(window, "PageHost")).ToArray();
+            Assert.Contains(controls, control => control is RoutePathVisual && control.Bounds.Width > 300);
+            Assert.DoesNotContain(controls, control => control is RouteGlobeWebView);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Settings_toggle_track_is_compact_and_at_the_right_edge()
+    {
+        var window = new MainWindow(Fixture(tab: "settings", signedIn: true))
+            { Width = 900, Height = 830 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            var toggle = Assert.Single(Descendants(page).OfType<Button>(), button =>
+                Descendants(button).OfType<TextBlock>().Any(text => text.Text == "Показывать мой регион"));
+            var content = Assert.IsType<Grid>(toggle.Content);
+            var track = Assert.Single(content.Children.OfType<Border>());
+            Assert.Equal(27, track.Height);
+            Assert.True(content.Bounds.Width > 600);
+            Assert.True(track.Bounds.X > content.Bounds.Width - 80);
         }
         finally
         {
