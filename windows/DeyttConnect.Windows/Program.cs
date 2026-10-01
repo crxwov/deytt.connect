@@ -7,6 +7,7 @@ using DeyttConnect.Windows.Views;
 
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DeyttConnect.Windows.QA")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DeyttConnect.Windows.HeadlessTests")]
+[assembly: System.Runtime.CompilerServices.InternalsVisibleTo("DeyttConnect.Windows.Tests")]
 
 namespace DeyttConnect.Windows;
 

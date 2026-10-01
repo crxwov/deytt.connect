@@ -68,7 +68,7 @@ public partial class MainWindow : Window
     private bool _profileRefreshInProgress;
     private bool _profileDevicesExpanded;
     private bool _profileHelpExpanded;
-    private string? _pendingPaymentId;
+    private readonly WindowsPaymentFlowState _paymentFlow = new();
     private MainTab _activeTab = MainTab.Home;
     private WindowsTunnelSnapshot _vpnSnapshot = new("disconnected", "VPN выключен");
     private IReadOnlyDictionary<string, WindowsRouteProbeResult> _routeProbeResults =
@@ -1608,7 +1608,7 @@ public partial class MainWindow : Window
             accountColumn.Children.Add(DeyttTheme.Spacer(8));
             accountColumn.Children.Add(planPaymentEntry);
         }
-        if (_pendingPaymentId is not null)
+        if (_paymentFlow.PendingPaymentId is not null)
         {
             accountColumn.Children.Add(DeyttTheme.Spacer(6));
             accountColumn.Children.Add(SettingsEntry("↻", Copy("Проверить платёж", "Check payment"),
@@ -1623,7 +1623,10 @@ public partial class MainWindow : Window
             if (_profileActionRetry is { } retry)
             {
                 var retryButton = DeyttTheme.Action(
-                    DeyttTheme.TextBlock(Copy("Повторить расчёт", "Retry quote"), 13,
+                    DeyttTheme.TextBlock(
+                        _paymentFlow.RetryUsesConfirmedQuote
+                            ? Copy("Повторить создание счёта", "Retry checkout")
+                            : Copy("Повторить расчёт", "Retry quote"), 13,
                         DeyttTheme.Sky, FontWeight.SemiBold),
                     () => _ = retry());
                 retryButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
@@ -3183,6 +3186,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!_paymentFlow.TryEnterBillingFlow())
+            return;
+
         try
         {
             _profileActionRetry = null;
@@ -3313,6 +3319,10 @@ public partial class MainWindow : Window
                 Copy("Проверьте интернет и повторите попытку. Сервер не подтвердил запрос.",
                     "Check your connection and retry. The server did not confirm the request."));
         }
+        finally
+        {
+            _paymentFlow.ExitBillingFlow();
+        }
     }
 
     private async Task ChooseSubscriptionDurationAsync(string token)
@@ -3347,60 +3357,31 @@ public partial class MainWindow : Window
         int? extra,
         string? selectedPlanLabel = null)
     {
-        var quoteReceived = false;
         try
         {
             _profileActionRetry = null;
             _profileActionStatus = Copy("Рассчитываем стоимость…", "Calculating the total…");
             ShowTab(MainTab.Profile);
-            var quote = await _telegramApi.GetQuoteAsync(token, kind, plan, months, devices, extra);
+            var checkout = await _paymentFlow.StartAsync(
+                () => _telegramApi.GetQuoteAsync(token, kind, plan, months, devices, extra),
+                quote => ChooseOptionAsync(Copy("Подтвердите сумму", "Confirm the total"),
+                    BuildQuoteDetail(quote, kind),
+                    [
+                        (Copy("Оплатить картой", "Pay by card"),
+                            Copy($"Защищённая страница · {quote.Rubles} ₽", $"Secure checkout · {quote.Rubles} ₽"), "platega"),
+                        (Copy("Telegram Stars", "Telegram Stars"),
+                            Copy($"Оплата через Telegram · ⭐ {quote.Stars}", $"Pay through Telegram · ⭐ {quote.Stars}"), "stars"),
+                    ]),
+                method => _telegramApi.CreateCheckoutAsync(token, kind, method, plan, months, devices, extra));
             if (_sessionToken != token)
                 return;
-            quoteReceived = true;
-            _profileActionStatus = null;
-            ShowTab(MainTab.Profile);
-
-            var duration = kind == "add_devices"
-                ? Copy("до конца текущей подписки", "until the current subscription ends")
-                : Copy($"{quote.Months} мес.", $"{quote.Months} months");
-            var amount = $"{quote.Rubles} ₽ · ⭐ {quote.Stars}";
-            var detail = $"{quote.Name}\n{quote.Devices} {Copy("устройств", "devices")} · {duration}\n{amount}";
-            var method = await ChooseOptionAsync(Copy("Подтвердите сумму", "Confirm the total"), detail,
-                [
-                    (Copy("Оплатить картой", "Pay by card"),
-                        Copy($"Защищённая страница · {quote.Rubles} ₽", $"Secure checkout · {quote.Rubles} ₽"), "platega"),
-                    (Copy("Telegram Stars", "Telegram Stars"),
-                        Copy($"Оплата через Telegram · ⭐ {quote.Stars}", $"Pay through Telegram · ⭐ {quote.Stars}"), "stars"),
-                ]);
-            if (method is null)
+            if (checkout is null)
+            {
+                _profileActionStatus = null;
+                ShowTab(MainTab.Profile);
                 return;
-
-            _profileActionStatus = Copy("Готовим защищённый счёт…", "Preparing secure checkout…");
-            ShowTab(MainTab.Profile);
-            var checkout = await _telegramApi.CreateCheckoutAsync(token, kind, method, plan, months, devices, extra);
-            if (_sessionToken != token)
-                return;
-            _pendingPaymentId = checkout.ExternalId;
-            _profileActionStatus = checkout.ExternalId is null
-                ? Copy("Счёт создан. Откройте страницу оплаты, чтобы продолжить.",
-                    "Checkout is ready. Open the payment page to continue.")
-                : Copy("Счёт создан. Статус можно проверить в профиле.",
-                    "Checkout is ready. You can check its status from Profile.");
-            ShowTab(MainTab.Profile);
-
-            var nextStep = await ChooseOptionAsync(Copy("Счёт готов", "Checkout is ready"),
-                Copy("Откройте защищённую страницу оплаты. Приложение не запрашивает данные карты.",
-                    "Open the secure payment page. The app never asks for card details."),
-                [
-                    (Copy("Открыть оплату", "Open payment"), Copy("Перейти в браузер", "Continue in your browser"), "open"),
-                    .. (checkout.ExternalId is null
-                        ? Array.Empty<(string Title, string Detail, string Value)>()
-                        : new[] { (Copy("Проверить статус", "Check status"), Copy("Запросить подтверждение у сервера", "Ask the server for confirmation"), "check") }),
-                ]);
-            if (nextStep == "open")
-                OpenExternal(checkout.PaymentUrl);
-            else if (nextStep == "check")
-                await CheckPaymentStatusAsync();
+            }
+            await PresentCheckoutAsync(checkout);
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
@@ -3413,15 +3394,14 @@ public partial class MainWindow : Window
         {
             if (_sessionToken != token)
                 return;
-            if (!quoteReceived)
+            if (_paymentFlow.CanRetry)
             {
                 var selection = selectedPlanLabel ?? plan ??
                     (months is { } duration
                         ? Copy($"План на {duration} мес.", $"{duration}-month plan")
                         : Copy("Выбранный план", "Selected plan"));
                 _profileActionStatus = $"{selection} · {BillingError(error)}";
-                _profileActionRetry = () => CreateQuoteAndCheckoutAsync(
-                    token, kind, plan, months, devices, extra, selectedPlanLabel);
+                _profileActionRetry = () => RetryPaymentFlowAsync(token);
                 ShowTab(MainTab.Profile);
                 return;
             }
@@ -3432,10 +3412,86 @@ public partial class MainWindow : Window
         }
     }
 
+    private string BuildQuoteDetail(TelegramQuote quote, string kind)
+    {
+        var duration = kind == "add_devices"
+            ? Copy("до конца текущей подписки", "until the current subscription ends")
+            : Copy($"{quote.Months} мес.", $"{quote.Months} months");
+        return $"{quote.Name}\n{quote.Devices} {Copy("устройств", "devices")} · {duration}\n{quote.Rubles} ₽ · ⭐ {quote.Stars}";
+    }
+
+    private async Task RetryPaymentFlowAsync(string token)
+    {
+        if (_sessionToken != token)
+            return;
+        if (!_paymentFlow.TryEnterBillingFlow())
+            return;
+        try
+        {
+            _profileActionRetry = null;
+            _profileActionStatus = Copy("Повторяем подготовку счёта…", "Retrying checkout preparation…");
+            ShowTab(MainTab.Profile);
+            var checkout = await _paymentFlow.RetryAsync();
+            if (_sessionToken != token)
+                return;
+            if (checkout is null)
+            {
+                _profileActionStatus = null;
+                ShowTab(MainTab.Profile);
+                return;
+            }
+            await PresentCheckoutAsync(checkout);
+        }
+        catch (TelegramApiException error) when (error.IsUnauthorized)
+        {
+            ClearLocalSession();
+            ShowTab(MainTab.Profile);
+            ShowInfoDialog(Copy("Сеанс истёк", "Session expired"),
+                Copy("Войди через Telegram ещё раз.", "Sign in with Telegram again."));
+        }
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or TaskCanceledException or IOException)
+        {
+            if (_sessionToken != token)
+                return;
+            _profileActionStatus = BillingError(error);
+            _profileActionRetry = () => RetryPaymentFlowAsync(token);
+            ShowTab(MainTab.Profile);
+        }
+        finally
+        {
+            _paymentFlow.ExitBillingFlow();
+        }
+    }
+
+    private async Task PresentCheckoutAsync(TelegramCheckout checkout)
+    {
+        var hasPendingId = _paymentFlow.PendingPaymentId is not null;
+        _profileActionStatus = !hasPendingId
+            ? Copy("Счёт создан. Откройте страницу оплаты, чтобы продолжить.",
+                "Checkout is ready. Open the payment page to continue.")
+            : Copy("Счёт создан. Статус можно проверить в профиле.",
+                "Checkout is ready. You can check its status from Profile.");
+        ShowTab(MainTab.Profile);
+
+        var nextStep = await ChooseOptionAsync(Copy("Счёт готов", "Checkout is ready"),
+            Copy("Откройте защищённую страницу оплаты. Приложение не запрашивает данные карты.",
+                "Open the secure payment page. The app never asks for card details."),
+            [
+                (Copy("Открыть оплату", "Open payment"), Copy("Перейти в браузер", "Continue in your browser"), "open"),
+                .. (!hasPendingId
+                    ? Array.Empty<(string Title, string Detail, string Value)>()
+                    : new[] { (Copy("Проверить статус", "Check status"), Copy("Запросить подтверждение у сервера", "Ask the server for confirmation"), "check") }),
+            ]);
+        if (nextStep == "open")
+            OpenExternal(checkout.PaymentUrl);
+        else if (nextStep == "check")
+            await CheckPaymentStatusAsync();
+    }
+
     private async Task CheckPaymentStatusAsync()
     {
         var token = _sessionToken;
-        var externalId = _pendingPaymentId;
+        var externalId = _paymentFlow.PendingPaymentId;
         if (token is null || externalId is null)
         {
             ShowInfoDialog(Copy("Нет ожидающего платежа", "No pending payment"),
@@ -3453,12 +3509,18 @@ public partial class MainWindow : Window
                 return;
             if (status == "paid")
             {
-                _pendingPaymentId = null;
-                _profileActionStatus = Copy("Оплата подтверждена", "Payment confirmed");
-                await RefreshAccountDataAsync(token);
+                var refreshed = await RefreshAccountDataAsync(token);
+                _paymentFlow.ApplyPaymentStatus(status, externalId, refreshed);
+                _profileActionStatus = refreshed
+                    ? Copy("Оплата подтверждена", "Payment confirmed")
+                    : Copy("Оплата подтверждена, но данные подписки не обновились.",
+                        "Payment confirmed, but subscription details could not be refreshed.");
                 ShowTab(MainTab.Profile);
                 ShowInfoDialog(Copy("Оплата подтверждена", "Payment confirmed"),
-                    Copy("Данные подписки обновлены.", "Your subscription details have been refreshed."));
+                    refreshed
+                        ? Copy("Данные подписки обновлены.", "Your subscription details have been refreshed.")
+                        : Copy("Оплата прошла. Обновите профиль позже, чтобы загрузить данные подписки.",
+                            "Payment succeeded. Refresh Profile later to load subscription details."));
             }
             else
             {
@@ -3782,7 +3844,7 @@ public partial class MainWindow : Window
         _sessions = [];
         _routes = [];
         _selectedRoute = "auto";
-        _pendingPaymentId = null;
+        _paymentFlow.Reset();
         _profileActionStatus = null;
         _profileActionRetry = null;
         _sessionLoadIssue = null;
