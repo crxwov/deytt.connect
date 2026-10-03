@@ -474,11 +474,11 @@ public partial class MainWindow : Window
             return;
 
         _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*");
-        _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto,Auto");
-        _homeConnectionLayout.RowSpacing = _compactLayout ? 14 : 18;
+        _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto,Auto,Auto");
+        _homeConnectionLayout.RowSpacing = _compactLayout ? 10 : 12;
         Grid.SetColumn(_homeConnectionPrimaryAction, 0);
-        Grid.SetRow(_homeConnectionPrimaryAction, 1);
-        _homeConnectionPrimaryAction.Height = _compactLayout ? 108 : 116;
+        Grid.SetRow(_homeConnectionPrimaryAction, 2);
+        _homeConnectionPrimaryAction.Height = _compactLayout ? 76 : 84;
         _homeConnectionCard.Padding = _compactLayout
             ? new Thickness(18, 18)
             : new Thickness(22, 22);
@@ -558,8 +558,8 @@ public partial class MainWindow : Window
         var contents = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto"),
-            RowSpacing = _compactLayout ? 14 : 18,
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
+            RowSpacing = _compactLayout ? 10 : 12,
         };
         var stateTitle = _qaFixture && isError
             ? Copy("Ошибка VPN", "VPN error")
@@ -621,22 +621,21 @@ public partial class MainWindow : Window
 
         var actionIsPrimary = !connected && !starting && !isError;
         var actionForeground = connected || actionIsPrimary ? DeyttTheme.Background : DeyttTheme.Text;
-        var detailForeground = connected || actionIsPrimary ? DeyttTheme.Surface : DeyttTheme.Muted;
         var statusDot = new Ellipse
         {
             Width = 8,
             Height = 8,
-            Fill = DeyttTheme.Brush(connected || actionIsPrimary ? DeyttTheme.Background :
+            Fill = DeyttTheme.Brush(connected ? DeyttTheme.Mint :
                 starting ? DeyttTheme.Amber : isError ? DeyttTheme.Coral : DeyttTheme.Muted),
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 9, 0),
         };
         var stateCopy = new StackPanel { Spacing = 3 };
         var stateTitleText = DeyttTheme.TextBlock(stateTitle, _compactLayout ? 16 : 18,
-            connected || actionIsPrimary ? DeyttTheme.Background : isError ? DeyttTheme.Coral : DeyttTheme.Text,
+            isError ? DeyttTheme.Coral : DeyttTheme.Text,
             FontWeight.SemiBold, wrap: false);
         stateCopy.Children.Add(stateTitleText);
-        var connectionDetailText = DeyttTheme.TextBlock(connectionDetail, 11, detailForeground, wrap: false);
+        var connectionDetailText = DeyttTheme.TextBlock(connectionDetail, 11, DeyttTheme.Muted, wrap: false);
         connectionDetailText.TextTrimming = TextTrimming.CharacterEllipsis;
         stateCopy.Children.Add(connectionDetailText);
         var status = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -674,24 +673,21 @@ public partial class MainWindow : Window
         primary.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
         primary.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
         primary.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
-        primary.VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Bottom;
+        primary.VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center;
         primary.Padding = new Thickness(16, 12, 16, 12);
         AutomationProperties.SetAutomationId(primary, "HomeConnectionAction");
-        var actionContent = new Grid
-        {
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
-        };
-        actionContent.Children.Add(primary);
         status.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
-        status.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
-        status.Margin = new Thickness(16, 18, 16, 0);
+        status.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+        status.Margin = new Thickness(2, 0);
         status.IsHitTestVisible = false;
-        actionContent.Children.Add(status);
+        AutomationProperties.SetAutomationId(status, "HomeConnectionStatus");
+        Grid.SetColumn(status, 0);
+        Grid.SetRow(status, 1);
+        contents.Children.Add(status);
 
         var actionTile = new Border
         {
-            Height = _compactLayout ? 108 : 116,
+            Height = _compactLayout ? 76 : 84,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
             BorderThickness = new Thickness(1),
@@ -712,11 +708,11 @@ public partial class MainWindow : Window
                         },
                     }
                     : DeyttTheme.Brush(DeyttTheme.Surface2),
-            Child = actionContent,
+            Child = primary,
         };
         AutomationProperties.SetAutomationId(actionTile, "HomeConnectionActionTile");
         Grid.SetColumn(actionTile, 0);
-        Grid.SetRow(actionTile, 1);
+        Grid.SetRow(actionTile, 2);
         contents.Children.Add(actionTile);
         var routeDetails = BuildHomeRouteDetails();
         Grid.SetColumn(routeDetails, 0);
@@ -882,7 +878,11 @@ public partial class MainWindow : Window
                     var expandedNow = _expandedRouteCountries.Add(country.Key);
                     if (expandedNow)
                     {
-                        _routeCountryProbeStates.Remove(country.Key);
+                        var routeTags = countryRoutes.Select(route => route.Tag)
+                            .Distinct(StringComparer.Ordinal).ToArray();
+                        if (!_qaFixture && !_routeCountryProbeStates.ContainsKey(country.Key) &&
+                            routeTags.Any(tag => !_routeProbeResults.ContainsKey(tag)))
+                            QueueRouteCountryProbe(country.Key, routeTags);
                     }
                     else
                     {
@@ -890,9 +890,6 @@ public partial class MainWindow : Window
                         CollapseRouteCountryProbe(country.Key);
                     }
                     RenderActiveTabPreservingScroll();
-                    if (expandedNow)
-                        QueueRouteCountryProbe(country.Key,
-                            countryRoutes.Select(route => route.Tag).Distinct(StringComparer.Ordinal).ToArray());
                 });
                 headerButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
                 headerButton.Padding = new Thickness(2, 3);
@@ -905,6 +902,61 @@ public partial class MainWindow : Window
                     foreach (var route in countryRoutes)
                         options.Children.Add(RouteOption(route, quality));
                     countryContents.Children.Add(options);
+
+                    if (RouteCountryProbeStatus(country.Key) is { } expandedProbeStatus)
+                    {
+                        var statusColor = _routeCountryProbeStates.GetValueOrDefault(country.Key) ==
+                            RouteCountryProbeState.Failed ? DeyttTheme.Coral : DeyttTheme.Muted;
+                    {
+                        var expandedStatus = DeyttTheme.TextBlock(expandedProbeStatus, 11, statusColor);
+                        expandedStatus.Margin = new Thickness(4, 5, 4, 0);
+                        countryContents.Children.Add(expandedStatus);
+                    }
+                    }
+
+                    var countryRouteTags = countryRoutes.Select(route => route.Tag)
+                        .Distinct(StringComparer.Ordinal).ToArray();
+                    var countryProbeActive = _routeProbeInProgress && _activeRouteProbeCountry == country.Key;
+                    var countryProbeQueued = _pendingRouteProbeNodes.ContainsKey(country.Key);
+                    var probeState = _routeCountryProbeStates.GetValueOrDefault(country.Key);
+                    var countryProbeLabel = countryProbeActive
+                        ? _routeProbeCancelRequested
+                            ? Copy("Останавливаем…", "Stopping…")
+                            : Copy("Остановить замеры", "Stop measurements")
+                        : countryProbeQueued
+                            ? Copy("Убрать из очереди", "Remove from queue")
+                            : probeState is RouteCountryProbeState.Cancelled or RouteCountryProbeState.Failed
+                                ? Copy("Повторить замеры", "Retry measurements")
+                                : Copy("Обновить замеры", "Refresh measurements");
+                    var countryProbeAction = DeyttTheme.Action(DeyttTheme.TextBlock(countryProbeLabel,
+                        12, DeyttTheme.Sky, FontWeight.SemiBold, wrap: false), () =>
+                    {
+                        if (_qaFixture)
+                            return;
+                        if (countryProbeActive)
+                        {
+                            if (!_routeProbeCancelRequested)
+                                _ = CancelRouteProbeAsync();
+                        }
+                        else if (_pendingRouteProbeNodes.Remove(country.Key, out var queuedNode))
+                        {
+                            _pendingRouteProbeQueue.Remove(queuedNode);
+                            _routeCountryProbeStates[country.Key] = RouteCountryProbeState.Cancelled;
+                            RenderActiveTabPreservingScroll();
+                        }
+                        else
+                        {
+                            _routeCountryProbeStates.Remove(country.Key);
+                            QueueRouteCountryProbe(country.Key, countryRouteTags);
+                        }
+                    });
+                    countryProbeAction.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+                    countryProbeAction.Padding = new Thickness(4, 8, 10, 5);
+                    countryProbeAction.IsEnabled = countryProbeQueued ||
+                        !countryProbeActive || !_routeProbeCancelRequested;
+                    AutomationProperties.SetAutomationId(countryProbeAction,
+                        $"RouteCountryRefresh-{country.Key}");
+                    countryContents.Children.Add(countryProbeAction);
                 }
                 countryList.Children.Add(DeyttTheme.Card(countryContents,
                     selectedCountry ? DeyttTheme.Surface2 : DeyttTheme.Surface,
@@ -931,32 +983,31 @@ public partial class MainWindow : Window
                         : !_vpnServiceAvailable
                             ? Copy("Сначала установите службу VPN в настройках.",
                                 "Install the VPN service in settings first.")
-                            : Copy("Каждый выход проверяется отдельно. Результаты появятся рядом с маршрутами.",
-                                "Each exit is checked separately. Results appear beside the routes."),
+                            : Copy("Пинг и скорость показываются у выбранной страны. Обновляйте замеры отдельно для нужного выхода.",
+                                "Latency and speed appear under each country. Refresh measurements for the exit you need."),
                 13, DeyttTheme.Muted));
-            var diagnosticAction = DeyttTheme.PrimaryButton(
-                _routeProbeInProgress
-                    ? _routeProbeCancelRequested
-                        ? Copy("Останавливаем…", "Stopping…")
-                        : Copy("Остановить проверку", "Stop diagnostics")
-                    : !_vpnServiceAvailable
-                        ? Copy("Настроить службу VPN", "Set up VPN service")
-                        : Copy("Проверить все маршруты", "Check all routes"),
-                () =>
-                {
-                    if (_routeProbeInProgress)
-                        _ = CancelRouteProbeAsync();
-                    else if (!_vpnServiceAvailable)
-                        ShowTab(MainTab.Settings);
-                    else
-                        _ = ProbeRoutesAsync();
-                });
-            if (diagnosticAction.Child is Control diagnosticButton)
-                AutomationProperties.SetAutomationId(diagnosticButton, "RouteDiagnosticsAction");
-            diagnosticAction.IsEnabled = _routeProbeInProgress
-                ? !_routeProbeCancelRequested
-                : !WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State);
-            diagnostic.Children.Add(diagnosticAction);
+            if (_routeProbeInProgress || !_vpnServiceAvailable)
+            {
+                var diagnosticAction = DeyttTheme.Action(DeyttTheme.TextBlock(
+                    _routeProbeInProgress
+                        ? _routeProbeCancelRequested
+                            ? Copy("Останавливаем…", "Stopping…")
+                            : Copy("Остановить замеры", "Stop measurements")
+                        : Copy("Настроить службу VPN", "Set up VPN service"),
+                    12, DeyttTheme.Sky, FontWeight.SemiBold, wrap: false),
+                    () =>
+                    {
+                        if (_routeProbeInProgress)
+                            _ = CancelRouteProbeAsync();
+                        else
+                            ShowTab(MainTab.Settings);
+                    });
+                AutomationProperties.SetAutomationId(diagnosticAction, "RouteDiagnosticsAction");
+                diagnosticAction.IsEnabled = _routeProbeInProgress
+                    ? !_routeProbeCancelRequested
+                    : !WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State);
+                diagnostic.Children.Add(diagnosticAction);
+            }
             toolsColumn.Children.Add(DeyttTheme.Card(diagnostic, DeyttTheme.Surface2,
                 DeyttTheme.Line, 20, new Thickness(18)));
         }
@@ -2183,14 +2234,14 @@ public partial class MainWindow : Window
                 ? Copy("Пинг проверяется · скорость в очереди", "Checking latency · speed queued")
                 : Copy("Проверяем пинг · скорость после входа в Telegram",
                     "Checking latency · sign in to measure speed"),
-            RouteCountryProbeState.Cancelled => Copy("Проверка отменена · откройте страну снова",
-                "Check cancelled · reopen the country to retry"),
+            RouteCountryProbeState.Cancelled => Copy("Замеры остановлены · можно повторить",
+                "Measurements stopped · retry when ready"),
             RouteCountryProbeState.NeedsDisconnect => Copy("Отключите VPN для проверки маршрутов",
                 "Disconnect the VPN to check routes"),
             RouteCountryProbeState.ServiceUnavailable => Copy("Служба VPN недоступна · проверьте настройки",
                 "VPN service unavailable · check settings"),
-            RouteCountryProbeState.Failed => Copy("Не удалось проверить · откройте страну для повтора",
-                "Check failed · reopen the country to retry"),
+            RouteCountryProbeState.Failed => Copy("Не удалось проверить · можно повторить замеры",
+                "Check failed · retry the measurements"),
             _ => null,
         };
     }
@@ -2339,6 +2390,7 @@ public partial class MainWindow : Window
         _routeProbeCancelRequested = false;
         RenderProbeProgressPreservingFocus();
         string[]? activeRouteTags = null;
+        var previousRouteResults = new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal);
         try
         {
             var availableTags = _routes.Select(route => route.Tag).ToHashSet(StringComparer.Ordinal);
@@ -2348,6 +2400,11 @@ public partial class MainWindow : Window
             if (routeTags.Length == 0)
                 return;
             activeRouteTags = routeTags;
+            foreach (var routeTag in routeTags)
+            {
+                if (_routeProbeResults.TryGetValue(routeTag, out var previous))
+                    previousRouteResults[routeTag] = previous;
+            }
             var awgProfiles = (_keysSnapshot?.AwgProfiles ?? [])
                 .ToDictionary(item => item.RouteId, item => item.Config, StringComparer.Ordinal);
             var speedToken = HasProbeSpeedToken() ? _sessionToken! : string.Empty;
@@ -2374,7 +2431,7 @@ public partial class MainWindow : Window
             if (countryCode is not null &&
                 (countryProbeGeneration != _routeCountryProbeGeneration || _activeTab != MainTab.Routes))
             {
-                ClearProbeProgress(routeTags);
+                RestoreProbeResults(routeTags, previousRouteResults);
                 return;
             }
             if (result.State == "probe_complete" && result.ProbeResults is { } probes)
@@ -2388,16 +2445,11 @@ public partial class MainWindow : Window
             }
             else if (result.State == "probe_cancelled")
             {
-                var updatedResults = new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults,
-                    StringComparer.Ordinal);
-                foreach (var routeTag in routeTags)
-                    updatedResults[routeTag] = new WindowsRouteProbeResult(routeTag, null, null, null,
-                        "cancelled");
-                _routeProbeResults = updatedResults;
+                RestoreProbeResults(routeTags, previousRouteResults);
             }
             else
             {
-                ClearProbeProgress(routeTags);
+                RestoreProbeResults(routeTags, previousRouteResults);
                 if (countryCode is null)
                     ShowInfoDialog(Copy("Не удалось проверить маршруты", "Could not check routes"),
                         result.Detail);
@@ -2408,7 +2460,7 @@ public partial class MainWindow : Window
         catch (Exception error) when (IsTunnelTransportError(error))
         {
             if (activeRouteTags is not null)
-                ClearProbeProgress(activeRouteTags);
+                RestoreProbeResults(activeRouteTags, previousRouteResults);
             if (countryCode is not null &&
                 (countryProbeGeneration != _routeCountryProbeGeneration || _activeTab != MainTab.Routes))
                 return;
@@ -2438,6 +2490,8 @@ public partial class MainWindow : Window
     {
         if (!_routeProbeInProgress || _routeProbeCancelRequested)
             return;
+        if (_activeRouteProbeCountry is { } countryCode)
+            _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Cancelled;
         MarkProbeCancellationRequested();
         try
         {
@@ -2478,20 +2532,15 @@ public partial class MainWindow : Window
         return true;
     }
 
-    private void ClearProbeProgress(IEnumerable<string> routeTags)
+    private void RestoreProbeResults(IEnumerable<string> routeTags,
+        IReadOnlyDictionary<string, WindowsRouteProbeResult> previousResults)
     {
         var updated = new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal);
-        var changed = false;
         foreach (var routeTag in routeTags)
-        {
-            if (!updated.TryGetValue(routeTag, out var result) ||
-                result.Stage is not ("latency" or "retry" or "waiting_speed" or "download"))
-                continue;
             updated.Remove(routeTag);
-            changed = true;
-        }
-        if (changed)
-            _routeProbeResults = updated;
+        foreach (var (routeTag, result) in previousResults)
+            updated[routeTag] = result;
+        _routeProbeResults = updated;
     }
 
     private void RenderProbeProgressPreservingFocus()

@@ -117,7 +117,7 @@
     wheelZoomOnly: windowsProfile,
     pixelRatioFloor: windowsProfile ? 1.6 : 1,
     pixelRatioCap: windowsProfile ? 2.25 : undefined,
-    labelScale: windowsProfile ? 1.55 : 1,
+    labelScale: windowsProfile ? 1.34 : 1,
     labelFontFamily: windowsProfile ? 'system-ui, "Segoe UI", sans-serif' : undefined,
     routeFocusMinZoom: windowsProfile ? 4.2 : undefined,
     routeFocusMaxZoom: windowsProfile ? 8.5 : undefined,

@@ -99,20 +99,27 @@ public sealed class HomeWindowTests
                 .OfType<Button>(), button => AutomationProperties.GetAutomationId(button) == "HomeConnectionAction");
             var hitTarget = Assert.Single(Descendants(page).OfType<Border>(), border =>
                 AutomationProperties.GetAutomationId(border) == "HomeConnectionActionTile");
+            var status = Assert.Single(Descendants(page).OfType<Grid>(), grid =>
+                AutomationProperties.GetAutomationId(grid) == "HomeConnectionStatus");
             var actionLabels = Descendants(action).OfType<TextBlock>().ToArray();
             var actionLabel = Assert.Single(actionLabels);
             var labelCenter = actionLabel.TranslatePoint(
                 new Point(actionLabel.Bounds.Width / 2, actionLabel.Bounds.Height / 2), action)!.Value;
             var tileText = Descendants(hitTarget).OfType<TextBlock>().Select(text => text.Text).ToArray();
+            var statusText = Descendants(status).OfType<TextBlock>().Select(text => text.Text).ToArray();
 
             Assert.True(action.IsEffectivelyVisible);
             Assert.True(action.IsEnabled);
             Assert.True(hitTarget.Bounds.Width >= 320);
-            Assert.InRange(hitTarget.Height, 104, 118);
+            Assert.InRange(hitTarget.Height, 72, 90);
             Assert.Equal("Подключиться", actionLabel.Text);
             Assert.InRange(Math.Abs(labelCenter.X - action.Bounds.Width / 2), 0, 1.5);
-            Assert.Contains("Не подключено", tileText);
-            Assert.Contains("Подписка готова · выберите маршрут и подключитесь", tileText);
+            Assert.InRange(Math.Abs(labelCenter.Y - action.Bounds.Height / 2), 0, 1.5);
+            Assert.Single(tileText);
+            Assert.Equal("Подключиться", tileText[0]!);
+            Assert.Contains("Не подключено", statusText);
+            Assert.Contains("Подписка готова · выберите маршрут и подключитесь", statusText);
+            Assert.DoesNotContain(status, Descendants(hitTarget));
             Assert.DoesNotContain("Не подключено", actionLabels.Select(text => text.Text));
             Assert.True(action.Focus());
             Assert.True(action.IsFocused);
@@ -140,6 +147,8 @@ public sealed class HomeWindowTests
                 AutomationProperties.GetAutomationId(border) == "HomeTrafficPath");
             var measurements = Assert.Single(Descendants(page).OfType<Border>(), border =>
                 AutomationProperties.GetAutomationId(border) == "HomeRouteMeasurements");
+            var status = Assert.Single(Descendants(page).OfType<Grid>(), grid =>
+                AutomationProperties.GetAutomationId(grid) == "HomeConnectionStatus");
             var tile = Assert.Single(Descendants(page).OfType<Border>(), border =>
                 AutomationProperties.GetAutomationId(border) == "HomeConnectionActionTile");
             var pathText = Descendants(path).OfType<TextBlock>().Select(text => text.Text).ToArray();
@@ -150,10 +159,11 @@ public sealed class HomeWindowTests
                 control.TranslatePoint(new Point(0, 0), relativeTo)?.Y ?? double.NaN;
             Assert.True(Top(protocol, page) < Top(path, page));
             Assert.True(Top(path, page) < Top(measurements, page));
-            Assert.True(Top(measurements, page) < Top(tile, page));
+            Assert.True(Top(measurements, page) < Top(status, page));
+            Assert.True(Top(status, page) < Top(tile, page));
 
             var measurementsBottom = Top(measurements, page) + measurements.Bounds.Height;
-            Assert.InRange(Top(tile, page) - measurementsBottom, 0, 48);
+            Assert.InRange(Top(status, page) - measurementsBottom, 0, 40);
         }
         finally
         {
@@ -444,7 +454,7 @@ public sealed class HomeWindowTests
     [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
-    public void Stop_button_cancel_transition_moves_focus_to_nearest_enabled_control(double width)
+    public void Route_probe_stop_cancel_transition_moves_focus_to_nearest_enabled_control(double width)
     {
         var window = new MainWindow(Fixture(tab: "routes", signedIn: true, routeProbeInProgress: true))
         {
@@ -457,7 +467,7 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
             var stopButton = Descendants(Required<Grid>(window, "PageHost")).OfType<Button>()
                 .Single(button => AutomationProperties.GetAutomationId(button) == "RouteDiagnosticsAction");
-            Assert.Equal("Остановить проверку", Assert.IsType<TextBlock>(stopButton.Content).Text);
+            Assert.Equal("Остановить замеры", Assert.IsType<TextBlock>(stopButton.Content).Text);
             Assert.True(stopButton.IsEnabled);
             Assert.True(stopButton.Focus());
             Dispatcher.UIThread.RunJobs();
@@ -473,6 +483,40 @@ public sealed class HomeWindowTests
             Assert.NotSame(stoppingButton, focused);
             Assert.True(focused.IsEffectivelyEnabled);
             Assert.True(focused.IsEffectivelyVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Routes_offer_country_scoped_refresh_without_global_probe_button(double width)
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true)) { Width = width, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            Assert.DoesNotContain(Descendants(page).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "RouteDiagnosticsAction");
+            Assert.DoesNotContain(Descendants(page).OfType<TextBlock>(), text =>
+                text.Text == "Проверить все маршруты");
+
+            var country = Assert.Single(Descendants(page).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "RouteCountry-NL");
+            country.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            var refresh = Assert.Single(Descendants(Required<Grid>(window, "PageHost")).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "RouteCountryRefresh-NL");
+            Assert.True(refresh.IsEnabled);
+            Assert.Contains("Обновить замеры", Descendants(refresh).OfType<TextBlock>()
+                .Select(text => text.Text));
         }
         finally
         {

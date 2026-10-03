@@ -809,7 +809,6 @@
     drawLabel(key, colors, occupied) {
       const point = this.projectedNodes[key];
       if (!point || point.z <= .03) return;
-      if (this.hovered === key) return;
       if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
       const active = key === "user" || this.activeRouteNodeKeys().includes(key);
       const autoCandidate = this.route === "auto" && ROUTES.auto.nodes.includes(key);
@@ -965,6 +964,12 @@
       this.centerLat = mix(this.centerLat, this.targetLat, panBlend);
       const zoomBlend = this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS);
       this.zoom = mix(this.zoom, this.targetZoom, zoomBlend);
+      // The animation loop intentionally stops at these same visual
+      // tolerances. Snap the final sub-pixel remainder now so the next hover
+      // cannot wake the camera and force a needless geography redraw.
+      if (Math.abs(this.targetLon - this.centerLon) < .01) this.centerLon = this.targetLon;
+      if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
+      if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
       if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 || Math.abs(this.zoom - previousZoom) > .0001) {
         this.staticDirty = true;
       }
@@ -998,32 +1003,11 @@
     setHovered(key) {
       if (this.hovered === key) return;
       this.hovered = key;
-      this.staticDirty = true;
       this.canvas.style.cursor = key ? "pointer" : this.dragging ? "grabbing" : "grab";
-      if (!key || !this.tooltip) {
-        if (this.tooltip) this.tooltip.hidden = true;
-      } else {
-        const location = key === "user" ? this.userLocation : LOCATIONS[key];
-        const point = this.projectedNodes[key];
-        const span = document.createElement("span");
-        const strong = document.createElement("strong");
-        const small = document.createElement("small");
-        if (key === "user") {
-          span.textContent = this.copy("ваша сеть");
-          strong.textContent = this.copy(location.city) || location.lat.toFixed(2) + "°, " + location.lon.toFixed(2) + "°";
-          small.textContent = location.country || this.copy("примерно по ip");
-        } else {
-          span.textContent = location.code + " · " + this.copy(location.country);
-          strong.textContent = this.copy(location.city);
-          small.textContent = location.lat.toFixed(2) + "°, " + location.lon.toFixed(2) + "°";
-        }
-        this.tooltip.replaceChildren(span, strong, small);
-        this.tooltip.hidden = false;
-        const left = clamp(point.x, 92, this.width - 92);
-        const top = clamp(point.y - 28, 80, this.height - 80);
-        this.tooltip.style.left = left + "px";
-        this.tooltip.style.top = top + "px";
-      }
+      // Hover affects only live route labels and nodes. Redrawing the cached
+      // sphere and geography here caused needless high-DPI work and visible
+      // softness while the pointer crossed country markers.
+      if (this.tooltip) this.tooltip.hidden = true;
       this.start();
     }
 
