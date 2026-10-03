@@ -58,7 +58,11 @@ public sealed class RouteGlobeWebView : ContentControl
         MinHeight = 230;
         ClipToBounds = true;
         Background = Brushes.Transparent;
-        AttachedToVisualTree += (_, _) => _attachedToVisualTree = true;
+        AttachedToVisualTree += (_, _) =>
+        {
+            _attachedToVisualTree = true;
+            QueueStateUpdate();
+        };
         DetachedFromVisualTree += (_, _) =>
         {
             _attachedToVisualTree = false;
@@ -298,6 +302,13 @@ public sealed class RouteGlobeWebView : ContentControl
                 {
                     gtk.ExperimentalOffscreen = true;
                     gtk.EphemeralDataManager = true;
+                }
+                else if (args is WindowsWebView2EnvironmentRequestedEventArgs webView2)
+                {
+                    // The Home page embeds the globe in a scrollable surface beside
+                    // shell controls; offscreen composition prevents WebView2 airspace
+                    // from covering navigation and keeps clipping aligned with layout.
+                    webView2.ExperimentalOffscreen = true;
                 }
             };
             webView.AdapterCreated += OnAdapterCreated;

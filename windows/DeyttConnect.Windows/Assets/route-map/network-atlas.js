@@ -999,7 +999,7 @@
       this.start();
     }
 
-    setRoute(key, announce) {
+    setRoute(key, announce, focus) {
       if (!ROUTES[key]) return;
       if (this.variant === "showcase" && announce !== false) this.showcaseFocused = true;
       const routeChanged = !this.routeInitialized || this.route !== key;
@@ -1014,7 +1014,7 @@
       });
       const route = ROUTES[key];
       this.renderRouteCopy();
-      if (routeChanged) this.focusRoute();
+      if (routeChanged && focus !== false) this.focusRoute();
       if (announce !== false) this.root.dispatchEvent(new CustomEvent("deytt:route-change", { detail: { key: key, route: route } }));
       this.start();
     }
@@ -1067,18 +1067,18 @@
       this.start();
     }
 
-    setAvailableLocations(keys) {
+    setAvailableLocations(keys, focus) {
       const next = new Set((Array.isArray(keys) ? keys : []).map((key) => String(key).toLowerCase()).filter((key) => LOCATION_ORDER.includes(key)));
       const changed = next.size !== this.availableLocationKeys.size || Array.from(next).some((key) => !this.availableLocationKeys.has(key));
       if (!changed) return;
       this.availableLocationKeys = next;
       this.labelPlacements.clear();
-      this.focusRoute();
+      if (focus !== false) this.focusRoute();
       this.staticDirty = true;
       this.start();
     }
 
-    setUserLocation(latitude, longitude, details) {
+    setUserLocation(latitude, longitude, details, focus) {
       const previousLocation = this.userLocation;
       const nextLocation = latitude == null || longitude == null ? null : {
         lat: clamp(Number(latitude), -85, 85),
@@ -1092,7 +1092,7 @@
       // The first origin fix (or an explicit removal) may change the useful
       // framing. Later IP-location refreshes update the endpoint in place so
       // a small geolocation correction cannot make the whole atlas jump.
-      if (previousLocation == null || nextLocation == null) this.focusRoute();
+      if (focus !== false && (previousLocation == null || nextLocation == null)) this.focusRoute();
       this.staticDirty = true;
       this.start();
     }
