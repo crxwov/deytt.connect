@@ -88,20 +88,32 @@ public sealed class HomeWindowTests
     [InlineData(1360d)]
     public void Home_connection_action_keeps_a_usable_hit_target(double width)
     {
-        var window = new MainWindow(Fixture()) { Width = width, Height = 820 };
+        var window = new MainWindow(Fixture(signedIn: true)) { Width = width, Height = 820 };
         try
         {
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var action = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+            var page = Required<Grid>(window, "PageHost");
+            var action = Assert.Single(Descendants(page)
                 .OfType<Button>(), button => AutomationProperties.GetAutomationId(button) == "HomeConnectionAction");
-            var hitTarget = Assert.IsType<Border>(action.GetVisualParent());
+            var hitTarget = Assert.Single(Descendants(page).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "HomeConnectionActionTile");
+            var actionLabels = Descendants(action).OfType<TextBlock>().ToArray();
+            var actionLabel = Assert.Single(actionLabels);
+            var labelCenter = actionLabel.TranslatePoint(
+                new Point(actionLabel.Bounds.Width / 2, actionLabel.Bounds.Height / 2), action)!.Value;
+            var tileText = Descendants(hitTarget).OfType<TextBlock>().Select(text => text.Text).ToArray();
 
             Assert.True(action.IsEffectivelyVisible);
             Assert.True(action.IsEnabled);
             Assert.True(hitTarget.Bounds.Width >= 320);
             Assert.InRange(hitTarget.Height, 104, 118);
+            Assert.Equal("Подключиться", actionLabel.Text);
+            Assert.InRange(Math.Abs(labelCenter.X - action.Bounds.Width / 2), 0, 1.5);
+            Assert.Contains("Не подключено", tileText);
+            Assert.Contains("Подписка готова · выберите маршрут и подключитесь", tileText);
+            Assert.DoesNotContain("Не подключено", actionLabels.Select(text => text.Text));
             Assert.True(action.Focus());
             Assert.True(action.IsFocused);
         }
