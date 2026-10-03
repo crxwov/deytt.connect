@@ -427,9 +427,9 @@ public partial class MainWindow : Window
         _compactLayout = compact;
         _shortCompactLayout = shortCompact;
         if (ShellGrid.ColumnDefinitions.Count > 0)
-            ShellGrid.ColumnDefinitions[0].Width = new GridLength(compact ? 0 : 252);
-        SidebarPanel.IsVisible = !compact;
-        BottomNavigationPanel.IsVisible = compact;
+            ShellGrid.ColumnDefinitions[0].Width = new GridLength(0);
+        SidebarPanel.IsVisible = false;
+        BottomNavigationPanel.IsVisible = true;
         SidebarPanel.Padding = compact
             ? new Thickness(11, 14, 11, 12)
             : new Thickness(20, 23, 18, 18);
@@ -441,8 +441,8 @@ public partial class MainWindow : Window
         WorkspaceHeader.Padding = compact ? new Thickness(16, 0) : new Thickness(30, 0);
         WorkspaceEyebrow.IsVisible = !compact;
         PageHost.Margin = compact
-            ? new Thickness(16, 18, 16, 56)
-            : new Thickness(34, 26, 34, 42);
+            ? new Thickness(14, 12, 14, 14)
+            : new Thickness(20, 14, 20, 16);
 
         SetNavigation(HomeNav, NavigationIconKind.Home, Copy("Главная", "Home"), _activeTab == MainTab.Home);
         SetNavigation(RoutesNav, NavigationIconKind.Routes, Copy("Маршруты", "Routes"), _activeTab == MainTab.Routes);
@@ -474,7 +474,7 @@ public partial class MainWindow : Window
             return;
 
         _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*");
-        _homeConnectionLayout.RowDefinitions = new RowDefinitions("*,Auto");
+        _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto,Auto");
         _homeConnectionLayout.RowSpacing = _compactLayout ? 14 : 18;
         Grid.SetColumn(_homeConnectionPrimaryAction, 0);
         Grid.SetRow(_homeConnectionPrimaryAction, 1);
@@ -558,7 +558,7 @@ public partial class MainWindow : Window
         var contents = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*"),
-            RowDefinitions = new RowDefinitions("*,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto"),
             RowSpacing = _compactLayout ? 14 : 18,
         };
         var stateTitle = _qaFixture && isError

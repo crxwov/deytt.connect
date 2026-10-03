@@ -23,7 +23,7 @@ public sealed class HomeWindowTests
     [InlineData("connecting", "Подключаемся…", "Подключаем VPN…", "Отменить подключение")]
     [InlineData("error", "Ошибка VPN", "Ошибка VPN", "Подключиться")]
     [InlineData("connected", "VPN подключён", "Подключено", "Отключить")]
-    public void Vpn_fixture_renders_truthful_state_across_header_rail_home_and_action(
+    public void Vpn_fixture_renders_truthful_state_across_header_home_and_action(
         string state, string expectedHeader, string expectedHome, string expectedAction)
     {
         var window = new MainWindow(Fixture(signedIn: true, state: state)) { Width = 1360, Height = 820 };
@@ -33,7 +33,8 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             Assert.Equal(expectedHeader, Required<TextBlock>(window, "HeaderStatusText").Text);
-            Assert.Equal(expectedHeader, Required<TextBlock>(window, "SidebarVpnText").Text);
+            Assert.False(Required<Control>(window, "SidebarPanel").IsVisible);
+            Assert.True(Required<Control>(window, "BottomNavigationPanel").IsVisible);
             var pageText = Descendants(Required<Grid>(window, "PageHost")).OfType<TextBlock>()
                 .Select(text => text.Text).ToArray();
             Assert.Contains(expectedHome, pageText);
@@ -46,9 +47,9 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaTheory]
-    [InlineData(720d, true)]
-    [InlineData(1360d, false)]
-    public void Home_navigation_and_controls_remain_reachable_at_supported_widths(double width, bool compact)
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Home_navigation_and_controls_remain_reachable_at_supported_widths(double width)
     {
         var window = new MainWindow(Fixture(tab: "settings")) { Width = width, Height = 820 };
         try
@@ -58,10 +59,12 @@ public sealed class HomeWindowTests
 
             var sidebar = Required<Control>(window, "SidebarPanel");
             var bottomNavigation = Required<Control>(window, "BottomNavigationPanel");
-            Assert.Equal(!compact, sidebar.IsVisible);
-            Assert.Equal(compact, bottomNavigation.IsVisible);
+            Assert.False(sidebar.IsVisible);
+            Assert.True(bottomNavigation.IsVisible);
+            Assert.True(bottomNavigation.Bounds.Height >= 60,
+                $"Bottom navigation did not reserve space: {bottomNavigation.Bounds}");
 
-            var homeButton = Required<Button>(window, compact ? "BottomHomeNav" : "HomeNav");
+            var homeButton = Required<Button>(window, "BottomHomeNav");
             Assert.True(homeButton.IsEffectivelyVisible);
             Assert.True(homeButton.Focus());
             Assert.True(homeButton.IsFocused);
@@ -111,7 +114,7 @@ public sealed class HomeWindowTests
     [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
-    public void Home_panel_matches_protocol_path_measurements_and_bottom_action_order(double width)
+    public void Home_panel_matches_protocol_path_measurements_and_compact_action_order(double width)
     {
         var window = new MainWindow(Fixture(signedIn: true)) { Width = width, Height = 820 };
         try
@@ -137,10 +140,8 @@ public sealed class HomeWindowTests
             Assert.True(Top(path, page) < Top(measurements, page));
             Assert.True(Top(measurements, page) < Top(tile, page));
 
-            var connectionCard = Assert.IsType<Border>(tile.GetVisualParent()?.GetVisualParent());
-            var tileBottom = Top(tile, page) + tile.Bounds.Height;
-            var cardBottom = Top(connectionCard, page) + connectionCard.Bounds.Height;
-            Assert.InRange(cardBottom - tileBottom, 17, 28);
+            var measurementsBottom = Top(measurements, page) + measurements.Bounds.Height;
+            Assert.InRange(Top(tile, page) - measurementsBottom, 0, 48);
         }
         finally
         {
@@ -243,6 +244,27 @@ public sealed class HomeWindowTests
             Assert.InRange(Math.Abs(overview.Children[0].Bounds.Width - overview.Children[1].Bounds.Width), 0, 32);
             Assert.Contains(page.OfType<TextBlock>(), text => text.Text == "./hysteria2");
             Assert.DoesNotContain(page.OfType<TextBlock>(), text => text.Text == "QA Demo");
+            Assert.True(Required<Control>(window, "BottomNavigationPanel").IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Wide_home_limits_vertical_stretch_and_keeps_bottom_navigation()
+    {
+        var window = new MainWindow(Fixture(signedIn: true)) { Width = 1360, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            var overview = Assert.IsType<Grid>(Assert.Single(page.Children));
+            Assert.InRange(overview.Bounds.Height, 480, 520);
+            Assert.False(Required<Control>(window, "SidebarPanel").IsVisible);
             Assert.True(Required<Control>(window, "BottomNavigationPanel").IsVisible);
         }
         finally
@@ -448,7 +470,7 @@ public sealed class HomeWindowTests
 
     [AvaloniaTheory]
     [InlineData(720d, "BottomHomeNav")]
-    [InlineData(1360d, "HomeNav")]
+    [InlineData(1360d, "BottomHomeNav")]
     public void Pending_route_focus_restore_does_not_override_navigation(double width, string homeNavigationName)
     {
         var window = new MainWindow(Fixture(tab: "routes", signedIn: true)) { Width = width, Height = 820 };

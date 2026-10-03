@@ -297,7 +297,7 @@ public partial class MainWindow
         _homeOverviewGrid.RowDefinitions = new RowDefinitions(split ? "*" : "Auto,Auto");
         _homeOverviewGrid.ColumnSpacing = split ? 24 : 0;
         _homeOverviewGrid.RowSpacing = split ? 0 : 16;
-        _homeOverviewGrid.Height = split ? Math.Max(520, availableHeight) : double.NaN;
+        _homeOverviewGrid.Height = split ? Math.Clamp(availableHeight, 480, 520) : double.NaN;
 
         Grid.SetColumn(_homeMapPanel, 0);
         Grid.SetRow(_homeMapPanel, 0);
