@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -78,30 +79,35 @@ public partial class MainWindow
     private Control BuildHomeRouteDetails()
     {
         var selected = _routes.FirstOrDefault(route => route.Id == _selectedRoute);
+        var displayedRoute = IsVpnDisplayConnected()
+            ? _routes.FirstOrDefault(route => route.Tag == _vpnSnapshot.RouteTag) ?? selected
+            : selected;
         var details = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
-            RowSpacing = 11,
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
+            RowSpacing = _compactLayout ? 12 : 16,
         };
 
         var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var titleStack = new StackPanel { Spacing = 5 };
-        titleStack.Children.Add(DeyttTheme.TextBlock(Copy("ВЫБРАННЫЙ МАРШРУТ", "SELECTED ROUTE"),
-            10, DeyttTheme.Sky, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        var routeName = selected?.CountryCode switch
+        titleStack.Children.Add(DeyttTheme.TextBlock(ProtocolPath(displayedRoute),
+            _compactLayout ? 20 : 22, DeyttTheme.Text, FontWeight.SemiBold,
+            DeyttTheme.JetBrainsMono, wrap: false));
+        var routeName = displayedRoute?.CountryCode switch
         {
-            "RU-DE" => Copy("Россия → Германия", "Russia → Germany"),
-            "AUTO" => Copy("Автоподбор маршрута", "Automatic route"),
-            _ => selected?.CountryName ?? RouteTitle(),
+            "RU-DE" => Copy("LTE · RU+DE", "LTE · RU+DE"),
+            "AUTO" => Copy("Автоподбор", "Automatic route"),
+            _ => displayedRoute?.CountryName ?? RouteTitle(),
         };
-        var routeTitle = DeyttTheme.TextBlock(routeName, _compactLayout ? 21 : 26,
-            DeyttTheme.Text, FontWeight.Bold, DeyttTheme.InterTight, wrap: false);
-        routeTitle.TextTrimming = TextTrimming.CharacterEllipsis;
-        titleStack.Children.Add(routeTitle);
+        var routeContext = DeyttTheme.TextBlock(
+            $"{routeName} · {ProtocolDescriptor(displayedRoute)}", 12,
+            DeyttTheme.Muted, FontWeight.Medium, wrap: false);
+        routeContext.TextTrimming = TextTrimming.CharacterEllipsis;
+        titleStack.Children.Add(routeContext);
         heading.Children.Add(titleStack);
 
         var changeRoute = DeyttTheme.Action(DeyttTheme.TextBlock(
-            Copy("Изменить", "Change"), 13, DeyttTheme.Sky, FontWeight.SemiBold, wrap: false),
+            Copy("Маршруты ↗", "Routes ↗"), 12, DeyttTheme.Sky, FontWeight.SemiBold, wrap: false),
             () => ShowTab(MainTab.Routes));
         changeRoute.VerticalAlignment = VerticalAlignment.Center;
         changeRoute.Margin = new Thickness(12, 0, 0, 0);
@@ -109,52 +115,66 @@ public partial class MainWindow
         heading.Children.Add(changeRoute);
         details.Children.Add(heading);
 
-        var endpoints = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,*"),
-            ColumnSpacing = 8,
-        };
-        var origin = GetHomeOriginParts();
-        endpoints.Children.Add(RouteEndpoint(Copy("ОТКУДА", "FROM"), origin.Code, origin.Name, origin.Hint));
-        var arrow = DeyttTheme.TextBlock("→", 24, DeyttTheme.Sky, FontWeight.Medium, wrap: false);
-        arrow.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(arrow, 1);
-        endpoints.Children.Add(arrow);
+        var trafficPath = BuildHomeTrafficPath(displayedRoute);
+        Grid.SetRow(trafficPath, 1);
+        details.Children.Add(trafficPath);
 
-        var destination = GetHomeDestinationParts(selected);
-        var exit = RouteEndpoint(Copy("КУДА", "TO"), destination.Code, destination.Name, destination.Hint);
-        Grid.SetColumn(exit, 2);
-        endpoints.Children.Add(exit);
-        Grid.SetRow(endpoints, 1);
-        details.Children.Add(endpoints);
-
-        var separator = DeyttTheme.Hairline();
-        separator.VerticalAlignment = VerticalAlignment.Bottom;
-        Grid.SetRow(separator, 2);
-        details.Children.Add(separator);
-
-        var protocol = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        var protocolCopy = new StackPanel { Spacing = 5 };
-        protocolCopy.Children.Add(DeyttTheme.TextBlock(Copy("ПРОТОКОЛ", "PROTOCOL"),
-            9, DeyttTheme.Sky, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        protocolCopy.Children.Add(DeyttTheme.TextBlock(ProtocolPath(selected), 17,
-            DeyttTheme.Text, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        protocol.Children.Add(protocolCopy);
-        var protocolName = DeyttTheme.TextBlock(ProtocolDescriptor(selected), 11, DeyttTheme.Muted,
-            FontWeight.Medium);
-        protocolName.TextAlignment = TextAlignment.Right;
-        protocolName.MaxWidth = 130;
-        Grid.SetColumn(protocolName, 1);
-        protocol.Children.Add(protocolName);
-        var protocolCard = DeyttTheme.Card(protocol, DeyttTheme.Surface, DeyttTheme.Line,
-            14, new Thickness(12, 9));
-        Grid.SetRow(protocolCard, 3);
-        details.Children.Add(protocolCard);
-        var measuredRouteTag = IsVpnDisplayConnected() ? _vpnSnapshot.RouteTag : selected?.Tag;
-        var diagnostics = BuildHomeRouteDiagnostic(measuredRouteTag);
-        Grid.SetRow(diagnostics, 4);
+        var diagnostics = BuildHomeRouteDiagnostic(displayedRoute?.Tag);
+        Grid.SetRow(diagnostics, 2);
         details.Children.Add(diagnostics);
         return details;
+    }
+
+    private Control BuildHomeTrafficPath(WindowsRoute? route)
+    {
+        var origin = GetHomeOriginParts();
+        var destination = route?.CountryCode == "AUTO"
+            ? ("AUTO", Copy("Выход", "Exit"), Copy("выберется автоматически", "selected automatically"))
+            : GetHomeDestinationParts(route);
+        var points = route?.CountryCode == "RU-DE"
+            ? new[]
+            {
+                (Copy("СЕТЬ", "NETWORK"), origin.Code, origin.Name, origin.Hint),
+                (Copy("УЗЕЛ", "HOP"), "RU", Copy("Россия", "Russia"), Copy("узел маршрута", "route node")),
+                (Copy("ВЫХОД", "EXIT"), destination.Item1, destination.Item2, destination.Item3),
+            }
+            : new[]
+            {
+                (Copy("СЕТЬ", "NETWORK"), origin.Code, origin.Name, origin.Hint),
+                (Copy("ВЫХОД", "EXIT"), destination.Item1, destination.Item2, destination.Item3),
+            };
+        var columns = new List<string>();
+        for (var index = 0; index < points.Length; index++)
+        {
+            columns.Add("*");
+            if (index < points.Length - 1)
+                columns.Add("Auto");
+        }
+        var path = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions(string.Join(",", columns)),
+            ColumnSpacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        for (var index = 0; index < points.Length; index++)
+        {
+            var point = points[index];
+            var node = RoutePathNode(point.Item1, point.Item2, point.Item3, point.Item4);
+            Grid.SetColumn(node, index * 2);
+            path.Children.Add(node);
+            if (index >= points.Length - 1)
+                continue;
+            var arrow = DeyttTheme.TextBlock("→", 19, DeyttTheme.Sky, FontWeight.Medium, wrap: false);
+            arrow.HorizontalAlignment = HorizontalAlignment.Center;
+            arrow.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(arrow, index * 2 + 1);
+            path.Children.Add(arrow);
+        }
+
+        var card = DeyttTheme.Card(path, DeyttTheme.Surface, DeyttTheme.Line,
+            16, new Thickness(13, 11));
+        AutomationProperties.SetAutomationId(card, "HomeTrafficPath");
+        return card;
     }
 
     private string ProtocolDescriptor(WindowsRoute? route) => route?.Protocol switch
@@ -216,38 +236,39 @@ public partial class MainWindow
 
     private static string ProtocolPath(WindowsRoute? route) => route?.Protocol.ToUpperInvariant() switch
     {
-        "VLESS" => "./vless",
-        "TROJAN" => "./trojan",
+        "VLESS" => "./vless+ws",
+        "TROJAN" => "./trojan+ws",
         "HYSTERIA2" => "./hysteria2",
         "AWG31" => "./amnezia3.1",
-        "CHAIN" => "./ru-de",
+        "CHAIN" => "./lte ru+de",
         _ => "./auto",
     };
 
-    private static Border RouteEndpoint(string eyebrow, string code, string name, string hint)
+    private static Control RoutePathNode(string eyebrow, string code, string name, string hint)
     {
         var endpoint = new StackPanel { Spacing = 7 };
-        endpoint.Children.Add(DeyttTheme.TextBlock(eyebrow, 10, DeyttTheme.Muted,
+        endpoint.Children.Add(DeyttTheme.TextBlock(eyebrow, 8, DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        var hasLocationMarker = code is not "—" and not "";
+        var hasLocationMarker = code is "NL" or "RU" or "DE" or "FI";
         var location = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions(hasLocationMarker ? "Auto,*" : "*"),
-            ColumnSpacing = 8,
+            ColumnSpacing = 6,
         };
         if (hasLocationMarker)
-            location.Children.Add(RouteFlagVisual.Create(code, 34, 22));
-        var locationText = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-        locationText.Children.Add(DeyttTheme.TextBlock(name, 15, DeyttTheme.Text,
-            FontWeight.SemiBold, DeyttTheme.InterTight));
+            location.Children.Add(RouteFlagVisual.Create(code, 23, 15));
+        var locationText = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
+        var locationName = DeyttTheme.TextBlock(name, 13, DeyttTheme.Text,
+            FontWeight.SemiBold, DeyttTheme.InterTight, wrap: false);
+        locationName.TextTrimming = TextTrimming.CharacterEllipsis;
+        locationText.Children.Add(locationName);
         var detail = DeyttTheme.TextBlock(hint, 9, DeyttTheme.Muted, wrap: false);
         detail.TextTrimming = TextTrimming.CharacterEllipsis;
         locationText.Children.Add(detail);
         Grid.SetColumn(locationText, hasLocationMarker ? 1 : 0);
         location.Children.Add(locationText);
         endpoint.Children.Add(location);
-        return DeyttTheme.Card(endpoint, DeyttTheme.Surface, DeyttTheme.Line,
-            14, new Thickness(10, 9));
+        return endpoint;
     }
 
     private RouteGlobeWebView CreateRouteGlobe()
@@ -307,8 +328,10 @@ public partial class MainWindow
         measurements.Children.Add(speedMeasurement);
 
         var details = new StackPanel { Spacing = 8 };
-        details.Children.Add(DeyttTheme.Card(measurements, DeyttTheme.Surface, DeyttTheme.Line,
-            14, new Thickness(12, 9)));
+        var measurementCard = DeyttTheme.Card(measurements, DeyttTheme.Surface, DeyttTheme.Line,
+            14, new Thickness(12, 9));
+        AutomationProperties.SetAutomationId(measurementCard, "HomeRouteMeasurements");
+        details.Children.Add(measurementCard);
         details.Children.Add(DeyttTheme.Action(DeyttTheme.TextBlock(
             Copy("Все замеры и диагностика ↗", "All measurements and diagnostics ↗"),
             11, DeyttTheme.Sky, FontWeight.SemiBold), () => ShowTab(MainTab.Routes)));

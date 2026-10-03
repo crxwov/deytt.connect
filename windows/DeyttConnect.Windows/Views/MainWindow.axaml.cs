@@ -91,10 +91,6 @@ public partial class MainWindow : Window
     private bool _responsiveLayoutInitialized;
     private Border? _homeConnectionCard;
     private Grid? _homeConnectionLayout;
-    private Grid? _homeConnectionStatus;
-    private Ellipse? _homeConnectionStatusDot;
-    private StackPanel? _homeConnectionStatusText;
-    private TextBlock? _homeConnectionStateTitle;
     private Border? _homeConnectionPrimaryAction;
     private RouteGlobeWebView? _routeGlobe;
 
@@ -474,25 +470,15 @@ public partial class MainWindow : Window
     private void UpdateHomeConnectionLayout()
     {
         if (_homeConnectionCard is null || _homeConnectionLayout is null ||
-            _homeConnectionStatus is null || _homeConnectionStatusDot is null ||
-            _homeConnectionStatusText is null || _homeConnectionStateTitle is null ||
             _homeConnectionPrimaryAction is null)
             return;
 
         _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*");
-        _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto,Auto,*");
-        _homeConnectionLayout.RowSpacing = _compactLayout ? 16 : 18;
-        _homeConnectionStatus.ColumnDefinitions = new ColumnDefinitions("Auto,*");
-        _homeConnectionStatusDot.IsVisible = true;
-        _homeConnectionStateTitle.IsVisible = true;
-        Grid.SetColumn(_homeConnectionStatusText, 1);
-        Grid.SetColumn(_homeConnectionStatus, 0);
-        Grid.SetRow(_homeConnectionStatus, 0);
+        _homeConnectionLayout.RowDefinitions = new RowDefinitions("*,Auto");
+        _homeConnectionLayout.RowSpacing = _compactLayout ? 14 : 18;
         Grid.SetColumn(_homeConnectionPrimaryAction, 0);
         Grid.SetRow(_homeConnectionPrimaryAction, 1);
-        _homeConnectionPrimaryAction.MinWidth = 0;
-        _homeConnectionPrimaryAction.Height = _compactLayout ? 60 : 64;
-        _homeConnectionPrimaryAction.Margin = new Thickness(0);
+        _homeConnectionPrimaryAction.Height = _compactLayout ? 108 : 116;
         _homeConnectionCard.Padding = _compactLayout
             ? new Thickness(18, 18)
             : new Thickness(22, 22);
@@ -572,21 +558,9 @@ public partial class MainWindow : Window
         var contents = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,*"),
-            RowSpacing = _compactLayout ? 16 : 18,
+            RowDefinitions = new RowDefinitions("*,Auto"),
+            RowSpacing = _compactLayout ? 14 : 18,
         };
-        var status = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        var statusDot = new Ellipse
-        {
-            Width = 9,
-            Height = 9,
-            Fill = DeyttTheme.Brush(connected ? DeyttTheme.Mint : starting ? DeyttTheme.Amber :
-                isError ? DeyttTheme.Coral : DeyttTheme.Muted),
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 0),
-        };
-        status.Children.Add(statusDot);
-        var text = new StackPanel { Spacing = 4 };
         var stateTitle = _qaFixture && isError
             ? Copy("Ошибка VPN", "VPN error")
             : !_vpnServiceAvailable && isError
@@ -604,10 +578,6 @@ public partial class MainWindow : Window
                         ? Copy("Проверяем VPN-трафик…", "Verifying VPN traffic…")
                         : Copy("Подключаем VPN…", "Connecting VPN…")
                 : Copy("Не подключено", "Not connected");
-        var stateTitleText = DeyttTheme.TextBlock(stateTitle, _compactLayout ? 22 : 27,
-            connected ? DeyttTheme.Mint : isError ? DeyttTheme.Coral : DeyttTheme.Text,
-            FontWeight.SemiBold);
-        text.Children.Add(stateTitleText);
         var connectionDetail = connected
             ? _qaFixture
                 ? Copy("Синтетический статус · туннель не запускался", "Synthetic status · no tunnel was started")
@@ -628,12 +598,9 @@ public partial class MainWindow : Window
                         ? Copy("Установите службу VPN в настройках приложения", "Install the VPN service in app settings")
                         : signedIn && subscriptionReady && profileReady
                             ? Copy("Подписка готова · выберите маршрут и подключитесь", "Subscription ready · choose a route and connect")
-                            : signedIn
-                                ? _profileLoadIssue ?? Copy("Нет активной подписки", "No active subscription")
-                                : Copy("Войдите через Telegram, чтобы загрузить подписку", "Sign in with Telegram to load your subscription");
-        text.Children.Add(DeyttTheme.TextBlock(connectionDetail, 12, DeyttTheme.Muted));
-        Grid.SetColumn(text, 1);
-        status.Children.Add(text);
+                : signedIn
+                    ? _profileLoadIssue ?? Copy("Нет активной подписки", "No active subscription")
+                    : Copy("Войдите через Telegram, чтобы загрузить подписку", "Sign in with Telegram to load your subscription");
         var primaryLabel = tunnelActive
             ? Copy("Отключить", "Disconnect")
             : starting
@@ -651,7 +618,50 @@ public partial class MainWindow : Window
                     : !_vpnServiceAvailable
                         ? Copy("Настроить VPN", "Set up VPN")
                         : Copy("Подключиться", "Connect");
-        var primary = DeyttTheme.PrimaryButton(primaryLabel, () =>
+
+        var actionIsPrimary = !connected && !starting && !isError;
+        var actionForeground = connected || actionIsPrimary ? DeyttTheme.Background : DeyttTheme.Text;
+        var detailForeground = connected || actionIsPrimary ? DeyttTheme.Surface : DeyttTheme.Muted;
+        var statusDot = new Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            Fill = DeyttTheme.Brush(connected || actionIsPrimary ? DeyttTheme.Background :
+                starting ? DeyttTheme.Amber : isError ? DeyttTheme.Coral : DeyttTheme.Muted),
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 9, 0),
+        };
+        var stateCopy = new StackPanel { Spacing = 3 };
+        var stateTitleText = DeyttTheme.TextBlock(stateTitle, _compactLayout ? 16 : 18,
+            connected || actionIsPrimary ? DeyttTheme.Background : isError ? DeyttTheme.Coral : DeyttTheme.Text,
+            FontWeight.SemiBold, wrap: false);
+        stateCopy.Children.Add(stateTitleText);
+        var connectionDetailText = DeyttTheme.TextBlock(connectionDetail, 11, detailForeground, wrap: false);
+        connectionDetailText.TextTrimming = TextTrimming.CharacterEllipsis;
+        stateCopy.Children.Add(connectionDetailText);
+        var status = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        status.Children.Add(statusDot);
+        Grid.SetColumn(stateCopy, 1);
+        status.Children.Add(stateCopy);
+
+        var actionContent = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto"),
+            RowSpacing = 8,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        Grid.SetRow(status, 0);
+        actionContent.Children.Add(status);
+        var actionLabel = DeyttTheme.TextBlock(primaryLabel, _compactLayout ? 19 : 21,
+            actionForeground, FontWeight.Bold, DeyttTheme.InterTight, wrap: false);
+        actionLabel.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        actionLabel.TextAlignment = TextAlignment.Center;
+        Grid.SetRow(actionLabel, 1);
+        actionContent.Children.Add(actionLabel);
+
+        var primary = DeyttTheme.Action(actionContent, () =>
         {
             if (_qaFixture)
                 return;
@@ -672,25 +682,48 @@ public partial class MainWindow : Window
                 _ = ToggleVpnAsync();
         });
         primary.IsEnabled = !starting || canCancel || healthUnknown;
-        Grid.SetColumn(status, 0);
-        Grid.SetRow(status, 0);
-        contents.Children.Add(status);
-        Grid.SetColumn(primary, 0);
-        Grid.SetRow(primary, 1);
-        contents.Children.Add(primary);
+        primary.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        primary.VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center;
+        primary.Padding = new Thickness(16, 12);
+        AutomationProperties.SetAutomationId(primary, "HomeConnectionAction");
+        var actionTile = new Border
+        {
+            Height = _compactLayout ? 108 : 116,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
+            BorderThickness = new Thickness(1),
+            BorderBrush = DeyttTheme.Brush(connected ? DeyttTheme.Mint : isError ? DeyttTheme.Coral :
+                starting ? DeyttTheme.Line : DeyttTheme.Sky),
+            CornerRadius = new CornerRadius(20),
+            Background = connected
+                ? DeyttTheme.Brush(DeyttTheme.Mint)
+                : actionIsPrimary
+                    ? new LinearGradientBrush
+                    {
+                        StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative),
+                        EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
+                        GradientStops =
+                        {
+                            new GradientStop(DeyttTheme.Sky, 0),
+                            new GradientStop(DeyttTheme.Mint, 1),
+                        },
+                    }
+                    : DeyttTheme.Brush(DeyttTheme.Surface2),
+            Child = primary,
+        };
+        AutomationProperties.SetAutomationId(actionTile, "HomeConnectionActionTile");
+        Grid.SetColumn(actionTile, 0);
+        Grid.SetRow(actionTile, 1);
+        contents.Children.Add(actionTile);
         var routeDetails = BuildHomeRouteDetails();
         Grid.SetColumn(routeDetails, 0);
-        Grid.SetRow(routeDetails, 2);
+        Grid.SetRow(routeDetails, 0);
         contents.Children.Add(routeDetails);
 
         _homeConnectionCard = DeyttTheme.Card(contents, DeyttTheme.Surface2, DeyttTheme.Line, 23,
             new Thickness(19));
         _homeConnectionLayout = contents;
-        _homeConnectionStatus = status;
-        _homeConnectionStatusDot = statusDot;
-        _homeConnectionStatusText = text;
-        _homeConnectionStateTitle = stateTitleText;
-        _homeConnectionPrimaryAction = primary;
+        _homeConnectionPrimaryAction = actionTile;
         UpdateHomeConnectionLayout();
         return _homeConnectionCard;
     }
