@@ -92,15 +92,84 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var action = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
-                .OfType<Button>(), button => button.Content is TextBlock text && text.Text == "Войти через Telegram");
+                .OfType<Button>(), button => AutomationProperties.GetAutomationId(button) == "HomeConnectionAction");
             var hitTarget = Assert.IsType<Border>(action.GetVisualParent());
 
             Assert.True(action.IsEffectivelyVisible);
             Assert.True(action.IsEnabled);
             Assert.True(hitTarget.Bounds.Width >= 320);
-            Assert.InRange(hitTarget.Height, 56, 68);
+            Assert.InRange(hitTarget.Height, 104, 118);
             Assert.True(action.Focus());
             Assert.True(action.IsFocused);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Home_panel_matches_protocol_path_measurements_and_bottom_action_order(double width)
+    {
+        var window = new MainWindow(Fixture(signedIn: true)) { Width = width, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            var protocol = Assert.Single(Descendants(page).OfType<TextBlock>(), text => text.Text == "./hysteria2");
+            var path = Assert.Single(Descendants(page).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "HomeTrafficPath");
+            var measurements = Assert.Single(Descendants(page).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "HomeRouteMeasurements");
+            var tile = Assert.Single(Descendants(page).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "HomeConnectionActionTile");
+            var pathText = Descendants(path).OfType<TextBlock>().Select(text => text.Text).ToArray();
+            Assert.Contains("Регион скрыт", pathText);
+            Assert.Contains("Амстердам", pathText);
+
+            static double Top(Control control, Control relativeTo) =>
+                control.TranslatePoint(new Point(0, 0), relativeTo)?.Y ?? double.NaN;
+            Assert.True(Top(protocol, page) < Top(path, page));
+            Assert.True(Top(path, page) < Top(measurements, page));
+            Assert.True(Top(measurements, page) < Top(tile, page));
+
+            var connectionCard = Assert.IsType<Border>(tile.GetVisualParent()?.GetVisualParent());
+            var tileBottom = Top(tile, page) + tile.Bounds.Height;
+            var cardBottom = Top(connectionCard, page) + connectionCard.Bounds.Height;
+            Assert.InRange(cardBottom - tileBottom, 17, 28);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Home_double_route_shows_known_country_hops_without_guessing_a_city()
+    {
+        var window = new MainWindow(Fixture(signedIn: true, selectedRoute: "ru-de"))
+        {
+            Width = 1360,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            var path = Assert.Single(Descendants(page).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "HomeTrafficPath");
+            var pathText = Descendants(path).OfType<TextBlock>().Select(text => text.Text).ToArray();
+            Assert.Contains("./lte ru+de", Descendants(page).OfType<TextBlock>().Select(text => text.Text));
+            Assert.Contains("Регион скрыт", pathText);
+            Assert.Contains("Россия", pathText);
+            Assert.Contains("Франкфурт", pathText);
+            Assert.DoesNotContain("Санкт-Петербург", pathText);
         }
         finally
         {
@@ -172,7 +241,7 @@ public sealed class HomeWindowTests
             var overview = Assert.IsType<Grid>(Assert.Single(Required<Grid>(window, "PageHost").Children));
             Assert.Equal(2, overview.ColumnDefinitions.Count);
             Assert.InRange(Math.Abs(overview.Children[0].Bounds.Width - overview.Children[1].Bounds.Width), 0, 32);
-            Assert.Contains(page.OfType<TextBlock>(), text => text.Text == "ПРОТОКОЛ");
+            Assert.Contains(page.OfType<TextBlock>(), text => text.Text == "./hysteria2");
             Assert.DoesNotContain(page.OfType<TextBlock>(), text => text.Text == "QA Demo");
             Assert.True(Required<Control>(window, "BottomNavigationPanel").IsVisible);
         }
@@ -564,6 +633,7 @@ public sealed class HomeWindowTests
 
     private static QaHomeFixture Fixture(string tab = "home", bool signedIn = false,
         bool routeProbeInProgress = false, TelegramSubscription? profileSubscription = null,
+        string selectedRoute = "nl-hysteria2",
         string state = "disconnected")
     {
         var routes = new[]
@@ -600,7 +670,7 @@ public sealed class HomeWindowTests
             "error" => new WindowsTunnelSnapshot("error", "Synthetic VPN error"),
             _ => new WindowsTunnelSnapshot("disconnected", "Synthetic only"),
         };
-        return new QaHomeFixture(signedIn, "ru", "nl-hysteria2", tab, account, subscription, routes,
+        return new QaHomeFixture(signedIn, "ru", selectedRoute, tab, account, subscription, routes,
             tunnel,
             RouteProbeInProgress: routeProbeInProgress);
     }
