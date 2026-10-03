@@ -18,9 +18,9 @@ namespace DeyttConnect.Windows.HeadlessTests;
 public sealed class HomeWindowTests
 {
     [AvaloniaTheory]
-    [InlineData("disconnected", "Не подключено", "Не подключено", "Подключить")]
+    [InlineData("disconnected", "Не подключено", "Не подключено", "Подключиться")]
     [InlineData("connecting", "Подключаемся…", "Подключаем VPN…", "Отменить подключение")]
-    [InlineData("error", "Ошибка VPN", "Ошибка VPN", "Подключить")]
+    [InlineData("error", "Ошибка VPN", "Ошибка VPN", "Подключиться")]
     [InlineData("connected", "VPN подключён", "Подключено", "Отключить")]
     public void Vpn_fixture_renders_truthful_state_across_header_rail_home_and_action(
         string state, string expectedHeader, string expectedHome, string expectedAction)
@@ -80,9 +80,9 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaTheory]
-    [InlineData(720d, 156d, 48d)]
-    [InlineData(1360d, 200d, 56d)]
-    public void Home_connection_action_keeps_a_usable_hit_target(double width, double expectedMinWidth, double expectedHeight)
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Home_connection_action_keeps_a_usable_hit_target(double width)
     {
         var window = new MainWindow(Fixture()) { Width = width, Height = 820 };
         try
@@ -96,8 +96,8 @@ public sealed class HomeWindowTests
 
             Assert.True(action.IsEffectivelyVisible);
             Assert.True(action.IsEnabled);
-            Assert.Equal(expectedMinWidth, hitTarget.MinWidth);
-            Assert.Equal(expectedHeight, hitTarget.Height);
+            Assert.True(hitTarget.Bounds.Width >= 320);
+            Assert.InRange(hitTarget.Height, 62, 68);
             Assert.True(action.Focus());
             Assert.True(action.IsFocused);
         }
@@ -119,15 +119,41 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var controls = Descendants(Required<Grid>(window, "PageHost")).ToArray();
-            var globe = Assert.Single(controls.OfType<RouteGlobeWebView>());
-            Assert.True(globe.Bounds.Width > 300);
-            Assert.False(string.IsNullOrWhiteSpace(globe.SelectedRoute));
-            Assert.NotEmpty(globe.AvailableLocations);
+            var map = Assert.Single(controls.OfType<RouteGlobeWebView>());
+            Assert.True(map.Bounds.Width > 300);
+            Assert.False(string.IsNullOrWhiteSpace(map.SelectedRoute));
+            Assert.NotEmpty(map.AvailableLocations);
         }
         finally
         {
             window.Close();
         }
+    }
+
+    [AvaloniaFact]
+    public void Android_atlas_route_keys_support_single_and_double_hops()
+    {
+        Assert.Equal("nl", RouteGlobeWebView.RouteKeyFor("NL_VLESS"));
+        Assert.Equal("de", RouteGlobeWebView.RouteKeyFor("DE_HYSTERIA2"));
+        Assert.Equal("ru-de", RouteGlobeWebView.RouteKeyFor("RU-DE_TROJAN"));
+        Assert.Equal("auto", RouteGlobeWebView.RouteKeyFor("unknown"));
+    }
+
+    [AvaloniaFact]
+    public void Route_map_labels_source_only_when_location_consent_is_enabled()
+    {
+        var map = new RouteGlobeWebView();
+        var syntheticOrigin = new WindowsNetworkLocation(54.735, 55.958, "Уфа", "Башкортостан", "RU");
+
+        map.OriginLocation = syntheticOrigin;
+        Assert.Null(map.OriginLocation);
+
+        map.OriginConsentGranted = true;
+        map.OriginLocation = syntheticOrigin;
+        Assert.Equal(syntheticOrigin, map.OriginLocation);
+
+        map.OriginConsentGranted = false;
+        Assert.Null(map.OriginLocation);
     }
 
     [AvaloniaFact]
@@ -140,12 +166,38 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var page = Descendants(Required<Grid>(window, "PageHost")).ToArray();
-            var globe = Assert.Single(page.OfType<RouteGlobeWebView>());
-            Assert.InRange(globe.Bounds.Height, 180, 205);
-            Assert.Contains(page.OfType<TextBlock>(), text =>
-                text.Text == "Проверить маршрут в диагностике ↗" && text.IsEffectivelyVisible);
+            var map = Assert.Single(page.OfType<RouteGlobeWebView>());
+            Assert.True(map.Bounds.Height > 450);
+            var overview = Assert.IsType<Grid>(Assert.Single(Required<Grid>(window, "PageHost").Children));
+            Assert.Equal(2, overview.ColumnDefinitions.Count);
+            Assert.InRange(Math.Abs(overview.Children[0].Bounds.Width - overview.Children[1].Bounds.Width), 0, 32);
+            Assert.Contains(page.OfType<TextBlock>(), text => text.Text == "ПРОТОКОЛ");
             Assert.DoesNotContain(page.OfType<TextBlock>(), text => text.Text == "QA Demo");
             Assert.True(Required<Control>(window, "BottomNavigationPanel").IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Wide_home_splits_map_and_connection_panel_evenly()
+    {
+        var window = new MainWindow(Fixture(signedIn: true)) { Width = 900, Height = 830 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var host = Required<Grid>(window, "PageHost");
+            var layout = Assert.IsType<Grid>(Assert.Single(host.Children));
+            Assert.Equal(2, layout.ColumnDefinitions.Count);
+            Assert.Equal(2, layout.Children.Count);
+            var mapPanel = layout.Children[0];
+            var connectionPanel = layout.Children[1];
+            Assert.InRange(Math.Abs(mapPanel.Bounds.Width - connectionPanel.Bounds.Width), 0, 32);
+            Assert.Single(Descendants(mapPanel).OfType<RouteGlobeWebView>());
         }
         finally
         {

@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using DeyttConnect.Windows.Services;
+using DeyttConnect.Windows.UI;
 using Microsoft.Web.WebView2.Core;
 
 namespace DeyttConnect.Windows.Controls;
@@ -32,7 +33,6 @@ public sealed class RouteGlobeWebView : ContentControl
     };
 
     private NativeWebView? _webView;
-    private RouteMapIllustration? _fallbackMap;
     private AtlasLoopbackAssetHost? _linuxAssetHost;
     private Uri _atlasUri = AtlasUri;
     private string _selectedRoute = "auto";
@@ -40,7 +40,6 @@ public sealed class RouteGlobeWebView : ContentControl
     private IReadOnlyCollection<string> _availableLocations = ["nl", "de", "fi", "ru"];
     private bool _originConsentGranted;
     private WindowsNetworkLocation? _originLocation;
-    private MapCoordinate? _exitCoordinate;
     private string? _egressCountryCode;
     private string? _activeAutoRouteKey;
     private bool _trafficActive;
@@ -138,7 +137,6 @@ public sealed class RouteGlobeWebView : ContentControl
             _originConsentGranted = value;
             if (!value)
                 _originLocation = null;
-            UpdateFallbackMap();
             QueueStateUpdate();
         }
     }
@@ -153,22 +151,6 @@ public sealed class RouteGlobeWebView : ContentControl
             if (_originLocation == next)
                 return;
             _originLocation = next;
-            UpdateFallbackMap();
-            QueueStateUpdate();
-        }
-    }
-
-    /// <summary>Fallback endpoint coordinate for the currently selected route.</summary>
-    public MapCoordinate? ExitCoordinate
-    {
-        get => _exitCoordinate;
-        set
-        {
-            var next = IsValidCoordinate(value) ? value : null;
-            if (_exitCoordinate == next)
-                return;
-            _exitCoordinate = next;
-            UpdateFallbackMap();
             QueueStateUpdate();
         }
     }
@@ -215,6 +197,12 @@ public sealed class RouteGlobeWebView : ContentControl
             QueueStateUpdate();
         }
     }
+
+    public void ZoomIn() => ExecuteMapCommand("window.deyttZoomMap && window.deyttZoomMap(1.45);");
+
+    public void ZoomOut() => ExecuteMapCommand("window.deyttZoomMap && window.deyttZoomMap(0.69);");
+
+    public void ResetView() => ExecuteMapCommand("window.deyttResetMapView && window.deyttResetMapView();");
 
     /// <summary>Stops atlas traffic motion and camera easing while enabled.</summary>
     public bool ReducedMotion
@@ -318,7 +306,6 @@ public sealed class RouteGlobeWebView : ContentControl
             webView.NewWindowRequested += OnNewWindowRequested;
             webView.WebMessageReceived += OnWebMessageReceived;
             _webView = webView;
-            _fallbackMap = null;
             Content = webView;
         }
         catch (Exception exception)
@@ -348,7 +335,7 @@ public sealed class RouteGlobeWebView : ContentControl
                 coreWebView2.SetVirtualHostNameToFolderMapping(
                     AssetHost,
                     AtlasAssetDirectory,
-                    CoreWebView2HostResourceAccessKind.Deny);
+                    CoreWebView2HostResourceAccessKind.DenyCors);
             }
 
             _webView!.Source = _atlasUri;
@@ -490,6 +477,27 @@ public sealed class RouteGlobeWebView : ContentControl
         });
     }
 
+    private void ExecuteMapCommand(string script)
+    {
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null)
+            return;
+
+        var webView = _webView;
+        Dispatcher.UIThread.Post(async () =>
+        {
+            if (_atlasFailed || !_attachedToVisualTree || !_pageReady || !ReferenceEquals(webView, _webView))
+                return;
+            try
+            {
+                await webView.InvokeScript(script);
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Trace.TraceWarning("Atlas camera command failed: {0}", exception.GetType().Name);
+            }
+        });
+    }
+
     private string BuildStateScript()
     {
         var script = new StringBuilder();
@@ -547,22 +555,22 @@ public sealed class RouteGlobeWebView : ContentControl
         }
 
         var english = _language == "en";
-        var message = (reason, english) switch
+        var (summary, message) = (reason, english) switch
         {
-            ("assets", true) => "Map files are missing. Reinstall the app and try again.",
-            ("assets", false) => "Файлы карты не найдены. Переустановите приложение и попробуйте снова.",
+            ("assets", true) => ("Map files are missing", "Re-extract the complete portable folder, including app/"),
+            ("assets", false) => ("Не найдены файлы карты", "Распакуйте архив целиком: папка app должна находиться рядом с deyttconnect.exe."),
             ("runtime", true) when OperatingSystem.IsWindows() =>
-                "The map needs Microsoft Edge WebView2 Runtime. Install it and restart the app.",
+                ("WebView2 Runtime is required", "Install or repair Microsoft Edge WebView2 Runtime, then retry."),
             ("runtime", false) when OperatingSystem.IsWindows() =>
-                "Для карты нужен Microsoft Edge WebView2 Runtime. Установите его и перезапустите приложение.",
+                ("Не запущен WebView2 Runtime", "Установите или восстановите Microsoft Edge WebView2 Runtime и повторите попытку."),
             ("runtime", true) when OperatingSystem.IsLinux() =>
-                "The map needs WebKitGTK 4.1 or WPE WebKit. Install a browser engine and retry.",
+                ("WebKitGTK is required", "Install WebKitGTK 4.1 or WPE WebKit and retry."),
             ("runtime", false) when OperatingSystem.IsLinux() =>
-                "Для карты нужен WebKitGTK 4.1 или WPE WebKit. Установите браузерный движок и повторите попытку.",
-            ("platform", true) => "The embedded map is unavailable on this system.",
-            ("platform", false) => "На этой системе встроенная карта пока недоступна.",
-            (_, true) => "The map could not load. Check the app installation and retry.",
-            _ => "Не удалось загрузить карту. Проверьте установку приложения и повторите попытку.",
+                ("Не найден WebKitGTK", "Установите WebKitGTK 4.1 или WPE WebKit и повторите попытку."),
+            ("platform", true) => ("Embedded map is unavailable", "This platform does not provide a supported WebView."),
+            ("platform", false) => ("Карта недоступна на этой системе", "Встроенный браузер не поддерживается этой платформой."),
+            (_, true) => ("The DEYTT atlas could not start", "Check the complete app folder and WebView2 Runtime, then retry."),
+            _ => ("Не удалось запустить атлас DEYTT", "Проверьте папку приложения и WebView2 Runtime, затем повторите попытку."),
         };
         var retry = new Button
         {
@@ -576,53 +584,55 @@ public sealed class RouteGlobeWebView : ContentControl
             BorderThickness = new Avalonia.Thickness(1),
         };
         retry.Click += (_, _) => TryInitializeWebView();
-        var fallback = new RouteMapIllustration();
-        _fallbackMap = fallback;
-        UpdateFallbackMap();
-        var summary = reason == "runtime" && OperatingSystem.IsWindows()
-            ? english ? "Interactive map needs WebView2 Runtime" : "Для интерактивной карты нужен WebView2 Runtime"
-            : english ? "Interactive map is unavailable" : "Интерактивная карта недоступна";
-        var caption = new StackPanel { Spacing = 2,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        var caption = new StackPanel
+        {
+            Spacing = 8,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        caption.Children.Add(new TextBlock
+        {
+            Text = english ? "DEYTT NETWORK ATLAS" : "АТЛАС СЕТИ DEYTT",
+            FontSize = 10,
+            FontFamily = DeyttTheme.JetBrainsMono,
+            Foreground = DeyttTheme.Brush(DeyttTheme.Sky),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+        });
         caption.Children.Add(new TextBlock
         {
             Text = summary,
             TextWrapping = TextWrapping.Wrap,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brushes.White,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
         });
         caption.Children.Add(new TextBlock
         {
             Text = english ? "Your route remains available." : "Маршрут остаётся доступен.",
             FontSize = 11,
-            Foreground = new SolidColorBrush(Avalonia.Media.Color.Parse("#AAB8CD")),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = DeyttTheme.Brush(DeyttTheme.Muted),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
         });
-        var actions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        actions.Children.Add(caption);
-        Grid.SetColumn(retry, 1);
-        actions.Children.Add(retry);
-        var fallbackPanel = new Grid();
-        fallbackPanel.Children.Add(fallback);
-        fallbackPanel.Children.Add(new Border
+        caption.Children.Add(new TextBlock
         {
-            Background = new SolidColorBrush(Avalonia.Media.Color.Parse("#E60A1018")),
-            Padding = new Avalonia.Thickness(15, 10),
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
-            Child = actions,
+            Text = message,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = Avalonia.Media.TextAlignment.Center,
+            Foreground = DeyttTheme.Brush(DeyttTheme.Muted),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
         });
-        ToolTip.SetTip(fallbackPanel, message);
-        Content = fallbackPanel;
-    }
-
-    private void UpdateFallbackMap()
-    {
-        if (_fallbackMap is null)
-            return;
-        _fallbackMap.ExitCoordinate = _exitCoordinate;
-        _fallbackMap.OriginCoordinate = _originConsentGranted && _originLocation is { } location
-            ? new MapCoordinate(location.Latitude, location.Longitude)
-            : null;
-        _fallbackMap.InvalidateVisual();
+        caption.Children.Add(retry);
+        Content = new Border
+        {
+            Background = DeyttTheme.Brush(DeyttTheme.MapSurface),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Avalonia.Thickness(1),
+            CornerRadius = new Avalonia.CornerRadius(18),
+            Padding = new Avalonia.Thickness(24),
+            Child = caption,
+        };
     }
 
     private void OnProcessExit(object? sender, EventArgs args) => _linuxAssetHost?.Dispose();
@@ -631,11 +641,6 @@ public sealed class RouteGlobeWebView : ContentControl
         location is not null &&
         double.IsFinite(location.Latitude) && location.Latitude is >= -85 and <= 85 &&
         double.IsFinite(location.Longitude) && location.Longitude is >= -180 and <= 180;
-
-    private static bool IsValidCoordinate(MapCoordinate? coordinate) =>
-        coordinate is null ||
-        (double.IsFinite(coordinate.Value.Latitude) && coordinate.Value.Latitude is >= -85 and <= 85 &&
-         double.IsFinite(coordinate.Value.Longitude) && coordinate.Value.Longitude is >= -180 and <= 180);
 
     private static string? NormalizeCountryCode(string? countryCode)
     {

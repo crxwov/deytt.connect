@@ -908,8 +908,10 @@
     render(time) {
       this.frame = 0;
       if (!this.visible || document.hidden || !this.width) return;
+      const wasCameraMoving = this.cameraMoving;
       const cameraMoving = this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
+      if (wasCameraMoving && !cameraMoving) this.labelPlacements.clear();
       // The atlas only animates while the user pans or zooms. Once the camera
       // settles, static routes and labels stay still and consume no frame loop.
       const frameInterval = cameraMoving
@@ -1116,9 +1118,10 @@
         : null;
       if (this.autoExitRouteKey === nextRouteKey) return;
       this.autoExitRouteKey = nextRouteKey;
+      if (this.route === "auto" && nextRouteKey) this.focusRoute();
       // Egress metadata changes the active endpoint, never the user's camera
-      // or the stable label layout. This avoids refocusing the whole map when
-      // an IP lookup reports a corrected exit region.
+      // after an active route is selected. The first active route update frames
+      // the actual path; later country corrections only refresh its marker.
       this.staticDirty = true;
       this.start();
     }

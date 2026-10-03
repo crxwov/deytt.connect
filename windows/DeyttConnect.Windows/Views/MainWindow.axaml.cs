@@ -96,8 +96,7 @@ public partial class MainWindow : Window
     private StackPanel? _homeConnectionStatusText;
     private TextBlock? _homeConnectionStateTitle;
     private Border? _homeConnectionPrimaryAction;
-    private RouteGlobeWebView? _routeGlobeMap;
-    private Grid? _routeGlobeHost;
+    private RouteGlobeWebView? _routeGlobe;
 
     public MainWindow() : this((string?)null)
     {
@@ -122,7 +121,11 @@ public partial class MainWindow : Window
         ConfigureNavigation();
         ShowTab(MainTab.Home);
         SizeChanged += (_, _) => UpdateResponsiveLayout();
-        PageScroll.SizeChanged += (_, _) => UpdatePageHostWidth();
+        PageScroll.SizeChanged += (_, _) =>
+        {
+            UpdatePageHostWidth();
+            UpdateHomeColumns();
+        };
         Opened += async (_, _) =>
         {
             FitInitialWindowToWorkArea();
@@ -267,10 +270,10 @@ public partial class MainWindow : Window
             MainTab.Setup => BuildSetupPage(),
             _ => BuildHomePage(),
         });
-        SetNavigation(HomeNav, "⌂", Copy("Главная", "Home"), tab == MainTab.Home);
-        SetNavigation(RoutesNav, "⌖", Copy("Маршруты", "Routes"), tab == MainTab.Routes);
-        SetNavigation(ProfileNav, "♙", Copy("Профиль", "Profile"), tab is MainTab.Profile or MainTab.Support);
-        SetNavigation(SettingsNav, "⚙", Copy("Настройки", "Settings"), tab == MainTab.Settings);
+        SetNavigation(HomeNav, NavigationIconKind.Home, Copy("Главная", "Home"), tab == MainTab.Home);
+        SetNavigation(RoutesNav, NavigationIconKind.Routes, Copy("Маршруты", "Routes"), tab == MainTab.Routes);
+        SetNavigation(ProfileNav, NavigationIconKind.Profile, Copy("Профиль", "Profile"), tab is MainTab.Profile or MainTab.Support);
+        SetNavigation(SettingsNav, NavigationIconKind.Settings, Copy("Настройки", "Settings"), tab == MainTab.Settings);
         UpdateBottomNavigation();
         UpdateShellStatus();
         if (tab == MainTab.Support && _supportView is not null &&
@@ -285,21 +288,20 @@ public partial class MainWindow : Window
         PageScroll.Offset = new Vector(0, 0);
     }
 
-    private void SetNavigation(Button button, string icon, string label, bool selected)
+    private void SetNavigation(Button button, NavigationIconKind icon, string label, bool selected)
     {
         ToolTip.SetTip(button, label);
+        Avalonia.Automation.AutomationProperties.SetName(button, label);
         var content = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions(_compactLayout ? "*" : "Auto,*"),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
         };
-        var glyph = DeyttTheme.TextBlock(icon, 19, selected ? DeyttTheme.Sky : DeyttTheme.Muted,
-            FontWeight.SemiBold, DeyttTheme.InterTight, wrap: false);
-        glyph.Width = _compactLayout ? double.NaN : 25;
+        var glyph = new NavigationIcon(icon, selected);
         glyph.HorizontalAlignment = _compactLayout
             ? Avalonia.Layout.HorizontalAlignment.Center
             : Avalonia.Layout.HorizontalAlignment.Left;
-        glyph.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+        glyph.Margin = new Thickness(0, 0, _compactLayout ? 0 : 12, 0);
         content.Children.Add(glyph);
         if (!_compactLayout)
         {
@@ -307,7 +309,7 @@ public partial class MainWindow : Window
                 selected ? DeyttTheme.Text : DeyttTheme.Muted,
                 selected ? FontWeight.SemiBold : FontWeight.Medium, wrap: false);
             title.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-            Grid.SetColumn(title, 1);
+        Grid.SetColumn(title, 1);
             content.Children.Add(title);
         }
 
@@ -326,15 +328,15 @@ public partial class MainWindow : Window
 
     private void UpdateBottomNavigation()
     {
-        SetBottomNavigation(BottomHomeNav, "⌂", Copy("Главная", "Home"), _activeTab == MainTab.Home);
-        SetBottomNavigation(BottomRoutesNav, "⌖", Copy("Маршруты", "Routes"), _activeTab == MainTab.Routes);
-        SetBottomNavigation(BottomProfileNav, "♙", Copy("Профиль", "Profile"),
+        SetBottomNavigation(BottomHomeNav, NavigationIconKind.Home, Copy("Главная", "Home"), _activeTab == MainTab.Home);
+        SetBottomNavigation(BottomRoutesNav, NavigationIconKind.Routes, Copy("Маршруты", "Routes"), _activeTab == MainTab.Routes);
+        SetBottomNavigation(BottomProfileNav, NavigationIconKind.Profile, Copy("Профиль", "Profile"),
             _activeTab is MainTab.Profile or MainTab.Support);
-        SetBottomNavigation(BottomSettingsNav, "⚙", Copy("Настройки", "Settings"),
+        SetBottomNavigation(BottomSettingsNav, NavigationIconKind.Settings, Copy("Настройки", "Settings"),
             _activeTab == MainTab.Settings);
     }
 
-    private static void SetBottomNavigation(Button button, string icon, string label, bool selected)
+    private static void SetBottomNavigation(Button button, NavigationIconKind icon, string label, bool selected)
     {
         ToolTip.SetTip(button, label);
         var content = new StackPanel
@@ -342,9 +344,7 @@ public partial class MainWindow : Window
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             Spacing = 2,
         };
-        var glyph = DeyttTheme.TextBlock(icon, 21,
-            selected ? DeyttTheme.Sky : DeyttTheme.Muted, FontWeight.SemiBold, wrap: false);
-        glyph.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        var glyph = new NavigationIcon(icon, selected);
         content.Children.Add(glyph);
         var title = DeyttTheme.TextBlock(label, 11,
             selected ? DeyttTheme.Text : DeyttTheme.Muted,
@@ -352,6 +352,8 @@ public partial class MainWindow : Window
         title.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         content.Children.Add(title);
         button.MinHeight = 58;
+        Avalonia.Automation.AutomationProperties.SetName(button, label);
+        ToolTip.SetTip(button, label);
         button.Content = new Border
         {
             Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : Colors.Transparent),
@@ -416,6 +418,7 @@ public partial class MainWindow : Window
         if (_responsiveLayoutInitialized && _compactLayout == compact && _shortCompactLayout == shortCompact)
         {
             UpdatePageHostWidth();
+            UpdateHomeColumns();
             return;
         }
 
@@ -442,10 +445,10 @@ public partial class MainWindow : Window
             ? new Thickness(16, 18, 16, 56)
             : new Thickness(34, 26, 34, 42);
 
-        SetNavigation(HomeNav, "⌂", Copy("Главная", "Home"), _activeTab == MainTab.Home);
-        SetNavigation(RoutesNav, "⌖", Copy("Маршруты", "Routes"), _activeTab == MainTab.Routes);
-        SetNavigation(ProfileNav, "♙", Copy("Профиль", "Profile"), _activeTab is MainTab.Profile or MainTab.Support);
-        SetNavigation(SettingsNav, "⚙", Copy("Настройки", "Settings"), _activeTab == MainTab.Settings);
+        SetNavigation(HomeNav, NavigationIconKind.Home, Copy("Главная", "Home"), _activeTab == MainTab.Home);
+        SetNavigation(RoutesNav, NavigationIconKind.Routes, Copy("Маршруты", "Routes"), _activeTab == MainTab.Routes);
+        SetNavigation(ProfileNav, NavigationIconKind.Profile, Copy("Профиль", "Profile"), _activeTab is MainTab.Profile or MainTab.Support);
+        SetNavigation(SettingsNav, NavigationIconKind.Settings, Copy("Настройки", "Settings"), _activeTab == MainTab.Settings);
         UpdateBottomNavigation();
         UpdatePageHostWidth();
         UpdateHomeColumns();
@@ -465,12 +468,6 @@ public partial class MainWindow : Window
             PageHost.Width = availableWidth;
     }
 
-    private void UpdateHomeColumns()
-    {
-        UpdateHomeConnectionLayout();
-        UpdateRouteGlobeHeight();
-    }
-
     private void UpdateHomeConnectionLayout()
     {
         if (_homeConnectionCard is null || _homeConnectionLayout is null ||
@@ -479,85 +476,29 @@ public partial class MainWindow : Window
             _homeConnectionPrimaryAction is null)
             return;
 
-        _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*,Auto");
-        _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto");
+        _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*");
+        _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto,Auto,*");
+        _homeConnectionLayout.RowSpacing = _compactLayout ? 20 : 26;
         _homeConnectionStatus.ColumnDefinitions = new ColumnDefinitions("Auto,*");
         _homeConnectionStatusDot.IsVisible = true;
         _homeConnectionStateTitle.IsVisible = true;
         Grid.SetColumn(_homeConnectionStatusText, 1);
         Grid.SetColumn(_homeConnectionStatus, 0);
         Grid.SetRow(_homeConnectionStatus, 0);
-        Grid.SetColumn(_homeConnectionPrimaryAction, 1);
-        Grid.SetRow(_homeConnectionPrimaryAction, 0);
-        _homeConnectionPrimaryAction.MinWidth = _compactLayout ? 156 : 200;
-        _homeConnectionPrimaryAction.Height = _compactLayout ? 48 : 56;
-        _homeConnectionPrimaryAction.Margin = new Thickness(_compactLayout ? 12 : 24, 0, 0, 0);
+        Grid.SetColumn(_homeConnectionPrimaryAction, 0);
+        Grid.SetRow(_homeConnectionPrimaryAction, 1);
+        _homeConnectionPrimaryAction.MinWidth = 0;
+        _homeConnectionPrimaryAction.Height = _compactLayout ? 62 : 68;
+        _homeConnectionPrimaryAction.Margin = new Thickness(0);
         _homeConnectionCard.Padding = _compactLayout
-            ? new Thickness(17, _shortCompactLayout ? 8 : 10)
-            : new Thickness(24, 20);
-        _homeConnectionCard.CornerRadius = new CornerRadius(20);
+            ? new Thickness(22, 22)
+            : new Thickness(28, 28);
+        _homeConnectionCard.CornerRadius = new CornerRadius(24);
     }
 
     private void ApplyVisualPreferences()
     {
         AppStarfield.Opacity = _reduceMotion ? 0 : 0.24;
-    }
-
-    private Control BuildHomePage()
-    {
-        var page = new StackPanel { Spacing = 0 };
-        if (!_shortCompactLayout)
-            page.Children.Add(BuildBrandHeader());
-        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 10 : 24));
-        page.Children.Add(BuildConnectionCard());
-        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 12 : 24));
-        page.Children.Add(BuildHomeRouteStage());
-        return page;
-    }
-
-    private Control BuildBrandHeader()
-    {
-        var avatar = new Border
-        {
-            Width = 42,
-            Height = 42,
-            Background = DeyttTheme.Brush(DeyttTheme.Surface2),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(21),
-            ClipToBounds = true,
-        };
-        if (_telegramAvatarBitmap is { } bitmap)
-        {
-            var image = new Image { Source = bitmap, Stretch = Stretch.UniformToFill };
-            _profileAvatarImage = image;
-            avatar.Child = image;
-        }
-        else
-        {
-            avatar.Child = DeyttTheme.TextBlock("•", 22, DeyttTheme.Sky, FontWeight.Bold, wrap: false);
-        }
-
-        var identity = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        identity.Children.Add(avatar);
-        var name = DeyttTheme.TextBlock(AccountDisplayName(_account, _sessionToken is not null), 17,
-            DeyttTheme.Text, FontWeight.SemiBold);
-        name.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-        name.Margin = new Thickness(12, 0, 0, 0);
-        Grid.SetColumn(name, 1);
-        identity.Children.Add(name);
-
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        grid.Children.Add(DeyttTheme.Action(identity, () => ShowTab(MainTab.Profile)));
-
-        var brand = DeyttTheme.TextBlock("deytt./connect", 10, DeyttTheme.Muted,
-            FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false);
-        brand.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-        brand.Margin = new Thickness(12, 0, 0, 0);
-        Grid.SetColumn(brand, 1);
-        grid.Children.Add(brand);
-        return grid;
     }
 
     private string GetMapOriginLabel()
@@ -628,8 +569,8 @@ public partial class MainWindow : Window
         var contents = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto"),
-            RowSpacing = 0,
+            RowDefinitions = new RowDefinitions("Auto,Auto,*"),
+            RowSpacing = _compactLayout ? 20 : 26,
         };
         var status = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         var statusDot = new Ellipse
@@ -660,10 +601,9 @@ public partial class MainWindow : Window
                         ? Copy("Проверяем VPN-трафик…", "Verifying VPN traffic…")
                         : Copy("Подключаем VPN…", "Connecting VPN…")
                 : Copy("Не подключено", "Not connected");
-        var stateTitleText = DeyttTheme.TextBlock(stateTitle, 27,
+        var stateTitleText = DeyttTheme.TextBlock(stateTitle, _compactLayout ? 22 : 27,
             connected ? DeyttTheme.Mint : isError ? DeyttTheme.Coral : DeyttTheme.Text,
             FontWeight.SemiBold);
-        stateTitleText.IsVisible = !_compactLayout;
         text.Children.Add(stateTitleText);
         var connectionDetail = connected
             ? _qaFixture
@@ -707,7 +647,7 @@ public partial class MainWindow : Window
                     ? Copy("Открыть профиль", "Open profile")
                     : !_vpnServiceAvailable
                         ? Copy("Настроить VPN", "Set up VPN")
-                        : Copy("Подключить", "Connect");
+                        : Copy("Подключиться", "Connect");
         var primary = DeyttTheme.PrimaryButton(primaryLabel, () =>
         {
             if (_qaFixture)
@@ -735,6 +675,10 @@ public partial class MainWindow : Window
         Grid.SetColumn(primary, 0);
         Grid.SetRow(primary, 1);
         contents.Children.Add(primary);
+        var routeDetails = BuildHomeRouteDetails();
+        Grid.SetColumn(routeDetails, 0);
+        Grid.SetRow(routeDetails, 2);
+        contents.Children.Add(routeDetails);
 
         _homeConnectionCard = DeyttTheme.Card(contents, DeyttTheme.Surface2, DeyttTheme.Line, 23,
             new Thickness(19));
