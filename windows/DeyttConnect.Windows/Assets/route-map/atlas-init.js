@@ -60,8 +60,16 @@
   window.deyttSetMapRoute = function (route) {
     window.deyttMapRoute = route;
     if (window.deyttMapAtlas) {
-      window.deyttMapAtlas.setRoute(route, false);
+      // Keep the desktop overview on the whole globe. Route changes update the
+      // highlighted path without zooming the camera into a single exit node.
+      const routeChanged = window.deyttMapAtlas.route !== route;
+      window.deyttMapAtlas.setRoute(route, false, false);
       window.deyttMapAtlas.showcaseFocused = route !== "auto";
+      if (routeChanged) {
+        window.deyttMapAtlas.targetLon = 15;
+        window.deyttMapAtlas.targetLat = 50;
+        window.deyttMapAtlas.targetZoom = 1.1;
+      }
       window.deyttMapAtlas.start();
     }
   };
@@ -86,18 +94,18 @@
     window.deyttMapLocations = Array.from(new Set((Array.isArray(locations) ? locations : [])
       .map((key) => String(key).toLowerCase())
       .filter((key) => allowed.includes(key))));
-    if (window.deyttMapAtlas) window.deyttMapAtlas.setAvailableLocations(window.deyttMapLocations);
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setAvailableLocations(window.deyttMapLocations, false);
   };
   window.deyttSetMapUserLocation = function (latitude, longitude, details) {
     window.deyttMapUserLocation = { latitude: latitude, longitude: longitude, details: details || {} };
     if (window.deyttMapAtlas) {
-      window.deyttMapAtlas.setUserLocation(latitude, longitude, details || {});
+      window.deyttMapAtlas.setUserLocation(latitude, longitude, details || {}, false);
     }
   };
   window.deyttClearMapUserLocation = function () {
     window.deyttMapUserLocation = null;
     if (window.deyttMapAtlas) {
-      window.deyttMapAtlas.setUserLocation(null, null, {});
+      window.deyttMapAtlas.setUserLocation(null, null, {}, false);
     }
   };
 
@@ -128,8 +136,16 @@
     if (window.deyttMapLocations) window.deyttSetMapLocations(window.deyttMapLocations);
     if (window.deyttMapUserLocation) {
       const location = window.deyttMapUserLocation;
-      window.deyttMapAtlas.setUserLocation(location.latitude, location.longitude, location.details);
+      window.deyttMapAtlas.setUserLocation(location.latitude, location.longitude, location.details, false);
     }
+    // The desktop home card is a global overview. Start with the full globe
+    // visible even if init() fitted the default route while loading topology.
+    window.deyttMapAtlas.centerLon = window.deyttMapAtlas.targetLon = 15;
+    window.deyttMapAtlas.centerLat = window.deyttMapAtlas.targetLat = 50;
+    window.deyttMapAtlas.zoom = window.deyttMapAtlas.targetZoom = 1.14;
+    window.deyttMapAtlas.velocityLon = 0;
+    window.deyttMapAtlas.staticDirty = true;
+    window.deyttMapAtlas.start();
     // Navigation can finish before the asynchronous topology fetch and atlas creation.
     // Ask the host to resend its latest state after the atlas is fully initialized.
     notifyHost("atlas-ready", 15);

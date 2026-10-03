@@ -110,7 +110,7 @@ public sealed class HomeWindowTests
     [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
-    public void Home_route_overview_is_native_and_never_an_empty_webview(double width)
+    public void Home_route_globe_is_present_and_sized_for_the_route(double width)
     {
         var window = new MainWindow(Fixture(signedIn: true)) { Width = width, Height = 820 };
         try
@@ -119,8 +119,33 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var controls = Descendants(Required<Grid>(window, "PageHost")).ToArray();
-            Assert.Contains(controls, control => control is RoutePathVisual && control.Bounds.Width > 300);
-            Assert.DoesNotContain(controls, control => control is RouteGlobeWebView);
+            var globe = Assert.Single(controls.OfType<RouteGlobeWebView>());
+            Assert.True(globe.Bounds.Width > 300);
+            Assert.False(string.IsNullOrWhiteSpace(globe.SelectedRoute));
+            Assert.NotEmpty(globe.AvailableLocations);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Short_compact_home_keeps_globe_and_route_actions_above_bottom_navigation()
+    {
+        var window = new MainWindow(Fixture(signedIn: true)) { Width = 900, Height = 650 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Descendants(Required<Grid>(window, "PageHost")).ToArray();
+            var globe = Assert.Single(page.OfType<RouteGlobeWebView>());
+            Assert.InRange(globe.Bounds.Height, 180, 205);
+            Assert.Contains(page.OfType<TextBlock>(), text =>
+                text.Text == "Проверить маршрут в диагностике ↗" && text.IsEffectivelyVisible);
+            Assert.DoesNotContain(page.OfType<TextBlock>(), text => text.Text == "QA Demo");
+            Assert.True(Required<Control>(window, "BottomNavigationPanel").IsVisible);
         }
         finally
         {

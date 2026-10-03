@@ -87,6 +87,7 @@ public partial class MainWindow : Window
     private bool _startupFlowStarted;
     private bool _qaFixture;
     private bool _compactLayout;
+    private bool _shortCompactLayout;
     private bool _responsiveLayoutInitialized;
     private Border? _homeConnectionCard;
     private Grid? _homeConnectionLayout;
@@ -95,6 +96,8 @@ public partial class MainWindow : Window
     private StackPanel? _homeConnectionStatusText;
     private TextBlock? _homeConnectionStateTitle;
     private Border? _homeConnectionPrimaryAction;
+    private RouteGlobeWebView? _routeGlobeMap;
+    private Grid? _routeGlobeHost;
 
     public MainWindow() : this((string?)null)
     {
@@ -390,9 +393,9 @@ public partial class MainWindow : Window
         WorkspaceTitle.Text = _activeTab switch
         {
             MainTab.Home => Copy("Ваше подключение", "Your connection"),
-            MainTab.Routes => Copy("Маршруты", "Routes"),
+            MainTab.Routes => Copy("Выбор маршрута", "Route selection"),
             MainTab.Profile => Copy("Аккаунт и подписка", "Account and subscription"),
-            MainTab.Settings => Copy("Настройки приложения", "App settings"),
+            MainTab.Settings => Copy("Параметры клиента", "Client settings"),
             MainTab.Support => Copy("Помощь и поддержка", "Help and support"),
             MainTab.Setup => Copy("Настройка подключения", "Connection setup"),
             _ => Copy("Ваше подключение", "Your connection"),
@@ -409,15 +412,18 @@ public partial class MainWindow : Window
     private void UpdateResponsiveLayout()
     {
         var compact = Bounds.Width < 1040;
-        if (_responsiveLayoutInitialized && _compactLayout == compact)
+        var shortCompact = compact && Bounds.Height < 700;
+        if (_responsiveLayoutInitialized && _compactLayout == compact && _shortCompactLayout == shortCompact)
         {
             UpdatePageHostWidth();
             return;
         }
 
         var switchedLayout = _responsiveLayoutInitialized;
+        var homeLayoutChanged = _responsiveLayoutInitialized && _shortCompactLayout != shortCompact;
         _responsiveLayoutInitialized = true;
         _compactLayout = compact;
+        _shortCompactLayout = shortCompact;
         if (ShellGrid.ColumnDefinitions.Count > 0)
             ShellGrid.ColumnDefinitions[0].Width = new GridLength(compact ? 0 : 252);
         SidebarPanel.IsVisible = !compact;
@@ -445,6 +451,8 @@ public partial class MainWindow : Window
         UpdateHomeColumns();
         if (switchedLayout && _activeTab is (MainTab.Routes or MainTab.Profile or MainTab.Settings))
             RenderActiveTabPreservingScroll();
+        else if (homeLayoutChanged && _activeTab == MainTab.Home)
+            RenderActiveTabPreservingScroll();
     }
 
     private void UpdatePageHostWidth()
@@ -460,6 +468,7 @@ public partial class MainWindow : Window
     private void UpdateHomeColumns()
     {
         UpdateHomeConnectionLayout();
+        UpdateRouteGlobeHeight();
     }
 
     private void UpdateHomeConnectionLayout()
@@ -483,7 +492,9 @@ public partial class MainWindow : Window
         _homeConnectionPrimaryAction.MinWidth = _compactLayout ? 156 : 200;
         _homeConnectionPrimaryAction.Height = _compactLayout ? 48 : 56;
         _homeConnectionPrimaryAction.Margin = new Thickness(_compactLayout ? 12 : 24, 0, 0, 0);
-        _homeConnectionCard.Padding = _compactLayout ? new Thickness(17, 14) : new Thickness(24, 20);
+        _homeConnectionCard.Padding = _compactLayout
+            ? new Thickness(17, _shortCompactLayout ? 8 : 10)
+            : new Thickness(24, 20);
         _homeConnectionCard.CornerRadius = new CornerRadius(20);
     }
 
@@ -495,10 +506,11 @@ public partial class MainWindow : Window
     private Control BuildHomePage()
     {
         var page = new StackPanel { Spacing = 0 };
-        page.Children.Add(BuildBrandHeader());
-        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 14 : 24));
+        if (!_shortCompactLayout)
+            page.Children.Add(BuildBrandHeader());
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 10 : 24));
         page.Children.Add(BuildConnectionCard());
-        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 17 : 24));
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 12 : 24));
         page.Children.Add(BuildHomeRouteStage());
         return page;
     }
