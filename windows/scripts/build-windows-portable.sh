@@ -46,10 +46,9 @@ DEYTT Connect for Windows 10 x64 — portable package
 Open deyttconnect.exe in the package root. Keep the app/, service/, vpn/, and
 docs/ folders beside it; moving only the launcher will not start the app.
 The app runs without administrator rights. Installing the VPN service from
-Settings requests Windows administrator approval. The interactive globe and
-its map data are bundled locally in app/Assets/route-map; no external map tiles
-are downloaded. Microsoft Edge WebView2 Runtime is required to render the globe.
-If it is missing, the app shows a setup message and a retry action.
+Settings requests Windows administrator approval. The interactive country map
+uses the same offline DEYTT atlas as Android; it downloads no map tiles. The
+Microsoft Edge WebView2 Runtime is required by the portable build.
 
 The VPN engine source and license are in docs/source/. See
 docs/THIRD-PARTY-NOTICES.md for attribution. This portable package is unsigned.

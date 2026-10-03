@@ -91,11 +91,12 @@ superseded by the successful smoke below.
 
 - Added an opt-in QA-only crash report that records exception type and up to 16
   stack method names, excluding exception messages, source paths, and process
-  environment. The new diagnostic reported `InvalidOperationException` from
+  environment. The diagnostic reported `InvalidOperationException` from
   Avalonia `Win32NativeControlHost` attachment (`DumbWindow..ctor` through
-  `NativeControlHost.OnAttachedToVisualTree`). The fixture home constructs the
-  native `RouteGlobeWebView`; this is the likely trigger, though the exception
-  message is intentionally unavailable.
+  `NativeControlHost.OnAttachedToVisualTree`). At the time, Home hosted a native
+  WebView for its atlas. Windows now hosts the same canvas atlas and geographic
+  data as Android directly from bundled offline assets. Native QA is still
+  needed to confirm WebView2 rendering and pointer input on Windows.
 - The fixture window-ready signal was written, but the VM screenshot dimensions
   did not contain its reported window bounds. The private full-display capture
   was deleted without inspection; no screenshot was confirmed. Runner timed out
@@ -113,8 +114,8 @@ superseded by the successful smoke below.
   guest-side GDI capture failure and CLR close crash are historical failed
   attempts, not the result of the latest smoke.
 - This validates only the synthetic fixture lifecycle and screenshot path. It
-  does not validate MSI installation, native WebView2 behavior, a real account,
-  VPN routes, tunnel health, or HTTPS egress.
+  does not validate MSI installation, native map rendering/input, a real
+  account, VPN routes, tunnel health, or HTTPS egress.
 
 Run manually:
 

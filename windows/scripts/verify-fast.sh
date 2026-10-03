@@ -37,4 +37,18 @@ phase "Windows headless UI tests" test "$WINDOWS_HEADLESS_TESTS" --no-restore --
 phase "Windows app Release build" build "$WINDOWS_APP" --no-restore --configuration Release --nologo
 phase "Windows service Release build" build "$WINDOWS_SERVICE" --no-restore --configuration Release --nologo
 
+ATLAS_SOURCE="$ROOT_DIR/app/src/main/assets/route-map"
+ATLAS_OUTPUT="$ROOT_DIR/windows/DeyttConnect.Windows/bin/Release/net10.0/Assets/route-map"
+for asset in atlas-init.js index.html network-atlas.css network-atlas.js; do
+  if [[ ! -s "$ATLAS_OUTPUT/$asset" ]] || ! cmp -s "$ATLAS_SOURCE/$asset" "$ATLAS_OUTPUT/$asset"; then
+    echo "error: Windows build does not contain the current Android atlas asset: $asset" >&2
+    exit 1
+  fi
+done
+if ! cmp -s "$ROOT_DIR/app/src/main/assets/world-land.json" "$ATLAS_OUTPUT/world-land.json"; then
+  echo "error: Windows build topology does not match Android." >&2
+  exit 1
+fi
+printf '    PASS: Windows build contains the exact Android atlas and topology\n'
+
 printf '\nFast Windows client verification passed.\n'

@@ -12,7 +12,12 @@
     <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
     <Compile Include="..\DeyttConnect.Shared\WindowsAwgProfileParser.cs" Link="Shared\WindowsAwgProfileParser.cs" />
     <AvaloniaResource Include="Assets\**" Exclude="Assets\route-map\**" />
-    <Content Include="Assets\route-map\**\*"
+    <Content Include="..\..\app\src\main\assets\route-map\**\*"
+             Link="Assets\route-map\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\app\src\main\assets\world-land.json"
+             Link="Assets\route-map\world-land.json"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\scripts\Install-VpnService.ps1" Link="Install-VpnService.ps1" CopyToOutputDirectory="PreserveNewest" />
@@ -33,10 +38,11 @@
   </ItemGroup>
 
   <Target Name="RemoveUnusedWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences">
-    <!-- Avalonia hosts WebView2 through its Core API; the package's implicit WPF reference is unused
-         and conflicts with the WindowsBase reference supplied by the .NET 10 target framework. -->
+    <!-- Avalonia hosts WebView2 through its Core API; the WPF wrapper is unused and
+         conflicts with WindowsBase from the .NET target framework. -->
     <ItemGroup>
       <Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
     </ItemGroup>
   </Target>
+
 </Project>

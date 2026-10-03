@@ -27,6 +27,19 @@ mkdir -p "$temp_dir/app" "$temp_dir/service"
   -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:NuGetAudit=false \
   -o "$temp_dir/service" --nologo
 
+atlas_source="$repo_root/app/src/main/assets/route-map"
+atlas_output="$temp_dir/app/Assets/route-map"
+for asset in atlas-init.js index.html network-atlas.css network-atlas.js; do
+  if [[ ! -s "$atlas_output/$asset" ]] || ! cmp -s "$atlas_source/$asset" "$atlas_output/$asset"; then
+    echo "The published DEYTT atlas asset is missing or differs from Android: $asset" >&2
+    exit 1
+  fi
+done
+if ! cmp -s "$repo_root/app/src/main/assets/world-land.json" "$atlas_output/world-land.json"; then
+  echo "The published DEYTT atlas topology differs from Android." >&2
+  exit 1
+fi
+
 AMNEZIA_BOX_SOURCE="$engine_source" "$repo_root/windows/scripts/build-engine.sh" "$stage_dir"
 cp -a "$temp_dir/app/." "$stage_dir/"
 mkdir -p "$stage_dir/service"
@@ -40,6 +53,10 @@ DEYTT Connect for Windows x64
 Run DeyttConnect.Windows.exe. The first VPN connection requires installing the
 privileged tunnel service from Settings; Windows will show an administrator
 approval prompt. The desktop application itself runs without elevation.
+
+The interactive map uses the same bundled offline DEYTT atlas as Android and
+requires Microsoft Edge WebView2 Runtime. Map geography is bundled; map tiles
+are not downloaded.
 
 The VPN engine source archive and its license are in source/. See
 THIRD-PARTY-NOTICES.md for component and attribution details.
