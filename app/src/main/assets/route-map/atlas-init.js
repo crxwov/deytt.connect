@@ -8,6 +8,18 @@
   window.deyttMapActiveAutoRoute = null;
   window.deyttMapTrafficActive = false;
   window.deyttMapReducedMotion = false;
+  const windowsProfile = new URLSearchParams(window.location.search).get("profile") === "windows";
+  function updateInteractionHint() {
+    if (!windowsProfile) return;
+    const hint = root.querySelector(".network-atlas__hint");
+    if (hint) hint.textContent = window.deyttMapLanguage === "en"
+      ? "wheel to zoom · drag to pan"
+      : "колёсико — масштаб · перетаскивание — обзор";
+    const canvas = root.querySelector("canvas");
+    if (canvas) canvas.setAttribute("aria-label", window.deyttMapLanguage === "en"
+      ? "Interactive DEYTT network globe. Use the mouse wheel to zoom, drag to pan, or use arrow keys."
+      : "Интерактивный глобус DEYTT. Масштабируйте колесиком, перетаскивайте карту или используйте клавиши со стрелками.");
+  }
   function notifyHost(message) {
     if (typeof window.invokeCSharpAction === "function") {
       try { window.invokeCSharpAction(message); return; } catch (_) { /* Native view may be closing. */ }
@@ -47,10 +59,12 @@
       window.deyttMapAtlas.showcaseFocused = route !== "auto";
       window.deyttMapAtlas.start();
     }
+    updateInteractionHint();
   };
   window.deyttSetMapLanguage = function (language) {
     window.deyttMapLanguage = language === "en" ? "en" : "ru";
     if (window.deyttMapAtlas) window.deyttMapAtlas.setLanguage(window.deyttMapLanguage);
+    updateInteractionHint();
   };
   window.deyttSetMapEgressCountry = function (countryCode) {
     window.deyttMapEgressCountry = countryCode || null;
@@ -100,6 +114,16 @@
     route: "auto",
     topologyUrl: "world-land.json",
     selectOnTap: false,
+    wheelZoomOnly: windowsProfile,
+    pixelRatioFloor: windowsProfile ? 1.6 : 1,
+    pixelRatioCap: windowsProfile ? 2.25 : undefined,
+    labelScale: windowsProfile ? 1.55 : 1,
+    labelFontFamily: windowsProfile ? 'system-ui, "Segoe UI", sans-serif' : undefined,
+    routeFocusMinZoom: windowsProfile ? 4.2 : undefined,
+    routeFocusMaxZoom: windowsProfile ? 8.5 : undefined,
+    routeFocusSingleZoom: windowsProfile ? 8.5 : undefined,
+    routeFocusFill: windowsProfile ? .34 : undefined,
+    routeFocusScale: windowsProfile ? 1.06 : undefined,
   }).then(function (atlas) {
     window.deyttMapAtlas = atlas;
     const systemReducedMotion = atlas.reducedMotion;
@@ -122,6 +146,7 @@
       const location = window.deyttMapUserLocation;
       window.deyttMapAtlas.setUserLocation(location.latitude, location.longitude, location.details);
     }
+    updateInteractionHint();
     notifyHost("atlas-ready");
   }).catch(function () {
     const status = root.querySelector("[data-atlas-status]");

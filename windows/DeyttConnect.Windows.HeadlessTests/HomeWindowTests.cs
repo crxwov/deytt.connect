@@ -4,6 +4,7 @@ using Avalonia.Automation;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using DeyttConnect.Protocol;
@@ -198,6 +199,64 @@ public sealed class HomeWindowTests
             var connectionPanel = layout.Children[1];
             Assert.InRange(Math.Abs(mapPanel.Bounds.Width - connectionPanel.Bounds.Width), 0, 32);
             Assert.Single(Descendants(mapPanel).OfType<RouteGlobeWebView>());
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Home_hides_the_extra_header_and_uses_wheel_only_map_controls()
+    {
+        var window = new MainWindow(Fixture(signedIn: true)) { Width = 900, Height = 830 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.False(Required<Control>(window, "WorkspaceHeader").IsVisible);
+            var page = Required<Grid>(window, "PageHost");
+            var map = Assert.Single(Descendants(page).OfType<RouteGlobeWebView>());
+            var mapPanel = Assert.IsType<Border>(map.Parent?.Parent);
+            Assert.Empty(Descendants(mapPanel).OfType<Button>());
+            Assert.DoesNotContain(Descendants(page).OfType<TextBlock>(), text =>
+                text.Text is "КАРТА СЕТИ" or "NETWORK MAP" or "1:1");
+            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "ПИНГ");
+            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "СКОРОСТЬ");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Expanded_route_country_shows_flags_and_readable_ping_and_speed_fields()
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, routeProbeInProgress: true))
+        {
+            Width = 900,
+            Height = 830,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var page = Required<Grid>(window, "PageHost");
+            var countryHeader = Descendants(page).OfType<Button>().Single(button =>
+                Descendants(button).OfType<TextBlock>().Any(text => text.Text == "Нидерланды") &&
+                Descendants(button).OfType<TextBlock>().Any(text => text.Text == "VLESS"));
+
+            countryHeader.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            var expanded = Required<Grid>(window, "PageHost");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "🇳🇱");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "ПИНГ");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "СКОРОСТЬ");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— ms");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— Mbps");
         }
         finally
         {

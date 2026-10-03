@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Platform;
@@ -17,6 +18,8 @@ public sealed class RouteGlobeWebView : ContentControl
 {
     private const string AssetHost = "deytt-atlas.example";
     private static readonly Uri AtlasUri = new($"https://{AssetHost}/index.html");
+    private static readonly Uri WindowsAtlasUri = new($"https://{AssetHost}/index.html?profile=windows");
+    private const int MaximumAutomaticRetries = 2;
     private static readonly string[] RequiredAtlasAssets =
         ["index.html", "network-atlas.css", "network-atlas.js", "atlas-init.js", "world-land.json"];
     private static readonly HashSet<string> RouteKeys = new(StringComparer.Ordinal)
@@ -51,6 +54,10 @@ public sealed class RouteGlobeWebView : ContentControl
     private bool _statePushQueued;
     private int _stateRevision;
     private int _appliedRevision;
+    private int _automaticRetries;
+    private int _webViewGeneration;
+    private bool _retryPending;
+    private CancellationTokenSource? _atlasReadyTimeout;
 
     public RouteGlobeWebView()
     {
@@ -60,12 +67,19 @@ public sealed class RouteGlobeWebView : ContentControl
         AttachedToVisualTree += (_, _) =>
         {
             _attachedToVisualTree = true;
+            if (!_atlasFailed && !_retryPending)
+            {
+                if (_webView is null)
+                    TryInitializeWebView();
+                else if (!_pageReady)
+                    StartAtlasReadyTimeout(_webView);
+            }
             QueueStateUpdate();
         };
         DetachedFromVisualTree += (_, _) =>
         {
             _attachedToVisualTree = false;
-            _pageReady = false;
+            StopAtlasReadyTimeout();
         };
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
         TryInitializeWebView();
@@ -198,12 +212,6 @@ public sealed class RouteGlobeWebView : ContentControl
         }
     }
 
-    public void ZoomIn() => ExecuteMapCommand("window.deyttZoomMap && window.deyttZoomMap(1.45);");
-
-    public void ZoomOut() => ExecuteMapCommand("window.deyttZoomMap && window.deyttZoomMap(0.69);");
-
-    public void ResetView() => ExecuteMapCommand("window.deyttResetMapView && window.deyttResetMapView();");
-
     /// <summary>Stops atlas traffic motion and camera easing while enabled.</summary>
     public bool ReducedMotion
     {
@@ -257,6 +265,7 @@ public sealed class RouteGlobeWebView : ContentControl
 
         try
         {
+            _webViewGeneration++;
             if (OperatingSystem.IsLinux())
             {
                 var gtk = WebViewAdapterInfo.GetAdapterInfo(WebViewAdapterType.WebKitGtk);
@@ -270,7 +279,11 @@ public sealed class RouteGlobeWebView : ContentControl
                 _linuxAssetHost ??= AtlasLoopbackAssetHost.Start(AtlasAssetDirectory);
                 _atlasUri = _linuxAssetHost.AtlasUri;
             }
-            else if (!OperatingSystem.IsWindows())
+            else if (OperatingSystem.IsWindows())
+            {
+                _atlasUri = WindowsAtlasUri;
+            }
+            else
             {
                 ShowAtlasError("platform");
                 return;
@@ -311,7 +324,7 @@ public sealed class RouteGlobeWebView : ContentControl
         catch (Exception exception)
         {
             System.Diagnostics.Trace.TraceError("Atlas WebView initialization failed: {0}", exception.GetType().Name);
-            ShowAtlasError("runtime");
+            HandleAtlasFailure("runtime");
         }
     }
 
@@ -327,7 +340,7 @@ public sealed class RouteGlobeWebView : ContentControl
                 if (args.TryGetPlatformHandle() is not IWindowsWebView2PlatformHandle handle ||
                     handle.CoreWebView2 == IntPtr.Zero)
                 {
-                    ShowAtlasError("runtime");
+                    HandleAtlasFailure("runtime");
                     return;
                 }
 
@@ -343,14 +356,21 @@ public sealed class RouteGlobeWebView : ContentControl
         catch (Exception exception)
         {
             System.Diagnostics.Trace.TraceError("Atlas adapter failed: {0}", exception.GetType().Name);
-            ShowAtlasError("runtime");
+            HandleAtlasFailure("runtime");
         }
     }
 
     private void OnAdapterDestroyed(object? sender, WebViewAdapterEventArgs args)
     {
         if (ReferenceEquals(sender, _webView))
+        {
             _pageReady = false;
+            StopAtlasReadyTimeout();
+            if (_attachedToVisualTree && !_atlasFailed)
+                HandleAtlasFailure("load");
+            else if (!_attachedToVisualTree)
+                DetachCurrentWebView();
+        }
     }
 
     private void OnNavigationStarted(object? sender, WebViewNavigationStartingEventArgs args)
@@ -367,7 +387,10 @@ public sealed class RouteGlobeWebView : ContentControl
         if (!isBlank && request != _atlasUri)
             args.Cancel = true;
         else if (request == _atlasUri)
+        {
             _pageReady = false;
+            StopAtlasReadyTimeout();
+        }
     }
 
     private void OnNavigationCompleted(object? sender, WebViewNavigationCompletedEventArgs args)
@@ -375,16 +398,17 @@ public sealed class RouteGlobeWebView : ContentControl
         if (_atlasFailed || !ReferenceEquals(sender, _webView))
             return;
 
-        if (!args.IsSuccess && args.Request == _atlasUri)
+        if (!args.IsSuccess)
         {
-            ShowAtlasError("load");
+            HandleAtlasFailure("load");
             return;
         }
 
         if (args.IsSuccess && args.Request == _atlasUri)
         {
-            _pageReady = true;
-            QueueStateUpdate();
+            // Navigation completion only means the HTML loaded. Wait for the
+            // atlas-ready bridge after topology parsing and the first frame.
+            StartAtlasReadyTimeout(_webView!);
         }
     }
 
@@ -417,16 +441,16 @@ public sealed class RouteGlobeWebView : ContentControl
             {
                 if (_atlasFailed || !ReferenceEquals(sender, _webView))
                     return;
+                _automaticRetries = 0;
+                StopAtlasReadyTimeout();
                 _pageReady = true;
-                // NavigationCompleted may have pushed state before atlas-init finished
-                // creating the renderer. Replay the latest values after its handshake.
                 QueueStateUpdate();
             });
             return;
         }
         if (node == "atlas-error")
         {
-            Dispatcher.UIThread.Post(() => ShowAtlasError("load"));
+            Dispatcher.UIThread.Post(() => HandleAtlasFailure("load"));
             return;
         }
         if (!TapKeys.Contains(node))
@@ -465,7 +489,7 @@ public sealed class RouteGlobeWebView : ContentControl
                 if (_attachedToVisualTree && _pageReady)
                 {
                     System.Diagnostics.Trace.TraceError("Atlas state update failed: {0}", exception.GetType().Name);
-                    ShowAtlasError("load");
+                    HandleAtlasFailure("load");
                 }
             }
             finally
@@ -477,25 +501,100 @@ public sealed class RouteGlobeWebView : ContentControl
         });
     }
 
-    private void ExecuteMapCommand(string script)
+    private void StartAtlasReadyTimeout(NativeWebView webView)
     {
-        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null)
+        StopAtlasReadyTimeout();
+        var source = new CancellationTokenSource();
+        _atlasReadyTimeout = source;
+        _ = WaitForAtlasReadyAsync(webView, _webViewGeneration, source.Token);
+    }
+
+    private async Task WaitForAtlasReadyAsync(NativeWebView webView, int generation, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(9), cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!cancellationToken.IsCancellationRequested && generation == _webViewGeneration &&
+                ReferenceEquals(webView, _webView) && !_pageReady && !_atlasFailed)
+                HandleAtlasFailure("load");
+        });
+    }
+
+    private void StopAtlasReadyTimeout()
+    {
+        _atlasReadyTimeout?.Cancel();
+        _atlasReadyTimeout?.Dispose();
+        _atlasReadyTimeout = null;
+    }
+
+    private async Task RetryAtlasAfterDelayAsync(int generation, int delayMilliseconds)
+    {
+        await Task.Delay(delayMilliseconds);
+        Dispatcher.UIThread.Post(() =>
+        {
+            _retryPending = false;
+            if (!_atlasFailed && generation == _webViewGeneration && _webView is null)
+                TryInitializeWebView();
+        });
+    }
+
+    private void HandleAtlasFailure(string reason)
+    {
+        if (_atlasFailed)
             return;
 
-        var webView = _webView;
-        Dispatcher.UIThread.Post(async () =>
+        StopAtlasReadyTimeout();
+        if (_retryPending)
+            return;
+        if (_automaticRetries < MaximumAutomaticRetries)
         {
-            if (_atlasFailed || !_attachedToVisualTree || !_pageReady || !ReferenceEquals(webView, _webView))
-                return;
-            try
-            {
-                await webView.InvokeScript(script);
-            }
-            catch (Exception exception)
-            {
-                System.Diagnostics.Trace.TraceWarning("Atlas camera command failed: {0}", exception.GetType().Name);
-            }
-        });
+            _automaticRetries++;
+            DetachCurrentWebView();
+            var generation = _webViewGeneration;
+            var delay = _automaticRetries == 1 ? 280 : 760;
+            _retryPending = true;
+            _ = RetryAtlasAfterDelayAsync(generation, delay);
+            return;
+        }
+
+        ShowAtlasError(reason);
+    }
+
+    private void RetryAtlasManually()
+    {
+        _automaticRetries = 0;
+        _retryPending = false;
+        _atlasFailed = false;
+        _atlasErrorReason = null;
+        DetachCurrentWebView();
+        Content = null;
+        TryInitializeWebView();
+    }
+
+    private void DetachCurrentWebView()
+    {
+        StopAtlasReadyTimeout();
+        if (_webView is not { } webView)
+            return;
+
+        webView.AdapterCreated -= OnAdapterCreated;
+        webView.AdapterDestroyed -= OnAdapterDestroyed;
+        webView.NavigationStarted -= OnNavigationStarted;
+        webView.NavigationCompleted -= OnNavigationCompleted;
+        webView.NewWindowRequested -= OnNewWindowRequested;
+        webView.WebMessageReceived -= OnWebMessageReceived;
+        if (ReferenceEquals(Content, webView))
+            Content = null;
+        _webView = null;
+        _pageReady = false;
     }
 
     private string BuildStateScript()
@@ -541,18 +640,7 @@ public sealed class RouteGlobeWebView : ContentControl
     {
         _atlasFailed = true;
         _atlasErrorReason = reason;
-        _pageReady = false;
-
-        if (_webView is { } webView)
-        {
-            webView.AdapterCreated -= OnAdapterCreated;
-            webView.AdapterDestroyed -= OnAdapterDestroyed;
-            webView.NavigationStarted -= OnNavigationStarted;
-            webView.NavigationCompleted -= OnNavigationCompleted;
-            webView.NewWindowRequested -= OnNewWindowRequested;
-            webView.WebMessageReceived -= OnWebMessageReceived;
-            _webView = null;
-        }
+        DetachCurrentWebView();
 
         var english = _language == "en";
         var (summary, message) = (reason, english) switch
@@ -583,7 +671,7 @@ public sealed class RouteGlobeWebView : ContentControl
             BorderBrush = new SolidColorBrush(Avalonia.Media.Color.Parse("#49627E")),
             BorderThickness = new Avalonia.Thickness(1),
         };
-        retry.Click += (_, _) => TryInitializeWebView();
+        retry.Click += (_, _) => RetryAtlasManually();
         var caption = new StackPanel
         {
             Spacing = 8,
