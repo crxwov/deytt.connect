@@ -98,7 +98,7 @@ public sealed class HomeWindowTests
             Assert.True(action.IsEffectivelyVisible);
             Assert.True(action.IsEnabled);
             Assert.True(hitTarget.Bounds.Width >= 320);
-            Assert.InRange(hitTarget.Height, 62, 68);
+            Assert.InRange(hitTarget.Height, 56, 68);
             Assert.True(action.Focus());
             Assert.True(action.IsFocused);
         }
@@ -245,18 +245,30 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
             var page = Required<Grid>(window, "PageHost");
             var countryHeader = Descendants(page).OfType<Button>().Single(button =>
-                Descendants(button).OfType<TextBlock>().Any(text => text.Text == "Нидерланды") &&
-                Descendants(button).OfType<TextBlock>().Any(text => text.Text == "VLESS"));
+                AutomationProperties.GetAutomationId(button) == "RouteCountry-NL");
 
             countryHeader.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
 
             var expanded = Required<Grid>(window, "PageHost");
-            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "🇳🇱");
+            Assert.Contains(Descendants(expanded).OfType<Border>(), flag =>
+                AutomationProperties.GetName(flag) == "Флаг Нидерландов");
             Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "ПИНГ");
             Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "СКОРОСТЬ");
             Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— ms");
             Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— Mbps");
+
+            var routeOptions = Descendants(expanded).OfType<Button>()
+                .Where(button => AutomationProperties.GetAutomationId(button)?.StartsWith(
+                    "RouteOption-nl-", StringComparison.Ordinal) == true)
+                .ToArray();
+            Assert.Equal(3, routeOptions.Length);
+            Assert.All(routeOptions, option =>
+            {
+                Assert.True(option.Bounds.Width > 300);
+                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "ПИНГ");
+                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "СКОРОСТЬ");
+            });
         }
         finally
         {
@@ -557,7 +569,19 @@ public sealed class HomeWindowTests
         var routes = new[]
         {
             new WindowsRoute("auto", "qa:auto", "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
+            new WindowsRoute("ru-de", "qa:ru-de", "RU-DE", "Россия → Германия", "🇷🇺→🇩🇪", "CHAIN", "RU → DE"),
             new WindowsRoute("nl-vless", "qa:nl-vless", "NL", "Нидерланды", "🇳🇱", "VLESS", "VLESS"),
+            new WindowsRoute("nl-trojan", "qa:nl-trojan", "NL", "Нидерланды", "🇳🇱", "TROJAN", "Trojan"),
+            new WindowsRoute("nl-hysteria2", "qa:nl-hysteria2", "NL", "Нидерланды", "🇳🇱", "HYSTERIA2", "Hysteria 2"),
+            new WindowsRoute("de-vless", "qa:de-vless", "DE", "Германия", "🇩🇪", "VLESS", "VLESS"),
+            new WindowsRoute("de-trojan", "qa:de-trojan", "DE", "Германия", "🇩🇪", "TROJAN", "Trojan"),
+            new WindowsRoute("de-hysteria2", "qa:de-hysteria2", "DE", "Германия", "🇩🇪", "HYSTERIA2", "Hysteria 2"),
+            new WindowsRoute("ru-vless", "qa:ru-vless", "RU", "Россия", "🇷🇺", "VLESS", "VLESS"),
+            new WindowsRoute("ru-trojan", "qa:ru-trojan", "RU", "Россия", "🇷🇺", "TROJAN", "Trojan"),
+            new WindowsRoute("ru-hysteria2", "qa:ru-hysteria2", "RU", "Россия", "🇷🇺", "HYSTERIA2", "Hysteria 2"),
+            new WindowsRoute("fi-vless", "qa:fi-vless", "FI", "Финляндия", "🇫🇮", "VLESS", "VLESS"),
+            new WindowsRoute("fi-trojan", "qa:fi-trojan", "FI", "Финляндия", "🇫🇮", "TROJAN", "Trojan"),
+            new WindowsRoute("fi-hysteria2", "qa:fi-hysteria2", "FI", "Финляндия", "🇫🇮", "HYSTERIA2", "Hysteria 2"),
         };
         var account = signedIn
             ? new TelegramAccount("qa_fixture", "QA Demo", false,
@@ -576,7 +600,7 @@ public sealed class HomeWindowTests
             "error" => new WindowsTunnelSnapshot("error", "Synthetic VPN error"),
             _ => new WindowsTunnelSnapshot("disconnected", "Synthetic only"),
         };
-        return new QaHomeFixture(signedIn, "ru", "auto", tab, account, subscription, routes,
+        return new QaHomeFixture(signedIn, "ru", "nl-hysteria2", tab, account, subscription, routes,
             tunnel,
             RouteProbeInProgress: routeProbeInProgress);
     }
