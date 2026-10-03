@@ -162,6 +162,8 @@ public partial class MainWindow : Window
         _vpnServiceAvailable = true;
         _routeProbeInProgress = fixture.RouteProbeInProgress;
         _routeProbeCancelRequested = fixture.RouteProbeCancelRequested;
+        if (!string.IsNullOrWhiteSpace(fixture.ExpandedRouteCountry))
+            _expandedRouteCountries.Add(fixture.ExpandedRouteCountry);
         ShowTab(fixture.Tab switch
         {
             "routes" => MainTab.Routes,
@@ -479,7 +481,7 @@ public partial class MainWindow : Window
 
         _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*");
         _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto,Auto,*");
-        _homeConnectionLayout.RowSpacing = _compactLayout ? 20 : 26;
+        _homeConnectionLayout.RowSpacing = _compactLayout ? 16 : 18;
         _homeConnectionStatus.ColumnDefinitions = new ColumnDefinitions("Auto,*");
         _homeConnectionStatusDot.IsVisible = true;
         _homeConnectionStateTitle.IsVisible = true;
@@ -489,11 +491,11 @@ public partial class MainWindow : Window
         Grid.SetColumn(_homeConnectionPrimaryAction, 0);
         Grid.SetRow(_homeConnectionPrimaryAction, 1);
         _homeConnectionPrimaryAction.MinWidth = 0;
-        _homeConnectionPrimaryAction.Height = _compactLayout ? 62 : 68;
+        _homeConnectionPrimaryAction.Height = _compactLayout ? 60 : 64;
         _homeConnectionPrimaryAction.Margin = new Thickness(0);
         _homeConnectionCard.Padding = _compactLayout
-            ? new Thickness(22, 22)
-            : new Thickness(28, 28);
+            ? new Thickness(18, 18)
+            : new Thickness(22, 22);
         _homeConnectionCard.CornerRadius = new CornerRadius(24);
     }
 
@@ -571,7 +573,7 @@ public partial class MainWindow : Window
         {
             ColumnDefinitions = new ColumnDefinitions("*"),
             RowDefinitions = new RowDefinitions("Auto,Auto,*"),
-            RowSpacing = _compactLayout ? 20 : 26,
+            RowSpacing = _compactLayout ? 16 : 18,
         };
         var status = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         var statusDot = new Ellipse
@@ -796,7 +798,7 @@ public partial class MainWindow : Window
         }
         else
         {
-            var countryList = new StackPanel { Spacing = 0 };
+            var countryList = new StackPanel { Spacing = 10 };
             var countryOrder = new[] { "NL", "DE", "RU", "FI", "AWG_UNKNOWN" };
             var countries = _routes.Where(route => route.CountryCode is "NL" or "RU" or "DE" or "FI" or "AWG_UNKNOWN")
                 .GroupBy(route => route.CountryCode)
@@ -818,34 +820,23 @@ public partial class MainWindow : Window
                     selectedCountry ? DeyttTheme.Sky : DeyttTheme.Text, FontWeight.SemiBold));
                 headerLabels.Children.Add(DeyttTheme.TextBlock(summary, 11,
                     DeyttTheme.Muted));
-                if (RouteCountryProbeStatus(country.Key) is { } probeStatus)
+                if (!expanded && RouteCountryProbeStatus(country.Key) is { } probeStatus)
                     headerLabels.Children.Add(DeyttTheme.TextBlock(probeStatus, 10,
                         _routeCountryProbeStates.GetValueOrDefault(country.Key) == RouteCountryProbeState.Failed
                             ? DeyttTheme.Coral : DeyttTheme.Muted));
-                var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 60 };
-                var flag = new Border
+                var header = new Grid
                 {
-                    Width = 40,
-                    Height = 36,
-                    Background = DeyttTheme.Brush(DeyttTheme.Surface2),
-                    BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(11),
-                    Child = new TextBlock
-                    {
-                        Text = first.Flag,
-                        FontFamily = new FontFamily("Segoe UI Emoji"),
-                        FontSize = 21,
-                        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-                    },
+                    ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+                    ColumnSpacing = 12,
+                    MinHeight = 54,
                 };
+                var flag = RouteFlagVisual.Create(country.Key, 42, 28);
                 header.Children.Add(flag);
-                headerLabels.Margin = new Thickness(12, 0, 8, 0);
+                headerLabels.Margin = new Thickness(0, 0, 8, 0);
                 headerLabels.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
                 Grid.SetColumn(headerLabels, 1);
                 header.Children.Add(headerLabels);
-                var disclosure = DeyttTheme.TextBlock(expanded ? "⌃" : "⌄", 16, DeyttTheme.Sky,
+                var disclosure = DeyttTheme.TextBlock(expanded ? "⌃" : "⌄", 17, DeyttTheme.Sky,
                     FontWeight.SemiBold, wrap: false);
                 disclosure.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
                 Grid.SetColumn(disclosure, 2);
@@ -868,23 +859,21 @@ public partial class MainWindow : Window
                             countryRoutes.Select(route => route.Tag).Distinct(StringComparer.Ordinal).ToArray());
                 });
                 headerButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-                headerButton.Padding = new Thickness(3, 7);
-                var countryContents = new StackPanel { Spacing = 8, Children = { headerButton } };
+                headerButton.Padding = new Thickness(2, 3);
+                AutomationProperties.SetAutomationId(headerButton, $"RouteCountry-{country.Key}");
+                var countryContents = new StackPanel { Spacing = 0, Children = { headerButton } };
                 if (expanded)
                 {
-                    var options = new StackPanel { Spacing = 2 };
+                    countryContents.Children.Add(DeyttTheme.Hairline());
+                    var options = new StackPanel { Spacing = 4, Margin = new Thickness(0, 9, 0, 2) };
                     foreach (var route in countryRoutes)
                         options.Children.Add(RouteOption(route, quality));
                     countryContents.Children.Add(options);
                 }
-                countryList.Children.Add(new Border
-                {
-                    Background = DeyttTheme.Brush(Colors.Transparent),
-                    BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-                    BorderThickness = new Thickness(0, 0, 0, 1),
-                    Padding = new Thickness(3, 0),
-                    Child = countryContents,
-                });
+                countryList.Children.Add(DeyttTheme.Card(countryContents,
+                    selectedCountry ? DeyttTheme.Surface2 : DeyttTheme.Surface,
+                    selectedCountry ? DeyttTheme.SelectedLine : DeyttTheme.Line,
+                    18, new Thickness(12, 8)));
             }
             routeColumn.Children.Add(countryList);
         }
@@ -1017,26 +1006,31 @@ public partial class MainWindow : Window
         var selected = _selectedRoute == route.Id;
         var body = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
-            RowSpacing = 5,
-            MinHeight = 78,
+            ColumnDefinitions = new ColumnDefinitions("3,2*,1,*,1,*,Auto"),
+            ColumnSpacing = 11,
+            MinHeight = 56,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
         };
-        var protocolMark = route.Protocol switch
+        var protocolColor = route.Protocol switch
         {
-            "VLESS" => "V",
-            "TROJAN" => "T",
-            "HYSTERIA2" => "H",
-            "AWG31" => "A",
-            _ => "•",
+            "VLESS" => DeyttTheme.Sky,
+            "TROJAN" => DeyttTheme.Blue,
+            "HYSTERIA2" => DeyttTheme.Mint,
+            "AWG31" => DeyttTheme.Amber,
+            _ => DeyttTheme.Muted,
         };
-        var protocolIcon = DeyttTheme.IconTile(protocolMark, 38);
-        Grid.SetRowSpan(protocolIcon, 3);
-        body.Children.Add(protocolIcon);
+        var protocolMark = new Border
+        {
+            Width = 3,
+            Height = 40,
+            CornerRadius = new CornerRadius(2),
+            Background = DeyttTheme.Brush(protocolColor),
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        body.Children.Add(protocolMark);
         var labels = new StackPanel
         {
-            Spacing = 3,
-            Margin = new Thickness(12, 0, 8, 0),
+            Spacing = 2,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
         labels.Children.Add(DeyttTheme.TextBlock(route.ProfileName ??
@@ -1045,102 +1039,86 @@ public partial class MainWindow : Window
         var detail = route.Protocol switch
         {
             "VLESS" or "TROJAN" => "WebSocket + TLS",
-            "HYSTERIA2" => Copy("Быстрый QUIC-маршрут", "Fast QUIC route"),
+            "HYSTERIA2" => "QUIC · UDP",
             "AWG31" => "AmneziaWG 3.1",
             _ => route.ProtocolName,
         };
-        labels.Children.Add(DeyttTheme.TextBlock(detail,
-            11, DeyttTheme.Muted));
-        if (_routeProbeResults.TryGetValue(route.Tag, out var probe))
+        labels.Children.Add(DeyttTheme.TextBlock(detail, 10, DeyttTheme.Muted));
+        var measured = _routeProbeResults.GetValueOrDefault(route.Tag);
+        var probeStatus = measured is null ? null : measured.Stage switch
         {
-            var probeLabel = probe.Stage switch
-            {
-                "latency" => Copy($"Пинг · попытка {probe.Attempt ?? 1}/3", $"Latency · attempt {probe.Attempt ?? 1}/3"),
-                "retry" => Copy($"Повтор пинга · {probe.Attempt ?? 2}/3", $"Retrying latency · {probe.Attempt ?? 2}/3"),
-                "waiting_speed" => Copy("Пинг готов · ждём измерение скорости", "Latency ready · waiting for speed test"),
-                "download" => FormatProbeDownloadProgress(probe),
-                "error" => probe.Error ?? Copy("Проверка маршрута не завершилась", "Route check failed"),
-                "cancelled" => Copy("Проверка отменена", "Check cancelled"),
-                "complete" or null => probe.LatencyMilliseconds is { } latency
-                ? $"{Copy("Пинг", "Ping")}: {latency} ms · {Copy("Скорость", "Speed")}: " +
-                  (probe.BytesPerSecond is { } bps
-                      ? $"{(bps * 8d / 1_000_000d).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} Mbps"
-                      : "—")
-                : probe.Error ?? Copy("Нет ответа", "No response"),
-                _ => Copy("Проверка маршрута…", "Checking route…"),
-            };
-            if (probe.LatencyMilliseconds is not null && !HasProbeSpeedToken())
-                probeLabel += " · " + Copy("войдите для проверки скорости", "sign in to measure speed");
-            if (quality.BestTag == route.Tag)
-                probeLabel += Copy(" · лучший выбор", " · best choice");
-            var grade = quality.Grades.GetValueOrDefault(route.Tag);
-            var probeColor = quality.BestTag == route.Tag ? DeyttTheme.Mint : grade switch
-            {
-                RouteQualityGrade.Good => DeyttTheme.Mint,
-                RouteQualityGrade.Medium => DeyttTheme.Amber,
-                RouteQualityGrade.Poor => DeyttTheme.Coral,
-                _ => probe.LatencyMilliseconds is null ? DeyttTheme.Coral : DeyttTheme.Muted,
-            };
-            labels.Children.Add(DeyttTheme.TextBlock(probeLabel, 10,
-                probeColor, quality.BestTag == route.Tag ? FontWeight.SemiBold : FontWeight.Normal));
+            "latency" => Copy($"Проверяем пинг · {measured.Attempt ?? 1}/3", $"Measuring ping · {measured.Attempt ?? 1}/3"),
+            "retry" => Copy($"Повтор замера · {measured.Attempt ?? 2}/3", $"Retrying measurement · {measured.Attempt ?? 2}/3"),
+            "waiting_speed" => Copy("Пинг получен · измеряем скорость", "Ping received · measuring speed"),
+            "download" => FormatProbeDownloadProgress(measured),
+            "error" => measured.Error ?? Copy("Не удалось проверить маршрут", "Could not check this route"),
+            "cancelled" => Copy("Замер остановлен", "Measurement stopped"),
+            "complete" when measured.LatencyMilliseconds is null => measured.Error ?? Copy("Нет ответа", "No response"),
+            "complete" when quality.BestTag == route.Tag => Copy("Лучший результат", "Best result"),
+            _ => null,
+        };
+        if (probeStatus is not null)
+        {
+            var status = DeyttTheme.TextBlock(probeStatus, 9,
+                measured?.Stage is "error" or "cancelled" ? DeyttTheme.Coral : DeyttTheme.Muted);
+            labels.Children.Add(status);
         }
         Grid.SetColumn(labels, 1);
-        Grid.SetRow(labels, 0);
         body.Children.Add(labels);
 
-        var measured = _routeProbeResults.GetValueOrDefault(route.Tag);
         var latencyText = measured?.LatencyMilliseconds is { } probeLatency ? $"{probeLatency} ms" : "— ms";
         var speedText = measured?.BytesPerSecond is { } bytesPerSecond && bytesPerSecond > 0
-            ? $"{bytesPerSecond * 8d / 1_000_000d:0.#} Mbps"
+            ? $"{(bytesPerSecond * 8d / 1_000_000d).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} Mbps"
             : "— Mbps";
-        var metrics = new Grid
+        var firstDivider = new Border
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"),
-            ColumnSpacing = 22,
-            Margin = new Thickness(0, 2, 0, 1),
+            Width = 1,
+            Height = 30,
+            Background = DeyttTheme.Brush(DeyttTheme.Line),
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
-        metrics.Children.Add(RouteMeasurement(Copy("ПИНГ", "PING"), latencyText,
+        Grid.SetColumn(firstDivider, 2);
+        body.Children.Add(firstDivider);
+
+        var latencyMetric = RouteMeasurement(Copy("ПИНГ", "PING"), latencyText,
             quality.Grades.GetValueOrDefault(route.Tag) switch
             {
                 RouteQualityGrade.Good => DeyttTheme.Mint,
                 RouteQualityGrade.Medium => DeyttTheme.Amber,
                 RouteQualityGrade.Poor => DeyttTheme.Coral,
                 _ => DeyttTheme.Text,
-            }));
+            });
+        Grid.SetColumn(latencyMetric, 3);
+        body.Children.Add(latencyMetric);
+
+        var secondDivider = new Border
+        {
+            Width = 1,
+            Height = 30,
+            Background = DeyttTheme.Brush(DeyttTheme.Line),
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        Grid.SetColumn(secondDivider, 4);
+        body.Children.Add(secondDivider);
+
         var speedMetric = RouteMeasurement(Copy("СКОРОСТЬ", "SPEED"), speedText,
             quality.BestTag == route.Tag ? DeyttTheme.Mint : DeyttTheme.Text);
-        Grid.SetColumn(speedMetric, 1);
-        metrics.Children.Add(speedMetric);
-        Grid.SetColumn(metrics, 1);
-        Grid.SetRow(metrics, 1);
-        body.Children.Add(metrics);
+        Grid.SetColumn(speedMetric, 5);
+        body.Children.Add(speedMetric);
 
-        var probeStatus = measured is null ? null : measured.Stage switch
-        {
-            "latency" => Copy("Измеряем пинг…", "Measuring latency…"),
-            "retry" => Copy($"Повтор проверки · {measured.Attempt ?? 2}/3", $"Retrying · {measured.Attempt ?? 2}/3"),
-            "waiting_speed" => Copy("Пинг готов · запускаем проверку скорости", "Latency ready · starting speed test"),
-            "download" => FormatProbeDownloadProgress(measured),
-            "error" or "cancelled" => measured.Error ?? Copy("Замер не завершён", "Measurement did not complete"),
-            "complete" when measured.LatencyMilliseconds is null => measured.Error ?? Copy("Нет ответа", "No response"),
-            "complete" => quality.BestTag == route.Tag
-                ? Copy("Лучший результат", "Best result")
-                : Copy("Проверка завершена", "Measurement complete"),
-            _ => null,
-        };
-        if (probeStatus is not null)
-        {
-            var status = DeyttTheme.TextBlock(probeStatus, 10,
-                measured?.Stage is "error" or "cancelled" ? DeyttTheme.Coral : DeyttTheme.Muted);
-            Grid.SetColumn(status, 1);
-            Grid.SetRow(status, 2);
-            body.Children.Add(status);
-        }
-
-        var action = DeyttTheme.TextBlock(selected ? Copy("ВЫБРАН", "SELECTED") : "›",
-            12, selected ? DeyttTheme.Mint : DeyttTheme.Muted, FontWeight.SemiBold, wrap: false);
-        Grid.SetColumn(action, 2);
-        Grid.SetRowSpan(action, 3);
+        Control action = selected
+            ? DeyttTheme.TextBlock("✓", 16, DeyttTheme.Mint, FontWeight.SemiBold, wrap: false)
+            : DeyttTheme.TextBlock("›", 16, DeyttTheme.Muted, FontWeight.Medium, wrap: false);
+        if (selected)
+            action = new Border
+            {
+                Width = 26,
+                Height = 26,
+                Background = DeyttTheme.Brush(DeyttTheme.MintSurface),
+                CornerRadius = new CornerRadius(9),
+                Child = action,
+            };
+        Grid.SetColumn(action, 6);
         action.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         body.Children.Add(action);
         var button = DeyttTheme.Action(body, () =>
@@ -1150,25 +1128,34 @@ public partial class MainWindow : Window
             else
                 SelectRoute(route.Id);
         });
-        button.Padding = new Thickness(10, 8);
+        button.Padding = new Thickness(0);
+        button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        AutomationProperties.SetAutomationId(button, $"RouteOption-{route.Id}");
+        AutomationProperties.SetName(button, $"{route.ProfileName ?? route.ProtocolName} · {route.CountryName}");
         return new Border
         {
             Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : Colors.Transparent),
             BorderBrush = DeyttTheme.Brush(selected ? DeyttTheme.SelectedLine : Colors.Transparent),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(15),
-            Margin = new Thickness(0, 0, 0, 4),
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(12, 8),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
             Child = button,
         };
     }
 
     private static StackPanel RouteMeasurement(string label, string value, Color valueColor)
     {
-        var cell = new StackPanel { Spacing = 2 };
+        var cell = new StackPanel
+        {
+            Spacing = 2,
+            MinWidth = 74,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
         cell.Children.Add(DeyttTheme.TextBlock(label, 9, DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        cell.Children.Add(DeyttTheme.TextBlock(value, 13, valueColor,
-            FontWeight.SemiBold, DeyttTheme.InterTight, wrap: false));
+        cell.Children.Add(DeyttTheme.TextBlock(value, 14, valueColor,
+            FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
         return cell;
     }
 
@@ -1204,9 +1191,18 @@ public partial class MainWindow : Window
     {
         var selected = _selectedRoute == route.Id;
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 60 };
-        var icon = DeyttTheme.TextBlock(glyph, 23, DeyttTheme.Sky, wrap: false);
-        icon.Width = 36;
-        icon.TextAlignment = TextAlignment.Center;
+        Control icon;
+        if (route.CountryCode == "RU-DE")
+        {
+            icon = RouteFlagVisual.Create("RU-DE", 48, 30);
+        }
+        else
+        {
+            var glyphIcon = DeyttTheme.TextBlock(glyph, 23, DeyttTheme.Sky, wrap: false);
+            glyphIcon.Width = 36;
+            glyphIcon.TextAlignment = TextAlignment.Center;
+            icon = glyphIcon;
+        }
         body.Children.Add(icon);
         var labels = new StackPanel { Spacing = 3, Margin = new Thickness(12, 0, 8, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
         labels.Children.Add(DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));

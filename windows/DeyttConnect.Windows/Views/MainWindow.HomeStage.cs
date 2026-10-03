@@ -78,7 +78,11 @@ public partial class MainWindow
     private Control BuildHomeRouteDetails()
     {
         var selected = _routes.FirstOrDefault(route => route.Id == _selectedRoute);
-        var details = new StackPanel { Spacing = 0 };
+        var details = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
+            RowSpacing = 11,
+        };
 
         var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var titleStack = new StackPanel { Spacing = 5 };
@@ -104,50 +108,62 @@ public partial class MainWindow
         Grid.SetColumn(changeRoute, 1);
         heading.Children.Add(changeRoute);
         details.Children.Add(heading);
-        details.Children.Add(DeyttTheme.Spacer(24));
 
         var endpoints = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto,*"),
-            ColumnSpacing = 12,
+            ColumnSpacing = 8,
         };
         var origin = GetHomeOriginParts();
-        endpoints.Children.Add(RouteEndpoint(Copy("ОТКУДА", "FROM"), origin.Code, origin.Name,
-            origin.Hint, HorizontalAlignment.Left));
-        var arrow = DeyttTheme.TextBlock("→", 28, DeyttTheme.Sky, FontWeight.Medium, wrap: false);
+        endpoints.Children.Add(RouteEndpoint(Copy("ОТКУДА", "FROM"), origin.Code, origin.Name, origin.Hint));
+        var arrow = DeyttTheme.TextBlock("→", 24, DeyttTheme.Sky, FontWeight.Medium, wrap: false);
         arrow.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(arrow, 1);
         endpoints.Children.Add(arrow);
 
         var destination = GetHomeDestinationParts(selected);
-        var exit = RouteEndpoint(Copy("КУДА", "TO"), destination.Code, destination.Name,
-            destination.Hint, HorizontalAlignment.Right);
+        var exit = RouteEndpoint(Copy("КУДА", "TO"), destination.Code, destination.Name, destination.Hint);
         Grid.SetColumn(exit, 2);
         endpoints.Children.Add(exit);
+        Grid.SetRow(endpoints, 1);
         details.Children.Add(endpoints);
-        details.Children.Add(DeyttTheme.Spacer(24));
-        details.Children.Add(DeyttTheme.Hairline());
-        details.Children.Add(DeyttTheme.Spacer(18));
+
+        var separator = DeyttTheme.Hairline();
+        separator.VerticalAlignment = VerticalAlignment.Bottom;
+        Grid.SetRow(separator, 2);
+        details.Children.Add(separator);
 
         var protocol = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var protocolCopy = new StackPanel { Spacing = 5 };
         protocolCopy.Children.Add(DeyttTheme.TextBlock(Copy("ПРОТОКОЛ", "PROTOCOL"),
-            10, DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        protocolCopy.Children.Add(DeyttTheme.TextBlock(ProtocolPath(selected), 18,
+            9, DeyttTheme.Sky, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
+        protocolCopy.Children.Add(DeyttTheme.TextBlock(ProtocolPath(selected), 17,
             DeyttTheme.Text, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
         protocol.Children.Add(protocolCopy);
-        var protocolName = DeyttTheme.TextBlock(selected?.ProtocolName ?? Copy("Автоподбор", "Automatic"),
-            12, DeyttTheme.Muted, FontWeight.Medium);
+        var protocolName = DeyttTheme.TextBlock(ProtocolDescriptor(selected), 11, DeyttTheme.Muted,
+            FontWeight.Medium);
         protocolName.TextAlignment = TextAlignment.Right;
         protocolName.MaxWidth = 130;
         Grid.SetColumn(protocolName, 1);
         protocol.Children.Add(protocolName);
-        details.Children.Add(protocol);
-        details.Children.Add(DeyttTheme.Spacer(18));
+        var protocolCard = DeyttTheme.Card(protocol, DeyttTheme.Surface, DeyttTheme.Line,
+            14, new Thickness(12, 9));
+        Grid.SetRow(protocolCard, 3);
+        details.Children.Add(protocolCard);
         var measuredRouteTag = IsVpnDisplayConnected() ? _vpnSnapshot.RouteTag : selected?.Tag;
-        details.Children.Add(BuildHomeRouteDiagnostic(measuredRouteTag));
+        var diagnostics = BuildHomeRouteDiagnostic(measuredRouteTag);
+        Grid.SetRow(diagnostics, 4);
+        details.Children.Add(diagnostics);
         return details;
     }
+
+    private string ProtocolDescriptor(WindowsRoute? route) => route?.Protocol switch
+    {
+        "VLESS" or "TROJAN" => "WebSocket · TLS",
+        "HYSTERIA2" => Copy("QUIC · UDP", "QUIC · UDP"),
+        "AWG31" => "AmneziaWG 3.1",
+        _ => route?.ProtocolName ?? Copy("Автоматически", "Automatic"),
+    };
 
     private (string Code, string Name, string Hint) GetHomeOriginParts()
     {
@@ -208,22 +224,30 @@ public partial class MainWindow
         _ => "./auto",
     };
 
-    private static StackPanel RouteEndpoint(string eyebrow, string code, string name, string hint,
-        HorizontalAlignment alignment)
+    private static Border RouteEndpoint(string eyebrow, string code, string name, string hint)
     {
-        var endpoint = new StackPanel { Spacing = 5, HorizontalAlignment = alignment };
+        var endpoint = new StackPanel { Spacing = 7 };
         endpoint.Children.Add(DeyttTheme.TextBlock(eyebrow, 10, DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        endpoint.Children.Add(DeyttTheme.TextBlock(code.ToUpperInvariant(), 12, DeyttTheme.Sky,
-            FontWeight.Bold, DeyttTheme.JetBrainsMono, wrap: false));
-        var location = DeyttTheme.TextBlock(name, 19, DeyttTheme.Text,
-            FontWeight.SemiBold, DeyttTheme.InterTight, wrap: false);
-        location.TextTrimming = TextTrimming.CharacterEllipsis;
-        endpoint.Children.Add(location);
-        var detail = DeyttTheme.TextBlock(hint, 10, DeyttTheme.Muted, wrap: false);
+        var hasLocationMarker = code is not "—" and not "";
+        var location = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions(hasLocationMarker ? "Auto,*" : "*"),
+            ColumnSpacing = 8,
+        };
+        if (hasLocationMarker)
+            location.Children.Add(RouteFlagVisual.Create(code, 34, 22));
+        var locationText = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
+        locationText.Children.Add(DeyttTheme.TextBlock(name, 15, DeyttTheme.Text,
+            FontWeight.SemiBold, DeyttTheme.InterTight));
+        var detail = DeyttTheme.TextBlock(hint, 9, DeyttTheme.Muted, wrap: false);
         detail.TextTrimming = TextTrimming.CharacterEllipsis;
-        endpoint.Children.Add(detail);
-        return endpoint;
+        locationText.Children.Add(detail);
+        Grid.SetColumn(locationText, hasLocationMarker ? 1 : 0);
+        location.Children.Add(locationText);
+        endpoint.Children.Add(location);
+        return DeyttTheme.Card(endpoint, DeyttTheme.Surface, DeyttTheme.Line,
+            14, new Thickness(10, 9));
     }
 
     private RouteGlobeWebView CreateRouteGlobe()
@@ -275,17 +299,19 @@ public partial class MainWindow
         var measurements = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,*"),
-            ColumnSpacing = 24,
+            ColumnSpacing = 16,
         };
         measurements.Children.Add(HomeMeasurement(Copy("ПИНГ", "PING"), latency));
         var speedMeasurement = HomeMeasurement(Copy("СКОРОСТЬ", "SPEED"), speed);
         Grid.SetColumn(speedMeasurement, 1);
         measurements.Children.Add(speedMeasurement);
 
-        var details = new StackPanel { Spacing = 12, Children = { measurements } };
+        var details = new StackPanel { Spacing = 8 };
+        details.Children.Add(DeyttTheme.Card(measurements, DeyttTheme.Surface, DeyttTheme.Line,
+            14, new Thickness(12, 9)));
         details.Children.Add(DeyttTheme.Action(DeyttTheme.TextBlock(
-            Copy("Открыть диагностику ↗", "Open diagnostics ↗"),
-            12, DeyttTheme.Sky, FontWeight.SemiBold), () => ShowTab(MainTab.Routes)));
+            Copy("Все замеры и диагностика ↗", "All measurements and diagnostics ↗"),
+            11, DeyttTheme.Sky, FontWeight.SemiBold), () => ShowTab(MainTab.Routes)));
         return details;
     }
 
@@ -294,8 +320,8 @@ public partial class MainWindow
         var cell = new StackPanel { Spacing = 4 };
         cell.Children.Add(DeyttTheme.TextBlock(label, 9, DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        cell.Children.Add(DeyttTheme.TextBlock(value, 15, DeyttTheme.Text,
-            FontWeight.SemiBold, DeyttTheme.InterTight, wrap: false));
+        cell.Children.Add(DeyttTheme.TextBlock(value, 14, DeyttTheme.Text,
+            FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
         return cell;
     }
 }

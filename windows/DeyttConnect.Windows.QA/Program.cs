@@ -37,6 +37,17 @@ internal sealed class QaApp : Application
             new WindowsRoute("auto", "qa:auto", "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
             new WindowsRoute("ru-de", "qa:ru-de", "RU-DE", "Россия → Германия", "🇷🇺→🇩🇪", "CHAIN", "RU → DE"),
             new WindowsRoute("nl-vless", "qa:nl-vless", "NL", "Нидерланды", "🇳🇱", "VLESS", "VLESS"),
+            new WindowsRoute("nl-trojan", "qa:nl-trojan", "NL", "Нидерланды", "🇳🇱", "TROJAN", "Trojan"),
+            new WindowsRoute("nl-hysteria2", "qa:nl-hysteria2", "NL", "Нидерланды", "🇳🇱", "HYSTERIA2", "Hysteria 2"),
+            new WindowsRoute("de-vless", "qa:de-vless", "DE", "Германия", "🇩🇪", "VLESS", "VLESS"),
+            new WindowsRoute("de-trojan", "qa:de-trojan", "DE", "Германия", "🇩🇪", "TROJAN", "Trojan"),
+            new WindowsRoute("de-hysteria2", "qa:de-hysteria2", "DE", "Германия", "🇩🇪", "HYSTERIA2", "Hysteria 2"),
+            new WindowsRoute("ru-vless", "qa:ru-vless", "RU", "Россия", "🇷🇺", "VLESS", "VLESS"),
+            new WindowsRoute("ru-trojan", "qa:ru-trojan", "RU", "Россия", "🇷🇺", "TROJAN", "Trojan"),
+            new WindowsRoute("ru-hysteria2", "qa:ru-hysteria2", "RU", "Россия", "🇷🇺", "HYSTERIA2", "Hysteria 2"),
+            new WindowsRoute("fi-vless", "qa:fi-vless", "FI", "Финляндия", "🇫🇮", "VLESS", "VLESS"),
+            new WindowsRoute("fi-trojan", "qa:fi-trojan", "FI", "Финляндия", "🇫🇮", "TROJAN", "Trojan"),
+            new WindowsRoute("fi-hysteria2", "qa:fi-hysteria2", "FI", "Финляндия", "🇫🇮", "HYSTERIA2", "Hysteria 2"),
         };
         var account = options.SignedIn
             ? new TelegramAccount("qa_fixture", "QA Demo", false,
@@ -50,9 +61,9 @@ internal sealed class QaApp : Application
             : null;
         var tunnel = options.State switch
         {
-            "connected" => new WindowsTunnelSnapshot("connected", "QA fixture · synthetic state", "qa:nl-vless",
+            "connected" => new WindowsTunnelSnapshot("connected", "QA fixture · synthetic state", "qa:nl-hysteria2",
                 HealthCheckedAt: DateTimeOffset.UtcNow),
-            "connecting" => new WindowsTunnelSnapshot("starting", "QA fixture · synthetic state", "qa:nl-vless"),
+            "connecting" => new WindowsTunnelSnapshot("starting", "QA fixture · synthetic state", "qa:nl-hysteria2"),
             "error" => new WindowsTunnelSnapshot("error", "QA fixture · synthetic error"),
             _ => new WindowsTunnelSnapshot("disconnected", "QA fixture · synthetic state"),
         };
@@ -65,8 +76,10 @@ internal sealed class QaApp : Application
                 stage == "download" ? 5 * 1024 * 1024 : null,
                 stage == "download" ? 32 * 1024 * 1024 : null)
             : null;
-        var fixture = new QaHomeFixture(options.SignedIn, "ru", "nl-vless", options.Tab,
-            account, subscription, routes, tunnel, probeResult);
+        var fixture = new QaHomeFixture(options.SignedIn, "ru", "nl-hysteria2", options.Tab,
+            account, subscription, routes, tunnel, probeResult,
+            RouteProbeInProgress: options.ProbeStage is "latency" or "retry" or "waiting_speed" or "download",
+            ExpandedRouteCountry: options.Tab == "routes" ? "NL" : null);
         var window = new MainWindow(fixture)
         {
             Title = $"deytt./connect · QA fixture ({(options.SignedIn ? "signed-in" : "signed-out")}, {options.State})",

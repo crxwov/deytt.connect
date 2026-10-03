@@ -22,7 +22,8 @@ internal sealed record QaHomeFixture(
     WindowsTunnelSnapshot Tunnel,
     WindowsRouteProbeResult? ProbeResult = null,
     bool RouteProbeInProgress = false,
-    bool RouteProbeCancelRequested = false);
+    bool RouteProbeCancelRequested = false,
+    string? ExpandedRouteCountry = null);
 
 sealed class Program
 {
