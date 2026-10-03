@@ -9,14 +9,14 @@
         CanMaximize="True"
         ShowInTaskbar="True"
         Width="1240"
-        Height="820"
+        Height="720"
         MinWidth="520"
         MinHeight="420"
         WindowStartupLocation="CenterScreen"
         Background="#080B12"
         RequestedThemeVariant="Dark">
 
-    <Grid x:Name="ShellGrid" ColumnDefinitions="252,*" RowDefinitions="*,Auto">
+    <Grid x:Name="ShellGrid" ColumnDefinitions="0,*" RowDefinitions="*,Auto">
         <Grid Grid.ColumnSpan="2" Grid.RowSpan="2" IsHitTestVisible="False">
             <Border>
                 <Border.Background>
@@ -33,6 +33,7 @@
         <Border x:Name="SidebarPanel"
                 Grid.Column="0"
                 Grid.Row="0"
+                IsVisible="False"
                 Background="#0D131D"
                 BorderBrush="#283548"
                 BorderThickness="0,0,1,0"
@@ -177,7 +178,7 @@
         <Border x:Name="BottomNavigationPanel"
                 Grid.Row="1"
                 Grid.ColumnSpan="2"
-                IsVisible="False"
+                IsVisible="True"
                 Background="#0D131D"
                 BorderBrush="#283548"
                 BorderThickness="0,1,0,0"
