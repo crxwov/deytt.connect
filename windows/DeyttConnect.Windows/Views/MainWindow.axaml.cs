@@ -644,24 +644,13 @@ public partial class MainWindow : Window
         Grid.SetColumn(stateCopy, 1);
         status.Children.Add(stateCopy);
 
-        var actionContent = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto"),
-            RowSpacing = 8,
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
-        Grid.SetRow(status, 0);
-        actionContent.Children.Add(status);
         var actionLabel = DeyttTheme.TextBlock(primaryLabel, _compactLayout ? 19 : 21,
             actionForeground, FontWeight.Bold, DeyttTheme.InterTight, wrap: false);
-        actionLabel.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        actionLabel.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         actionLabel.TextAlignment = TextAlignment.Center;
-        Grid.SetRow(actionLabel, 1);
-        actionContent.Children.Add(actionLabel);
+        AutomationProperties.SetAutomationId(actionLabel, "HomeConnectionActionLabel");
 
-        var primary = DeyttTheme.Action(actionContent, () =>
+        var primary = DeyttTheme.Action(actionLabel, () =>
         {
             if (_qaFixture)
                 return;
@@ -682,10 +671,24 @@ public partial class MainWindow : Window
                 _ = ToggleVpnAsync();
         });
         primary.IsEnabled = !starting || canCancel || healthUnknown;
-        primary.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-        primary.VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center;
-        primary.Padding = new Thickness(16, 12);
+        primary.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        primary.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+        primary.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        primary.VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Bottom;
+        primary.Padding = new Thickness(16, 12, 16, 12);
         AutomationProperties.SetAutomationId(primary, "HomeConnectionAction");
+        var actionContent = new Grid
+        {
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
+        };
+        actionContent.Children.Add(primary);
+        status.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+        status.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
+        status.Margin = new Thickness(16, 18, 16, 0);
+        status.IsHitTestVisible = false;
+        actionContent.Children.Add(status);
+
         var actionTile = new Border
         {
             Height = _compactLayout ? 108 : 116,
@@ -709,7 +712,7 @@ public partial class MainWindow : Window
                         },
                     }
                     : DeyttTheme.Brush(DeyttTheme.Surface2),
-            Child = primary,
+            Child = actionContent,
         };
         AutomationProperties.SetAutomationId(actionTile, "HomeConnectionActionTile");
         Grid.SetColumn(actionTile, 0);
