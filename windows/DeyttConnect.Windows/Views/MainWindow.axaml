@@ -118,7 +118,7 @@
             </Grid>
         </Border>
 
-        <Grid Grid.Column="1" Grid.Row="0" RowDefinitions="72,*">
+        <Grid x:Name="WorkspaceColumn" Grid.Column="1" Grid.Row="0" RowDefinitions="Auto,*">
             <Border x:Name="WorkspaceHeader" Grid.Row="0"
                     Background="#0A1018"
                     BorderBrush="#202B38"

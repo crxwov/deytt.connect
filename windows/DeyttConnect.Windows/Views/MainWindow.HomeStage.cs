@@ -64,39 +64,6 @@ public partial class MainWindow
         if (map.Parent is Panel oldHost)
             oldHost.Children.Remove(map);
         layout.Children.Add(map);
-        var mapLabel = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Left };
-        mapLabel.Children.Add(DeyttTheme.TextBlock(Copy("КАРТА СЕТИ", "NETWORK MAP"),
-            10, DeyttTheme.Sky, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        mapLabel.Children.Add(DeyttTheme.TextBlock(Copy("Встроенная карта · регион только с согласия",
-            "Embedded map · region shown with consent"), 11, DeyttTheme.Muted));
-        var mapLabelSurface = new Border
-        {
-            Background = new SolidColorBrush(Color.FromArgb(218, 8, 15, 23)),
-            BorderBrush = DeyttTheme.Brush(Color.Parse("#283B49")),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(13, 10),
-            Margin = new Thickness(18),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top,
-            Child = mapLabel,
-        };
-        mapLabelSurface.ZIndex = 1;
-        layout.Children.Add(mapLabelSurface);
-
-        var zoomControls = new StackPanel
-        {
-            Spacing = 7,
-            Margin = new Thickness(16),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-        };
-        zoomControls.Children.Add(MapControlButton("+", Copy("Увеличить карту", "Zoom in"), map.ZoomIn));
-        zoomControls.Children.Add(MapControlButton("-", Copy("Уменьшить карту", "Zoom out"), map.ZoomOut));
-        zoomControls.Children.Add(MapControlButton("1:1", Copy("Сбросить масштаб", "Reset map"), map.ResetView));
-        zoomControls.ZIndex = 1;
-        layout.Children.Add(zoomControls);
-
         return new Border
         {
             Background = DeyttTheme.Brush(DeyttTheme.MapSurface),
@@ -106,27 +73,6 @@ public partial class MainWindow
             ClipToBounds = true,
             Child = layout,
         };
-    }
-
-    private static Button MapControlButton(string glyph, string label, Action action)
-    {
-        var button = new Button
-        {
-            Width = 38,
-            Height = 38,
-            Padding = new Thickness(0),
-            Content = DeyttTheme.TextBlock(glyph, 20, DeyttTheme.Text, FontWeight.Medium,
-                DeyttTheme.InterTight, wrap: false),
-            Background = DeyttTheme.Brush(Color.Parse("#182530")),
-            BorderBrush = DeyttTheme.Brush(Color.Parse("#385261")),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
-        };
-        ToolTip.SetTip(button, label);
-        button.Click += (_, _) => action();
-        return button;
     }
 
     private Control BuildHomeRouteDetails()
@@ -198,7 +144,8 @@ public partial class MainWindow
         protocol.Children.Add(protocolName);
         details.Children.Add(protocol);
         details.Children.Add(DeyttTheme.Spacer(18));
-        details.Children.Add(BuildHomeRouteDiagnostic(selected?.Tag));
+        var measuredRouteTag = IsVpnDisplayConnected() ? _vpnSnapshot.RouteTag : selected?.Tag;
+        details.Children.Add(BuildHomeRouteDiagnostic(measuredRouteTag));
         return details;
     }
 
@@ -320,22 +267,35 @@ public partial class MainWindow
 
     private Control BuildHomeRouteDiagnostic(string? routeTag)
     {
-        if (routeTag is not null && _routeProbeResults.TryGetValue(routeTag, out var quality) &&
-            (quality.LatencyMilliseconds is not null || quality.BytesPerSecond is not null))
+        var result = routeTag is not null ? _routeProbeResults.GetValueOrDefault(routeTag) : null;
+        var latency = result?.LatencyMilliseconds is { } ping ? $"{ping} ms" : "— ms";
+        var speed = result?.BytesPerSecond is { } bytesPerSecond && bytesPerSecond > 0
+            ? $"{bytesPerSecond * 8d / 1_000_000d:0.#} Mbps"
+            : "— Mbps";
+        var measurements = new Grid
         {
-            var measurements = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 22 };
-            if (quality.LatencyMilliseconds is { } latency)
-                measurements.Children.Add(DeyttTheme.TextBlock(
-                    $"{Copy("Пинг", "Latency")} {latency} ms", 12, DeyttTheme.Muted));
-            if (quality.BytesPerSecond is { } bytesPerSecond)
-                measurements.Children.Add(DeyttTheme.TextBlock(
-                    $"{Copy("Скорость", "Speed")} {bytesPerSecond * 8d / 1_000_000d:0.#} Mbps",
-                    12, DeyttTheme.Muted));
-            return measurements;
-        }
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
+            ColumnSpacing = 24,
+        };
+        measurements.Children.Add(HomeMeasurement(Copy("ПИНГ", "PING"), latency));
+        var speedMeasurement = HomeMeasurement(Copy("СКОРОСТЬ", "SPEED"), speed);
+        Grid.SetColumn(speedMeasurement, 1);
+        measurements.Children.Add(speedMeasurement);
 
-        return DeyttTheme.Action(DeyttTheme.TextBlock(
+        var details = new StackPanel { Spacing = 12, Children = { measurements } };
+        details.Children.Add(DeyttTheme.Action(DeyttTheme.TextBlock(
             Copy("Открыть диагностику ↗", "Open diagnostics ↗"),
-            12, DeyttTheme.Sky, FontWeight.SemiBold), () => ShowTab(MainTab.Routes));
+            12, DeyttTheme.Sky, FontWeight.SemiBold), () => ShowTab(MainTab.Routes)));
+        return details;
+    }
+
+    private static StackPanel HomeMeasurement(string label, string value)
+    {
+        var cell = new StackPanel { Spacing = 4 };
+        cell.Children.Add(DeyttTheme.TextBlock(label, 9, DeyttTheme.Muted,
+            FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
+        cell.Children.Add(DeyttTheme.TextBlock(value, 15, DeyttTheme.Text,
+            FontWeight.SemiBold, DeyttTheme.InterTight, wrap: false));
+        return cell;
     }
 }

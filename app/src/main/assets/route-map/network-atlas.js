@@ -5,6 +5,7 @@
   const TAU = Math.PI * 2;
   const MAX_ZOOM = 32;
   const ZOOM_EASE_MS = 120;
+  const PAN_EASE_MS = 120;
   const LOCATION_ORDER = ["nl", "de", "fi", "ru"];
   const LABEL_OFFSETS = {
     nl: { x: -24, y: -42, align: "right" },
@@ -21,10 +22,10 @@
     user: { x: 18, y: -62, align: "left" }
   };
   const LOCATIONS = {
-    nl: { code: "nl", city: "амстердам", country: "нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
-    de: { code: "de", city: "франкфурт", country: "германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
-    fi: { code: "fi", city: "хельсинки", country: "финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
-    ru: { code: "ru", city: "санкт-петербург", country: "россия", countryId: "643", lat: 59.9311, lon: 30.3609 }
+    nl: { code: "nl", city: "Амстердам", country: "Нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
+    de: { code: "de", city: "Франкфурт-на-Майне", country: "Германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
+    fi: { code: "fi", city: "Хельсинки", country: "Финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
+    ru: { code: "ru", city: "Санкт-Петербург", country: "Россия", countryId: "643", lat: 59.9311, lon: 30.3609 }
   };
   const COUNTRY_EXIT_KEYS = { NL: "nl", DE: "de", FI: "fi", RU: "ru" };
   const ROUTES = {
@@ -76,6 +77,7 @@
     "амстердам": "Amsterdam",
     "нидерланды": "Netherlands",
     "франкфурт": "Frankfurt",
+    "франкфурт-на-майне": "Frankfurt am Main",
     "германия": "Germany",
     "хельсинки": "Helsinki",
     "финляндия": "Finland",
@@ -241,6 +243,7 @@
       this.context = this.canvas.getContext("2d");
       this.tooltip = root.querySelector("[data-atlas-tooltip]");
       this.options = options || {};
+      this.wheelZoomOnly = Boolean(this.options.wheelZoomOnly);
       this.variant = this.options.variant || "home";
       this.selectOnTap = this.options.selectOnTap !== false;
       this.root.dataset.atlasVariant = this.variant;
@@ -290,8 +293,19 @@
     }
 
     async init() {
-      const response = await fetch(this.options.topologyUrl, { cache: "force-cache", credentials: "omit" });
-      if (!response.ok) throw new Error("geography unavailable: " + response.status);
+      let response;
+      let lastError;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          response = await fetch(this.options.topologyUrl, { cache: "force-cache", credentials: "omit" });
+          if (!response.ok) throw new Error("geography unavailable: " + response.status);
+          break;
+        } catch (error) {
+          lastError = error;
+          if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 180 * (attempt + 1)));
+        }
+      }
+      if (!response || !response.ok) throw lastError || new Error("geography unavailable");
       const topology = await response.json();
       const geography = decodeTopology(topology);
       this.boundaryLines = geography.boundaryLines;
@@ -325,7 +339,7 @@
         if (this.activePointers.size >= 2) {
           const points = Array.from(this.activePointers.values()).slice(0, 2);
           const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
-          if (this.pinchDistance > 0 && distance > 0) {
+          if (!this.wheelZoomOnly && this.pinchDistance > 0 && distance > 0) {
             this.targetZoom = clamp(this.targetZoom * distance / this.pinchDistance, .82, MAX_ZOOM);
             this.staticDirty = true;
           }
@@ -387,6 +401,10 @@
       });
       this.canvas.addEventListener("keydown", (event) => {
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "+", "=", "-", "_", "0"].includes(event.key)) return;
+        if (this.wheelZoomOnly && ["+", "=", "-", "_", "0"].includes(event.key)) {
+          event.preventDefault();
+          return;
+        }
         event.preventDefault();
         if (event.key === "ArrowLeft") this.targetLon -= 9;
         if (event.key === "ArrowRight") this.targetLon += 9;
@@ -426,8 +444,10 @@
       const rectangle = this.canvas.getBoundingClientRect();
       const previousWidth = this.width;
       const previousHeight = this.height;
-      const pixelRatioCap = rectangle.width < 520 || (navigator.connection && navigator.connection.saveData) ? 1.5 : 2;
-      const ratio = Math.min(window.devicePixelRatio || 1, pixelRatioCap);
+      const pixelRatioCap = this.options.pixelRatioCap ||
+        (rectangle.width < 520 || (navigator.connection && navigator.connection.saveData) ? 1.5 : 2);
+      const pixelRatioFloor = Math.min(this.options.pixelRatioFloor || 1, pixelRatioCap);
+      const ratio = Math.min(Math.max(window.devicePixelRatio || 1, pixelRatioFloor), pixelRatioCap);
       this.pixelRatio = ratio;
       this.width = Math.max(1, Math.round(rectangle.width));
       this.height = Math.max(1, Math.round(rectangle.height));
@@ -797,13 +817,21 @@
       const context = this.context;
       const location = key === "user" ? this.userLocation : LOCATIONS[key];
       const compact = this.width < 520;
+      const labelScale = this.options.labelScale || 1;
       const offset = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
       const title = key === "user" ? (this.copy(location.city) || this.copy("ваша сеть")) : this.copy(location.city);
       const meta = key === "user" ? (location.country || this.copy("вход в сеть")) : location.code + " · " + this.copy(location.country);
+      const titleFontSize = Math.round((compact ? 9 : 10) * labelScale);
+      const metaFontSize = Math.round((compact ? 7 : 8) * labelScale);
+      const inset = Math.round((compact ? 10 : 12) * labelScale);
+      const height = Math.round((compact ? 35 : 39) * labelScale);
+      const titleFont = "700 " + titleFontSize + "px " + (this.options.labelFontFamily || "ui-monospace, SFMono-Regular, Menlo, monospace");
+      const metaFont = "600 " + metaFontSize + "px ui-monospace, SFMono-Regular, Menlo, monospace";
       context.save();
-      context.font = "700 " + (compact ? 9 : 10) + "px ui-monospace, SFMono-Regular, Menlo, monospace";
-      const width = Math.max(context.measureText(title).width, context.measureText(meta).width) + (compact ? 20 : 24);
-      const height = compact ? 35 : 39;
+      context.font = titleFont;
+      const titleWidth = context.measureText(title).width;
+      context.font = metaFont;
+      const width = Math.max(titleWidth, context.measureText(meta).width) + inset * 2;
       // Prefer nearby labels; score all alternatives instead of falling back
       // to (8,8), which detached crowded user labels from their actual pin.
       const alternatives = [offset,
@@ -847,7 +875,7 @@
       context.stroke();
       occupied.push({ left: left, top: top, width: width, height: height });
       context.beginPath();
-      context.roundRect(left, top, width, height, compact ? 10 : 12);
+      context.roundRect(left, top, width, height, Math.round((compact ? 10 : 12) * labelScale));
       context.fillStyle = colors.labelBg;
       context.globalAlpha = active ? .96 : .68;
       context.shadowColor = "rgba(16,29,65,.22)";
@@ -861,11 +889,11 @@
       context.textAlign = "left";
       context.fillStyle = active ? colors.label : colors.labelMuted;
       context.globalAlpha = 1;
-      context.font = "700 " + (compact ? 9 : 10) + "px ui-monospace, SFMono-Regular, Menlo, monospace";
-      context.fillText(title, left + (compact ? 10 : 12), top + (compact ? 11 : 12));
+      context.font = titleFont;
+      context.fillText(title, left + inset, top + Math.round((compact ? 11 : 12) * labelScale));
       context.fillStyle = colors.labelMuted;
-      context.font = "600 " + (compact ? 7 : 8) + "px ui-monospace, SFMono-Regular, Menlo, monospace";
-      context.fillText(meta, left + (compact ? 10 : 12), top + (compact ? 25 : 28));
+      context.font = metaFont;
+      context.fillText(meta, left + inset, top + Math.round((compact ? 25 : 28) * labelScale));
       context.restore();
     }
 
@@ -914,11 +942,9 @@
       if (wasCameraMoving && !cameraMoving) this.labelPlacements.clear();
       // The atlas only animates while the user pans or zooms. Once the camera
       // settles, static routes and labels stay still and consume no frame loop.
-      const frameInterval = cameraMoving
-        ? (this.width < 520 ? 20 : 16)
-        : this.trafficActive && !this.reducedMotion.matches ? 33 : 16;
-      const elapsed = this.lastFrame ? time - this.lastFrame : frameInterval;
-      if (elapsed < frameInterval && !this.dragging) {
+      const frameInterval = !cameraMoving && this.trafficActive && !this.reducedMotion.matches ? 33 : 0;
+      const elapsed = this.lastFrame ? time - this.lastFrame : 16;
+      if (frameInterval > 0 && elapsed < frameInterval && !this.dragging) {
         this.start();
         return;
       }
@@ -934,7 +960,7 @@
       }
       // Pointer events already arrive as the user's input stream. Interpolating
       // targetLon a second time made the globe visibly trail and then catch up.
-      const panBlend = this.reducedMotion.matches || this.dragging ? 1 : .13;
+      const panBlend = this.reducedMotion.matches || this.dragging ? 1 : 1 - Math.exp(-Math.max(1, delta) / PAN_EASE_MS);
       this.centerLon = mix(this.centerLon, this.targetLon, panBlend);
       this.centerLat = mix(this.centerLat, this.targetLat, panBlend);
       const zoomBlend = this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS);
@@ -1159,9 +1185,20 @@
       const target = locationFromVector(center);
       this.targetLat = clamp(target.lat, -62, 72);
       this.targetLon = nearestLongitude(this.centerLon, target.lon);
-      // Start with the provisioned server cluster filling the screen. Pinch
-      // still reaches the whole globe; idle pages do not imply any traffic.
-      this.targetZoom = clamp(2.0 / Math.max(Math.sin(maxAngle), .2), 2.15, 2.85);
+      // Desktop opens on the selected segment; wheel zoom reveals the whole globe.
+      // Other clients retain the established Android/site framing.
+      if (Number.isFinite(this.options.routeFocusMinZoom)) {
+        const singleNode = routeNodes.length === 1 && !this.userLocation;
+        const fitRadius = Math.min(this.width, this.height) * (this.options.routeFocusFill || .39);
+        const fitZoom = fitRadius / Math.max(this.radius * Math.sin(maxAngle), this.radius * .055);
+        const minZoom = this.options.routeFocusMinZoom;
+        const maxZoom = this.options.routeFocusMaxZoom || minZoom;
+        this.targetZoom = singleNode
+          ? clamp(this.options.routeFocusSingleZoom || maxZoom, minZoom, maxZoom)
+          : clamp(fitZoom * (this.options.routeFocusScale || 1), minZoom, maxZoom);
+      } else {
+        this.targetZoom = clamp(2.0 / Math.max(Math.sin(maxAngle), .2), 2.15, 2.85);
+      }
       this.staticDirty = true;
     }
 
