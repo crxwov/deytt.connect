@@ -2859,9 +2859,12 @@ public partial class MainWindow : Window
         }
 
         _sessionToken = token;
+        var subscriptionSnapshotLoaded = false;
         try
         {
             await RefreshAccountDataAsync(token);
+            // A successful API response, including no active subscription, is authoritative.
+            subscriptionSnapshotLoaded = _keysSnapshot is not null;
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
@@ -2875,7 +2878,8 @@ public partial class MainWindow : Window
             _profileLoadIssue = Copy("Не удалось загрузить данные аккаунта.", "Could not load account data.");
         }
 
-        RestoreImportedSubscription();
+        if (!subscriptionSnapshotLoaded)
+            RestoreImportedSubscription();
 
         if (IsVisible)
             ShowTab(_activeTab);

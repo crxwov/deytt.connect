@@ -23,7 +23,10 @@ object SubscriptionClient {
     private const val MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024
 
     fun import(
-        context: android.content.Context, rawUrl: String, onStage: (String) -> Unit = {},
+        context: android.content.Context,
+        rawUrl: String,
+        beforeCommit: () -> Unit = {},
+        onStage: (String) -> Unit = {},
     ): ImportedSubscription {
         val headers = SubscriptionRequestIdentity.headers(context)
         val coreBudget = SubscriptionRequestBudget(60_000)
@@ -38,6 +41,7 @@ object SubscriptionClient {
                 if (TelegramSessionStore.read(context) != headers["X-TG-App-Token"]) {
                     throw SubscriptionCancelledException()
                 }
+                beforeCommit()
             })
         } catch (error: SubscriptionHttpFailure) {
             if (error.statusCode == 401 && error.code == "session_expired") {

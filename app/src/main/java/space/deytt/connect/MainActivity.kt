@@ -118,7 +118,10 @@ class MainActivity : Activity() {
     private var homeSpeedSampleAt = 0L
     private val locationExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val accountExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val subscriptionExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private var accountGeneration = 0
+    private var subscriptionRefreshInFlight = false
+    private var subscriptionRefreshLastStartedAt = 0L
     private val connectionProgressHandler = Handler(Looper.getMainLooper())
     private val selectedRouteLatencyHandler = Handler(Looper.getMainLooper())
     private val mapTrafficHandler = Handler(Looper.getMainLooper())
@@ -154,7 +157,7 @@ class MainActivity : Activity() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ConnectVpnService.ACTION_ACTIVE_ROUTE) {
                 currentAutoRouteKey = intent.getStringExtra(ConnectVpnService.EXTRA_ACTIVE_ROUTE_KEY)
-                    ?.takeIf { it in setOf("nl", "de", "fi", "ru", "ru-de") }
+                    ?.takeIf { it in setOf("nl", "de", "fi", "ru", "it", "ru-de") }
                 if (::globe.isInitialized) globe.setActiveAutoRoute(currentAutoRouteKey)
                 return
             }
@@ -274,7 +277,7 @@ class MainActivity : Activity() {
         mapTrafficHandler.post(mapTrafficTick)
         currentAutoRouteKey = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
             .getString(ConnectVpnService.EXTRA_ACTIVE_ROUTE_KEY, null)
-            ?.takeIf { it in setOf("nl", "de", "fi", "ru", "ru-de") }
+            ?.takeIf { it in setOf("nl", "de", "fi", "ru", "it", "ru-de") }
         val filter = IntentFilter().apply {
             addAction(ConnectVpnService.ACTION_STATUS)
             addAction(ConnectVpnService.ACTION_ACTIVE_ROUTE)
@@ -297,6 +300,7 @@ class MainActivity : Activity() {
         hasStartedBefore = true
         refreshNetworkLocation()
         refreshTelegramAccount()
+        refreshSubscriptionIfNeeded()
         if (::primaryPages.isInitialized) primaryPages.startForegroundUpdates()
         selectedRouteLatencyHandler.removeCallbacks(selectedRouteLatencyTick)
         selectedRouteLatencyHandler.post(selectedRouteLatencyTick)
@@ -371,6 +375,8 @@ class MainActivity : Activity() {
         locationExecutor.shutdownNow()
         accountGeneration++
         accountExecutor.shutdownNow()
+        subscriptionExecutor.shutdownNow()
+        subscriptionRefreshInFlight = false
         selectedRouteLatencyHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
     }
@@ -438,6 +444,43 @@ class MainActivity : Activity() {
     internal fun refreshAccountViews() {
         if (!::pageAdapter.isInitialized) return
         for (position in 0..3) pageAdapter.refresh(position)
+    }
+
+    private fun refreshSubscriptionIfNeeded() {
+        if (isFinishing || isDestroyed || subscriptionRefreshInFlight) return
+        val prefs = getSharedPreferences("profile_settings", MODE_PRIVATE)
+        val url = prefs.getString("subscription_url", null)?.trim()?.takeIf(String::isNotEmpty) ?: return
+        val now = SystemClock.elapsedRealtime()
+        if (subscriptionRefreshLastStartedAt > 0 && now - subscriptionRefreshLastStartedAt < 30_000) return
+
+        subscriptionRefreshLastStartedAt = now
+        subscriptionRefreshInFlight = true
+        subscriptionExecutor.execute {
+            val result = runCatching {
+                SubscriptionClient.import(this@MainActivity, url, beforeCommit = {
+                    if (prefs.getString("subscription_url", null) != url) {
+                        throw SubscriptionCancelledException()
+                    }
+                })
+            }
+            runOnUiThread {
+                subscriptionRefreshInFlight = false
+                if (isFinishing || isDestroyed || result.isFailure) return@runOnUiThread
+
+                val routes = runCatching {
+                    val config = SubscriptionStore(this).readCurrent() ?: return@runCatching emptyList()
+                    RouteCatalog.from(config, AwgProfileStore(this).profiles())
+                }.getOrNull() ?: return@runOnUiThread
+                if (routes.none { it.id == SelectedRouteStore(this).read().id }) {
+                    routes.firstOrNull()?.let { SelectedRouteStore(this).save(it) }
+                }
+                if (::statusText.isInitialized) rebuildRouteRow()
+                if (::pageAdapter.isInitialized) {
+                    pageAdapter.refresh(1)
+                    pageAdapter.refresh(2)
+                }
+            }
+        }
     }
 
     private fun decodeTelegramAvatar(bytes: ByteArray): Bitmap? {

@@ -17,6 +17,7 @@ object ProfileRoutes {
         "DE" to Pair("🇩🇪", "Германия"),
         "RU" to Pair("🇷🇺", "Россия"),
         "FI" to Pair("🇫🇮", "Финляндия"),
+        "IT" to Pair("🇮🇹", "Италия"),
         "RU-DE" to Pair("🇷🇺→🇩🇪", "RU → DE"),
     )
 
