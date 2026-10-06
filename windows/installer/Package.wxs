@@ -4,6 +4,8 @@
            Manufacturer="DEYTT"
            Version="$(var.ProductVersion)"
            Scope="perMachine">
+    <Icon Id="DeyttConnectProductIcon.exe" SourceFile="$(var.PackageStageDir)/DeyttConnect.Windows.exe" />
+    <Property Id="ARPPRODUCTICON" Value="DeyttConnectProductIcon.exe" />
     <MajorUpgrade DowngradeErrorMessage="A newer version of DEYTT Connect is already installed." />
     <MediaTemplate EmbedCab="yes" />
 
@@ -14,6 +16,8 @@
                       Name="AllowedUserSid"
                       Type="raw" />
     </Property>
+    <SetProperty Id="ALLOWEDUSERSID" Value="[UserSID]" Before="LaunchConditions"
+                 Sequence="both" Condition="NOT ALLOWEDUSERSID" />
     <Property Id="EXISTING_SERVICE_PATH">
       <RegistrySearch Id="FindExistingVpnService"
                       Root="HKLM"
@@ -23,9 +27,9 @@
     </Property>
 
     <Launch Condition="ALLOWEDUSERSID &gt;&lt; &quot;S-1-&quot;"
-            Message="Supply ALLOWEDUSERSID as the interactive Windows user's SID when installing the first MSI. For example, run msiexec /i package.msi ALLOWEDUSERSID=S-1-... from that user's PowerShell session." />
-    <Launch Condition="NOT EXISTING_SERVICE_PATH OR Installed OR WIX_UPGRADE_DETECTED"
-            Message="A DEYTT VPN service is already installed outside this MSI. Remove it with the existing service uninstaller before installing this MSI." />
+            Message="Windows could not identify the account installing DEYTT Connect. Start the installer from the account that will use the application." />
+    <Launch Condition="NOT EXISTING_SERVICE_PATH OR Installed OR WIX_UPGRADE_DETECTED OR (EXISTING_SERVICE_PATH ~&gt;&lt; &quot;DEYTT\Connect\DeyttConnect.Windows.Service.exe&quot;)"
+            Message="The DEYTT VPN service points to an unexpected executable. Contact support to recover this installation." />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="DEYTTDIR" Name="DEYTT">
@@ -47,7 +51,7 @@
                             Name="DEYTTConnectVpn"
                             Start="install"
                             Stop="both"
-                            Remove="uninstall"
+                            Remove="both"
                             Wait="yes" />
           </Component>
 
@@ -65,8 +69,11 @@
                   Source="$(var.PackageStageDir)/DeyttConnect.Windows.exe"
                   KeyPath="yes">
               <Shortcut Id="UiStartMenuShortcut"
+                        Advertise="yes"
                         Directory="ApplicationProgramsFolder"
                         Name="DEYTT Connect"
+                      Icon="DeyttConnectProductIcon.exe"
+                      IconIndex="0"
                         WorkingDirectory="INSTALLFOLDER" />
             </File>
             <RemoveFolder Id="RemoveApplicationProgramsFolder"
@@ -74,9 +81,6 @@
                           On="uninstall" />
           </Component>
 
-          <Files Include="$(var.PackageStageDir)/**" Directory="INSTALLFOLDER">
-            <Exclude Files="$(var.PackageStageDir)/DeyttConnect.Windows.Service.exe" />
-          </Files>
         </Directory>
       </Directory>
     </StandardDirectory>
@@ -85,9 +89,16 @@
       <ComponentRef Id="VpnServiceComponent" />
       <ComponentRef Id="AllowedUserSidComponent" />
       <ComponentRef Id="UiExecutableComponent" />
+      <ComponentGroupRef Id="PayloadFiles" />
     </Feature>
   </Package>
   <Fragment>
+    <ComponentGroup Id="PayloadFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PackageStageDir)/**">
+        <Exclude Files="$(var.PackageStageDir)/DeyttConnect.Windows.Service.exe" />
+        <Exclude Files="$(var.PackageStageDir)/DeyttConnect.Windows.exe" />
+      </Files>
+    </ComponentGroup>
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="ApplicationProgramsFolder" Name="DEYTT Connect" />
     </StandardDirectory>
