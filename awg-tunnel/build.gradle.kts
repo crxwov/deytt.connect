@@ -126,11 +126,10 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 // AmneziaWG 3.1 moved the Go module under /v3, but its Android Makefile still
-// injects the old linker symbol. Without this correction the Go backend falls
-// back to /var/run/amneziawg, which Android mounts read-only. The Android
-// backend accesses tunnel state through JNI, so this private UAPI socket only
-// needs to live under this app's writable cache directory.
-val prepareDeyttAwgUapiSocketPath by tasks.registering {
+// injects the old linker symbol and pins a Go release below the module minimum.
+// Keep the linker socket in this app's writable cache and use the official,
+// checksum-pinned Go release required to build the backend.
+val prepareDeyttAwgBackendMakefile by tasks.registering {
     val upstreamMakefile = file("../third_party/amneziawg-android/tunnel/tools/libwg-go/Makefile")
     outputs.upToDateWhen { false }
     doLast {
@@ -138,12 +137,33 @@ val prepareDeyttAwgUapiSocketPath by tasks.registering {
         val oldSymbol = "github.com/amnezia-vpn/amneziawg-go/ipc.socketDirectory"
         val newSymbol = "github.com/amnezia-vpn/amneziawg-go/v3/ipc.socketDirectory"
         val source = upstreamMakefile.readText()
+        var patched = source
         when {
             source.contains(newSymbol) && !source.contains(oldSymbol) -> Unit
             source.contains(oldSymbol) && !source.contains(newSymbol) ->
-                upstreamMakefile.writeText(source.replace(oldSymbol, newSymbol))
+                patched = patched.replace(oldSymbol, newSymbol)
             else -> error("Unexpected AmneziaWG Go backend linker symbol; review its Makefile before building")
         }
+        val pinnedGoArtifacts = mapOf(
+            "GO_VERSION := 1.24.2" to "GO_VERSION := 1.25.14",
+            "GO_HASH_darwin-amd64 := 238d9c065d09ff6af229d2e3b8b5e85e688318d69f4006fb85a96e41c216ea83" to
+                "GO_HASH_darwin-amd64 := b09087a67d5792a8b0fcbf74212d62560c94ac8a8fd750ff920d8cb5f1e20118",
+            "GO_HASH_darwin-arm64 := b70f8b3c5b4ccb0ad4ffa5ee91cd38075df20fdbd953a1daedd47f50fbcff47a" to
+                "GO_HASH_darwin-arm64 := 5b26c0b6f308240fca2614fb02f622cfcc8c0cc3b69c78bba4845489a4590259",
+            "GO_HASH_linux-amd64 := 68097bd680839cbc9d464a0edce4f7c333975e27a90246890e9f1078c7e702ad" to
+                "GO_HASH_linux-amd64 := a21ae5633a269bcd7e90cf767e48225633795e99d831742cbf3397064fee7712",
+        )
+        for ((oldLine, newLine) in pinnedGoArtifacts) {
+            patched = when {
+                patched.contains(newLine) && !patched.contains(oldLine) -> patched
+                patched.contains(oldLine) && !patched.contains(newLine) -> patched.replace(oldLine, newLine)
+                else -> error("Unexpected AmneziaWG Go toolchain pin; review upstream Makefile before building")
+            }
+        }
+        check(patched.contains(newSymbol) && pinnedGoArtifacts.values.all { patched.contains(it) }) {
+            "AmneziaWG Go backend patch did not produce the reviewed linker and Go toolchain pins"
+        }
+        if (patched != source) upstreamMakefile.writeText(patched)
 
         // The upstream Makefile does not list itself as a prerequisite for
         // libwg-go.so, so an existing binary can survive a linker-flag fix.
@@ -161,7 +181,7 @@ val prepareDeyttAwgUapiSocketPath by tasks.registering {
 }
 
 tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }.configureEach {
-    dependsOn(prepareDeyttAwgUapiSocketPath)
+    dependsOn(prepareDeyttAwgBackendMakefile)
 }
 
 // AGP's annotation extraction reads the generated source directly and must

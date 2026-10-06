@@ -31,7 +31,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version-file: awg-tunnel/src/main/go/go.mod
+          go-version: '1.25.14'
           cache-dependency-path: awg-tunnel/src/main/go/go.sum
 
       - name: Set up Android SDK
@@ -129,4 +129,3 @@ jobs:
             output/android/deytt-connect-0.8.18-manual-reinstall-x86_64.apk.sha256 \
             --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md"
-
