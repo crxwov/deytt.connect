@@ -15,19 +15,17 @@ dependencies, and network access for NuGet restore:
 windows/installer/build-msi.sh 1.2.3 /path/to/DEYTTConnect-Windows-x64.msi
 ```
 
-For the first installation, pass the SID of the interactive account that will
-use the VPN. From that account's PowerShell session:
+Double-click the MSI from the interactive Windows account that will use the VPN.
+The installer defaults the named-pipe owner to Windows Installer's UserSID;
+no SID entry is required. Major upgrades preserve the existing AllowedUserSid.
+Administrators can explicitly supply ALLOWEDUSERSID when installing for another
+account.
 
-```powershell
-$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-msiexec.exe /i .\DEYTTConnect.Windows.Installer.msi "ALLOWEDUSERSID=$sid"
-```
-
-Subsequent major upgrades read and preserve the existing `AllowedUserSid`.
-The MSI blocks installation over a service installed outside this MSI, so a
-legacy service installation must first be removed with the matching existing
-uninstaller. An explicit `ALLOWEDUSERSID` property can be supplied by an
-administrator to intentionally change the allowed user.
+A leftover service pointing to the standard DEYTT\Connect service executable is
+stopped and recreated through Windows Installer service actions. A service at
+an unexpected path is rejected. Uninstall removes the managed service; per-user
+account and installation identity data remains in LOCALAPPDATA so reinstalling
+on the same device retains its identity.
 
 This prototype has not been installed, upgraded, or removed on Windows 10. It
 is not signed or ready for public distribution: trusted signing credentials
