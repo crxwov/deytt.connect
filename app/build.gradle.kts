@@ -25,7 +25,7 @@ android {
 
     buildTypes {
         release {
-            // Signing and certificate rotation are checked by scripts/release.py.
+            // Signing identity and APK policy are checked by scripts/release.py.
             // Keep this output unsigned instead of silently using a debug key.
             isDebuggable = false
             isJniDebuggable = false
@@ -71,3 +71,4 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }
+
