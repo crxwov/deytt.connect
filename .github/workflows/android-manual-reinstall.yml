@@ -6,17 +6,17 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Stable release tag for the signed APKs
+        description: Corrective release tag for the signed APKs
         required: true
         type: string
-        default: v0.8.20
+        default: v0.8.21
 
 permissions:
   contents: write
 
 jobs:
   build-and-publish:
-    if: github.repository == 'crxwov/deytt.connect' && (github.event_name == 'workflow_dispatch' || github.event.release.tag_name == 'v0.8.20')
+    if: github.repository == 'crxwov/deytt.connect' && (github.event_name == 'workflow_dispatch' || (github.event.release.tag_name == 'v0.8.21' && !github.event.release.prerelease))
     runs-on: ubuntu-latest
     steps:
       - name: Check out source and submodules
@@ -55,12 +55,15 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           case "$RELEASE_TAG" in
-            v0.8.20) ;;
+            v0.8.21) ;;
             *)
-              echo "This signing-key migration workflow only publishes v0.8.20 releases." >&2
+              echo "This signing-key migration workflow only publishes v0.8.21 releases." >&2
               exit 1
               ;;
           esac
+
+      - name: Test Android release variant
+        run: ./gradlew --no-daemon --max-workers=2 :app:testReleaseUnitTest
 
       - name: Build unsigned release APKs
         run: ./gradlew --no-daemon --max-workers=2 :app:assembleRelease

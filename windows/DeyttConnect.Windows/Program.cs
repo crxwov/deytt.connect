@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Media.Fonts;
 using System;
 using DeyttConnect.Protocol;
@@ -23,7 +23,8 @@ internal sealed record QaHomeFixture(
     WindowsRouteProbeResult? ProbeResult = null,
     bool RouteProbeInProgress = false,
     bool RouteProbeCancelRequested = false,
-    string? ExpandedRouteCountry = null);
+    string? ExpandedRouteCountry = null,
+    bool DisableNativeMapInitialization = false);
 
 sealed class Program
 {

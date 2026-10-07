@@ -23,7 +23,7 @@ public static class WindowsRouteCatalog
         ("RU", "Россия", "🇷🇺"),
         ("DE", "Германия", "🇩🇪"),
         ("FI", "Финляндия", "🇫🇮"),
-        ("IT", "Италия", "🇮🇹"),
+        ("IT", "италия", "🇮🇹"),
     ];
 
     private static readonly (string Code, string Name)[] Protocols =
@@ -40,44 +40,64 @@ public static class WindowsRouteCatalog
         JsonElement profile,
         IReadOnlyList<WindowsAwgProfile>? awgProfiles = null)
     {
-        if (profile.ValueKind != JsonValueKind.Object ||
-            !profile.TryGetProperty("inbounds", out var inbounds) ||
-            inbounds.ValueKind != JsonValueKind.Array ||
-            !inbounds.EnumerateArray().Any(item =>
-                item.ValueKind == JsonValueKind.Object &&
-                ReadString(item, "type") == "tun" &&
-                item.TryGetProperty("address", out var address) && address.ValueKind == JsonValueKind.Array))
-            throw new InvalidDataException("The subscription has no supported TUN inbound.");
+        if (profile.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException("The subscription root is not an object.");
+        if (!profile.TryGetProperty("inbounds", out var inbounds) ||
+            inbounds.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("The subscription has no inbound list.");
+        var tun = inbounds.EnumerateArray().FirstOrDefault(item =>
+            item.ValueKind == JsonValueKind.Object && ReadString(item, "type") == "tun");
+        if (tun.ValueKind != JsonValueKind.Object)
+        {
+            if (inbounds.GetArrayLength() == 0)
+                throw new InvalidDataException("The subscription has an empty inbound list.");
+            if (inbounds.EnumerateArray().Any(item =>
+                    ReadString(item, "type") is "mixed" or "socks" or "http"))
+                throw new InvalidDataException("The subscription has only proxy inbounds.");
+            throw new InvalidDataException("The subscription has no TUN inbound.");
+        }
+        if (!tun.TryGetProperty("address", out var address))
+            throw new InvalidDataException("The subscription TUN inbound has no address.");
+        if (address.ValueKind != JsonValueKind.Array)
+            throw new InvalidDataException("The subscription TUN address is not an array.");
 
         if (!profile.TryGetProperty("outbounds", out var outbounds) || outbounds.ValueKind != JsonValueKind.Array)
             throw new InvalidDataException("The subscription has no outbounds.");
 
-        var tags = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var outbound in outbounds.EnumerateArray())
-        {
-            if (outbound.ValueKind != JsonValueKind.Object ||
-                ReadString(outbound, "tag") is not { Length: > 0 } tag || !tags.Add(tag))
-                throw new InvalidDataException("The subscription has invalid or duplicate outbound tags.");
-        }
+        var outboundItems = outbounds.EnumerateArray().ToArray();
+        var outboundTags = CollectTags(outboundItems);
+        var allTags = new HashSet<string>(outboundTags, StringComparer.Ordinal);
+        JsonElement[] endpointItems = profile.TryGetProperty("endpoints", out var endpoints) &&
+                                      endpoints.ValueKind == JsonValueKind.Array
+            ? endpoints.EnumerateArray().ToArray()
+            : Array.Empty<JsonElement>();
+        AddTags(endpointItems, allTags);
 
-        var autoTag = tags.FirstOrDefault(tag => tag.Contains("автоподбор", StringComparison.OrdinalIgnoreCase));
+        if (allTags.Count == 0)
+            throw new InvalidDataException("The subscription has an empty outbound list.");
+        var hasNetworkOutbound = outboundItems.Any(HasNetworkTransport);
+        var hasNetworkEndpoint = endpointItems.Any(HasNetworkTransport);
+        if (!hasNetworkOutbound && !hasNetworkEndpoint)
+            throw new InvalidDataException("The subscription has no network outbounds or endpoints.");
+
+        var autoTag = outboundItems.Select(item => ReadString(item, "tag"))
+            .FirstOrDefault(tag => tag?.Contains("автоподбор", StringComparison.OrdinalIgnoreCase) == true);
         var chainTag = "route:RU-DE:CHAIN";
-        if (autoTag is null || !tags.Contains(chainTag))
-            throw new InvalidDataException("The subscription is missing the automatic or RU-DE route.");
+        if (autoTag is null)
+            throw new InvalidDataException("The subscription is missing the automatic route.");
 
         var routes = new List<WindowsRoute>
         {
             new("auto", autoTag, "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
-            new("ru-de", chainTag, "RU-DE", "LTE + белые списки", "🇷🇺→🇩🇪", "CHAIN", "RU → DE"),
         };
+        if (outboundTags.Contains(chainTag))
+            routes.Add(new WindowsRoute("ru-de", chainTag, "RU-DE", "LTE + белые списки", "🇷🇺→🇩🇪", "CHAIN", "RU → DE"));
 
         foreach (var country in Countries)
         foreach (var protocol in Protocols)
         {
             var tag = $"route:{country.Code}:{protocol.Code}";
-            if (country.Code != "IT" && !tags.Contains(tag))
-                throw new InvalidDataException("The subscription is missing a required route.");
-            if (tags.Contains(tag))
+            if (outboundTags.Contains(tag))
                 routes.Add(new WindowsRoute(tag, tag, country.Code, country.Name, country.Flag,
                     protocol.Code, protocol.Name));
         }
@@ -112,7 +132,7 @@ public static class WindowsRouteCatalog
         }
 
         if (!profile.TryGetProperty("route", out var route) ||
-            ReadString(route, "final") is not { Length: > 0 } finalTag || !tags.Contains(finalTag) ||
+            ReadString(route, "final") is not { Length: > 0 } finalTag || !allTags.Contains(finalTag) ||
             !route.TryGetProperty("rules", out var rules) || rules.ValueKind != JsonValueKind.Array ||
             !rules.EnumerateArray().Any(rule =>
                 rule.ValueKind == JsonValueKind.Object &&
@@ -129,4 +149,30 @@ public static class WindowsRouteCatalog
         value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+
+    private static HashSet<string> CollectTags(IEnumerable<JsonElement> items)
+    {
+        var tags = new HashSet<string>(StringComparer.Ordinal);
+        AddTags(items, tags);
+        return tags;
+    }
+
+    private static void AddTags(IEnumerable<JsonElement> items, HashSet<string> tags)
+    {
+        foreach (var item in items)
+        {
+            if (item.ValueKind != JsonValueKind.Object ||
+                ReadString(item, "tag") is not { Length: > 0 } tag || !tags.Add(tag))
+                throw new InvalidDataException("The subscription has invalid or duplicate profile tags.");
+        }
+    }
+
+    private static bool HasNetworkTransport(JsonElement item)
+    {
+        var type = ReadString(item, "type");
+        if (string.IsNullOrWhiteSpace(type))
+            return false;
+
+        return type.ToLowerInvariant() is not ("urltest" or "selector" or "direct" or "block" or "dns");
+    }
 }

@@ -19,10 +19,10 @@ namespace DeyttConnect.Windows.HeadlessTests;
 public sealed class HomeWindowTests
 {
     [AvaloniaTheory]
-    [InlineData("disconnected", "Не подключено", "Не подключено", "Подключиться")]
-    [InlineData("connecting", "Подключаемся…", "Подключаем VPN…", "Отменить подключение")]
-    [InlineData("error", "Ошибка VPN", "Ошибка VPN", "Подключиться")]
-    [InlineData("connected", "VPN подключён", "Подключено", "Отключить")]
+    [InlineData("disconnected", "не подключено", "не подключено", "подключиться")]
+    [InlineData("connecting", "подключаемся…", "подключаем vpn…", "отменить подключение")]
+    [InlineData("error", "ошибка vpn", "ошибка vpn", "подключиться")]
+    [InlineData("connected", "vpn подключён", "подключено", "отключить")]
     public void Vpn_fixture_renders_truthful_state_across_header_home_and_action(
         string state, string expectedHeader, string expectedHome, string expectedAction)
     {
@@ -72,7 +72,7 @@ public sealed class HomeWindowTests
             window.KeyReleaseQwerty(PhysicalKey.Space, RawInputModifiers.None);
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Equal("Ваше подключение", Required<TextBlock>(window, "WorkspaceTitle").Text);
+            Assert.Equal("ваше подключение", Required<TextBlock>(window, "WorkspaceTitle").Text);
             var pageHost = Required<Grid>(window, "PageHost");
             Assert.Single(pageHost.Children);
             Assert.Contains(Descendants(pageHost).OfType<Button>(), button => button.IsEffectivelyVisible && button.IsEnabled);
@@ -112,15 +112,15 @@ public sealed class HomeWindowTests
             Assert.True(action.IsEnabled);
             Assert.True(hitTarget.Bounds.Width >= 320);
             Assert.InRange(hitTarget.Height, 72, 90);
-            Assert.Equal("Подключиться", actionLabel.Text);
+            Assert.Equal("подключиться", actionLabel.Text);
             Assert.InRange(Math.Abs(labelCenter.X - action.Bounds.Width / 2), 0, 1.5);
             Assert.InRange(Math.Abs(labelCenter.Y - action.Bounds.Height / 2), 0, 1.5);
             Assert.Single(tileText);
-            Assert.Equal("Подключиться", tileText[0]!);
-            Assert.Contains("Не подключено", statusText);
-            Assert.Contains("Подписка готова · выберите маршрут и подключитесь", statusText);
+            Assert.Equal("подключиться", tileText[0]!);
+            Assert.Contains("не подключено", statusText);
+            Assert.Contains("подписка готова · выберите маршрут и подключитесь", statusText);
             Assert.DoesNotContain(status, Descendants(hitTarget));
-            Assert.DoesNotContain("Не подключено", actionLabels.Select(text => text.Text));
+            Assert.DoesNotContain("не подключено", actionLabels.Select(text => text.Text));
             Assert.True(action.Focus());
             Assert.True(action.IsFocused);
         }
@@ -152,18 +152,15 @@ public sealed class HomeWindowTests
             var tile = Assert.Single(Descendants(page).OfType<Border>(), border =>
                 AutomationProperties.GetAutomationId(border) == "HomeConnectionActionTile");
             var pathText = Descendants(path).OfType<TextBlock>().Select(text => text.Text).ToArray();
-            Assert.Contains("Регион скрыт", pathText);
-            Assert.Contains("Амстердам", pathText);
+            Assert.Contains("регион скрыт", pathText);
+            Assert.Contains("амстердам", pathText);
 
             static double Top(Control control, Control relativeTo) =>
                 control.TranslatePoint(new Point(0, 0), relativeTo)?.Y ?? double.NaN;
             Assert.True(Top(protocol, page) < Top(path, page));
             Assert.True(Top(path, page) < Top(measurements, page));
-            Assert.True(Top(measurements, page) < Top(status, page));
-            Assert.True(Top(status, page) < Top(tile, page));
-
-            var measurementsBottom = Top(measurements, page) + measurements.Bounds.Height;
-            Assert.InRange(Top(status, page) - measurementsBottom, 0, 40);
+            Assert.False(status.IsVisible);
+            Assert.True(Top(measurements, page) < Top(tile, page));
         }
         finally
         {
@@ -189,10 +186,10 @@ public sealed class HomeWindowTests
                 AutomationProperties.GetAutomationId(border) == "HomeTrafficPath");
             var pathText = Descendants(path).OfType<TextBlock>().Select(text => text.Text).ToArray();
             Assert.Contains("./lte ru+de", Descendants(page).OfType<TextBlock>().Select(text => text.Text));
-            Assert.Contains("Регион скрыт", pathText);
-            Assert.Contains("Россия", pathText);
-            Assert.Contains("Франкфурт", pathText);
-            Assert.DoesNotContain("Санкт-Петербург", pathText);
+            Assert.Contains("регион скрыт", pathText);
+            Assert.Contains("россия", pathText);
+            Assert.Contains("франкфурт", pathText);
+            Assert.DoesNotContain("санкт-петербург", pathText);
         }
         finally
         {
@@ -334,9 +331,9 @@ public sealed class HomeWindowTests
             var mapPanel = Assert.IsType<Border>(map.Parent?.Parent);
             Assert.Empty(Descendants(mapPanel).OfType<Button>());
             Assert.DoesNotContain(Descendants(page).OfType<TextBlock>(), text =>
-                text.Text is "КАРТА СЕТИ" or "NETWORK MAP" or "1:1");
-            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "ПИНГ");
-            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "СКОРОСТЬ");
+                text.Text is "карта сети" or "NETWORK MAP" or "1:1");
+            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "пинг");
+            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "скорость");
         }
         finally
         {
@@ -365,11 +362,11 @@ public sealed class HomeWindowTests
 
             var expanded = Required<Grid>(window, "PageHost");
             Assert.Contains(Descendants(expanded).OfType<Border>(), flag =>
-                AutomationProperties.GetName(flag) == "Флаг Нидерландов");
-            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "ПИНГ");
-            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "СКОРОСТЬ");
+                AutomationProperties.GetName(flag) == "флаг нидерландов");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "пинг");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "скорость");
             Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— ms");
-            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— Mbps");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— mbps");
 
             var routeOptions = Descendants(expanded).OfType<Button>()
                 .Where(button => AutomationProperties.GetAutomationId(button)?.StartsWith(
@@ -379,9 +376,32 @@ public sealed class HomeWindowTests
             Assert.All(routeOptions, option =>
             {
                 Assert.True(option.Bounds.Width > 300);
-                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "ПИНГ");
-                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "СКОРОСТЬ");
+                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "пинг");
+                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "скорость");
             });
+
+            Assert.True(window.ApplyProbeProgress(
+                [new WindowsRouteProbeResult("qa:nl-vless", null, null, null, "latency", 1)],
+                ["qa:nl-vless"]));
+            Dispatcher.UIThread.RunJobs();
+            var pendingOption = Descendants(Required<Grid>(window, "PageHost")).OfType<Button>()
+                .Single(button => AutomationProperties.GetAutomationId(button) == "RouteOption-nl-vless");
+            var pendingTexts = Descendants(pendingOption).OfType<TextBlock>().ToArray();
+            var pingLabel = Assert.Single(pendingTexts, text => text.Text == "пинг");
+            var labelLeft = pingLabel.TranslatePoint(new Point(0, 0), pendingOption)?.X;
+            var pendingDots = pendingTexts
+                .Where(text => text.Text is "·" or "··" or "···")
+                .Select(text => (Text: text, Point: text.TranslatePoint(new Point(0, 0), pendingOption)))
+                .Where(item => item.Point is not null)
+                .ToArray();
+            Assert.NotEmpty(pendingDots);
+            var pendingDot = pendingDots.OrderBy(item => Math.Abs(
+                labelLeft!.Value - item.Point!.Value.X)).First();
+            var dotsLeft = pendingDot.Point?.X;
+            Assert.NotNull(labelLeft);
+            Assert.NotNull(dotsLeft);
+            Assert.InRange(Math.Abs(labelLeft.Value - dotsLeft.Value), 0, 0.5);
+
         }
         finally
         {
@@ -401,7 +421,7 @@ public sealed class HomeWindowTests
 
             var page = Required<Grid>(window, "PageHost");
             var toggle = Assert.Single(Descendants(page).OfType<Button>(), button =>
-                Descendants(button).OfType<TextBlock>().Any(text => text.Text == "Показывать мой регион"));
+                Descendants(button).OfType<TextBlock>().Any(text => text.Text == "показывать мой регион"));
             var content = Assert.IsType<Grid>(toggle.Content);
             var track = Assert.Single(content.Children.OfType<Border>());
             Assert.Equal(27, track.Height);
@@ -456,7 +476,8 @@ public sealed class HomeWindowTests
     [InlineData(1360d)]
     public void Route_probe_stop_cancel_transition_moves_focus_to_nearest_enabled_control(double width)
     {
-        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, routeProbeInProgress: true))
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true,
+            routeProbeInProgress: true, expandedRouteCountry: "NL"))
         {
             Width = width,
             Height = 820,
@@ -466,8 +487,8 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
             var stopButton = Descendants(Required<Grid>(window, "PageHost")).OfType<Button>()
-                .Single(button => AutomationProperties.GetAutomationId(button) == "RouteDiagnosticsAction");
-            Assert.Equal("Остановить замеры", Assert.IsType<TextBlock>(stopButton.Content).Text);
+                .Single(button => AutomationProperties.GetAutomationId(button) == "RouteCountryRefresh-NL");
+            Assert.Equal("остановить замеры", Assert.IsType<TextBlock>(stopButton.Content).Text);
             Assert.True(stopButton.IsEnabled);
             Assert.True(stopButton.Focus());
             Dispatcher.UIThread.RunJobs();
@@ -476,8 +497,8 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var stoppingButton = Descendants(Required<Grid>(window, "PageHost")).OfType<Button>()
-                .Single(button => AutomationProperties.GetAutomationId(button) == "RouteDiagnosticsAction");
-            Assert.Equal("Останавливаем…", Assert.IsType<TextBlock>(stoppingButton.Content).Text);
+                .Single(button => AutomationProperties.GetAutomationId(button) == "RouteCountryRefresh-NL");
+            Assert.Equal("останавливаем…", Assert.IsType<TextBlock>(stoppingButton.Content).Text);
             Assert.False(stoppingButton.IsEffectivelyEnabled);
             var focused = Assert.IsType<Button>(window.FocusManager?.GetFocusedElement());
             Assert.NotSame(stoppingButton, focused);
@@ -505,7 +526,7 @@ public sealed class HomeWindowTests
             Assert.DoesNotContain(Descendants(page).OfType<Button>(), button =>
                 AutomationProperties.GetAutomationId(button) == "RouteDiagnosticsAction");
             Assert.DoesNotContain(Descendants(page).OfType<TextBlock>(), text =>
-                text.Text == "Проверить все маршруты");
+                text.Text == "проверить все маршруты");
 
             var country = Assert.Single(Descendants(page).OfType<Button>(), button =>
                 AutomationProperties.GetAutomationId(button) == "RouteCountry-NL");
@@ -515,7 +536,7 @@ public sealed class HomeWindowTests
             var refresh = Assert.Single(Descendants(Required<Grid>(window, "PageHost")).OfType<Button>(), button =>
                 AutomationProperties.GetAutomationId(button) == "RouteCountryRefresh-NL");
             Assert.True(refresh.IsEnabled);
-            Assert.Contains("Обновить замеры", Descendants(refresh).OfType<TextBlock>()
+            Assert.Contains("обновить замеры", Descendants(refresh).OfType<TextBlock>()
                 .Select(text => text.Text));
         }
         finally
@@ -542,7 +563,7 @@ public sealed class HomeWindowTests
             window.KeyReleaseQwerty(PhysicalKey.Space, RawInputModifiers.None);
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Equal("Ваше подключение", Required<TextBlock>(window, "WorkspaceTitle").Text);
+            Assert.Equal("ваше подключение", Required<TextBlock>(window, "WorkspaceTitle").Text);
             Assert.Same(homeNavigation, window.FocusManager?.GetFocusedElement());
         }
         finally
@@ -570,12 +591,12 @@ public sealed class HomeWindowTests
             var pageHost = Required<Grid>(window, "PageHost");
             var tariffActions = Descendants(pageHost).OfType<Button>()
                 .Where(button => Descendants(button).OfType<TextBlock>()
-                    .Any(text => text.Text == "Тарифы и оплата"))
+                    .Any(text => text.Text == "тарифы и оплата"))
                 .ToArray();
             var tariffAction = Assert.Single(tariffActions);
             var tariffRow = Assert.IsType<Border>(tariffAction.GetVisualParent());
             var subscriptionHeading = Descendants(pageHost).OfType<TextBlock>()
-                .Single(text => text.Text == "ПОДПИСКА");
+                .Single(text => text.Text == "подписка");
             var pageScroll = Required<ScrollViewer>(window, "PageScroll");
             var tariffTop = tariffRow.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
             var subscriptionTop = subscriptionHeading.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
@@ -604,7 +625,7 @@ public sealed class HomeWindowTests
             var pageHost = Required<Grid>(window, "PageHost");
             var loginAction = Descendants(pageHost).OfType<Button>()
                 .Single(button => Descendants(button).OfType<TextBlock>()
-                    .Any(text => text.Text == "Войти через Telegram"));
+                    .Any(text => text.Text == "войти через telegram"));
             var loginRow = Assert.IsType<Border>(loginAction.GetVisualParent());
             Assert.True(IsFullyWithinViewport(loginRow, pageScroll), "Login action should start fully visible at 720x520.");
             pageScroll.ScrollToEnd();
@@ -644,9 +665,9 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var summary = ProfileSummary(window);
-            Assert.Contains("передано: 128 MB", summary);
+            Assert.Contains("передано: 128 mb", summary);
             Assert.Contains("без установленного лимита", summary);
-            Assert.DoesNotContain("64 MB /", summary);
+            Assert.DoesNotContain("64 mb /", summary);
             Assert.DoesNotContain('%', summary);
         }
         finally
@@ -699,7 +720,7 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var summary = ProfileSummary(window);
-            Assert.Contains("512 MB / 1 GB", summary);
+            Assert.Contains("512 mb / 1 gb", summary);
             Assert.DoesNotContain("без установленного лимита", summary);
             Assert.DoesNotContain('%', summary);
         }
@@ -712,7 +733,7 @@ public sealed class HomeWindowTests
     private static QaHomeFixture Fixture(string tab = "home", bool signedIn = false,
         bool routeProbeInProgress = false, TelegramSubscription? profileSubscription = null,
         string selectedRoute = "nl-hysteria2",
-        string state = "disconnected")
+        string state = "disconnected", string? expandedRouteCountry = null)
     {
         var routes = new[]
         {
@@ -750,7 +771,9 @@ public sealed class HomeWindowTests
         };
         return new QaHomeFixture(signedIn, "ru", selectedRoute, tab, account, subscription, routes,
             tunnel,
-            RouteProbeInProgress: routeProbeInProgress);
+            RouteProbeInProgress: routeProbeInProgress,
+            DisableNativeMapInitialization: true,
+            ExpandedRouteCountry: expandedRouteCountry);
     }
 
     private static TelegramSubscription ProfileSubscription(long? trafficLimit, long? trafficUsed, long? trafficTotal) =>

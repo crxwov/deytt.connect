@@ -169,6 +169,7 @@ public sealed class TelegramApiClient
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+        WindowsSubscriptionDeviceIdentity.AddProfileHeaders(request, token);
 
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(subscriptionToken);
         requestTimeout.CancelAfter(EssentialRequestTimeout);
@@ -179,29 +180,70 @@ public sealed class TelegramApiClient
             using var response = await Http.SendAsync(
                 request, HttpCompletionOption.ResponseHeadersRead, requestTimeout.Token);
             payload = await ReadBoundedAsync(response.Content, requestTimeout.Token, MaxProfileBytes);
+            if (response.Headers.TryGetValues("X-Deytt-Device-Blocked", out var blockedValues) &&
+                blockedValues.Any(value => string.Equals(value.Trim(), "1", StringComparison.Ordinal)))
+                throw new TelegramApiException("device_blocked", HttpStatusCode.Forbidden);
             if (!response.IsSuccessStatusCode)
-                throw new TelegramApiException("subscription_unavailable", response.StatusCode);
+                throw new TelegramApiException(ReadErrorCode(payload), response.StatusCode);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw new OperationCanceledException(cancellationToken);
         }
 
+        var profileStage = "json";
         try
         {
             using var profile = JsonDocument.Parse(payload.AsMemory());
+            profileStage = "utf8";
             var profileJson = new UTF8Encoding(false, true).GetString(payload);
+            profileStage = "normalize";
+            profileJson = WindowsSubscriptionProfileNormalizer.AddTunForEmptyInbounds(profileJson);
+            using var normalizedProfile = JsonDocument.Parse(profileJson);
             progress?.Report("optional");
-            var awgProfiles = await FetchAwgProfilesAsync(subscriptionUri!, subscriptionToken);
-            var routes = WindowsRouteCatalog.Parse(profile.RootElement, awgProfiles);
+            profileStage = "awg";
+            var awgProfiles = await FetchAwgProfilesAsync(subscriptionUri!, token, subscriptionToken);
+            profileStage = "routes";
+            var routes = WindowsRouteCatalog.Parse(normalizedProfile.RootElement, awgProfiles);
             progress?.Report("ready");
             return new TelegramKeysSnapshot(true, awgActive, awgClients, devices, profileJson, routes, awgProfiles);
         }
         catch (Exception error) when (error is JsonException or DecoderFallbackException or InvalidDataException or
                                       InvalidOperationException or KeyNotFoundException or FormatException or ArgumentException)
         {
-            throw new TelegramApiException("subscription_invalid", HttpStatusCode.BadGateway);
+            var diagnosticCode = SubscriptionProfileErrorCode(profileStage, error);
+            System.Diagnostics.Trace.TraceError("Telegram subscription profile rejected at {0} ({1}).",
+                profileStage, error.GetType().Name);
+            throw new TelegramApiException(diagnosticCode, HttpStatusCode.BadGateway);
         }
+    }
+
+    private static string SubscriptionProfileErrorCode(string stage, Exception error)
+    {
+        if (stage != "routes" || error is not InvalidDataException invalid)
+            return $"subscription_invalid_{stage}";
+
+        return invalid.Message switch
+        {
+            "The subscription root is not an object." => "subscription_invalid_routes_root",
+            "The subscription has no inbound list." => "subscription_invalid_routes_inbounds",
+            "The subscription has no TUN inbound." => "subscription_invalid_routes_tun",
+            "The subscription has an empty inbound list." => "subscription_invalid_routes_inbounds_empty",
+            "The subscription has only proxy inbounds." => "subscription_invalid_routes_inbounds_proxy",
+            "The subscription TUN inbound has no address." => "subscription_invalid_routes_tun_address_missing",
+            "The subscription TUN address is not an array." => "subscription_invalid_routes_tun_address_shape",
+            "The subscription has no outbounds." => "subscription_invalid_routes_outbounds",
+            "The subscription has an empty outbound list." => "subscription_invalid_routes_outbounds_empty",
+            "The subscription has no network outbounds or endpoints." => "subscription_invalid_routes_outbounds_no_network",
+            "The subscription has invalid or duplicate profile tags." => "subscription_invalid_routes_tags",
+            "The subscription is missing the automatic or RU-DE route." => "subscription_invalid_routes_automatic",
+            "The subscription is missing both automatic and RU-DE routes." => "subscription_invalid_routes_auto_chain",
+            "The subscription is missing the automatic route." => "subscription_invalid_routes_auto",
+            "The subscription is missing the RU-DE route." => "subscription_invalid_routes_chain",
+            "The subscription is missing a required route." => "subscription_invalid_routes_required",
+            "The subscription has an unsupported route or DNS policy." => "subscription_invalid_routes_policy",
+            _ => "subscription_invalid_routes",
+        };
     }
 
     public async Task<IReadOnlyList<TelegramTariff>> GetTariffsAsync(
@@ -487,6 +529,7 @@ public sealed class TelegramApiClient
 
     private static async Task<IReadOnlyList<WindowsAwgProfile>> FetchAwgProfilesAsync(
         Uri subscriptionUri,
+        string sessionToken,
         CancellationToken cancellationToken)
     {
         using var fetchBudget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -496,7 +539,7 @@ public sealed class TelegramApiClient
         AwgDownload? first;
         try
         {
-            first = await DownloadAwgProfileAsync(subscriptionUri, null, fetchToken);
+            first = await DownloadAwgProfileAsync(subscriptionUri, null, sessionToken, fetchToken);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -578,7 +621,8 @@ public sealed class TelegramApiClient
 
                     try
                     {
-                        var response = await DownloadAwgProfileAsync(subscriptionUri, servers[index].Id, token);
+                        var response = await DownloadAwgProfileAsync(
+                            subscriptionUri, servers[index].Id, sessionToken, token);
                         if (TryValidateAwg(response?.Config))
                             configs[index] = response!.Config;
                     }
@@ -632,13 +676,14 @@ public sealed class TelegramApiClient
     private static async Task<AwgDownload?> DownloadAwgProfileAsync(
         Uri subscriptionUri,
         string? serverId,
+        string sessionToken,
         CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildAwgUri(subscriptionUri, serverId));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
         request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
-        request.Headers.TryAddWithoutValidation("X-Deytt-Client", "deytt-connect");
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+        WindowsSubscriptionDeviceIdentity.AddProfileHeaders(request, sessionToken);
 
         using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         var manifest = response.Headers.TryGetValues(AwgServersHeader, out var values)
@@ -663,7 +708,7 @@ public sealed class TelegramApiClient
         }
     }
 
-    private static Uri BuildAwgUri(Uri subscriptionUri, string? serverId)
+    internal static Uri BuildAwgUri(Uri subscriptionUri, string? serverId)
     {
         var builder = new UriBuilder(subscriptionUri);
         var parts = builder.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
@@ -676,6 +721,9 @@ public sealed class TelegramApiClient
                        !Uri.UnescapeDataString(key).Equals("server_id", StringComparison.OrdinalIgnoreCase);
             })
             .ToList();
+        // Keep the Windows request identical to Android and the server contract.
+        // `format=awg` is not a supported subscription format and silently yields
+        // an empty AWG list on servers that only expose `amneziawg31`.
         parts.Add("format=amneziawg31");
         if (serverId is not null)
             parts.Add("server_id=" + Uri.EscapeDataString(serverId));

@@ -57,14 +57,17 @@ internal sealed class EngineController
 
             SetSnapshot(new ServiceSnapshot("starting", "Подготовка VPN…", routeTag));
 
-            var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig);
+            var upstreamInterface = FindActiveHappTunnel();
+            var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
+                upstreamInterface);
             var tunAddresses = TunnelProfileBuilder.GetTunAddresses(runtimeProfile);
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return SetError("Не найдено ядро VPN. Переустановите приложение.");
             _profilePath = WritePrivateProfile(runtimeProfile);
 
-            using (var check = StartEngine(enginePath, "check", _profilePath))
+            using (var check = StartEngine(enginePath, "check", _profilePath, out var checkError,
+                       captureStandardError: true))
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(30));
@@ -80,28 +83,32 @@ internal sealed class EngineController
                 }
                 if (check.ExitCode != 0)
                 {
+                    var diagnostic = await checkError.ConfigureAwait(false);
                     StopCore();
-                    return SetError("Ядро VPN не приняло профиль подписки.");
+                    return SetError($"Ядро: {SummarizeEngineDiagnostic(diagnostic)}");
                 }
             }
 
-            _engine = StartEngine(enginePath, "run", _profilePath);
+            var runtimeDiagnostic = new EngineRuntimeDiagnostic();
+            _engine = StartEngine(enginePath, "run", _profilePath, out _,
+                runtimeDiagnostic: runtimeDiagnostic);
             _routeTag = routeTag;
             var process = _engine;
-            _ = MonitorEngineAsync(process);
+            _ = MonitorEngineAsync(process, runtimeDiagnostic);
 
             _verification?.Cancel();
             _verification?.Dispose();
             _verification = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var verification = _verification;
             SetSnapshot(new ServiceSnapshot("checking", "Проверяем VPN-трафик…", routeTag));
-            _ = VerifyTunnelAsync(process, routeTag, tunAddresses, verification.Token);
+            _ = VerifyTunnelAsync(process, routeTag, tunAddresses, runtimeDiagnostic,
+                verification.Token);
             return Snapshot;
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException error)
         {
             StopCore();
-            return SetError("Профиль подписки не подходит для Windows.");
+            return SetError($"Профиль подписки не подходит для Windows: {error.Message}");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -149,13 +156,15 @@ internal sealed class EngineController
                     _probeProgress[endpoint.RouteTag] = new ServiceProbeResult(endpoint.RouteTag, null, null, null,
                         "latency", 1);
             }
-            var probeProfile = TunnelProfileBuilder.BuildProbeProfile(profile, endpoints);
+            var probeProfile = TunnelProfileBuilder.BuildProbeProfile(profile, endpoints,
+                FindActiveHappTunnel());
             _profilePath = WritePrivateProfile(probeProfile);
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return ProbeError("Не найдено ядро VPN. Переустановите приложение.");
 
-            using (var check = StartEngine(enginePath, "check", _profilePath))
+            using (var check = StartEngine(enginePath, "check", _profilePath, out var checkError,
+                       captureStandardError: true))
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(probeToken);
                 timeout.CancelAfter(TimeSpan.FromSeconds(30));
@@ -169,10 +178,13 @@ internal sealed class EngineController
                     return ProbeError("Проверка профиля диагностики не завершилась вовремя.");
                 }
                 if (check.ExitCode != 0)
-                    return ProbeError("Ядро VPN не приняло профиль диагностики.");
+                {
+                    var diagnostic = await checkError.ConfigureAwait(false);
+                    return ProbeError($"Ядро: {SummarizeEngineDiagnostic(diagnostic)}");
+                }
             }
 
-            _engine = StartEngine(enginePath, "run", _profilePath);
+            _engine = StartEngine(enginePath, "run", _profilePath, out _);
             var process = _engine;
             await Task.Delay(TimeSpan.FromMilliseconds(350), probeToken).ConfigureAwait(false);
             if (process.HasExited)
@@ -185,9 +197,9 @@ internal sealed class EngineController
             return new ServiceSnapshot("probe_complete", "Проверка маршрутов завершена.",
                 ProbeResults: results);
         }
-        catch (InvalidDataException)
+        catch (InvalidDataException error)
         {
-            return ProbeError("Профиль подписки не подходит для проверки маршрутов.");
+            return ProbeError($"Профиль подписки не подходит для проверки маршрутов: {error.Message}");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -241,10 +253,14 @@ internal sealed class EngineController
     }
 
     private async Task VerifyTunnelAsync(Process process, string routeTag,
-        IReadOnlyList<string> tunAddresses, CancellationToken cancellationToken)
+        IReadOnlyList<string> tunAddresses, EngineRuntimeDiagnostic runtimeDiagnostic,
+        CancellationToken cancellationToken)
     {
+        var failureStage = "TUN";
         try
         {
+            var tunnelInterface = await WaitForTunInterfaceAsync(process, tunAddresses,
+                cancellationToken).ConfigureAwait(false);
             var passed = false;
             Exception? lastError = null;
             for (var attempt = 0; attempt < 3; attempt++)
@@ -255,20 +271,9 @@ internal sealed class EngineController
                     if (process.HasExited)
                         throw new InvalidOperationException("VPN engine exited before traffic verification.");
 
-                    var tunnelInterface = FindTunInterface(tunAddresses)
-                        ?? throw new InvalidOperationException("The configured TUN address is not assigned to an active interface.");
-                    using var http = CreateTunnelHttpClient(tunnelInterface, TimeSpan.FromSeconds(5));
-
-                    using var transport = await http.GetAsync(
-                        "https://www.cloudflare.com/cdn-cgi/trace", cancellationToken).ConfigureAwait(false);
-                    if (!transport.IsSuccessStatusCode)
-                        throw new HttpRequestException("Transport canary did not pass.");
-
-                    using var dns = await http.GetAsync(
-                        "https://www.gstatic.com/generate_204", cancellationToken).ConfigureAwait(false);
-                    if (dns.StatusCode != HttpStatusCode.NoContent)
-                        throw new HttpRequestException("DNS canary did not pass.");
-
+                    failureStage = "HTTPS";
+                    await VerifyHttpsThroughTunAsync(tunnelInterface, TimeSpan.FromSeconds(5),
+                        cancellationToken).ConfigureAwait(false);
                     passed = true;
                     break;
                 }
@@ -310,7 +315,7 @@ internal sealed class EngineController
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
-        catch
+          catch (Exception error)
         {
             await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
@@ -318,7 +323,10 @@ internal sealed class EngineController
                 if (ReferenceEquals(_engine, process))
                 {
                     StopCore();
-                    SetError("VPN запустился, но трафик через него не прошёл.");
+                      var coreReason = runtimeDiagnostic.LatestError;
+                      SetError(coreReason is null
+                          ? SummarizeTunnelFailure(failureStage, error)
+                          : $"Ядро: {coreReason}");
                 }
             }
             finally
@@ -369,11 +377,9 @@ internal sealed class EngineController
                 {
                     var tunnelInterface = FindTunInterface(tunAddresses)
                         ?? throw new InvalidOperationException("The configured TUN address is unavailable.");
-                    using var http = CreateTunnelHttpClient(tunnelInterface,
-                        TimeSpan.FromSeconds(canaryTimeoutSeconds));
-                    using var response = await http.GetAsync("https://www.gstatic.com/generate_204",
-                        cancellationToken).ConfigureAwait(false);
-                    passed = response.StatusCode == HttpStatusCode.NoContent && !process.HasExited;
+                    await VerifyHttpsThroughTunAsync(tunnelInterface,
+                        TimeSpan.FromSeconds(canaryTimeoutSeconds), cancellationToken).ConfigureAwait(false);
+                    passed = !process.HasExited;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
                 catch { }
@@ -404,6 +410,78 @@ internal sealed class EngineController
         finally { NetworkChange.NetworkAddressChanged -= OnNetworkChanged; }
     }
 
+    private static async Task<WindowsTunnelCanaryInterface> WaitForTunInterfaceAsync(Process process,
+        IReadOnlyList<string> tunAddresses, CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; attempt < 30; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (process.HasExited)
+                throw new InvalidOperationException("VPN engine exited before the TUN address appeared.");
+            var tunnelInterface = FindTunInterface(tunAddresses);
+            if (tunnelInterface is not null)
+                return tunnelInterface;
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+        }
+        throw new InvalidOperationException("The configured TUN address is not assigned to an active interface.");
+    }
+
+    private static async Task VerifyHttpsThroughTunAsync(WindowsTunnelCanaryInterface tunnelInterface,
+        TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        // A single successful HTTPS response through a socket pinned to TUN proves
+        // traffic reached the tunnel. Public canaries can fail independently.
+        (string Url, HttpStatusCode? ExpectedStatus)[] canaries =
+        [
+            ("https://www.cloudflare.com/cdn-cgi/trace", null),
+            ("https://www.gstatic.com/generate_204", HttpStatusCode.NoContent),
+        ];
+        Exception? lastError = null;
+        foreach (var canary in canaries)
+        {
+            try
+            {
+                using var http = CreateTunnelHttpClient(tunnelInterface, timeout);
+                using var response = await http.GetAsync(canary.Url, cancellationToken).ConfigureAwait(false);
+                if (canary.ExpectedStatus is { } expected
+                    ? response.StatusCode == expected
+                    : response.IsSuccessStatusCode)
+                    return;
+                lastError = new HttpRequestException("HTTPS canary returned an unexpected status.");
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception error) when (error is HttpRequestException or OperationCanceledException or IOException)
+            {
+                lastError = error;
+            }
+        }
+        throw new HttpRequestException("No HTTPS canary passed through TUN.", lastError);
+    }
+
+    private static string SummarizeTunnelFailure(string stage, Exception error)
+    {
+        if (error is InvalidOperationException && error.Message.Contains("engine exited", StringComparison.Ordinal))
+            return "Ядро VPN остановилось до появления TUN-адреса.";
+        if (stage == "core")
+            return "Ядро VPN остановилось до проверки трафика.";
+        if (stage == "TUN")
+            return "VPN запустился, но TUN-адаптер не получил адрес.";
+
+        for (var current = error; current is not null; current = current.InnerException)
+        {
+            if (current is SocketException socket)
+                return $"HTTPS через TUN: ошибка сокета {socket.SocketErrorCode}.";
+            if (current is OperationCanceledException)
+                return "HTTPS через TUN: время ожидания истекло.";
+            if (current is System.Security.Authentication.AuthenticationException)
+                return "HTTPS через TUN: ошибка TLS.";
+        }
+        return "HTTPS через TUN не прошёл; проверь доступность выбранного маршрута.";
+    }
+
     private static WindowsTunnelCanaryInterface? FindTunInterface(IReadOnlyList<string> configuredAddresses)
     {
         var interfaceAddresses = new List<WindowsTunnelCanaryInterface>();
@@ -432,6 +510,24 @@ internal sealed class EngineController
             }
         }
         return WindowsTunnelCanaryRoute.SelectInterface(configuredAddresses, interfaceAddresses);
+    }
+
+    private static string? FindActiveHappTunnel()
+    {
+        try
+        {
+            return NetworkInterface.GetAllNetworkInterfaces()
+                .FirstOrDefault(networkInterface =>
+                    networkInterface.Name.Equals("happ-tun", StringComparison.OrdinalIgnoreCase) &&
+                    networkInterface.OperationalStatus == OperationalStatus.Up &&
+                    networkInterface.GetIPProperties().UnicastAddresses.Any(unicast =>
+                        unicast.Address.AddressFamily == AddressFamily.InterNetwork &&
+                        !IPAddress.IsLoopback(unicast.Address)))?.Name;
+        }
+        catch (NetworkInformationException)
+        {
+            return null;
+        }
     }
 
     private static HttpClient CreateTunnelHttpClient(WindowsTunnelCanaryInterface tunnelInterface,
@@ -501,7 +597,7 @@ internal sealed class EngineController
     [DllImport("Ws2_32.dll", EntryPoint = "WSAGetLastError")]
     private static extern int GetSocketErrorNative();
 
-    private async Task MonitorEngineAsync(Process process)
+    private async Task MonitorEngineAsync(Process process, EngineRuntimeDiagnostic runtimeDiagnostic)
     {
         try
         {
@@ -518,7 +614,11 @@ internal sealed class EngineController
             if (!ReferenceEquals(_engine, process))
                 return;
             StopCore();
-            SetError("Ядро VPN остановилось.");
+            var exitCode = unchecked((uint)process.ExitCode);
+            var detail = runtimeDiagnostic.LatestError is { } reason
+                ? $"Ядро: {reason}"
+                : "Причина завершения ядра не получена.";
+            SetError($"{detail} Код завершения: 0x{exitCode:X8}.");
         }
         finally
         {
@@ -551,36 +651,46 @@ internal sealed class EngineController
         IReadOnlyList<ProbeRouteEndpoint> endpoints, string method, string token,
         CancellationToken cancellationToken, Action<ServiceProbeResult> publish)
     {
-        var latencyTasks = endpoints.Select(endpoint => MeasureLatencyAsync(endpoint, method, cancellationToken,
-            attempt => publish(new ServiceProbeResult(endpoint.RouteTag, null, null, null,
-                attempt == 1 ? "latency" : "retry", attempt))));
-        var latencies = await Task.WhenAll(latencyTasks).ConfigureAwait(false);
-        var results = new List<ServiceProbeResult>(endpoints.Count);
-        for (var index = 0; index < endpoints.Count; index++)
+        async Task<ServiceProbeResult> MeasureEndpointAsync(ProbeRouteEndpoint endpoint)
         {
-            var endpoint = endpoints[index];
-            var latency = latencies[index];
+            var latency = await MeasureLatencyAsync(endpoint, method, cancellationToken,
+                (attempt, value) => publish(new ServiceProbeResult(endpoint.RouteTag, value, null, null,
+                    attempt == 1 ? "latency" : "retry", attempt))).ConfigureAwait(false);
             long? speed = null;
             var error = latency is null ? "Проверочный HTTPS-сервер не ответил." : null;
             if (latency is not null && token.Length is >= 32 and <= 256 &&
                 token.All(character => character is >= '\x21' and <= '\x7e'))
             {
-                publish(new ServiceProbeResult(endpoint.RouteTag, latency, null, null, "waiting_speed", 1));
-                try
+                for (var attempt = 1; attempt <= 2; attempt++)
                 {
-                    speed = await MeasureDownloadAsync(endpoint, token, cancellationToken,
-                        (received, total) => publish(new ServiceProbeResult(endpoint.RouteTag, latency, null, null,
-                            "download", 1, received, total))).ConfigureAwait(false);
-                    if (speed is null)
-                        error = "Сервер скорости не ответил.";
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch
-                {
-                    error = "Не удалось измерить скорость.";
+                    publish(new ServiceProbeResult(endpoint.RouteTag, latency, null, null, "waiting_speed", attempt));
+                    try
+                    {
+                        var download = await MeasureDownloadAsync(endpoint, token, cancellationToken,
+                            (received, total, liveSpeed) => publish(new ServiceProbeResult(endpoint.RouteTag,
+                                latency, liveSpeed, null, "download", attempt, received, total)))
+                            .ConfigureAwait(false);
+                        speed = download.BytesPerSecond;
+                        error = download.Error;
+                        if (speed is not null || !download.Retryable)
+                            break;
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        error = "Сервер скорости не ответил вовремя.";
+                    }
+                    catch (HttpRequestException)
+                    {
+                        error = "HTTPS-запрос скорости не прошёл через маршрут.";
+                    }
+                    catch (IOException)
+                    {
+                        error = "Соединение с сервером скорости прервалось.";
+                    }
                 }
             }
             else if (latency is not null)
@@ -588,59 +698,91 @@ internal sealed class EngineController
                 error = "Скорость недоступна для этой сессии.";
             }
 
-            results.Add(new ServiceProbeResult(endpoint.RouteTag, latency, speed, error));
-            publish(new ServiceProbeResult(endpoint.RouteTag, latency, speed, error,
-                error is null ? "complete" : "error", null));
+            var result = new ServiceProbeResult(endpoint.RouteTag, latency, speed, error,
+                error is null ? "complete" : "error", null);
+            publish(result);
+            return result;
         }
-        return results;
+
+        return await Task.WhenAll(endpoints.Select(MeasureEndpointAsync)).ConfigureAwait(false);
     }
 
     private static async Task<long?> MeasureLatencyAsync(ProbeRouteEndpoint endpoint, string method,
-        CancellationToken cancellationToken, Action<int> reportAttempt)
+        CancellationToken cancellationToken, Action<int, long?> reportAttempt)
     {
         var targets = new[]
         {
             (Method: method, Url: "https://cp.cloudflare.com/generate_204"),
-            (Method: "GET", Url: "https://www.gstatic.com/generate_204"),
+            (Method: "GET", Url: "https://www.cloudflare.com/cdn-cgi/trace"),
         };
-        var samples = new List<long>(3);
-        for (var sample = 0; sample < 3; sample++)
+
+        using var sampleCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        async Task<long?> MeasureTargetAsync((string Method, string Url) target)
         {
-            reportAttempt(sample + 1);
-            foreach (var target in targets)
+            try
             {
-                try
-                {
-                    using var handler = CreateProxyHandler(endpoint);
-                    using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
-                    using var request = new HttpRequestMessage(new HttpMethod(target.Method), target.Url);
-                    request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
-                    request.Headers.ConnectionClose = true;
-                    var started = Stopwatch.GetTimestamp();
-                    using var response = await client.SendAsync(request,
-                        HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                    if (response.IsSuccessStatusCode)
-                    {
-                        samples.Add((long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds));
-                        break;
-                    }
-                }
-                catch (Exception error) when (error is HttpRequestException or TaskCanceledException or IOException)
-                {
-                    if (cancellationToken.IsCancellationRequested)
-                        throw new OperationCanceledException(cancellationToken);
-                }
+                using var handler = CreateProxyHandler(endpoint);
+                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
+                using var request = new HttpRequestMessage(new HttpMethod(target.Method), target.Url);
+                request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+                request.Headers.ConnectionClose = true;
+                var started = Stopwatch.GetTimestamp();
+                using var response = await client.SendAsync(request,
+                    HttpCompletionOption.ResponseHeadersRead, sampleCancellation.Token).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                    return null;
+                return (long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
+            catch (Exception error) when (error is HttpRequestException or IOException)
+            {
+                return null;
             }
         }
 
-        return samples.Count == 0 ? null : samples.Order().ElementAt(samples.Count / 2);
+        var requests = targets.Select(MeasureTargetAsync).ToList();
+
+        long? latency = null;
+        while (requests.Count > 0)
+        {
+            var request = await Task.WhenAny(requests).ConfigureAwait(false);
+            requests.Remove(request);
+            latency = await request.ConfigureAwait(false);
+            if (latency is not null)
+                break;
+        }
+
+        sampleCancellation.Cancel();
+        try
+        {
+            await Task.WhenAll(requests).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The first valid HTTPS response won; cancel and drain the slower fallback.
+        }
+
+        reportAttempt(1, latency);
+        return latency;
     }
 
-    private static async Task<long?> MeasureDownloadAsync(ProbeRouteEndpoint endpoint, string token,
-        CancellationToken cancellationToken, Action<long, long> reportProgress)
+    private readonly record struct DownloadMeasurement(long? BytesPerSecond, string? Error, bool Retryable);
+
+    private static async Task<DownloadMeasurement> MeasureDownloadAsync(ProbeRouteEndpoint endpoint, string token,
+        CancellationToken cancellationToken, Action<long, long, long?> reportProgress)
     {
         using var handler = CreateProxyHandler(endpoint);
-        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+        // Bound the request-header wait separately from the five-second streaming
+        // sample below; an unreachable server must not leave the route row pending
+        // for the old twelve-second default before any live speed can be reported.
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(6) };
         using var request = new HttpRequestMessage(HttpMethod.Get,
             "https://deytt.space/api/tg/mobile/probe/download");
         request.Headers.TryAddWithoutValidation("X-TG-App-Token", token);
@@ -648,15 +790,18 @@ internal sealed class EngineController
         request.Headers.CacheControl = new CacheControlHeaderValue { NoStore = true };
         using var response = await client.SendAsync(request,
             HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            return new DownloadMeasurement(null, "Сессия для замера скорости недействительна. Обновите вход.", false);
         if (response.StatusCode != HttpStatusCode.OK)
-            return null;
+            return new DownloadMeasurement(null, "Сервер скорости временно недоступен.", true);
 
         await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var sampleTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        sampleTimeout.CancelAfter(TimeSpan.FromSeconds(3));
+        sampleTimeout.CancelAfter(TimeSpan.FromSeconds(5));
         var buffer = new byte[32 * 1024];
         long received = 0;
         long firstByte = 0;
+        long lastProgress = 0;
         while (received < 32L * 1024 * 1024)
         {
             int count;
@@ -668,19 +813,28 @@ internal sealed class EngineController
             {
                 break;
             }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                return new DownloadMeasurement(null, "Сервер скорости не передал данные за пять секунд.", true);
+            }
             if (count <= 0)
                 break;
             if (firstByte == 0)
                 firstByte = Stopwatch.GetTimestamp();
             received += count;
-            reportProgress(received, Math.Min(response.Content.Headers.ContentLength ?? 32L * 1024 * 1024,
-                32L * 1024 * 1024));
+            var elapsedMs = Stopwatch.GetElapsedTime(firstByte).TotalMilliseconds;
+            if (lastProgress == 0 || Stopwatch.GetElapsedTime(lastProgress).TotalMilliseconds >= 200)
+            {
+                reportProgress(received, Math.Min(response.Content.Headers.ContentLength ?? 32L * 1024 * 1024,
+                    32L * 1024 * 1024), elapsedMs >= 200 ? (long)(received * 1000d / elapsedMs) : null);
+                lastProgress = Stopwatch.GetTimestamp();
+            }
         }
 
         if (received == 0 || firstByte == 0)
-            return null;
+            return new DownloadMeasurement(null, "Сервер скорости вернул пустой ответ.", true);
         var elapsed = Math.Max(1, Stopwatch.GetElapsedTime(firstByte).TotalMilliseconds);
-        return (long)(received * 1000d / elapsed);
+        return new DownloadMeasurement((long)(received * 1000d / elapsed), null, false);
     }
 
     private void PublishProbeProgress(ServiceProbeResult result)
@@ -715,7 +869,9 @@ internal sealed class EngineController
     private static ServiceSnapshot ProbeError(string detail) =>
         new("probe_error", detail, ProbeResults: []);
 
-    private static Process StartEngine(string enginePath, string command, string profilePath)
+    private static Process StartEngine(string enginePath, string command, string profilePath,
+        out Task<string> standardError, bool captureStandardError = false,
+        EngineRuntimeDiagnostic? runtimeDiagnostic = null)
     {
         var start = new ProcessStartInfo
         {
@@ -732,10 +888,116 @@ internal sealed class EngineController
 
         var process = Process.Start(start) ?? throw new InvalidOperationException("Engine did not start.");
         process.OutputDataReceived += static (_, _) => { };
-        process.ErrorDataReceived += static (_, _) => { };
         process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        if (captureStandardError)
+        {
+            standardError = ReadBoundedStandardErrorAsync(process.StandardError);
+        }
+        else
+        {
+            standardError = Task.FromResult(string.Empty);
+            process.ErrorDataReceived += (_, eventArgs) =>
+            {
+                if (eventArgs.Data is { } line)
+                    runtimeDiagnostic?.Record(line);
+            };
+            process.BeginErrorReadLine();
+        }
         return process;
+    }
+
+    private static async Task<string> ReadBoundedStandardErrorAsync(StreamReader reader)
+    {
+        const int maximumCharacters = 16_384;
+        var output = new System.Text.StringBuilder(maximumCharacters);
+        var buffer = new char[2_048];
+        while (output.Length < maximumCharacters)
+        {
+            var count = await reader.ReadAsync(buffer.AsMemory(0,
+                Math.Min(buffer.Length, maximumCharacters - output.Length))).ConfigureAwait(false);
+            if (count == 0)
+                break;
+            output.Append(buffer, 0, count);
+        }
+
+        if (output.Length == maximumCharacters)
+        {
+            while (await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false) > 0)
+            {
+                // Drain additional output without retaining it or blocking the engine process.
+            }
+        }
+        return output.ToString();
+    }
+
+    private static string SummarizeEngineDiagnostic(string standardError)
+    {
+        var lines = standardError.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0)
+            .ToArray();
+        var diagnostic = lines.LastOrDefault(line =>
+            System.Text.RegularExpressions.Regex.IsMatch(line,
+                @"(?i)\b(fatal|error|failed|invalid|unsupported|unknown|missing|decode|parse)\b"))
+            ?? lines.LastOrDefault();
+        if (string.IsNullOrWhiteSpace(diagnostic))
+            return "Причина ядра не получена.";
+
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"\x1B(?:\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))", string.Empty);
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", string.Empty);
+        var configLocation = System.Text.RegularExpressions.Regex.Match(diagnostic,
+            @"(?i)\bdecode config at .+?\.json:\s*");
+        if (configLocation.Success)
+        {
+            diagnostic = "decode config: " + diagnostic[(configLocation.Index + configLocation.Length)..].Trim();
+        }
+        else
+        {
+            diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+                @"(?i)^\s*(?:FATAL|ERROR)\[\d+\]\s*", string.Empty);
+        }
+
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"(?i)\b(?:https?|socks5?|vless|trojan|hysteria2?)://[^\s<>]+", "[URL скрыт]");
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"(?i)(?<prefix>[""']?(?:password|passwd|username|user|token|secret|private[_-]?key|public[_-]?key|preshared[_-]?key|uuid|short[_-]?id|client[_-]?id|psk|alter[_-]?id|authorization)[""']?\s*[:=]\s*[""']?)[^,""'\s;}]+",
+            "${prefix}[скрыто]");
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"(?i)(?<prefix>[""']?(?:server|host|endpoint|peer|address)[""']?\s*[:=]\s*[""']?)[^,""'\s;}]+",
+            "${prefix}[адрес скрыт]");
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"\b(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?::\d{1,5})?\b",
+            "[IP скрыт]");
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"(?i)(?<![0-9a-f])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[0-9a-z_-]+)?(?![0-9a-f])",
+            "[IPv6 скрыт]");
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"(?i)(?:[a-z]:\\|\\\\)[^\s:]+", "[путь скрыт]");
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"\b[0-9a-f]{32,}\b", "[идентификатор скрыт]");
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic,
+            @"\b[A-Za-z0-9_+/=-]{64,}\b", "[секрет скрыт]");
+        diagnostic = System.Text.RegularExpressions.Regex.Replace(diagnostic, @"\s{2,}", " ").Trim();
+        const int maximumLength = 64;
+        if (diagnostic.Length > maximumLength)
+            diagnostic = diagnostic[..maximumLength] + "…";
+        return diagnostic;
+    }
+
+    private sealed class EngineRuntimeDiagnostic
+    {
+        private string? _latestError;
+
+        public string? LatestError => Volatile.Read(ref _latestError);
+
+        public void Record(string line)
+        {
+            if (System.Text.RegularExpressions.Regex.IsMatch(line,
+                    @"(?i)\b(fatal|error|failed|invalid|unsupported|unknown|missing)\b"))
+                Volatile.Write(ref _latestError, SummarizeEngineDiagnostic(line));
+        }
     }
 
     private static string WritePrivateProfile(string content)

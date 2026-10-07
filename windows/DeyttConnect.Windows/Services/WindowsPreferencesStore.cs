@@ -85,7 +85,7 @@ public static class WindowsPreferencesStore
 
     private static bool IsKnownRoute(string route) => route is "auto" or "ru-de" ||
         System.Text.RegularExpressions.Regex.IsMatch(route,
-            "^route:(NL|RU|DE|FI):(VLESS|TROJAN|HYSTERIA2)$",
+            "^route:(NL|RU|DE|FI|IT):(VLESS|TROJAN|HYSTERIA2)$",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant) ||
         route == "awg31" ||
         System.Text.RegularExpressions.Regex.IsMatch(route,

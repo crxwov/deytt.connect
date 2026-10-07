@@ -67,6 +67,7 @@ object RouteCatalog {
         "DE" to ("🇩🇪" to "Германия"),
         "RU" to ("🇷🇺" to "Россия"),
         "FI" to ("🇫🇮" to "Финляндия"),
+        "IT" to ("🇮🇹" to "Италия"),
         "RU-DE" to ("🇷🇺→🇩🇪" to "RU → DE"),
     )
 
@@ -75,10 +76,11 @@ object RouteCatalog {
         "DE" to ("🇩🇪" to "Германия"),
         "RU" to ("🇷🇺" to "Россия"),
         "FI" to ("🇫🇮" to "Финляндия"),
+        "IT" to ("🇮🇹" to "Италия"),
     )
 
     private fun awgCountry(profile: AwgProfile): Pair<String, Pair<String, String>>? {
-        val mark = Regex("^(NL|DE|RU|FI)(?:$|[-_\\s])", RegexOption.IGNORE_CASE)
+        val mark = Regex("^(NL|DE|RU|FI|IT)(?:$|[-_\\s])", RegexOption.IGNORE_CASE)
             .find(profile.shortLabel.trim())?.groupValues?.get(1)?.uppercase()
             ?: return null
         return awgCountries[mark]?.let { mark to it }

@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using DeyttConnect.Windows.Controls;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
@@ -35,37 +37,47 @@ public partial class MainWindow
 
     private Control BuildMapPanel()
     {
-        var map = _routeGlobe ??= CreateRouteGlobe();
-        var availableLocations = _routes
-            .SelectMany(route => route.CountryCode.ToUpperInvariant() switch
-            {
-                "NL" => new[] { "nl" },
-                "DE" => new[] { "de" },
-                "FI" => new[] { "fi" },
-                "RU" => new[] { "ru" },
-                "IT" => new[] { "it" },
-                "RU-DE" => new[] { "ru", "de" },
-                _ => Array.Empty<string>(),
-            })
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-        map.SelectedRoute = _selectedRoute;
-        map.Language = _language;
-        map.AvailableLocations = availableLocations;
-        map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
-        map.OriginLocation = _mapOriginLocation;
-        map.TrafficActive = IsVpnDisplayConnected();
-        map.ReducedMotion = _reduceMotion;
-        var actualEgress = IsVpnDisplayConnected() ? _mapEgressLocation : null;
-        map.EgressCountryCode = actualEgress?.CountryCode;
-        map.ActiveAutoRouteKey = _selectedRoute == "auto" && IsVpnDisplayConnected()
-            ? RouteGlobeWebView.RouteKeyFor(_vpnSnapshot.RouteTag)
-            : null;
-
         var layout = new Grid();
-        if (map.Parent is Panel oldHost)
-            oldHost.Children.Remove(map);
-        layout.Children.Add(map);
+        if ((!OperatingSystem.IsWindows() || _homeMapInitializationAllowed) &&
+            _activeShellContentDialog is null)
+        {
+            var map = _routeGlobe ??= CreateRouteGlobe();
+            var availableLocations = _routes
+                .SelectMany(route => route.CountryCode.ToUpperInvariant() switch
+                {
+                    "NL" => new[] { "nl" },
+                    "DE" => new[] { "de" },
+                    "FI" => new[] { "fi" },
+                    "RU" => new[] { "ru" },
+                    "IT" => new[] { "it" },
+                    "RU-DE" => new[] { "ru", "de" },
+                    _ => Array.Empty<string>(),
+                })
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            map.SelectedRoute = _selectedRoute;
+            map.Language = _language;
+            map.AvailableLocations = availableLocations;
+            map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
+            map.OriginLocation = _mapOriginLocation;
+            map.TrafficActive = IsVpnDisplayConnected();
+            map.ReducedMotion = _reduceMotion;
+            // A normal IP lookup follows the machine's upstream VPN (for example Happ).
+            // It cannot prove which exit the DEYTT tunnel selected.
+            map.EgressCountryCode = null;
+            map.ActiveAutoRouteKey = _selectedRoute == "auto" && IsVpnDisplayConnected()
+                ? RouteGlobeWebView.RouteKeyFor(_vpnSnapshot.RouteTag)
+                : null;
+
+            if (map.Parent is Panel oldHost)
+                oldHost.Children.Remove(map);
+            layout.Children.Add(map);
+        }
+        else
+        {
+            layout.Children.Add(BuildMapLoadingView());
+        }
+
         return new Border
         {
             Background = DeyttTheme.Brush(DeyttTheme.MapSurface),
@@ -75,6 +87,71 @@ public partial class MainWindow
             ClipToBounds = true,
             Child = layout,
         };
+    }
+
+    private Control BuildMapLoadingView()
+    {
+        var orbit = new Canvas { Width = 228, Height = 228 };
+        foreach (var (inset, opacity) in new[] { (0d, 0.18d), (28d, 0.24d), (57d, 0.3d) })
+        {
+            var ring = new Ellipse
+            {
+                Width = 228 - inset * 2,
+                Height = 228 - inset * 2,
+                Stroke = DeyttTheme.Brush(DeyttTheme.Sky),
+                StrokeThickness = 1,
+                Opacity = opacity,
+            };
+            Canvas.SetLeft(ring, inset);
+            Canvas.SetTop(ring, inset);
+            orbit.Children.Add(ring);
+        }
+
+        var route = new Line
+        {
+            StartPoint = new Point(46, 159),
+            EndPoint = new Point(173, 73),
+            Stroke = DeyttTheme.Brush(DeyttTheme.Sky),
+            StrokeThickness = 1.5,
+            Opacity = 0.46,
+        };
+        orbit.Children.Add(route);
+        foreach (var (x, y, color) in new[]
+                 {
+                     (46d, 159d, DeyttTheme.Sky),
+                     (173d, 73d, DeyttTheme.Mint),
+                 })
+        {
+            var halo = new Ellipse
+            {
+                Width = 18, Height = 18,
+                Fill = DeyttTheme.Brush(color),
+                Opacity = 0.15,
+            };
+            Canvas.SetLeft(halo, x - 9);
+            Canvas.SetTop(halo, y - 9);
+            orbit.Children.Add(halo);
+            var node = new Ellipse
+            {
+                Width = 6, Height = 6,
+                Fill = DeyttTheme.Brush(color),
+            };
+            Canvas.SetLeft(node, x - 3);
+            Canvas.SetTop(node, y - 3);
+            orbit.Children.Add(node);
+        }
+
+        var label = DeyttTheme.TextBlock(Copy("Готовим атлас маршрутов", "Preparing route atlas"),
+            12, DeyttTheme.Muted, FontWeight.Medium, wrap: false);
+        label.HorizontalAlignment = HorizontalAlignment.Center;
+        var placeholder = new StackPanel
+        {
+            Spacing = 12,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { orbit, label },
+        };
+        return placeholder;
     }
 
     private Control BuildHomeRouteDetails()
@@ -89,7 +166,7 @@ public partial class MainWindow
             RowSpacing = _compactLayout ? 12 : 16,
         };
 
-        var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*") };
         var titleStack = new StackPanel { Spacing = 5 };
         titleStack.Children.Add(DeyttTheme.TextBlock(ProtocolPath(displayedRoute),
             _compactLayout ? 20 : 22, DeyttTheme.Text, FontWeight.SemiBold,
@@ -107,13 +184,6 @@ public partial class MainWindow
         titleStack.Children.Add(routeContext);
         heading.Children.Add(titleStack);
 
-        var changeRoute = DeyttTheme.Action(DeyttTheme.TextBlock(
-            Copy("Маршруты ↗", "Routes ↗"), 12, DeyttTheme.Sky, FontWeight.SemiBold, wrap: false),
-            () => ShowTab(MainTab.Routes));
-        changeRoute.VerticalAlignment = VerticalAlignment.Center;
-        changeRoute.Margin = new Thickness(12, 0, 0, 0);
-        Grid.SetColumn(changeRoute, 1);
-        heading.Children.Add(changeRoute);
         details.Children.Add(heading);
 
         var trafficPath = BuildHomeTrafficPath(displayedRoute);
@@ -209,22 +279,13 @@ public partial class MainWindow
 
     private (string Code, string Name, string Hint) GetHomeDestinationParts(WindowsRoute? route)
     {
-        var actualEgress = IsVpnDisplayConnected() ? _mapEgressLocation : null;
-        if (actualEgress is { } egress)
-        {
-            var city = !string.IsNullOrWhiteSpace(egress.City) ? egress.City : egress.Region;
-            if (string.IsNullOrWhiteSpace(city))
-                city = egress.CountryCode;
-            return (string.IsNullOrWhiteSpace(egress.CountryCode) ? "VPN" : egress.CountryCode,
-                city, Copy("выход проверен по IP", "egress verified by IP"));
-        }
-
         var code = route?.CountryCode switch
         {
             "RU-DE" => "DE",
             "NL" => "NL",
             "DE" => "DE",
             "FI" => "FI",
+            "IT" => "IT",
             "RU" => "RU",
             _ => "AUTO",
         };
@@ -250,7 +311,7 @@ public partial class MainWindow
         var endpoint = new StackPanel { Spacing = 7 };
         endpoint.Children.Add(DeyttTheme.TextBlock(eyebrow, 8, DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        var hasLocationMarker = code is "NL" or "RU" or "DE" or "FI";
+        var hasLocationMarker = code is "NL" or "RU" or "DE" or "FI" or "IT";
         var location = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions(hasLocationMarker ? "Auto,*" : "*"),
@@ -274,7 +335,7 @@ public partial class MainWindow
 
     private RouteGlobeWebView CreateRouteGlobe()
     {
-        var map = new RouteGlobeWebView
+        var map = new RouteGlobeWebView(_disableNativeMapInitialization)
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
@@ -306,6 +367,9 @@ public partial class MainWindow
         Grid.SetRow(_homeConnectionCard, split ? 0 : 1);
         _homeMapPanel.Margin = split ? new Thickness(0, 0, 12, 0) : new Thickness(0);
         _homeConnectionCard.Margin = split ? new Thickness(12, 0, 0, 0) : new Thickness(0);
+        _homeConnectionCard.VerticalAlignment = split
+            ? VerticalAlignment.Center
+            : VerticalAlignment.Stretch;
 
         if (_routeGlobe is not null)
             _routeGlobe.Height = split ? double.NaN : Math.Clamp(availableWidth * 0.68, 320, 480);
@@ -316,15 +380,19 @@ public partial class MainWindow
         var result = routeTag is not null ? _routeProbeResults.GetValueOrDefault(routeTag) : null;
         var latency = result?.LatencyMilliseconds is { } ping ? $"{ping} ms" : "— ms";
         var speed = result?.BytesPerSecond is { } bytesPerSecond && bytesPerSecond > 0
-            ? $"{bytesPerSecond * 8d / 1_000_000d:0.#} Mbps"
-            : "— Mbps";
+            ? $"{bytesPerSecond * 8d / 1_000_000d:0.#} mbps"
+            : "— mbps";
+        var routeProbeActive = routeTag is not null && _activeRouteProbeTags.Contains(routeTag) &&
+            result?.Stage is "latency" or "retry" or "waiting_speed" or "download";
         var measurements = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,*"),
             ColumnSpacing = 16,
         };
-        measurements.Children.Add(HomeMeasurement(Copy("ПИНГ", "PING"), latency));
-        var speedMeasurement = HomeMeasurement(Copy("СКОРОСТЬ", "SPEED"), speed);
+        measurements.Children.Add(HomeMeasurement(Copy("ПИНГ", "PING"), latency,
+            routeProbeActive && result?.LatencyMilliseconds is null));
+        var speedMeasurement = HomeMeasurement(Copy("СКОРОСТЬ", "SPEED"), speed,
+            routeProbeActive && result?.BytesPerSecond is not > 0);
         Grid.SetColumn(speedMeasurement, 1);
         measurements.Children.Add(speedMeasurement);
 
@@ -333,19 +401,36 @@ public partial class MainWindow
             14, new Thickness(12, 9));
         AutomationProperties.SetAutomationId(measurementCard, "HomeRouteMeasurements");
         details.Children.Add(measurementCard);
-        details.Children.Add(DeyttTheme.Action(DeyttTheme.TextBlock(
-            Copy("Все замеры и диагностика ↗", "All measurements and diagnostics ↗"),
-            11, DeyttTheme.Sky, FontWeight.SemiBold), () => ShowTab(MainTab.Routes)));
+        if (result is not null && result.Stage is not ("latency" or "retry" or "waiting_speed" or "download"))
+            details.Children.Add(DeyttTheme.TextBlock(
+                Copy("Последний замер маршрута", "Last route measurement"),
+                10, DeyttTheme.Muted));
         return details;
     }
 
-    private static StackPanel HomeMeasurement(string label, string value)
+    private StackPanel HomeMeasurement(string label, string value, bool active)
     {
         var cell = new StackPanel { Spacing = 4 };
         cell.Children.Add(DeyttTheme.TextBlock(label, 9, DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        cell.Children.Add(DeyttTheme.TextBlock(value, 14, DeyttTheme.Text,
-            FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
+        if (active && value.StartsWith('—'))
+        {
+            var dots = DeyttTheme.TextBlock(_reduceMotion ? "···" : "·", 14,
+                DeyttTheme.Sky, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false);
+            dots.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+            cell.Children.Add(dots);
+            if (!_reduceMotion)
+            {
+                var step = 0;
+                var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(340) };
+                timer.Tick += (_, _) => dots.Text = new string('·', 1 + (++step % 3));
+                dots.AttachedToVisualTree += (_, _) => timer.Start();
+                dots.DetachedFromVisualTree += (_, _) => timer.Stop();
+            }
+        }
+        else
+            cell.Children.Add(DeyttTheme.TextBlock(value, 14, DeyttTheme.Text,
+                FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
         return cell;
     }
 }

@@ -3,7 +3,7 @@ name: windows release
 on:
   push:
     tags:
-      - v0.8.20
+      - v0.8.21
 
 permissions:
   contents: write
@@ -34,11 +34,38 @@ jobs:
         with:
           go-version: 1.25.14
 
+      - name: test windows protocol, client, and headless UI
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          dotnet test windows/DeyttConnect.Protocol.Tests/DeyttConnect.Protocol.Tests.csproj -c Release -p:NuGetAudit=false -m:1 -nr:false --disable-build-servers --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'protocol tests failed' }
+          dotnet test windows/DeyttConnect.Windows.Tests/DeyttConnect.Windows.Tests.csproj -c Release -p:NuGetAudit=false -m:1 -nr:false --disable-build-servers --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'windows client tests failed' }
+          dotnet test windows/DeyttConnect.Windows.HeadlessTests/DeyttConnect.Windows.HeadlessTests.csproj -c Release -p:NuGetAudit=false -m:1 -nr:false --disable-build-servers --nologo
+          if ($LASTEXITCODE -ne 0) { throw 'windows headless UI tests failed' }
+
       - name: build windows package
         shell: bash
         env:
           DOTNET: dotnet
         run: DOTNET="$(command -v dotnet)" windows/scripts/build-windows-package.sh windows/artifacts/win-x64
+
+      - name: verify package provenance
+        shell: pwsh
+        run: >-
+          ./windows/scripts/Write-PackageProvenance.ps1
+          -PackageDirectory windows/artifacts/win-x64
+          -ExpectedVersion 0.8.21
+          -RequireCleanSource
+
+      - name: build portable package and updater archive
+        shell: pwsh
+        run: >-
+          ./windows/scripts/package-windows-portable.ps1
+          -PackageDirectory windows/artifacts/win-x64
+          -OutputDirectory windows/artifacts/portable
+          -ArchivePath windows/artifacts/release-assets/deytt-connect-windows-x64.zip
 
       - name: prepare msi package layout
         shell: pwsh
@@ -66,7 +93,7 @@ jobs:
         shell: pwsh
         run: >-
           ./windows/installer/Build-Msi.ps1
-          -ProductVersion 0.8.20
+          -ProductVersion 0.8.21
           -PackageStageDir windows/artifacts/msi-stage
           -BuildRoot windows/artifacts/msi-build
           -Dotnet dotnet
@@ -83,7 +110,101 @@ jobs:
           if ($install.ExitCode -notin @(0, 3010)) { Get-Content $installLog -Tail 100; throw "clean install failed: $($install.ExitCode)" }
           $app = Join-Path $env:ProgramFiles 'DEYTT/Connect/DeyttConnect.Windows.exe'
           if (!(Test-Path $app)) { throw 'installed app executable is missing' }
+          $installDir = Split-Path -Parent $app
+          $uiDll = Join-Path $installDir 'DeyttConnect.Windows.dll'
+          $serviceDll = Join-Path $installDir 'DeyttConnect.Windows.Service.dll'
+          foreach ($dll in @($uiDll, $serviceDll)) {
+            if (!(Test-Path -LiteralPath $dll -PathType Leaf)) { throw "installed assembly is missing: $(Split-Path -Leaf $dll)" }
+            $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($dll).Version.ToString()
+            $fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($dll).FileVersion
+            if ($assemblyVersion -ne '0.8.21.0' -or $fileVersion -ne '0.8.21.0') {
+              throw "installed assembly version mismatch for $(Split-Path -Leaf $dll): $assemblyVersion / $fileVersion"
+            }
+          }
+          $buildInfoPath = Join-Path $installDir 'build-info.json'
+          if (!(Test-Path -LiteralPath $buildInfoPath -PathType Leaf)) { throw 'installed package provenance file is missing' }
+          $buildInfo = Get-Content -LiteralPath $buildInfoPath -Raw | ConvertFrom-Json
+          $sourceCommit = (& git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $buildInfo.expected_version -ne '0.8.21' -or
+              $buildInfo.source_commit -ne $sourceCommit) {
+            throw "installed package provenance mismatch: version=$($buildInfo.expected_version), commit=$($buildInfo.source_commit)"
+          }
+          foreach ($check in @(
+            @{Path=$uiDll; Hash=$buildInfo.ui_assembly.SHA256},
+            @{Path=$serviceDll; Hash=$buildInfo.service_assembly.SHA256},
+            @{Path=(Join-Path $installDir 'DeyttVpnEngine.exe'); Hash=$buildInfo.vpn_engine.SHA256}
+          )) {
+            if ((Get-FileHash -LiteralPath $check.Path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $check.Hash) {
+              throw "installed payload hash mismatch: $($check.Path)"
+            }
+          }
+          foreach ($asset in $buildInfo.route_map_assets.PSObject.Properties) {
+            $path = Join-Path $installDir $asset.Value.Path
+            if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $asset.Value.SHA256) {
+              throw "installed map content mismatch: $($asset.Name)"
+            }
+          }
+          $runtimeProcess = $null
+          try {
+            $runtimeProcess = Start-Process -FilePath $app -WindowStyle Hidden -PassThru
+            Start-Sleep -Seconds 15
+            $runtimeProcess.Refresh()
+            if ($runtimeProcess.HasExited) { throw "installed app exited during runtime smoke (code $($runtimeProcess.ExitCode))" }
+            if (-not $runtimeProcess.Responding) { throw 'installed app is not responding after startup' }
+            $runtimeInfo = Get-Process -Id $runtimeProcess.Id -ErrorAction Stop
+            if (![string]::Equals([IO.Path]::GetFullPath($runtimeInfo.Path),
+                [IO.Path]::GetFullPath($app), [StringComparison]::OrdinalIgnoreCase)) {
+              throw 'runtime smoke process path does not match the installed app'
+            }
+            Write-Host "Installed app runtime smoke passed: pid=$($runtimeProcess.Id), version=$assemblyVersion"
+          } finally {
+            if ($null -ne $runtimeProcess) {
+              $runtimeProcess.Refresh()
+              if (-not $runtimeProcess.HasExited) {
+                $runtimeInfo = Get-Process -Id $runtimeProcess.Id -ErrorAction SilentlyContinue
+                if ($runtimeInfo -and [string]::Equals([IO.Path]::GetFullPath($runtimeInfo.Path),
+                    [IO.Path]::GetFullPath($app), [StringComparison]::OrdinalIgnoreCase)) {
+                  Stop-Process -Id $runtimeProcess.Id -Force -ErrorAction SilentlyContinue
+                  $runtimeProcess.WaitForExit(5000)
+                }
+              }
+            }
+          }
           $service = Get-Service -Name 'DEYTTConnectVpn' -ErrorAction Stop
+          if ($service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) { throw 'vpn service did not start during the clean MSI install' }
+          $service.Dispose()
+          Stop-Service -Name 'DEYTTConnectVpn' -Force -ErrorAction Stop
+          (Get-Service -Name 'DEYTTConnectVpn' -ErrorAction Stop).WaitForStatus(
+            [System.ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(20))
+          & sc.exe delete 'DEYTTConnectVpn' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "could not remove the test vpn service before recovery: $LASTEXITCODE" }
+          $serviceRemovalDeadline = [DateTime]::UtcNow.AddSeconds(30)
+          do {
+            Start-Sleep -Milliseconds 500
+            $remainingService = Get-Service -Name 'DEYTTConnectVpn' -ErrorAction SilentlyContinue
+            if ($null -ne $remainingService) { $remainingService.Dispose() }
+          } while ($null -ne $remainingService -and [DateTime]::UtcNow -lt $serviceRemovalDeadline)
+          if ($null -ne $remainingService) { throw 'test vpn service was not removed before the recovery check' }
+          $installerScript = Join-Path $installDir 'Install-VpnService.ps1'
+          $runnerSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+          if (!(Test-Path -LiteralPath $installerScript -PathType Leaf)) { throw 'installed vpn service recovery script is missing' }
+          $recovery = Start-Process -FilePath powershell.exe -ArgumentList @(
+            '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$installerScript`"",
+            '-AllowedUserSid', "`"$runnerSid`"", '-BundleRoot', "`"$installDir`"") -Wait -PassThru
+          if ($recovery.ExitCode -ne 0) { throw "vpn service recovery script failed: $($recovery.ExitCode)" }
+          $recoveredService = Get-Service -Name 'DEYTTConnectVpn' -ErrorAction Stop
+          try {
+            $recoveredService.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, [TimeSpan]::FromSeconds(20))
+          } finally { $recoveredService.Dispose() }
+          foreach ($check in @(
+            @{Path=$uiDll; Hash=$buildInfo.ui_assembly.SHA256},
+            @{Path=$serviceDll; Hash=$buildInfo.service_assembly.SHA256},
+            @{Path=(Join-Path $installDir 'DeyttVpnEngine.exe'); Hash=$buildInfo.vpn_engine.SHA256}
+          )) {
+            if ((Get-FileHash -LiteralPath $check.Path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $check.Hash) {
+              throw "installed payload changed during in-place vpn recovery: $($check.Path)"
+            }
+          }
           $uninstall = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'deytt connect' } | Select-Object -First 1
           if (!$uninstall) { throw 'installed product registration is missing' }
           $productCode = $uninstall.PSChildName
@@ -98,19 +219,65 @@ jobs:
           if (Test-Path $app) { throw 'application files remain after uninstall' }
           if (Get-Service -Name 'DEYTTConnectVpn' -ErrorAction SilentlyContinue) { throw 'vpn service remains after uninstall' }
 
+      - name: test hosted upgrade from v0.8.20
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $previousDir = Join-Path $env:RUNNER_TEMP 'previous-release'
+          New-Item -ItemType Directory -Force -Path $previousDir | Out-Null
+          & gh release download v0.8.20 --repo $env:GITHUB_REPOSITORY --pattern 'deytt-connect-windows-x64.msi' --dir $previousDir
+          if ($LASTEXITCODE -ne 0) { throw 'could not download the withdrawn v0.8.20 MSI for isolated upgrade testing' }
+          $previousMsi = Join-Path $previousDir 'deytt-connect-windows-x64.msi'
+          $currentMsi = (Resolve-Path 'windows/artifacts/msi-build/output/DEYTTConnect.Windows.Installer.msi').Path
+          $upgradeApp = Join-Path $env:ProgramFiles 'DEYTT/Connect/DeyttConnect.Windows.exe'
+          $upgradeInstallLog = Join-Path $env:RUNNER_TEMP 'deytt-upgrade-v020-install.log'
+          $upgradeLog = Join-Path $env:RUNNER_TEMP 'deytt-upgrade-v021-install.log'
+          $upgradeRemoveLog = Join-Path $env:RUNNER_TEMP 'deytt-upgrade-v021-remove.log'
+          $previousInstall = Start-Process msiexec.exe -ArgumentList @('/i', "`"$previousMsi`"", '/qn', '/norestart', '/l*v', "`"$upgradeInstallLog`"") -Wait -PassThru
+          if ($previousInstall.ExitCode -notin @(0, 3010)) { Get-Content $upgradeInstallLog -Tail 100; throw "v0.8.20 install failed: $($previousInstall.ExitCode)" }
+          foreach ($assembly in @('DeyttConnect.Windows.dll', 'DeyttConnect.Windows.Service.dll')) {
+            $assemblyPath = Join-Path (Split-Path -Parent $upgradeApp) $assembly
+            if (!(Test-Path -LiteralPath $assemblyPath -PathType Leaf)) { throw "v0.8.20 assembly is missing: $assembly" }
+            $version = [Reflection.AssemblyName]::GetAssemblyName($assemblyPath).Version.ToString()
+            if ($version -ne '0.8.20.0') { throw "expected v0.8.20 before upgrade, found $version in $assembly" }
+          }
+          $upgradeInstall = Start-Process msiexec.exe -ArgumentList @('/i', "`"$currentMsi`"", '/qn', '/norestart', '/l*v', "`"$upgradeLog`"") -Wait -PassThru
+          if ($upgradeInstall.ExitCode -notin @(0, 3010)) { Get-Content $upgradeLog -Tail 100; throw "v0.8.21 upgrade failed: $($upgradeInstall.ExitCode)" }
+          foreach ($assembly in @('DeyttConnect.Windows.dll', 'DeyttConnect.Windows.Service.dll')) {
+            $assemblyPath = Join-Path (Split-Path -Parent $upgradeApp) $assembly
+            if (!(Test-Path -LiteralPath $assemblyPath -PathType Leaf)) { throw "v0.8.21 assembly is missing: $assembly" }
+            $version = [Reflection.AssemblyName]::GetAssemblyName($assemblyPath).Version.ToString()
+            if ($version -ne '0.8.21.0') { throw "expected v0.8.21 after upgrade, found $version in $assembly" }
+          }
+          $productRegistrations = @(Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'deytt connect' })
+          if ($productRegistrations.Count -ne 1) { throw "expected exactly one current product registration after upgrade, found $($productRegistrations.Count)" }
+          $upgradeRemove = Start-Process msiexec.exe -ArgumentList @('/x', $productRegistrations[0].PSChildName, '/qn', '/norestart', '/l*v', "`"$upgradeRemoveLog`"") -Wait -PassThru
+          if ($upgradeRemove.ExitCode -notin @(0, 3010)) { Get-Content $upgradeRemoveLog -Tail 100; throw "v0.8.21 uninstall after upgrade failed: $($upgradeRemove.ExitCode)" }
+          if (Test-Path $upgradeApp) { throw 'application files remain after upgraded product uninstall' }
+          $serviceDeadline = [DateTime]::UtcNow.AddSeconds(30)
+          do {
+            Start-Sleep -Milliseconds 500
+            $remainingService = Get-Service -Name 'DEYTTConnectVpn' -ErrorAction SilentlyContinue
+            if ($null -ne $remainingService) { $remainingService.Dispose() }
+          } while ($null -ne $remainingService -and [DateTime]::UtcNow -lt $serviceDeadline)
+          if ($null -ne $remainingService) { throw 'vpn service remains after upgraded product uninstall' }
+
       - name: prepare release assets
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $assets = 'windows/artifacts/release-assets'
           New-Item -ItemType Directory -Force -Path $assets | Out-Null
-          Compress-Archive -Path 'windows/artifacts/win-x64/*' -DestinationPath "$assets/deytt-connect-windows-x64.zip" -CompressionLevel Optimal
+          if (!(Test-Path -LiteralPath "$assets/deytt-connect-windows-x64.zip" -PathType Leaf)) { throw 'portable ZIP is missing' }
+          if (!(Test-Path -LiteralPath 'windows/artifacts/portable/deyttconnect.exe' -PathType Leaf)) { throw 'portable launcher is missing' }
           Copy-Item 'windows/artifacts/msi-build/output/DEYTTConnect.Windows.Installer.msi' "$assets/deytt-connect-windows-x64.msi"
           Get-FileHash "$assets/deytt-connect-windows-x64.zip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  deytt-connect-windows-x64.zip" } | Set-Content "$assets/deytt-connect-windows-x64.zip.sha256" -Encoding ascii
           Get-FileHash "$assets/deytt-connect-windows-x64.msi" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  deytt-connect-windows-x64.msi" } | Set-Content "$assets/deytt-connect-windows-x64.msi.sha256" -Encoding ascii
           Get-Content "$assets/deytt-connect-windows-x64.zip.sha256", "$assets/deytt-connect-windows-x64.msi.sha256" | Set-Content "$assets/SHA256SUMS.txt" -Encoding ascii
 
-      - name: create stable release
+      - name: create or update prerelease
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -131,13 +298,17 @@ jobs:
             'windows/artifacts/release-assets/deytt-connect-windows-x64.msi.sha256',
             'windows/artifacts/release-assets/SHA256SUMS.txt'
           )
-          gh release view v0.8.20 --repo $env:GITHUB_REPOSITORY *> $null
+          gh release view v0.8.21 --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
-            gh release upload v0.8.20 @assets --repo $env:GITHUB_REPOSITORY --clobber
+            $releaseId = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/v0.8.21" --jq .id
+            if ($LASTEXITCODE -ne 0 -or !$releaseId) { throw 'could not find the existing prerelease' }
+            gh api "repos/$env:GITHUB_REPOSITORY/releases/$releaseId" --method PATCH -F prerelease=true -f make_latest=false | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw 'could not mark existing release as prerelease' }
+            gh release upload v0.8.21 @assets --repo $env:GITHUB_REPOSITORY --clobber
             if ($LASTEXITCODE -ne 0) { throw 'release asset upload failed' }
-            gh release edit v0.8.20 --repo $env:GITHUB_REPOSITORY --title 'deytt connect 0.8.20' --notes-file $notes
+            gh release edit v0.8.21 --repo $env:GITHUB_REPOSITORY --title 'deytt connect 0.8.21' --notes-file $notes
           } else {
-            gh release create v0.8.20 @assets --repo $env:GITHUB_REPOSITORY --title 'deytt connect 0.8.20' --notes-file $notes
+            gh release create v0.8.21 @assets --repo $env:GITHUB_REPOSITORY --title 'deytt connect 0.8.21' --notes-file $notes --prerelease --latest=false
           }
           if ($LASTEXITCODE -ne 0) { throw 'release publication failed' }
 
@@ -180,7 +351,9 @@ jobs:
           "cmake;3.22.1"
 
       - name: build unsigned release apks
-        run: ./gradlew --no-daemon --max-workers=2 :app:assembleRelease
+        run: |
+          ./gradlew --no-daemon --max-workers=2 :app:testReleaseUnitTest
+          ./gradlew --no-daemon --max-workers=2 :app:assembleRelease
 
       - name: prepare signing credentials
         env:
@@ -266,3 +439,60 @@ jobs:
             "output/android/deytt-connect-${release_version}-manual-reinstall-x86_64.apk.sha256" \
             --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md"
+
+  promote-stable:
+    name: promote validated release to stable
+    needs: android-apk-publishing
+    if: github.repository == 'crxwov/deytt.connect' && needs.android-apk-publishing.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: verify release assets and promote
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          release_json="$(gh release view v0.8.21 --repo "$GITHUB_REPOSITORY" --json isPrerelease,assets)"
+          python3 - "$release_json" <<'PY'
+          import json
+          import sys
+
+          release = json.loads(sys.argv[1])
+          if not release["isPrerelease"]:
+              raise SystemExit("v0.8.21 must remain a prerelease until validation completes")
+          names = {asset["name"] for asset in release["assets"]}
+          required = {
+              "deytt-connect-windows-x64.zip",
+              "deytt-connect-windows-x64.zip.sha256",
+              "deytt-connect-windows-x64.msi",
+              "deytt-connect-windows-x64.msi.sha256",
+              "SHA256SUMS.txt",
+              "app-arm64-v8a-release.apk",
+              "app-arm64-v8a-release.apk.sha256",
+              "app-armeabi-v7a-release.apk",
+              "app-armeabi-v7a-release.apk.sha256",
+              "app-x86_64-release.apk",
+              "app-x86_64-release.apk.sha256",
+              "deytt-connect-0.8.21-manual-reinstall-arm64-v8a.apk",
+              "deytt-connect-0.8.21-manual-reinstall-arm64-v8a.apk.sha256",
+              "deytt-connect-0.8.21-manual-reinstall-armeabi-v7a.apk",
+              "deytt-connect-0.8.21-manual-reinstall-armeabi-v7a.apk.sha256",
+              "deytt-connect-0.8.21-manual-reinstall-x86_64.apk",
+              "deytt-connect-0.8.21-manual-reinstall-x86_64.apk.sha256",
+          }
+          missing = sorted(required - names)
+          if missing:
+              raise SystemExit("release assets missing after Android publishing: " + ", ".join(missing))
+          PY
+          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.8.21" --jq .id)"
+          gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --method PATCH -F prerelease=false -f make_latest=true >/dev/null
+          promoted="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.8.21" --jq '[.tag_name, (.prerelease|tostring)] | @tsv')"
+          latest_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          python3 - "$promoted" "$latest_tag" <<'PY'
+          import json
+          import sys
+
+          tag, prerelease = sys.argv[1].split("\t")
+          latest_tag = sys.argv[2]
+          if tag != "v0.8.21" or prerelease != "false" or latest_tag != tag:
+              raise SystemExit("v0.8.21 was not promoted as the stable latest release")
+          PY

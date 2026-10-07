@@ -247,6 +247,7 @@ public partial class MainWindow
             "nl" => "NL",
             "de" => "DE",
             "fi" => "FI",
+            "it" => "IT",
             "ru" => "RU",
             _ => null,
         };
@@ -255,12 +256,13 @@ public partial class MainWindow
 
         var countryRoutes = _routes.Where(route =>
                 route.CountryCode == countryCode &&
-                route.Protocol is "VLESS" or "TROJAN" or "HYSTERIA2")
+                route.Protocol is "VLESS" or "TROJAN" or "HYSTERIA2" or "AWG31")
             .OrderBy(route => route.Protocol switch
             {
                 "VLESS" => 0,
                 "TROJAN" => 1,
                 "HYSTERIA2" => 2,
+                "AWG31" => 3,
                 _ => 3,
             })
             .ToArray();
@@ -277,6 +279,7 @@ public partial class MainWindow
             "NL" => Copy("Нидерланды", "Netherlands"),
             "DE" => Copy("Германия", "Germany"),
             "FI" => Copy("Финляндия", "Finland"),
+            "IT" => Copy("Италия", "Italy"),
             _ => Copy("Россия", "Russia"),
         };
         if (choices.Count == 0)
@@ -387,6 +390,16 @@ public partial class MainWindow
             ? MainTab.Profile
             : _activeTab;
         ShowTab(MainTab.Support);
+        return Task.CompletedTask;
+    }
+
+    private Task ShowHelpAndDocumentsAsync()
+    {
+        _supportReturnTab = _activeTab is MainTab.Support or MainTab.Setup
+            ? MainTab.Profile
+            : _activeTab;
+        ShowTab(MainTab.Support);
+        _supportView?.ShowHelpIndex();
         return Task.CompletedTask;
     }
 

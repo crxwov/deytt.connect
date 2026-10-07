@@ -31,7 +31,7 @@ public sealed class StarfieldBackground : Control
 
     private static Star[] CreateStars()
     {
-        var stars = new Star[64];
+        var stars = new Star[96];
         for (var index = 0; index < stars.Length; index++)
         {
             var random = new Random(0x44D7 + index * 7919);

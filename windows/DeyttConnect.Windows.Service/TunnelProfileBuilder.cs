@@ -14,6 +14,7 @@ internal static class TunnelProfileBuilder
         ("RU", "Россия"),
         ("DE", "Германия"),
         ("FI", "Финляндия"),
+        ("IT", "Италия"),
     ];
 
     private static readonly string[] Protocols = ["VLESS", "TROJAN", "HYSTERIA2"];
@@ -25,8 +26,9 @@ internal static class TunnelProfileBuilder
         var root = JsonNode.Parse(runtimeProfile) as JsonObject
                    ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
         var inbounds = root["inbounds"] as JsonArray;
-        if (inbounds is not { Count: 1 } || inbounds[0] is not JsonObject tun ||
-            tun["address"] is not JsonArray addresses)
+        var tun = inbounds?.OfType<JsonObject>()
+            .FirstOrDefault(inbound => ReadString(inbound, "type") == "tun");
+        if (tun is null || tun["address"] is not JsonArray addresses)
             throw new InvalidDataException("Windows tunnel profile has no TUN address.");
 
         var result = new List<string>(addresses.Count);
@@ -42,7 +44,8 @@ internal static class TunnelProfileBuilder
         return result;
     }
 
-    public static string Build(string profileJson, string selectedTag, string? awgConfig = null)
+    public static string Build(string profileJson, string selectedTag, string? awgConfig = null,
+        string? upstreamInterface = null)
     {
         JsonObject root;
         try
@@ -57,11 +60,18 @@ internal static class TunnelProfileBuilder
 
         var inboundArray = root["inbounds"] as JsonArray
                            ?? throw new InvalidDataException("Subscription has no inbounds.");
-        if (inboundArray.Count != 1 || inboundArray[0] is not JsonObject tun ||
-            ReadString(tun, "type") != "tun" || tun["address"] is not JsonArray)
+        var tunInbound = inboundArray.OfType<JsonObject>()
+            .FirstOrDefault(inbound => ReadString(inbound, "type") == "tun");
+        if (tunInbound is null || tunInbound["address"] is not JsonArray)
             throw new InvalidDataException("Subscription has an unsupported Windows inbound.");
+        // The subscription may also contain proxy inbounds. Windows only needs its TUN;
+        // dropping the others avoids exposing subscription listeners from the privileged service.
+        var tun = (JsonObject)tunInbound.DeepClone();
+        // The shared profile includes an Android-only field that this engine rejects.
+        tun.Remove("dns_mode");
         tun["auto_route"] = true;
-        tun["strict_route"] = true;
+        tun["strict_route"] = upstreamInterface is null;
+        root["inbounds"] = new JsonArray(tun);
 
         var outboundArray = root["outbounds"] as JsonArray
                             ?? throw new InvalidDataException("Subscription has no outbounds.");
@@ -87,13 +97,8 @@ internal static class TunnelProfileBuilder
 
         var autoTag = tags.FirstOrDefault(tag => tag.Contains("автоподбор", StringComparison.OrdinalIgnoreCase));
         const string chainTag = "route:RU-DE:CHAIN";
-        if (autoTag is null || !tags.Contains(chainTag))
-            throw new InvalidDataException("Subscription has no supported automatic or RU-DE route.");
-
-        foreach (var (country, _) in Countries)
-        foreach (var protocol in Protocols)
-            if (!tags.Contains($"route:{country}:{protocol}"))
-                throw new InvalidDataException("Subscription is missing a required route.");
+        if (autoTag is null)
+            throw new InvalidDataException("Subscription has no supported automatic route.");
 
         string engineTag;
         if (awgConfig is not null)
@@ -133,7 +138,11 @@ internal static class TunnelProfileBuilder
         var route = root["route"] as JsonObject
                     ?? throw new InvalidDataException("Subscription has no route policy.");
         route["final"] = engineTag;
-        route["auto_detect_interface"] = true;
+        route["auto_detect_interface"] = upstreamInterface is null;
+        if (upstreamInterface is null)
+            route.Remove("default_interface");
+        else
+            route["default_interface"] = upstreamInterface;
         if (root["dns"] is JsonObject dns && dns["servers"] is JsonArray servers)
         {
             foreach (var server in servers.OfType<JsonObject>())
@@ -147,7 +156,8 @@ internal static class TunnelProfileBuilder
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
     }
 
-    public static string BuildProbeProfile(string profileJson, IReadOnlyList<ProbeRouteEndpoint> endpoints)
+    public static string BuildProbeProfile(string profileJson, IReadOnlyList<ProbeRouteEndpoint> endpoints,
+        string? upstreamInterface = null)
     {
         if (endpoints.Count is < 1 or > 32 ||
             endpoints.Select(endpoint => endpoint.RouteTag).Distinct(StringComparer.Ordinal).Count() != endpoints.Count ||
@@ -159,10 +169,11 @@ internal static class TunnelProfileBuilder
             if (endpoint.Port is < 1 or > 65535 || string.IsNullOrWhiteSpace(endpoint.Username) ||
                 string.IsNullOrWhiteSpace(endpoint.Password))
                 throw new InvalidDataException("A diagnostic proxy endpoint is invalid.");
-            _ = Build(profileJson, endpoint.RouteTag, endpoint.AwgConfig);
+            _ = Build(profileJson, endpoint.RouteTag, endpoint.AwgConfig, upstreamInterface);
         }
 
-        var root = JsonNode.Parse(Build(profileJson, endpoints[0].RouteTag, endpoints[0].AwgConfig)) as JsonObject
+        var root = JsonNode.Parse(Build(profileJson, endpoints[0].RouteTag,
+            endpoints[0].AwgConfig, upstreamInterface)) as JsonObject
                    ?? throw new InvalidDataException("Subscription JSON is invalid.");
         var endpointArray = root["endpoints"] as JsonArray ?? new JsonArray();
         var endpointTags = new HashSet<string>(StringComparer.Ordinal);

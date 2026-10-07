@@ -187,8 +187,7 @@ public static class WindowsTunnelCanaryRoute
     public static WindowsTunnelCanaryInterface? SelectInterface(IEnumerable<string> configuredAddresses,
         IEnumerable<WindowsTunnelCanaryInterface> interfaces)
     {
-        var available = interfaces.Where(item => item.InterfaceIndex > 0)
-            .ToDictionary(item => item.Address);
+        var available = interfaces.Where(item => item.InterfaceIndex > 0).ToArray();
         foreach (var configured in configuredAddresses)
         {
             var addressText = configured.Split('/', 2)[0];
@@ -196,8 +195,9 @@ public static class WindowsTunnelCanaryRoute
                 IPAddress.Any.Equals(address) || IPAddress.IPv6Any.Equals(address) ||
                 IPAddress.IsLoopback(address))
                 continue;
-            if (available.TryGetValue(address, out var tunnelInterface))
-                return tunnelInterface;
+            foreach (var tunnelInterface in available)
+                if (tunnelInterface.Address.Equals(address))
+                    return tunnelInterface;
         }
         return null;
     }
