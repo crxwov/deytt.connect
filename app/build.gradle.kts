@@ -17,8 +17,8 @@ android {
         targetSdk = 35
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        } else 36
-        versionName = "0.8.23"
+        } else 37
+        versionName = "0.8.24"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }

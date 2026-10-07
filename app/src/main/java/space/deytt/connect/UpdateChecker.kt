@@ -46,13 +46,14 @@ internal object ReleaseUrlPolicy {
 }
 
 internal object ReleaseAssetPolicy {
+    fun isStableRelease(draft: Boolean, prerelease: Boolean): Boolean = !draft && !prerelease
+
     fun preferredName(names: List<String>, supportedAbis: List<String>): String? {
-        // Prefer a production APK even when a legacy debug asset appears first.
-        for (variant in listOf("release", "debug")) {
-            for (abi in supportedAbis + "universal") {
-                val name = "app-$abi-$variant.apk"
-                if (name in names) return name
-            }
+        // The updater installs only production APKs; debug packages are not
+        // valid candidates for a production release, even in a debug build.
+        for (abi in supportedAbis + "universal") {
+            val name = "app-$abi-release.apk"
+            if (name in names) return name
         }
         return null
     }
@@ -75,8 +76,8 @@ internal object UpdateSignaturePolicy {
 }
 
 object UpdateChecker {
-    // GitHub's /releases/latest deliberately excludes prereleases. The public
-    // Android channel is currently prerelease based, so inspect ordered releases.
+    // Inspect recent stable releases in order so ABI-specific assets can be
+    // selected without ever offering a draft or a partially built prerelease.
     private const val RELEASES_URL = "https://api.github.com/repos/crxwov/deytt.connect/releases?per_page=20"
     private const val MAX_RELEASE_RESPONSE_BYTES = 2 * 1024 * 1024
     private const val MAX_APK_BYTES = 120L * 1024 * 1024
@@ -96,7 +97,10 @@ object UpdateChecker {
             var selectedRelease: ReleaseInfo? = null
             for (index in 0 until releases.length()) {
                 val json = releases.optJSONObject(index) ?: continue
-                if (json.optBoolean("draft", true)) continue
+                if (!ReleaseAssetPolicy.isStableRelease(
+                        draft = json.optBoolean("draft", true),
+                        prerelease = json.optBoolean("prerelease", true),
+                    )) continue
 
                 val assets = json.optJSONArray("assets")
                 val candidates = (0 until (assets?.length() ?: 0))

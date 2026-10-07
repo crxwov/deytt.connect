@@ -23,12 +23,14 @@ backend are excluded; their removal is not evidence they caused antivirus alerts
 
 `release/signing-policy.json` records the expected public certificate SHA-256.
 The historical `release/signing-lineage.bin` proves a previous rotation but
-cannot authorize the new identity. The 0.8.18 preview therefore uses one new
-signer on API 24 and newer. Android will reject it over every APK signed with the
-old identity. The preview APK assets use `manual-reinstall` names, which the
-in-app updater does not select. Users must uninstall the old app and then install
-the matching APK; Android may erase local settings and credentials. Keep access
-to the account needed to sign in and restore its server-backed subscription.
+cannot authorize the new identity. The historical `0.8.18-preview.1` release
+introduced the new signer on API 24 and newer because the previous private key
+was lost. Android rejects this signer over APKs signed with the old identity.
+That release's APK assets use `manual-reinstall` names, which the in-app updater
+does not select. Users moving from the old identity must uninstall the old app
+and then install the matching APK; Android may erase local settings and
+credentials. Keep access to the account needed to sign in and restore its
+server-backed subscription.
 
 Future updates are compatible only while the new private key is preserved and
 used for every APK. Private keystores and password files must stay outside the
@@ -47,11 +49,11 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
 
 python3 scripts/release.py sign \
   app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk \
-  --output output/release/deytt-connect-0.8.18-manual-reinstall-arm64-v8a.apk \
+  --output output/release/deytt-connect-0.8.24-manual-reinstall-arm64-v8a.apk \
   --keystore /secure/signing/release.p12 \
   --password-file /secure/signing/release.password
 
-python3 scripts/release.py verify output/release/deytt-connect-0.8.18-manual-reinstall-arm64-v8a.apk
+python3 scripts/release.py verify output/release/deytt-connect-0.8.24-manual-reinstall-arm64-v8a.apk
 ```
 
 The release script refuses
