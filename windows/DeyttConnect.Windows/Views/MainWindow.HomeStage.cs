@@ -43,6 +43,7 @@ public partial class MainWindow
                 "DE" => new[] { "de" },
                 "FI" => new[] { "fi" },
                 "RU" => new[] { "ru" },
+                "IT" => new[] { "it" },
                 "RU-DE" => new[] { "ru", "de" },
                 _ => Array.Empty<string>(),
             })

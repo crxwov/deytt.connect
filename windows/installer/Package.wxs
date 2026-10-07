@@ -1,13 +1,13 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Id="DEYTT.Connect.Windows"
-           Name="DEYTT Connect"
+           Name="deytt connect"
            Manufacturer="DEYTT"
            Language="1049"
            Version="$(var.ProductVersion)"
            Scope="perMachine">
     <Icon Id="DeyttConnectProductIcon.exe" SourceFile="$(var.PackageStageDir)/DeyttConnect.Windows.exe" />
     <Property Id="ARPPRODUCTICON" Value="DeyttConnectProductIcon.exe" />
-    <MajorUpgrade Schedule="afterInstallInitialize" IgnoreLanguage="yes" DowngradeErrorMessage="На компьютере уже установлена более новая версия DEYTT Connect." />
+    <MajorUpgrade Schedule="afterInstallInitialize" IgnoreLanguage="yes" DowngradeErrorMessage="на компьютере уже установлена более новая версия deytt connect." />
     <MediaTemplate EmbedCab="yes" />
 
     <Property Id="ALLOWEDUSERSID" Secure="yes">
@@ -53,11 +53,11 @@
     <Property Id="WINDOWS_BUILD"><RegistrySearch Id="FindWindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" /></Property>
     <UIRef Id="DeyttSetupUI" />
     <Launch Condition="Installed OR (VersionNT64 AND WINDOWS_BUILD &gt;= 17763)"
-            Message="DEYTT Connect требует 64-разрядную Windows 10 версии 1809 или более новую Windows." />
+            Message="deytt connect требует 64-разрядную windows 10 версии 1809 или более новую windows." />
     <Launch Condition="ALLOWEDUSERSID &gt;&lt; &quot;S-1-&quot;"
-            Message="Не удалось определить учётную запись Windows. Запустите установщик из учётной записи, в которой будете пользоваться приложением." />
+            Message="не удалось определить учётную запись windows. запустите установщик из учётной записи, в которой будете пользоваться приложением." />
     <Launch Condition="NOT EXISTING_SERVICE_PATH OR CONNECT_SERVICE_COMPATIBLE = &quot;1&quot; OR REMOVE~=&quot;ALL&quot;"
-            Message="Служба DEYTTConnectVpn указывает на другое приложение. Установка остановлена, чтобы не повредить его. Обратитесь в поддержку DEYTT." />
+            Message="служба deyttconnectvpn указывает на другое приложение. установка остановлена, чтобы не повредить его. обратитесь в поддержку deytt." />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="DEYTTDIR" Name="DEYTT">
@@ -73,8 +73,8 @@
                   KeyPath="yes" />
             <ServiceInstall Id="VpnServiceInstall"
                             Name="DEYTTConnectVpn"
-                            DisplayName="DEYTT Connect VPN"
-                            Description="Runs the DEYTT Connect Windows VPN tunnel."
+                            DisplayName="deytt connect vpn"
+                            Description="runs the deytt connect windows vpn tunnel."
                             Type="ownProcess"
                             Start="auto"
                             ErrorControl="normal"
@@ -104,7 +104,7 @@
               <Shortcut Id="UiStartMenuShortcut"
                         Advertise="yes"
                         Directory="ApplicationProgramsFolder"
-                        Name="DEYTT Connect"
+                        Name="deytt connect"
                       Icon="DeyttConnectProductIcon.exe"
                       IconIndex="0"
                         WorkingDirectory="INSTALLFOLDER" />
@@ -118,7 +118,7 @@
       </Directory>
     </StandardDirectory>
 
-    <Feature Id="MainFeature" Title="DEYTT Connect" Level="1">
+    <Feature Id="MainFeature" Title="deytt connect" Level="1">
       <ComponentRef Id="VpnServiceComponent" />
       <ComponentRef Id="AllowedUserSidComponent" />
       <ComponentRef Id="UiExecutableComponent" />
@@ -135,7 +135,7 @@
       </Files>
     </ComponentGroup>
     <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="ApplicationProgramsFolder" Name="DEYTT Connect" />
+      <Directory Id="ApplicationProgramsFolder" Name="deytt connect" />
     </StandardDirectory>
   </Fragment>
 </Wix>

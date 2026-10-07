@@ -42,7 +42,7 @@ internal static class DeyttTheme
     {
         return new TextBlock
         {
-            Text = value,
+            Text = value.ToLowerInvariant(),
             FontFamily = family ?? InterTight,
             FontSize = size,
             FontWeight = weight ?? FontWeight.Normal,

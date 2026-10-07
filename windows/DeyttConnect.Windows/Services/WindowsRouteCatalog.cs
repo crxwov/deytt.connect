@@ -23,6 +23,7 @@ public static class WindowsRouteCatalog
         ("RU", "Россия", "🇷🇺"),
         ("DE", "Германия", "🇩🇪"),
         ("FI", "Финляндия", "🇫🇮"),
+        ("IT", "Италия", "🇮🇹"),
     ];
 
     private static readonly (string Code, string Name)[] Protocols =
@@ -32,7 +33,7 @@ public static class WindowsRouteCatalog
         ("HYSTERIA2", "Hysteria 2"),
     ];
 
-    private static readonly Regex RegionPrefix = new("^(NL|DE|RU|FI)(?:$|[-_\\s])",
+    private static readonly Regex RegionPrefix = new("^(NL|DE|RU|FI|IT)(?:$|[-_\\s])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public static IReadOnlyList<WindowsRoute> Parse(
@@ -74,10 +75,11 @@ public static class WindowsRouteCatalog
         foreach (var protocol in Protocols)
         {
             var tag = $"route:{country.Code}:{protocol.Code}";
-            if (!tags.Contains(tag))
+            if (country.Code != "IT" && !tags.Contains(tag))
                 throw new InvalidDataException("The subscription is missing a required route.");
-            routes.Add(new WindowsRoute(tag, tag, country.Code, country.Name, country.Flag,
-                protocol.Code, protocol.Name));
+            if (tags.Contains(tag))
+                routes.Add(new WindowsRoute(tag, tag, country.Code, country.Name, country.Flag,
+                    protocol.Code, protocol.Name));
         }
 
         foreach (var awgProfile in (awgProfiles ?? []).Take(16))

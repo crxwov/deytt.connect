@@ -676,8 +676,7 @@ public sealed class TelegramApiClient
                        !Uri.UnescapeDataString(key).Equals("server_id", StringComparison.OrdinalIgnoreCase);
             })
             .ToList();
-        parts.Add("format=awg");
-        parts.Add("version=31");
+        parts.Add("format=amneziawg31");
         if (serverId is not null)
             parts.Add("server_id=" + Uri.EscapeDataString(serverId));
         builder.Query = string.Join('&', parts);

@@ -598,28 +598,38 @@ internal sealed class EngineController
     private static async Task<long?> MeasureLatencyAsync(ProbeRouteEndpoint endpoint, string method,
         CancellationToken cancellationToken, Action<int> reportAttempt)
     {
+        var targets = new[]
+        {
+            (Method: method, Url: "https://cp.cloudflare.com/generate_204"),
+            (Method: "GET", Url: "https://www.gstatic.com/generate_204"),
+        };
         var samples = new List<long>(3);
         for (var sample = 0; sample < 3; sample++)
         {
             reportAttempt(sample + 1);
-            try
+            foreach (var target in targets)
             {
-                using var handler = CreateProxyHandler(endpoint);
-                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(8) };
-                using var request = new HttpRequestMessage(new HttpMethod(method),
-                    "https://cp.cloudflare.com/generate_204");
-                request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
-                request.Headers.ConnectionClose = true;
-                var started = Stopwatch.GetTimestamp();
-                using var response = await client.SendAsync(request,
-                    HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                if (response.StatusCode == HttpStatusCode.NoContent)
-                    samples.Add((long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds));
-            }
-            catch (Exception error) when (error is HttpRequestException or TaskCanceledException or IOException)
-            {
-                if (cancellationToken.IsCancellationRequested)
-                    throw new OperationCanceledException(cancellationToken);
+                try
+                {
+                    using var handler = CreateProxyHandler(endpoint);
+                    using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
+                    using var request = new HttpRequestMessage(new HttpMethod(target.Method), target.Url);
+                    request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+                    request.Headers.ConnectionClose = true;
+                    var started = Stopwatch.GetTimestamp();
+                    using var response = await client.SendAsync(request,
+                        HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        samples.Add((long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds));
+                        break;
+                    }
+                }
+                catch (Exception error) when (error is HttpRequestException or TaskCanceledException or IOException)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                        throw new OperationCanceledException(cancellationToken);
+                }
             }
         }
 

@@ -24,15 +24,15 @@ public sealed class RouteGlobeWebView : ContentControl
         ["index.html", "network-atlas.css", "network-atlas.js", "atlas-init.js", "world-land.json"];
     private static readonly HashSet<string> RouteKeys = new(StringComparer.Ordinal)
     {
-        "auto", "nl", "de", "fi", "ru", "ru-de",
+        "auto", "nl", "de", "fi", "ru", "it", "ru-de",
     };
     private static readonly HashSet<string> LocationKeys = new(StringComparer.Ordinal)
     {
-        "nl", "de", "fi", "ru",
+        "nl", "de", "fi", "ru", "it",
     };
     private static readonly HashSet<string> TapKeys = new(StringComparer.Ordinal)
     {
-        "nl", "de", "fi", "ru", "user",
+        "nl", "de", "fi", "ru", "it", "user",
     };
 
     private NativeWebView? _webView;
@@ -247,6 +247,8 @@ public sealed class RouteGlobeWebView : ContentControl
             return "de";
         if (tokens.Contains("FI"))
             return "fi";
+        if (tokens.Contains("IT"))
+            return "it";
         if (tokens.Contains("RU"))
             return "ru";
         return "auto";
@@ -289,6 +291,20 @@ public sealed class RouteGlobeWebView : ContentControl
                 return;
             }
 
+            string? webView2UserDataFolder = null;
+            if (OperatingSystem.IsWindows())
+            {
+                var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                if (string.IsNullOrWhiteSpace(localAppData))
+                {
+                    ShowAtlasError("runtime");
+                    return;
+                }
+
+                webView2UserDataFolder = Path.Combine(localAppData, "DEYTT", "Connect", "WebView2");
+                Directory.CreateDirectory(webView2UserDataFolder);
+            }
+
             _atlasFailed = false;
             _atlasErrorReason = null;
             var webView = new NativeWebView
@@ -306,10 +322,9 @@ public sealed class RouteGlobeWebView : ContentControl
                 }
                 else if (args is WindowsWebView2EnvironmentRequestedEventArgs webView2)
                 {
-                    // The Home page embeds the globe in a scrollable surface beside
-                    // shell controls; offscreen composition prevents WebView2 airspace
-                    // from covering navigation and keeps clipping aligned with layout.
-                    webView2.ExperimentalOffscreen = true;
+                    webView2.UserDataFolder = webView2UserDataFolder!;
+                    // Avoid the experimental offscreen controller crash on supported Windows 10.
+                    webView2.ExperimentalOffscreen = false;
                 }
             };
             webView.AdapterCreated += OnAdapterCreated;

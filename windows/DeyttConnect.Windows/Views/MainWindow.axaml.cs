@@ -1865,10 +1865,10 @@ public partial class MainWindow : Window
 
     private Task<bool> ConfirmMapRegionConsentAsync() => ConfirmDialogAsync(
         Copy("Показывать ваш примерный регион?", "Show your approximate region?"),
-        Copy("Точка определяется по публичному IP через ipinfo.io — это не GPS и на выбор маршрута не влияет. Запрос видит внешний сервис; приложение не сохраняет IP или координаты, а держит точку только в памяти, пока открыто.",
-            "The point is estimated from your public IP through ipinfo.io. This is not GPS and does not affect route selection. The external service receives the request; the app does not save your IP or coordinates and keeps the point in memory only while open."),
+        Copy("Точка определяется по публичному IP через ipinfo.io — это не GPS и на выбор маршрута не влияет. Запрос видит внешний сервис; приложение не сохраняет адрес или координаты, а держит точку только в памяти до закрытия.",
+            "The point is estimated from your public IP through ipinfo.io. This is not GPS and does not affect route selection. The external service receives the request; the app does not save your address or coordinates and keeps the point in memory only until closed."),
         Copy("Показывать на карте", "Show on map"),
-        Copy("Не сейчас", "Not now"));
+        Copy("не сейчас", "not now"));
 
     private StackPanel NewPage(string kicker, string title)
     {
@@ -4104,5 +4104,5 @@ public partial class MainWindow : Window
         }
     }
 
-    private string Copy(string russian, string english) => _language == "ru" ? russian : english;
+    private string Copy(string russian, string english) => (_language == "ru" ? russian : english).ToLowerInvariant();
 }
