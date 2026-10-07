@@ -269,6 +269,12 @@ public sealed class RouteGlobeWebView : ContentControl
         return "auto";
     }
 
+    internal static string RouteKeyFor(string? routeId, IReadOnlyList<WindowsRoute> routes)
+    {
+        var route = routes.FirstOrDefault(item => item.Id == routeId || item.Tag == routeId);
+        // AWG ids encode the server id; geography comes from subscription metadata.
+        return RouteKeyFor(route?.CountryCode ?? routeId);
+    }
     private static string AtlasAssetDirectory => Path.Combine(AppContext.BaseDirectory, "Assets", "route-map");
 
     private void TryInitializeWebView()
