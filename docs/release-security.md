@@ -33,12 +33,15 @@ newer. Use that legacy APK only for installations with the v0.8.17 signing
 identity. Never replace the normal lineage with the historical key: doing so
 would break updates for Android 8.1 and lower users of v0.8.18–v0.8.26.
 
-Human-facing APK assets use `deytt-connect-{version}-{abi}.apk`; the historical
-compatibility build adds `-legacy-` before the ABI. The unversioned
+The canonical Android download is the ARM64 build named
+`deytt-connect-{version}.apk`. Other architecture builds use
+`deytt-connect-{version}-{abi}.apk`; the historical compatibility build adds
+`-legacy-` before the ABI. The unversioned
 `app-{abi}-release.apk` copies exist only for the updater in already-installed
 versions and must contain identical bytes to the normal versioned APK. Keep
-the Android release free of Windows installers until the Windows issue is
-fixed; then attach the MSI and portable ZIP to the same release.
+the Windows installer named `deytt-connect-{version}.msi` and portable archive
+named `deytt-connect-{version}-portable.zip`; attach them to the same release
+only after the Windows issue is fixed.
 
 Future updates are compatible only while the new private key is preserved and
 used for every APK. Private keystores and password files must stay outside the

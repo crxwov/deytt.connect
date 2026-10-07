@@ -136,6 +136,11 @@ jobs:
             (cd output/android && sha256sum "$(basename "$legacy_output")" > "$(basename "$legacy_output").sha256")
           done
 
+          canonical_output="output/android/deytt-connect-${release_version}.apk"
+          cp "output/android/deytt-connect-${release_version}-arm64-v8a.apk" "$canonical_output"
+          python3 scripts/release.py verify "$canonical_output" --expected-version "$release_version" --expected-version-code 40
+          (cd output/android && sha256sum "$(basename "$canonical_output")" > "$(basename "$canonical_output").sha256")
+
       - name: publish apks and signing-key migration instructions
         env:
           GH_TOKEN: ${{ github.token }}
@@ -177,6 +182,8 @@ jobs:
             output/android/app-x86_64-release.apk.sha256 \
             "output/android/deytt-connect-${release_version}-arm64-v8a.apk" \
             "output/android/deytt-connect-${release_version}-arm64-v8a.apk.sha256" \
+            "output/android/deytt-connect-${release_version}.apk" \
+            "output/android/deytt-connect-${release_version}.apk.sha256" \
             "output/android/deytt-connect-${release_version}-armeabi-v7a.apk" \
             "output/android/deytt-connect-${release_version}-armeabi-v7a.apk.sha256" \
             "output/android/deytt-connect-${release_version}-x86_64.apk" \
