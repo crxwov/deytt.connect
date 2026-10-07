@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - v0.8.22
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: release tag for the fixed v0.8.22 validation
+        required: true
+        type: string
+        default: v0.8.22
 
 permissions:
   contents: write
@@ -16,7 +23,15 @@ jobs:
       - name: check out source
         uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.release_tag || github.sha }}
           submodules: recursive
+
+      - name: validate release target
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          if ($env:RELEASE_TAG -ne 'v0.8.22') { throw 'this workflow only validates v0.8.22' }
 
       - name: install pinned .net sdk
         shell: pwsh
@@ -173,25 +188,46 @@ jobs:
           $service = Get-Service -Name 'DEYTTConnectVpn' -ErrorAction Stop
           if ($service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) { throw 'vpn service did not start during the clean MSI install' }
           $service.Dispose()
+          $service = $null
           Stop-Service -Name 'DEYTTConnectVpn' -Force -ErrorAction Stop
-          (Get-Service -Name 'DEYTTConnectVpn' -ErrorAction Stop).WaitForStatus(
-            [System.ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(20))
+          $stoppedService = Get-Service -Name 'DEYTTConnectVpn' -ErrorAction Stop
+          try {
+            $stoppedService.WaitForStatus(
+              [System.ServiceProcess.ServiceControllerStatus]::Stopped, [TimeSpan]::FromSeconds(20))
+          } finally {
+            $stoppedService.Dispose()
+            $stoppedService = $null
+          }
+          [GC]::Collect()
+          [GC]::WaitForPendingFinalizers()
           & sc.exe delete 'DEYTTConnectVpn' | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "could not remove the test vpn service before recovery: $LASTEXITCODE" }
           $serviceRemovalDeadline = [DateTime]::UtcNow.AddSeconds(30)
           do {
             Start-Sleep -Milliseconds 500
             $remainingService = Get-Service -Name 'DEYTTConnectVpn' -ErrorAction SilentlyContinue
-            if ($null -ne $remainingService) { $remainingService.Dispose() }
-          } while ($null -ne $remainingService -and [DateTime]::UtcNow -lt $serviceRemovalDeadline)
-          if ($null -ne $remainingService) { throw 'test vpn service was not removed before the recovery check' }
+            if ($null -ne $remainingService) {
+              $remainingService.Dispose()
+              $remainingService = $true
+            } else {
+              $remainingService = $false
+            }
+          } while ($remainingService -and [DateTime]::UtcNow -lt $serviceRemovalDeadline)
+          if ($remainingService) { throw 'test vpn service was not removed before the recovery check' }
           $installerScript = Join-Path $installDir 'Install-VpnService.ps1'
           $runnerSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
           if (!(Test-Path -LiteralPath $installerScript -PathType Leaf)) { throw 'installed vpn service recovery script is missing' }
+          $recoveryStdout = Join-Path $env:RUNNER_TEMP 'deytt-service-recovery.stdout.log'
+          $recoveryStderr = Join-Path $env:RUNNER_TEMP 'deytt-service-recovery.stderr.log'
           $recovery = Start-Process -FilePath powershell.exe -ArgumentList @(
             '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$installerScript`"",
-            '-AllowedUserSid', "`"$runnerSid`"", '-BundleRoot', "`"$installDir`"") -Wait -PassThru
-          if ($recovery.ExitCode -ne 0) { throw "vpn service recovery script failed: $($recovery.ExitCode)" }
+            '-AllowedUserSid', "`"$runnerSid`"", '-BundleRoot', "`"$installDir`"") -Wait -PassThru `
+            -RedirectStandardOutput $recoveryStdout -RedirectStandardError $recoveryStderr
+          if ($recovery.ExitCode -ne 0) {
+            if (Test-Path -LiteralPath $recoveryStdout) { Get-Content -LiteralPath $recoveryStdout -Tail 100 }
+            if (Test-Path -LiteralPath $recoveryStderr) { Get-Content -LiteralPath $recoveryStderr -Tail 100 }
+            throw "vpn service recovery script failed: $($recovery.ExitCode)"
+          }
           $recoveredService = Get-Service -Name 'DEYTTConnectVpn' -ErrorAction Stop
           try {
             $recoveredService.WaitForStatus([System.ServiceProcess.ServiceControllerStatus]::Running, [TimeSpan]::FromSeconds(20))
@@ -321,7 +357,7 @@ jobs:
       - name: check out source and submodules
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.release_tag || github.sha }}
           submodules: recursive
 
       - name: set up java
@@ -369,7 +405,7 @@ jobs:
 
       - name: sign and verify apks
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
           mkdir -p output/android
@@ -393,7 +429,7 @@ jobs:
       - name: publish apks and lowercase install notes
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/release-notes.md"
