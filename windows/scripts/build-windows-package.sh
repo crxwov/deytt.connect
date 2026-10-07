@@ -5,6 +5,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 dotnet_bin="${DOTNET:-$repo_root/.toolchain/dotnet/dotnet}"
 artifact_dir="${1:-$repo_root/windows/artifacts/win-x64}"
 engine_source="${AMNEZIA_BOX_SOURCE:-$repo_root/.toolchain/amnezia-box}"
+mkdir -p "$repo_root/.toolchain"
 temp_dir="$(mktemp -d "$repo_root/.toolchain/windows-package.XXXXXX")"
 stage_dir="$temp_dir/package"
 trap 'rm -rf "$temp_dir"' EXIT
