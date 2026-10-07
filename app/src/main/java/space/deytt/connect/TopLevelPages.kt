@@ -276,7 +276,7 @@ internal class PrimaryPages(private val host: MainActivity) {
 
         root.addView(spacer(24, host))
         root.addView(host.sectionLabel(copy("Страны", "Countries")))
-        val orderedCodes = listOf("NL", "DE", "RU", "FI", "AWG_UNKNOWN")
+        val orderedCodes = listOf("NL", "DE", "RU", "FI", "IT", "AWG_UNKNOWN")
         val countries = routes.filter { it.countryCode in orderedCodes }
             .groupBy { it.countryCode }
         orderedCodes.filter { it in countries }.forEach { code ->

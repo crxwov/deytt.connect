@@ -22,14 +22,23 @@ backend are excluded; their removal is not evidence they caused antivirus alerts
 ## Signing identity and migration
 
 `release/signing-policy.json` records the expected public certificate SHA-256.
-the normal v0.8.26 apk uses a lineage from the signer used by stable v0.8.18–
-v0.8.25 to the supplied release signer. android 9+ verifies that proof-of-
-rotation; android 8.1 and lower use the previous signer so those installs keep
-updating. a separate `deytt-connect-0.8.26-legacy-{abi}.apk` uses a lineage
-from the recovered v0.8.17 signer to the supplied release signer, and keeps
-that old signer for android 8.1 and lower. use that file only when the installed
-app has the v0.8.17 signing identity. the in-app updater selects only the normal
-`app-{abi}-release.apk` family.
+The normal v0.8.27 APK keeps the v0.8.18–v0.8.26 signer on Android 8.1 and
+lower, and uses the supplied release key (`release.p12`, certificate SHA-256
+`bb39b663e555c7ed7b725c543ed73ea2602432b003591b2e1370f0359c4c4333`) on
+Android 9 and newer. A separate `deytt-connect-0.8.27-legacy-{abi}.apk` keeps
+the recovered v0.8.17 signer from `debug.keystore` (SHA-256
+`25e335babcdc88679ad4e8d884de5a8475866b55341d5b4596c5168e82bf2b46`) on
+Android 8.1 and lower, and uses the same supplied release key on Android 9 and
+newer. Use that legacy APK only for installations with the v0.8.17 signing
+identity. Never replace the normal lineage with the historical key: doing so
+would break updates for Android 8.1 and lower users of v0.8.18–v0.8.26.
+
+Human-facing APK assets use `deytt-connect-{version}-{abi}.apk`; the historical
+compatibility build adds `-legacy-` before the ABI. The unversioned
+`app-{abi}-release.apk` copies exist only for the updater in already-installed
+versions and must contain identical bytes to the normal versioned APK. Keep
+the Android release free of Windows installers until the Windows issue is
+fixed; then attach the MSI and portable ZIP to the same release.
 
 Future updates are compatible only while the new private key is preserved and
 used for every APK. Private keystores and password files must stay outside the
@@ -48,13 +57,13 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
 
 python3 scripts/release.py sign \
   app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk \
-  --output output/release/deytt-connect-0.8.26-arm64-v8a.apk \
+  --output output/release/deytt-connect-0.8.27-arm64-v8a.apk \
   --keystore /secure/signing/release.p12 \
   --password-file /secure/signing/release.password \
   --legacy-keystore /secure/signing/current-release.p12 \
   --legacy-key-alias deytt-connect
 
-python3 scripts/release.py verify output/release/deytt-connect-0.8.26-arm64-v8a.apk
+python3 scripts/release.py verify output/release/deytt-connect-0.8.27-arm64-v8a.apk
 ```
 
 The release script refuses

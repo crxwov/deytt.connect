@@ -1227,6 +1227,7 @@ class MainActivity : Activity() {
             "DE", "RU-DE" -> "Франкфурт"
             "RU" -> "Санкт-Петербург"
             "FI" -> "Хельсинки"
+            "IT" -> "Милан"
             else -> return uiCopy(selected.title)
         }
         return (if (route.countryCode == "RU-DE") "🇩🇪" else route.flag) + " " + uiCopy(city)

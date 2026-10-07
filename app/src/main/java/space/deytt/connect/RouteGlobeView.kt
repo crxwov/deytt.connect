@@ -24,7 +24,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var egressCountryCode: String? = null
     private var activeAutoRouteKey: String? = null
     private var pageLoaded = false
-    private var availableLocations = setOf("nl", "de", "fi", "ru")
+    private var availableLocations = setOf("nl", "de", "fi", "ru", "it")
     private var trafficActive = false
     private val atlas: WebView
     var onMapNodeTapped: ((String) -> Unit)? = null
@@ -33,7 +33,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         @JavascriptInterface
         fun onNodeTap(code: String) {
             val node = code.lowercase()
-            if (node !in setOf("nl", "de", "fi", "ru", "user")) return
+            if (node !in setOf("nl", "de", "fi", "ru", "it", "user")) return
             post { onMapNodeTapped?.invoke(node) }
         }
     }
@@ -224,8 +224,9 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                 "de" -> "The selected exit is Frankfurt, Germany"
                 "fi" -> "The selected exit is Helsinki, Finland"
                 "ru" -> "The selected exit is Saint Petersburg, Russia"
+                "it" -> "The selected exit is Milan, Italy"
                 "ru-de" -> "The selected route is a double hop from Saint Petersburg to Frankfurt"
-                else -> "Available exits are Amsterdam, Frankfurt, Helsinki, and Saint Petersburg"
+                else -> "Available exits are Amsterdam, Frankfurt, Helsinki, Milan, and Saint Petersburg"
             }
         val origin = networkLocation?.let {
             " Entry point: ${it.placeLabel}, approximate by IP; the IP address is not stored."
@@ -238,8 +239,9 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             "de" -> "выбрана точка Франкфурт, Германия"
             "fi" -> "выбрана точка Хельсинки, Финляндия"
             "ru" -> "выбрана точка Санкт-Петербург, Россия"
+            "it" -> "выбрана точка Милан, Италия"
             "ru-de" -> "показан двойной маршрут Санкт-Петербург — Франкфурт"
-            else -> "показаны точки Амстердам, Франкфурт, Хельсинки и Санкт-Петербург"
+            else -> "показаны точки Амстердам, Франкфурт, Хельсинки, Милан и Санкт-Петербург"
         }
         val origin = networkLocation?.let { " Точка входа — ${it.placeLabel}, приблизительно по IP; адрес IP не сохраняется." }.orEmpty()
         val egress = if (route == "auto" && egressCountryCode != null) " Примерно по IP выбран выход в ${countryName(egressCountryCode!!)}." else ""
@@ -250,6 +252,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         "NL" -> "Нидерландах"
         "DE" -> "Германии"
         "FI" -> "Финляндии"
+        "IT" -> "Италии"
         "RU" -> "России"
         else -> code
     }

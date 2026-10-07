@@ -28,7 +28,7 @@
     de: { code: "de", city: "Франкфурт-на-Майне", country: "Германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
     fi: { code: "fi", city: "Хельсинки", country: "Финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
     ru: { code: "ru", city: "Санкт-Петербург", country: "Россия", countryId: "643", lat: 59.9311, lon: 30.3609 },
-    it: { code: "it", city: "выход", country: "Италия", countryId: "380", lat: 42.5, lon: 12.5 }
+    it: { code: "it", city: "Милан", country: "Италия", countryId: "380", lat: 42.5, lon: 12.5 }
   };
   const COUNTRY_EXIT_KEYS = { NL: "nl", DE: "de", FI: "fi", RU: "ru", IT: "it" };
   const ROUTES = {
@@ -91,6 +91,7 @@
     "германия": "Germany",
     "хельсинки": "Helsinki",
     "финляндия": "Finland",
+    "милан": "Milan",
     "италия": "Italy",
     "выход": "Exit",
     "санкт-петербург": "Saint Petersburg",
