@@ -40,12 +40,34 @@ jobs:
           DOTNET: dotnet
         run: DOTNET="$(command -v dotnet)" windows/scripts/build-windows-package.sh windows/artifacts/win-x64
 
+      - name: prepare msi package layout
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = (Resolve-Path 'windows/artifacts/win-x64').Path
+          $stage = Join-Path (Resolve-Path 'windows/artifacts').Path 'msi-stage'
+          Copy-Item -LiteralPath $source -Destination $stage -Recurse
+          $service = Join-Path $stage 'service'
+          if (!(Test-Path -LiteralPath $service -PathType Container)) { throw 'service payload folder is missing' }
+          if (Get-ChildItem -LiteralPath $service -Directory -Recurse) { throw 'unexpected nested service payload' }
+          foreach ($file in Get-ChildItem -LiteralPath $service -File) {
+            $target = Join-Path $stage $file.Name
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
+              if ((Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash) {
+                throw "conflicting app and service payload file: $($file.Name)"
+              }
+            } else {
+              Copy-Item -LiteralPath $file.FullName -Destination $target
+            }
+          }
+          Remove-Item -LiteralPath $service -Recurse -Force
+
       - name: build msi
         shell: pwsh
         run: >-
           ./windows/installer/Build-Msi.ps1
           -ProductVersion 0.8.20
-          -PackageStageDir windows/artifacts/win-x64
+          -PackageStageDir windows/artifacts/msi-stage
           -BuildRoot windows/artifacts/msi-build
           -Dotnet dotnet
 
