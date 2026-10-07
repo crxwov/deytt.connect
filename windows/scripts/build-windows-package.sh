@@ -48,18 +48,18 @@ cp "$repo_root/windows/scripts/Install-VpnService.ps1" "$stage_dir/Install-VpnSe
 cp "$repo_root/windows/scripts/Uninstall-VpnService.ps1" "$stage_dir/Uninstall-VpnService.ps1"
 
 cat > "$stage_dir/WINDOWS-README.txt" <<'EOF'
-DEYTT Connect for Windows x64
+deytt connect for windows x64
 
 Run DeyttConnect.Windows.exe. The first VPN connection requires installing the
-privileged tunnel service from Settings; Windows will show an administrator
+privileged tunnel service from settings; windows will show an administrator
 approval prompt. The desktop application itself runs without elevation.
 
-The interactive map uses the same bundled offline DEYTT atlas as Android and
-requires Microsoft Edge WebView2 Runtime. Map geography is bundled; map tiles
+the interactive map uses the same bundled offline atlas as android and
+requires microsoft edge webview2 runtime. map geography is bundled; map tiles
 are not downloaded.
 
-The VPN engine source archive and its license are in source/. See
-THIRD-PARTY-NOTICES.md for component and attribution details.
+the vpn engine source archive and its license are in source/. see
+third-party-notices.md for component and attribution details.
 EOF
 
 if [[ -f "$repo_root/LICENSE" ]]; then

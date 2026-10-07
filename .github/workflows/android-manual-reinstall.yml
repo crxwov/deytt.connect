@@ -1,20 +1,22 @@
-name: Android signing-key migration and release APK publishing
+name: android signing-key migration and release apk publishing
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing stable release to attach the signed APKs to
+        description: Stable release tag for the signed APKs
         required: true
         type: string
-        default: v0.8.18
+        default: v0.8.20
 
 permissions:
   contents: write
 
 jobs:
   build-and-publish:
-    if: github.repository == 'crxwov/deytt.connect'
+    if: github.repository == 'crxwov/deytt.connect' && (github.event_name == 'workflow_dispatch' || github.event.release.tag_name == 'v0.8.20')
     runs-on: ubuntu-latest
     steps:
       - name: Check out source and submodules
@@ -50,12 +52,12 @@ jobs:
 
       - name: Validate release target
         env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           case "$RELEASE_TAG" in
-            v0.8.18|v0.8.18-preview.1) ;;
+            v0.8.20) ;;
             *)
-              echo "This signing-key migration workflow only publishes v0.8.18 releases." >&2
+              echo "This signing-key migration workflow only publishes v0.8.20 releases." >&2
               exit 1
               ;;
           esac
@@ -76,12 +78,15 @@ jobs:
           printf '%s' "$ANDROID_RELEASE_KEY_PASSWORD" > "$RUNNER_TEMP/deytt-connect-release.password"
 
       - name: Sign, verify, and expose updater-compatible APK names
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           set -euo pipefail
           mkdir -p output/android
+          release_version="${RELEASE_TAG#v}"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             input="app/build/outputs/apk/release/app-${abi}-release-unsigned.apk"
-            output="output/android/deytt-connect-0.8.18-manual-reinstall-${abi}.apk"
+            output="output/android/deytt-connect-${release_version}-manual-reinstall-${abi}.apk"
             updater_output="output/android/app-${abi}-release.apk"
             test -f "$input"
             python3 scripts/release.py sign "$input" \
@@ -89,6 +94,7 @@ jobs:
               --keystore "$RUNNER_TEMP/deytt-connect-release.p12" \
               --password-file "$RUNNER_TEMP/deytt-connect-release.password"
             python3 scripts/release.py verify "$output"
+            (cd output/android && sha256sum "$(basename "$output")" > "$(basename "$output").sha256")
             cp "$output" "$updater_output"
             python3 scripts/release.py verify "$updater_output"
             (cd output/android && sha256sum "app-${abi}-release.apk" > "app-${abi}-release.apk.sha256")
@@ -97,33 +103,34 @@ jobs:
       - name: Publish APKs and manual-install instructions
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           set -euo pipefail
           gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/release-notes.md"
+          release_version="${RELEASE_TAG#v}"
           python3 - <<'PY'
           import os
           from pathlib import Path
 
           notes = Path(os.environ["RUNNER_TEMP"]) / "release-notes.md"
           body = notes.read_text(encoding="utf-8").rstrip()
-          marker = "## Android manual installation — new signing key"
+          marker = "## android manual installation — new signing key"
           if marker in body:
               body = body.split(marker, 1)[0].rstrip()
           body += """
 
           ---
 
-          ## Android manual installation — new signing key
+          ## android manual installation — new signing key
 
-          These APKs use a new signing key because the previous private key is unavailable. Android cannot install them over an existing DEYTT Connect APK signed with the old key. Updater-compatible app-{abi}-release.apk assets are also published so the app can find and verify these downloads.
+          эти apk подписаны новым ключом, поскольку прежний закрытый ключ недоступен. android не установит их поверх deytt connect, подписанного старым ключом. также опубликованы файлы app-{abi}-release.apk для проверки и установки обновлений внутри приложения.
 
-          1. Make sure you can sign in to your DEYTT Connect account.
-          2. If the app is already installed with the old signing key, uninstall it first. Android may erase its local settings and saved sign-in state.
-          3. Download the APK matching your device: arm64-v8a for most modern phones, armeabi-v7a for older 32-bit ARM devices, or x86_64 for x86 Android devices.
-          4. Install the APK, open the app, and sign in again.
+          1. убедитесь, что можете войти в аккаунт deytt connect.
+          2. если приложение установлено со старым ключом, сначала удалите его. android может стереть настройки и сохранённый вход.
+          3. скачайте apk для своего устройства: arm64-v8a для большинства современных телефонов, armeabi-v7a для старых 32-битных устройств или x86_64 для android на x86.
+          4. установите apk, откройте приложение и войдите снова.
 
-          Future in-app APK updates require the same new signing key.
+          будущие обновления внутри приложения используют тот же новый ключ.
           """
           notes.write_text(body.rstrip() + "\n", encoding="utf-8")
           PY
@@ -134,11 +141,11 @@ jobs:
             output/android/app-armeabi-v7a-release.apk.sha256 \
             output/android/app-x86_64-release.apk \
             output/android/app-x86_64-release.apk.sha256 \
-            output/android/deytt-connect-0.8.18-manual-reinstall-arm64-v8a.apk \
-            output/android/deytt-connect-0.8.18-manual-reinstall-arm64-v8a.apk.sha256 \
-            output/android/deytt-connect-0.8.18-manual-reinstall-armeabi-v7a.apk \
-            output/android/deytt-connect-0.8.18-manual-reinstall-armeabi-v7a.apk.sha256 \
-            output/android/deytt-connect-0.8.18-manual-reinstall-x86_64.apk \
-            output/android/deytt-connect-0.8.18-manual-reinstall-x86_64.apk.sha256 \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-arm64-v8a.apk" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-arm64-v8a.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-armeabi-v7a.apk" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-armeabi-v7a.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-x86_64.apk" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-x86_64.apk.sha256" \
             --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md"

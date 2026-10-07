@@ -1,0 +1,104 @@
+name: windows release
+
+on:
+  push:
+    tags:
+      - v0.8.20
+
+permissions:
+  contents: write
+
+jobs:
+  package-and-validate:
+    if: github.repository == 'crxwov/deytt.connect'
+    runs-on: windows-latest
+    steps:
+      - name: check out source
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: set up .net
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.401
+
+      - name: set up go
+        uses: actions/setup-go@v6
+        with:
+          go-version: 1.25.14
+
+      - name: build windows package
+        shell: bash
+        env:
+          DOTNET: dotnet
+        run: DOTNET="$(command -v dotnet)" windows/scripts/build-windows-package.sh windows/artifacts/win-x64
+
+      - name: build msi
+        shell: pwsh
+        run: >-
+          ./windows/installer/Build-Msi.ps1
+          -ProductVersion 0.8.20
+          -PackageStageDir windows/artifacts/win-x64
+          -BuildRoot windows/artifacts/msi-build
+          -Dotnet dotnet
+
+      - name: test clean install, repair, and uninstall
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = (Resolve-Path 'windows/artifacts/msi-build/output/DEYTTConnect.Windows.Installer.msi').Path
+          $installLog = Join-Path $env:RUNNER_TEMP 'deytt-install.log'
+          $repairLog = Join-Path $env:RUNNER_TEMP 'deytt-repair.log'
+          $removeLog = Join-Path $env:RUNNER_TEMP 'deytt-remove.log'
+          $install = Start-Process msiexec.exe -ArgumentList @('/i', "`"$msi`"", '/qn', '/norestart', '/l*v', "`"$installLog`"") -Wait -PassThru
+          if ($install.ExitCode -notin @(0, 3010)) { Get-Content $installLog -Tail 100; throw "clean install failed: $($install.ExitCode)" }
+          $app = Join-Path $env:ProgramFiles 'DEYTT/Connect/DeyttConnect.Windows.exe'
+          if (!(Test-Path $app)) { throw 'installed app executable is missing' }
+          $service = Get-Service -Name 'DEYTTConnectVpn' -ErrorAction Stop
+          $uninstall = Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'deytt connect' } | Select-Object -First 1
+          if (!$uninstall) { throw 'installed product registration is missing' }
+          $productCode = $uninstall.PSChildName
+          if (!(Test-Path (Join-Path $env:ProgramData 'Microsoft/Windows/Start Menu/Programs/DEYTT Connect'))) {
+            $startMenu = Join-Path $env:APPDATA 'Microsoft/Windows/Start Menu/Programs/deytt connect.lnk'
+            if (!(Test-Path $startMenu)) { Write-Host 'start menu shortcut is per-user or localized; MSI metadata already checks it' }
+          }
+          $repair = Start-Process msiexec.exe -ArgumentList @('/fa', $productCode, '/qn', '/norestart', '/l*v', "`"$repairLog`"") -Wait -PassThru
+          if ($repair.ExitCode -notin @(0, 3010)) { Get-Content $repairLog -Tail 100; throw "repair failed: $($repair.ExitCode)" }
+          $remove = Start-Process msiexec.exe -ArgumentList @('/x', $productCode, '/qn', '/norestart', '/l*v', "`"$removeLog`"") -Wait -PassThru
+          if ($remove.ExitCode -notin @(0, 3010)) { Get-Content $removeLog -Tail 100; throw "uninstall failed: $($remove.ExitCode)" }
+          if (Test-Path $app) { throw 'application files remain after uninstall' }
+          if (Get-Service -Name 'DEYTTConnectVpn' -ErrorAction SilentlyContinue) { throw 'vpn service remains after uninstall' }
+
+      - name: prepare release assets
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $assets = 'windows/artifacts/release-assets'
+          New-Item -ItemType Directory -Force -Path $assets | Out-Null
+          Compress-Archive -Path 'windows/artifacts/win-x64/*' -DestinationPath "$assets/deytt-connect-windows-x64.zip" -CompressionLevel Optimal
+          Copy-Item 'windows/artifacts/msi-build/output/DEYTTConnect.Windows.Installer.msi' "$assets/deytt-connect-windows-x64.msi"
+          Get-FileHash "$assets/deytt-connect-windows-x64.zip" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  deytt-connect-windows-x64.zip" } | Set-Content "$assets/deytt-connect-windows-x64.zip.sha256" -Encoding ascii
+          Get-FileHash "$assets/deytt-connect-windows-x64.msi" -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  deytt-connect-windows-x64.msi" } | Set-Content "$assets/deytt-connect-windows-x64.msi.sha256" -Encoding ascii
+          Get-Content "$assets/deytt-connect-windows-x64.zip.sha256", "$assets/deytt-connect-windows-x64.msi.sha256" | Set-Content "$assets/SHA256SUMS.txt" -Encoding ascii
+
+      - name: publish stable release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.8.20
+          name: deytt connect 0.8.20
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+          body: |
+            исправлена стабильность приложения, добавлено отображение доступных маршрутов италии и amneziawg из подписки, улучшены проверки доступности серверов.
+
+            windows: установщик msi или портативный zip. msi проверяется на чистую установку, восстановление и удаление.
+
+            android: apk появятся после сборки и проверки подписи. при первом переходе на новый ключ потребуется удалить предыдущую версию и установить apk заново.
+          files: |
+            windows/artifacts/release-assets/deytt-connect-windows-x64.zip
+            windows/artifacts/release-assets/deytt-connect-windows-x64.zip.sha256
+            windows/artifacts/release-assets/deytt-connect-windows-x64.msi
+            windows/artifacts/release-assets/deytt-connect-windows-x64.msi.sha256
+            windows/artifacts/release-assets/SHA256SUMS.txt
