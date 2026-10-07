@@ -22,10 +22,10 @@ backend are excluded; their removal is not evidence they caused antivirus alerts
 ## Signing identity and migration
 
 `release/signing-policy.json` records the expected public certificate SHA-256.
-The normal v0.8.27 APK keeps the v0.8.18–v0.8.26 signer on Android 8.1 and
+The normal v0.8.28 APK keeps the v0.8.18–v0.8.26 signer on Android 8.1 and
 lower, and uses the supplied release key (`release.p12`, certificate SHA-256
 `bb39b663e555c7ed7b725c543ed73ea2602432b003591b2e1370f0359c4c4333`) on
-Android 9 and newer. A separate `deytt-connect-0.8.27-legacy-{abi}.apk` keeps
+Android 9 and newer. A separate `deytt-connect-0.8.28-legacy-{abi}.apk` keeps
 the recovered v0.8.17 signer from `debug.keystore` (SHA-256
 `25e335babcdc88679ad4e8d884de5a8475866b55341d5b4596c5168e82bf2b46`) on
 Android 8.1 and lower, and uses the same supplied release key on Android 9 and
@@ -60,13 +60,13 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
 
 python3 scripts/release.py sign \
   app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk \
-  --output output/release/deytt-connect-0.8.27-arm64-v8a.apk \
+  --output output/release/deytt-connect-0.8.28-arm64-v8a.apk \
   --keystore /secure/signing/release.p12 \
   --password-file /secure/signing/release.password \
   --legacy-keystore /secure/signing/current-release.p12 \
   --legacy-key-alias deytt-connect
 
-python3 scripts/release.py verify output/release/deytt-connect-0.8.27-arm64-v8a.apk
+python3 scripts/release.py verify output/release/deytt-connect-0.8.28-arm64-v8a.apk
 ```
 
 The release script refuses

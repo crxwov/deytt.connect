@@ -274,6 +274,36 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         if (quickGroup.childCount > 0) root.addView(quickGroup)
 
+        val amneziaRoutes = routes.filter { it.engine == TunnelEngine.AMNEZIAWG }
+        root.addView(spacer(24, host))
+        root.addView(host.sectionLabel("AmneziaWG"))
+        if (amneziaRoutes.isEmpty()) {
+            root.addView(host.note(
+                copy(
+                    "Ключи AmneziaWG пока не загружены. Обновите подписку, чтобы получить доступные профили.",
+                    "AmneziaWG keys are not loaded yet. Refresh the subscription to get available profiles.",
+                ),
+                AMBER,
+            ))
+        } else {
+            amneziaRoutes.forEach { route ->
+                val title = route.profileName?.takeIf { it.isNotBlank() } ?: route.protocol.title
+                root.addView(host.row(
+                    title,
+                    "${route.country} · ${route.protocol.title}",
+                    "AWG_MARK",
+                    copy("выбрать", "select"),
+                    selectedId == route.id,
+                ).apply { setOnClickListener { host.selectRoute(route) } })
+            }
+        }
+        root.addView(host.row(
+            copy("Обновить ключи AmneziaWG", "Refresh AmneziaWG keys"),
+            copy("Повторно загрузить подписку и профили", "Reload subscription and profiles"),
+            "↻",
+            copy("обновить", "refresh"),
+        ).apply { setOnClickListener { host.startActivity(Intent(host, SetupActivity::class.java)) } })
+
         root.addView(spacer(24, host))
         root.addView(host.sectionLabel(copy("Страны", "Countries")))
         val orderedCodes = listOf("NL", "DE", "RU", "FI", "IT", "AWG_UNKNOWN")

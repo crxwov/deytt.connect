@@ -393,19 +393,43 @@ object SubscriptionClient {
                 transport = transport,
             )
                 ?: return AwgFetchResult(version, emptyList(), AwgFetchState.NOT_AVAILABLE)
-            val servers = try { JSONArray(first.awgServers ?: "[]") } catch (error: Exception) {
+            val manifestFallback = runCatching {
+                AwgProfile("awg$version", version, "основной", "awg", first.body).also { profile ->
+                    requireAwgProfileSize(profile.config)
+                    AwgProfileStore.validate(profile.config)
+                }
+            }.getOrNull()
+            fun malformedManifestResult(): AwgFetchResult? = manifestFallback?.let { profile ->
+                AwgFetchResult(
+                    version = version,
+                    profiles = listOf(profile),
+                    state = AwgFetchState.PARTIAL_FAILURE,
+                    warning = "${awgName(version)}: список серверов повреждён. Добавлен первый профиль; обновите подписку для полного списка.",
+                )
+            }
+            val servers = try { JSONArray(first.awgServers?.takeIf { it.isNotBlank() } ?: "[]") } catch (error: Exception) {
+                malformedManifestResult()?.let { return it }
                 throw SubscriptionPayloadException()
             }
-            if (servers != null && servers.length() > 16) throw SubscriptionPayloadException()
+            if (servers.length() > 16) {
+                malformedManifestResult()?.let { return it }
+                throw SubscriptionPayloadException()
+            }
             val advertisedIds = mutableSetOf<String>()
-            if (servers != null) for (index in 0 until servers.length()) {
-                val item = servers.optJSONObject(index) ?: throw SubscriptionPayloadException()
+            for (index in 0 until servers.length()) {
+                val item = servers.optJSONObject(index) ?: run {
+                    malformedManifestResult()?.let { return it }
+                    throw SubscriptionPayloadException()
+                }
                 val id = item.optString("id").trim()
-                if (id.isEmpty() || id.length > 128 || !advertisedIds.add(id)) throw SubscriptionPayloadException()
+                if (id.isEmpty() || id.length > 128 || !advertisedIds.add(id)) {
+                    malformedManifestResult()?.let { return it }
+                    throw SubscriptionPayloadException()
+                }
             }
             val failedIds = mutableSetOf<String>()
             var failedRequestsAreTransient = true
-            val profiles = if (servers == null || servers.length() == 0) {
+            val profiles = if (servers.length() == 0) {
                 listOf(AwgProfile("awg$version", version, "основной", "awg", first.body)).also {
                     requireAwgProfileSize(first.body)
                     it.forEach { profile -> AwgProfileStore.validate(profile.config) }
@@ -466,7 +490,7 @@ object SubscriptionClient {
                     }
                 }
             }
-            if (servers != null && servers.length() > 0 && profiles.isEmpty() && failedIds.isEmpty()) {
+            if (servers.length() > 0 && profiles.isEmpty() && failedIds.isEmpty()) {
                 throw IOException("Сервер не вернул ни одного профиля AmneziaWG")
             }
             if (profiles.isEmpty() && failedIds.isNotEmpty()) {
