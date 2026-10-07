@@ -352,7 +352,11 @@ class SubscriptionClientTest {
         }.exceptionOrNull() as SubscriptionHttpFailure
         assertEquals("app_device_limit_reached", error.code)
         assertEquals(1, transport.calls.size)
-        assertTrue(SubscriptionErrorText.userMessage(error).contains("другим устройством"))
+        val message = SubscriptionErrorText.userMessage(error)
+        assertTrue(message.contains("один слот на телефон"))
+        assertTrue(message.contains("компьютерные подключения и happ используют отдельные слоты"))
+        assertTrue(message.contains("выйдите из приложения на старом телефоне"))
+        assertTrue(message.contains("не отключает устройство автоматически"))
     }
 
     @Test

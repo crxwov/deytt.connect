@@ -116,12 +116,12 @@ object DeyttUi {
                 addView(backAction, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(48)))
             }
             if (kicker.isNotBlank()) {
-                addView(text(uiCopy(kicker).uppercase(), 10f, SKY, Typeface.BOLD).apply {
+                addView(text(uiCopy(kicker), 10f, SKY, Typeface.BOLD).apply {
                     letterSpacing = .13f
                     setPadding(0, dp(5), 0, 0)
                 })
             }
-            addView(text(title, 23f, TEXT).apply {
+            addView(text(uiCopy(title), 23f, TEXT).apply {
                 letterSpacing = -.035f
                 typeface = typeface(FontFamily.INTER_TIGHT, 650)
                 setPadding(0, dp(5), 0, dp(7))
@@ -386,7 +386,7 @@ object DeyttUi {
         layoutParams = LinearLayout.LayoutParams(1, activity.dp(height))
     }
 
-    fun Activity.sectionLabel(value: String): TextView = mono(value.uppercase(), 9f, MUTED, 560).apply {
+    fun Activity.sectionLabel(value: String): TextView = mono(uiCopy(value), 9f, MUTED, 560).apply {
         setPadding(0, dp(3), 0, dp(7))
     }
 

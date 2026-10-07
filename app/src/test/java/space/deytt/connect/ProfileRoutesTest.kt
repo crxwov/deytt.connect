@@ -37,7 +37,9 @@ class ProfileRoutesTest {
             routes.map(RouteOption::tag),
         )
         assertEquals("автоподбор", routes.first().label)
+        assertEquals("самый быстрый доступный маршрут", routes.first().detail)
         assertEquals("германия", routes[1].label)
+        assertEquals("vless · trojan · hysteria 2", routes[1].detail)
         assertEquals("🇩🇪", routes[1].flag)
     }
 

@@ -3,14 +3,14 @@ name: windows release
 on:
   push:
     tags:
-      - v0.8.24
+      - v0.8.25
   workflow_dispatch:
     inputs:
       release_tag:
-        description: release tag for the fixed v0.8.24 validation
+        description: release tag for the fixed v0.8.25 validation
         required: true
         type: string
-        default: v0.8.24
+        default: v0.8.25
 
 permissions:
   contents: write
@@ -31,7 +31,7 @@ jobs:
         env:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
-          if ($env:RELEASE_TAG -ne 'v0.8.24') { throw 'this workflow only validates v0.8.24' }
+          if ($env:RELEASE_TAG -ne 'v0.8.25') { throw 'this workflow only validates v0.8.25' }
 
       - name: install pinned .net sdk
         shell: pwsh
@@ -71,7 +71,7 @@ jobs:
         run: >-
           ./windows/scripts/Write-PackageProvenance.ps1
           -PackageDirectory windows/artifacts/win-x64
-          -ExpectedVersion 0.8.24
+          -ExpectedVersion 0.8.25
           -RequireCleanSource
 
       - name: build portable package and updater archive
@@ -108,7 +108,7 @@ jobs:
         shell: pwsh
         run: >-
           ./windows/installer/Build-Msi.ps1
-          -ProductVersion 0.8.24
+          -ProductVersion 0.8.25
           -PackageStageDir windows/artifacts/msi-stage
           -BuildRoot windows/artifacts/msi-build
           -Dotnet dotnet
@@ -132,7 +132,7 @@ jobs:
             if (!(Test-Path -LiteralPath $dll -PathType Leaf)) { throw "installed assembly is missing: $(Split-Path -Leaf $dll)" }
             $assemblyVersion = [Reflection.AssemblyName]::GetAssemblyName($dll).Version.ToString()
             $fileVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($dll).FileVersion
-            if ($assemblyVersion -ne '0.8.24.0' -or $fileVersion -ne '0.8.24.0') {
+            if ($assemblyVersion -ne '0.8.25.0' -or $fileVersion -ne '0.8.25.0') {
               throw "installed assembly version mismatch for $(Split-Path -Leaf $dll): $assemblyVersion / $fileVersion"
             }
           }
@@ -140,7 +140,7 @@ jobs:
           if (!(Test-Path -LiteralPath $buildInfoPath -PathType Leaf)) { throw 'installed package provenance file is missing' }
           $buildInfo = Get-Content -LiteralPath $buildInfoPath -Raw | ConvertFrom-Json
           $sourceCommit = (& git rev-parse HEAD).Trim()
-          if ($LASTEXITCODE -ne 0 -or $buildInfo.expected_version -ne '0.8.24' -or
+          if ($LASTEXITCODE -ne 0 -or $buildInfo.expected_version -ne '0.8.25' -or
               $buildInfo.source_commit -ne $sourceCommit) {
             throw "installed package provenance mismatch: version=$($buildInfo.expected_version), commit=$($buildInfo.source_commit)"
           }
@@ -296,17 +296,17 @@ jobs:
             if ($version -ne '0.8.20.0') { throw "expected v0.8.20 before upgrade, found $version in $assembly" }
           }
           $upgradeInstall = Start-Process msiexec.exe -ArgumentList @('/i', "`"$currentMsi`"", '/qn', '/norestart', '/l*v', "`"$upgradeLog`"") -Wait -PassThru
-          if ($upgradeInstall.ExitCode -notin @(0, 3010)) { Get-Content $upgradeLog -Tail 100; throw "v0.8.24 upgrade failed: $($upgradeInstall.ExitCode)" }
+          if ($upgradeInstall.ExitCode -notin @(0, 3010)) { Get-Content $upgradeLog -Tail 100; throw "v0.8.25 upgrade failed: $($upgradeInstall.ExitCode)" }
           foreach ($assembly in @('DeyttConnect.Windows.dll', 'DeyttConnect.Windows.Service.dll')) {
             $assemblyPath = Join-Path (Split-Path -Parent $upgradeApp) $assembly
-            if (!(Test-Path -LiteralPath $assemblyPath -PathType Leaf)) { throw "v0.8.24 assembly is missing: $assembly" }
+            if (!(Test-Path -LiteralPath $assemblyPath -PathType Leaf)) { throw "v0.8.25 assembly is missing: $assembly" }
             $version = [Reflection.AssemblyName]::GetAssemblyName($assemblyPath).Version.ToString()
-            if ($version -ne '0.8.24.0') { throw "expected v0.8.24 after upgrade, found $version in $assembly" }
+            if ($version -ne '0.8.25.0') { throw "expected v0.8.25 after upgrade, found $version in $assembly" }
           }
           $productRegistrations = @(Get-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*' -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'deytt connect' })
           if ($productRegistrations.Count -ne 1) { throw "expected exactly one current product registration after upgrade, found $($productRegistrations.Count)" }
           $upgradeRemove = Start-Process msiexec.exe -ArgumentList @('/x', $productRegistrations[0].PSChildName, '/qn', '/norestart', '/l*v', "`"$upgradeRemoveLog`"") -Wait -PassThru
-          if ($upgradeRemove.ExitCode -notin @(0, 3010)) { Get-Content $upgradeRemoveLog -Tail 100; throw "v0.8.24 uninstall after upgrade failed: $($upgradeRemove.ExitCode)" }
+          if ($upgradeRemove.ExitCode -notin @(0, 3010)) { Get-Content $upgradeRemoveLog -Tail 100; throw "v0.8.25 uninstall after upgrade failed: $($upgradeRemove.ExitCode)" }
           if (Test-Path $upgradeApp) { throw 'application files remain after upgraded product uninstall' }
           $serviceDeadline = [DateTime]::UtcNow.AddSeconds(30)
           do {
@@ -352,17 +352,17 @@ jobs:
             'windows/artifacts/release-assets/deytt-connect-windows-x64.msi.sha256',
             'windows/artifacts/release-assets/SHA256SUMS.txt'
           )
-          gh release view v0.8.24 --repo $env:GITHUB_REPOSITORY *> $null
+          gh release view v0.8.25 --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
-            $releaseId = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/v0.8.24" --jq .id
+            $releaseId = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/v0.8.25" --jq .id
             if ($LASTEXITCODE -ne 0 -or !$releaseId) { throw 'could not find the existing prerelease' }
             gh api "repos/$env:GITHUB_REPOSITORY/releases/$releaseId" --method PATCH -F prerelease=true -f make_latest=false | Out-Null
             if ($LASTEXITCODE -ne 0) { throw 'could not mark existing release as prerelease' }
-            gh release upload v0.8.24 @assets --repo $env:GITHUB_REPOSITORY --clobber
+            gh release upload v0.8.25 @assets --repo $env:GITHUB_REPOSITORY --clobber
             if ($LASTEXITCODE -ne 0) { throw 'release asset upload failed' }
-            gh release edit v0.8.24 --repo $env:GITHUB_REPOSITORY --title 'deytt connect 0.8.24' --notes-file $notes
+            gh release edit v0.8.25 --repo $env:GITHUB_REPOSITORY --title 'deytt connect 0.8.25' --notes-file $notes
           } else {
-            gh release create v0.8.24 @assets --repo $env:GITHUB_REPOSITORY --title 'deytt connect 0.8.24' --notes-file $notes --prerelease --latest=false
+            gh release create v0.8.25 @assets --repo $env:GITHUB_REPOSITORY --title 'deytt connect 0.8.25' --notes-file $notes --prerelease --latest=false
           }
           if ($LASTEXITCODE -ne 0) { throw 'release publication failed' }
 
@@ -505,14 +505,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          release_json="$(gh release view v0.8.24 --repo "$GITHUB_REPOSITORY" --json isPrerelease,assets)"
+          release_json="$(gh release view v0.8.25 --repo "$GITHUB_REPOSITORY" --json isPrerelease,assets)"
           python3 - "$release_json" <<'PY'
           import json
           import sys
 
           release = json.loads(sys.argv[1])
           if not release["isPrerelease"]:
-              raise SystemExit("v0.8.24 must remain a prerelease until validation completes")
+              raise SystemExit("v0.8.25 must remain a prerelease until validation completes")
           names = {asset["name"] for asset in release["assets"]}
           required = {
               "deytt-connect-windows-x64.zip",
@@ -526,20 +526,20 @@ jobs:
               "app-armeabi-v7a-release.apk.sha256",
               "app-x86_64-release.apk",
               "app-x86_64-release.apk.sha256",
-              "deytt-connect-0.8.24-manual-reinstall-arm64-v8a.apk",
-              "deytt-connect-0.8.24-manual-reinstall-arm64-v8a.apk.sha256",
-              "deytt-connect-0.8.24-manual-reinstall-armeabi-v7a.apk",
-              "deytt-connect-0.8.24-manual-reinstall-armeabi-v7a.apk.sha256",
-              "deytt-connect-0.8.24-manual-reinstall-x86_64.apk",
-              "deytt-connect-0.8.24-manual-reinstall-x86_64.apk.sha256",
+              "deytt-connect-0.8.25-manual-reinstall-arm64-v8a.apk",
+              "deytt-connect-0.8.25-manual-reinstall-arm64-v8a.apk.sha256",
+              "deytt-connect-0.8.25-manual-reinstall-armeabi-v7a.apk",
+              "deytt-connect-0.8.25-manual-reinstall-armeabi-v7a.apk.sha256",
+              "deytt-connect-0.8.25-manual-reinstall-x86_64.apk",
+              "deytt-connect-0.8.25-manual-reinstall-x86_64.apk.sha256",
           }
           missing = sorted(required - names)
           if missing:
               raise SystemExit("release assets missing after Android publishing: " + ", ".join(missing))
           PY
-          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.8.24" --jq .id)"
+          release_id="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.8.25" --jq .id)"
           gh api "repos/$GITHUB_REPOSITORY/releases/$release_id" --method PATCH -F prerelease=false -f make_latest=true >/dev/null
-          promoted="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.8.24" --jq '[.tag_name, (.prerelease|tostring)] | @tsv')"
+          promoted="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.8.25" --jq '[.tag_name, (.prerelease|tostring)] | @tsv')"
           latest_tag="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
           python3 - "$promoted" "$latest_tag" <<'PY'
           import json
@@ -547,6 +547,6 @@ jobs:
 
           tag, prerelease = sys.argv[1].split("\t")
           latest_tag = sys.argv[2]
-          if tag != "v0.8.24" or prerelease != "false" or latest_tag != tag:
-              raise SystemExit("v0.8.24 was not promoted as the stable latest release")
+          if tag != "v0.8.25" or prerelease != "false" or latest_tag != tag:
+              raise SystemExit("v0.8.25 was not promoted as the stable latest release")
           PY

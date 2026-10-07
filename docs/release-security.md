@@ -49,11 +49,11 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
 
 python3 scripts/release.py sign \
   app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk \
-  --output output/release/deytt-connect-0.8.24-manual-reinstall-arm64-v8a.apk \
+  --output output/release/deytt-connect-0.8.25-manual-reinstall-arm64-v8a.apk \
   --keystore /secure/signing/release.p12 \
   --password-file /secure/signing/release.password
 
-python3 scripts/release.py verify output/release/deytt-connect-0.8.24-manual-reinstall-arm64-v8a.apk
+python3 scripts/release.py verify output/release/deytt-connect-0.8.25-manual-reinstall-arm64-v8a.apk
 ```
 
 The release script refuses
