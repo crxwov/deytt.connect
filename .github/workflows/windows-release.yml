@@ -219,10 +219,26 @@ jobs:
           if (!(Test-Path -LiteralPath $installerScript -PathType Leaf)) { throw 'installed vpn service recovery script is missing' }
           $recoveryStdout = Join-Path $env:RUNNER_TEMP 'deytt-service-recovery.stdout.log'
           $recoveryStderr = Join-Path $env:RUNNER_TEMP 'deytt-service-recovery.stderr.log'
-          $recovery = Start-Process -FilePath powershell.exe -ArgumentList @(
-            '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$installerScript`"",
-            '-AllowedUserSid', "`"$runnerSid`"", '-BundleRoot', "`"$installDir`"") -Wait -PassThru `
-            -RedirectStandardOutput $recoveryStdout -RedirectStandardError $recoveryStderr
+          $moduleCheckStdout = Join-Path $env:RUNNER_TEMP 'deytt-security-module.stdout.log'
+          $moduleCheckStderr = Join-Path $env:RUNNER_TEMP 'deytt-security-module.stderr.log'
+          $previousModulePath = $env:PSModulePath
+          try {
+            $env:PSModulePath = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\Modules'
+            $moduleCheck = Start-Process -FilePath powershell.exe -ArgumentList @(
+              '-NoProfile', '-NonInteractive', '-Command', 'Import-Module Microsoft.PowerShell.Security -ErrorAction Stop; Get-Command Set-Acl -ErrorAction Stop | Out-Null') `
+              -Wait -PassThru -RedirectStandardOutput $moduleCheckStdout -RedirectStandardError $moduleCheckStderr
+            if ($moduleCheck.ExitCode -ne 0) {
+              if (Test-Path -LiteralPath $moduleCheckStdout) { Get-Content -LiteralPath $moduleCheckStdout -Tail 100 }
+              if (Test-Path -LiteralPath $moduleCheckStderr) { Get-Content -LiteralPath $moduleCheckStderr -Tail 100 }
+              throw "Windows PowerShell security module check failed: $($moduleCheck.ExitCode)"
+            }
+            $recovery = Start-Process -FilePath powershell.exe -ArgumentList @(
+              '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', "`"$installerScript`"",
+              '-AllowedUserSid', "`"$runnerSid`"", '-BundleRoot', "`"$installDir`"") -Wait -PassThru `
+              -RedirectStandardOutput $recoveryStdout -RedirectStandardError $recoveryStderr
+          } finally {
+            $env:PSModulePath = $previousModulePath
+          }
           if ($recovery.ExitCode -ne 0) {
             if (Test-Path -LiteralPath $recoveryStdout) { Get-Content -LiteralPath $recoveryStdout -Tail 100 }
             if (Test-Path -LiteralPath $recoveryStderr) { Get-Content -LiteralPath $recoveryStderr -Tail 100 }
