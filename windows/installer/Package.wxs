@@ -2,11 +2,12 @@
   <Package Id="DEYTT.Connect.Windows"
            Name="DEYTT Connect"
            Manufacturer="DEYTT"
+           Language="1049"
            Version="$(var.ProductVersion)"
            Scope="perMachine">
     <Icon Id="DeyttConnectProductIcon.exe" SourceFile="$(var.PackageStageDir)/DeyttConnect.Windows.exe" />
     <Property Id="ARPPRODUCTICON" Value="DeyttConnectProductIcon.exe" />
-    <MajorUpgrade DowngradeErrorMessage="A newer version of DEYTT Connect is already installed." />
+    <MajorUpgrade Schedule="afterInstallInitialize" IgnoreLanguage="yes" DowngradeErrorMessage="На компьютере уже установлена более новая версия DEYTT Connect." />
     <MediaTemplate EmbedCab="yes" />
 
     <Property Id="ALLOWEDUSERSID" Secure="yes">
@@ -18,7 +19,7 @@
     </Property>
     <SetProperty Id="ALLOWEDUSERSID" Value="[UserSID]" Before="LaunchConditions"
                  Sequence="both" Condition="NOT ALLOWEDUSERSID" />
-    <Property Id="EXISTING_SERVICE_PATH">
+    <Property Id="EXISTING_SERVICE_PATH" Secure="yes">
       <RegistrySearch Id="FindExistingVpnService"
                       Root="HKLM"
                       Key="SYSTEM\CurrentControlSet\Services\DEYTTConnectVpn"
@@ -26,14 +27,46 @@
                       Type="raw" />
     </Property>
 
+    <Property Id="CONNECT_SERVICE_COMPATIBLE" Secure="yes" />
+    <Property Id="WEBVIEW2_PRESENT" Secure="yes" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPCOMMENTS" Value="DEYTT Connect — приложение и служба VPN. Данные входа сохраняются при обновлении и удалении." />
+    <Binary Id="SetupActions" SourceFile="$(var.DeyttConnect.SetupActions.TargetDir)DeyttConnect.SetupActions.CA.dll" />
+    <CustomAction Id="DetectLegacyService" BinaryRef="SetupActions" DllEntry="DetectLegacyService" Execute="immediate" Return="check" />
+    <CustomAction Id="ValidateInstallDirectory" BinaryRef="SetupActions" DllEntry="ValidateInstallDirectory" Execute="immediate" Return="check" />
+    <CustomAction Id="FinishSetup" BinaryRef="SetupActions" DllEntry="FinishSetup" Execute="immediate" Return="check" />
+    <CustomAction Id="PrepareWebView2" BinaryRef="SetupActions" DllEntry="PrepareWebView2" Execute="immediate" Return="check" />
+    <CustomAction Id="InstallWebView2" BinaryRef="SetupActions" DllEntry="InstallWebView2" Execute="deferred" Impersonate="no" Return="check" />
+    <CustomAction Id="PrepareShortcutRemoval" BinaryRef="SetupActions" DllEntry="PrepareShortcutRemoval" Execute="immediate" Return="check" />
+    <CustomAction Id="RemoveDesktopShortcut" BinaryRef="SetupActions" DllEntry="RemoveDesktopShortcut" Execute="deferred" Impersonate="yes" Return="check" />
+    <InstallUISequence>
+      <Custom Action="DetectLegacyService" After="AppSearch" />
+    </InstallUISequence>
+    <InstallExecuteSequence>
+      <Custom Action="DetectLegacyService" After="AppSearch" />
+      <Custom Action="ValidateInstallDirectory" Before="InstallInitialize" Condition="NOT REMOVE~=&quot;ALL&quot;" />
+      <Custom Action="PrepareWebView2" Before="InstallWebView2" Condition="NOT REMOVE~=&quot;ALL&quot; AND NOT WEBVIEW2_PRESENT" />
+      <Custom Action="InstallWebView2" After="InstallFiles" Condition="NOT REMOVE~=&quot;ALL&quot; AND NOT WEBVIEW2_PRESENT" />
+      <Custom Action="PrepareShortcutRemoval" Before="RemoveDesktopShortcut" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="RemoveDesktopShortcut" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+    <Property Id="WINDOWS_BUILD"><RegistrySearch Id="FindWindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" /></Property>
+    <UIRef Id="DeyttSetupUI" />
+    <Launch Condition="Installed OR (VersionNT64 AND WINDOWS_BUILD &gt;= 17763)"
+            Message="DEYTT Connect требует 64-разрядную Windows 10 версии 1809 или более новую Windows." />
     <Launch Condition="ALLOWEDUSERSID &gt;&lt; &quot;S-1-&quot;"
-            Message="Windows could not identify the account installing DEYTT Connect. Start the installer from the account that will use the application." />
-    <Launch Condition="NOT EXISTING_SERVICE_PATH OR Installed OR WIX_UPGRADE_DETECTED OR (EXISTING_SERVICE_PATH ~&gt;&lt; &quot;DEYTT\Connect\DeyttConnect.Windows.Service.exe&quot;)"
-            Message="The DEYTT VPN service points to an unexpected executable. Contact support to recover this installation." />
+            Message="Не удалось определить учётную запись Windows. Запустите установщик из учётной записи, в которой будете пользоваться приложением." />
+    <Launch Condition="NOT EXISTING_SERVICE_PATH OR CONNECT_SERVICE_COMPATIBLE = &quot;1&quot; OR REMOVE~=&quot;ALL&quot;"
+            Message="Служба DEYTTConnectVpn указывает на другое приложение. Установка остановлена, чтобы не повредить его. Обратитесь в поддержку DEYTT." />
 
     <StandardDirectory Id="ProgramFiles64Folder">
       <Directory Id="DEYTTDIR" Name="DEYTT">
         <Directory Id="INSTALLFOLDER" Name="Connect">
+          <Directory Id="PREREQUISITESFOLDER" Name="Prerequisites">
+            <Component Id="WebViewBootstrapperComponent" Guid="DFD5C59A-705F-434A-A676-0D4B9273C5BB" Bitness="always64">
+              <File Id="WebViewBootstrapper" Source="$(var.PackageStageDir)/Prerequisites/MicrosoftEdgeWebview2Setup.exe" KeyPath="yes" />
+            </Component>
+          </Directory>
           <Component Id="VpnServiceComponent" Guid="7AC61332-77E2-4B5A-B098-16BD7EC4C621" Bitness="always64">
             <File Id="VpnServiceExecutable"
                   Source="$(var.PackageStageDir)/DeyttConnect.Windows.Service.exe"
@@ -89,6 +122,7 @@
       <ComponentRef Id="VpnServiceComponent" />
       <ComponentRef Id="AllowedUserSidComponent" />
       <ComponentRef Id="UiExecutableComponent" />
+      <ComponentRef Id="WebViewBootstrapperComponent" />
       <ComponentGroupRef Id="PayloadFiles" />
     </Feature>
   </Package>
@@ -97,6 +131,7 @@
       <Files Include="$(var.PackageStageDir)/**">
         <Exclude Files="$(var.PackageStageDir)/DeyttConnect.Windows.Service.exe" />
         <Exclude Files="$(var.PackageStageDir)/DeyttConnect.Windows.exe" />
+        <Exclude Files="$(var.PackageStageDir)/Prerequisites/MicrosoftEdgeWebview2Setup.exe" />
       </Files>
     </ComponentGroup>
     <StandardDirectory Id="ProgramMenuFolder">

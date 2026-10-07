@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${OS:-}" != "Windows_NT" ]]; then
+  echo "Build the MSI on Windows (DTF custom actions require the Windows packaging tool)." >&2
+  exit 1
+fi
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 dotnet_bin="${DOTNET:-$repo_root/.toolchain/dotnet/dotnet}"
 
@@ -32,8 +37,6 @@ fi
 temp_dir="$(mktemp -d "$repo_root/.toolchain/windows-msi.XXXXXX")"
 trap 'rm -rf "$temp_dir"' EXIT
 package_dir="$temp_dir/package"
-wix_output="$temp_dir/wix-output"
-wix_obj="$temp_dir/wix-obj"
 
 "$repo_root/windows/scripts/build-windows-package.sh" "$package_dir"
 
@@ -61,23 +64,21 @@ if find "$service_dir" -mindepth 1 -maxdepth 1 ! -type f -print -quit | rg -q .;
   exit 1
 fi
 rm -rf "$service_dir"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$repo_root/windows/installer/Get-WebView2Bootstrapper.ps1")" -Destination "$(cygpath -w "$package_dir/Prerequisites/MicrosoftEdgeWebview2Setup.exe")"
 (cd "$package_dir" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
 
 "$dotnet_bin" build "$repo_root/windows/installer/DEYTTConnect.Windows.Installer.wixproj" \
   --configuration Release \
   -p:PackageStageDir="$package_dir" \
   -p:ProductVersion="$product_version" \
-  -p:OutputPath="$wix_output/Release/" \
-  -p:BaseIntermediateOutputPath="$wix_obj/" \
-  -p:IntermediateOutputPath="$wix_obj/Release/" \
-  -p:MSBuildProjectExtensionsPath="$wix_obj/" \
+  -p:InstallerBuildRoot="$temp_dir/wix-build" \
   --nologo
 
-mapfile -t built_msis < <(find "$wix_output" -type f -name '*.msi' -print)
+mapfile -t built_msis < <(find "$temp_dir/wix-build/output" -type f -name '*.msi' -print)
 if [[ ${#built_msis[@]} -ne 1 ]]; then
   echo "Expected exactly one MSI build output, found ${#built_msis[@]}." >&2
   exit 1
 fi
 mkdir -p "$(dirname "$output_msi")"
 cp -- "${built_msis[0]}" "$output_msi"
-echo "Unsigned MSI prototype created at $output_msi"
+echo "Unsigned MSI created at $output_msi"

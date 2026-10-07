@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup Condition="'$(InstallerBuildRoot)' != ''">
+    <BaseIntermediateOutputPath>$(InstallerBuildRoot)/obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(BaseIntermediateOutputPath)</MSBuildProjectExtensionsPath>
+    <OutputPath>$(InstallerBuildRoot)/output/</OutputPath>
+  </PropertyGroup>
+</Project>
