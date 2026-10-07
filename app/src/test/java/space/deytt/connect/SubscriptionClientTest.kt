@@ -72,7 +72,10 @@ class SubscriptionClientTest {
         val result = SubscriptionClient.fetchAwgProfilesForTest("https://deytt.space/sub/token", "amneziawg31", "31",
             FakeTransport(SubscriptionClient.SubscriptionHttpResponse(200, VALID_AWG31_CONFIG,
                 awgServers = "[{\"id\":\"nl\"},{\"id\":\"nl\"}]")))
-        assertEquals(SubscriptionClient.AwgFetchState.TRANSIENT_FAILURE, result.state)
+        assertEquals(SubscriptionClient.AwgFetchState.PARTIAL_FAILURE, result.state)
+        assertEquals("awg31", result.profiles.single().id)
+        assertEquals(VALID_AWG31_CONFIG, result.profiles.single().config)
+        assertTrue(!result.warning.isNullOrBlank())
     }
 
     @Test
