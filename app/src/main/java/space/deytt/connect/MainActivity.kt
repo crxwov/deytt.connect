@@ -87,6 +87,7 @@ class MainActivity : Activity() {
     private var renderedPhase: VpnPhase? = null
     private var initialPage = 0
     private var hasStartedBefore = false
+    private var awgProfilesAvailableForSettings: Boolean? = null
     private var currentNetworkLocation: IpNetworkLocation? = null
     private var currentEgressLocation: IpNetworkLocation? = null
     private var currentAutoRouteKey: String? = null
@@ -297,6 +298,7 @@ class MainActivity : Activity() {
             pageAdapter.refresh(1)
             pageAdapter.refresh(2)
         }
+        refreshAmneziaSettingsIfNeeded()
         hasStartedBefore = true
         refreshNetworkLocation()
         refreshTelegramAccount()
@@ -446,6 +448,14 @@ class MainActivity : Activity() {
         for (position in 0..3) pageAdapter.refresh(position)
     }
 
+    private fun refreshAmneziaSettingsIfNeeded() {
+        if (!::pageAdapter.isInitialized) return
+        val hasProfiles = AwgProfileStore(this).profiles().isNotEmpty()
+        val previous = awgProfilesAvailableForSettings
+        awgProfilesAvailableForSettings = hasProfiles
+        if (previous != null && previous != hasProfiles) pageAdapter.refresh(3)
+    }
+
     private fun refreshSubscriptionIfNeeded() {
         if (isFinishing || isDestroyed || subscriptionRefreshInFlight) return
         val prefs = getSharedPreferences("profile_settings", MODE_PRIVATE)
@@ -479,6 +489,7 @@ class MainActivity : Activity() {
                     pageAdapter.refresh(1)
                     pageAdapter.refresh(2)
                 }
+                refreshAmneziaSettingsIfNeeded()
             }
         }
     }
