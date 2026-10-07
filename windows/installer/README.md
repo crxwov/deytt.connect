@@ -1,33 +1,43 @@
-# Windows MSI prototype
+# DEYTT Connect for Windows
 
-This is an unsigned x64 MSI slice. It packages the existing self-contained UI,
-Windows VPN service, and engine; uses Windows Installer service actions for
-install, stop, start, and removal; and stores the allowed interactive user SID
-in the registry value consumed by the service's named-pipe ACL. Per-user
-application data remains under `%LOCALAPPDATA%` and is outside the MSI install
-tree. The UI executable is an explicit MSI component and receives a Start Menu
-shortcut; Windows Installer provides the standard Add/Remove Programs entry.
+The x64 MSI installs the complete self-contained Windows app, AmneziaWG VPN
+engine, named-pipe service, offline route-map assets, and Start Menu shortcut.
+The application needs Windows 10 version 1809 or newer. The MSI runs elevated
+once to install and maintain its Windows VPN service.
 
-Build on a machine with the .NET 10 SDK, Go, the pinned Amnezia Box source build
-dependencies, and network access for NuGet restore:
+If the shared Microsoft Edge WebView2 Runtime is missing, the MSI installs it
+from Microsoft's signed Evergreen bootstrapper. An internet connection is
+needed for that first WebView2 download. The embedded app and VPN engine do not
+need a separate .NET or Go install.
 
-```bash
-windows/installer/build-msi.sh 1.2.3 /path/to/DEYTTConnect-Windows-x64.msi
+The Russian wizard repairs or removes an existing installation and recovers
+the known DEYTTConnectVpn service left by older Connect installers. It checks
+the service executable before replacing it, preserves the allowed Windows
+account across upgrades, and rejects a service belonging to another program.
+The completion screen offers an optional desktop shortcut and app launch. The
+launcher never starts with the elevated installation token. Uninstall stops
+and removes the managed VPN service. MSI-owned files live in Program Files;
+account data under `%LOCALAPPDATA%` is retained for later reinstall.
+
+The installer and runtime are unsigned by DEYTT. The Microsoft WebView2
+bootstrapper is signature-checked during the official Windows build workflow.
+
+## Build and verify
+
+Use Windows 10 version 1809 or newer, the .NET 10 SDK, and an already-built,
+self-contained package directory. The package must contain the x64 app and
+service, VPN engine, and `Assets/route-map/index.html`.
+
+```powershell
+.\Build-Msi.ps1 `
+  -ProductVersion 0.8.19 `
+  -PackageStageDir C:\path\to\windows-x64-package `
+  -BuildRoot D:\build\deytt-connect
 ```
 
-Double-click the MSI from the interactive Windows account that will use the VPN.
-The installer defaults the named-pipe owner to Windows Installer's UserSID;
-no SID entry is required. Major upgrades preserve the existing AllowedUserSid.
-Administrators can explicitly supply ALLOWEDUSERSID when installing for another
-account.
-
-A leftover service pointing to the standard DEYTT\Connect service executable is
-stopped and recreated through Windows Installer service actions. A service at
-an unexpected path is rejected. Uninstall removes the managed service; per-user
-account and installation identity data remains in LOCALAPPDATA so reinstalling
-on the same device retains its identity.
-
-This prototype has not been installed, upgraded, or removed on Windows 10. It
-is not signed or ready for public distribution: trusted signing credentials
-and native Windows 10 install/upgrade/uninstall QA are still required. Service
-startup and the existing service ACL implementation remain part of acceptance.
+The build downloads the official Microsoft WebView2 bootstrapper, checks its
+Authenticode signer, runs WiX ICE validation, executes read-only MSI metadata
+and service-classification checks, and prints the SHA-256 of the MSI.
+`Verify-InstallerRecovery.ps1` and the native lifecycle test harness cover
+service recovery, first install, repair, upgrade, downgrade rejection,
+uninstall, and fresh reinstall. No test command silently installs the MSI.
