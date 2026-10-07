@@ -276,7 +276,7 @@ class ProtocolActivity : Activity() {
                             maxLines = 1
                             ellipsize = android.text.TextUtils.TruncateAt.END
                         })
-                        addView(mono(rowDetail.uppercase(), 8f, DeyttUi.MUTED, 540).apply {
+                        addView(mono(rowDetail, 8f, DeyttUi.MUTED, 540).apply {
                             setPadding(0, dp(4), 0, 0)
                             maxLines = 1
                             ellipsize = android.text.TextUtils.TruncateAt.END

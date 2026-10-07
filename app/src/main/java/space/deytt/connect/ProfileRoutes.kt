@@ -13,12 +13,12 @@ data class RouteOption(
 object ProfileRoutes {
     private const val ROUTE_PREFIX = "route:"
     private val countryPresentation = mapOf(
-        "NL" to Pair("🇳🇱", "Нидерланды"),
-        "DE" to Pair("🇩🇪", "Германия"),
-        "RU" to Pair("🇷🇺", "Россия"),
-        "FI" to Pair("🇫🇮", "Финляндия"),
-        "IT" to Pair("🇮🇹", "Италия"),
-        "RU-DE" to Pair("🇷🇺→🇩🇪", "RU → DE"),
+        "NL" to Pair("🇳🇱", "нидерланды"),
+        "DE" to Pair("🇩🇪", "германия"),
+        "RU" to Pair("🇷🇺", "россия"),
+        "FI" to Pair("🇫🇮", "финляндия"),
+        "IT" to Pair("🇮🇹", "италия"),
+        "RU-DE" to Pair("🇷🇺→🇩🇪", "ru → de"),
     )
 
     fun selected(config: String): String = parse(config)
@@ -35,9 +35,9 @@ object ProfileRoutes {
             when {
                 tag.contains("автоподбор", ignoreCase = true) -> result += RouteOption(
                     tag = tag,
-                    label = "Автоподбор",
+                    label = "автоподбор",
                     flag = "✦",
-                    detail = "Самый быстрый доступный маршрут",
+                    detail = "самый быстрый доступный маршрут",
                     recommended = true,
                 )
                 tag.startsWith(ROUTE_PREFIX) && tag.count { it == ':' } == 1 -> {
@@ -47,7 +47,7 @@ object ProfileRoutes {
                         tag = tag,
                         label = presentation.second,
                         flag = presentation.first,
-                        detail = "VLESS · Trojan · Hysteria 2",
+                        detail = "vless · trojan · hysteria 2",
                     )
                 }
             }
@@ -64,7 +64,7 @@ object ProfileRoutes {
             outbounds.optJSONObject(it)?.optString("tag") == tag
         }
         require(exists) {
-            "Выбранный маршрут отсутствует в подписке"
+            "выбранный маршрут отсутствует в подписке"
         }
         root.getJSONObject("route").put("final", tag)
         root.optJSONObject("dns")?.optJSONArray("servers")?.let { servers ->
@@ -80,7 +80,7 @@ object ProfileRoutes {
     private fun parse(config: String): JSONObject = try {
         JSONObject(config)
     } catch (error: Exception) {
-        throw IllegalArgumentException("Сохранённый профиль повреждён", error)
+        throw IllegalArgumentException("сохранённый профиль повреждён", error)
     }
 
 }

@@ -969,7 +969,7 @@ class MainActivity : Activity() {
 
     private fun showMapRoutePicker(node: String) {
         val english = AppLanguage.current(this) == AppLanguage.EN
-        fun mapCopy(ru: String, en: String): String = if (english) en else ru
+        fun mapCopy(ru: String, en: String): String = (if (english) en else ru).lowercase()
         if (node == "user") {
             val place = currentNetworkLocation?.placeLabel?.let { AppLanguage.locationLabel(this, it) } ?: mapCopy("Точка входа с этого устройства", "This device’s entry point")
             AppDialog.Builder(this)
@@ -1002,11 +1002,11 @@ class MainActivity : Activity() {
         }.takeIf { countryCode == "RU" || countryCode == "DE" }
         val choices = listOfNotNull(automatic) + countryRoutes + listOfNotNull(doubleRoute)
         val countryName = when (countryCode) {
-            "NL" -> mapCopy("Нидерланды", "Netherlands")
-            "DE" -> mapCopy("Германия", "Germany")
-            "FI" -> mapCopy("Финляндия", "Finland")
-            "IT" -> mapCopy("Италия", "Italy")
-            else -> mapCopy("Россия", "Russia")
+            "NL" -> mapCopy("нидерланды", "netherlands")
+            "DE" -> mapCopy("германия", "germany")
+            "FI" -> mapCopy("финляндия", "finland")
+            "IT" -> mapCopy("италия", "italy")
+            else -> mapCopy("россия", "russia")
         }
         if (choices.isEmpty()) {
             AppDialog.Builder(this)
@@ -1027,7 +1027,7 @@ class MainActivity : Activity() {
         View(this).apply {
             background = rounded(0xFF465368.toInt(), 2f, 0xFF465368.toInt())
         }.also { panel.addView(it, LinearLayout.LayoutParams(dp(34), dp(4)).apply { gravity = Gravity.CENTER }) }
-        panel.addView(mono(mapCopy("ВЫХОД", "EXIT") + "  ·  ${countryName.uppercase()}", 9f, DeyttUi.SKY, 600).apply {
+        panel.addView(mono(mapCopy("выход", "exit") + "  ·  $countryName", 9f, DeyttUi.SKY, 600).apply {
             letterSpacing = .08f
             setPadding(0, dp(18), 0, dp(5))
         })
@@ -1047,14 +1047,14 @@ class MainActivity : Activity() {
         choices.forEachIndexed { index, route ->
             val selected = route.id == selectedId
             val title = when (route.protocol) {
-                RouteProtocol.AUTO -> mapCopy("Автоподбор", "Auto-select")
-                RouteProtocol.RU_DE -> mapCopy("LTE + белые списки · RU → DE", "LTE + whitelist · RU → DE")
+                RouteProtocol.AUTO -> mapCopy("автоподбор", "auto-select")
+                RouteProtocol.RU_DE -> mapCopy("lte + белые списки · ru → de", "lte + whitelist · ru → de")
                 else -> route.protocol.title
             }
             val detail = when (route.protocol) {
                 RouteProtocol.AUTO -> mapCopy("Выбрать доступный выход автоматически", "Select an available exit automatically")
                 RouteProtocol.RU_DE -> mapCopy("Двойной маршрут · Санкт-Петербург → Франкфурт", "Double route · Saint Petersburg → Frankfurt")
-                RouteProtocol.HYSTERIA2 -> mapCopy("Быстрый QUIC-маршрут", "Fast QUIC route")
+                RouteProtocol.HYSTERIA2 -> mapCopy("быстрый quic-маршрут", "fast quic route")
                 else -> uiCopy(route.protocol.detail)
             }
             val row = LinearLayout(this).apply {
@@ -1081,7 +1081,7 @@ class MainActivity : Activity() {
                         ellipsize = android.text.TextUtils.TruncateAt.END
                     })
                 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                if (selected) addView(mono(mapCopy("ВЫБРАН", "SELECTED"), 8f, DeyttUi.MINT, 600))
+                if (selected) addView(mono(mapCopy("выбран", "selected"), 8f, DeyttUi.MINT, 600))
                 setOnClickListener {
                     if ((Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()) &&
                         !getSharedPreferences("profile_settings", MODE_PRIVATE).getBoolean("reduced_motion", false)) {
