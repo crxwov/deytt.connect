@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sign and verify distribution APKs; private keys always stay outside the repo."""
+"""sign and verify distribution apks; private keys always stay outside the repo."""
 import argparse
 import hashlib
 import json
@@ -22,21 +22,29 @@ def tool(name):
     sdk = Path(os.environ.get("ANDROID_HOME", ROOT / ".toolchain/android-sdk"))
     path = sdk / "build-tools/35.0.0" / name
     if not path.is_file():
-        raise ValueError(f"Install Android build-tools 35.0.0: missing {name}")
+        raise ValueError(f"install android build-tools 35.0.0: missing {name}")
     return str(path)
 
 
-def inspect_apk(apk, qa=False):
+def inspect_apk(apk, qa=False, expected_version=None, expected_version_code=None):
     badging = run(tool("aapt"), "dump", "badging", str(apk))
     package = POLICY["package"] + (".qa" if qa else "")
-    if not badging.startswith(f"package: name='{package}' "):
-        raise ValueError("Unexpected package identity")
+    identities = badging.splitlines()
+    if not identities:
+        raise ValueError("aapt returned no package identity")
+    identity = identities[0]
+    if not identity.startswith(f"package: name='{package}' "):
+        raise ValueError("unexpected package identity")
+    if expected_version and f"versionName='{expected_version}'" not in identity:
+        raise ValueError("apk version name does not match the release tag")
+    if expected_version_code is not None and f"versionCode='{expected_version_code}'" not in identity:
+        raise ValueError("apk version code does not match the release policy")
     if "application-debuggable" in badging:
-        raise ValueError("Distribution APK must not be debuggable")
+        raise ValueError("distribution apk must not be debuggable")
     sdk = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
     target = re.search(r"^targetSdkVersion:'(\d+)'", badging, re.M)
     if not sdk or int(sdk[1]) != POLICY["min_sdk"] or not target or int(target[1]) < 35:
-        raise ValueError("Unexpected Android SDK policy")
+        raise ValueError("unexpected android sdk policy")
     allowed_permissions = {
         "android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE",
         "android.permission.CHANGE_NETWORK_STATE", "android.permission.FOREGROUND_SERVICE",
@@ -46,26 +54,31 @@ def inspect_apk(apk, qa=False):
     }
     permissions = set(re.findall(r"^uses-permission: name='([^']+)'", badging, re.M))
     if permissions - allowed_permissions:
-        raise ValueError("Unexpected permissions: " + ", ".join(sorted(permissions - allowed_permissions)))
+        raise ValueError("unexpected permissions: " + ", ".join(sorted(permissions - allowed_permissions)))
     with zipfile.ZipFile(apk) as archive:
         names = archive.namelist()
         if any(Path(name).name in {"libwg.so", "libwg-quick.so"} for name in names):
-            raise ValueError("Unused root-management native tools must not ship")
+            raise ValueError("unused root-management native tools must not ship")
         if not any(name.endswith("/libwg-go.so") for name in names):
-            raise ValueError("AmneziaWG userspace backend missing")
+            raise ValueError("amneziawg userspace backend missing")
         if not any(name.endswith("/libdeytt-awg.so") for name in names):
-            raise ValueError("AmneziaWG domain-routing backend missing")
+            raise ValueError("amneziawg domain-routing backend missing")
     run(tool("zipalign"), "-c", "-P", "16", "4", str(apk))
-    return badging.splitlines()[0]
+    return identity
 
 
-def verify(apk, qa=False):
-    identity = inspect_apk(apk, qa)
+def verify(apk, qa=False, legacy_certificate_sha256=None, release_certificate_sha256=None,
+           expected_version=None, expected_version_code=None):
+    identity = inspect_apk(apk, qa, expected_version, expected_version_code)
+    expected_legacy = (legacy_certificate_sha256 or POLICY["legacy_certificate_sha256"]).lower().replace(":", "")
+    expected_release = (release_certificate_sha256 or POLICY["release_certificate_sha256"]).lower().replace(":", "")
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_legacy) or not re.fullmatch(r"[0-9a-f]{64}", expected_release):
+        raise ValueError("invalid expected signing certificate fingerprint")
     # Independently validate the configured signer on both supported API ranges.
     # A cert in untrusted metadata is insufficient: apksigner verifies the APK.
     for minimum, maximum, expected in (
-        (24, 27, POLICY["legacy_certificate_sha256"]),
-        (28, None, POLICY["release_certificate_sha256"]),
+        (24, 27, expected_legacy),
+        (28, None, expected_release),
     ):
         args = [tool("apksigner"), "verify", "--print-certs", "--min-sdk-version", str(minimum)]
         if maximum is not None:
@@ -75,26 +88,29 @@ def verify(apk, qa=False):
         if fingerprints != [expected]:
             raise ValueError(f"Unexpected signing certificate for API {minimum}")
     print(identity)
-    print(f"Verified release policy and signatures: {apk.name}")
+    print(f"verified release policy and signatures: {apk.name}")
     with apk.open("rb") as source:
         return hashlib.file_digest(source, "sha256").hexdigest()
 
 
 def sign(args):
-    inspect_apk(args.apk, args.qa)
+    inspect_apk(args.apk, args.qa, args.expected_version, args.expected_version_code)
     if args.output.resolve() == args.apk.resolve():
-        raise ValueError("Signing must not overwrite the unsigned input")
+        raise ValueError("signing must not overwrite the unsigned input")
     single_signer = POLICY["legacy_certificate_sha256"] == POLICY["release_certificate_sha256"]
     private_paths = [args.keystore, args.password_file]
     if not single_signer:
         if args.legacy_keystore is None or args.legacy_password_env not in os.environ:
-            raise ValueError("The configured signing policy requires the legacy signing credentials")
+            raise ValueError("the configured signing policy requires the legacy signing credentials")
         private_paths.append(args.legacy_keystore)
+    lineage_file = args.lineage_file or (ROOT / "release/signing-lineage.bin")
+    if not single_signer and not lineage_file.is_file():
+        raise ValueError("signing certificate lineage is unavailable")
     for private_path in private_paths:
         if private_path.resolve().is_relative_to(ROOT):
-            raise ValueError("Keep signing keys and passwords outside the source checkout")
+            raise ValueError("keep signing keys and passwords outside the source checkout")
         if not private_path.is_file():
-            raise ValueError("Signing credentials are unavailable")
+            raise ValueError("signing credentials are unavailable")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".sign-", dir=args.output.parent) as temporary:
         output = Path(temporary) / args.output.name
@@ -108,14 +124,17 @@ def sign(args):
         else:
             command += [
                 "--rotation-min-sdk-version", str(POLICY["rotation_min_sdk"]),
-                "--lineage", str(ROOT / "release/signing-lineage.bin"),
-                "--ks", str(args.legacy_keystore), "--ks-key-alias", "androiddebugkey",
+                "--lineage", str(lineage_file),
+                "--ks", str(args.legacy_keystore), "--ks-key-alias", args.legacy_key_alias,
                 "--ks-pass", "env:" + args.legacy_password_env,
                 "--next-signer", "--ks", str(args.keystore), "--ks-key-alias", "deytt-connect",
                 "--ks-pass", "file:" + str(args.password_file),
             ]
         run(*command, str(args.apk))
-        digest = verify(output, args.qa)
+        digest = verify(
+            output, args.qa, args.legacy_certificate_sha256, args.release_certificate_sha256,
+            args.expected_version, args.expected_version_code,
+        )
         output.replace(args.output)
     args.output.with_suffix(".apk.sha256").write_text(f"{digest}  {args.output.name}\n")
     print(f"SHA-256: {digest}")
@@ -127,24 +146,33 @@ def main():
     for name in ("sign", "verify"):
         command = commands.add_parser(name)
         command.add_argument("apk", type=Path)
-        command.add_argument("--qa", action="store_true", help="Allow the isolated .qa package only")
+        command.add_argument("--qa", action="store_true", help="allow the isolated .qa package only")
+        command.add_argument("--legacy-certificate-sha256")
+        command.add_argument("--release-certificate-sha256")
+        command.add_argument("--expected-version")
+        command.add_argument("--expected-version-code", type=int)
         if name == "sign":
             command.add_argument("--output", type=Path, required=True)
             command.add_argument("--keystore", type=Path, required=True)
             command.add_argument("--password-file", type=Path, required=True)
             command.add_argument("--legacy-keystore", type=Path)
+            command.add_argument("--legacy-key-alias", default="androiddebugkey")
             command.add_argument("--legacy-password-env", default="DEYTT_LEGACY_PASSWORD")
+            command.add_argument("--lineage-file", type=Path)
     args = parser.parse_args()
     try:
         if args.command == "sign":
             sign(args)
         else:
-            print("SHA-256: " + verify(args.apk, args.qa))
+            print("SHA-256: " + verify(
+                args.apk, args.qa, args.legacy_certificate_sha256, args.release_certificate_sha256,
+                args.expected_version, args.expected_version_code,
+            ))
     except subprocess.CalledProcessError as error:
         # Passwords are passed by file/env reference, never command arguments.
-        parser.exit(1, f"Release verification failed: {error.stderr.strip()}\n")
+        parser.exit(1, f"release verification failed: {error.stderr.strip()}\n")
     except (ValueError, OSError, zipfile.BadZipFile) as error:
-        parser.exit(1, f"Release verification failed: {error}\n")
+        parser.exit(1, f"release verification failed: {error}\n")
 
 
 if __name__ == "__main__":

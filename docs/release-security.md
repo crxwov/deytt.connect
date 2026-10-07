@@ -22,15 +22,14 @@ backend are excluded; their removal is not evidence they caused antivirus alerts
 ## Signing identity and migration
 
 `release/signing-policy.json` records the expected public certificate SHA-256.
-The historical `release/signing-lineage.bin` proves a previous rotation but
-cannot authorize the new identity. The historical `0.8.18-preview.1` release
-introduced the new signer on API 24 and newer because the previous private key
-was lost. Android rejects this signer over APKs signed with the old identity.
-That release's APK assets use `manual-reinstall` names, which the in-app updater
-does not select. Users moving from the old identity must uninstall the old app
-and then install the matching APK; Android may erase local settings and
-credentials. Keep access to the account needed to sign in and restore its
-server-backed subscription.
+the normal v0.8.26 apk uses a lineage from the signer used by stable v0.8.18–
+v0.8.25 to the supplied release signer. android 9+ verifies that proof-of-
+rotation; android 8.1 and lower use the previous signer so those installs keep
+updating. a separate `deytt-connect-0.8.26-legacy-{abi}.apk` uses a lineage
+from the recovered v0.8.17 signer to the supplied release signer, and keeps
+that old signer for android 8.1 and lower. use that file only when the installed
+app has the v0.8.17 signing identity. the in-app updater selects only the normal
+`app-{abi}-release.apk` family.
 
 Future updates are compatible only while the new private key is preserved and
 used for every APK. Private keystores and password files must stay outside the
@@ -49,11 +48,13 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
 
 python3 scripts/release.py sign \
   app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk \
-  --output output/release/deytt-connect-0.8.25-manual-reinstall-arm64-v8a.apk \
+  --output output/release/deytt-connect-0.8.26-arm64-v8a.apk \
   --keystore /secure/signing/release.p12 \
-  --password-file /secure/signing/release.password
+  --password-file /secure/signing/release.password \
+  --legacy-keystore /secure/signing/current-release.p12 \
+  --legacy-key-alias deytt-connect
 
-python3 scripts/release.py verify output/release/deytt-connect-0.8.25-manual-reinstall-arm64-v8a.apk
+python3 scripts/release.py verify output/release/deytt-connect-0.8.26-arm64-v8a.apk
 ```
 
 The release script refuses

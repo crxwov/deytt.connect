@@ -3,6 +3,6 @@
   "min_sdk": 24,
   "rotation_min_sdk": 28,
   "legacy_certificate_sha256": "30574107f7202081237f98cc38b8ceef88f9dc55f80641dfc5685033ee75d19a",
-  "release_certificate_sha256": "30574107f7202081237f98cc38b8ceef88f9dc55f80641dfc5685033ee75d19a"
+  "release_certificate_sha256": "bb39b663e555c7ed7b725c543ed73ea2602432b003591b2e1370f0359c4c4333"
 }
 

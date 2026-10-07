@@ -1,4 +1,4 @@
-name: android signing-key migration and release apk publishing
+name: android signing-key rotation and release apk publishing
 
 on:
   release:
@@ -6,43 +6,43 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Corrective release tag for the signed APKs
+        description: stable android release tag for signed apks
         required: true
         type: string
-        default: v0.8.25
+        default: v0.8.26
 
 permissions:
   contents: write
 
 jobs:
   build-and-publish:
-    if: github.repository == 'crxwov/deytt.connect' && (github.event_name == 'workflow_dispatch' || (github.event.release.tag_name == 'v0.8.25' && !github.event.release.prerelease))
+    if: github.repository == 'crxwov/deytt.connect' && (github.event_name == 'workflow_dispatch' || (github.event.release.tag_name == 'v0.8.26' && !github.event.release.prerelease && !contains(github.event.release.assets.*.name, 'app-arm64-v8a-release.apk')))
     runs-on: ubuntu-latest
     steps:
-      - name: Check out source and submodules
+      - name: check out source and submodules
         uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      - name: Set up Java
+      - name: set up java
         uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Go
+      - name: set up go
         uses: actions/setup-go@v7
         with:
           go-version: '1.25.14'
           cache-dependency-path: awg-tunnel/src/main/go/go.sum
 
-      - name: Set up Android SDK
+      - name: set up android sdk
         uses: android-actions/setup-android@v4
 
-      - name: Set up Gradle
+      - name: set up gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Install pinned Android SDK components
+      - name: install pinned android sdk components
         run: >-
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           "platforms;android-35"
@@ -50,60 +50,93 @@ jobs:
           "ndk;26.1.10909125"
           "cmake;3.22.1"
 
-      - name: Validate release target
+      - name: validate release target
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           case "$RELEASE_TAG" in
-            v0.8.25) ;;
+            v0.8.26) ;;
             *)
-              echo "This signing-key migration workflow only publishes v0.8.25 releases." >&2
+              echo "This signing-key rotation workflow only publishes v0.8.26 releases." >&2
               exit 1
               ;;
           esac
 
-      - name: Test Android release variant
+      - name: test android release variant
         run: ./gradlew --no-daemon --max-workers=2 :app:testReleaseUnitTest
 
-      - name: Build unsigned release APKs
+      - name: build unsigned release apks
         run: ./gradlew --no-daemon --max-workers=2 :app:assembleRelease
 
-      - name: Prepare signing credentials
+      - name: prepare signing credentials
         env:
-          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
-          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_NEXT_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_NEXT_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_NEXT_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_NEXT_RELEASE_KEY_PASSWORD }}
+          ANDROID_LEGACY_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_LEGACY_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          ANDROID_HISTORIC_KEYSTORE_BASE64: ${{ secrets.ANDROID_HISTORIC_KEYSTORE_BASE64 }}
+          ANDROID_HISTORIC_KEY_PASSWORD: ${{ secrets.ANDROID_HISTORIC_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          test -n "$ANDROID_RELEASE_KEYSTORE_BASE64"
-          test -n "$ANDROID_RELEASE_KEY_PASSWORD"
+          test -n "$ANDROID_NEXT_RELEASE_KEYSTORE_BASE64"
+          test -n "$ANDROID_NEXT_RELEASE_KEY_PASSWORD"
+          test -n "$ANDROID_LEGACY_KEYSTORE_BASE64"
+          test -n "$ANDROID_LEGACY_KEY_PASSWORD"
+          test -n "$ANDROID_HISTORIC_KEYSTORE_BASE64"
+          test -n "$ANDROID_HISTORIC_KEY_PASSWORD"
           umask 077
-          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/deytt-connect-release.p12"
-          printf '%s' "$ANDROID_RELEASE_KEY_PASSWORD" > "$RUNNER_TEMP/deytt-connect-release.password"
+          printf '%s' "$ANDROID_NEXT_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/deytt-connect-next-release.p12"
+          printf '%s' "$ANDROID_NEXT_RELEASE_KEY_PASSWORD" > "$RUNNER_TEMP/deytt-connect-next-release.password"
+          printf '%s' "$ANDROID_LEGACY_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/deytt-connect-current-release.p12"
+          printf '%s' "$ANDROID_HISTORIC_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/deytt-connect-historic.keystore"
 
-      - name: Sign, verify, and expose updater-compatible APK names
+      - name: sign, verify, and expose updater-compatible apk names
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+          DEYTT_LEGACY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+          DEYTT_HISTORIC_PASSWORD: ${{ secrets.ANDROID_HISTORIC_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           mkdir -p output/android
           release_version="${RELEASE_TAG#v}"
           for abi in arm64-v8a armeabi-v7a x86_64; do
             input="app/build/outputs/apk/release/app-${abi}-release-unsigned.apk"
-            output="output/android/deytt-connect-${release_version}-manual-reinstall-${abi}.apk"
+            output="output/android/deytt-connect-${release_version}-${abi}.apk"
             updater_output="output/android/app-${abi}-release.apk"
             test -f "$input"
             python3 scripts/release.py sign "$input" \
               --output "$output" \
-              --keystore "$RUNNER_TEMP/deytt-connect-release.p12" \
-              --password-file "$RUNNER_TEMP/deytt-connect-release.password"
-            python3 scripts/release.py verify "$output"
+              --keystore "$RUNNER_TEMP/deytt-connect-next-release.p12" \
+              --password-file "$RUNNER_TEMP/deytt-connect-next-release.password" \
+              --legacy-keystore "$RUNNER_TEMP/deytt-connect-current-release.p12" \
+              --legacy-key-alias deytt-connect \
+              --expected-version "$release_version" --expected-version-code 39
+            python3 scripts/release.py verify "$output" \
+              --expected-version "$release_version" --expected-version-code 39
             (cd output/android && sha256sum "$(basename "$output")" > "$(basename "$output").sha256")
             cp "$output" "$updater_output"
-            python3 scripts/release.py verify "$updater_output"
+            python3 scripts/release.py verify "$updater_output" --expected-version "$release_version" --expected-version-code 39
             (cd output/android && sha256sum "app-${abi}-release.apk" > "app-${abi}-release.apk.sha256")
+            legacy_output="output/android/deytt-connect-${release_version}-legacy-${abi}.apk"
+            python3 scripts/release.py sign "$input" \
+              --output "$legacy_output" \
+              --keystore "$RUNNER_TEMP/deytt-connect-next-release.p12" \
+              --password-file "$RUNNER_TEMP/deytt-connect-next-release.password" \
+              --legacy-keystore "$RUNNER_TEMP/deytt-connect-historic.keystore" \
+              --legacy-key-alias androiddebugkey \
+              --legacy-password-env DEYTT_HISTORIC_PASSWORD \
+              --lineage-file release/signing-lineage-legacy.bin \
+              --legacy-certificate-sha256 25e335babcdc88679ad4e8d884de5a8475866b55341d5b4596c5168e82bf2b46 \
+              --release-certificate-sha256 bb39b663e555c7ed7b725c543ed73ea2602432b003591b2e1370f0359c4c4333 \
+              --expected-version "$release_version" --expected-version-code 39
+            python3 scripts/release.py verify "$legacy_output" \
+              --legacy-certificate-sha256 25e335babcdc88679ad4e8d884de5a8475866b55341d5b4596c5168e82bf2b46 \
+              --release-certificate-sha256 bb39b663e555c7ed7b725c543ed73ea2602432b003591b2e1370f0359c4c4333 \
+              --expected-version "$release_version" --expected-version-code 39
+            (cd output/android && sha256sum "$(basename "$legacy_output")" > "$(basename "$legacy_output").sha256")
           done
 
-      - name: Publish APKs and manual-install instructions
+      - name: publish apks and signing-key migration instructions
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
@@ -117,23 +150,21 @@ jobs:
 
           notes = Path(os.environ["RUNNER_TEMP"]) / "release-notes.md"
           body = notes.read_text(encoding="utf-8").rstrip()
-          marker = "## android manual installation — new signing key"
+          release_version = os.environ["RELEASE_TAG"].removeprefix("v")
+          marker = "## android signing-key rotation"
           if marker in body:
               body = body.split(marker, 1)[0].rstrip()
-          body += """
+          body += f"""
 
           ---
 
-          ## android manual installation — new signing key
+          ## android signing-key rotation
 
-          эти apk подписаны новым ключом, поскольку прежний закрытый ключ недоступен. android не установит их поверх deytt connect, подписанного старым ключом. также опубликованы файлы app-{abi}-release.apk для проверки и установки обновлений внутри приложения.
+          основной apk использует цепочку ротации к новому release-ключу. приложение v0.8.18–v0.8.25 обновляется через обычный файл app-{{abi}}-release.apk.
 
-          1. убедитесь, что можете войти в аккаунт deytt connect.
-          2. если приложение установлено со старым ключом, сначала удалите его. android может стереть настройки и сохранённый вход.
-          3. скачайте apk для своего устройства: arm64-v8a для большинства современных телефонов, armeabi-v7a для старых 32-битных устройств или x86_64 для android на x86.
-          4. установите apk, откройте приложение и войдите снова.
+          для установки со старой подписью v0.8.17 используйте отдельный файл deytt-connect-{release_version}-legacy-{{abi}}.apk. он подписан старым ключом для android 8.1 и старее и содержит цепочку ротации к новому ключу для android 9 и новее.
 
-          будущие обновления внутри приложения используют тот же новый ключ.
+          для ручной установки версии для текущих установок скачайте deytt-connect-{release_version}-{{abi}}.apk.
           """
           notes.write_text(body.rstrip() + "\n", encoding="utf-8")
           PY
@@ -144,11 +175,17 @@ jobs:
             output/android/app-armeabi-v7a-release.apk.sha256 \
             output/android/app-x86_64-release.apk \
             output/android/app-x86_64-release.apk.sha256 \
-            "output/android/deytt-connect-${release_version}-manual-reinstall-arm64-v8a.apk" \
-            "output/android/deytt-connect-${release_version}-manual-reinstall-arm64-v8a.apk.sha256" \
-            "output/android/deytt-connect-${release_version}-manual-reinstall-armeabi-v7a.apk" \
-            "output/android/deytt-connect-${release_version}-manual-reinstall-armeabi-v7a.apk.sha256" \
-            "output/android/deytt-connect-${release_version}-manual-reinstall-x86_64.apk" \
-            "output/android/deytt-connect-${release_version}-manual-reinstall-x86_64.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-arm64-v8a.apk" \
+            "output/android/deytt-connect-${release_version}-arm64-v8a.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-armeabi-v7a.apk" \
+            "output/android/deytt-connect-${release_version}-armeabi-v7a.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-x86_64.apk" \
+            "output/android/deytt-connect-${release_version}-x86_64.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-legacy-arm64-v8a.apk" \
+            "output/android/deytt-connect-${release_version}-legacy-arm64-v8a.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-legacy-armeabi-v7a.apk" \
+            "output/android/deytt-connect-${release_version}-legacy-armeabi-v7a.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-legacy-x86_64.apk" \
+            "output/android/deytt-connect-${release_version}-legacy-x86_64.apk.sha256" \
             --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md"
