@@ -34,7 +34,10 @@ class AwgProfileStore internal constructor(private val directory: File) {
             return@synchronized (0 until source.length()).mapNotNull { position ->
                 runCatching {
                     val item = source.getJSONObject(position)
-                    if (item.optString("version") != "31") return@runCatching null
+                    val version = item.getString("version")
+                    if (version !in SUPPORTED_VERSIONS) return@runCatching null
+                    val id = item.getString("id")
+                    require(id == "awg$version" || id.startsWith("awg$version:"))
                     val name = item.getString("file")
                     require(name.isNotBlank() && File(name).name == name && name.endsWith(".conf"))
                     val file = File(directory, name)
@@ -42,8 +45,8 @@ class AwgProfileStore internal constructor(private val directory: File) {
                     val config = readFile(name) ?: return@runCatching null
                     validate(config)
                     AwgProfile(
-                        id = item.getString("id"),
-                        version = "31",
+                        id = id,
+                        version = version,
                         label = item.getString("label"),
                         shortLabel = item.getString("shortLabel"),
                         config = config,
@@ -51,14 +54,13 @@ class AwgProfileStore internal constructor(private val directory: File) {
                 }.getOrNull()
             }
         }
-        listOfNotNull(runCatching {
-            readFile("awg31.conf")?.let {
-                validate(it)
-                AwgProfile("awg31", "31", "Основной", "AWG", it)
-            }
-        }.getOrNull())
+        listOfNotNull(
+            readLegacyProfile("awg15.conf", "15"),
+            readLegacyProfile("awg31.conf", "31"),
+        )
     }
 
+    fun read15(): String? = profiles().firstOrNull { it.version == "15" }?.config
     fun read31(): String? = profiles().firstOrNull { it.version == "31" }?.config
     fun read(id: String): String? = profiles().firstOrNull { it.id == id }?.config
 
@@ -69,7 +71,7 @@ class AwgProfileStore internal constructor(private val directory: File) {
     fun save(profiles: List<AwgProfile>) = saveWithCommit(profiles) {}
 
     internal fun saveWithCommit(profiles: List<AwgProfile>, commit: () -> Unit) = synchronized(AtomicSubscriptionFile.lock) {
-        val supportedProfiles = profiles.filter { it.version == "31" }
+        val supportedProfiles = profiles.filter { it.version in SUPPORTED_VERSIONS }
         supportedProfiles.forEach { validate(it.config) }
         directory.mkdirs()
         val generation = java.util.UUID.randomUUID().toString()
@@ -113,10 +115,19 @@ class AwgProfileStore internal constructor(private val directory: File) {
         .takeIf { it.isFile && it.length() > 0L }
         ?.readText(Charsets.UTF_8)
 
+    private fun readLegacyProfile(name: String, version: String): AwgProfile? = runCatching {
+        readFile(name)?.let {
+            validate(it)
+            AwgProfile("awg$version", version, "основной", "awg", it)
+        }
+    }.getOrNull()
+
     private fun writeAtomic(name: String, content: String) =
         AtomicSubscriptionFile.write(File(directory, name), content)
 
     companion object {
+        private val SUPPORTED_VERSIONS = setOf("15", "31")
+
         fun validate(content: String?) {
             val raw = content?.takeIf { it.isNotBlank() } ?: throw IllegalArgumentException(
                 "Сервер вернул пустой профиль AmneziaWG"

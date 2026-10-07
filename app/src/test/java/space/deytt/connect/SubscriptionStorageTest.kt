@@ -81,6 +81,30 @@ class SubscriptionStorageTest {
         assertEquals(source.toString(), index.readText())
     }
 
+    @Test fun persistsAndLoadsBothAwgGenerationsWithoutCrossGenerationLoss() {
+        val directory = temporary.newFolder()
+        val profiles = listOf(
+            AwgProfile("awg15:it", "15", "Milano 01", "IT", VALID_AWG_CONFIG),
+            AwgProfile("awg31:it", "31", "Milano 31", "IT", VALID_AWG_CONFIG),
+        )
+
+        AwgProfileStore(directory).save(profiles)
+        val loaded = AwgProfileStore(directory).profiles()
+
+        assertEquals(listOf("awg15:it", "awg31:it"), loaded.map(AwgProfile::id))
+        assertEquals(listOf("15", "31"), loaded.map(AwgProfile::version))
+        assertEquals(VALID_AWG_CONFIG, AwgProfileStore(directory).read15())
+        assertEquals(VALID_AWG_CONFIG, AwgProfileStore(directory).read31())
+    }
+
+    @Test fun readsBothLegacyAwgConfigFilesWhenNoProfileIndexExists() {
+        val directory = temporary.newFolder()
+        File(directory, "awg15.conf").writeText(VALID_AWG_CONFIG)
+        File(directory, "awg31.conf").writeText(VALID_AWG_CONFIG)
+
+        assertEquals(listOf("15", "31"), AwgProfileStore(directory).profiles().map(AwgProfile::version))
+    }
+
     @Test fun failedCoreCommitRestoresAwgIndexAndKeepsPriorFiles() {
         val directory = temporary.newFolder()
         val index = File(directory, "awg-profiles.json").apply { writeText("[]") }
@@ -183,6 +207,20 @@ class SubscriptionStorageTest {
     }
 
     private class SimulatedProcessDeath : Error()
+
+    private companion object {
+        const val VALID_AWG_CONFIG = """
+            [Interface]
+            Address = 192.0.2.2/32
+            DNS = 192.0.2.0
+            PrivateKey = TFlmmEUC7V7VtiDYLKsbP5rySTKLIZq1yn8lMqK83wo=
+            [Peer]
+            AllowedIPs = 0.0.0.0/0, ::0/0
+            Endpoint = awg.example.com:51820
+            PersistentKeepalive = 25
+            PublicKey = vBN7qyUTb5lJtWYJ8LhbPio1Z4RcyBPGnqFBGn6O6Qg=
+        """
+    }
 
     @Test fun trafficCountersCannotOverflow() {
         assertEquals(Long.MAX_VALUE, SubscriptionMetadata(uploadBytes = Long.MAX_VALUE, downloadBytes = 1).usedBytes)

@@ -15,12 +15,14 @@ data class ImportedSubscription(
     val url: String,
     val summary: ProfileSummary,
     val metadata: SubscriptionMetadata,
+    val awg15Available: Boolean,
     val awg31Available: Boolean,
     val warnings: List<String> = emptyList(),
 )
 
 object SubscriptionClient {
     private const val MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024
+    private const val MAX_AWG_PROFILE_BYTES = 256 * 1024
 
     fun import(
         context: android.content.Context,
@@ -30,11 +32,24 @@ object SubscriptionClient {
     ): ImportedSubscription {
         val headers = SubscriptionRequestIdentity.headers(context)
         val coreBudget = SubscriptionRequestBudget(60_000)
-        var optionalBudget: SubscriptionRequestBudget? = null
+        var awg15Budget: SubscriptionRequestBudget? = null
+        var awg31Budget: SubscriptionRequestBudget? = null
+        var otherOptionalBudget: SubscriptionRequestBudget? = null
         try {
             return import(context, rawUrl, SubscriptionHttpTransport { url, accept ->
                 val budget = if (accept == "application/json") coreBudget else {
-                    optionalBudget ?: SubscriptionRequestBudget(20_000).also { optionalBudget = it }
+                    // Give each generation its own bounded deadline. A slow or
+                    // unavailable legacy endpoint must not consume the 3.1
+                    // endpoint's entire optional-fetch window (or vice versa).
+                    when {
+                        url.contains("format=amneziawg31") ->
+                            awg31Budget ?: SubscriptionRequestBudget(10_000).also { awg31Budget = it }
+                        url.contains("format=amneziawg") ->
+                            awg15Budget ?: SubscriptionRequestBudget(10_000).also { awg15Budget = it }
+                        else -> otherOptionalBudget ?: SubscriptionRequestBudget(20_000).also {
+                            otherOptionalBudget = it
+                        }
+                    }
                 }
                 requestUrlConnection(url, accept, headers, budget)
             }, onStage, onBeforeCommit = {
@@ -68,7 +83,10 @@ object SubscriptionClient {
         val metadata = SubscriptionMetadata.parse(response.profileTitle, response.userInfo)
         val awgStore = AwgProfileStore(context)
         onStage("awg")
-        val awgResults = listOf(fetchAwgProfiles(baseUrl, "amneziawg31", "31", transport))
+        // The legacy endpoint is `format=amneziawg`; generation 3.1 has its own
+        // `format=amneziawg31` endpoint. Each generation has a fair 10-second
+        // optional-fetch budget, separate from the required sing-box request.
+        val awgResults = fetchAwgGenerations(baseUrl, transport)
         // An optional AWG endpoint must not make a valid core subscription unusable.
         // Keep a last-known-good family when its gateway is temporarily failing.
         fun mergedProfiles(previousAwgProfiles: List<AwgProfile>) = awgResults.flatMap { result ->
@@ -124,6 +142,7 @@ object SubscriptionClient {
             baseUrl,
             summary,
             metadata,
+            awgProfiles.any { it.version == "15" },
             awgProfiles.any { it.version == "31" },
             warnings = warnings,
         )
@@ -185,6 +204,19 @@ object SubscriptionClient {
         version: String,
         transport: SubscriptionHttpTransport,
     ): AwgFetchResult = fetchAwgProfiles(baseUrl, format, version, transport)
+
+    internal fun fetchAwgGenerationsForTest(
+        baseUrl: String,
+        transport: SubscriptionHttpTransport,
+    ): List<AwgFetchResult> = fetchAwgGenerations(baseUrl, transport)
+
+    private fun fetchAwgGenerations(
+        baseUrl: String,
+        transport: SubscriptionHttpTransport,
+    ): List<AwgFetchResult> = listOf(
+        fetchAwgProfiles(baseUrl, "amneziawg", "15", transport),
+        fetchAwgProfiles(baseUrl, "amneziawg31", "31", transport),
+    )
 
     private fun request(
         url: String,
@@ -374,7 +406,8 @@ object SubscriptionClient {
             val failedIds = mutableSetOf<String>()
             var failedRequestsAreTransient = true
             val profiles = if (servers == null || servers.length() == 0) {
-                listOf(AwgProfile("awg$version", version, "Основной", "AWG", first.body)).also {
+                listOf(AwgProfile("awg$version", version, "основной", "awg", first.body)).also {
+                    requireAwgProfileSize(first.body)
                     it.forEach { profile -> AwgProfileStore.validate(profile.config) }
                 }
             } else {
@@ -395,6 +428,7 @@ object SubscriptionClient {
                                     shortLabel = server.optString("short_label", id.uppercase()),
                                     config = first.body,
                                 )
+                                requireAwgProfileSize(profile.config)
                                 AwgProfileStore.validate(profile.config)
                                 add(profile)
                             }.isSuccess
@@ -418,6 +452,7 @@ object SubscriptionClient {
                                     shortLabel = server.optString("short_label", id.uppercase()),
                                     config = response.body,
                                 )
+                                requireAwgProfileSize(profile.config)
                                 AwgProfileStore.validate(profile.config)
                                 add(profile)
                             }
@@ -465,10 +500,22 @@ object SubscriptionClient {
     }
 
     private fun isAccessFailure(error: Exception): Boolean =
-        error is SubscriptionHttpFailure && error.statusCode in setOf(400, 401, 403, 409)
+        error is SubscriptionHttpFailure && error.statusCode in setOf(401, 403, 409)
+
+    private fun requireAwgProfileSize(config: String) {
+        if (config.toByteArray(Charsets.UTF_8).size > MAX_AWG_PROFILE_BYTES) {
+            throw SubscriptionPayloadException()
+        }
+    }
+
+    private fun awgName(version: String): String = when (version) {
+        "15" -> "amneziawg 1.5"
+        "31" -> "amneziawg 3.1"
+        else -> "amneziawg"
+    }
 
     private fun awgWarning(version: String, failedCount: Int, availableCount: Int, temporary: Boolean): String {
-        val name = "AmneziaWG 3.1"
+        val name = awgName(version)
         return if (temporary) {
             if (availableCount == 0) {
                 "$name: $failedCount ${if (failedCount == 1) "сервер" else "сервера"} временно недоступ${if (failedCount == 1) "ен" else "ны"}. Доступных точек нет, обновите подписку позже."
@@ -485,7 +532,7 @@ object SubscriptionClient {
     }
 
     private fun awgWarning(version: String, error: Exception): String {
-        val name = "AmneziaWG 3.1"
+        val name = awgName(version)
         val reason = SubscriptionRetryPolicy.safeFailureSummary(error)
         return if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) == true) {
             "$name: дополнительные профили временно недоступны ($reason). Основная подписка добавлена, обновите её позже."

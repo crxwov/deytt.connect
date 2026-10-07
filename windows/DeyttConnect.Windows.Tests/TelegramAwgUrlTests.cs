@@ -27,4 +27,21 @@ public sealed class TelegramAwgUrlTests
 
         Assert.Equal("format=amneziawg31&server_id=edge%20eu%2F1", result.Query.TrimStart('?'));
     }
+
+    [Fact]
+    public void LegacyAwgRequestUsesTheAmnezia15Format()
+    {
+        var source = new Uri("https://deytt.space/sub/key?format=singbox&lang=ru");
+
+        var result = TelegramApiClient.BuildAwgUri(source, "it", generation: "15");
+
+        Assert.Equal("lang=ru&format=amneziawg&server_id=it", result.Query.TrimStart('?'));
+    }
+
+    [Fact]
+    public void AwgFormatRejectsUnknownGeneration()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            TelegramApiClient.BuildAwgUri(new Uri("https://deytt.space/sub/key"), null, "20"));
+    }
 }

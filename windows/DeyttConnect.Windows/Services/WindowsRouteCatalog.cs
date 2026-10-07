@@ -102,10 +102,12 @@ public static class WindowsRouteCatalog
                     protocol.Code, protocol.Name));
         }
 
-        foreach (var awgProfile in (awgProfiles ?? []).Take(16))
+        foreach (var awgProfile in (awgProfiles ?? []).Take(32))
         {
-            if (awgProfile.RouteId != "awg31" &&
-                !Regex.IsMatch(awgProfile.RouteId, "^awg31:[A-Za-z0-9_-]{1,172}$", RegexOptions.CultureInvariant))
+            if (awgProfile.Generation is not ("15" or "31") ||
+                awgProfile.RouteId != $"awg{awgProfile.Generation}" &&
+                !Regex.IsMatch(awgProfile.RouteId,
+                    $"^awg{awgProfile.Generation}:[A-Za-z0-9_-]{{1,172}}$", RegexOptions.CultureInvariant))
                 continue;
             try
             {
@@ -125,8 +127,8 @@ public static class WindowsRouteCatalog
                 countryCode,
                 country.Name ?? "Регион не указан",
                 country.Flag ?? "◉",
-                "AWG31",
-                "AmneziaWG",
+                "AWG" + awgProfile.Generation,
+                "amneziawg " + (awgProfile.Generation == "31" ? "3.1" : "1.5"),
                 awgProfile.RouteId,
                 awgProfile.Label));
         }

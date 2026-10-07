@@ -36,6 +36,7 @@ public sealed class TelegramApiClient
     private const int MaxAvatarBytes = 512 * 1024;
     private const int MaxProfileBytes = 2 * 1024 * 1024;
     private const int MaxAwgManifestBytes = 32 * 1024;
+    private const int MaxAwgProfileCount = 32;
     private const int MaxAwgProfilesTotalBytes = 4 * 1024 * 1024;
 
     public async Task<PairingStart> StartPairingAsync(string username, CancellationToken cancellationToken = default)
@@ -536,10 +537,57 @@ public sealed class TelegramApiClient
         fetchBudget.CancelAfter(OptionalAwgFetchBudget);
         var fetchToken = fetchBudget.Token;
 
+        // Legacy AmneziaWG 1.5 and current 3.1 are separate entitlements and
+        // endpoint formats. Fetch both independently so one missing generation
+        // cannot hide the other, while sharing the same optional-work deadline.
+        var generations = await Task.WhenAll(
+            FetchAwgProfilesForGenerationAsync(subscriptionUri, sessionToken, "31", fetchToken, cancellationToken),
+            FetchAwgProfilesForGenerationAsync(subscriptionUri, sessionToken, "15", fetchToken, cancellationToken));
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return MergeAwgProfiles(generations);
+    }
+
+    internal static IReadOnlyList<WindowsAwgProfile> MergeAwgProfiles(
+        params IReadOnlyList<WindowsAwgProfile>[] generations)
+    {
+        if (generations.Length == 0)
+            return [];
+
+        var profiles = new List<WindowsAwgProfile>(
+            Math.Min(MaxAwgProfileCount, generations.Sum(items => items.Count)));
+        var profilesBytes = 0;
+        var maxGenerationCount = generations.Max(items => items.Count);
+        for (var index = 0; index < maxGenerationCount && profiles.Count < MaxAwgProfileCount; index++)
+        {
+            foreach (var generation in generations)
+            {
+                if (index >= generation.Count)
+                    continue;
+                if (profiles.Count == MaxAwgProfileCount)
+                    break;
+                var profile = generation[index];
+                var bodyBytes = Encoding.UTF8.GetByteCount(profile.Config);
+                if (profilesBytes + bodyBytes > MaxAwgProfilesTotalBytes)
+                    continue;
+                profiles.Add(profile);
+                profilesBytes += bodyBytes;
+            }
+        }
+        return profiles;
+    }
+
+    private static async Task<IReadOnlyList<WindowsAwgProfile>> FetchAwgProfilesForGenerationAsync(
+        Uri subscriptionUri,
+        string sessionToken,
+        string generation,
+        CancellationToken fetchToken,
+        CancellationToken cancellationToken)
+    {
         AwgDownload? first;
         try
         {
-            first = await DownloadAwgProfileAsync(subscriptionUri, null, sessionToken, fetchToken);
+            first = await DownloadAwgProfileAsync(subscriptionUri, null, generation, sessionToken, fetchToken);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -565,7 +613,7 @@ public sealed class TelegramApiClient
         if (string.IsNullOrWhiteSpace(first.Manifest))
         {
             if (TryValidateAwg(first.Config))
-                return [CreateAwgProfile(null, "Основной", "AWG", first.Config!)];
+                return [CreateAwgProfile(generation, null, "Основной", "AWG", first.Config!)];
             return [];
         }
 
@@ -598,7 +646,7 @@ public sealed class TelegramApiClient
 
         if (servers.Count == 0)
             return TryValidateAwg(first.Config)
-                ? [CreateAwgProfile(null, "Основной", "AWG", first.Config!)]
+                ? [CreateAwgProfile(generation, null, "Основной", "AWG", first.Config!)]
                 : [];
 
         var configs = new string?[servers.Count];
@@ -622,7 +670,7 @@ public sealed class TelegramApiClient
                     try
                     {
                         var response = await DownloadAwgProfileAsync(
-                            subscriptionUri, servers[index].Id, sessionToken, token);
+                            subscriptionUri, servers[index].Id, generation, sessionToken, token);
                         if (TryValidateAwg(response?.Config))
                             configs[index] = response!.Config;
                     }
@@ -663,7 +711,7 @@ public sealed class TelegramApiClient
             var bodyBytes = Encoding.UTF8.GetByteCount(body);
             if (profilesBytes + bodyBytes <= MaxAwgProfilesTotalBytes)
             {
-                profiles.Add(CreateAwgProfile(server.Id, server.Label, server.ShortLabel, body));
+                profiles.Add(CreateAwgProfile(generation, server.Id, server.Label, server.ShortLabel, body));
                 profilesBytes += bodyBytes;
             }
         }
@@ -676,10 +724,11 @@ public sealed class TelegramApiClient
     private static async Task<AwgDownload?> DownloadAwgProfileAsync(
         Uri subscriptionUri,
         string? serverId,
+        string generation,
         string sessionToken,
         CancellationToken cancellationToken)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, BuildAwgUri(subscriptionUri, serverId));
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildAwgUri(subscriptionUri, serverId, generation));
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/plain"));
         request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
@@ -708,8 +757,10 @@ public sealed class TelegramApiClient
         }
     }
 
-    internal static Uri BuildAwgUri(Uri subscriptionUri, string? serverId)
+    internal static Uri BuildAwgUri(Uri subscriptionUri, string? serverId, string generation = "31")
     {
+        if (generation is not ("15" or "31"))
+            throw new ArgumentOutOfRangeException(nameof(generation));
         var builder = new UriBuilder(subscriptionUri);
         var parts = builder.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
             .Where(part =>
@@ -721,10 +772,7 @@ public sealed class TelegramApiClient
                        !Uri.UnescapeDataString(key).Equals("server_id", StringComparison.OrdinalIgnoreCase);
             })
             .ToList();
-        // Keep the Windows request identical to Android and the server contract.
-        // `format=awg` is not a supported subscription format and silently yields
-        // an empty AWG list on servers that only expose `amneziawg31`.
-        parts.Add("format=amneziawg31");
+        parts.Add(generation == "15" ? "format=amneziawg" : "format=amneziawg31");
         if (serverId is not null)
             parts.Add("server_id=" + Uri.EscapeDataString(serverId));
         builder.Query = string.Join('&', parts);
@@ -748,10 +796,12 @@ public sealed class TelegramApiClient
         }
     }
 
-    private static WindowsAwgProfile CreateAwgProfile(string? serverId, string label, string shortLabel, string config)
+    private static WindowsAwgProfile CreateAwgProfile(
+        string generation, string? serverId, string label, string shortLabel, string config)
     {
-        var routeId = serverId is null ? "awg31" : "awg31:" + Base64Url(Encoding.UTF8.GetBytes(serverId));
-        return new WindowsAwgProfile(routeId, serverId, label, shortLabel, config);
+        var routePrefix = "awg" + generation;
+        var routeId = serverId is null ? routePrefix : routePrefix + ":" + Base64Url(Encoding.UTF8.GetBytes(serverId));
+        return new WindowsAwgProfile(routeId, serverId, label, shortLabel, config, generation);
     }
 
     private static string Base64Url(byte[] value) =>
@@ -887,7 +937,8 @@ public sealed record TelegramKeysSnapshot(
     string? ProfileJson,
     IReadOnlyList<WindowsRoute> Routes,
     IReadOnlyList<WindowsAwgProfile> AwgProfiles);
-public sealed record WindowsAwgProfile(string RouteId, string? ServerId, string Label, string ShortLabel, string Config);
+public sealed record WindowsAwgProfile(
+    string RouteId, string? ServerId, string Label, string ShortLabel, string Config, string Generation = "31");
 internal sealed record AwgServer(string Id, string Label, string ShortLabel);
 internal sealed record AwgDownload(string Config, string? Manifest);
 public sealed record TelegramAccount(

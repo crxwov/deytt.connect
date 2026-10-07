@@ -104,7 +104,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     }
 
     internal fun setAvailableLocations(locations: Set<String>) {
-        val allowed = setOf("nl", "de", "fi", "ru")
+        val allowed = setOf("nl", "de", "fi", "ru", "it")
         availableLocations = locations.map(String::lowercase).filter(allowed::contains).toSet()
         if (pageLoaded) applyAvailableLocations()
     }
@@ -116,7 +116,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     }
 
     internal fun setEgressCountry(countryCode: String?) {
-        val normalized = countryCode?.uppercase()?.takeIf { it in setOf("NL", "DE", "FI", "RU") }
+        val normalized = countryCode?.uppercase()?.takeIf { it in setOf("NL", "DE", "FI", "RU", "IT") }
         if (egressCountryCode == normalized) return
         egressCountryCode = normalized
         atlas.contentDescription = mapDescription(selectedRoute)
@@ -124,7 +124,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     }
 
     internal fun setActiveAutoRoute(routeKey: String?) {
-        val allowed = setOf("nl", "de", "fi", "ru", "ru-de")
+        val allowed = setOf("nl", "de", "fi", "ru", "it", "ru-de")
         val normalized = routeKey?.lowercase()?.takeIf(allowed::contains)
         if (activeAutoRouteKey == normalized) return
         activeAutoRouteKey = normalized
@@ -307,6 +307,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                 "DE" in routeTokens -> "de"
                 "FI" in routeTokens -> "fi"
                 "RU" in routeTokens -> "ru"
+                "IT" in routeTokens -> "it"
                 else -> "auto"
             }
         }

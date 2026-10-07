@@ -115,7 +115,8 @@ internal static class PipeServer
                 if (request.Profile is null || request.RouteTags is null || request.Method is null ||
                     request.Token is null)
                     throw new JsonException("Missing diagnostic details.");
-                if (request.RouteTags.Count > 32 || request.AwgProfiles?.Count > 16)
+                if (request.RouteTags.Count > WindowsPipeProtocol.MaximumProbeRouteCount ||
+                    request.AwgProfiles?.Count > WindowsPipeProtocol.MaximumAwgProfiles)
                     throw new JsonException("Invalid diagnostic details.");
                 result = await engine.ProbeAsync(request.Profile, request.RouteTags,
                     request.AwgProfiles ?? new Dictionary<string, string>(StringComparer.Ordinal),

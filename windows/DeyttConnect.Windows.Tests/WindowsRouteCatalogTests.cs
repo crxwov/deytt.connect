@@ -107,4 +107,48 @@ public sealed class WindowsRouteCatalogTests
 
         Assert.Equal("The subscription is missing the automatic route.", error.Message);
     }
+
+    [Fact]
+    public void AwgCatalogKeepsLegacyAndCurrentGenerationsAsSeparateRoutes()
+    {
+        const string source = """
+            {
+              "inbounds": [{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
+              "outbounds": [
+                {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:IT:VLESS"]},
+                {"type":"vless","tag":"route:IT:VLESS"},
+                {"type":"direct","tag":"direct"}
+              ],
+              "route": {"final":"🇪🇺 автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}
+            }
+            """;
+        using var profile = JsonDocument.Parse(source);
+        const string config = """
+            [Interface]
+            PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            Address = 10.8.0.2/32
+            Jc = 4
+            Jmin = 40
+            Jmax = 70
+            S1 = 15
+            S2 = 20
+
+            [Peer]
+            PublicKey = AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=
+            Endpoint = it.example:51820
+            AllowedIPs = 0.0.0.0/0
+            """;
+        var awgProfiles = new[]
+        {
+            new WindowsAwgProfile("awg15:aXQ", "it", "италия 1.5", "IT", config, "15"),
+            new WindowsAwgProfile("awg31:aXQ", "it", "италия 3.1", "IT", config, "31"),
+        };
+
+        var routes = WindowsRouteCatalog.Parse(profile.RootElement, awgProfiles);
+
+        var legacy = Assert.Single(routes, route => route.Id == "awg15:aXQ");
+        var current = Assert.Single(routes, route => route.Id == "awg31:aXQ");
+        Assert.Equal(("AWG15", "amneziawg 1.5", "IT"), (legacy.Protocol, legacy.ProtocolName, legacy.CountryCode));
+        Assert.Equal(("AWG31", "amneziawg 3.1", "IT"), (current.Protocol, current.ProtocolName, current.CountryCode));
+    }
 }

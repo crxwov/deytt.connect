@@ -7,12 +7,13 @@ import org.json.JSONObject
 enum class TunnelEngine { LIBBOX, AMNEZIAWG }
 
 enum class RouteProtocol(val title: String, val detail: String) {
-    AUTO("Автоподбор", "Приложение выберет лучший доступный маршрут"),
-    RU_DE("RU → DE", "Двойной маршрут через Россию и Германию"),
-    VLESS("VLESS", "WebSocket + TLS"),
-    TROJAN("Trojan", "WebSocket + TLS"),
-    HYSTERIA2("Hysteria 2", "Быстрый QUIC-маршрут"),
-    AWG31("AmneziaWG 3.1", "Новая маскировка трафика"),
+    AUTO("автоподбор", "приложение выберет лучший доступный маршрут"),
+    RU_DE("ru → de", "двойной маршрут через россию и германию"),
+    VLESS("vless", "websocket + tls"),
+    TROJAN("trojan", "websocket + tls"),
+    HYSTERIA2("hysteria 2", "быстрый quic-маршрут"),
+    AWG15("amneziawg 1.5", "маскировка трафика"),
+    AWG31("amneziawg 3.1", "новая маскировка трафика"),
 }
 
 data class DeyttRoute(
@@ -43,7 +44,7 @@ class SelectedRouteStore(context: Context) {
             putString("title", if (route.protocol == RouteProtocol.AUTO) route.protocol.title else "${route.flag} ${route.country}")
             putString(
                 "subtitle",
-                if (route.protocol == RouteProtocol.AUTO) "Лучший доступный маршрут" else route.protocol.title,
+                if (route.protocol == RouteProtocol.AUTO) "лучший доступный маршрут" else route.protocol.title,
             )
             putString("engine", route.engine.name)
             putString("tag", route.configTag)
@@ -52,8 +53,8 @@ class SelectedRouteStore(context: Context) {
 
     fun read(): SelectedRoute = SelectedRoute(
         id = prefs.getString("id", "auto") ?: "auto",
-        title = prefs.getString("title", "Автоподбор") ?: "Автоподбор",
-        subtitle = prefs.getString("subtitle", "Лучший доступный маршрут") ?: "Лучший доступный маршрут",
+        title = prefs.getString("title", "автоподбор") ?: "автоподбор",
+        subtitle = prefs.getString("subtitle", "лучший доступный маршрут") ?: "лучший доступный маршрут",
         engine = runCatching {
             TunnelEngine.valueOf(prefs.getString("engine", TunnelEngine.LIBBOX.name)!!)
         }.getOrDefault(TunnelEngine.LIBBOX),
@@ -63,20 +64,20 @@ class SelectedRouteStore(context: Context) {
 
 object RouteCatalog {
     private val countries = mapOf(
-        "NL" to ("🇳🇱" to "Нидерланды"),
-        "DE" to ("🇩🇪" to "Германия"),
-        "RU" to ("🇷🇺" to "Россия"),
-        "FI" to ("🇫🇮" to "Финляндия"),
-        "IT" to ("🇮🇹" to "Италия"),
-        "RU-DE" to ("🇷🇺→🇩🇪" to "RU → DE"),
+        "NL" to ("🇳🇱" to "нидерланды"),
+        "DE" to ("🇩🇪" to "германия"),
+        "RU" to ("🇷🇺" to "россия"),
+        "FI" to ("🇫🇮" to "финляндия"),
+        "IT" to ("🇮🇹" to "италия"),
+        "RU-DE" to ("🇷🇺→🇩🇪" to "ru → de"),
     )
 
     private val awgCountries = mapOf(
-        "NL" to ("🇳🇱" to "Нидерланды"),
-        "DE" to ("🇩🇪" to "Германия"),
-        "RU" to ("🇷🇺" to "Россия"),
-        "FI" to ("🇫🇮" to "Финляндия"),
-        "IT" to ("🇮🇹" to "Италия"),
+        "NL" to ("🇳🇱" to "нидерланды"),
+        "DE" to ("🇩🇪" to "германия"),
+        "RU" to ("🇷🇺" to "россия"),
+        "FI" to ("🇫🇮" to "финляндия"),
+        "IT" to ("🇮🇹" to "италия"),
     )
 
     private fun awgCountry(profile: AwgProfile): Pair<String, Pair<String, String>>? {
@@ -90,7 +91,7 @@ object RouteCatalog {
         val automaticTag = autoTag(config)
         require(automaticTag.isNotBlank()) { "В подписке отсутствует автоподбор" }
         val routes = mutableListOf(
-            DeyttRoute("auto", "AUTO", "Автоподбор", "✦", RouteProtocol.AUTO, TunnelEngine.LIBBOX, automaticTag),
+            DeyttRoute("auto", "AUTO", "автоподбор", "✦", RouteProtocol.AUTO, TunnelEngine.LIBBOX, automaticTag),
         )
         val outbounds = JSONObject(config).optJSONArray("outbounds")
         if (outbounds != null) {
@@ -109,14 +110,20 @@ object RouteCatalog {
                 routes += DeyttRoute(tag, parts[1], presentation.second, presentation.first, protocol, TunnelEngine.LIBBOX, tag)
             }
         }
-        awgProfiles.filter { it.version == "31" }.forEach { profile ->
+        for (profile in awgProfiles) {
+            if (profile.version !in setOf("15", "31")) continue
             val country = awgCountry(profile)
+            val protocol = when (profile.version) {
+                "15" -> RouteProtocol.AWG15
+                "31" -> RouteProtocol.AWG31
+                else -> error("Unsupported AmneziaWG version: ${profile.version}")
+            }
             routes += DeyttRoute(
                 profile.id,
                 country?.first ?: "AWG_UNKNOWN",
-                country?.second?.second ?: "Регион не указан",
+                country?.second?.second ?: "регион не указан",
                 country?.second?.first ?: "AWG_MARK",
-                RouteProtocol.AWG31,
+                protocol,
                 TunnelEngine.AMNEZIAWG,
                 profileName = profile.label,
             )

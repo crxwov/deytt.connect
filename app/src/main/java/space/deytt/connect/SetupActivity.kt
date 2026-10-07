@@ -219,7 +219,7 @@ class SetupActivity : Activity() {
         if (!deviceSlotConflict) transferRequestSent = false
         state.visibility = View.VISIBLE
         state.setTextColor(DeyttUi.CORAL)
-        state.text = "${SubscriptionLoadDiagnostics.userMessage(error)}\n\nКод: $reference"
+        state.text = "${uiCopy(SubscriptionLoadDiagnostics.userMessage(error))}\n\nкод: $reference"
         lastFailureMessage = state.text.toString()
         state.announceForAccessibility(state.text)
         accountAction.text = uiCopy(when {

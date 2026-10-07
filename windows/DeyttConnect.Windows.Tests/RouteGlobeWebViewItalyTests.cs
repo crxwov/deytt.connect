@@ -10,13 +10,17 @@ public sealed class RouteGlobeWebViewItalyTests
     [InlineData("IT", "it")]
     [InlineData("route:IT:VLESS", "it")]
     [InlineData("awg31:it", "it")]
+    [InlineData("awg15:it", "it")]
     public void RouteKeyForMapsItalianRoutesToTheItalianAtlasLocation(string routeId, string expected)
     {
         Assert.Equal(expected, RouteGlobeWebView.RouteKeyFor(routeId));
     }
-    [Fact]
-    public void EncodedAwgIdUsesSubscriptionCountryInsteadOfDecodingGeography()
+    [Theory]
+    [InlineData("awg31:aXQ", "AWG31")]
+    [InlineData("awg15:aXQ", "AWG15")]
+    public void EncodedAwgIdUsesSubscriptionCountryInsteadOfDecodingGeography(string routeId, string protocol)
     {
-        var route = new WindowsRoute("awg31:aXQ", "awg31:aXQ", "IT", "италия", "🇮🇹", "AWG31", "amneziawg");
+        var route = new WindowsRoute(routeId, routeId, "IT", "италия", "🇮🇹", protocol, "amneziawg");
         Assert.Equal("it", RouteGlobeWebView.RouteKeyFor(route.Id, new[] { route }));
-    }}
+    }
+}
