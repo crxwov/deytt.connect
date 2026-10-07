@@ -15,19 +15,19 @@ internal object AppLanguage {
         ?.takeIf { it == RU || it == EN }
         ?: if (Locale.getDefault().language == EN) EN else RU
 
-    fun label(context: Context): String = if (current(context) == EN) "English" else "Русский"
+    fun label(context: Context): String = if (current(context) == EN) "english" else "русский"
 
     fun set(context: Context, language: String) {
         require(language == RU || language == EN)
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, language).apply()
     }
 
-    fun text(context: Context, value: String): String = if (current(context) == EN) english(value) else value
+    fun text(context: Context, value: String): String = (if (current(context) == EN) english(value) else value).lowercase(Locale.ROOT)
 
     fun Activity.uiCopy(value: String): String = text(this, value)
 
     fun locationLabel(context: Context, value: String): String =
-        if (current(context) == EN) english(value) else russianLocation(value)
+        (if (current(context) == EN) english(value) else russianLocation(value)).lowercase(Locale.ROOT)
 
     internal fun russianLocation(value: String): String = russianPlaces.entries
         .sortedByDescending { it.key.length }

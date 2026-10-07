@@ -89,11 +89,11 @@ namespace DeyttConnect.Setup
                 { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden }))
                 {
                     if (!process.WaitForExit(600000))
-                        throw new IOException("Установка WebView2 заняла слишком много времени. Проверьте подключение к Интернету и повторите установку.");
+                        throw new IOException("установка webview2 заняла слишком много времени. проверьте подключение к интернету и повторите установку.");
                     if (process.ExitCode == 3010 || process.ExitCode == 1641)
                         session.SetMode(InstallRunMode.RebootAtEnd, true);
                     else if (process.ExitCode != 0)
-                        throw new IOException("Не удалось установить компонент карты Microsoft WebView2 (код " + process.ExitCode + "). Проверьте подключение к Интернету и повторите установку.");
+                        throw new IOException("не удалось установить компонент карты microsoft webview2 (код " + process.ExitCode + "). проверьте подключение к интернету и повторите установку.");
                 }
                 return ActionResult.Success;
             }
@@ -102,7 +102,7 @@ namespace DeyttConnect.Setup
                 session.Log("WebView2 prerequisite: {0}", exception.Message);
                 using (var record = new Record(1))
                 {
-                    record[0] = exception.Message;
+                    record[0] = exception.Message.ToLowerInvariant();
                     session.Message(InstallMessage.Error, record);
                 }
                 return ActionResult.Failure;
@@ -119,7 +119,7 @@ namespace DeyttConnect.Setup
                 while (directory != null)
                 {
                     if (directory.Exists && (directory.Attributes & System.IO.FileAttributes.ReparsePoint) != 0)
-                        throw new IOException("Папка установки содержит ссылку на другую папку. Выберите обычную локальную папку.");
+                        throw new IOException("папка установки содержит ссылку на другую папку. выберите обычную локальную папку.");
                     directory = directory.Parent;
                 }
                 return ActionResult.Success;
@@ -129,7 +129,7 @@ namespace DeyttConnect.Setup
                 session.Log("Install directory validation: {0}", exception.Message);
                 using (var record = new Record(1))
                 {
-                    record[0] = exception.Message;
+                    record[0] = exception.Message.ToLowerInvariant();
                     session.Message(InstallMessage.Error, record);
                 }
                 return ActionResult.Failure;
@@ -140,7 +140,7 @@ namespace DeyttConnect.Setup
         {
             if (!File.Exists(executable)) throw new FileNotFoundException("Не найден файл приложения.", executable);
             Directory.CreateDirectory(desktop);
-            var shortcutPath = Path.Combine(desktop, "DEYTT Connect.lnk");
+            var shortcutPath = Path.Combine(desktop, "deytt connect.lnk");
             var link = (IShellLinkW)new ShellLink();
             try
             {
@@ -151,11 +151,11 @@ namespace DeyttConnect.Setup
                     var target = new System.Text.StringBuilder(32768);
                     link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
                     if (!string.Equals(Path.GetFullPath(target.ToString()), Path.GetFullPath(executable), StringComparison.OrdinalIgnoreCase))
-                        throw new IOException("На рабочем столе уже есть другой ярлык с именем DEYTT Connect. Переименуйте его и повторите попытку.");
+                        throw new IOException("на рабочем столе уже есть другой ярлык с именем deytt connect. переименуйте его и повторите попытку.");
                 }
                 link.SetPath(executable);
                 link.SetWorkingDirectory(Path.GetDirectoryName(executable));
-                link.SetDescription("DEYTT Connect — подключение к VPN");
+                link.SetDescription("deytt connect — подключение к vpn");
                 link.SetIconLocation(executable, 0);
                 link.SetShowCmd(1);
                 persist.Save(shortcutPath, true);
@@ -180,7 +180,7 @@ namespace DeyttConnect.Setup
             catch (Exception exception)
             {
                 session.Log("Finish setup failed: {0}", exception.Message);
-                session["FINISH_ERROR"] = "Приложение установлено. Не удалось выполнить выбранное действие: " + exception.Message + " Можно снять галочку и завершить установку.";
+                session["FINISH_ERROR"] = "приложение установлено. не удалось выполнить выбранное действие: " + exception.Message.ToLowerInvariant() + " можно снять галочку и завершить установку.";
             }
             return ActionResult.Success;
         }
@@ -201,7 +201,7 @@ namespace DeyttConnect.Setup
             // Do not remove an unrelated/replaced shortcut or user data. Major upgrades skip this action.
             try
             {
-                var path = Path.Combine(session.CustomActionData["Desktop"], "DEYTT Connect.lnk");
+                var path = Path.Combine(session.CustomActionData["Desktop"], "deytt connect.lnk");
                 if (!File.Exists(path)) return ActionResult.Success;
                 var link = (IShellLinkW)new ShellLink();
                 try

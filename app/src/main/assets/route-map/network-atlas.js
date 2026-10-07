@@ -6,11 +6,12 @@
   const MAX_ZOOM = 32;
   const ZOOM_EASE_MS = 120;
   const PAN_EASE_MS = 120;
-  const LOCATION_ORDER = ["nl", "de", "fi", "ru"];
+  const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
   const LABEL_OFFSETS = {
     nl: { x: -24, y: -42, align: "right" },
     de: { x: -24, y: 54, align: "right" },
     fi: { x: -22, y: -42, align: "right" },
+    it: { x: -24, y: 52, align: "right" },
     ru: { x: 24, y: -42, align: "left" },
     user: { x: 22, y: -38, align: "left" }
   };
@@ -18,6 +19,7 @@
     nl: { x: -20, y: -42, align: "right" },
     de: { x: -20, y: 56, align: "right" },
     fi: { x: -18, y: -82, align: "right" },
+    it: { x: -22, y: 54, align: "right" },
     ru: { x: 18, y: -42, align: "left" },
     user: { x: 18, y: -62, align: "left" }
   };
@@ -25,17 +27,18 @@
     nl: { code: "nl", city: "Амстердам", country: "Нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
     de: { code: "de", city: "Франкфурт-на-Майне", country: "Германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
     fi: { code: "fi", city: "Хельсинки", country: "Финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
-    ru: { code: "ru", city: "Санкт-Петербург", country: "Россия", countryId: "643", lat: 59.9311, lon: 30.3609 }
+    ru: { code: "ru", city: "Санкт-Петербург", country: "Россия", countryId: "643", lat: 59.9311, lon: 30.3609 },
+    it: { code: "it", city: "выход", country: "Италия", countryId: "380", lat: 42.5, lon: 12.5 }
   };
-  const COUNTRY_EXIT_KEYS = { NL: "nl", DE: "de", FI: "fi", RU: "ru" };
+  const COUNTRY_EXIT_KEYS = { NL: "nl", DE: "de", FI: "fi", RU: "ru", IT: "it" };
   const ROUTES = {
     auto: {
       title: "автоподбор",
       eyebrow: "два доступных выхода",
-      nodes: ["nl", "de", "fi", "ru"],
+      nodes: ["nl", "de", "fi", "ru", "it"],
       links: [],
-      steps: [["вы", "устройство"], ["auto", "проверка точек"], ["nl / de / fi / ru", "доступные выходы"], ["web", "интернет"]],
-      description: "общий адрес выбирает доступный выход из амстердама, франкфурта, хельсинки или санкт-петербурга по состоянию сети."
+      steps: [["вы", "устройство"], ["auto", "проверка точек"], ["nl / de / fi / ru / it", "доступные выходы"], ["web", "интернет"]],
+      description: "общий адрес выбирает доступный выход из амстердама, франкфурта, хельсинки, санкт-петербурга или италии по состоянию сети."
     },
     nl: {
       title: "нидерланды",
@@ -65,6 +68,13 @@
       steps: [["вы", "устройство"], ["fi", "хельсинки"], ["web", "интернет"]],
       description: "соединение входит в сеть и выходит в интернет через хельсинки."
     },
+    it: {
+      title: "италия",
+      eyebrow: "прямой маршрут",
+      nodes: ["it"], links: [],
+      steps: [["вы", "устройство"], ["it", "точка в италии"], ["web", "интернет"]],
+      description: "соединение входит в сеть и выходит в интернет через точку в италии."
+    },
     "ru-de": {
       title: "россия + германия",
       eyebrow: "двойной маршрут",
@@ -81,6 +91,8 @@
     "германия": "Germany",
     "хельсинки": "Helsinki",
     "финляндия": "Finland",
+    "италия": "Italy",
+    "выход": "Exit",
     "санкт-петербург": "Saint Petersburg",
     "россия": "Russia",
     "ваша сеть": "Your network",
@@ -98,8 +110,8 @@
     auto: {
       title: "Auto-select",
       eyebrow: "available exits",
-      steps: [["you", "device"], ["auto", "checking nodes"], ["nl / de / fi / ru", "available exits"], ["web", "internet"]],
-      description: "The shared entry chooses an available exit in Amsterdam, Frankfurt, Helsinki, or Saint Petersburg based on network conditions."
+      steps: [["you", "device"], ["auto", "checking nodes"], ["nl / de / fi / ru / it", "available exits"], ["web", "internet"]],
+      description: "The shared entry chooses an available exit in Amsterdam, Frankfurt, Helsinki, Saint Petersburg, or Italy based on network conditions."
     },
     nl: {
       title: "Netherlands",
@@ -124,6 +136,12 @@
       eyebrow: "direct route",
       steps: [["you", "device"], ["fi", "Helsinki"], ["web", "internet"]],
       description: "Traffic enters the network and reaches the internet through Helsinki."
+    },
+    it: {
+      title: "Italy",
+      eyebrow: "direct route",
+      steps: [["you", "device"], ["it", "exit in Italy"], ["web", "internet"]],
+      description: "Traffic enters the network and reaches the internet through an exit in Italy."
     },
     "ru-de": {
       title: "Russia + Germany",
@@ -889,10 +907,10 @@
       context.fillStyle = active ? colors.label : colors.labelMuted;
       context.globalAlpha = 1;
       context.font = titleFont;
-      context.fillText(title, left + inset, top + Math.round((compact ? 11 : 12) * labelScale));
+      context.fillText(title.toLowerCase(), left + inset, top + Math.round((compact ? 11 : 12) * labelScale));
       context.fillStyle = colors.labelMuted;
       context.font = metaFont;
-      context.fillText(meta, left + inset, top + Math.round((compact ? 25 : 28) * labelScale));
+      context.fillText(meta.toLowerCase(), left + inset, top + Math.round((compact ? 25 : 28) * labelScale));
       context.restore();
     }
 
@@ -1043,18 +1061,18 @@
       const eyebrow = this.root.querySelector("[data-atlas-eyebrow]");
       const description = this.root.querySelector("[data-atlas-description]");
       const steps = this.root.querySelector("[data-atlas-steps]");
-      if (title) title.textContent = route.title;
-      if (eyebrow) eyebrow.textContent = route.eyebrow;
-      if (description) description.textContent = route.description;
+      if (title) title.textContent = route.title.toLowerCase();
+      if (eyebrow) eyebrow.textContent = route.eyebrow.toLowerCase();
+      if (description) description.textContent = route.description.toLowerCase();
       if (steps) {
         steps.innerHTML = route.steps.map(function (step, index) {
           const arrow = index ? '<span class="atlas-step__arrow" aria-hidden="true">→</span>' : "";
-          return arrow + '<span class="atlas-step"><b>' + step[0] + '</b><small>' + step[1] + '</small></span>';
+          return arrow + '<span class="atlas-step"><b>' + step[0].toLowerCase() + '</b><small>' + step[1].toLowerCase() + '</small></span>';
         }).join("");
         steps.setAttribute("aria-label", route.steps.map(function (step) { return step.join(" — "); }).join(" → "));
       }
       const mapLabel = this.language === "en"
-        ? "Interactive globe. Route: " + route.title + ". Drag to rotate; pinch to zoom. Choose a route from the list below."
+        ? "Interactive globe. Route: " + route.title + ". Drag to rotate; pinch to zoom. Choose a route from the list below.".toLowerCase()
         : "интерактивный глобус: маршрут «" + route.title + "». проведите пальцем, чтобы повернуть; сведите или разведите два пальца, чтобы изменить масштаб. маршрут выбирается в списке ниже.";
       this.canvas.setAttribute("aria-label", mapLabel);
     }
@@ -1064,11 +1082,11 @@
       if (this.language !== nextLanguage) this.labelPlacements.clear();
       this.language = nextLanguage;
       document.documentElement.lang = this.language;
-      document.title = this.language === "en" ? "DEYTT network map" : "Карта сети DEYTT";
+      document.title = (this.language === "en" ? "DEYTT network map" : "Карта сети DEYTT").toLowerCase();
       const hint = this.root.querySelector(".network-atlas__hint");
       const loader = this.root.querySelector(".network-atlas__loader");
-      if (hint) hint.textContent = this.language === "en" ? "drag · pinch to zoom" : "потяните · два пальца — масштаб";
-      if (loader) loader.textContent = this.language === "en" ? "Loading map" : "Загружаю карту";
+      if (hint) hint.textContent = (this.language === "en" ? "drag · pinch to zoom" : "потяните · два пальца — масштаб").toLowerCase();
+      if (loader) loader.textContent = (this.language === "en" ? "Loading map" : "Загружаю карту").toLowerCase();
       this.renderRouteCopy();
       this.staticDirty = true;
       this.start();
@@ -1121,7 +1139,7 @@
     }
 
     setActiveAutoRoute(routeKey) {
-      const allowed = ["nl", "de", "fi", "ru", "ru-de"];
+      const allowed = ["nl", "de", "fi", "ru", "it", "ru-de"];
       const requestedKey = String(routeKey || "").toLowerCase();
       const nextRouteKey = allowed.includes(requestedKey)
         ? requestedKey

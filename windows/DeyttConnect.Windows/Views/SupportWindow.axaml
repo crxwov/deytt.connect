@@ -11,13 +11,13 @@
                 <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
                     <StackPanel Spacing="3" VerticalAlignment="Center">
                         <TextBlock x:Name="HeaderKicker"
-                                   Text="SUPPORT"
+                                   Text="support"
                                    FontFamily="fonts:DEYTT#JetBrains Mono"
                                    FontSize="9"
                                    FontWeight="SemiBold"
                                    Foreground="#8291A8" />
                         <TextBlock x:Name="HeaderTitle"
-                                   Text="Поддержка"
+                                   Text="поддержка"
                                    FontSize="21"
                                    FontWeight="SemiBold"
                                    Foreground="#F2F5FC" />
@@ -31,7 +31,7 @@
                             BorderBrush="#283548"
                             BorderThickness="1"
                             CornerRadius="12"
-                            Content="Обновить" />
+                            Content="обновить" />
                     <Button x:Name="BackButton"
                             Grid.Column="2"
                             Classes="deytt-button"
@@ -40,7 +40,7 @@
                             BorderBrush="#283548"
                             BorderThickness="1"
                             CornerRadius="12"
-                            Content="Назад" />
+                            Content="назад" />
                 </Grid>
 
                 <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="6">
@@ -70,7 +70,7 @@
                                  Margin="0,0,10,0" />
                         <TextBlock x:Name="StatusText"
                                    Grid.Column="1"
-                                   Text="Загрузка приостановлена"
+                                   Text="загрузка приостановлена"
                                    FontSize="12"
                                    Foreground="#9AA8BC"
                                    TextWrapping="Wrap"
@@ -79,7 +79,7 @@
                                 Grid.Column="2"
                                 Classes="deytt-button"
                                 Padding="10,5"
-                                Content="Повторить"
+                                Content="повторить"
                                 Foreground="#6BDDF2" />
                     </Grid>
                 </Border>
@@ -102,11 +102,11 @@
                             HorizontalAlignment="Center"
                             VerticalAlignment="Center">
                         <StackPanel Spacing="12">
-                            <TextBlock Text="Аккаунт Telegram"
+                            <TextBlock Text="аккаунт telegram"
                                        FontSize="21"
                                        FontWeight="SemiBold" />
                             <TextBlock x:Name="SignInDescription"
-                                       Text="Подключите Telegram, чтобы написать команде и посмотреть историю обращений."
+                                       Text="подключите telegram, чтобы написать команде и посмотреть историю обращений."
                                        FontSize="14"
                                        Foreground="#9AA8BC"
                                        TextWrapping="Wrap" />
@@ -118,7 +118,7 @@
                                     BorderBrush="#2F5A69"
                                     BorderThickness="1"
                                     CornerRadius="14"
-                                    Content="Подключить Telegram" />
+                                    Content="подключить telegram" />
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -133,7 +133,7 @@
                         Margin="0,14,0,0">
                     <Grid RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="*,Auto">
                         <TextBlock x:Name="ComposerLabel"
-                                   Text="СООБЩЕНИЕ КОМАНДЕ"
+                                   Text="сообщение команде"
                                    FontFamily="fonts:DEYTT#JetBrains Mono"
                                    FontSize="9"
                                    FontWeight="SemiBold"
@@ -155,7 +155,7 @@
                                  AcceptsReturn="True"
                                  TextWrapping="Wrap"
                                  MaxLength="4000"
-                                 PlaceholderText="Опишите вопрос минимум в пяти символах"
+                                 PlaceholderText="опишите вопрос минимум в пяти символах"
                                  Background="#192331"
                                  BorderBrush="#283548"
                                  BorderThickness="1"
@@ -175,7 +175,7 @@
                                     BorderBrush="#283548"
                                     BorderThickness="1"
                                     CornerRadius="12"
-                                    Content="Закрыть обращение"
+                                    Content="закрыть обращение"
                                     IsVisible="False" />
                             <Button x:Name="SendButton"
                                     Classes="deytt-button"
@@ -184,7 +184,7 @@
                                     BorderBrush="#2F5A69"
                                     BorderThickness="1"
                                     CornerRadius="12"
-                                    Content="Отправить · Ctrl+Enter" />
+                                    Content="отправить · ctrl+enter" />
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -201,11 +201,11 @@
                     <Grid ColumnDefinitions="*,Auto">
                         <StackPanel Spacing="4" VerticalAlignment="Center">
                             <TextBlock x:Name="DocumentTitle"
-                                       Text="Условия использования"
+                                       Text="условия использования"
                                        FontSize="18"
                                        FontWeight="SemiBold" />
                             <TextBlock x:Name="DocumentStatus"
-                                       Text="Загрузка приостановлена"
+                                       Text="загрузка приостановлена"
                                        FontSize="11"
                                        Foreground="#9AA8BC"
                                        TextWrapping="Wrap" />
@@ -214,7 +214,7 @@
                                 Grid.Column="1"
                                 Classes="deytt-button"
                                 Padding="12,8"
-                                Content="Повторить"
+                                Content="повторить"
                                 Foreground="#6BDDF2"
                                 VerticalAlignment="Center" />
                     </Grid>

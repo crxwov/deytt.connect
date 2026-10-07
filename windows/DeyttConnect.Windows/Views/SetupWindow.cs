@@ -1345,7 +1345,7 @@ public sealed class SetupWindow : UserControl
     private static Color ErrorColor(TelegramApiException error) =>
         error.Code is "rate_limited" or "pairing_rate_limited" ? DeyttTheme.Amber : DeyttTheme.Coral;
 
-    private string Copy(string russian, string english) => _language == "en" ? english : russian;
+    private string Copy(string russian, string english) => (_language == "en" ? english : russian).ToLowerInvariant();
 
     private string LocalizeImportProgress(string stage) => stage.Trim().ToLowerInvariant() switch
     {
