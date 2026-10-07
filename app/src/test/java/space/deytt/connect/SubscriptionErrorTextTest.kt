@@ -25,6 +25,20 @@ class SubscriptionErrorTextTest {
     }
 
     @Test
+    fun appSlotMessageExplainsPhoneSignOutAndSeparateComputerAndHappSlots() {
+        val message = SubscriptionErrorText.userMessage(
+            SubscriptionHttpFailure(409, "conflict", "app_device_limit_reached"),
+        )
+
+        assertTrue(message.contains("один слот на телефон"))
+        assertTrue(message.contains("выйдите из приложения на старом телефоне"))
+        assertTrue(message.contains("затем повторите проверку"))
+        assertTrue(message.contains("компьютерные подключения и happ используют отдельные слоты"))
+        assertTrue(message.contains("не отключает устройство автоматически"))
+        assertTrue(message.contains("обратитесь в поддержку"))
+    }
+
+    @Test
     fun typedErrorsHaveDistinctActionableSafeMessages() {
         val failures = listOf(
             java.net.UnknownHostException("secret") to "DNS",

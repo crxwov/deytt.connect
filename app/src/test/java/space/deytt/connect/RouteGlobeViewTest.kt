@@ -10,6 +10,7 @@ class RouteGlobeViewTest {
         assertEquals("nl", RouteGlobeView.routeKeyFor("route:NL:HYSTERIA"))
         assertEquals("fi", RouteGlobeView.routeKeyFor("route:FI:TROJAN"))
         assertEquals("ru", RouteGlobeView.routeKeyFor("route:RU:AWG31"))
+        assertEquals("it", RouteGlobeView.routeKeyFor("awg15:IT"))
         assertEquals("ru-de", RouteGlobeView.routeKeyFor("route:RU-DE:DOUBLE"))
         assertEquals("auto", RouteGlobeView.routeKeyFor("auto"))
     }

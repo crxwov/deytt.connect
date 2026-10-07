@@ -36,8 +36,8 @@ class ProfileRoutesTest {
             listOf("🇪🇺 автоподбор", "route:DE"),
             routes.map(RouteOption::tag),
         )
-        assertEquals("Автоподбор", routes.first().label)
-        assertEquals("Германия", routes[1].label)
+        assertEquals("автоподбор", routes.first().label)
+        assertEquals("германия", routes[1].label)
         assertEquals("🇩🇪", routes[1].flag)
     }
 
@@ -55,7 +55,10 @@ class ProfileRoutesTest {
     fun exposesEveryFirstPartyProtocolWithoutInternalNames() {
         val routes = RouteCatalog.from(
             config,
-            listOf(AwgProfile("awg31", "31", "Основной", "RU", "valid-awg31")),
+            listOf(
+                AwgProfile("awg15", "15", "Основной", "RU", "valid-awg15"),
+                AwgProfile("awg31", "31", "Основной", "RU", "valid-awg31"),
+            ),
         )
 
         assertEquals(
@@ -65,6 +68,7 @@ class ProfileRoutesTest {
                 RouteProtocol.TROJAN,
                 RouteProtocol.HYSTERIA2,
                 RouteProtocol.RU_DE,
+                RouteProtocol.AWG15,
                 RouteProtocol.AWG31,
             ),
             routes.map(DeyttRoute::protocol),
@@ -78,21 +82,26 @@ class ProfileRoutesTest {
     }
 
     @Test
-    fun ignoresUnsupportedAwgVersionsAndExposesEveryAmnezia31Server() {
+    fun ignoresUnsupportedAwgVersionsAndExposesBothGenerationsAndItalianServers() {
         val profiles = listOf(
             AwgProfile("awg15:nl", "15", "Амстердам 01", "NL", "valid-awg15"),
+            AwgProfile("awg15:it", "15", "Милан 01", "IT", "valid-awg15-italy"),
             AwgProfile("awg31:de", "31", "Франкфурт 02", "DE", "valid-awg31"),
             AwgProfile("awg31:it", "31", "Милан 01", "IT", "valid-awg31-italy"),
             AwgProfile("awg31:unknown", "31", "Unknown 03", "edge-03", "valid-awg31-unknown"),
+            AwgProfile("awg20:ru", "20", "Москва", "RU", "unsupported"),
         )
 
         val routes = RouteCatalog.from(config, profiles).filter { it.engine == TunnelEngine.AMNEZIAWG }
 
-        assertEquals(listOf("awg31:de", "awg31:it", "awg31:unknown"), routes.map(DeyttRoute::id))
-        assertEquals(listOf("Германия", "Италия", "Регион не указан"), routes.map(DeyttRoute::country))
-        assertEquals(listOf("🇩🇪", "🇮🇹", "AWG_MARK"), routes.map(DeyttRoute::flag))
-        assertEquals(listOf("DE", "IT", "AWG_UNKNOWN"), routes.map(DeyttRoute::countryCode))
-        assertEquals(List(3) { RouteProtocol.AWG31 }, routes.map(DeyttRoute::protocol))
+        assertEquals(listOf("awg15:nl", "awg15:it", "awg31:de", "awg31:it", "awg31:unknown"), routes.map(DeyttRoute::id))
+        assertEquals(listOf("нидерланды", "италия", "германия", "италия", "регион не указан"), routes.map(DeyttRoute::country))
+        assertEquals(listOf("🇳🇱", "🇮🇹", "🇩🇪", "🇮🇹", "AWG_MARK"), routes.map(DeyttRoute::flag))
+        assertEquals(listOf("NL", "IT", "DE", "IT", "AWG_UNKNOWN"), routes.map(DeyttRoute::countryCode))
+        assertEquals(
+            listOf(RouteProtocol.AWG15, RouteProtocol.AWG15, RouteProtocol.AWG31, RouteProtocol.AWG31, RouteProtocol.AWG31),
+            routes.map(DeyttRoute::protocol),
+        )
     }
 
     @Test
@@ -104,7 +113,7 @@ class ProfileRoutesTest {
 
         val italy = RouteCatalog.from(italianConfig, emptyList()).single { it.countryCode == "IT" }
 
-        assertEquals("Италия", italy.country)
+        assertEquals("италия", italy.country)
         assertEquals("🇮🇹", italy.flag)
         assertEquals(RouteProtocol.VLESS, italy.protocol)
     }

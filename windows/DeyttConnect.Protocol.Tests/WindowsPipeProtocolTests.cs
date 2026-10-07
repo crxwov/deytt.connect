@@ -56,6 +56,30 @@ public sealed class WindowsPipeProtocolTests
     }
 
     [Fact]
+    public void Request_TransportsThirtyTwoAwgProfilesWithinEscapedPayloadBudget()
+    {
+        var comment = "#" + new string('\u0001', 128 * 1024);
+        var profiles = Enumerable.Range(0, WindowsPipeProtocol.MaximumAwgProfiles)
+            .ToDictionary(index => $"awg31:route{index}", _ => comment, StringComparer.Ordinal);
+        var request = new WindowsPipeRequest
+        {
+            Command = WindowsPipeCommand.Probe,
+            Profile = "profile",
+            RouteTags = profiles.Keys.ToArray(),
+            Method = "GET",
+            Token = "test-token",
+            AwgProfiles = profiles,
+        };
+
+        var payload = WindowsPipeProtocol.SerializeRequest(request);
+        var restored = WindowsPipeProtocol.DeserializeRequest(payload);
+
+        Assert.True(payload.Length < WindowsPipeProtocol.MaximumRequestBytes);
+        Assert.Equal(WindowsPipeProtocol.MaximumAwgProfiles, restored.AwgProfiles!.Count);
+        Assert.Equal(WindowsPipeProtocol.MaximumProbeRouteCount, restored.RouteTags!.Count);
+    }
+
+    [Fact]
     public void Snapshot_RoundTripsAndOmitsNullOptionalFields()
     {
         var snapshot = new WindowsTunnelSnapshot("connected", "Подключено", "nl-vless",

@@ -226,6 +226,68 @@ class SubscriptionClientTest {
     }
 
     @Test
+    fun fetchesBothRealAwgGenerationsAndPreservesItalianServerMetadata() {
+        AwgProfileStore.validate(VALID_AWG_CONFIG)
+        AwgProfileStore.validate(VALID_AWG31_CONFIG)
+        val transport = FakeTransport(
+            SubscriptionClient.SubscriptionHttpResponse(
+                200,
+                body = VALID_AWG_CONFIG,
+                awgServers = """[{"id":"it-01","label":"Milano 01","short_label":"IT"}]""",
+            ),
+            SubscriptionClient.SubscriptionHttpResponse(
+                200,
+                body = VALID_AWG31_CONFIG,
+                awgServers = """[{"id":"it-31","label":"Milano 31","short_label":"IT"}]""",
+            ),
+        )
+
+        val results = SubscriptionClient.fetchAwgGenerationsForTest("https://deytt.space/sub/token", transport)
+        val profiles = results.flatMap { it.profiles }
+
+        assertEquals(
+            listOf("amneziawg", "amneziawg31"),
+            transport.calls.map { java.net.URI(it.first).rawQuery.orEmpty().substringAfter("format=") },
+        )
+        assertEquals(listOf("15", "31"), profiles.map(AwgProfile::version))
+        assertEquals(listOf("awg15:it-01", "awg31:it-31"), profiles.map(AwgProfile::id))
+        assertEquals(listOf("IT", "IT"), profiles.map(AwgProfile::shortLabel))
+        assertTrue(profiles.all { it.config.contains("[Peer]") })
+    }
+
+    @Test
+    fun unavailableLegacyFormatDoesNotHideAvailable31Profiles() {
+        val results = SubscriptionClient.fetchAwgGenerationsForTest(
+            "https://deytt.space/sub/token",
+            FakeTransport(
+                SubscriptionClient.SubscriptionHttpResponse(404),
+                SubscriptionClient.SubscriptionHttpResponse(200, VALID_AWG31_CONFIG),
+            ),
+        )
+
+        assertEquals(SubscriptionClient.AwgFetchState.NOT_AVAILABLE, results[0].state)
+        assertEquals(SubscriptionClient.AwgFetchState.AVAILABLE, results[1].state)
+        assertTrue(results[0].profiles.isEmpty())
+        assertEquals(listOf("awg31"), results[1].profiles.map(AwgProfile::id))
+    }
+
+    @Test
+    fun timedOutLegacyFormatDoesNotHideAvailable31Profiles() {
+        val results = SubscriptionClient.fetchAwgGenerationsForTest(
+            "https://deytt.space/sub/token",
+            FakeTransport(
+                SubscriptionDeadlineException(),
+                SubscriptionClient.SubscriptionHttpResponse(200, VALID_AWG31_CONFIG),
+            ),
+        )
+
+        assertEquals(SubscriptionClient.AwgFetchState.TRANSIENT_FAILURE, results[0].state)
+        assertEquals(SubscriptionClient.AwgFetchState.AVAILABLE, results[1].state)
+        assertTrue(results[0].profiles.isEmpty())
+        assertEquals(listOf("awg31"), results[1].profiles.map(AwgProfile::id))
+    }
+
+    @Test
     fun allAdvertisedAwgServersRemainAVisiblePartialFailure() {
         val result = SubscriptionClient.fetchAwgProfilesForTest(
             "https://deytt.space/sub/token",

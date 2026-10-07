@@ -83,13 +83,13 @@ public static class WindowsPreferencesStore
         ProductFolder,
         PreferencesFileName);
 
-    private static bool IsKnownRoute(string route) => route is "auto" or "ru-de" ||
+    internal static bool IsKnownRoute(string route) => route is "auto" or "ru-de" ||
         System.Text.RegularExpressions.Regex.IsMatch(route,
             "^route:(NL|RU|DE|FI|IT):(VLESS|TROJAN|HYSTERIA2)$",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant) ||
-        route == "awg31" ||
+        route is "awg15" or "awg31" ||
         System.Text.RegularExpressions.Regex.IsMatch(route,
-            "^awg31:[A-Za-z0-9_-]{1,172}$",
+            "^awg(15|31):[A-Za-z0-9_-]{1,172}$",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     private static void EnsureWindows()

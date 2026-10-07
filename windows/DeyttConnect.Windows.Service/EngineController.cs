@@ -138,7 +138,8 @@ internal sealed class EngineController
                 return ProbeError("Сначала отключите VPN для проверки маршрутов.");
             var awgProfilesBytes = awgProfiles.Sum(item => System.Text.Encoding.UTF8.GetByteCount(item.Value));
             if (System.Text.Encoding.UTF8.GetByteCount(profile) is <= 0 or > MaximumProfileBytes ||
-                routeTags.Count is < 1 or > 32 || awgProfiles.Count > 16 || method is not ("HEAD" or "GET") ||
+                routeTags.Count is < 1 or > WindowsPipeProtocol.MaximumProbeRouteCount ||
+                awgProfiles.Count > WindowsPipeProtocol.MaximumAwgProfiles || method is not ("HEAD" or "GET") ||
                 awgProfilesBytes > MaximumAwgProfilesTotalBytes ||
                 awgProfiles.Any(item => !routeTags.Contains(item.Key, StringComparer.Ordinal) ||
                                         System.Text.Encoding.UTF8.GetByteCount(item.Value) > MaximumAwgProfileBytes))

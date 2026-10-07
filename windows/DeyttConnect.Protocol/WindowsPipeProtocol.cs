@@ -64,8 +64,12 @@ public sealed record WindowsRouteProbeResult(
 
 public static class WindowsPipeProtocol
 {
-    public const int MaximumRequestBytes = 12 * 1024 * 1024;
+    // The 2 MiB profile plus 4 MiB of AWG configs can expand several-fold when
+    // JSON escapes Unicode and control characters. Keep enough bounded headroom.
+    public const int MaximumRequestBytes = 40 * 1024 * 1024;
     public const int MaximumResponseBytes = 1024 * 1024;
+    public const int MaximumProbeRouteCount = 32;
+    public const int MaximumAwgProfiles = 32;
 
     private static readonly JsonSerializerOptions RequestOptions = new()
     {

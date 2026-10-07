@@ -125,21 +125,27 @@ class ProtocolActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val code = intent.getStringExtra("country") ?: run { finish(); return }
-        val requestedVersion = intent.getStringExtra("version")?.takeIf { it == "31" }
+        val requestedVersion = intent.getStringExtra("version")?.takeIf { it in setOf("15", "31") }
         val config = SubscriptionStore(this).readCurrent() ?: run { finish(); return }
         val awg = AwgProfileStore(this)
         val routes = RouteCatalog.from(config, awg.profiles())
             .filter { route ->
                 route.countryCode == code &&
-                    (requestedVersion == null ||
-                        (requestedVersion == "31" && route.protocol == RouteProtocol.AWG31))
+                    (requestedVersion == null || route.protocol == when (requestedVersion) {
+                        "15" -> RouteProtocol.AWG15
+                        else -> RouteProtocol.AWG31
+                    })
             }
         val title = if (code == "AWG") {
-            "AmneziaWG 3.1"
+            when (requestedVersion) {
+                "15" -> "amneziawg 1.5"
+                "31" -> "amneziawg 3.1"
+                else -> "amneziawg"
+            }
         } else routes.firstOrNull()?.country ?: "Протокол"
         val root = screen()
         val selectedId = SelectedRouteStore(this).read().id
-        root.addView(header(if (code == "AWG") "AmneziaWG" else "маршрут", title, true))
+        root.addView(header(if (code == "AWG") "amneziawg" else "маршрут", title, true))
         root.addView(spacer(5, this))
         val globe = RouteGlobeView(this)
         globe.onMapNodeTapped = { node ->
@@ -154,6 +160,7 @@ class ProtocolActivity : Activity() {
                     "de" -> "DE"
                     "fi" -> "FI"
                     "ru" -> "RU"
+                    "it" -> "IT"
                     else -> null
                 }
                 if (tappedCountry != null && tappedCountry != code) {

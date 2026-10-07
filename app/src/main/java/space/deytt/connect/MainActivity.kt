@@ -647,8 +647,8 @@ class MainActivity : Activity() {
             ?.takeIf(String::isNotBlank)
             ?.let { warning ->
                 root.addView(spacer(12, this))
-                val compactWarning = if (warning.startsWith("Профили AmneziaWG ") && warning.contains(" не загружены.")) {
-                    "Профиль AmneziaWG 3.1 не загружен. Обновите подписку."
+                val compactWarning = if (warning.startsWith("профили amneziawg ") && warning.contains(" не загружены.")) {
+                    "профиль amneziawg 3.1 не загружен. обновите подписку."
                 } else warning
                 root.addView(note(compactWarning, DeyttUi.AMBER))
             }
@@ -984,14 +984,18 @@ class MainActivity : Activity() {
             "de" -> "DE"
             "fi" -> "FI"
             "ru" -> "RU"
+            "it" -> "IT"
             else -> return
         }
         val config = SubscriptionStore(this).readCurrent() ?: return
         val routes = RouteCatalog.from(config, AwgProfileStore(this).profiles())
         val automatic = routes.firstOrNull { it.protocol == RouteProtocol.AUTO }
         val countryRoutes = routes.filter {
-            it.engine == TunnelEngine.LIBBOX && it.countryCode == countryCode &&
-                it.protocol in setOf(RouteProtocol.VLESS, RouteProtocol.TROJAN, RouteProtocol.HYSTERIA2)
+            it.countryCode == countryCode && (
+                it.engine == TunnelEngine.AMNEZIAWG ||
+                    it.engine == TunnelEngine.LIBBOX &&
+                    it.protocol in setOf(RouteProtocol.VLESS, RouteProtocol.TROJAN, RouteProtocol.HYSTERIA2)
+                )
         }
         val doubleRoute = routes.firstOrNull {
             it.engine == TunnelEngine.LIBBOX && it.protocol == RouteProtocol.RU_DE
@@ -1001,6 +1005,7 @@ class MainActivity : Activity() {
             "NL" -> mapCopy("Нидерланды", "Netherlands")
             "DE" -> mapCopy("Германия", "Germany")
             "FI" -> mapCopy("Финляндия", "Finland")
+            "IT" -> mapCopy("Италия", "Italy")
             else -> mapCopy("Россия", "Russia")
         }
         if (choices.isEmpty()) {
@@ -1379,6 +1384,7 @@ class MainActivity : Activity() {
                 "DE" -> listOf("de")
                 "FI" -> listOf("fi")
                 "RU" -> listOf("ru")
+                "IT" -> listOf("it")
                 "RU-DE" -> listOf("ru", "de")
                 else -> emptyList()
             }
@@ -1787,7 +1793,7 @@ class MainActivity : Activity() {
             val store = AwgProfileStore(this)
             val config = store.read(route.id)
             if (config == null) {
-                renderStatus(VpnPhase.ERROR, "Ошибка запуска соединения", "Обновите подписку: профиль ${route.subtitle} отсутствует")
+                renderStatus(VpnPhase.ERROR, "ошибка запуска соединения", "обновите подписку: профиль ${route.subtitle.lowercase()} отсутствует")
                 return
             }
         }

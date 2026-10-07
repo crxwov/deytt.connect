@@ -240,11 +240,13 @@ internal static class TunnelProfileBuilder
 
     private static bool IsAwgRoute(string routeTag)
     {
-        if (routeTag == "awg31")
+        if (routeTag is "awg15" or "awg31")
             return true;
-        if (!routeTag.StartsWith("awg31:", StringComparison.Ordinal) || routeTag.Length > 178)
+        var prefixLength = routeTag.StartsWith("awg15:", StringComparison.Ordinal) ? 6 :
+            routeTag.StartsWith("awg31:", StringComparison.Ordinal) ? 6 : 0;
+        if (prefixLength == 0 || routeTag.Length > 178 || routeTag.Length == prefixLength)
             return false;
-        return routeTag.AsSpan("awg31:".Length).IndexOfAnyExcept(
+        return routeTag.AsSpan(prefixLength).IndexOfAnyExcept(
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-".AsSpan()) < 0;
     }
 

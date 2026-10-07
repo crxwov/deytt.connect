@@ -895,7 +895,7 @@ public partial class MainWindow : Window
                 var expanded = _expandedRouteCountries.Contains(country.Key);
                 var selectedCountry = countryRoutes.Any(route => route.Id == _selectedRoute);
                 var summary = string.Join(" · ", countryRoutes
-                    .Select(route => route.Protocol == "AWG31" ? "AmneziaWG 3.1" : route.ProtocolName)
+                    .Select(route => IsAwgProtocol(route.Protocol) ? AwgProtocolTitle(route.Protocol) : route.ProtocolName)
                     .Distinct(StringComparer.Ordinal));
                 var headerLabels = new StackPanel { Spacing = 3 };
                 headerLabels.Children.Add(DeyttTheme.TextBlock(
@@ -1026,7 +1026,7 @@ public partial class MainWindow : Window
         "VLESS" => 0,
         "TROJAN" => 1,
         "HYSTERIA2" => 2,
-        "AWG31" => 3,
+        "AWG15" or "AWG31" => 3,
         _ => 4,
     };
 
@@ -1103,7 +1103,7 @@ public partial class MainWindow : Window
             "VLESS" => DeyttTheme.Sky,
             "TROJAN" => DeyttTheme.Blue,
             "HYSTERIA2" => DeyttTheme.Mint,
-            "AWG31" => DeyttTheme.Amber,
+            "AWG15" or "AWG31" => DeyttTheme.Amber,
             _ => DeyttTheme.Muted,
         };
         var protocolMark = new Border
@@ -1121,13 +1121,13 @@ public partial class MainWindow : Window
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
         labels.Children.Add(DeyttTheme.TextBlock(route.ProfileName ??
-            (route.Protocol == "AWG31" ? "AmneziaWG 3.1" : route.ProtocolName),
+            (IsAwgProtocol(route.Protocol) ? AwgProtocolTitle(route.Protocol) : route.ProtocolName),
             14, DeyttTheme.Text, FontWeight.SemiBold));
         var detail = route.Protocol switch
         {
             "VLESS" or "TROJAN" => "WebSocket + TLS",
             "HYSTERIA2" => "QUIC · UDP",
-            "AWG31" => "AmneziaWG 3.1",
+            "AWG15" or "AWG31" => AwgProtocolTitle(route.Protocol),
             _ => route.ProtocolName,
         };
         labels.Children.Add(DeyttTheme.TextBlock(detail, 10, DeyttTheme.Muted));
@@ -1211,7 +1211,7 @@ public partial class MainWindow : Window
         body.Children.Add(action);
         var button = DeyttTheme.Action(body, () =>
         {
-            if (route.Protocol == "AWG31")
+            if (IsAwgProtocol(route.Protocol))
                 _ = ShowAwgRouteChoicesAsync(route);
             else
                 SelectRoute(route.Id);
@@ -1267,7 +1267,7 @@ public partial class MainWindow : Window
 
     private async Task ShowAwgRouteChoicesAsync(WindowsRoute route)
     {
-        var choice = await ChooseOptionAsync(route.ProfileName ?? "AmneziaWG 3.1",
+        var choice = await ChooseOptionAsync(route.ProfileName ?? AwgProtocolTitle(route.Protocol),
             Copy("Выберите маршрут или проверьте этот выход отдельно.",
                 "Select this route or measure this exit separately."),
             [
@@ -1932,9 +1932,18 @@ public partial class MainWindow : Window
             : RouteTitle();
 
     private string? GetAwgConfig(WindowsRoute route) =>
-        route.Protocol == "AWG31" && route.ProfileId is { } profileId
+        IsAwgProtocol(route.Protocol) && route.ProfileId is { } profileId
             ? _keysSnapshot?.AwgProfiles.FirstOrDefault(profile => profile.RouteId == profileId)?.Config
             : null;
+
+    private static bool IsAwgProtocol(string? protocol) => protocol is "AWG15" or "AWG31";
+
+    private static string AwgProtocolTitle(string? protocol) => protocol switch
+    {
+        "AWG15" => "amneziawg 1.5",
+        "AWG31" => "amneziawg 3.1",
+        _ => "amneziawg",
+    };
 
     private string RouteCountryName(WindowsRoute route) => route.CountryCode switch
     {
@@ -2150,7 +2159,7 @@ public partial class MainWindow : Window
                 Copy("Подготавливаем профиль VPN…", "Preparing VPN profile…"), route.Tag);
             RenderActiveTabPreservingScroll();
             var awgConfig = GetAwgConfig(route);
-            if (route.Protocol == "AWG31" && awgConfig is null)
+            if (IsAwgProtocol(route.Protocol) && awgConfig is null)
             {
                 _vpnSnapshot = new WindowsTunnelSnapshot("error",
                     Copy("Профиль AmneziaWG не загружен. Обновите подписку.",

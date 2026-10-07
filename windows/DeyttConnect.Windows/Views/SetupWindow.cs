@@ -525,8 +525,8 @@ public sealed class SetupWindow : UserControl
         catch (TelegramApiException error) when (IsDeviceSlotConflict(error))
         {
             Render(ViewState.DeviceConflict, Copy(
-                "Достигнут лимит подключённых приложений DEYTT. Попроси поддержку перенести приложение на это устройство.",
-                "The DEYTT app limit has been reached. Ask support to transfer the app to this device."),
+                "Занят слот компьютера. Выйди из deytt.connect на прежнем компьютере и повтори проверку. Если доступа к нему нет, обратись в поддержку. Слоты телефона и Happ отдельные.",
+                "The computer slot is in use. Sign out of deytt.connect on the previous computer, then retry the check. If you cannot access it, contact support. Phone and Happ slots are separate."),
                 DeyttTheme.Amber);
         }
         catch (TelegramApiException error) when (error.Code == "device_blocked")
@@ -930,33 +930,36 @@ public sealed class SetupWindow : UserControl
 
     private void BuildDeviceConflictView()
     {
-        _body.Children.Add(DeyttTheme.SectionLabel(Copy("01 / ЛИМИТ ПРИЛОЖЕНИЙ", "01 / APP LIMIT")));
-        _body.Children.Add(DeyttTheme.TextBlock(Copy("Достигнут лимит приложений DEYTT.",
-            "The DEYTT app limit has been reached."), 15,
+        _body.Children.Add(DeyttTheme.SectionLabel(Copy("01 / СЛОТ КОМПЬЮТЕРА", "01 / COMPUTER SLOT")));
+        _body.Children.Add(DeyttTheme.TextBlock(Copy("Слот компьютера занят.",
+            "The computer slot is in use."), 15,
             DeyttTheme.Text, FontWeight.SemiBold));
         if (_sessionToken is { Length: > 0 })
         {
             _body.Children.Add(DeyttTheme.TextBlock(Copy(
-                "Попроси поддержку перенести deytt.connect на это устройство. После переноса повтори проверку. Приложение само не отключает устройства.",
-                "Ask support to transfer deytt.connect to this device. Retry after the transfer. The app does not disconnect devices."),
+                "Выйди из deytt.connect на прежнем компьютере и повтори проверку. Слоты телефона и Happ отдельные. Если прежний компьютер недоступен, попроси поддержку освободить слот. Приложение не отключает устройства автоматически.",
+                "Sign out of deytt.connect on the previous computer, then retry the check. Phone and Happ slots are separate. If the previous computer is unavailable, ask support to free its slot. The app does not disconnect devices automatically."),
                 13, DeyttTheme.Muted));
-            _body.Children.Add(BuildPrimary(
+            _body.Children.Add(BuildPrimary(Copy("Повторить проверку", "Retry the check"), () =>
+            {
+                if (_sessionToken is { } token)
+                    _ = RefreshSubscriptionAsync(token, completeAfterVerification: _completeAfterPairing);
+            }));
+            _body.Children.Add(BuildTextButton(
                 _transferRequestSent
-                    ? Copy("Повторить проверку", "Retry the check")
+                    ? Copy("Обращение отправлено", "Support request sent")
                     : Copy("Обратиться в поддержку", "Contact support"),
                 () =>
                 {
-                    if (_transferRequestSent && _sessionToken is { } token)
-                        _ = RefreshSubscriptionAsync(token, completeAfterVerification: _completeAfterPairing);
-                    else
+                    if (!_transferRequestSent)
                         _ = RequestDeviceTransferAsync();
                 }));
         }
         else
         {
             _body.Children.Add(DeyttTheme.TextBlock(Copy(
-                "Чтобы попросить поддержку перенести приложение, сначала подключи аккаунт Telegram. Можно также освободить старый сеанс DEYTT в Telegram.",
-                "Sign in to Telegram before asking support to transfer the app. You can also remove an old DEYTT session in Telegram."),
+                "Сначала подключи аккаунт Telegram. Если прежний компьютер недоступен, войди в аккаунт и обратись в поддержку, чтобы освободить компьютерный слот.",
+                "Sign in to Telegram first. If the previous computer is unavailable, contact support to free the computer slot."),
                 13, DeyttTheme.Muted));
             _body.Children.Add(BuildPrimary(Copy("Попробовать снова", "Try again"), () => Render(ViewState.Username)));
         }
@@ -986,7 +989,7 @@ public sealed class SetupWindow : UserControl
 
         SetBusy(true);
         SetStatus(Copy("Отправляем запрос в поддержку…", "Sending the support request…"), DeyttTheme.Blue);
-        const string message = "Здравствуйте! Не получается подключить deytt.connect: сервер отвечает HTTP 409 app_device_limit_reached (download/http_409). Прошу проверить и перенести приложение на это устройство.";
+        const string message = "здравствуйте! на новом компьютере deytt.connect отвечает http 409 app_device_limit_reached (download/http_409). не получается освободить слот прежнего компьютера самостоятельно. прошу проверить и освободить только компьютерный слот; слот телефона и happ менять не нужно.";
         try
         {
             var thread = await _support.GetThreadAsync(token, _lifetime.Token);
@@ -1001,8 +1004,8 @@ public sealed class SetupWindow : UserControl
             _transferRequestSent = true;
             if (_state == ViewState.DeviceConflict)
                 Render(ViewState.DeviceConflict, Copy(
-                    "Запрос отправлен. После переноса слота поддержкой нажми «Повторить проверку».",
-                    "Request sent. After support transfers the app slot, select “Retry the check”."), DeyttTheme.Mint);
+                    "Запрос отправлен. После освобождения слота нажми «Повторить проверку».",
+                    "Request sent. After the slot is freed, select “Retry the check”."), DeyttTheme.Mint);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
@@ -1022,7 +1025,7 @@ public sealed class SetupWindow : UserControl
 
     private async Task<bool> ConfirmDeviceTransferAsync()
     {
-        var title = Copy("Перенос приложения", "Transfer the app");
+        var title = Copy("Запрос в поддержку", "Contact support");
         var confirm = _options.ConfirmAsync;
         if (confirm is null)
         {
@@ -1035,8 +1038,8 @@ public sealed class SetupWindow : UserControl
         {
             return await confirm(
                 title,
-                Copy("Отправить в поддержку обращение с просьбой перенести deytt.connect на это устройство?",
-                    "Send support a request to transfer deytt.connect to this device?"),
+                Copy("Отправить обращение, чтобы освободить занятый слот компьютера? Слот телефона и Happ не изменится.",
+                    "Send a request to free the occupied computer slot? Phone and Happ slots will not change."),
                 Copy("Отправить обращение", "Send request"));
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
@@ -1277,9 +1280,9 @@ public sealed class SetupWindow : UserControl
             ViewState.Code => (Copy("Подтвердите вход", "Confirm sign-in"),
                 Copy("Одноразовый код связывает Windows-приложение с вашим Telegram-аккаунтом.",
                     "A one-time code links this Windows app to your Telegram account.")),
-            ViewState.DeviceConflict => (Copy("Нужен свободный сеанс", "An app slot is needed"),
-                Copy("Обратись в поддержку за переносом приложения на это устройство.",
-                    "Ask support to transfer the app to this device.")),
+            ViewState.DeviceConflict => (Copy("Нужен свободный слот компьютера", "A computer slot is needed"),
+                Copy("Освободи слот на прежнем компьютере и повтори проверку. Если он недоступен, обратись в поддержку. Слоты телефона и happ отдельные.",
+                    "Free the slot on the previous computer and retry. If it is unavailable, contact support. Phone and happ slots are separate.")),
             ViewState.Refreshing => (Copy("Загружаем данные", "Loading your data"),
                 Copy("Сверяем аккаунт и получаем готовые маршруты подписки.",
                     "Checking your account and loading subscription routes.")),
@@ -1402,8 +1405,9 @@ public sealed class SetupWindow : UserControl
             "Telegram sign-in is currently unavailable."),
         "session_expired" or "session_invalid" => Copy("Сеанс истёк. Войди через Telegram ещё раз.",
             "Your session expired. Sign in with Telegram again."),
-        "app_device_limit_reached" or "device_limit_reached" => Copy("Достигнут лимит подключённых приложений.",
-            "The connected app limit has been reached."),
+        "app_device_limit_reached" or "device_limit_reached" => Copy(
+            "Слот компьютера занят. Выйди из deytt.connect на прежнем компьютере и повтори проверку. Если доступа к нему нет, обратись в поддержку. Слоты телефона и Happ отдельные.",
+            "The computer slot is in use. Sign out of deytt.connect on the previous computer, then retry the check. If you cannot access it, contact support. Phone and Happ slots are separate."),
         _ => Copy("Сервер не подтвердил вход. Повтори попытку позже.",
             "The server could not confirm sign-in. Please try again later."),
     };

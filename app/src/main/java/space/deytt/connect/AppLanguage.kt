@@ -266,7 +266,10 @@ internal object AppLanguage {
         "Попробуйте ещё раз или выберите другой маршрут" to "Try again or choose another route",
         "Проверяем маршрут и интернет" to "Checking route and internet",
         "Настраиваем защищённый туннель" to "Setting up the secure tunnel",
-        "Профиль AmneziaWG 3.1 не загружен. Обновите подписку." to "AmneziaWG 3.1 profile is missing. Refresh the subscription.",
+        "профиль amneziawg 1.5 не загружен. обновите подписку." to "amneziawg 1.5 profile is missing. refresh the subscription.",
+        "профиль amneziawg 3.1 не загружен. обновите подписку." to "amneziawg 3.1 profile is missing. refresh the subscription.",
+        "deytt.connect использует один слот на телефон. выйдите из приложения на старом телефоне, чтобы освободить слот, затем повторите проверку. компьютерные подключения и happ используют отдельные слоты. приложение не отключает устройство автоматически; если старый телефон недоступен или слот не освободился, обратитесь в поддержку." to
+            "deytt.connect uses one phone slot. sign out on the old phone to release it, then retry the check. computer connections and happ use separate slots. the app does not disconnect devices automatically; contact support if the old phone is unavailable or the slot stays occupied.",
         "ВХОД" to "ENTRY",
         "ВЫХОД" to "EXIT",
         "Ищем регион…" to "Locating region…",
