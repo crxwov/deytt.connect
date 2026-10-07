@@ -28,6 +28,7 @@ public sealed record VerifiedWindowsUpdatePackage(string FilePath, string Sha256
 public static class WindowsUpdateClient
 {
     public const long MaximumPackageSizeBytes = 512L * 1024 * 1024;
+    private const string ExpectedWindowsAssetName = "deytt-connect-windows-x64.zip";
 
     private const int MaximumReleaseResponseBytes = 2 * 1024 * 1024;
     private const int MaximumRedirects = 5;
@@ -82,9 +83,7 @@ public static class WindowsUpdateClient
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = GetJsonString(asset, "name");
-                if (name is null || !name.Contains("windows", StringComparison.OrdinalIgnoreCase) ||
-                    !name.Contains("x64", StringComparison.OrdinalIgnoreCase) ||
-                    !name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                if (name is null || !string.Equals(name, ExpectedWindowsAssetName, StringComparison.Ordinal))
                     continue;
 
                 var rawUrl = GetJsonString(asset, "browser_download_url");

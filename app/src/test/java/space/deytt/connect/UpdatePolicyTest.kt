@@ -26,12 +26,19 @@ class UpdatePolicyTest {
         assertFalse(ReleaseUrlPolicy.isOfficialAsset("https://github.com/other/repo/releases/download/v1/app.apk"))
     }
 
-    @Test fun prefersReleaseAndDeviceAbiRegardlessOfAssetOrder() {
+    @Test fun prefersOnlyReleaseAndDeviceAbiRegardlessOfAssetOrder() {
         val names = listOf("app-x86_64-release.apk", "app-arm64-v8a-debug.apk", "app-universal-release.apk", "app-arm64-v8a-release.apk")
         assertEquals("app-arm64-v8a-release.apk", ReleaseAssetPolicy.preferredName(names, listOf("arm64-v8a", "armeabi-v7a")))
         assertEquals("app-universal-release.apk", ReleaseAssetPolicy.preferredName(names, listOf("armeabi-v7a")))
-        assertEquals("app-arm64-v8a-debug.apk", ReleaseAssetPolicy.preferredName(listOf("app-arm64-v8a-debug.apk"), listOf("arm64-v8a")))
+        assertNull(ReleaseAssetPolicy.preferredName(listOf("app-arm64-v8a-debug.apk"), listOf("arm64-v8a")))
         assertNull(ReleaseAssetPolicy.preferredName(listOf("app-x86_64-release.apk", "unrelated.apk"), listOf("arm64-v8a")))
+    }
+
+    @Test fun ignoresPrereleasesAndDraftsWhenSelectingUpdaterRelease() {
+        assertFalse(ReleaseAssetPolicy.isStableRelease(draft = true, prerelease = false))
+        assertFalse(ReleaseAssetPolicy.isStableRelease(draft = false, prerelease = true))
+        assertFalse(ReleaseAssetPolicy.isStableRelease(draft = true, prerelease = true))
+        assertTrue(ReleaseAssetPolicy.isStableRelease(draft = false, prerelease = false))
     }
 
     @Test fun acceptsCurrentSignerOrForwardVerifiedRotationOnly() {

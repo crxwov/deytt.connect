@@ -130,7 +130,7 @@ public sealed class WindowsUpdateClientTests
     }
 
     [Fact]
-    public void ParseLatestWindowsReleaseResponse_SkipsDraftAndKeepsWindowsX64ZipMatching()
+    public void ParseLatestWindowsReleaseResponse_SkipsDraftAndRequiresCanonicalWindowsZipName()
     {
         const string json = """
             [
@@ -162,9 +162,14 @@ public sealed class WindowsUpdateClientTests
                     "size": 1200
                   },
                   {
-                    "name": "DEYTT-connect-WINDOWS-X64.ZIP",
-                    "browser_download_url": "https://github.com/crxwov/deytt.connect/releases/download/v1.9.0/DEYTT-connect-WINDOWS-X64.ZIP",
+                    "name": "deytt-connect-windows-x64-preview.zip",
+                    "browser_download_url": "https://github.com/crxwov/deytt.connect/releases/download/v1.9.0/deytt-connect-windows-x64-preview.zip",
                     "size": 1300
+                  },
+                  {
+                    "name": "deytt-connect-windows-x64.zip",
+                    "browser_download_url": "https://github.com/crxwov/deytt.connect/releases/download/v1.9.0/deytt-connect-windows-x64.zip",
+                    "size": 1400
                   }
                 ]
               }
@@ -175,10 +180,31 @@ public sealed class WindowsUpdateClientTests
 
         Assert.NotNull(release);
         Assert.Equal("v1.9.0", release.Tag);
-        Assert.Equal("DEYTT-connect-WINDOWS-X64.ZIP", release.AssetName);
-        Assert.Equal(1300, release.AssetSize);
+        Assert.Equal("deytt-connect-windows-x64.zip", release.AssetName);
+        Assert.Equal(1400, release.AssetSize);
         Assert.Equal(
-            "https://github.com/crxwov/deytt.connect/releases/download/v1.9.0/DEYTT-connect-WINDOWS-X64.ZIP",
+            "https://github.com/crxwov/deytt.connect/releases/download/v1.9.0/deytt-connect-windows-x64.zip",
             release.AssetUrl);
+    }
+
+    [Fact]
+    public void ParseLatestWindowsReleaseResponse_RejectsNonCanonicalWindowsZipNames()
+    {
+        const string json = """
+            [{
+              "draft": false,
+              "prerelease": false,
+              "tag_name": "v1.9.0",
+              "html_url": "https://github.com/crxwov/deytt.connect/releases/tag/v1.9.0",
+              "assets": [{
+                "name": "deytt-connect-windows-x64-preview.zip",
+                "browser_download_url": "https://github.com/crxwov/deytt.connect/releases/download/v1.9.0/deytt-connect-windows-x64-preview.zip",
+                "size": 1234,
+                "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+              }]
+            }]
+            """;
+
+        Assert.Null(WindowsUpdateClient.ParseLatestWindowsReleaseResponse(json));
     }
 }
