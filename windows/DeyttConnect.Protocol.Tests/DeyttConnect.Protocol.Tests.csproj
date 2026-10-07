@@ -18,5 +18,11 @@
     <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
     <Compile Include="..\DeyttConnect.Windows.Service\TunnelHealthMonitorLifetime.cs"
              Link="Service\TunnelHealthMonitorLifetime.cs" />
+    <Compile Include="..\DeyttConnect.Windows.Service\TunnelProfileBuilder.cs"
+             Link="Service\TunnelProfileBuilder.cs" />
+    <Compile Include="..\DeyttConnect.Windows.Service\RouteProbeModels.cs"
+             Link="Service\RouteProbeModels.cs" />
+    <Compile Include="..\DeyttConnect.Shared\WindowsAwgProfileParser.cs"
+             Link="Shared\WindowsAwgProfileParser.cs" />
   </ItemGroup>
 </Project>

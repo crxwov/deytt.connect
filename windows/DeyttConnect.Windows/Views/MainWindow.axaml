@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="using:DeyttConnect.Windows.Controls"
         x:Class="DeyttConnect.Windows.Views.MainWindow"
+        Icon="/Assets/deyttconnect.ico"
         Title="deytt./connect"
         WindowDecorations="Full"
         CanResize="True"
@@ -45,11 +46,11 @@
                             BorderBrush="#34445B"
                             BorderThickness="1"
                             CornerRadius="15">
-                        <TextBlock Text="d"
-                                   FontFamily="fonts:DEYTT#Unbounded"
-                                   FontSize="16"
-                                   FontWeight="Bold"
-                                   Foreground="#6BDDF2"
+                        <TextBlock Text="./c"
+                                   FontFamily="fonts:DEYTT#Inter Tight"
+                                   FontSize="17"
+                                   FontWeight="SemiBold"
+                                   Foreground="#F2F5FC"
                                    HorizontalAlignment="Center"
                                    VerticalAlignment="Center" />
                     </Border>
@@ -77,10 +78,10 @@
                 </StackPanel>
 
                 <StackPanel x:Name="SidebarNavPanel" Grid.Row="2" Spacing="5">
-                    <Button x:Name="HomeNav" Classes="deytt-button sidebar-nav" />
-                    <Button x:Name="RoutesNav" Classes="deytt-button sidebar-nav" />
-                    <Button x:Name="ProfileNav" Classes="deytt-button sidebar-nav" />
-                    <Button x:Name="SettingsNav" Classes="deytt-button sidebar-nav" />
+                    <Button x:Name="HomeNav" Classes="deytt-button sidebar-nav nav-pill" />
+                    <Button x:Name="RoutesNav" Classes="deytt-button sidebar-nav nav-pill" />
+                    <Button x:Name="ProfileNav" Classes="deytt-button sidebar-nav nav-pill" />
+                    <Button x:Name="SettingsNav" Classes="deytt-button sidebar-nav nav-pill" />
                 </StackPanel>
 
                 <Border x:Name="SidebarStatusCard" Grid.Row="3"
@@ -184,10 +185,10 @@
                 BorderThickness="0,1,0,0"
                 Padding="6,6,6,8">
             <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="2">
-                <Button x:Name="BottomHomeNav" Grid.Column="0" Classes="deytt-button" />
-                <Button x:Name="BottomRoutesNav" Grid.Column="1" Classes="deytt-button" />
-                <Button x:Name="BottomProfileNav" Grid.Column="2" Classes="deytt-button" />
-                <Button x:Name="BottomSettingsNav" Grid.Column="3" Classes="deytt-button" />
+                <Button x:Name="BottomHomeNav" Grid.Column="0" Classes="deytt-button nav-pill" />
+                <Button x:Name="BottomRoutesNav" Grid.Column="1" Classes="deytt-button nav-pill" />
+                <Button x:Name="BottomProfileNav" Grid.Column="2" Classes="deytt-button nav-pill" />
+                <Button x:Name="BottomSettingsNav" Grid.Column="3" Classes="deytt-button nav-pill" />
             </Grid>
         </Border>
 

@@ -53,6 +53,87 @@
         </Border>
 
         <Grid Grid.Row="1" Margin="22,18,22,20">
+            <Grid x:Name="HelpPane" IsVisible="False">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel MaxWidth="760"
+                                HorizontalAlignment="Center"
+                                Spacing="12">
+                        <TextBlock x:Name="HelpIntro"
+                                   Text="центр помощи"
+                                   FontSize="15"
+                                   Foreground="#9AA8BC"
+                                   TextWrapping="Wrap"
+                                   Margin="2,0,2,8" />
+                        <Button x:Name="HelpCenterButton"
+                                Classes="deytt-button"
+                                HorizontalContentAlignment="Stretch"
+                                Padding="0">
+                            <Border Background="#111823" BorderBrush="#283548" BorderThickness="1"
+                                    CornerRadius="16" Padding="16,14">
+                                <Grid ColumnDefinitions="42,*,Auto" ColumnSpacing="12">
+                                    <Border Width="38" Height="38" CornerRadius="12" Background="#1B303D">
+                                        <TextBlock Text="◉" Foreground="#6BDDF2" FontSize="18"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                        <TextBlock x:Name="HelpCenterTitle" Text="центр помощи"
+                                                   FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="HelpCenterSubtitle" Text="написать в поддержку и посмотреть обращения"
+                                                   FontSize="12" Foreground="#9AA8BC" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="›" FontSize="20" Foreground="#6BDDF2"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </Button>
+                        <Button x:Name="HelpTermsButton"
+                                Classes="deytt-button"
+                                HorizontalContentAlignment="Stretch"
+                                Padding="0">
+                            <Border Background="#111823" BorderBrush="#283548" BorderThickness="1"
+                                    CornerRadius="16" Padding="16,14">
+                                <Grid ColumnDefinitions="42,*,Auto" ColumnSpacing="12">
+                                    <Border Width="38" Height="38" CornerRadius="12" Background="#1B303D">
+                                        <TextBlock Text="§" Foreground="#6BDDF2" FontSize="18"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                        <TextBlock x:Name="HelpTermsTitle" Text="условия использования"
+                                                   FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="HelpTermsSubtitle" Text="пользовательское соглашение"
+                                                   FontSize="12" Foreground="#9AA8BC" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="›" FontSize="20" Foreground="#6BDDF2"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </Button>
+                        <Button x:Name="HelpPrivacyButton"
+                                Classes="deytt-button"
+                                HorizontalContentAlignment="Stretch"
+                                Padding="0">
+                            <Border Background="#111823" BorderBrush="#283548" BorderThickness="1"
+                                    CornerRadius="16" Padding="16,14">
+                                <Grid ColumnDefinitions="42,*,Auto" ColumnSpacing="12">
+                                    <Border Width="38" Height="38" CornerRadius="12" Background="#1B303D">
+                                        <TextBlock Text="◇" Foreground="#6BDDF2" FontSize="18"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    </Border>
+                                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                                        <TextBlock x:Name="HelpPrivacyTitle" Text="конфиденциальность"
+                                                   FontSize="16" FontWeight="SemiBold" />
+                                        <TextBlock x:Name="HelpPrivacySubtitle" Text="политика обработки данных"
+                                                   FontSize="12" Foreground="#9AA8BC" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="2" Text="›" FontSize="20" Foreground="#6BDDF2"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                        </Button>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
             <Grid x:Name="SupportPane" RowDefinitions="Auto,*,Auto" IsVisible="True">
                 <Border Grid.Row="0"
                         Background="#111823"

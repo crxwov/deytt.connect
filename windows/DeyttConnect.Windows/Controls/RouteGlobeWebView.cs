@@ -1,6 +1,8 @@
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Platform;
@@ -20,6 +22,7 @@ public sealed class RouteGlobeWebView : ContentControl
     private static readonly Uri AtlasUri = new($"https://{AssetHost}/index.html");
     private static readonly Uri WindowsAtlasUri = new($"https://{AssetHost}/index.html?profile=windows");
     private const int MaximumAutomaticRetries = 2;
+    private readonly bool _disableNativeInitialization;
     private static readonly string[] RequiredAtlasAssets =
         ["index.html", "network-atlas.css", "network-atlas.js", "atlas-init.js", "world-land.json"];
     private static readonly HashSet<string> RouteKeys = new(StringComparer.Ordinal)
@@ -40,7 +43,7 @@ public sealed class RouteGlobeWebView : ContentControl
     private Uri _atlasUri = AtlasUri;
     private string _selectedRoute = "auto";
     private string _language = "ru";
-    private IReadOnlyCollection<string> _availableLocations = ["nl", "de", "fi", "ru"];
+    private IReadOnlyCollection<string> _availableLocations = [];
     private bool _originConsentGranted;
     private WindowsNetworkLocation? _originLocation;
     private string? _egressCountryCode;
@@ -52,6 +55,11 @@ public sealed class RouteGlobeWebView : ContentControl
     private bool _attachedToVisualTree;
     private bool _pageReady;
     private bool _statePushQueued;
+    private bool _mapRegionUpdateQueued;
+    private IntPtr _nativeMapWindowHandle;
+    private int _appliedMapRegionWidth;
+    private int _appliedMapRegionHeight;
+    private uint _appliedMapRegionDpi;
     private int _stateRevision;
     private int _appliedRevision;
     private int _automaticRetries;
@@ -59,15 +67,21 @@ public sealed class RouteGlobeWebView : ContentControl
     private bool _retryPending;
     private CancellationTokenSource? _atlasReadyTimeout;
 
-    public RouteGlobeWebView()
+    public RouteGlobeWebView() : this(false)
     {
+    }
+
+    internal RouteGlobeWebView(bool disableNativeInitialization)
+    {
+        _disableNativeInitialization = disableNativeInitialization;
         MinHeight = 230;
         ClipToBounds = true;
         Background = Brushes.Transparent;
+        SizeChanged += OnMapSizeChanged;
         AttachedToVisualTree += (_, _) =>
         {
             _attachedToVisualTree = true;
-            if (!_atlasFailed && !_retryPending)
+            if (!_disableNativeInitialization && !_atlasFailed && !_retryPending)
             {
                 if (_webView is null)
                     TryInitializeWebView();
@@ -82,13 +96,14 @@ public sealed class RouteGlobeWebView : ContentControl
             StopAtlasReadyTimeout();
         };
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
-        TryInitializeWebView();
+        if (!_disableNativeInitialization)
+            TryInitializeWebView();
     }
 
     /// <summary>Raised when the atlas reports a selectable node code.</summary>
     public event Action<string>? NodeTapped;
 
-    /// <summary>Selected atlas route: auto, nl, de, fi, ru, or ru-de.</summary>
+    /// <summary>Selected atlas route: auto, nl, de, fi, ru, it, or ru-de.</summary>
     public string SelectedRoute
     {
         get => _selectedRoute;
@@ -190,7 +205,7 @@ public sealed class RouteGlobeWebView : ContentControl
         set
         {
             var next = value?.Trim().ToLowerInvariant();
-            if (next is not ("nl" or "de" or "fi" or "ru" or "ru-de"))
+            if (next is not ("nl" or "de" or "fi" or "ru" or "it" or "ru-de"))
                 next = null;
             if (_activeAutoRouteKey == next)
                 return;
@@ -226,8 +241,8 @@ public sealed class RouteGlobeWebView : ContentControl
     }
 
     /// <summary>
-    /// Translates route identifiers such as NL, RU-DE, or a route id containing those
-    /// country tokens to the key understood by the Android atlas.
+    /// Translates route identifiers such as NL, IT, RU-DE, or a route id containing those
+    /// country tokens to the key understood by the shared atlas.
     /// </summary>
     public static string RouteKeyFor(string? selectedRouteId)
     {
@@ -258,6 +273,9 @@ public sealed class RouteGlobeWebView : ContentControl
 
     private void TryInitializeWebView()
     {
+        if (_disableNativeInitialization)
+            return;
+
         if (!Directory.Exists(AtlasAssetDirectory) ||
             RequiredAtlasAssets.Any(name => !File.Exists(Path.Combine(AtlasAssetDirectory, name))))
         {
@@ -323,7 +341,9 @@ public sealed class RouteGlobeWebView : ContentControl
                 else if (args is WindowsWebView2EnvironmentRequestedEventArgs webView2)
                 {
                     webView2.UserDataFolder = webView2UserDataFolder!;
-                    // Avoid the experimental offscreen controller crash on supported Windows 10.
+                    // Keep the standard HWND controller on Windows. The experimental
+                    // offscreen adapter crashes during initialization on this supported
+                    // Windows 10 and WebView2 combination, taking down the whole client.
                     webView2.ExperimentalOffscreen = false;
                 }
             };
@@ -359,6 +379,12 @@ public sealed class RouteGlobeWebView : ContentControl
                     return;
                 }
 
+                _nativeMapWindowHandle = handle.Handle;
+                _appliedMapRegionWidth = 0;
+                _appliedMapRegionHeight = 0;
+                _appliedMapRegionDpi = 0;
+                QueueRoundedMapRegionUpdate();
+                SetTransparentWebViewBackground(handle.CoreWebView2Controller);
                 var coreWebView2 = CoreWebView2.CreateFromComICoreWebView2(handle.CoreWebView2);
                 coreWebView2.SetVirtualHostNameToFolderMapping(
                     AssetHost,
@@ -375,10 +401,136 @@ public sealed class RouteGlobeWebView : ContentControl
         }
     }
 
+    private void OnMapSizeChanged(object? sender, SizeChangedEventArgs args) => QueueRoundedMapRegionUpdate();
+
+    private void QueueRoundedMapRegionUpdate()
+    {
+        if (!OperatingSystem.IsWindows() || _nativeMapWindowHandle == IntPtr.Zero || _mapRegionUpdateQueued)
+            return;
+
+        var expectedHandle = _nativeMapWindowHandle;
+        _mapRegionUpdateQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _mapRegionUpdateQueued = false;
+            if (expectedHandle != _nativeMapWindowHandle)
+                return;
+
+            if (OperatingSystem.IsWindows())
+                ApplyRoundedMapWindowRegion(expectedHandle);
+        }, DispatcherPriority.Render);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private void ApplyRoundedMapWindowRegion(IntPtr windowHandle)
+    {
+        const uint RootAncestor = 2;
+        if (windowHandle == IntPtr.Zero)
+            return;
+
+        // The WebView's platform handle must be its own child HWND. Never round
+        // the top-level app window, even if the adapter returns an unexpected handle.
+        var rootWindow = GetAncestor(windowHandle, RootAncestor);
+        if (rootWindow == IntPtr.Zero || rootWindow == windowHandle)
+        {
+            System.Diagnostics.Trace.TraceError("Map corner clip skipped: WebView handle is not a child window.");
+            return;
+        }
+
+        if (!GetWindowRect(windowHandle, out var bounds))
+            return;
+
+        var width = bounds.Right - bounds.Left;
+        var height = bounds.Bottom - bounds.Top;
+        if (width <= 0 || height <= 0)
+            return;
+
+        var dpi = GetDpiForWindow(windowHandle);
+        if (dpi == 0)
+            dpi = 96;
+        if (width == _appliedMapRegionWidth && height == _appliedMapRegionHeight && dpi == _appliedMapRegionDpi)
+            return;
+
+        var radius = Math.Max(1, (int)Math.Round(24d * dpi / 96d));
+        var diameter = Math.Min(radius * 2, Math.Min(width, height));
+        var region = CreateRoundRectRgn(0, 0, width, height, diameter, diameter);
+        if (region == IntPtr.Zero)
+            return;
+
+        if (SetWindowRgn(windowHandle, region, true) == 0)
+        {
+            DeleteObject(region);
+            System.Diagnostics.Trace.TraceError("Map corner clip failed: SetWindowRgn returned zero.");
+            return;
+        }
+        // On success, Windows owns the region handle and deletes it when replaced.
+        _appliedMapRegionWidth = width;
+        _appliedMapRegionHeight = height;
+        _appliedMapRegionDpi = dpi;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr GetAncestor(IntPtr windowHandle, uint flags);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowRect(IntPtr windowHandle, out NativeRect bounds);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint GetDpiForWindow(IntPtr windowHandle);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowRgn(IntPtr windowHandle, IntPtr region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    private static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int ellipseWidth, int ellipseHeight);
+
+    [DllImport("gdi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(IntPtr objectHandle);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void SetTransparentWebViewBackground(IntPtr controllerHandle)
+    {
+        if (controllerHandle == IntPtr.Zero)
+            throw new InvalidOperationException("WebView2 controller handle is unavailable.");
+
+        var controllerObject = Marshal.GetObjectForIUnknown(controllerHandle);
+        var controllerType = typeof(CoreWebView2).Assembly.GetType(
+            "Microsoft.Web.WebView2.Core.Raw.ICoreWebView2Controller2",
+            throwOnError: true)!;
+        if (!controllerType.IsInstanceOfType(controllerObject))
+            throw new InvalidOperationException("WebView2 controller does not support transparent backgrounds.");
+
+        var colorType = controllerType.Assembly.GetType(
+            "Microsoft.Web.WebView2.Core.Raw.COREWEBVIEW2_COLOR",
+            throwOnError: true)!;
+        var transparentColor = Activator.CreateInstance(colorType)!;
+        colorType.GetField("A")!.SetValue(transparentColor, (byte)0);
+        colorType.GetField("R")!.SetValue(transparentColor, (byte)0);
+        colorType.GetField("G")!.SetValue(transparentColor, (byte)0);
+        colorType.GetField("B")!.SetValue(transparentColor, (byte)0);
+        controllerType.GetProperty("DefaultBackgroundColor")!.SetValue(controllerObject, transparentColor);
+    }
+
     private void OnAdapterDestroyed(object? sender, WebViewAdapterEventArgs args)
     {
         if (ReferenceEquals(sender, _webView))
         {
+            _nativeMapWindowHandle = IntPtr.Zero;
+            _mapRegionUpdateQueued = false;
+            _appliedMapRegionWidth = 0;
+            _appliedMapRegionHeight = 0;
+            _appliedMapRegionDpi = 0;
             _pageReady = false;
             StopAtlasReadyTimeout();
             if (_attachedToVisualTree && !_atlasFailed)
@@ -748,6 +900,6 @@ public sealed class RouteGlobeWebView : ContentControl
     private static string? NormalizeCountryCode(string? countryCode)
     {
         var normalized = countryCode?.Trim().ToUpperInvariant();
-        return normalized is "NL" or "DE" or "FI" or "RU" ? normalized : null;
+        return normalized is "NL" or "DE" or "FI" or "RU" or "IT" ? normalized : null;
     }
 }

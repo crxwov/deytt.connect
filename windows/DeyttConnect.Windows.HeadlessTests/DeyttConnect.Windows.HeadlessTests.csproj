@@ -23,4 +23,12 @@
     <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
   </ItemGroup>
 
+  <Target Name="RemoveUnusedWebView2WpfReference" BeforeTargets="ResolveAssemblyReferences">
+    <!-- Avalonia hosts WebView2 through its Core API; the WPF wrapper is unused and
+         conflicts with WindowsBase from the .NET target framework. -->
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+
 </Project>

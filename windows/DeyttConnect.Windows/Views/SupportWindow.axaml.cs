@@ -16,10 +16,10 @@ namespace DeyttConnect.Windows.Views;
 
 public partial class SupportView : UserControl, IDisposable
 {
-    private enum SupportPage { Thread, Terms, Privacy }
+    private enum SupportPage { Help, Thread, Terms, Privacy }
 
     private const int MaximumMessageLength = 4000;
-    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(8);
     private readonly IWindowsSupportClient _client;
     private readonly DispatcherTimer _refreshTimer = new() { Interval = RefreshInterval };
     private readonly CancellationTokenSource _lifetime = new();
@@ -70,6 +70,9 @@ public partial class SupportView : UserControl, IDisposable
         SetCopy();
 
         SupportNavButton.Click += (_, _) => ShowThread();
+        HelpCenterButton.Click += (_, _) => ShowThread();
+        HelpTermsButton.Click += async (_, _) => await ShowDocumentAsync(SupportDocumentKind.Terms);
+        HelpPrivacyButton.Click += async (_, _) => await ShowDocumentAsync(SupportDocumentKind.Privacy);
         TermsNavButton.Click += async (_, _) => await ShowDocumentAsync(SupportDocumentKind.Terms);
         PrivacyNavButton.Click += async (_, _) => await ShowDocumentAsync(SupportDocumentKind.Privacy);
         TelegramNavButton.Click += (_, _) => OpenTelegram();
@@ -156,10 +159,12 @@ public partial class SupportView : UserControl, IDisposable
                 _refreshTimer.Start();
             }
         }
-        else
+        else if (_page is SupportPage.Terms or SupportPage.Privacy)
         {
             _ = LoadDocumentAsync(CurrentDocumentKind());
         }
+        else
+            ShowHelpIndex();
     }
 
     public void Deactivate()
@@ -178,7 +183,7 @@ public partial class SupportView : UserControl, IDisposable
         _busy = false;
         SetBusy(false);
 
-        if (_page != SupportPage.Thread)
+        if (_page is SupportPage.Terms or SupportPage.Privacy)
         {
             DocumentStatus.Text = T("Загрузка приостановлена до возвращения на экран.", "Loading paused until you return to this screen.");
             DocumentStatus.Foreground = DeyttTheme.Brush(DeyttTheme.Muted);
@@ -212,17 +217,33 @@ public partial class SupportView : UserControl, IDisposable
 
     private void SetCopy()
     {
+        RefreshButton.IsVisible = _page != SupportPage.Help;
         SupportNavButton.Content = NavContent("◉", T("Поддержка", "Support"), _page == SupportPage.Thread);
         TermsNavButton.Content = NavContent("§", T("Условия", "Terms"), _page == SupportPage.Terms);
         PrivacyNavButton.Content = NavContent("◇", T("Приватность", "Privacy"), _page == SupportPage.Privacy);
         TelegramNavButton.Content = NavContent("↗", T("Открыть Telegram", "Open Telegram"), false);
-        HeaderKicker.Text = _page == SupportPage.Thread ? "SUPPORT" : "DOCUMENTS";
+        HeaderKicker.Text = _page switch
+        {
+            SupportPage.Thread => "SUPPORT",
+            SupportPage.Help => "HELP CENTER",
+            _ => "DOCUMENTS",
+        };
         HeaderTitle.Text = _page switch
         {
             SupportPage.Terms => T("Условия использования", "Terms of use"),
             SupportPage.Privacy => T("Конфиденциальность", "Privacy"),
+            SupportPage.Help => T("Помощь и документы", "Help and documents"),
             _ => T("Поддержка", "Support"),
         };
+        HelpIntro.Text = T("Выберите раздел. Для документов вход в Telegram не требуется.",
+            "Choose a section. Telegram sign-in is not required for documents.");
+        HelpCenterTitle.Text = T("Центр помощи", "Help center");
+        HelpCenterSubtitle.Text = T("Написать в поддержку и посмотреть обращения",
+            "Contact support and view your tickets");
+        HelpTermsTitle.Text = T("Условия использования", "Terms of use");
+        HelpTermsSubtitle.Text = T("Пользовательское соглашение", "User agreement");
+        HelpPrivacyTitle.Text = T("Конфиденциальность", "Privacy");
+        HelpPrivacySubtitle.Text = T("Политика обработки данных", "Data policy");
         RefreshButton.Content = T("Обновить", "Refresh");
         BackButton.Content = T("Назад", "Back");
         if (_uncertainSendText is not null)
@@ -864,6 +885,8 @@ public partial class SupportView : UserControl, IDisposable
     {
         _documentLoad?.Cancel();
         _page = SupportPage.Thread;
+        RefreshButton.IsVisible = true;
+        HelpPane.IsVisible = false;
         SupportPane.IsVisible = true;
         DocumentPane.IsVisible = false;
         SetCopy();
@@ -887,6 +910,8 @@ public partial class SupportView : UserControl, IDisposable
     private async Task ShowDocumentAsync(SupportDocumentKind kind)
     {
         _page = kind == SupportDocumentKind.Terms ? SupportPage.Terms : SupportPage.Privacy;
+        RefreshButton.IsVisible = true;
+        HelpPane.IsVisible = false;
         SupportPane.IsVisible = false;
         DocumentPane.IsVisible = true;
         RefreshButton.IsEnabled = true;
@@ -897,6 +922,18 @@ public partial class SupportView : UserControl, IDisposable
             : T("Конфиденциальность", "Privacy");
         if (IsActive)
             await LoadDocumentAsync(kind);
+    }
+
+    public void ShowHelpIndex()
+    {
+        _documentLoad?.Cancel();
+        _refreshTimer.Stop();
+        _page = SupportPage.Help;
+        HelpPane.IsVisible = true;
+        SupportPane.IsVisible = false;
+        DocumentPane.IsVisible = false;
+        RefreshButton.IsVisible = false;
+        SetCopy();
     }
 
     private async Task LoadDocumentAsync(SupportDocumentKind kind)
@@ -1089,5 +1126,5 @@ public partial class SupportView : UserControl, IDisposable
         };
     }
 
-    private string T(string russian, string english) => IsRussian ? russian : english;
+    private string T(string russian, string english) => (IsRussian ? russian : english).ToLowerInvariant();
 }

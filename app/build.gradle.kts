@@ -17,15 +17,15 @@ android {
         targetSdk = 35
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        } else 33
-        versionName = "0.8.20"
+        } else 34
+        versionName = "0.8.21"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }
 
     buildTypes {
         release {
-            // Signing and certificate rotation are checked by scripts/release.py.
+            // Signing identity and APK policy are checked by scripts/release.py.
             // Keep this output unsigned instead of silently using a debug key.
             isDebuggable = false
             isJniDebuggable = false
@@ -71,3 +71,4 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }
+

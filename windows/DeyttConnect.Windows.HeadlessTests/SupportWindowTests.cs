@@ -28,12 +28,12 @@ public sealed class SupportWindowTests
         Assert.Equal(1, client.SendCount);
         Assert.Equal(2, client.ThreadReadCount);
         Assert.Equal(string.Empty, fixture.Composer.Text);
-        Assert.Equal("Обращение №42 · открыто", fixture.Status.Text);
+        Assert.Equal("обращение №42 · открыто", fixture.Status.Text);
     }
 
     [AvaloniaTheory]
-    [InlineData("ru", "Сообщение отправлено, историю обновить не удалось. Нажмите «Обновить».", "Повторить", "Обращение №42 · открыто")]
-    [InlineData("en", "Message sent, but conversation could not be refreshed. Press Refresh.", "Retry", "Ticket #42 · open")]
+    [InlineData("ru", "сообщение отправлено, историю обновить не удалось. нажмите «обновить».", "повторить", "обращение №42 · открыто")]
+    [InlineData("en", "message sent, but conversation could not be refreshed. press refresh.", "retry", "ticket #42 · open")]
     public void Sent_message_with_failed_refresh_is_confirmed_and_retry_refresh_does_not_resend(
         string language, string expectedStatus, string expectedRetryText, string expectedThreadStatus)
     {
@@ -69,7 +69,7 @@ public sealed class SupportWindowTests
         Assert.Equal(1, client.SendCount);
         Assert.Equal(Draft, fixture.Composer.Text);
         Assert.Contains("черновик сохранён", fixture.Status.Text);
-        Assert.Equal("Отправить ещё раз", fixture.RetryButton.Content);
+        Assert.Equal("отправить ещё раз", fixture.RetryButton.Content);
 
         fixture.RetryButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
@@ -77,7 +77,7 @@ public sealed class SupportWindowTests
         Assert.Equal(2, client.SendCount);
         Assert.Equal(string.Empty, fixture.Composer.Text);
         Assert.Equal(2, client.ThreadReadCount);
-        Assert.Equal("Обращение №42 · открыто", fixture.Status.Text);
+        Assert.Equal("обращение №42 · открыто", fixture.Status.Text);
     }
 
     [AvaloniaFact]
@@ -91,8 +91,8 @@ public sealed class SupportWindowTests
 
         Assert.Equal(1, client.SendCount);
         Assert.Equal(string.Empty, fixture.Composer.Text);
-        Assert.Equal("Сообщение отправлено.", fixture.Status.Text);
-        Assert.Equal("Повторить", fixture.RetryButton.Content);
+        Assert.Equal("сообщение отправлено.", fixture.Status.Text);
+        Assert.Equal("повторить", fixture.RetryButton.Content);
     }
 
     [AvaloniaFact]
@@ -110,7 +110,7 @@ public sealed class SupportWindowTests
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(Draft, fixture.Composer.Text);
         Assert.Contains("могло дойти", fixture.Status.Text);
-        Assert.Equal("Подтвердить повтор…", fixture.RetryButton.Content);
+        Assert.Equal("подтвердить повтор…", fixture.RetryButton.Content);
 
         fixture.RetryButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
@@ -134,7 +134,7 @@ public sealed class SupportWindowTests
 
         Assert.Equal(1, client.SendCount);
         Assert.Equal(string.Empty, fixture.Composer.Text);
-        Assert.Equal("Сообщение отправлено.", fixture.Status.Text);
+        Assert.Equal("сообщение отправлено.", fixture.Status.Text);
     }
 
     [AvaloniaTheory]
@@ -254,8 +254,8 @@ public sealed class SupportWindowTests
 
         Assert.Equal(1, client.SendCount);
         Assert.Equal(string.Empty, fixture.Composer.Text);
-        Assert.Equal("Сообщение отправлено.", fixture.Status.Text);
-        Assert.Equal("Повторить", fixture.RetryButton.Content);
+        Assert.Equal("сообщение отправлено.", fixture.Status.Text);
+        Assert.Equal("повторить", fixture.RetryButton.Content);
     }
 
     [AvaloniaFact]

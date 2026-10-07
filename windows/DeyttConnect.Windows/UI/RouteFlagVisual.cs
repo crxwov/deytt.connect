@@ -16,6 +16,7 @@ internal static class RouteFlagVisual
             "DE" => HorizontalStripes(width, height, "#17191E", "#C83C4A", "#F0C66B"),
             "RU" => HorizontalStripes(width, height, "#F7F7F4", "#477CC0", "#C83C4A"),
             "FI" => FinnishFlag(width, height),
+            "IT" => VerticalStripes(width, height, "#168B4B", "#F7F7F4", "#D0474D"),
             "RU-DE" => DoubleFlag(width, height),
             _ => Fallback(code, width, height),
         };
@@ -65,6 +66,23 @@ internal static class RouteFlagVisual
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
         });
         return field;
+    }
+
+    private static Control VerticalStripes(double width, double height, params string[] colors)
+    {
+        var columns = new Grid
+        {
+            Width = width - 2,
+            Height = height - 2,
+            ColumnDefinitions = new ColumnDefinitions(string.Join(",", Enumerable.Repeat("*", colors.Length))),
+        };
+        for (var index = 0; index < colors.Length; index++)
+        {
+            var stripe = new Border { Background = new SolidColorBrush(Color.Parse(colors[index])) };
+            Grid.SetColumn(stripe, index);
+            columns.Children.Add(stripe);
+        }
+        return columns;
     }
 
     private static Control DoubleFlag(double width, double height)
@@ -122,13 +140,14 @@ internal static class RouteFlagVisual
 
     private static string FlagName(string code) => code switch
     {
-        "NL" => "Флаг Нидерландов",
-        "DE" => "Флаг Германии",
-        "RU" => "Флаг России",
-        "FI" => "Флаг Финляндии",
-        "RU-DE" => "Флаги России и Германии",
-        "AUTO" => "Автоматический выбор маршрута",
-        "IP" => "Регион, определённый по IP",
-        _ => "Регион не указан",
+        "NL" => "флаг нидерландов",
+        "DE" => "флаг германии",
+        "RU" => "флаг россии",
+        "FI" => "флаг финляндии",
+        "IT" => "флаг италии",
+        "RU-DE" => "флаги россии и германии",
+        "AUTO" => "автоматический выбор маршрута",
+        "IP" => "регион, определённый по ip",
+        _ => "регион не указан",
     };
 }

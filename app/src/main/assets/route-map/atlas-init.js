@@ -9,16 +9,15 @@
   window.deyttMapTrafficActive = false;
   window.deyttMapReducedMotion = false;
   const windowsProfile = new URLSearchParams(window.location.search).get("profile") === "windows";
+  if (windowsProfile) document.documentElement.dataset.atlasProfile = "windows";
   function updateInteractionHint() {
     if (!windowsProfile) return;
     const hint = root.querySelector(".network-atlas__hint");
-    if (hint) hint.textContent = window.deyttMapLanguage === "en"
-      ? "wheel to zoom · drag to pan"
-      : "колёсико — масштаб · перетаскивание — обзор";
+    if (hint) hint.style.display = "none";
     const canvas = root.querySelector("canvas");
     if (canvas) canvas.setAttribute("aria-label", window.deyttMapLanguage === "en"
-      ? "Interactive DEYTT network globe. Use the mouse wheel to zoom, drag to pan, or use arrow keys."
-      : "Интерактивный глобус DEYTT. Масштабируйте колесиком, перетаскивайте карту или используйте клавиши со стрелками.");
+      ? "interactive deytt network globe. use the mouse wheel to zoom, drag to pan, or use arrow keys."
+      : "интерактивный глобус deytt. масштабируйте колесиком, перетаскивайте карту или используйте клавиши со стрелками.");
   }
   function notifyHost(message) {
     if (typeof window.invokeCSharpAction === "function") {

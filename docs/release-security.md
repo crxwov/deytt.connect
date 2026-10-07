@@ -21,26 +21,20 @@ backend are excluded; their removal is not evidence they caused antivirus alerts
 
 ## Signing identity and migration
 
-`release/signing-policy.json` records public certificate SHA-256 fingerprints.
-`release/signing-lineage.bin` contains the old-key-authorized proof of rotation;
-it contains no private key. Android 9+ uses the dedicated release key. Android
-7–8 continues to see the original certificate through v1/v2 signatures, allowing
-existing installations to update without uninstalling. Both paths are release
-builds with debugging disabled. The old certificate has no rollback capability
-in the lineage.
+`release/signing-policy.json` records the expected public certificate SHA-256.
+The historical `release/signing-lineage.bin` proves a previous rotation but
+cannot authorize the new identity. The 0.8.18 preview therefore uses one new
+signer on API 24 and newer. Android will reject it over every APK signed with the
+old identity. The preview APK assets use `manual-reinstall` names, which the
+in-app updater does not select. Users must uninstall the old app and then install
+the matching APK; Android may erase local settings and credentials. Keep access
+to the account needed to sign in and restore its server-backed subscription.
 
-The updater in 0.8.12 and earlier compares entire certificate histories and
-rejects a rotated update. The first transition therefore requires opening the
-new APK manually in Android's installer. Do not uninstall the existing app or
-clear its data. Subsequent updates support forward rotation. Devices with a
-different debug certificate are a separate migration case: never force an
-uninstall or claim their update is compatible.
-
-Private keystores and password files live outside the checkout with permissions
-0700 on the directory and 0600 on files. Keep a separate encrypted offline backup
-of both the dedicated release key and original compatibility key. Losing either
-can prevent updates for part of the install base. Do not commit passwords,
-keystores, or a private signing configuration.
+Future updates are compatible only while the new private key is preserved and
+used for every APK. Private keystores and password files must stay outside the
+checkout. Store the release key in a protected location and keep a separate
+encrypted backup. Do not commit passwords, keystores, or private signing
+configuration. Losing the new key will require another reinstall migration.
 
 ## Build and sign
 
@@ -53,17 +47,14 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
 
 python3 scripts/release.py sign \
   app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk \
-  --output output/release/app-arm64-v8a-release.apk \
+  --output output/release/deytt-connect-0.8.18-manual-reinstall-arm64-v8a.apk \
   --keystore /secure/signing/release.p12 \
-  --password-file /secure/signing/release.password \
-  --legacy-keystore /secure/signing/legacy.keystore \
-  --legacy-password-env DEYTT_LEGACY_PASSWORD
+  --password-file /secure/signing/release.password
 
-python3 scripts/release.py verify output/release/app-arm64-v8a-release.apk
+python3 scripts/release.py verify output/release/deytt-connect-0.8.18-manual-reinstall-arm64-v8a.apk
 ```
 
-Supply the legacy password through the named environment variable; never put
-password values in command arguments or tracked scripts. The script refuses
+The release script refuses
 debuggable APKs, unexpected package identities, SDK levels, permissions, legacy
 root tools, missing AWG engines, bad alignment, and mismatching certificates.
 It verifies both API 24–27 and API 28+ signatures and writes a SHA-256 sidecar.
@@ -100,3 +91,4 @@ accounts, review and checks. Any external submission must be explicitly authoriz
 References: [Android APK signing](https://developer.android.com/tools/apksigner),
 [Play Protect guidance](https://developers.google.com/android/play-protect/warning-dev-guidance),
 [Samsung Auto Blocker](https://www.samsung.com/us/support/answer/ANS10003636/).
+

@@ -61,8 +61,8 @@ def inspect_apk(apk, qa=False):
 
 def verify(apk, qa=False):
     identity = inspect_apk(apk, qa)
-    # Independently validate the legacy and rotated scheme. A cert in untrusted
-    # metadata is insufficient: apksigner must verify the actual APK signatures.
+    # Independently validate the configured signer on both supported API ranges.
+    # A cert in untrusted metadata is insufficient: apksigner verifies the APK.
     for minimum, maximum, expected in (
         (24, 27, POLICY["legacy_certificate_sha256"]),
         (28, None, POLICY["release_certificate_sha256"]),
@@ -84,26 +84,37 @@ def sign(args):
     inspect_apk(args.apk, args.qa)
     if args.output.resolve() == args.apk.resolve():
         raise ValueError("Signing must not overwrite the unsigned input")
-    for private_path in (args.keystore, args.password_file, args.legacy_keystore):
+    single_signer = POLICY["legacy_certificate_sha256"] == POLICY["release_certificate_sha256"]
+    private_paths = [args.keystore, args.password_file]
+    if not single_signer:
+        if args.legacy_keystore is None or args.legacy_password_env not in os.environ:
+            raise ValueError("The configured signing policy requires the legacy signing credentials")
+        private_paths.append(args.legacy_keystore)
+    for private_path in private_paths:
         if private_path.resolve().is_relative_to(ROOT):
             raise ValueError("Keep signing keys and passwords outside the source checkout")
         if not private_path.is_file():
             raise ValueError("Signing credentials are unavailable")
-    if args.legacy_password_env not in os.environ:
-        raise ValueError("Legacy keystore password environment variable is missing")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix=".sign-", dir=args.output.parent) as temporary:
         output = Path(temporary) / args.output.name
-        run(
+        command = [
             tool("apksigner"), "sign", "--out", str(output),
             "--debuggable-apk-permitted", "false", "--v4-signing-enabled", "false",
-            "--rotation-min-sdk-version", str(POLICY["rotation_min_sdk"]),
-            "--lineage", str(ROOT / "release/signing-lineage.bin"),
-            "--ks", str(args.legacy_keystore), "--ks-key-alias", "androiddebugkey",
-            "--ks-pass", "env:" + args.legacy_password_env,
-            "--next-signer", "--ks", str(args.keystore), "--ks-key-alias", "deytt-connect",
-            "--ks-pass", "file:" + str(args.password_file), str(args.apk),
-        )
+        ]
+        if single_signer:
+            command += ["--ks", str(args.keystore), "--ks-key-alias", "deytt-connect",
+                        "--ks-pass", "file:" + str(args.password_file)]
+        else:
+            command += [
+                "--rotation-min-sdk-version", str(POLICY["rotation_min_sdk"]),
+                "--lineage", str(ROOT / "release/signing-lineage.bin"),
+                "--ks", str(args.legacy_keystore), "--ks-key-alias", "androiddebugkey",
+                "--ks-pass", "env:" + args.legacy_password_env,
+                "--next-signer", "--ks", str(args.keystore), "--ks-key-alias", "deytt-connect",
+                "--ks-pass", "file:" + str(args.password_file),
+            ]
+        run(*command, str(args.apk))
         digest = verify(output, args.qa)
         output.replace(args.output)
     args.output.with_suffix(".apk.sha256").write_text(f"{digest}  {args.output.name}\n")
@@ -121,8 +132,8 @@ def main():
             command.add_argument("--output", type=Path, required=True)
             command.add_argument("--keystore", type=Path, required=True)
             command.add_argument("--password-file", type=Path, required=True)
-            command.add_argument("--legacy-keystore", type=Path, required=True)
-            command.add_argument("--legacy-password-env", required=True)
+            command.add_argument("--legacy-keystore", type=Path)
+            command.add_argument("--legacy-password-env", default="DEYTT_LEGACY_PASSWORD")
     args = parser.parse_args()
     try:
         if args.command == "sign":
@@ -138,3 +149,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

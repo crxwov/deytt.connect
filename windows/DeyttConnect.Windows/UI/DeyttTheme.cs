@@ -140,7 +140,7 @@ internal static class DeyttTheme
     public static Border Spacer(double height) => new() { Height = height };
 
     public static TextBlock SectionLabel(string label) => TextBlock(
-        label.ToUpperInvariant(), 11, Muted, FontWeight.SemiBold, JetBrainsMono, wrap: false);
+        label.ToLowerInvariant(), 11, Muted, FontWeight.SemiBold, JetBrainsMono, wrap: false);
 
     public static Border Hairline(double left = 0) => new()
     {

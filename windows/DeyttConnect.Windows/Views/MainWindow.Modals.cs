@@ -115,10 +115,11 @@ public partial class MainWindow
                 };
                 Grid.SetColumn(close, 1);
 
+                var availableCardHeight = Math.Max(340, Bounds.Height - 60);
                 var body = new ScrollViewer
                 {
                     Content = content,
-                    MaxHeight = 660,
+                    MaxHeight = Math.Max(240, availableCardHeight - 104),
                     VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
                     HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                 };
@@ -128,7 +129,7 @@ public partial class MainWindow
                     Children = { header, body },
                 }, DeyttTheme.Surface2, DeyttTheme.Line, 21, new Thickness(24));
                 card.MaxWidth = maxWidth;
-                card.MaxHeight = 740;
+                card.MaxHeight = availableCardHeight;
                 card.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
                 card.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
                 card.Margin = new Thickness(22);
@@ -151,6 +152,9 @@ public partial class MainWindow
 
                 configure?.Invoke(modal);
                 _activeShellContentDialog = modal;
+                // WebView2 owns a native child window and otherwise paints over Avalonia dialogs.
+                if (_routeGlobe?.Parent is Panel mapHost)
+                    mapHost.Children.Remove(_routeGlobe);
                 SidebarPanel.IsEnabled = false;
                 BottomNavigationPanel.IsEnabled = false;
                 PageScroll.IsEnabled = false;
@@ -179,6 +183,8 @@ public partial class MainWindow
                         _activeShellContentDialog = null;
                         ModalOverlayHost.Children.Clear();
                         ModalOverlayHost.IsVisible = false;
+                        if (_activeTab == MainTab.Home)
+                            RenderActiveTabPreservingScroll();
                         SidebarPanel.IsEnabled = previousEnabled.Sidebar;
                         BottomNavigationPanel.IsEnabled = previousEnabled.BottomNavigation;
                         PageScroll.IsEnabled = previousEnabled.Page;

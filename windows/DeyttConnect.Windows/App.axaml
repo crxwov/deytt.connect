@@ -28,6 +28,13 @@
             <Setter Property="BorderBrush" Value="#6BDDF2" />
             <Setter Property="BorderThickness" Value="1" />
         </Style>
+        <Style Selector="Button.nav-pill:focus">
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.nav-pill:focus Border.nav-surface">
+            <Setter Property="BorderBrush" Value="#6BDDF2" />
+        </Style>
         <Style Selector="Button.deytt-button:disabled">
             <Setter Property="Opacity" Value="0.56" />
         </Style>

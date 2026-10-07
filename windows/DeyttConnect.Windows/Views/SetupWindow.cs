@@ -485,8 +485,18 @@ public sealed class SetupWindow : UserControl
                 ? _api.GetAccountAsync(token, _lifetime.Token)
                 : Task.FromResult(verifiedAccount);
             var subscriptionTask = _api.GetSubscriptionAsync(token, _lifetime.Token, progress);
-            await Task.WhenAll(accountTask, subscriptionTask);
-            _account = await accountTask;
+            try
+            {
+                await Task.WhenAll(accountTask, subscriptionTask);
+            }
+            finally
+            {
+                // Keep the verified account identity even when the separate
+                // subscription request fails, so the error state identifies
+                // which Telegram account needs attention.
+                if (accountTask.IsCompletedSuccessfully)
+                    _account = accountTask.Result;
+            }
             _subscription = await subscriptionTask;
             if (!_subscription.HappAvailable || _subscription.Routes.Count == 0)
             {
@@ -519,6 +529,13 @@ public sealed class SetupWindow : UserControl
                 "The DEYTT app limit has been reached. Ask support to transfer the app to this device."),
                 DeyttTheme.Amber);
         }
+        catch (TelegramApiException error) when (error.Code == "device_blocked")
+        {
+            Render(ViewState.RefreshError, Copy(
+                "Сервер пометил это устройство как заблокированное. Обратись в поддержку DEYTT и попроси проверить доступ.",
+                "The server marked this device as blocked. Contact DEYTT support to check its access."),
+                DeyttTheme.Amber);
+        }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
             _sessionToken = null;
@@ -539,13 +556,32 @@ public sealed class SetupWindow : UserControl
                     "The refresh took too long. Your session is saved; please retry later."),
                 DeyttTheme.Coral);
         }
+        catch (TelegramApiException error) when (error.Code is
+                   "subscription_invalid_routes_outbounds_empty" or
+                   "subscription_invalid_routes_outbounds_no_network")
+        {
+            var activeSubscription = _account?.Subscription is { Active: true };
+            var profileError = activeSubscription
+                ? Copy("Подписка активна, но серверный профиль не содержит подключаемых маршрутов.",
+                    "The subscription is active, but the server profile has no connectable routes.")
+                : Copy("Серверный профиль не содержит подключаемых маршрутов.",
+                    "The server profile has no connectable routes.");
+            var accountState = _options.DeferSessionSaveUntilImport
+                ? Copy("Текущий аккаунт не изменён; проверь выдачу маршрутов.",
+                    "Your current account is unchanged; check route provisioning.")
+                : Copy("Сеанс сохранён; проверь выдачу маршрутов.",
+                    "Your session is saved; check route provisioning.");
+            Render(ViewState.RefreshError, $"{profileError} {accountState}", DeyttTheme.Amber);
+        }
         catch (Exception error) when (error is TelegramApiException or HttpRequestException or IOException)
         {
+            var diagnostic = SubscriptionRefreshDiagnostic(error);
+            Trace.TraceError("Telegram subscription refresh failed ({0}).", diagnostic);
             Render(ViewState.RefreshError, _options.DeferSessionSaveUntilImport
-                ? Copy("Не удалось загрузить подписку. Текущий аккаунт не изменён; проверь интернет и повтори.",
-                    "Could not load the subscription. Your current account is unchanged; check your connection and retry.")
-                : Copy("Не удалось обновить подписку. Проверь интернет и повтори; сохранённый сеанс останется на устройстве.",
-                    "Could not refresh the subscription. Check your connection and retry; the saved session will stay on this device."),
+                ? Copy($"Не удалось загрузить подписку. Текущий аккаунт не изменён; проверь интернет и повтори. Код: {diagnostic}.",
+                    $"Could not load the subscription. Your current account is unchanged; check your connection and retry. Code: {diagnostic}.")
+                : Copy($"Не удалось обновить подписку. Проверь интернет и повтори; сохранённый сеанс останется на устройстве. Код: {diagnostic}.",
+                    $"Could not refresh the subscription. Check your connection and retry; the saved session will stay on this device. Code: {diagnostic}."),
                 DeyttTheme.Coral);
         }
         catch (Exception error) when (_lifetime.IsCancellationRequested && IsNonFatal(error))
@@ -566,6 +602,33 @@ public sealed class SetupWindow : UserControl
             SetBusy(false);
         }
     }
+
+    private static string SubscriptionRefreshDiagnostic(Exception error) => error switch
+    {
+        TelegramApiException api => $"API/{(int)api.StatusCode}/{SafeSubscriptionApiCode(api.Code)}",
+        HttpRequestException network => $"NET/{network.HttpRequestError}",
+        IOException => "IO",
+        _ => "UNKNOWN",
+    };
+
+    private static string SafeSubscriptionApiCode(string code) => code switch
+    {
+        "invalid_response" or "subscription_unavailable" or "subscription_invalid" or
+            "subscription_invalid_json" or "subscription_invalid_utf8" or "subscription_invalid_normalize" or
+            "subscription_invalid_awg" or "subscription_invalid_routes" or
+            "subscription_invalid_routes_tun" or "subscription_invalid_routes_outbounds" or
+            "subscription_invalid_routes_outbounds_empty" or "subscription_invalid_routes_outbounds_no_network" or
+            "subscription_invalid_routes_root" or "subscription_invalid_routes_inbounds" or
+            "subscription_invalid_routes_inbounds_empty" or "subscription_invalid_routes_inbounds_proxy" or
+            "subscription_invalid_routes_tun_address_missing" or
+            "subscription_invalid_routes_tun_address_shape" or
+            "subscription_invalid_routes_tags" or "subscription_invalid_routes_automatic" or
+            "subscription_invalid_routes_auto_chain" or "subscription_invalid_routes_auto" or
+            "subscription_invalid_routes_chain" or
+            "subscription_invalid_routes_required" or "subscription_invalid_routes_policy" or
+            "response_too_large" or "request_failed" or "session_invalid" => code,
+        _ => "server_rejected",
+    };
 
     private async Task ImportUrlAsync(string? candidate)
     {
@@ -814,9 +877,16 @@ public sealed class SetupWindow : UserControl
             ? Copy("Текущий аккаунт пока не изменён.", "Your current account is unchanged.")
             : Copy("Сеанс сохранён на этом устройстве.", "Your session is saved on this device."), 15,
             DeyttTheme.Text, FontWeight.SemiBold));
+        var accountUsername = _account?.Username;
+        if (!string.IsNullOrWhiteSpace(accountUsername))
+        {
+            var username = accountUsername.Trim().TrimStart('@');
+            if (username.Length > 0)
+                _body.Children.Add(DeyttTheme.TextBlock($"Telegram: @{username}", 13, DeyttTheme.Muted));
+        }
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
-            "Повтори запрос. Если соединение снова не установится, проверь сеть и попробуй позже.",
-            "Retry the request. If it still fails, check your connection and try again later."),
+            "Проверь соединение и доступность профиля. Повторный запрос не удалит сохранённый сеанс.",
+            "Check your connection and profile availability. Retrying will keep the saved session."),
             13, DeyttTheme.Muted));
         _body.Children.Add(BuildPrimary(Copy("Повторить", "Retry"), () =>
         {
@@ -1369,6 +1439,7 @@ public sealed class SetupWindow : UserControl
             "RU" => "Russia",
             "DE" => "Germany",
             "FI" => "Finland",
+            "IT" => "Italy",
             "AWG_UNKNOWN" => "Region not specified",
             _ => route.CountryName,
         };
