@@ -9,14 +9,14 @@ on:
         description: Corrective release tag for the signed APKs
         required: true
         type: string
-        default: v0.8.21
+        default: v0.8.22
 
 permissions:
   contents: write
 
 jobs:
   build-and-publish:
-    if: github.repository == 'crxwov/deytt.connect' && (github.event_name == 'workflow_dispatch' || (github.event.release.tag_name == 'v0.8.21' && !github.event.release.prerelease))
+    if: github.repository == 'crxwov/deytt.connect' && (github.event_name == 'workflow_dispatch' || (github.event.release.tag_name == 'v0.8.22' && !github.event.release.prerelease))
     runs-on: ubuntu-latest
     steps:
       - name: Check out source and submodules
@@ -55,9 +55,9 @@ jobs:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
         run: |
           case "$RELEASE_TAG" in
-            v0.8.21) ;;
+            v0.8.22) ;;
             *)
-              echo "This signing-key migration workflow only publishes v0.8.21 releases." >&2
+              echo "This signing-key migration workflow only publishes v0.8.22 releases." >&2
               exit 1
               ;;
           esac

@@ -55,7 +55,7 @@ public partial class MainWindow
                 })
                 .Distinct(StringComparer.Ordinal)
                 .ToArray();
-            map.SelectedRoute = _selectedRoute;
+            map.SelectedRoute = RouteGlobeWebView.RouteKeyFor(_selectedRoute, _routes);
             map.Language = _language;
             map.AvailableLocations = availableLocations;
             map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
@@ -66,7 +66,7 @@ public partial class MainWindow
             // It cannot prove which exit the DEYTT tunnel selected.
             map.EgressCountryCode = null;
             map.ActiveAutoRouteKey = _selectedRoute == "auto" && IsVpnDisplayConnected()
-                ? RouteGlobeWebView.RouteKeyFor(_vpnSnapshot.RouteTag)
+                ? RouteGlobeWebView.RouteKeyFor(_vpnSnapshot.RouteTag, _routes)
                 : null;
 
             if (map.Parent is Panel oldHost)
