@@ -140,3 +140,129 @@ jobs:
             gh release create v0.8.20 @assets --repo $env:GITHUB_REPOSITORY --title 'deytt connect 0.8.20' --notes-file $notes
           }
           if ($LASTEXITCODE -ne 0) { throw 'release publication failed' }
+
+  android-apk-publishing:
+    name: android apk publishing
+    needs: package-and-validate
+    if: github.repository == 'crxwov/deytt.connect'
+    runs-on: ubuntu-latest
+    steps:
+      - name: check out source and submodules
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          submodules: recursive
+
+      - name: set up java
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: set up go
+        uses: actions/setup-go@v7
+        with:
+          go-version: '1.25.14'
+          cache-dependency-path: awg-tunnel/src/main/go/go.sum
+
+      - name: set up android sdk
+        uses: android-actions/setup-android@v4
+
+      - name: set up gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: install pinned android sdk components
+        run: >-
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          "platforms;android-35"
+          "build-tools;35.0.0"
+          "ndk;26.1.10909125"
+          "cmake;3.22.1"
+
+      - name: build unsigned release apks
+        run: ./gradlew --no-daemon --max-workers=2 :app:assembleRelease
+
+      - name: prepare signing credentials
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+          ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_RELEASE_KEYSTORE_BASE64"
+          test -n "$ANDROID_RELEASE_KEY_PASSWORD"
+          umask 077
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/deytt-connect-release.p12"
+          printf '%s' "$ANDROID_RELEASE_KEY_PASSWORD" > "$RUNNER_TEMP/deytt-connect-release.password"
+
+      - name: sign and verify apks
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p output/android
+          release_version="${RELEASE_TAG#v}"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            input="app/build/outputs/apk/release/app-${abi}-release-unsigned.apk"
+            output="output/android/deytt-connect-${release_version}-manual-reinstall-${abi}.apk"
+            updater_output="output/android/app-${abi}-release.apk"
+            test -f "$input"
+            python3 scripts/release.py sign "$input" \
+              --output "$output" \
+              --keystore "$RUNNER_TEMP/deytt-connect-release.p12" \
+              --password-file "$RUNNER_TEMP/deytt-connect-release.password"
+            python3 scripts/release.py verify "$output"
+            (cd output/android && sha256sum "$(basename "$output")" > "$(basename "$output").sha256")
+            cp "$output" "$updater_output"
+            python3 scripts/release.py verify "$updater_output"
+            (cd output/android && sha256sum "app-${abi}-release.apk" > "app-${abi}-release.apk.sha256")
+          done
+
+      - name: publish apks and lowercase install notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$RUNNER_TEMP/release-notes.md"
+          release_version="${RELEASE_TAG#v}"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          notes = Path(os.environ["RUNNER_TEMP"]) / "release-notes.md"
+          body = notes.read_text(encoding="utf-8").rstrip()
+          marker = "## android manual installation — new signing key"
+          if marker in body:
+              body = body.split(marker, 1)[0].rstrip()
+          body += """
+
+          ---
+
+          ## android manual installation — new signing key
+
+          эти apk подписаны новым ключом, поскольку прежний закрытый ключ недоступен. android не установит их поверх deytt connect, подписанного старым ключом. также опубликованы файлы app-{abi}-release.apk для проверки и установки обновлений внутри приложения.
+
+          1. убедитесь, что можете войти в аккаунт deytt connect.
+          2. если приложение установлено со старым ключом, сначала удалите его. android может стереть настройки и сохранённый вход.
+          3. скачайте apk для своего устройства: arm64-v8a для большинства современных телефонов, armeabi-v7a для старых 32-битных устройств или x86_64 для android на x86.
+          4. установите apk, откройте приложение и войдите снова.
+
+          будущие обновления внутри приложения используют тот же новый ключ.
+          """
+          notes.write_text(body.rstrip() + "\n", encoding="utf-8")
+          PY
+          gh release upload "$RELEASE_TAG" \
+            output/android/app-arm64-v8a-release.apk \
+            output/android/app-arm64-v8a-release.apk.sha256 \
+            output/android/app-armeabi-v7a-release.apk \
+            output/android/app-armeabi-v7a-release.apk.sha256 \
+            output/android/app-x86_64-release.apk \
+            output/android/app-x86_64-release.apk.sha256 \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-arm64-v8a.apk" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-arm64-v8a.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-armeabi-v7a.apk" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-armeabi-v7a.apk.sha256" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-x86_64.apk" \
+            "output/android/deytt-connect-${release_version}-manual-reinstall-x86_64.apk.sha256" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --notes-file "$RUNNER_TEMP/release-notes.md"
