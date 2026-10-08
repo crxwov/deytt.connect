@@ -1,4 +1,4 @@
-# DEYTT Connect for Windows
+# deytt./connect for Windows
 
 The x64 MSI installs the complete self-contained Windows app, AmneziaWG VPN
 engine, named-pipe service, offline route-map assets, and Start Menu shortcut.
@@ -14,13 +14,16 @@ The Russian wizard repairs or removes an existing installation and recovers
 the known DEYTTConnectVpn service left by older Connect installers. It checks
 the service executable before replacing it, preserves the allowed Windows
 account across upgrades, and rejects a service belonging to another program.
-The completion screen offers an optional desktop shortcut and app launch. The
-launcher never starts with the elevated installation token. Uninstall stops
-and removes the managed VPN service. MSI-owned files live in Program Files;
-account data under `%LOCALAPPDATA%` is retained for later reinstall.
+The completion screen offers an optional desktop shortcut and opens the app
+through the signed-in Windows shell after installation. It never starts with
+the elevated installation token. Uninstall stops and removes the managed VPN
+service. MSI-owned files live in Program Files; account data under
+`%LOCALAPPDATA%` is retained for later reinstall.
 
-The installer and runtime are unsigned by DEYTT. The Microsoft WebView2
-bootstrapper is signature-checked during the official Windows build workflow.
+The Windows installer and runtime are currently unsigned by deytt, so Windows
+may show a publisher warning. The v0.8.31 release is intentionally unsigned
+under the project owner's release instruction. The Microsoft WebView2
+bootstrapper is signature-checked during the Windows build workflow.
 
 ## Build and verify
 
@@ -30,7 +33,7 @@ service, VPN engine, and `Assets/route-map/index.html`.
 
 ```powershell
 .\Build-Msi.ps1 `
-  -ProductVersion 0.8.19 `
+  -ProductVersion 0.8.31 `
   -PackageStageDir C:\path\to\windows-x64-package `
   -BuildRoot D:\build\deytt-connect
 ```
@@ -41,3 +44,4 @@ and service-classification checks, and prints the SHA-256 of the MSI.
 `Verify-InstallerRecovery.ps1` and the native lifecycle test harness cover
 service recovery, first install, repair, upgrade, downgrade rejection,
 uninstall, and fresh reinstall. No test command silently installs the MSI.
+
