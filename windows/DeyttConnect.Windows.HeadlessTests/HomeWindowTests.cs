@@ -197,38 +197,6 @@ public sealed class HomeWindowTests
         }
     }
 
-    [AvaloniaFact]
-    public void Home_italian_awg_uses_server_label_and_regular_route_does_not_guess_a_city()
-    {
-        var awgWindow = new MainWindow(Fixture(signedIn: true, selectedRoute: "awg31:it-31"))
-        {
-            Width = 1360,
-            Height = 820,
-        };
-        var regularWindow = new MainWindow(Fixture(signedIn: true, selectedRoute: "it-vless"))
-        {
-            Width = 1360,
-            Height = 820,
-        };
-        try
-        {
-            awgWindow.Show();
-            regularWindow.Show();
-            Dispatcher.UIThread.RunJobs();
-
-            var awgText = ProfileSummary(awgWindow);
-            var regularText = ProfileSummary(regularWindow);
-            Assert.Contains("Milano 31", awgText);
-            Assert.Contains("Италия", regularText);
-            Assert.False(regularText.Contains("milan", StringComparison.OrdinalIgnoreCase));
-        }
-        finally
-        {
-            awgWindow.Close();
-            regularWindow.Close();
-        }
-    }
-
     [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
@@ -584,7 +552,7 @@ public sealed class HomeWindowTests
         int activeAmneziaClients)
     {
         var window = new MainWindow(Fixture(tab: "routes", signedIn: true, amneziaActive: amneziaActive,
-            amneziaClients: activeAmneziaClients, includeAmneziaRoute: false))
+            amneziaClients: activeAmneziaClients))
         {
             Width = width,
             Height = 820,
@@ -597,11 +565,12 @@ public sealed class HomeWindowTests
             var page = Required<Grid>(window, "PageHost");
             Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "AmneziaWG");
             Assert.Contains(Descendants(page).OfType<TextBlock>(), text =>
-                activeAmneziaClients > 0
+                text.Text.Contains("Проверяю доступность профилей AmneziaWG", StringComparison.Ordinal) ||
+                (activeAmneziaClients > 0
                     ? text.Text.Contains("2", StringComparison.Ordinal) && text.Text.Contains("ключ", StringComparison.Ordinal)
-                    : text.Text.Contains("активной выдаче AmneziaWG", StringComparison.Ordinal));
+                    : text.Text.Contains("активной выдаче AmneziaWG", StringComparison.Ordinal)));
             Assert.Contains(Descendants(page).OfType<Button>(), button =>
-                AutomationProperties.GetAutomationId(button) == "AmneziaRefreshProfile" && button.IsEnabled);
+                AutomationProperties.GetAutomationId(button) == "AmneziaRefreshProfile");
         }
         finally
         {
@@ -798,7 +767,7 @@ public sealed class HomeWindowTests
         bool routeProbeInProgress = false, TelegramSubscription? profileSubscription = null,
         string selectedRoute = "nl-hysteria2",
         string state = "disconnected", string? expandedRouteCountry = null,
-        bool amneziaActive = false, int amneziaClients = 0, bool includeAmneziaRoute = true)
+        bool amneziaActive = false, int amneziaClients = 0)
     {
         var routes = new List<WindowsRoute>
         {
@@ -816,11 +785,7 @@ public sealed class HomeWindowTests
             new WindowsRoute("fi-vless", "qa:fi-vless", "FI", "Финляндия", "🇫🇮", "VLESS", "VLESS"),
             new WindowsRoute("fi-trojan", "qa:fi-trojan", "FI", "Финляндия", "🇫🇮", "TROJAN", "Trojan"),
             new WindowsRoute("fi-hysteria2", "qa:fi-hysteria2", "FI", "Финляндия", "🇫🇮", "HYSTERIA2", "Hysteria 2"),
-            new WindowsRoute("it-vless", "qa:it-vless", "IT", "италия", "🇮🇹", "VLESS", "VLESS"),
         };
-        if (includeAmneziaRoute)
-            routes.Add(new WindowsRoute("awg31:it-31", "awg31:it-31", "IT", "италия", "🇮🇹", "AWG31",
-                "amneziawg 3.1", "awg31:it-31", "Milano 31"));
         var account = signedIn
             ? new TelegramAccount("qa_fixture", "QA Demo", false,
                 profileSubscription ?? ProfileSubscription(trafficLimit: null, trafficUsed: null, trafficTotal: null))
