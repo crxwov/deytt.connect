@@ -564,7 +564,19 @@ public sealed class HomeWindowTests
 
             var page = Required<Grid>(window, "PageHost");
             var pageText = string.Join(" | ", Descendants(page).OfType<TextBlock>().Select(text => text.Text));
-            Assert.Contains("AmneziaWG", pageText);
+            var sessionToken = typeof(MainWindow).GetField("_sessionToken",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.GetValue(window);
+            var routeValues = typeof(MainWindow).GetField("_routes",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.GetValue(window)
+                as IEnumerable<WindowsRoute>;
+            var activeTab = typeof(MainWindow).GetField("_activeTab",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)?.GetValue(window);
+            var routesSummary = routeValues is null
+                ? "<null>"
+                : string.Join(",", routeValues.Select(route => route.Protocol));
+            Assert.True(pageText.Contains("AmneziaWG", StringComparison.Ordinal),
+                $"Amnezia label missing; session={sessionToken is string session && session.Length > 0}; " +
+                $"routes={routesSummary}; tab={activeTab}; text={pageText}");
             Assert.Contains(Descendants(page).OfType<Button>(), button =>
                 AutomationProperties.GetAutomationId(button) == "AmneziaRefreshProfile");
         }
