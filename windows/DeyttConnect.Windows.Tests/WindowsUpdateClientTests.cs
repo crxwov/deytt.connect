@@ -64,6 +64,42 @@ public sealed class WindowsUpdateClientTests
     }
 
     [Fact]
+    public void ParseLatestWindowsReleaseResponse_UsesVersionedPortableAssetForMatchingTag()
+    {
+        const string json = """
+            [{
+              "draft": false,
+              "prerelease": false,
+              "tag_name": "v0.8.31",
+              "html_url": "https://github.com/crxwov/deytt.connect/releases/tag/v0.8.31",
+              "assets": [
+                {
+                  "name": "deytt-connect-0.8.30-portable.zip",
+                  "browser_download_url": "https://github.com/crxwov/deytt.connect/releases/download/v0.8.31/deytt-connect-0.8.30-portable.zip",
+                  "size": 1000
+                },
+                {
+                  "name": "deytt-connect-0.8.31-portable.zip",
+                  "browser_download_url": "https://github.com/crxwov/deytt.connect/releases/download/v0.8.31/deytt-connect-0.8.31-portable.zip",
+                  "size": 1400,
+                  "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            }]
+            """;
+
+        var release = WindowsUpdateClient.ParseLatestWindowsReleaseResponse(json);
+
+        Assert.NotNull(release);
+        Assert.Equal("v0.8.31", release.Tag);
+        Assert.Equal("deytt-connect-0.8.31-portable.zip", release.AssetName);
+        Assert.Equal(1400, release.AssetSize);
+        Assert.Equal(
+            "https://github.com/crxwov/deytt.connect/releases/download/v0.8.31/deytt-connect-0.8.31-portable.zip",
+            release.AssetUrl);
+    }
+
+    [Fact]
     public void ParseLatestWindowsReleaseResponse_FailsClosedForMissingOrMalformedPrereleaseFlag()
     {
         const string releaseWithoutFlag = """
@@ -208,3 +244,4 @@ public sealed class WindowsUpdateClientTests
         Assert.Null(WindowsUpdateClient.ParseLatestWindowsReleaseResponse(json));
     }
 }
+
