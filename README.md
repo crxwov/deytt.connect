@@ -6,26 +6,47 @@
 
 <h3 align="center">скачать приложение</h3>
 
-<p align="center">выберите устройство</p>
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top">
+        <h4>android</h4>
+        <p><sub>v0.8.30 &nbsp;·&nbsp; android 7+ &nbsp;·&nbsp; ARM64</sub></p>
+        <p><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.30/deytt-connect-0.8.30.apk"><img src="assets/download-android-outline.svg" width="180" alt="скачать android APK v0.8.30"></a></p>
+        <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">релиз и SHA-256</a><br>приложения нет в google play</sub></p>
+      </td>
+      <td width="50%" align="center" valign="top">
+        <h4>windows</h4>
+        <p><sub>v0.8.40 &nbsp;·&nbsp; windows 10 (1809+) &nbsp;·&nbsp; x64</sub></p>
+        <p><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40"><img src="assets/download-windows-outline.svg" width="180" alt="скачать windows MSI или portable ZIP v0.8.40"></a></p>
+        <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip">portable ZIP</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40">SHA-256 и релиз</a><br>сборки не подписаны</sub></p>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
-<p align="center"><strong>android</strong><br><sub>v0.8.30 &nbsp;·&nbsp; android 7+ &nbsp;·&nbsp; ARM64</sub></p>
-<p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.30/deytt-connect-0.8.30.apk"><img src="assets/download-android-outline.svg" width="260" alt="скачать android APK v0.8.30"></a></p>
-<p align="center"><sub><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">релиз и SHA-256</a> &nbsp;·&nbsp; приложения нет в google play</sub></p>
-
-<p align="center"><strong>windows</strong><br><sub>v0.8.40 &nbsp;·&nbsp; windows 10 (1809+) &nbsp;·&nbsp; x64</sub></p>
-<p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40"><img src="assets/download-windows-outline.svg" width="260" alt="скачать windows MSI или portable ZIP v0.8.40"></a></p>
-<p align="center"><sub><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip">portable ZIP</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40">SHA-256 и релиз</a> &nbsp;·&nbsp; сборки не подписаны</sub></p>
-
-<p align="center">доступ deytt. &nbsp;·&nbsp; отдельные слоты для телефона и компьютера<br><sub>установка windows не занимает слот телефона</sub></p>
-
-<p align="center"><img src="assets/readme-route-flow.svg" width="520" alt="доступ соединяется с выбором маршрута и подключением"></p>
-<p align="center">доступ &nbsp;·&nbsp; маршрут &nbsp;·&nbsp; соединение</p>
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%" valign="top"><sub>доступ</sub><br>получите его через <a href="https://t.me/deyttbot">telegram-бот</a></td>
+      <td width="50%" valign="top"><sub>устройства</sub><br>телефон и компьютер используют отдельные слоты. установка windows не занимает слот телефона.</td>
+    </tr>
+  </tbody>
+</table>
 
 <h3>как начать</h3>
 
-1. получите доступ через [telegram-бот](https://t.me/deyttbot).
-2. скачайте приложение и войдите через telegram.
-3. выберите «Авто» или маршрут и нажмите «Подключить».
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%" valign="top"><sub>01 &nbsp;·&nbsp; доступ</sub><br>войдите через telegram.</td>
+      <td width="50%" valign="top"><sub>02 &nbsp;·&nbsp; приложение</sub><br>скачайте его для своего устройства.</td>
+    </tr>
+    <tr>
+      <td colspan="2" valign="top"><sub>03 &nbsp;·&nbsp; подключение</sub><br>выберите «Авто» или маршрут и нажмите «Подключить».</td>
+    </tr>
+  </tbody>
+</table>
 
 <details>
 <summary><strong>установка android</strong></summary>
@@ -41,17 +62,10 @@
 <details>
 <summary><strong>установка windows</strong></summary>
 
-**MSI**
-
-1. скачайте [`deytt-connect-0.8.40.msi`](https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40.msi).
-2. запустите установщик и подтвердите установку vpn-службы.
-3. откройте приложение и войдите через telegram.
-
-**portable ZIP**
-
-1. скачайте [`deytt-connect-0.8.40-portable.zip`](https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip).
-2. полностью распакуйте архив и запустите `deyttconnect.exe`.
-3. подтвердите запрос администратора windows при установке vpn-службы.
+| вариант | установка |
+| :--- | :--- |
+| MSI | скачайте [`deytt-connect-0.8.40.msi`](https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40.msi), запустите файл и подтвердите установку vpn-службы. |
+| portable ZIP | скачайте [`deytt-connect-0.8.40-portable.zip`](https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip), полностью распакуйте архив и запустите `deyttconnect.exe`. подтвердите запрос администратора windows при установке vpn-службы. |
 
 для работы приложения нужен **microsoft edge webview2 runtime**. если компонента нет, MSI может загрузить его с сайта microsoft. подробнее — в [руководстве по установщику](windows/installer/README.md).
 
@@ -59,11 +73,22 @@
 
 <h3 align="center">возможности</h3>
 
-<p align="center">telegram-вход &nbsp;·&nbsp; авто-маршрут<br>диагностика &nbsp;·&nbsp; обновления</p>
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%" align="center"><strong>вход</strong><br><sub>через telegram</sub></td>
+      <td width="50%" align="center"><strong>маршрут</strong><br><sub>автоматический или выбранный</sub></td>
+    </tr>
+    <tr>
+      <td width="50%" align="center"><strong>диагностика</strong><br><sub>состояние соединения</sub></td>
+      <td width="50%" align="center"><strong>обновления</strong><br><sub>android и windows</sub></td>
+    </tr>
+  </tbody>
+</table>
 
 <h3>протоколы</h3>
 
-<p align="center">доступность зависит от платформы и конфигурации маршрута</p>
+<p align="center"><sub>доступность зависит от платформы и конфигурации маршрута</sub></p>
 
 | протокол | android | windows |
 | :--- | :---: | :---: |
@@ -73,7 +98,14 @@
 | AmneziaWG 1.5 | ✓ | — |
 | AmneziaWG 3.1 | ✓ | ✓ |
 
-<p align="center"><sub>на android регион определяется по ip, не по gps · <a href="https://deytt.space/info/">условия и конфиденциальность</a></sub></p>
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%" align="center"><sub>регион на android</sub><br>определяется по ip, не по gps</td>
+      <td width="50%" align="center"><sub>данные и условия</sub><br><a href="https://deytt.space/info/">условия и конфиденциальность</a></td>
+    </tr>
+  </tbody>
+</table>
 
 <h3>для разработчиков</h3>
 
@@ -84,32 +116,45 @@ git clone --recurse-submodules https://github.com/crxwov/deytt.connect.git
 cd deytt.connect
 ```
 
-<details>
-<summary><strong>сборка android</strong></summary>
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%" valign="top"><strong>android</strong><br><sub>JDK 17 · android SDK 35 · NDK 26.1 · CMake 3.22.1</sub></td>
+      <td width="50%" valign="top"><strong>windows</strong><br><sub>windows SDK · .NET 10 SDK · Go · подмодули</sub></td>
+    </tr>
+  </tbody>
+</table>
 
-нужны JDK 17, android SDK 35, NDK 26.1 и CMake 3.22.1.
+<details>
+<summary><strong>команды сборки</strong></summary>
+
+android:
 
 ```bash
 ./gradlew assembleDebug
 ```
 
-перед публикацией прочитайте [инструкцию по безопасной сборке и подписи](docs/release-security.md).
+windows: исходники и сценарии находятся в каталоге [`windows/`](windows/). состав MSI описан в [руководстве по установщику](windows/installer/README.md).
+
+перед публикацией android-приложения прочитайте [инструкцию по безопасной сборке и подписи](docs/release-security.md).
 
 </details>
 
-<details>
-<summary><strong>сборка windows</strong></summary>
-
-для сборки нужны windows SDK, .NET 10 SDK, Go и подмодули. исходники и сценарии находятся в каталоге [`windows/`](windows/). состав MSI описан в [руководстве по установщику](windows/installer/README.md).
-
-</details>
-
-<p align="center"><a href="docs/README.md">документация</a> &nbsp;·&nbsp; <a href="docs/brand-guide.md">стиль проекта</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">участие в проекте</a></sub></p>
+<p align="center"><a href="docs/README.md">документация</a> &nbsp;·&nbsp; <a href="docs/brand-guide.md">стиль проекта</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">участие в проекте</a></p>
 
 <h3 align="center">поддержка</h3>
 
-<p align="center"><a href="https://t.me/deyttbot">доступ и подключение</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/issues">ошибка приложения</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/security/advisories/new">сообщить об уязвимости</a> &nbsp;·&nbsp; <a href="SECURITY.md">политика безопасности</a></p>
-
-<p align="center"><sub>issues публичны. не публикуйте коды входа, ссылки подписки, vpn-ключи, конфигурации, ip-адреса и данные аккаунта</sub></p>
-
-<p align="center"><sub>исходный код: <a href="LICENSE">GNU GPL-3.0-or-later</a> &nbsp;·&nbsp; сторонние материалы: <a href="THIRD-PARTY-NOTICES.md">уведомления</a> и <a href="THIRD_PARTY_NOTICES.md">атрибуции</a></sub></p>
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top"><strong>аккаунт и приложение</strong><br><sub><a href="https://t.me/deyttbot">доступ и подключение</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/issues">ошибка приложения</a></sub></td>
+      <td width="50%" align="center" valign="top"><strong>безопасность</strong><br><sub><a href="https://github.com/crxwov/deytt.connect/security/advisories/new">сообщить об уязвимости</a> &nbsp;·&nbsp; <a href="SECURITY.md">политика безопасности</a></sub></td>
+    </tr>
+    <tr>
+      <td colspan="2" align="center"><sub>issues публичны. не публикуйте коды входа, ссылки подписки, vpn-ключи, конфигурации, ip-адреса и данные аккаунта</sub></td>
+    </tr>
+    <tr>
+      <td colspan="2" align="center"><sub>исходный код: <a href="LICENSE">GNU GPL-3.0-or-later</a> &nbsp;·&nbsp; сторонние материалы: <a href="THIRD-PARTY-NOTICES.md">уведомления</a> и <a href="THIRD_PARTY_NOTICES.md">атрибуции</a></sub></td>
+    </tr>
+  </tbody>
+</table>
