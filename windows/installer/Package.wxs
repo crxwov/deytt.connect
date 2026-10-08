@@ -100,15 +100,24 @@
           <Component Id="UiExecutableComponent" Guid="F58356B8-3B93-445A-B003-F5E1E863B435" Bitness="always64">
             <File Id="UiExecutable"
                   Source="$(var.PackageStageDir)/DeyttConnect.Windows.exe"
-                  KeyPath="yes">
-              <Shortcut Id="UiStartMenuShortcut"
-                        Advertise="no"
-                        Directory="ApplicationProgramsFolder"
-                        Name="connect"
+                  KeyPath="yes" />
+          </Component>
+
+          <Component Id="UiStartMenuShortcutComponent" Guid="CE5F62A7-2C3F-4CAB-A44D-5D3C4D2B1F01">
+            <RegistryValue Root="HKCU"
+                           Key="Software\Deytt\Connect"
+                           Name="StartMenuShortcut"
+                           Type="integer"
+                           Value="1"
+                           KeyPath="yes" />
+            <Shortcut Id="UiStartMenuShortcut"
+                      Advertise="no"
+                      Directory="ApplicationProgramsFolder"
+                      Name="connect"
+                      Target="[#UiExecutable]"
                       Icon="DeyttConnectProductIcon.exe"
                       IconIndex="0"
-                        WorkingDirectory="INSTALLFOLDER" />
-            </File>
+                      WorkingDirectory="INSTALLFOLDER" />
             <RemoveFolder Id="RemoveApplicationProgramsFolder"
                           Directory="ApplicationProgramsFolder"
                           On="uninstall" />
@@ -122,6 +131,7 @@
       <ComponentRef Id="VpnServiceComponent" />
       <ComponentRef Id="AllowedUserSidComponent" />
       <ComponentRef Id="UiExecutableComponent" />
+      <ComponentRef Id="UiStartMenuShortcutComponent" />
       <ComponentRef Id="WebViewBootstrapperComponent" />
       <ComponentGroupRef Id="PayloadFiles" />
     </Feature>
