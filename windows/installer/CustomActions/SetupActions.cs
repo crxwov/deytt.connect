@@ -11,6 +11,41 @@ namespace DeyttConnect.Setup
 {
     public static class SetupActions
     {
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetShellWindow();
+
+        private static bool HasInteractiveShell() => GetShellWindow() != IntPtr.Zero;
+
+        private static bool LaunchConnect(string executable)
+        {
+            var workingDirectory = Path.GetDirectoryName(executable) ?? Environment.CurrentDirectory;
+            if (HasInteractiveShell())
+            {
+                // Ask the logged-in Explorer shell to open the app so an elevated MSI
+                // never starts the interactive client with its administrator token.
+                var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                var shellStart = new ProcessStartInfo(explorer, "\"" + executable + "\"")
+                {
+                    UseShellExecute = true,
+                    WorkingDirectory = workingDirectory,
+                };
+                using (var process = Process.Start(shellStart))
+                    return process != null;
+            }
+
+            var identity = WindowsIdentity.GetCurrent();
+            if (new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator))
+                return false;
+
+            var appStart = new ProcessStartInfo(executable)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = workingDirectory,
+            };
+            using (var process = Process.Start(appStart))
+                return process != null;
+        }
+
         // Parse the executable, never an occurrence of its name in an argument.
         public static bool IsConnectService(string command)
         {
@@ -49,8 +84,10 @@ namespace DeyttConnect.Setup
         {
             session["CONNECT_SERVICE_COMPATIBLE"] = IsConnectService(session["EXISTING_SERVICE_PATH"]) ? "1" : "";
             var identity = WindowsIdentity.GetCurrent();
-            // Never launch the interactive client with the installer's elevated token.
-            session["CAN_LAUNCH_CONNECT"] = !new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator) ? "1" : "";
+            // An existing interactive Explorer shell can launch the client unelevated
+            // even when Windows Installer is running with its UAC-elevated token.
+            session["CAN_LAUNCH_CONNECT"] = HasInteractiveShell() ||
+                !new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator) ? "1" : "";
             session["WEBVIEW2_PRESENT"] = HasWebView2Runtime() ? "1" : "";
             return ActionResult.Success;
         }
@@ -140,7 +177,7 @@ namespace DeyttConnect.Setup
         {
             if (!File.Exists(executable)) throw new FileNotFoundException("Не найден файл приложения.", executable);
             Directory.CreateDirectory(desktop);
-            var shortcutPath = Path.Combine(desktop, "deytt connect.lnk");
+            var shortcutPath = Path.Combine(desktop, "deytt.connect.lnk");
             var link = (IShellLinkW)new ShellLink();
             try
             {
@@ -151,11 +188,11 @@ namespace DeyttConnect.Setup
                     var target = new System.Text.StringBuilder(32768);
                     link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
                     if (!string.Equals(Path.GetFullPath(target.ToString()), Path.GetFullPath(executable), StringComparison.OrdinalIgnoreCase))
-                        throw new IOException("на рабочем столе уже есть другой ярлык с именем deytt connect. переименуйте его и повторите попытку.");
+                        throw new IOException("на рабочем столе уже есть другой ярлык с именем deytt.connect. переименуйте его и повторите попытку.");
                 }
                 link.SetPath(executable);
                 link.SetWorkingDirectory(Path.GetDirectoryName(executable));
-                link.SetDescription("deytt connect — подключение к vpn");
+                link.SetDescription("deytt./connect — подключение к VPN");
                 link.SetIconLocation(executable, 0);
                 link.SetShowCmd(1);
                 persist.Save(shortcutPath, true);
@@ -173,8 +210,8 @@ namespace DeyttConnect.Setup
                 var executable = Path.Combine(session["INSTALLFOLDER"], "DeyttConnect.Windows.exe");
                 if (session["CREATE_DESKTOP_SHORTCUT"] == "1")
                     CreateDesktopShortcut(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), executable);
-                if (session["LAUNCH_CONNECT"] == "1" && session["CAN_LAUNCH_CONNECT"] == "1")
-                    Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(executable) });
+                if (session["LAUNCH_CONNECT"] == "1" && session["REBOOTNEEDED"] != "1")
+                    _ = LaunchConnect(executable);
                 session["FINISH_ACTIONS_OK"] = "1";
             }
             catch (Exception exception)
@@ -201,7 +238,7 @@ namespace DeyttConnect.Setup
             // Do not remove an unrelated/replaced shortcut or user data. Major upgrades skip this action.
             try
             {
-                var path = Path.Combine(session.CustomActionData["Desktop"], "deytt connect.lnk");
+                var path = Path.Combine(session.CustomActionData["Desktop"], "deytt.connect.lnk");
                 if (!File.Exists(path)) return ActionResult.Success;
                 var link = (IShellLinkW)new ShellLink();
                 try
@@ -242,3 +279,4 @@ namespace DeyttConnect.Setup
         void SetPath([MarshalAs(UnmanagedType.LPWStr)] string path);
     }
 }
+
