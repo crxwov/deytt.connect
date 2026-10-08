@@ -256,7 +256,7 @@ class SetupActivity : Activity() {
         state.setTextColor(DeyttUi.BLUE)
         state.text = uiCopy("Отправляем запрос в поддержку…")
         state.announceForAccessibility(state.text)
-        val message = "Здравствуйте! Не получается подключить deytt.connect: сервер отвечает HTTP 409 app_device_limit_reached (download/http_409). Прошу проверить и перенести приложение на это устройство."
+        val message = "Здравствуйте! Не получается подключить deytt.connect: сервер отвечает HTTP 409 app_device_limit_reached (download/http_409). Прошу проверить и заменить слот телефона; слот компьютера должен оставаться отдельным."
         executor.execute {
             val result = runCatching {
                 check(TelegramSessionStore.read(this) == token) { "Сессия Telegram изменилась" }

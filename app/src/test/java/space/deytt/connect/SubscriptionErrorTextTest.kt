@@ -30,12 +30,11 @@ class SubscriptionErrorTextTest {
             SubscriptionHttpFailure(409, "conflict", "app_device_limit_reached"),
         )
 
-        assertTrue(message.contains("один слот на телефон"))
-        assertTrue(message.contains("выйдите из приложения на старом телефоне"))
-        assertTrue(message.contains("затем повторите проверку"))
-        assertTrue(message.contains("компьютерные подключения и happ используют отдельные слоты"))
-        assertTrue(message.contains("не отключает устройство автоматически"))
-        assertTrue(message.contains("обратитесь в поддержку"))
+        assertTrue(message.contains("по одному телефону и одному компьютеру"))
+        assertTrue(message.contains("их слоты независимы"))
+        assertTrue(message.contains("выйдите из аккаунта на прежнем телефоне"))
+        assertTrue(message.contains("завершите его сессию в профиле"))
+        assertTrue(message.contains("Happ использует отдельную квоту"))
     }
 
     @Test
