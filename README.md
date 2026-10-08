@@ -2,11 +2,6 @@
   <img src="assets/readme-banner.svg" alt="deytt./connect: приложение для Android и Windows" width="100%">
 </p>
 
-<p align="center">
-  Выбирайте маршрут и подключайтесь с телефона или компьютера.<br>
-  Вход и управление доступом — через Telegram.
-</p>
-
 ## Скачать приложение
 
 Выберите версию для своего устройства:
@@ -17,14 +12,14 @@
       <h3 align="center">Android</h3>
       <p align="center"><strong>v0.8.30</strong> · Android 7.0+</p>
       <p align="center">ARM64 подходит большинству телефонов. APK для других архитектур доступны в релизе.</p>
-      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30"><img src="https://img.shields.io/badge/Скачать_APK-GitHub-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Скачать APK для Android"></a></p>
+      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30"><img src="assets/download-android.svg" width="224" alt="Скачать APK"></a></p>
       <p align="center"><sub>APK загружается с GitHub. В Google Play приложения нет.</sub></p>
     </td>
     <td width="50%" valign="top">
       <h3 align="center">Windows</h3>
       <p align="center"><strong>v0.8.40</strong> · Windows 10 1809+ · x64</p>
       <p align="center">Установщик MSI или portable ZIP. Оба файла находятся на странице релиза.</p>
-      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="https://img.shields.io/badge/Скачать_MSI_или_ZIP-GitHub-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Скачать MSI или portable ZIP для Windows"></a></p>
+      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="assets/download-windows.svg" width="224" alt="Скачать MSI или portable ZIP"></a></p>
       <p align="center"><sub>Сборки не подписаны сертификатом издателя. SHA-256 есть на странице релиза.</sub></p>
     </td>
   </tr>
@@ -105,6 +100,10 @@ ARM64 APK появится в `app/build/outputs/apk/debug/app-arm64-v8a-debug.a
 ## Поддержка и безопасность
 
 По вопросам входа, подписки и подключения напишите в [бот deytt](https://t.me/deyttbot).
+
+Инструкции для сборки и проверки собраны в [документации](docs/README.md).
+Как сохранить единый стиль и предложить изменение — в [памятке по стилю](docs/brand-guide.md)
+и [руководстве для участников](CONTRIBUTING.md).
 
 Ошибку приложения можно описать в [GitHub Issues](https://github.com/crxwov/deytt.connect/issues). Укажите платформу, версию приложения и ОС, модель устройства и шаги воспроизведения. Issues публичные: не прикладывайте username, коды входа, ссылки подписки, VPN-ключи, конфигурации, IP-адреса или снимки экрана с данными аккаунта.
 

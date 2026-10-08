@@ -4,8 +4,8 @@ contact_links:
     url: https://t.me/deyttbot
     about: Помощь со входом, подпиской и подключением.
   - name: Условия и политика конфиденциальности
-    url: https://deytt.space/info
-    about: Документы сервиса DEYTTT.
+    url: https://deytt.space/info/
+    about: Условия и политика конфиденциальности deytt.
   - name: Сообщить об уязвимости приватно
     url: https://github.com/crxwov/deytt.connect/security/advisories/new
     about: Не публикуйте сведения об уязвимостях в Issues.

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="224" height="52" viewBox="0 0 224 52" role="img" aria-labelledby="title desc">
+  <title id="title">Скачать MSI или ZIP</title>
+  <desc id="desc">Кнопка загрузки установщика или portable-версии Windows с GitHub Releases</desc>
+  <rect width="224" height="52" rx="14" fill="#91B6FF"/>
+  <path d="M29 14v16m-7-7 7 7 7-7M18 35h22" fill="none" stroke="#09111F" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"/>
+  <text x="52" y="32" fill="#09111F" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700">Скачать MSI / ZIP</text>
+</svg>

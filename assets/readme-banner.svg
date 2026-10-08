@@ -28,8 +28,8 @@
     <text x="143" y="117" fill="#B8C8DC" font-size="14" font-weight="700" letter-spacing="2.3">ОДНО ПРИЛОЖЕНИЕ · ДВЕ ПЛАТФОРМЫ</text>
 
     <text x="100" y="248" fill="#F5F8FC" font-size="77" font-weight="750" letter-spacing="-4">deytt./connect</text>
-    <text x="106" y="314" fill="#D3DFED" font-size="30" font-weight="500">Одна подписка. Телефон и компьютер.</text>
-    <text x="106" y="358" fill="#9EADC1" font-size="20">Выбирайте маршрут и подключайтесь через Telegram.</text>
+    <text x="106" y="314" fill="#D3DFED" font-size="30" font-weight="500">Выбирайте маршрут и подключайтесь.</text>
+    <text x="106" y="358" fill="#9EADC1" font-size="20">Для Android и Windows · вход через Telegram.</text>
 
     <rect x="105" y="409" width="154" height="42" rx="21" fill="#142B35" stroke="#367A73"/>
     <path d="M125 421v17m-6-11h12m-9-7h6" stroke="#7DE6C3" stroke-width="2" stroke-linecap="round"/>
