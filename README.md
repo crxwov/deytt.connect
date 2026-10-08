@@ -1,58 +1,68 @@
 <p align="center">
-  <img src="assets/readme-banner.svg" alt="deytt./connect — приложение для Android и Windows" width="100%">
-</p>
-
-<h1 align="center">deytt./connect</h1>
-<p align="center">
-  Одно приложение для телефона и компьютера.<br>
-  Выбирайте маршрут, подключайтесь и управляйте доступом через Telegram.
+  <img src="assets/readme-banner.svg" alt="deytt./connect: приложение для Android и Windows" width="100%">
 </p>
 
 <p align="center">
-  <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30"><img src="https://img.shields.io/badge/Android-v0.8.30-3DDC84?logo=android&logoColor=white" alt="Android: стабильный релиз v0.8.30"></a>
-  <a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="https://img.shields.io/badge/Windows-v0.8.40-0078D4?logo=windows&logoColor=white" alt="Windows: стабильный релиз v0.8.40"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-8B7CF6" alt="Лицензия GPL-3.0-or-later"></a>
+  Выбирайте маршрут и подключайтесь с телефона или компьютера.<br>
+  Вход и управление доступом — через Telegram.
 </p>
 
-<p align="center">
-  <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">Android APK</a>
-  · <a href="https://github.com/crxwov/deytt.connect/releases/latest">Windows MSI и portable</a>
-  · <a href="https://t.me/deyttbot">Поддержка</a>
-  · <a href="https://deytt.space/info/">Условия и конфиденциальность</a>
-</p>
+## Скачать приложение
 
-Для входа нужен активный доступ deytt. Телефон и компьютер используют отдельные слоты подписки: установка Windows-клиента не занимает слот телефона.
+Выберите версию для своего устройства:
 
-## Скачать
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <h3 align="center">Android</h3>
+      <p align="center"><strong>v0.8.30</strong> · Android 7.0+</p>
+      <p align="center">ARM64 подходит большинству телефонов. APK для других архитектур доступны в релизе.</p>
+      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30"><img src="https://img.shields.io/badge/Скачать_APK-GitHub-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Скачать APK для Android"></a></p>
+      <p align="center"><sub>APK загружается с GitHub. В Google Play приложения нет.</sub></p>
+    </td>
+    <td width="50%" valign="top">
+      <h3 align="center">Windows</h3>
+      <p align="center"><strong>v0.8.40</strong> · Windows 10 1809+ · x64</p>
+      <p align="center">Установщик MSI или portable ZIP. Оба файла находятся на странице релиза.</p>
+      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="https://img.shields.io/badge/Скачать_MSI_или_ZIP-GitHub-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Скачать MSI или portable ZIP для Windows"></a></p>
+      <p align="center"><sub>Сборки не подписаны сертификатом издателя. SHA-256 есть на странице релиза.</sub></p>
+    </td>
+  </tr>
+</table>
 
-| Платформа | Стабильная версия | Файл |
-| --- | --- | --- |
-| **Android** | [v0.8.30](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30) | Android 7.0+; APK для ARM64 подходит большинству телефонов. Для других устройств выберите сборку с подходящей архитектурой. |
-| **Windows** | [v0.8.40](https://github.com/crxwov/deytt.connect/releases/latest) | Windows 10 1809+ · x64; установщик MSI или portable ZIP. |
+> Для входа нужен активный доступ deytt. Телефон и компьютер используют отдельные слоты подписки; установка приложения на Windows не занимает слот телефона.
 
-Для MSI и portable ZIP опубликованы SHA-256. Сборки сейчас не подписаны сертификатом издателя, поэтому Windows может показать предупреждение. Сверьте SHA-256 с файлом из того же релиза. Android-клиент распространяется APK из GitHub и не опубликован в Google Play.
+## Установка
 
-### Установка на Android
+<details>
+  <summary><strong>Установка на Android</strong></summary>
 
-1. Скачайте APK для своей архитектуры из [стабильного релиза Android](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30). Для большинства устройств подходит ARM64.
-2. Откройте APK в системном установщике Android и войдите через Telegram.
-3. Выберите «Авто» или доступный маршрут, нажмите «Подключить» и подтвердите системный запрос Android на создание VPN-подключения.
+1. Скачайте APK для архитектуры устройства из [релиза Android](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30). Для большинства телефонов подходит ARM64.
+2. Откройте APK и установите приложение. Затем войдите через Telegram.
+3. Выберите «Авто» или доступный маршрут, нажмите «Подключить» и подтвердите системный запрос Android.
 
-Если на телефоне осталась версия 0.8.17 со старой подписью, используйте APK с суффиксом <code>legacy</code> и подходящей архитектурой. Для остальных поддерживаемых обновлений устанавливайте обычный APK; подробности указаны в заметках [релиза Android](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30).
+Если на телефоне установлена версия 0.8.17 со старой подписью, скачайте APK с суффиксом `legacy` для своей архитектуры. Для остальных поддерживаемых обновлений используйте обычный APK. Подробности есть в [заметках к релизу](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30).
 
-### Установка на Windows
+</details>
 
-- **MSI:** установите <code>deytt-connect-0.8.40.msi</code>. Установщик попросит подтверждение Windows для службы VPN.
-- **Portable:** распакуйте весь <code>deytt-connect-0.8.40-portable.zip</code> и запустите <code>deyttconnect.exe</code>. Для установки службы VPN также потребуется подтверждение администратора.
+<details>
+  <summary><strong>Установка на Windows</strong></summary>
 
-Нужен Microsoft Edge WebView2 Runtime. Установщик MSI может загрузить его с сайта Microsoft, если общего runtime ещё нет. Подробности — в [руководстве по установщику](windows/installer/README.md).
+- **MSI:** скачайте `deytt-connect-0.8.40.msi` со [страницы релиза](https://github.com/crxwov/deytt.connect/releases/latest) и запустите установщик. Подтвердите установку службы VPN.
+- **Portable:** скачайте и полностью распакуйте `deytt-connect-0.8.40-portable.zip`, затем запустите `deyttconnect.exe`. Для установки службы потребуется подтверждение администратора.
+
+Приложению нужен Microsoft Edge WebView2 Runtime. Если его нет в системе, установщик MSI может загрузить runtime с сайта Microsoft. Подробнее — в [руководстве по установщику](windows/installer/README.md).
+
+</details>
 
 ## Возможности
 
 - Вход через Telegram и загрузка маршрутов активной подписки.
-- Автоматический выбор маршрута, список доступных регионов и диагностика соединения.
+- Автоматический выбор маршрута, список регионов и диагностика соединения.
 - Проверка доступности, задержки и скорости маршрутов.
-- Обновление приложения и проверка новых релизов из поддерживаемого клиента.
+- Обновление приложения и проверка новых релизов.
+
+### Поддерживаемые протоколы
 
 | Протокол | Android | Windows |
 | --- | :---: | :---: |
@@ -62,9 +72,12 @@
 | AmneziaWG 1.5 | ✓ | — |
 | AmneziaWG 3.1 | ✓ | ✓ |
 
-На Android карта регионов использует IP-адрес через [ipinfo.io](https://ipinfo.io), а не GPS. Подробнее — в [условиях и политике конфиденциальности](https://deytt.space/info/).
+На Android карта регионов использует IP-адрес, а не GPS. Для определения региона приложение обращается к [ipinfo.io](https://ipinfo.io). Подробнее — в [условиях и политике конфиденциальности](https://deytt.space/info/).
 
 ## Сборка из исходников
+
+<details>
+  <summary><strong>Требования и команды сборки</strong></summary>
 
 Клонируйте проект вместе с подмодулями:
 
@@ -81,17 +94,19 @@ cd deytt.connect
 ./gradlew assembleDebug
 ~~~
 
-ARM64 APK появится в <code>app/build/outputs/apk/debug/app-arm64-v8a-debug.apk</code>. Для распространения используйте [инструкцию по безопасной сборке релиза](docs/release-security.md).
+ARM64 APK появится в `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`. Перед публикацией соберите релиз по [инструкции по безопасной сборке](docs/release-security.md).
 
 ### Windows
 
-Для компонентов Windows нужны Windows SDK, .NET 10 SDK, Go и рекурсивные подмодули. Сценарии сборки и упаковки находятся в <code>windows/</code>; детали MSI — в [руководстве по установщику](windows/installer/README.md).
+Для сборки нужны Windows SDK, .NET 10 SDK, Go и рекурсивные подмодули. Сценарии сборки и упаковки находятся в `windows/`. Параметры MSI описаны в [руководстве по установщику](windows/installer/README.md).
 
-## Поддержка и сообщения об ошибках
+</details>
+
+## Поддержка и безопасность
 
 По вопросам входа, подписки и подключения напишите в [бот deytt](https://t.me/deyttbot).
 
-Ошибку клиента можно описать в [GitHub Issue](https://github.com/crxwov/deytt.connect/issues): укажите платформу, версию приложения и ОС, модель устройства и шаги воспроизведения. Issues публичные. Не прикладывайте username, коды входа, ссылки подписки, VPN-ключи, конфигурации, IP-адреса или снимки экрана с данными аккаунта.
+Ошибку приложения можно описать в [GitHub Issues](https://github.com/crxwov/deytt.connect/issues). Укажите платформу, версию приложения и ОС, модель устройства и шаги воспроизведения. Issues публичные: не прикладывайте username, коды входа, ссылки подписки, VPN-ключи, конфигурации, IP-адреса или снимки экрана с данными аккаунта.
 
 О проблемах безопасности сообщайте приватно через [Security Advisories](https://github.com/crxwov/deytt.connect/security/advisories/new). Подробности — в [политике безопасности](SECURITY.md).
 
