@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/deytt-connect-banner.svg" alt="deytt./connect: приложение для Android и Windows" width="100%">
+  <img src="assets/deytt-connect-banner.png" alt="Баннер deytt./connect: маршруты и подключение для Android и Windows" width="100%">
 </p>
 
 ## Скачать приложение
@@ -12,14 +12,14 @@
       <h3 align="center">Android</h3>
       <p align="center"><strong>v0.8.30</strong> · Android 7.0+</p>
       <p align="center">ARM64 подходит большинству телефонов. APK для других архитектур доступны в релизе.</p>
-      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30"><img src="assets/download-android.svg" width="224" alt="Скачать APK"></a></p>
+      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30"><img src="assets/download-android.svg" width="260" alt="Скачать APK"></a></p>
       <p align="center"><sub>APK загружается с GitHub. В Google Play приложения нет.</sub></p>
     </td>
     <td width="50%" valign="top">
       <h3 align="center">Windows</h3>
       <p align="center"><strong>v0.8.40</strong> · Windows 10 1809+ · x64</p>
       <p align="center">Установщик MSI или portable ZIP. Оба файла находятся на странице релиза.</p>
-      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="assets/download-windows.svg" width="224" alt="Скачать MSI или portable ZIP"></a></p>
+      <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="assets/download-windows.svg" width="260" alt="Скачать MSI или portable ZIP"></a></p>
       <p align="center"><sub>Сборки не подписаны сертификатом издателя. SHA-256 есть на странице релиза.</sub></p>
     </td>
   </tr>
