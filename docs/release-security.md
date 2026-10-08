@@ -25,23 +25,21 @@ backend are excluded; their removal is not evidence they caused antivirus alerts
 The normal v0.8.30 APK keeps the v0.8.18–v0.8.26 signer on Android 8.1 and
 lower, and uses the supplied release key (`release.p12`, certificate SHA-256
 `bb39b663e555c7ed7b725c543ed73ea2602432b003591b2e1370f0359c4c4333`) on
-Android 9 and newer. A separate `deytt-connect-0.8.30-legacy-{abi}.apk` keeps
-the recovered v0.8.17 signer from `debug.keystore` (SHA-256
-`25e335babcdc88679ad4e8d884de5a8475866b55341d5b4596c5168e82bf2b46`) on
-Android 8.1 and lower, and uses the same supplied release key on Android 9 and
-newer. Use that legacy APK only for installations with the v0.8.17 signing
-identity. Never replace the normal lineage with the historical key: doing so
-would break updates for Android 8.1 and lower users of v0.8.18–v0.8.26.
+Android 9 and newer.
 
-The canonical Android download is the ARM64 build named
-`deytt-connect-{version}.apk`. Other architecture builds use
-`deytt-connect-{version}-{abi}.apk`; the historical compatibility build adds
-`-legacy-` before the ABI. The unversioned
-`app-{abi}-release.apk` copies exist only for the updater in already-installed
-versions and must contain identical bytes to the normal versioned APK. Keep
-the Windows installer named `deytt-connect-{version}.msi` and portable archive
-named `deytt-connect-{version}-portable.zip`; attach them to the same release
-only after the Windows issue is fixed.
+Uploaded Android assets must be exactly `deytt-connect-{version}.apk` and its
+matching `.apk.sha256` checksum. No ABI suffixes, legacy variants, or unversioned
+updater aliases are published. Future builds use the universal release APK.
+The existing v0.8.30 canonical APK is ARM64 and remains byte-for-byte unchanged.
+Older clients that require `app-{abi}-release.apk` need manual installation;
+future updater code prefers the canonical name for the exact release tag.
+Historical v0.8.17 installations on Android 8.1 and lower cannot use the normal
+APK as an in-place signing upgrade. Do not weaken certificate checks.
+
+Windows assets must be `deytt-connect-{version}.msi` and
+`deytt-connect-{version}-portable.zip`, with matching SHA256 sidecars.
+Publish Windows only after native acceptance and signing gates pass.
+GitHub-generated source archives are managed by GitHub, not uploaded binaries.
 
 Future updates are compatible only while the new private key is preserved and
 used for every APK. Private keystores and password files must stay outside the
@@ -59,14 +57,14 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
   --no-daemon --console=plain --max-workers=2
 
 python3 scripts/release.py sign \
-  app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk \
-  --output output/release/deytt-connect-0.8.30-arm64-v8a.apk \
+  app/build/outputs/apk/release/app-universal-release-unsigned.apk \
+  --output output/release/deytt-connect-0.8.30.apk \
   --keystore /secure/signing/release.p12 \
   --password-file /secure/signing/release.password \
   --legacy-keystore /secure/signing/current-release.p12 \
   --legacy-key-alias deytt-connect
 
-python3 scripts/release.py verify output/release/deytt-connect-0.8.30-arm64-v8a.apk
+python3 scripts/release.py verify output/release/deytt-connect-0.8.30.apk
 ```
 
 The release script refuses

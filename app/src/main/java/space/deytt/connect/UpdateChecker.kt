@@ -48,7 +48,12 @@ internal object ReleaseUrlPolicy {
 internal object ReleaseAssetPolicy {
     fun isStableRelease(draft: Boolean, prerelease: Boolean): Boolean = !draft && !prerelease
 
-    fun preferredName(names: List<String>, supportedAbis: List<String>): String? {
+    fun preferredName(names: List<String>, supportedAbis: List<String>, tag: String? = null): String? {
+        val version = tag?.removePrefix("v")
+        if (version != null && Regex("[0-9]+\\.[0-9]+\\.[0-9]+").matches(version)) {
+            val canonical = "deytt-connect-$version.apk"
+            if (canonical in names) return canonical
+        }
         // The updater installs only production APKs; debug packages are not
         // valid candidates for a production release, even in a debug build.
         for (abi in supportedAbis + "universal") {
@@ -107,7 +112,7 @@ object UpdateChecker {
                     .mapNotNull { assets?.optJSONObject(it) }
                     .filter { ReleaseUrlPolicy.isOfficialAsset(it.optString("browser_download_url")) }
                 val preferredName = ReleaseAssetPolicy.preferredName(
-                    candidates.map { it.optString("name") }, Build.SUPPORTED_ABIS.toList(),
+                    candidates.map { it.optString("name") }, Build.SUPPORTED_ABIS.toList(), json.optString("tag_name"),
                 ) ?: continue
                 val apkAsset = candidates.firstOrNull { it.optString("name") == preferredName } ?: continue
                 val pageUrl = json.optString("html_url")

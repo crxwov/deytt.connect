@@ -1,0 +1,47 @@
+name: normalize release asset names
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release to normalize (v0.8.30 only)
+        required: true
+        default: v0.8.30
+        type: string
+permissions:
+  contents: write
+jobs:
+  normalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: normalize v0.8.30 without replacing the verified APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          test "$RELEASE_TAG" = v0.8.30
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,body > "$RUNNER_TEMP/release.json"
+          python3 - <<'PY'
+          import json, os, subprocess
+          from pathlib import Path
+          data = json.loads((Path(os.environ["RUNNER_TEMP"]) / "release.json").read_text())
+          allowed = {"deytt-connect-0.8.30.apk", "deytt-connect-0.8.30.apk.sha256"}
+          assets = data["assets"]
+          assert allowed <= {a["name"] for a in assets}, "Canonical APK/checksum missing"
+          apk = next(a for a in assets if a["name"] == "deytt-connect-0.8.30.apk")
+          assert apk["digest"] == "sha256:311d26a3175d38e9b3736e0a3a14e872c5b2116170ddadf70c669662fbfe5b73", "Unexpected APK"
+          repo = os.environ["GITHUB_REPOSITORY"]
+          for asset in assets:
+              name = asset["name"]
+              if name not in allowed:
+                  assert name.endswith((".apk", ".apk.sha256")), "Unexpected non-Android asset"
+                  subprocess.run(["gh", "release", "delete-asset", "v0.8.30", name, "--repo", repo, "--yes"], check=True)
+          body = data["body"].split("## android signing-key rotation", 1)[0].rstrip().rstrip("-").rstrip()
+          body += "\n\nЕдинственный установочный файл: `deytt-connect-0.8.30.apk` (ARM64). Контрольная сумма: `deytt-connect-0.8.30.apk.sha256`. Если установленная версия ищет старые имена APK, скачайте файл вручную по этой странице.\n"
+          notes = Path(os.environ["RUNNER_TEMP"]) / "notes.md"
+          notes.write_text(body)
+          subprocess.run(["gh", "release", "edit", "v0.8.30", "--repo", repo, "--notes-file", str(notes)], check=True)
+          result = json.loads(subprocess.check_output(["gh", "release", "view", "v0.8.30", "--repo", repo, "--json", "assets"]))
+          assert {a["name"] for a in result["assets"]} == allowed
+          print("Verified: exactly the canonical APK and matching checksum remain")
+          PY
