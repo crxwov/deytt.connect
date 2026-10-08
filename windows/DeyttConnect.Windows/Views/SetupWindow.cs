@@ -525,8 +525,8 @@ public sealed class SetupWindow : UserControl
         catch (TelegramApiException error) when (IsDeviceSlotConflict(error))
         {
             Render(ViewState.DeviceConflict, Copy(
-                "Занят слот компьютера. Выйди из deytt.connect на прежнем компьютере и повтори проверку. Если доступа к нему нет, обратись в поддержку. Слоты телефона и Happ отдельные.",
-                "The computer slot is in use. Sign out of deytt.connect on the previous computer, then retry the check. If you cannot access it, contact support. Phone and Happ slots are separate."),
+                "Слот компьютера уже занят другим компьютером. На аккаунт доступно по одному телефону и одному компьютеру; слот телефона и квота Happ отдельные. Если нужно заменить компьютер, обратись в поддержку.",
+                "The computer slot is already used by another computer. Each account has one phone slot and one computer slot; the phone slot and Happ allowance are separate. Contact support if you need to replace the computer."),
                 DeyttTheme.Amber);
         }
         catch (TelegramApiException error) when (error.Code == "device_blocked")
@@ -937,8 +937,8 @@ public sealed class SetupWindow : UserControl
         if (_sessionToken is { Length: > 0 })
         {
             _body.Children.Add(DeyttTheme.TextBlock(Copy(
-                "Выйди из deytt.connect на прежнем компьютере и повтори проверку. Слоты телефона и Happ отдельные. Если прежний компьютер недоступен, попроси поддержку освободить слот. Приложение не отключает устройства автоматически.",
-                "Sign out of deytt.connect on the previous computer, then retry the check. Phone and Happ slots are separate. If the previous computer is unavailable, ask support to free its slot. The app does not disconnect devices automatically."),
+                "Выйди из deytt./connect на прежнем компьютере и повтори проверку. Слоты телефона и Happ отдельные. Если прежний компьютер недоступен, попроси поддержку освободить слот. Приложение не отключает устройства автоматически.",
+                "Sign out of deytt./connect on the previous computer, then retry the check. Phone and Happ slots are separate. If the previous computer is unavailable, ask support to free its slot. The app does not disconnect devices automatically."),
                 13, DeyttTheme.Muted));
             _body.Children.Add(BuildPrimary(Copy("Повторить проверку", "Retry the check"), () =>
             {
@@ -989,7 +989,7 @@ public sealed class SetupWindow : UserControl
 
         SetBusy(true);
         SetStatus(Copy("Отправляем запрос в поддержку…", "Sending the support request…"), DeyttTheme.Blue);
-        const string message = "здравствуйте! на новом компьютере deytt.connect отвечает http 409 app_device_limit_reached (download/http_409). не получается освободить слот прежнего компьютера самостоятельно. прошу проверить и освободить только компьютерный слот; слот телефона и happ менять не нужно.";
+        const string message = "здравствуйте! на новом компьютере deytt./connect отвечает http 409 app_device_limit_reached (download/http_409). не получается освободить слот прежнего компьютера самостоятельно. прошу проверить и освободить только компьютерный слот; слот телефона и happ менять не нужно.";
         try
         {
             var thread = await _support.GetThreadAsync(token, _lifetime.Token);
@@ -1219,7 +1219,7 @@ public sealed class SetupWindow : UserControl
         };
         brandLine.Children.Add(DeyttTheme.IconTile("◉", 42, DeyttTheme.Mint));
         var brand = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-        brand.Children.Add(DeyttTheme.TextBlock("DEYTT CONNECT", 10, DeyttTheme.Muted,
+        brand.Children.Add(DeyttTheme.TextBlock("deytt./connect", 10, DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
         brand.Children.Add(DeyttTheme.TextBlock(Copy("НАСТРОЙКА ПОДКЛЮЧЕНИЯ", "CONNECTION SETUP"), 9, DeyttTheme.Muted,
             FontWeight.Medium, DeyttTheme.JetBrainsMono, wrap: false));
@@ -1296,8 +1296,8 @@ public sealed class SetupWindow : UserControl
                 Copy("Ссылка подготовит профиль для первого маршрута.",
                     "The link will load a profile for your first route.")),
             ViewState.Success => (Copy("Маршруты готовы", "Routes are ready"),
-                Copy("Выберите стартовый выход и передайте профиль в DEYTT Connect.",
-                    "Choose your starting route and import the profile into DEYTT Connect.")),
+                Copy("Выберите стартовый выход и передайте профиль в deytt./connect.",
+                    "Choose your starting route and import the profile into deytt./connect.")),
             _ => (Copy("Подключите DEYTT", "Set up DEYTT"),
                 Copy("Войдите через Telegram, чтобы загрузить подписку и выбрать первый маршрут.",
                     "Sign in with Telegram to load your subscription and choose the first route.")),
@@ -1406,8 +1406,8 @@ public sealed class SetupWindow : UserControl
         "session_expired" or "session_invalid" => Copy("Сеанс истёк. Войди через Telegram ещё раз.",
             "Your session expired. Sign in with Telegram again."),
         "app_device_limit_reached" or "device_limit_reached" => Copy(
-            "Слот компьютера занят. Выйди из deytt.connect на прежнем компьютере и повтори проверку. Если доступа к нему нет, обратись в поддержку. Слоты телефона и Happ отдельные.",
-            "The computer slot is in use. Sign out of deytt.connect on the previous computer, then retry the check. If you cannot access it, contact support. Phone and Happ slots are separate."),
+            "Слот компьютера уже занят другим компьютером. На аккаунт доступно по одному телефону и одному компьютеру; слот телефона и квота Happ отдельные. Если нужно заменить компьютер, обратись в поддержку.",
+            "The computer slot is already used by another computer. Each account has one phone slot and one computer slot; the phone slot and Happ allowance are separate. Contact support if you need to replace the computer."),
         _ => Copy("Сервер не подтвердил вход. Повтори попытку позже.",
             "The server could not confirm sign-in. Please try again later."),
     };
@@ -1476,3 +1476,4 @@ public sealed class SetupWindow : UserControl
         Dispatcher.UIThread.Post(() => control.Focus(), DispatcherPriority.Input);
     }
 }
+

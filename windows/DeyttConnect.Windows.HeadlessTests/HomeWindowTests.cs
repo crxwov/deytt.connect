@@ -197,6 +197,38 @@ public sealed class HomeWindowTests
         }
     }
 
+    [AvaloniaFact]
+    public void Home_italian_awg_uses_server_label_and_regular_route_does_not_guess_a_city()
+    {
+        var awgWindow = new MainWindow(Fixture(signedIn: true, selectedRoute: "awg31:it-31"))
+        {
+            Width = 1360,
+            Height = 820,
+        };
+        var regularWindow = new MainWindow(Fixture(signedIn: true, selectedRoute: "it-vless"))
+        {
+            Width = 1360,
+            Height = 820,
+        };
+        try
+        {
+            awgWindow.Show();
+            regularWindow.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var awgText = ProfileSummary(awgWindow);
+            var regularText = ProfileSummary(regularWindow);
+            Assert.Contains("Milano 31", awgText);
+            Assert.Contains("Италия", regularText);
+            Assert.False(regularText.Contains("milan", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            awgWindow.Close();
+            regularWindow.Close();
+        }
+    }
+
     [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
@@ -546,6 +578,38 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaTheory]
+    [InlineData(720d, false, 0)]
+    [InlineData(1360d, true, 2)]
+    public void Routes_explain_when_Amnezia_profile_is_missing(double width, bool amneziaActive,
+        int activeAmneziaClients)
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, amneziaActive: amneziaActive,
+            amneziaClients: activeAmneziaClients, includeAmneziaRoute: false))
+        {
+            Width = width,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "AmneziaWG");
+            Assert.Contains(Descendants(page).OfType<TextBlock>(), text =>
+                activeAmneziaClients > 0
+                    ? text.Text.Contains("2", StringComparison.Ordinal) && text.Text.Contains("ключ", StringComparison.Ordinal)
+                    : text.Text.Contains("активной выдаче AmneziaWG", StringComparison.Ordinal));
+            Assert.Contains(Descendants(page).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "AmneziaRefreshProfile" && button.IsEnabled);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
     [InlineData(720d, "BottomHomeNav")]
     [InlineData(1360d, "BottomHomeNav")]
     public void Pending_route_focus_restore_does_not_override_navigation(double width, string homeNavigationName)
@@ -733,9 +797,10 @@ public sealed class HomeWindowTests
     private static QaHomeFixture Fixture(string tab = "home", bool signedIn = false,
         bool routeProbeInProgress = false, TelegramSubscription? profileSubscription = null,
         string selectedRoute = "nl-hysteria2",
-        string state = "disconnected", string? expandedRouteCountry = null)
+        string state = "disconnected", string? expandedRouteCountry = null,
+        bool amneziaActive = false, int amneziaClients = 0, bool includeAmneziaRoute = true)
     {
-        var routes = new[]
+        var routes = new List<WindowsRoute>
         {
             new WindowsRoute("auto", "qa:auto", "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
             new WindowsRoute("ru-de", "qa:ru-de", "RU-DE", "Россия → Германия", "🇷🇺→🇩🇪", "CHAIN", "RU → DE"),
@@ -751,13 +816,17 @@ public sealed class HomeWindowTests
             new WindowsRoute("fi-vless", "qa:fi-vless", "FI", "Финляндия", "🇫🇮", "VLESS", "VLESS"),
             new WindowsRoute("fi-trojan", "qa:fi-trojan", "FI", "Финляндия", "🇫🇮", "TROJAN", "Trojan"),
             new WindowsRoute("fi-hysteria2", "qa:fi-hysteria2", "FI", "Финляндия", "🇫🇮", "HYSTERIA2", "Hysteria 2"),
+            new WindowsRoute("it-vless", "qa:it-vless", "IT", "италия", "🇮🇹", "VLESS", "VLESS"),
         };
+        if (includeAmneziaRoute)
+            routes.Add(new WindowsRoute("awg31:it-31", "awg31:it-31", "IT", "италия", "🇮🇹", "AWG31",
+                "amneziawg 3.1", "awg31:it-31", "Milano 31"));
         var account = signedIn
             ? new TelegramAccount("qa_fixture", "QA Demo", false,
                 profileSubscription ?? ProfileSubscription(trafficLimit: null, trafficUsed: null, trafficTotal: null))
             : null;
         var subscription = signedIn
-            ? new TelegramKeysSnapshot(true, false, 0,
+            ? new TelegramKeysSnapshot(true, amneziaActive, amneziaClients,
                 [new TelegramHappDevice(0, false, "QA fixture", "Synthetic desktop", "now")],
                 "{\"qa_fixture\":true}", routes, [])
             : null;
@@ -806,3 +875,4 @@ public sealed class HomeWindowTests
         }
     }
 }
+
