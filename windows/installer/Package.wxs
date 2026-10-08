@@ -104,7 +104,8 @@
           </Component>
 
           <Component Id="UiStartMenuShortcutComponent" Guid="CE5F62A7-2C3F-4CAB-A44D-5D3C4D2B1F01">
-            <RegistryValue Root="HKCU"
+            <RegistryValue Id="UiStartMenuShortcutKey"
+                           Root="HKCU"
                            Key="Software\Deytt\Connect"
                            Name="StartMenuShortcut"
                            Type="integer"
@@ -114,7 +115,7 @@
                       Advertise="no"
                       Directory="ApplicationProgramsFolder"
                       Name="connect"
-                      Target="[#UiExecutable]"
+                      Target="[INSTALLFOLDER]DeyttConnect.Windows.exe"
                       Icon="DeyttConnectProductIcon.exe"
                       IconIndex="0"
                       WorkingDirectory="INSTALLFOLDER" />
