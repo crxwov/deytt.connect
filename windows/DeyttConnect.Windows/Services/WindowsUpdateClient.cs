@@ -28,7 +28,7 @@ public sealed record VerifiedWindowsUpdatePackage(string FilePath, string Sha256
 public static class WindowsUpdateClient
 {
     public const long MaximumPackageSizeBytes = 512L * 1024 * 1024;
-    private const string ExpectedWindowsAssetName = "deytt-connect-windows-x64.zip";
+    private const string LegacyWindowsAssetName = "deytt-connect-windows-x64.zip";
 
     private const int MaximumReleaseResponseBytes = 2 * 1024 * 1024;
     private const int MaximumRedirects = 5;
@@ -83,7 +83,7 @@ public static class WindowsUpdateClient
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = GetJsonString(asset, "name");
-                if (name is null || !string.Equals(name, ExpectedWindowsAssetName, StringComparison.Ordinal))
+                if (!IsSupportedWindowsAssetName(tag, name))
                     continue;
 
                 var rawUrl = GetJsonString(asset, "browser_download_url");
@@ -100,6 +100,24 @@ public static class WindowsUpdateClient
         }
 
         return null;
+    }
+
+    private static bool IsSupportedWindowsAssetName(string tag, string? name)
+    {
+        if (string.Equals(name, LegacyWindowsAssetName, StringComparison.Ordinal))
+            return true;
+
+        if (!tag.StartsWith("v", StringComparison.Ordinal))
+            return false;
+
+        var version = tag[1..];
+        var components = version.Split('.');
+        if (components.Length != 3 || components.Any(component =>
+                component.Length == 0 || (component.Length > 1 && component[0] == '0') ||
+                component.Any(character => !char.IsAsciiDigit(character))))
+            return false;
+
+        return string.Equals(name, $"deytt-connect-{version}-portable.zip", StringComparison.Ordinal);
     }
 
     public static async Task<VerifiedWindowsUpdatePackage> DownloadAndVerifyAsync(

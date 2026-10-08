@@ -1,0 +1,82 @@
+name: Windows v0.8.30 canonical packages
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    if: github.repository == 'crxwov/deytt.connect'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - name: set up dotnet
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.401'
+      - uses: actions/setup-go@v7
+        with:
+          go-version: '1.25.14'
+      - name: build matching UI service and VPN engine
+        shell: bash
+        run: DOTNET="$(command -v dotnet)" bash windows/scripts/build-windows-package.sh windows/artifacts/win-x64
+      - name: verify package provenance
+        shell: pwsh
+        run: ./windows/scripts/Write-PackageProvenance.ps1 -PackageDirectory windows/artifacts/win-x64 -ExpectedVersion 0.8.30 -RequireCleanSource
+      - name: build canonical portable ZIP
+        shell: pwsh
+        run: ./windows/scripts/package-windows-portable.ps1 -PackageDirectory windows/artifacts/win-x64 -OutputDirectory windows/artifacts/portable30 -ArchivePath windows/artifacts/release-assets/deytt-connect-0.8.30-portable.zip
+      - name: stage complete MSI payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source = (Resolve-Path 'windows/artifacts/win-x64').Path
+          $stage = Join-Path (Resolve-Path 'windows/artifacts').Path 'msi-stage30'
+          Copy-Item -LiteralPath $source -Destination $stage -Recurse
+          $service = Join-Path $stage 'service'
+          if (Get-ChildItem -LiteralPath $service -Directory) { throw 'nested service payload' }
+          foreach ($file in Get-ChildItem -LiteralPath $service -File) {
+            $target = Join-Path $stage $file.Name
+            if (Test-Path -LiteralPath $target) {
+              if ((Get-FileHash $file.FullName).Hash -ne (Get-FileHash $target).Hash) { throw "conflicting payload: $($file.Name)" }
+            } else { Copy-Item -LiteralPath $file.FullName -Destination $target }
+          }
+          $resolved = [IO.Path]::GetFullPath($service)
+          if (!$resolved.StartsWith($stage + [IO.Path]::DirectorySeparatorChar)) { throw 'invalid stage cleanup path' }
+          Remove-Item -LiteralPath $resolved -Recurse
+      - name: build MSI with metadata and ICE validation
+        shell: pwsh
+        run: ./windows/installer/Build-Msi.ps1 -ProductVersion 0.8.30 -PackageStageDir windows/artifacts/msi-stage30 -BuildRoot windows/artifacts/msi-build30 -Dotnet dotnet
+      - name: prepare canonical MSI and checksum
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = 'windows/artifacts/release-assets/deytt-connect-0.8.30.msi'
+          Copy-Item -LiteralPath 'windows/artifacts/msi-build30/output/DEYTTConnect.Windows.Installer.msi' -Destination $msi
+          $digest = (Get-FileHash -LiteralPath $msi -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$digest  deytt-connect-0.8.30.msi" | Set-Content -LiteralPath ($msi + '.sha256') -Encoding ascii
+          Write-Host "MSI SHA256: $digest"
+          Write-Host "Authenticode: $((Get-AuthenticodeSignature -LiteralPath $msi).Status)"
+      - name: attach only Windows packages to existing Android release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $names = @('deytt-connect-0.8.30.msi', 'deytt-connect-0.8.30.msi.sha256', 'deytt-connect-0.8.30-portable.zip', 'deytt-connect-0.8.30-portable.zip.sha256')
+          $paths = @($names | ForEach-Object { "windows/artifacts/release-assets/$_" })
+          foreach ($path in $paths) { if (!(Test-Path -LiteralPath $path -PathType Leaf)) { throw "missing asset $path" } }
+          & gh release upload v0.8.30 @paths --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Windows upload failed' }
+          $release = & gh release view v0.8.30 --repo $env:GITHUB_REPOSITORY --json body,assets | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'release verification failed' }
+          $expected = @($names + @('deytt-connect-0.8.30.apk', 'deytt-connect-0.8.30.apk.sha256'))
+          if (@($release.assets | Where-Object { $_.name -notin $expected }).Count -gt 0 -or @($release.assets).Count -ne 6) { throw 'unexpected uploaded asset names' }
+          $body = $release.body.Replace('Единственный установочный файл:', 'Установочный файл Android:')
+          $body += "`n`n## Windows`n`nУстановщик: deytt-connect-0.8.30.msi. Портативный архив: deytt-connect-0.8.30-portable.zip. Для каждого файла опубликован SHA-256. Windows-файлы не имеют Authenticode-подписи издателя; публикация без неё разрешена владельцем проекта. Сборка и метаданные пакетов проверены; полный пользовательский QA установки и VPN не выполнен.`n`nWindows source: $env:GITHUB_SHA.`n"
+          $notes = Join-Path $env:RUNNER_TEMP 'windows-release-notes.md'
+          Set-Content -LiteralPath $notes -Value $body -Encoding utf8
+          & gh release edit v0.8.30 --repo $env:GITHUB_REPOSITORY --notes-file $notes
+          if ($LASTEXITCODE -ne 0) { throw 'release notes update failed' }
+          Write-Host 'Verified six canonical uploaded assets'
