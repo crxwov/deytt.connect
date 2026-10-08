@@ -75,7 +75,7 @@
         <Control Id="InstalledText" Type="Text" X="24" Y="76" Width="392" Height="40" Text="deytt./connect установлен." NoPrefix="yes" HideCondition="REMOVE~=&quot;ALL&quot;" />
         <Control Id="RemovedText" Type="Text" X="24" Y="76" Width="392" Height="45" Text="deytt./connect удалён." NoPrefix="yes" Hidden="yes" ShowCondition="REMOVE~=&quot;ALL&quot;" />
         <Control Id="Desktop" Type="CheckBox" X="24" Y="128" Width="392" Height="20" Property="CREATE_DESKTOP_SHORTCUT" CheckBoxValue="1" Text="добавить ярлык на &amp;рабочий стол" HideCondition="REMOVE~=&quot;ALL&quot;" />
-        <Control Id="LaunchText" Type="Text" X="24" Y="156" Width="392" Height="30" Text="После нажатия «Готово» откроется deytt./connect." NoPrefix="yes" Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND CAN_LAUNCH_CONNECT AND NOT REBOOTNEEDED" />
+        <Control Id="LaunchConnect" Type="CheckBox" X="24" Y="156" Width="392" Height="20" Property="LAUNCH_CONNECT" CheckBoxValue="1" Text="запустить deytt./connect после установки" Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND CAN_LAUNCH_CONNECT AND NOT REBOOTNEEDED" />
         <Control Id="ManualLaunch" Type="Text" X="24" Y="156" Width="392" Height="35" Text="После завершения установки откройте deytt./connect из меню «Пуск»." NoPrefix="yes" Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND (NOT CAN_LAUNCH_CONNECT OR REBOOTNEEDED)" />
         <Control Id="Reboot" Type="Text" X="24" Y="190" Width="392" Height="38" Text="Для завершения установки потребуется перезагрузка Windows." Hidden="yes" ShowCondition="REBOOTNEEDED" />
         <Control Id="Error" Type="Text" X="24" Y="190" Width="392" Height="54" Text="[FINISH_ERROR]" Hidden="yes" ShowCondition="FINISH_ERROR" />
