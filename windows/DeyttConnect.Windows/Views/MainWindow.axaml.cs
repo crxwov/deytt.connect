@@ -842,15 +842,18 @@ public partial class MainWindow : Window
         }
 
         var hasAmneziaRoute = _routes.Any(route => IsAwgProtocol(route.Protocol));
-        if (!hasAmneziaRoute && _keysSnapshot is { } keys &&
-            (keys.HappAvailable || keys.AmneziaActive || keys.AmneziaClients > 0))
+        if (!hasAmneziaRoute && _account?.Subscription.Active == true)
         {
+            var keys = _keysSnapshot;
             var message = _profileRefreshInProgress
                 ? Copy("Проверяю доступность профилей AmneziaWG…", "Checking AmneziaWG profile availability…")
-                : keys.AmneziaActive && keys.AmneziaClients > 0
-                    ? Copy($"На аккаунте есть активные ключи: {keys.AmneziaClients}. Профиль маршрута не загрузился.",
-                        $"The account has {keys.AmneziaClients} active keys, but the AmneziaWG route profile did not load.")
-                    : keys.AmneziaActive
+                : keys is null
+                    ? Copy("Не удалось проверить доступность профиля AmneziaWG. Обновите профиль.",
+                        "Could not check AmneziaWG profile availability. Refresh the profile.")
+                    : keys.AmneziaActive && keys.AmneziaClients > 0
+                        ? Copy($"На аккаунте есть активные ключи: {keys.AmneziaClients}. Профиль маршрута не загрузился.",
+                            $"The account has {keys.AmneziaClients} active keys, but the AmneziaWG route profile did not load.")
+                        : keys.AmneziaActive
                         ? Copy("Подписка отмечена активной, но сервер не сообщил активные ключи AmneziaWG.",
                             "The subscription is marked active, but the server reports no active AmneziaWG keys.")
                         : !keys.HappAvailable
