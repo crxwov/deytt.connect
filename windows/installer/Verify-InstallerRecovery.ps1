@@ -19,7 +19,11 @@ foreach ($table in @('InstallUISequence','InstallExecuteSequence')) {
 $service=Row "SELECT ``Event`` FROM ``ServiceControl`` WHERE ``Name``='DEYTTConnectVpn'"
 Check (($service.Number -band 0x88) -eq 0x88) 'Service removal events missing'
 $startShortcut=Row "SELECT ``Target`` FROM ``Shortcut`` WHERE ``Shortcut``='UiStartMenuShortcut'"
-Check ($startShortcut.Text -eq 'MainFeature') 'Start Menu shortcut must be advertised by the app component'
+Check ($startShortcut.Text -eq '[INSTALLFOLDER]DeyttConnect.Windows.exe') 'Start Menu shortcut must directly target the installed app executable'
+$shortcutComponent=Row "SELECT ``Component_`` FROM ``Shortcut`` WHERE ``Shortcut``='UiStartMenuShortcut'"
+Check ($shortcutComponent.Text -eq 'UiStartMenuShortcutComponent') 'Start Menu shortcut must be isolated from the machine executable component'
+$shortcutRegistry=Row "SELECT ``Root`` FROM ``Registry`` WHERE ``Component_``='UiStartMenuShortcutComponent' AND ``Name``='StartMenuShortcut'"
+Check ($shortcutRegistry.Number -eq 1) 'Start Menu shortcut component must use an HKCU registry keypath'
 $webView=Row "SELECT ``File`` FROM ``File`` WHERE ``File``='WebViewBootstrapper'"
 Check ($webView.Text -eq 'WebViewBootstrapper') 'Signed WebView2 bootstrapper not packaged'
 $session=$installer.OpenPackage($MsiPath,1)
