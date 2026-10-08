@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/readme-banner.svg" alt="deytt./connect: приложение для Android и Windows" width="100%">
+  <img src="assets/deytt-connect-banner.svg" alt="deytt./connect: приложение для Android и Windows" width="100%">
 </p>
 
 ## Скачать приложение
