@@ -842,27 +842,41 @@ public partial class MainWindow : Window
         }
 
         var hasAmneziaRoute = _routes.Any(route => IsAwgProtocol(route.Protocol));
-        if (!hasAmneziaRoute && _keysSnapshot is { } keys &&
-            (keys.HappAvailable || keys.AmneziaActive || keys.AmneziaClients > 0))
+        var hasSession = _sessionToken is not null;
+        var hasActiveSubscription = _account?.Subscription?.Active == true;
         {
-            var message = _profileRefreshInProgress
-                ? Copy("Проверяю доступность профилей AmneziaWG…", "Checking AmneziaWG profile availability…")
-                : keys.AmneziaActive && keys.AmneziaClients > 0
-                    ? Copy($"На аккаунте есть активные ключи: {keys.AmneziaClients}. Профиль маршрута не загрузился.",
-                        $"The account has {keys.AmneziaClients} active keys, but the AmneziaWG route profile did not load.")
-                    : keys.AmneziaActive
+            var keys = _keysSnapshot;
+            var message = hasAmneziaRoute
+                ? Copy("Профиль AmneziaWG доступен в списке маршрутов ниже.",
+                    "The AmneziaWG profile is available in the route list below.")
+                : _profileRefreshInProgress
+                    ? Copy("Проверяю доступность профилей AmneziaWG…", "Checking AmneziaWG profile availability…")
+                : !hasSession
+                    ? Copy("Войдите через Telegram, чтобы получить профиль AmneziaWG.",
+                        "Sign in with Telegram to get an AmneziaWG profile.")
+                    : keys is null
+                    ? Copy("Не удалось проверить доступность профиля AmneziaWG. Обновите профиль.",
+                        "Could not check AmneziaWG profile availability. Refresh the profile.")
+                    : keys.AmneziaActive && keys.AmneziaClients > 0
+                        ? Copy($"На аккаунте есть активные ключи: {keys.AmneziaClients}. Профиль маршрута не загрузился.",
+                            $"The account has {keys.AmneziaClients} active keys, but the AmneziaWG route profile did not load.")
+                        : keys.AmneziaActive
                         ? Copy("Подписка отмечена активной, но сервер не сообщил активные ключи AmneziaWG.",
                             "The subscription is marked active, but the server reports no active AmneziaWG keys.")
+                        : !hasActiveSubscription
+                            ? Copy("Активируйте подписку, чтобы получить профиль AmneziaWG.",
+                                "Activate a subscription to get an AmneziaWG profile.")
                         : !keys.HappAvailable
-                            ? Copy("Маршрут AmneziaWG появится после активации подписки.",
-                                "The AmneziaWG route becomes available after the subscription is activated.")
+                            ? Copy("Подписка активна, но сервер пока не сообщил доступный профиль AmneziaWG.",
+                                "The subscription is active, but the server has not reported an AmneziaWG profile yet.")
                         : Copy("Сервер пока не сообщил об активной выдаче AmneziaWG для аккаунта.",
                             "The server has not reported active AmneziaWG provisioning for this account yet.");
             var refreshAmnezia = DeyttTheme.PrimaryButton(
                 Copy("Обновить профиль", "Refresh profile"),
                 () => _ = RefreshSignedInAccountAsync());
-            refreshAmnezia.IsEnabled = !_profileRefreshInProgress;
-            AutomationProperties.SetAutomationId(refreshAmnezia, "AmneziaRefreshProfile");
+            refreshAmnezia.IsEnabled = hasSession && !_profileRefreshInProgress;
+            if (refreshAmnezia.Child is Button refreshButton)
+                AutomationProperties.SetAutomationId(refreshButton, "AmneziaRefreshProfile");
             routeColumn.Children.Add(DeyttTheme.Card(new StackPanel
             {
                 Spacing = 9,
