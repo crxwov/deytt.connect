@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="600" viewBox="0 0 1600 600" fill="none" role="img" aria-labelledby="title desc">
   <title id="title">deytt./connect — Android и Windows</title>
-  <desc id="desc">Клиенты DEYTTT для телефона и компьютера с маршрутами, соединёнными общей сетевой линией.</desc>
+  <desc id="desc">Приложение deytt./connect для телефона и компьютера, с маршрутами, соединёнными общей сетевой линией.</desc>
   <defs>
     <linearGradient id="background" x1="80" y1="0" x2="1510" y2="600" gradientUnits="userSpaceOnUse">
       <stop stop-color="#09111F"/><stop offset=".55" stop-color="#101B2E"/><stop offset="1" stop-color="#11152A"/>
@@ -25,7 +25,7 @@
   <g font-family="Inter,Segoe UI,Arial,sans-serif">
     <rect x="104" y="92" width="274" height="38" rx="19" fill="#18283B" stroke="#39516D"/>
     <circle cx="126" cy="111" r="5" fill="#70E8C6"/>
-    <text x="143" y="117" fill="#B8C8DC" font-size="14" font-weight="700" letter-spacing="2.3">КЛИЕНТЫ DEYTTT</text>
+    <text x="143" y="117" fill="#B8C8DC" font-size="14" font-weight="700" letter-spacing="2.3">ОДНО ПРИЛОЖЕНИЕ · ДВЕ ПЛАТФОРМЫ</text>
 
     <text x="100" y="248" fill="#F5F8FC" font-size="77" font-weight="750" letter-spacing="-4">deytt./connect</text>
     <text x="106" y="314" fill="#D3DFED" font-size="30" font-weight="500">Одна подписка. Телефон и компьютер.</text>
