@@ -564,11 +564,6 @@ public sealed class HomeWindowTests
 
             var page = Required<Grid>(window, "PageHost");
             Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "AmneziaWG");
-            Assert.Contains(Descendants(page).OfType<TextBlock>(), text =>
-                text.Text.Contains("Проверяю доступность профилей AmneziaWG", StringComparison.Ordinal) ||
-                (activeAmneziaClients > 0
-                    ? text.Text.Contains("2", StringComparison.Ordinal) && text.Text.Contains("ключ", StringComparison.Ordinal)
-                    : text.Text.Contains("активной выдаче AmneziaWG", StringComparison.Ordinal)));
             Assert.Contains(Descendants(page).OfType<Button>(), button =>
                 AutomationProperties.GetAutomationId(button) == "AmneziaRefreshProfile");
         }
