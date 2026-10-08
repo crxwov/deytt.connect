@@ -11,6 +11,8 @@ namespace DeyttConnect.Setup
 {
     public static class SetupActions
     {
+        private const string ConnectUpgradeCode = "{405BFF99-D3EE-5F7F-BF2D-FC11478F37B5}";
+
         [DllImport("user32.dll")]
         private static extern IntPtr GetShellWindow();
 
@@ -79,10 +81,76 @@ namespace DeyttConnect.Setup
             catch (ArgumentException) { return false; }
         }
 
+        internal static string ClassifySetupMode(
+            bool sameProductInstalled,
+            bool upgradeDetected,
+            Version installedVersion,
+            Version packageVersion)
+        {
+            if (sameProductInstalled) return "maintenance";
+            if (upgradeDetected && (installedVersion == null || packageVersion == null ||
+                installedVersion.CompareTo(packageVersion) < 0))
+                return "update";
+            return "install";
+        }
+
+        private static Version FindInstalledConnectVersion(Session session)
+        {
+            var currentProductCode = session["ProductCode"];
+            var upgradeProductCodes = session["WIX_UPGRADE_DETECTED"] ?? "";
+            Version newest = null;
+            foreach (var product in ProductInstallation.GetRelatedProducts(ConnectUpgradeCode))
+            {
+                if (!product.IsInstalled) continue;
+
+                var code = product.ProductCode;
+                var isCurrent = string.Equals(NormalizeProductCode(code), NormalizeProductCode(currentProductCode), StringComparison.OrdinalIgnoreCase);
+                var isUpgradeCandidate = ContainsProductCode(upgradeProductCodes, code);
+                if (!isCurrent && !isUpgradeCandidate) continue;
+
+                var version = product.ProductVersion;
+                if (version != null && (newest == null || version.CompareTo(newest) > 0))
+                    newest = version;
+            }
+            return newest;
+        }
+
+        private static bool ContainsProductCode(string list, string productCode)
+        {
+            var normalized = NormalizeProductCode(productCode);
+            if (normalized.Length == 0) return false;
+            foreach (var candidate in list.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                if (string.Equals(NormalizeProductCode(candidate), normalized, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static string NormalizeProductCode(string productCode) =>
+            (productCode ?? "").Trim().Trim('{', '}');
+
         [CustomAction]
         public static ActionResult DetectLegacyService(Session session)
         {
             session["CONNECT_SERVICE_COMPATIBLE"] = IsConnectService(session["EXISTING_SERVICE_PATH"]) ? "1" : "";
+            var sameProductInstalled = session["Installed"] == "1";
+            var upgradeDetected = !string.IsNullOrWhiteSpace(session["WIX_UPGRADE_DETECTED"]);
+            Version installedVersion = null;
+            Version packageVersion = null;
+            Version.TryParse(session["ProductVersion"], out packageVersion);
+            try
+            {
+                installedVersion = FindInstalledConnectVersion(session);
+            }
+            catch (Exception exception)
+            {
+                // Installation mode still follows native MSI properties; version metadata is display-only.
+                session.Log("Installed product version lookup failed: {0}", exception.GetType().Name);
+            }
+            session["SETUP_INSTALLED_VERSION"] = installedVersion?.ToString() ?? "не определена";
+            session["SETUP_MODE"] = ClassifySetupMode(
+                sameProductInstalled, upgradeDetected, installedVersion, packageVersion);
+            session["SETUP_COMMIT_LABEL"] = session["SETUP_MODE"] == "update" ? "&Обновить" : "&Установить";
+
             var identity = WindowsIdentity.GetCurrent();
             // An existing interactive Explorer shell can launch the client unelevated
             // even when Windows Installer is running with its UAC-elevated token.
@@ -200,6 +268,9 @@ namespace DeyttConnect.Setup
             finally { Marshal.FinalReleaseComObject(link); }
         }
 
+        internal static bool ShouldLaunchConnect(string launch, string canLaunch, string rebootNeeded) =>
+            launch == "1" && canLaunch == "1" && rebootNeeded != "1";
+
         [CustomAction]
         public static ActionResult FinishSetup(Session session)
         {
@@ -210,8 +281,12 @@ namespace DeyttConnect.Setup
                 var executable = Path.Combine(session["INSTALLFOLDER"], "DeyttConnect.Windows.exe");
                 if (session["CREATE_DESKTOP_SHORTCUT"] == "1")
                     CreateDesktopShortcut(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), executable);
-                if (session["LAUNCH_CONNECT"] == "1" && session["REBOOTNEEDED"] != "1")
-                    _ = LaunchConnect(executable);
+                if (ShouldLaunchConnect(session["LAUNCH_CONNECT"], session["CAN_LAUNCH_CONNECT"],
+                    session["REBOOTNEEDED"]) && !LaunchConnect(executable))
+                {
+                    session["FINISH_ERROR"] = "приложение установлено. не удалось открыть deytt./connect. откройте его из меню «пуск» после завершения установки.";
+                    return ActionResult.Success;
+                }
                 session["FINISH_ACTIONS_OK"] = "1";
             }
             catch (Exception exception)

@@ -1,98 +1,113 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Fragment>
     <UI Id="DeyttSetupUI">
-      <TextStyle Id="SetupNormal" FaceName="Segoe UI" Size="9" />
-      <TextStyle Id="SetupTitle" FaceName="Segoe UI" Size="18" Bold="yes" />
-      <TextStyle Id="SetupSmall" FaceName="Segoe UI" Size="8" />
+      <TextStyle Id="SetupNormal" FaceName="Segoe UI" Size="10" Red="45" Green="56" Blue="72" />
+      <TextStyle Id="SetupTitle" FaceName="Segoe UI" Size="20" Bold="yes" Red="16" Green="26" Blue="42" />
+      <TextStyle Id="SetupHeading" FaceName="Segoe UI" Size="10" Bold="yes" Red="16" Green="26" Blue="42" />
+      <TextStyle Id="SetupSmall" FaceName="Segoe UI" Size="9" Red="89" Green="102" Blue="122" />
+      <TextStyle Id="SetupAccent" FaceName="Segoe UI" Size="9" Bold="yes" Red="0" Green="120" Blue="137" />
+      <TextStyle Id="SetupBrand" FaceName="Segoe UI" Size="22" Bold="yes" Red="255" Green="255" Blue="255" />
+      <TextStyle Id="SetupWhite" FaceName="Segoe UI" Size="11" Red="202" Green="219" Blue="239" />
+      <TextStyle Id="SetupMutedWhite" FaceName="Segoe UI" Size="8" Red="139" Green="170" Blue="202" />
+      <TextStyle Id="SetupDanger" FaceName="Segoe UI" Size="9" Red="167" Green="40" Blue="62" />
       <TextStyle Id="WixUI_Font_Normal" FaceName="Segoe UI" Size="9" />
       <TextStyle Id="WixUI_Font_Bigger" FaceName="Segoe UI" Size="12" />
       <TextStyle Id="WixUI_Font_Title" FaceName="Segoe UI" Size="10" Bold="yes" />
       <Property Id="DefaultUIFont" Value="SetupNormal" />
       <Property Id="CREATE_DESKTOP_SHORTCUT" Value="1" />
       <Property Id="LAUNCH_CONNECT" Value="1" />
-      <DialogRef Id="ErrorDlg" />
-      <DialogRef Id="FatalError" />
-      <DialogRef Id="UserExit" />
-      <DialogRef Id="FilesInUse" />
-      <DialogRef Id="MsiRMFilesInUse" />
-      <DialogRef Id="ProgressDlg" />
-      <DialogRef Id="PrepareDlg" />
-      <DialogRef Id="ResumeDlg" />
-      <DialogRef Id="OutOfDiskDlg" />
-      <DialogRef Id="OutOfRbDiskDlg" />
-      <Dialog Id="SetupWelcome" Width="440" Height="300" Title="deytt./connect — установка">
-        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}deytt./connect" NoPrefix="yes" />
-        <Control Id="Intro" Type="Text" X="24" Y="72" Width="392" Height="40" Text="Установите deytt./connect и выберите маршрут для подключения." NoPrefix="yes" />
-        <Control Id="Details" Type="Text" X="24" Y="126" Width="392" Height="42" Text="Ярлык появится в меню «Пуск». При обновлении данные входа сохранятся." NoPrefix="yes" />
-        <Control Id="Version" Type="Text" X="24" Y="208" Width="392" Height="20" Text="{\SetupSmall}версия [ProductVersion] · Windows x64" NoPrefix="yes" />
-        <Control Id="Line" Type="Line" X="0" Y="252" Width="440" Height="0" />
-        <Control Id="Next" Type="PushButton" X="252" Y="270" Width="80" Height="20" Default="yes" Text="&amp;далее">
-          <Publish Event="NewDialog" Value="SetupReady" />
+      <DialogRef Id="ErrorDlg" /><DialogRef Id="FatalError" /><DialogRef Id="UserExit" />
+      <DialogRef Id="FilesInUse" /><DialogRef Id="MsiRMFilesInUse" /><DialogRef Id="PrepareDlg" />
+      <DialogRef Id="ResumeDlg" /><DialogRef Id="OutOfDiskDlg" /><DialogRef Id="OutOfRbDiskDlg" />
+
+      <Dialog Id="SetupWelcome" Width="568" Height="348" Title="./connect">
+        <?include BrandPanel.wxi?>
+        <Control Id="Step" Type="Text" X="252" Y="29" Width="288" Height="18" Text="{\SetupAccent}01 / ПОДГОТОВКА" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Title" Type="Text" X="252" Y="60" Width="288" Height="38" Text="{\SetupTitle}Добро пожаловать" Transparent="yes" NoPrefix="yes" HideCondition="SETUP_MODE = &quot;update&quot;" />
+        <Control Id="UpdateTitle" Type="Text" X="252" Y="60" Width="288" Height="38" Text="{\SetupTitle}Время обновиться" Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="SETUP_MODE = &quot;update&quot;" />
+        <Control Id="Intro" Type="Text" X="252" Y="108" Width="288" Height="46" Text="Установите ./connect, выберите маршрут и подключитесь к VPN." Transparent="yes" NoPrefix="yes" HideCondition="SETUP_MODE = &quot;update&quot;" />
+        <Control Id="UpdateIntro" Type="Text" X="252" Y="108" Width="288" Height="48" Text="Установлена версия [SETUP_INSTALLED_VERSION]. Обновим приложение до [ProductVersion]." Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="SETUP_MODE = &quot;update&quot;" />
+        <Control Id="FeatureOne" Type="Text" X="252" Y="178" Width="288" Height="18" Text="{\SetupHeading}Всё готово для подключения" Transparent="yes" NoPrefix="yes" />
+        <Control Id="FeatureOneBody" Type="Text" X="252" Y="203" Width="288" Height="34" Text="{\SetupSmall}Приложение появится в меню «Пуск». Настройки и вход сохранятся при обновлении." Transparent="yes" NoPrefix="yes" />
+        <Control Id="Version" Type="Text" X="252" Y="272" Width="288" Height="18" Text="{\SetupSmall}Версия [ProductVersion] · Windows 10 / 11" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Cancel" Type="PushButton" X="340" Y="316" Width="96" Height="26" Cancel="yes" Text="Отмена"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+        <Control Id="Next" Type="PushButton" X="448" Y="316" Width="96" Height="26" Default="yes" Text="&amp;Продолжить"><Publish Event="NewDialog" Value="SetupReady" /></Control>
+      </Dialog>
+
+      <Dialog Id="SetupMaintenance" Width="568" Height="348" Title="./connect — управление">
+        <?include BrandPanel.wxi?>
+        <Control Id="Step" Type="Text" X="252" Y="29" Width="288" Height="18" Text="{\SetupAccent}ПРИЛОЖЕНИЕ УСТАНОВЛЕНО" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Title" Type="Text" X="252" Y="60" Width="288" Height="64" Text="{\SetupTitle}Уже установлено" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Intro" Type="Text" X="252" Y="141" Width="288" Height="58" Text="./connect [ProductVersion] уже установлен. Вы можете удалить приложение или восстановить его файлы." Transparent="yes" NoPrefix="yes" />
+        <Control Id="Repair" Type="PushButton" X="252" Y="218" Width="164" Height="26" Text="&amp;Восстановить файлы">
+          <Publish Property="REINSTALL" Value="ALL" Order="1" /><Publish Property="REINSTALLMODE" Value="amus" Order="2" />
+          <Publish Property="WixUI_InstallMode" Value="Repair" Order="3" /><Publish Event="EndDialog" Value="Return" Order="4" />
         </Control>
-        <Control Id="Cancel" Type="PushButton" X="340" Y="270" Width="80" Height="20" Cancel="yes" Text="отмена">
-          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        <Control Id="Cancel" Type="PushButton" X="340" Y="316" Width="96" Height="26" Default="yes" Cancel="yes" Text="Закрыть"><Publish Event="EndDialog" Value="Exit" /></Control>
+        <Control Id="Remove" Type="PushButton" X="448" Y="316" Width="96" Height="26" Text="&amp;Удалить"><Publish Event="NewDialog" Value="SetupRemoveConfirm" /></Control>
+      </Dialog>
+
+      <Dialog Id="SetupRemoveConfirm" Width="568" Height="348" Title="./connect — удаление">
+        <?include BrandPanel.wxi?>
+        <Control Id="Step" Type="Text" X="252" Y="29" Width="288" Height="18" Text="{\SetupAccent}УДАЛЕНИЕ" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Title" Type="Text" X="252" Y="60" Width="288" Height="70" Text="{\SetupTitle}Удалить приложение?" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Intro" Type="Text" X="252" Y="148" Width="288" Height="58" Text="Приложение будет удалено. Активное VPN-подключение остановится." Transparent="yes" NoPrefix="yes" />
+        <Control Id="Account" Type="Text" X="252" Y="220" Width="288" Height="44" Text="{\SetupSmall}Данные аккаунта сохранятся на компьютере для следующей установки." Transparent="yes" NoPrefix="yes" />
+        <Control Id="Cancel" Type="PushButton" X="340" Y="316" Width="96" Height="26" Default="yes" Cancel="yes" Text="&amp;Назад"><Publish Event="NewDialog" Value="SetupMaintenance" /></Control>
+        <Control Id="Remove" Type="PushButton" X="448" Y="316" Width="96" Height="26" ElevationShield="yes" Text="Удалить">
+          <Publish Property="REMOVE" Value="ALL" Order="1" /><Publish Property="WixUI_InstallMode" Value="Remove" Order="2" /><Publish Event="EndDialog" Value="Return" Order="3" />
         </Control>
       </Dialog>
-      <Dialog Id="SetupMaintenance" Width="440" Height="300" Title="deytt./connect — обслуживание">
-        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}deytt./connect" NoPrefix="yes" />
-        <Control Id="Intro" Type="Text" X="24" Y="78" Width="392" Height="50" Text="deytt./connect уже установлен. Восстановите установку или удалите приложение." NoPrefix="yes" />
-        <Control Id="Repair" Type="PushButton" X="24" Y="154" Width="188" Height="26" Default="yes" Text="&amp;восстановить">
-          <Publish Property="REINSTALL" Value="ALL" Order="1" />
-          <Publish Property="REINSTALLMODE" Value="amus" Order="2" />
-          <Publish Property="WixUI_InstallMode" Value="Repair" Order="3" />
-          <Publish Event="EndDialog" Value="Return" Order="4" />
-        </Control>
-        <Control Id="Remove" Type="PushButton" X="228" Y="154" Width="188" Height="26" Text="&amp;удалить">
-          <Publish Event="NewDialog" Value="SetupRemoveConfirm" />
-        </Control>
-        <Control Id="Line" Type="Line" X="0" Y="252" Width="440" Height="0" />
-        <Control Id="Cancel" Type="PushButton" X="340" Y="270" Width="80" Height="20" Cancel="yes" Text="отмена">
-          <Publish Event="SpawnDialog" Value="CancelDlg" />
-        </Control>
+
+      <Dialog Id="SetupReady" Width="568" Height="348" Title="./connect — подтверждение">
+        <?include BrandPanel.wxi?>
+        <Control Id="Step" Type="Text" X="252" Y="29" Width="288" Height="18" Text="{\SetupAccent}02 / ПОДТВЕРЖДЕНИЕ" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Title" Type="Text" X="252" Y="60" Width="288" Height="70" Text="{\SetupTitle}Установим приложение" Transparent="yes" NoPrefix="yes" HideCondition="SETUP_MODE = &quot;update&quot;" />
+        <Control Id="UpdateTitle" Type="Text" X="252" Y="60" Width="288" Height="70" Text="{\SetupTitle}Обновим приложение" Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="SETUP_MODE = &quot;update&quot;" />
+        <Control Id="Details" Type="Text" X="252" Y="149" Width="288" Height="60" Text="Подтвердите запрос Windows, чтобы продолжить. При обновлении VPN отключится, а настройки и вход сохранятся." Transparent="yes" NoPrefix="yes" />
+        <Control Id="PathLabel" Type="Text" X="252" Y="230" Width="288" Height="18" Text="{\SetupSmall}Папка приложения:" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Path" Type="Text" X="252" Y="250" Width="288" Height="35" Text="{\SetupSmall}[INSTALLFOLDER]" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Back" Type="PushButton" X="252" Y="316" Width="84" Height="26" Text="&amp;Назад"><Publish Event="NewDialog" Value="SetupWelcome" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="344" Y="316" Width="92" Height="26" Cancel="yes" Text="Отмена"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
+        <Control Id="Install" Type="PushButton" X="448" Y="316" Width="96" Height="26" Default="yes" ElevationShield="yes" Text="[SETUP_COMMIT_LABEL]"><Publish Event="EndDialog" Value="Return" /></Control>
       </Dialog>
-      <Dialog Id="SetupRemoveConfirm" Width="300" Height="150" Title="удаление deytt./connect">
-        <Control Id="Text" Type="Text" X="18" Y="18" Width="264" Height="68" Text="Удалить deytt./connect? Активное VPN-подключение будет остановлено." NoPrefix="yes" />
-        <Control Id="Remove" Type="PushButton" X="104" Y="112" Width="80" Height="20" Text="удалить">
-          <Publish Property="REMOVE" Value="ALL" Order="1" />
-          <Publish Property="WixUI_InstallMode" Value="Remove" Order="2" />
-          <Publish Event="EndDialog" Value="Return" Order="3" />
-        </Control>
-        <Control Id="Cancel" Type="PushButton" X="194" Y="112" Width="80" Height="20" Default="yes" Cancel="yes" Text="отмена">
-          <Publish Event="NewDialog" Value="SetupMaintenance" />
-        </Control>
+
+      <Dialog Id="SetupProgress" Width="568" Height="348" Title="./connect — установка" Modeless="yes">
+        <?include BrandPanel.wxi?>
+        <Control Id="Step" Type="Text" X="252" Y="29" Width="288" Height="18" Text="{\SetupAccent}03 / УСТАНОВКА" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Title" Type="Text" X="252" Y="60" Width="288" Height="70" Text="{\SetupTitle}Ещё немного" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Intro" Type="Text" X="252" Y="138" Width="288" Height="42" Text="Подготавливаем приложение. После завершения можно будет подключиться." Transparent="yes" NoPrefix="yes" />
+        <Control Id="Progress" Type="ProgressBar" X="252" Y="202" Width="288" Height="12" ProgressBlocks="no"><Subscribe Event="SetProgress" Attribute="Progress" /></Control>
+        <Control Id="Action" Type="Text" X="252" Y="231" Width="288" Height="45" Text="{\SetupSmall}Подготовка…" Transparent="yes" NoPrefix="yes"><Subscribe Event="ActionText" Attribute="Text" /></Control>
+        <Control Id="Cancel" Type="PushButton" X="448" Y="316" Width="96" Height="26" Cancel="yes" Text="Отмена"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
       </Dialog>
-      <Dialog Id="SetupReady" Width="440" Height="300" Title="deytt./connect — установка">
-        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}установим deytt./connect" NoPrefix="yes" />
-        <Control Id="Path" Type="Text" X="24" Y="80" Width="392" Height="48" Text="папка приложения: [INSTALLFOLDER]" NoPrefix="yes" />
-        <Control Id="Details" Type="Text" X="24" Y="142" Width="392" Height="60" Text="Подтвердите запрос Windows, чтобы продолжить установку. Во время обновления активное подключение остановится." NoPrefix="yes" />
-        <Control Id="Line" Type="Line" X="0" Y="252" Width="440" Height="0" />
-        <Control Id="Back" Type="PushButton" X="152" Y="270" Width="80" Height="20" Text="&amp;назад"><Publish Event="NewDialog" Value="SetupWelcome" /></Control>
-        <Control Id="Install" Type="PushButton" X="240" Y="270" Width="92" Height="20" Default="yes" ElevationShield="yes" Text="&amp;установить"><Publish Event="EndDialog" Value="Return" /></Control>
-        <Control Id="Cancel" Type="PushButton" X="340" Y="270" Width="80" Height="20" Cancel="yes" Text="отмена"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
-      </Dialog>
-      <Dialog Id="SetupComplete" Width="440" Height="300" Title="deytt./connect — завершение">
-        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}готово" NoPrefix="yes" />
-        <Control Id="InstalledText" Type="Text" X="24" Y="76" Width="392" Height="40" Text="deytt./connect установлен." NoPrefix="yes" HideCondition="REMOVE~=&quot;ALL&quot;" />
-        <Control Id="RemovedText" Type="Text" X="24" Y="76" Width="392" Height="45" Text="deytt./connect удалён." NoPrefix="yes" Hidden="yes" ShowCondition="REMOVE~=&quot;ALL&quot;" />
-        <Control Id="Desktop" Type="CheckBox" X="24" Y="128" Width="392" Height="20" Property="CREATE_DESKTOP_SHORTCUT" CheckBoxValue="1" Text="добавить ярлык на &amp;рабочий стол" HideCondition="REMOVE~=&quot;ALL&quot;" />
-        <Control Id="LaunchText" Type="Text" X="24" Y="156" Width="392" Height="30" Text="После нажатия «Готово» откроется deytt./connect." NoPrefix="yes" Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND CAN_LAUNCH_CONNECT AND NOT REBOOTNEEDED" />
-        <Control Id="ManualLaunch" Type="Text" X="24" Y="156" Width="392" Height="35" Text="После завершения установки откройте deytt./connect из меню «Пуск»." NoPrefix="yes" Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND (NOT CAN_LAUNCH_CONNECT OR REBOOTNEEDED)" />
-        <Control Id="Reboot" Type="Text" X="24" Y="190" Width="392" Height="38" Text="Для завершения установки потребуется перезагрузка Windows." Hidden="yes" ShowCondition="REBOOTNEEDED" />
-        <Control Id="Error" Type="Text" X="24" Y="190" Width="392" Height="54" Text="[FINISH_ERROR]" Hidden="yes" ShowCondition="FINISH_ERROR" />
-        <Control Id="Line" Type="Line" X="0" Y="252" Width="440" Height="0" />
-        <Control Id="Finish" Type="PushButton" X="324" Y="270" Width="96" Height="20" Default="yes" Cancel="yes" Text="&amp;завершить">
+
+      <Dialog Id="SetupComplete" Width="568" Height="348" Title="./connect — готово">
+        <?include BrandPanel.wxi?>
+        <Control Id="Step" Type="Text" X="252" Y="29" Width="288" Height="18" Text="{\SetupAccent}ГОТОВО" Transparent="yes" NoPrefix="yes" />
+        <Control Id="Title" Type="Text" X="252" Y="60" Width="288" Height="38" Text="{\SetupTitle}Можно подключаться" Transparent="yes" NoPrefix="yes" HideCondition="REMOVE~=&quot;ALL&quot;" />
+        <Control Id="RemovedTitle" Type="Text" X="252" Y="60" Width="288" Height="38" Text="{\SetupTitle}До встречи" Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="REMOVE~=&quot;ALL&quot;" />
+        <Control Id="InstalledText" Type="Text" X="252" Y="112" Width="288" Height="40" Text="./connect [ProductVersion] установлен. Выберите, что сделать после закрытия." Transparent="yes" NoPrefix="yes" HideCondition="REMOVE~=&quot;ALL&quot;" />
+        <Control Id="RemovedText" Type="Text" X="252" Y="112" Width="288" Height="58" Text="Приложение удалено. Данные аккаунта сохранены для следующей установки." Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="REMOVE~=&quot;ALL&quot;" />
+        <Control Id="Desktop" Type="CheckBox" X="252" Y="169" Width="292" Height="22" Property="CREATE_DESKTOP_SHORTCUT" CheckBoxValue="1" Text="Ярлык на &amp;рабочем столе" HideCondition="REMOVE~=&quot;ALL&quot;" />
+        <Control Id="Launch" Type="CheckBox" X="252" Y="201" Width="292" Height="28" Property="LAUNCH_CONNECT" CheckBoxValue="1" Text="&amp;Запустить ./connect после закрытия" Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND CAN_LAUNCH_CONNECT AND NOT REBOOTNEEDED" />
+        <Control Id="ManualLaunch" Type="Text" X="252" Y="204" Width="288" Height="40" Text="{\SetupSmall}Приложение можно открыть из меню «Пуск»." Transparent="yes" NoPrefix="yes" Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND (NOT CAN_LAUNCH_CONNECT OR REBOOTNEEDED)" />
+        <Control Id="Reboot" Type="Text" X="252" Y="254" Width="288" Height="34" Text="{\SetupSmall}Для завершения требуется перезагрузка Windows." Transparent="yes" Hidden="yes" ShowCondition="REBOOTNEEDED AND NOT FINISH_ERROR" />
+        <Control Id="Error" Type="Text" X="252" Y="249" Width="288" Height="48" Text="{\SetupDanger}[FINISH_ERROR]" Transparent="yes" Hidden="yes" ShowCondition="FINISH_ERROR" />
+        <Control Id="Finish" Type="PushButton" X="448" Y="316" Width="96" Height="26" Default="yes" Cancel="yes" Text="&amp;Готово">
           <Publish Event="DoAction" Value="FinishSetup" Order="1" Condition="NOT REMOVE~=&quot;ALL&quot;" />
           <Publish Event="EndDialog" Value="Return" Order="2" Condition="REMOVE~=&quot;ALL&quot; OR FINISH_ACTIONS_OK = &quot;1&quot;" />
         </Control>
       </Dialog>
+
       <InstallUISequence>
-        <Show Dialog="SetupWelcome" Before="ProgressDlg" Condition="NOT Installed" />
+        <Show Dialog="SetupWelcome" Before="SetupProgress" Condition="NOT Installed" />
         <Show Dialog="SetupMaintenance" After="SetupWelcome" Condition="Installed AND NOT RESUME" />
+        <!-- WixUI_Common adds modeless ProgressDlg before ExecuteAction; put the branded dialog last so it stays visible on top. -->
+        <Show Dialog="SetupProgress" After="ProgressDlg" />
         <Show Dialog="SetupComplete" OnExit="success" />
       </InstallUISequence>
-      <AdminUISequence>
-        <Show Dialog="SetupComplete" OnExit="success" />
-      </AdminUISequence>
+      <AdminUISequence><Show Dialog="SetupComplete" OnExit="success" /></AdminUISequence>
     </UI>
     <UIRef Id="WixUI_Common" />
   </Fragment>

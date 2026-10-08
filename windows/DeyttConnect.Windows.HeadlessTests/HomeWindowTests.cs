@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using DeyttConnect.Protocol;
@@ -12,6 +13,7 @@ using DeyttConnect.Windows;
 using DeyttConnect.Windows.Views;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.Controls;
+using System.Reflection;
 using Xunit;
 
 namespace DeyttConnect.Windows.HeadlessTests;
@@ -332,7 +334,7 @@ public sealed class HomeWindowTests
             Assert.Empty(Descendants(mapPanel).OfType<Button>());
             Assert.DoesNotContain(Descendants(page).OfType<TextBlock>(), text =>
                 text.Text is "карта сети" or "NETWORK MAP" or "1:1");
-            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "пинг");
+            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "отклик");
             Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "скорость");
         }
         finally
@@ -342,7 +344,7 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaFact]
-    public void Expanded_route_country_shows_flags_and_readable_ping_and_speed_fields()
+    public void Expanded_route_country_shows_flags_and_readable_response_and_speed_fields()
     {
         var window = new MainWindow(Fixture(tab: "routes", signedIn: true, routeProbeInProgress: true))
         {
@@ -363,7 +365,7 @@ public sealed class HomeWindowTests
             var expanded = Required<Grid>(window, "PageHost");
             Assert.Contains(Descendants(expanded).OfType<Border>(), flag =>
                 AutomationProperties.GetName(flag) == "флаг нидерландов");
-            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "пинг");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "отклик");
             Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "скорость");
             Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— ms");
             Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— mbps");
@@ -376,7 +378,7 @@ public sealed class HomeWindowTests
             Assert.All(routeOptions, option =>
             {
                 Assert.True(option.Bounds.Width > 300);
-                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "пинг");
+                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "отклик");
                 Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "скорость");
             });
 
@@ -387,8 +389,8 @@ public sealed class HomeWindowTests
             var pendingOption = Descendants(Required<Grid>(window, "PageHost")).OfType<Button>()
                 .Single(button => AutomationProperties.GetAutomationId(button) == "RouteOption-nl-vless");
             var pendingTexts = Descendants(pendingOption).OfType<TextBlock>().ToArray();
-            var pingLabel = Assert.Single(pendingTexts, text => text.Text == "пинг");
-            var labelLeft = pingLabel.TranslatePoint(new Point(0, 0), pendingOption)?.X;
+            var responseLabel = Assert.Single(pendingTexts, text => text.Text == "отклик");
+            var labelLeft = responseLabel.TranslatePoint(new Point(0, 0), pendingOption)?.X;
             var pendingDots = pendingTexts
                 .Where(text => text.Text is "·" or "··" or "···")
                 .Select(text => (Text: text, Point: text.TranslatePoint(new Point(0, 0), pendingOption)))
@@ -407,6 +409,19 @@ public sealed class HomeWindowTests
         {
             window.Close();
         }
+    }
+
+    [Fact]
+    public void Leftover_provider_adapter_does_not_report_a_stopped_service_as_running()
+    {
+        var runningServices = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        Assert.Null(WindowsExternalVpnDetector.GetRunningServiceForAdapter(
+            "WireGuardManager", runningServices));
+
+        runningServices.Add("WireGuardManager");
+        Assert.Equal("WireGuardManager", WindowsExternalVpnDetector.GetRunningServiceForAdapter(
+            "WireGuardManager", runningServices));
     }
 
     [AvaloniaFact]
@@ -572,6 +587,196 @@ public sealed class HomeWindowTests
         {
             window.Close();
         }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Routes_do_not_repeat_Amnezia_status_card_when_profile_is_available(double width)
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, includeAmneziaRoute: true))
+        {
+            Width = width,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            var pageText = string.Join(" | ", Descendants(page).OfType<TextBlock>().Select(text => text.Text));
+            Assert.Contains("amneziawg", pageText.ToLowerInvariant());
+            Assert.DoesNotContain(Descendants(page).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "AmneziaRefreshProfile");
+            Assert.DoesNotContain("профиль amneziawg доступен в списке маршрутов ниже", pageText.ToLowerInvariant());
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(520d, 480d)]
+    [InlineData(1360d, 820d)]
+    public async Task Information_dialog_uses_compact_acknowledgement_and_restores_focus(double width, double height)
+    {
+        var window = new MainWindow(Fixture()) { Width = width, Height = height };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var homeButton = Required<Button>(window, "BottomHomeNav");
+            Assert.True(homeButton.Focus());
+
+            var showInfo = typeof(MainWindow).GetMethod("ShowInfoInShellAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(showInfo);
+            var dialogTask = showInfo!.Invoke(window,
+                ["Текущее подключение", "Проверка подключения завершена. Диагностика показывает доступность выбранного маршрута, но не гарантирует доступ к каждому сайту. Текущий внешний IP: 203.0.113.8. Если соединение не работает, выберите другой маршрут и повторите проверку.", null]) as Task
+                ?? throw new InvalidOperationException("ShowInfoInShellAsync did not return a task.");
+            Dispatcher.UIThread.RunJobs();
+
+            var overlay = Required<Grid>(window, "ModalOverlayHost");
+            var closeAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "DialogCloseAction");
+            var card = Assert.Single(Descendants(overlay).OfType<Border>(), border =>
+                border.Child is StackPanel);
+            Assert.InRange(card.Bounds.Width, 300, 456);
+            Assert.Equal(44, closeAction.Bounds.Height);
+            Assert.True(closeAction.IsFocused);
+            Assert.Contains(Descendants(overlay).OfType<TextBlock>(), text =>
+                text.Text?.Contains("не гарантирует доступ к каждому сайту", StringComparison.OrdinalIgnoreCase) == true &&
+                text.TextWrapping == Avalonia.Media.TextWrapping.Wrap);
+
+            SaveSnapshotIfRequested(window, $"connection-info-{(int)width}.png");
+
+            closeAction.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await dialogTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+            Assert.False(overlay.IsVisible);
+            Assert.True(homeButton.IsFocused);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(520d, false)]
+    [InlineData(1360d, true)]
+    public async Task Confirmation_dialog_preserves_cancel_and_confirm_results(double width, bool accept)
+    {
+        var window = new MainWindow(Fixture()) { Width = width, Height = 540 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var showConfirm = typeof(MainWindow).GetMethod("ConfirmInShellAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(showConfirm);
+            var dialogTask = showConfirm!.Invoke(window,
+                ["Показывать ваш примерный регион?", "Точка определяется по публичному IP и не влияет на выбор маршрута.",
+                    "Показывать на карте", "не сейчас"]) as Task<bool>
+                ?? throw new InvalidOperationException("ConfirmInShellAsync did not return a task.");
+            Dispatcher.UIThread.RunJobs();
+
+            var overlay = Required<Grid>(window, "ModalOverlayHost");
+            var cancelAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "DialogCancelAction");
+            var confirmAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "DialogConfirmAction");
+            Assert.True(cancelAction.IsFocused);
+            (accept ? confirmAction : cancelAction).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(accept, await dialogTask.WaitAsync(TimeSpan.FromSeconds(3)));
+            Assert.False(overlay.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(520d, 480d)]
+    [InlineData(1360d, 820d)]
+    public async Task Active_vpn_notice_uses_responsive_actions_and_scrollable_copy(double width, double height)
+    {
+        var window = new MainWindow(Fixture()) { Width = width, Height = height };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var detected = new[]
+            {
+                new WindowsExternalVpnObservation("WireGuard", ["VPN interface detected"], ["WireGuardManager"]),
+            };
+            var layout = window.BuildActiveVpnNoticeContent(detected, includeStopButton: true,
+                includeWindowsSettingsButton: true);
+            var showContent = typeof(MainWindow).GetMethod("ShowContentInShellAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(showContent);
+            var dialogTask = showContent!.Invoke(window,
+                ["Активные VPN-службы", layout.Content, 560d, null, layout.Actions]) as Task<object?>
+                ?? throw new InvalidOperationException("ShowContentInShellAsync did not return a task.");
+            Dispatcher.UIThread.RunJobs();
+
+            var overlay = Required<Grid>(window, "ModalOverlayHost");
+            var card = Assert.Single(Descendants(overlay).OfType<Border>(), border =>
+                border.Child is StackPanel);
+            var closeAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "DialogCloseButton");
+            var stopAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "ExternalVpnStop");
+            var settingsAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "ExternalVpnSettings");
+            var body = Assert.Single(Descendants(overlay).OfType<ScrollViewer>());
+            Assert.InRange(card.Bounds.Width, 300, 560);
+            Assert.Equal(44, stopAction.Bounds.Height);
+            Assert.Equal(44, settingsAction.Bounds.Height);
+            Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                body.HorizontalScrollBarVisibility);
+            Assert.Contains(Descendants(overlay).OfType<TextBlock>(), text =>
+                text.Text?.Contains("VPN-службы или сетевые туннели", StringComparison.OrdinalIgnoreCase) == true);
+            Assert.True(layout.ContinueButton.IsEnabled);
+            Assert.True(layout.ContinueButton.IsEffectivelyVisible);
+            Assert.True(stopAction.IsEffectivelyVisible);
+            Assert.True(settingsAction.IsEffectivelyVisible);
+            if (height < 600)
+                Assert.True(body.MaxHeight <= 200, $"Dialog body did not reserve footer space: {body.MaxHeight}.");
+            Assert.True(closeAction.IsFocused);
+            SaveSnapshotIfRequested(window, $"active-vpn-notice-{(int)width}.png");
+
+            closeAction.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await dialogTask.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.False(overlay.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static void SaveSnapshotIfRequested(Window window, string fileName)
+    {
+        if (Environment.GetEnvironmentVariable("DEYTT_UI_SNAPSHOT_DIR") is not { Length: > 0 } snapshotDirectory)
+            return;
+
+        Directory.CreateDirectory(snapshotDirectory);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
+        Dispatcher.UIThread.RunJobs();
+        using var bitmap = window.GetLastRenderedFrame()
+            ?? throw new InvalidOperationException("The headless window did not render a frame.");
+        var snapshotPath = Path.Combine(snapshotDirectory, fileName);
+        using (var file = File.Create(snapshotPath))
+            bitmap.Save(file, PngBitmapEncoderOptions.Default);
+        Assert.True(new FileInfo(snapshotPath).Length > 0, "The headless snapshot was empty.");
     }
 
     [AvaloniaTheory]
@@ -763,7 +968,7 @@ public sealed class HomeWindowTests
         bool routeProbeInProgress = false, TelegramSubscription? profileSubscription = null,
         string selectedRoute = "nl-hysteria2",
         string state = "disconnected", string? expandedRouteCountry = null,
-        bool amneziaActive = false, int amneziaClients = 0)
+        bool amneziaActive = false, int amneziaClients = 0, bool includeAmneziaRoute = false)
     {
         var routes = new List<WindowsRoute>
         {
@@ -782,6 +987,9 @@ public sealed class HomeWindowTests
             new WindowsRoute("fi-trojan", "qa:fi-trojan", "FI", "Финляндия", "🇫🇮", "TROJAN", "Trojan"),
             new WindowsRoute("fi-hysteria2", "qa:fi-hysteria2", "FI", "Финляндия", "🇫🇮", "HYSTERIA2", "Hysteria 2"),
         };
+        if (includeAmneziaRoute)
+            routes.Add(new WindowsRoute("de-awg31", "qa:de-awg31", "DE", "Германия", "🇩🇪", "AWG31",
+                "AmneziaWG 3.1"));
         var account = signedIn
             ? new TelegramAccount("qa_fixture", "QA Demo", false,
                 profileSubscription ?? ProfileSubscription(trafficLimit: null, trafficUsed: null, trafficTotal: null))

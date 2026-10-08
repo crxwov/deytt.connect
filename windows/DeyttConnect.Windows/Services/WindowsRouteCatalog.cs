@@ -104,7 +104,7 @@ public static class WindowsRouteCatalog
 
         foreach (var awgProfile in (awgProfiles ?? []).Take(32))
         {
-            if (awgProfile.Generation is not ("15" or "31") ||
+            if (awgProfile.Generation != "31" ||
                 awgProfile.RouteId != $"awg{awgProfile.Generation}" &&
                 !Regex.IsMatch(awgProfile.RouteId,
                     $"^awg{awgProfile.Generation}:[A-Za-z0-9_-]{{1,172}}$", RegexOptions.CultureInvariant))
@@ -128,7 +128,7 @@ public static class WindowsRouteCatalog
                 country.Name ?? "Регион не указан",
                 country.Flag ?? "◉",
                 "AWG" + awgProfile.Generation,
-                "amneziawg " + (awgProfile.Generation == "31" ? "3.1" : "1.5"),
+                "amneziawg 3.1",
                 awgProfile.RouteId,
                 awgProfile.Label));
         }

@@ -24,7 +24,8 @@ foreach ($name in @('DeyttConnect.Windows.dll', 'DeyttConnect.Windows.Service.dl
     }
 }
 & "$PSScriptRoot/Get-WebView2Bootstrapper.ps1" -Destination (Join-Path $PackageStageDir 'Prerequisites/MicrosoftEdgeWebview2Setup.exe')
-& $Dotnet build "$PSScriptRoot/DEYTTConnect.Windows.Installer.wixproj" -c Release "-p:ProductVersion=$ProductVersion" "-p:PackageStageDir=$PackageStageDir" "-p:InstallerBuildRoot=$BuildRoot" --nologo
+$productCode = & "$PSScriptRoot/Get-ProductCode.ps1" -ProductVersion $ProductVersion
+& $Dotnet build "$PSScriptRoot/DEYTTConnect.Windows.Installer.wixproj" -c Release "-p:ProductVersion=$ProductVersion" "-p:SetupProductCode=$productCode" "-p:PackageStageDir=$PackageStageDir" "-p:InstallerBuildRoot=$BuildRoot" -m:1 -nr:false --disable-build-servers --nologo
 if ($LASTEXITCODE -ne 0) { throw 'MSI build failed.' }
 $msi = Join-Path $BuildRoot 'output/DEYTTConnect.Windows.Installer.msi'
 & "$PSScriptRoot/Verify-InstallerRecovery.ps1" -MsiPath $msi

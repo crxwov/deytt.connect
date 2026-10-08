@@ -256,13 +256,13 @@ public partial class MainWindow
 
         var countryRoutes = _routes.Where(route =>
                 route.CountryCode == countryCode &&
-                route.Protocol is "VLESS" or "TROJAN" or "HYSTERIA2" or "AWG15" or "AWG31")
+                route.Protocol is "VLESS" or "TROJAN" or "HYSTERIA2" or "AWG31")
             .OrderBy(route => route.Protocol switch
             {
                 "VLESS" => 0,
                 "TROJAN" => 1,
                 "HYSTERIA2" => 2,
-                "AWG15" or "AWG31" => 3,
+                "AWG31" => 3,
                 _ => 3,
             })
             .ToArray();
@@ -313,7 +313,7 @@ public partial class MainWindow
                 "RU-DE" => Copy("Двойной маршрут · Санкт-Петербург → Франкфурт", "Double route · Saint Petersburg → Frankfurt"),
                 "VLESS" or "TROJAN" => Copy("WebSocket + TLS", "WebSocket + TLS"),
                 "HYSTERIA2" => Copy("Быстрый QUIC-маршрут", "Fast QUIC route"),
-                "AWG15" or "AWG31" => route.ProfileName ?? AwgProtocolTitle(route.Protocol),
+                "AWG31" => route.ProfileName ?? AwgProtocolTitle(route.Protocol),
                 _ => route.ProfileName ?? route.ProtocolName,
             };
             var selected = route.Id == _selectedRoute;

@@ -17,5 +17,6 @@ internal static class TestAppBuilder
 {
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<TestApplication>()
         .ConfigureFonts(fontManager => fontManager.AddFontCollection(new DeyttConnect.Windows.DeyttFontCollection()))
-        .UseHeadless(new AvaloniaHeadlessPlatformOptions());
+        .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
+        .UseSkia();
 }

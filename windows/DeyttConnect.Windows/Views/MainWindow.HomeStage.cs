@@ -252,7 +252,7 @@ public partial class MainWindow
     {
         "VLESS" or "TROJAN" => "WebSocket · TLS",
         "HYSTERIA2" => Copy("QUIC · UDP", "QUIC · UDP"),
-        "AWG15" or "AWG31" => AwgProtocolTitle(route?.Protocol),
+        "AWG31" => AwgProtocolTitle(route?.Protocol),
         _ => route?.ProtocolName ?? Copy("Автоматически", "Automatic"),
     };
 
@@ -301,7 +301,6 @@ public partial class MainWindow
         "VLESS" => "./vless+ws",
         "TROJAN" => "./trojan+ws",
         "HYSTERIA2" => "./hysteria2",
-        "AWG15" => "./amnezia1.5",
         "AWG31" => "./amnezia3.1",
         "CHAIN" => "./lte ru+de",
         _ => "./auto",
@@ -390,8 +389,15 @@ public partial class MainWindow
             ColumnDefinitions = new ColumnDefinitions("*,*"),
             ColumnSpacing = 16,
         };
-        measurements.Children.Add(HomeMeasurement(Copy("ПИНГ", "PING"), latency,
-            routeProbeActive && result?.LatencyMilliseconds is null));
+        var latencyMeasurement = HomeMeasurement(Copy("ОТКЛИК", "RESPONSE"), latency,
+            routeProbeActive && result?.LatencyMilliseconds is null);
+        var latencyHelpText = Copy(
+            "Время до первого ответа по HTTPS через выбранный маршрут. Это не ICMP-пинг.",
+            "Time to the first HTTPS response through the selected route. This is not an ICMP ping.");
+        var latencyMeasurementLabel = latencyMeasurement.Children.OfType<TextBlock>().First();
+        ToolTip.SetTip(latencyMeasurementLabel, latencyHelpText);
+        AutomationProperties.SetHelpText(latencyMeasurementLabel, latencyHelpText);
+        measurements.Children.Add(latencyMeasurement);
         var speedMeasurement = HomeMeasurement(Copy("СКОРОСТЬ", "SPEED"), speed,
             routeProbeActive && result?.BytesPerSecond is not > 0);
         Grid.SetColumn(speedMeasurement, 1);

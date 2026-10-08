@@ -584,7 +584,7 @@ public partial class MainWindow : Window
 
         if (route.CountryCode == "IT")
         {
-            if ((route.Protocol is "AWG15" or "AWG31") &&
+            if ((route.Protocol is "AWG31") &&
                 !string.IsNullOrWhiteSpace(route.ProfileName))
                 return route.ProfileName.Trim();
 
@@ -844,12 +844,10 @@ public partial class MainWindow : Window
         var hasAmneziaRoute = _routes.Any(route => IsAwgProtocol(route.Protocol));
         var hasSession = _sessionToken is not null;
         var hasActiveSubscription = _account?.Subscription?.Active == true;
+        if (!hasAmneziaRoute)
         {
             var keys = _keysSnapshot;
-            var message = hasAmneziaRoute
-                ? Copy("Профиль AmneziaWG доступен в списке маршрутов ниже.",
-                    "The AmneziaWG profile is available in the route list below.")
-                : _profileRefreshInProgress
+            var message = _profileRefreshInProgress
                     ? Copy("Проверяю доступность профилей AmneziaWG…", "Checking AmneziaWG profile availability…")
                 : !hasSession
                     ? Copy("Войдите через Telegram, чтобы получить профиль AmneziaWG.",
@@ -1088,7 +1086,7 @@ public partial class MainWindow : Window
         "VLESS" => 0,
         "TROJAN" => 1,
         "HYSTERIA2" => 2,
-        "AWG15" or "AWG31" => 3,
+        "AWG31" => 3,
         _ => 4,
     };
 
@@ -1165,7 +1163,7 @@ public partial class MainWindow : Window
             "VLESS" => DeyttTheme.Sky,
             "TROJAN" => DeyttTheme.Blue,
             "HYSTERIA2" => DeyttTheme.Mint,
-            "AWG15" or "AWG31" => DeyttTheme.Amber,
+            "AWG31" => DeyttTheme.Amber,
             _ => DeyttTheme.Muted,
         };
         var protocolMark = new Border
@@ -1189,7 +1187,7 @@ public partial class MainWindow : Window
         {
             "VLESS" or "TROJAN" => "WebSocket + TLS",
             "HYSTERIA2" => "QUIC · UDP",
-            "AWG15" or "AWG31" => AwgProtocolTitle(route.Protocol),
+            "AWG31" => AwgProtocolTitle(route.Protocol),
             _ => route.ProtocolName,
         };
         labels.Children.Add(DeyttTheme.TextBlock(detail, 10, DeyttTheme.Muted));
@@ -1229,7 +1227,7 @@ public partial class MainWindow : Window
         Grid.SetColumn(firstDivider, 2);
         body.Children.Add(firstDivider);
 
-        var latencyMetric = RouteMeasurement(Copy("ПИНГ", "PING"), latencyText,
+        var latencyMetric = RouteMeasurement(Copy("ОТКЛИК", "RESPONSE"), latencyText,
             quality.Grades.GetValueOrDefault(route.Tag) switch
             {
                 RouteQualityGrade.Good => DeyttTheme.Mint,
@@ -1237,6 +1235,12 @@ public partial class MainWindow : Window
                 RouteQualityGrade.Poor => DeyttTheme.Coral,
                 _ => DeyttTheme.Text,
             }, measured?.Stage is "latency" or "retry", _reduceMotion);
+        var latencyHelpText = Copy(
+            "Время до первого ответа по HTTPS через выбранный маршрут. Это не ICMP-пинг.",
+            "Time to the first HTTPS response through the selected route. This is not an ICMP ping.");
+        var latencyMetricLabel = latencyMetric.Children.OfType<TextBlock>().First();
+        ToolTip.SetTip(latencyMetricLabel, latencyHelpText);
+        AutomationProperties.SetHelpText(latencyMetricLabel, latencyHelpText);
         Grid.SetColumn(latencyMetric, 3);
         body.Children.Add(latencyMetric);
 
@@ -1998,11 +2002,10 @@ public partial class MainWindow : Window
             ? _keysSnapshot?.AwgProfiles.FirstOrDefault(profile => profile.RouteId == profileId)?.Config
             : null;
 
-    private static bool IsAwgProtocol(string? protocol) => protocol is "AWG15" or "AWG31";
+    private static bool IsAwgProtocol(string? protocol) => protocol is "AWG31";
 
     private static string AwgProtocolTitle(string? protocol) => protocol switch
     {
-        "AWG15" => "amneziawg 1.5",
         "AWG31" => "amneziawg 3.1",
         _ => "amneziawg",
     };
@@ -2562,6 +2565,8 @@ public partial class MainWindow : Window
             else if (result.State == "probe_cancelled")
             {
                 RestoreProbeResults(routeTags, previousRouteResults);
+                if (result.ProbeResults is { } partial)
+                    ApplyProbeProgress(partial.Where(item => item.LatencyMilliseconds is not null || item.BytesPerSecond is not null).ToArray(), routeTags);
             }
             else
             {

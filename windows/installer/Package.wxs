@@ -1,5 +1,6 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Id="DEYTT.Connect.Windows"
+           ProductCode="$(var.SetupProductCode)"
            Name="deytt./connect"
            Manufacturer="deytt."
            Language="1049"
@@ -29,6 +30,10 @@
 
     <Property Id="CONNECT_SERVICE_COMPATIBLE" Secure="yes" />
     <Property Id="WEBVIEW2_PRESENT" Secure="yes" />
+    <Property Id="SETUP_MODE" Secure="yes" />
+    <Property Id="SETUP_INSTALLED_VERSION" Secure="yes" />
+    <Property Id="SETUP_COMMIT_LABEL" Value="&amp;Установить" />
+    <Binary Id="SetupSidebar" SourceFile="$(sys.SOURCEFILEDIR)Assets/Sidebar.bmp" />
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="ARPCOMMENTS" Value="Приложение deytt./connect для VPN." />
     <Binary Id="SetupActions" SourceFile="$(var.DeyttConnect.SetupActions.TargetDir)DeyttConnect.SetupActions.CA.dll" />

@@ -14,8 +14,8 @@ The Russian wizard repairs or removes an existing installation and recovers
 the known DEYTTConnectVpn service left by older Connect installers. It checks
 the service executable before replacing it, preserves the allowed Windows
 account across upgrades, and rejects a service belonging to another program.
-The completion screen offers an optional desktop shortcut and opens the app
-through the signed-in Windows shell after installation. It never starts with
+The completion screen offers independent desktop-shortcut and launch checkboxes.
+Launch occurs only when selected, through the signed-in Windows shell. It never starts with
 the elevated installation token. Uninstall stops and removes the managed VPN
 service. MSI-owned files live in Program Files; account data under
 `%LOCALAPPDATA%` is retained for later reinstall.
@@ -45,3 +45,13 @@ and service-classification checks, and prints the SHA-256 of the MSI.
 service recovery, first install, repair, upgrade, downgrade rejection,
 uninstall, and fresh reinstall. No test command silently installs the MSI.
 
+ProductCode is stable per numeric release version. Reopening the same version
+enters maintenance and offers removal; older installed releases enter the update
+flow. Payload changes must increment the release version. Never reuse a version
+for a different public release. Get-ProductCode.ps1 is the identity implementation
+used by both PowerShell and Bash packaging. MajorUpgrade preserves the existing
+UpgradeCode and blocks downgrades.
+
+All six custom wizard dialogs share a 224-dialog-unit navy-to-teal gradient panel and
+the single-line `./connect` wordmark. The panel contains no globe or decorative image.
+Text, buttons, checkboxes, and progress indicators use native MSI controls.

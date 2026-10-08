@@ -83,7 +83,7 @@ internal static partial class WindowsExternalVpnDetector
 
             var name = provider?.Name ?? "Другой VPN-туннель";
             Add(name, $"Сетевой интерфейс: {adapter.Name}",
-                provider?.ServiceName);
+                GetRunningServiceForAdapter(provider?.ServiceName, runningServices));
         }
 
         return results
@@ -104,6 +104,13 @@ internal static partial class WindowsExternalVpnDetector
             results[name] = entry;
         }
     }
+
+    internal static string? GetRunningServiceForAdapter(
+        string? providerServiceName,
+        IReadOnlySet<string> runningServices) =>
+        providerServiceName is not null && runningServices.Contains(providerServiceName)
+            ? providerServiceName
+            : null;
 
     public static async Task<WindowsExternalVpnStopResult> StopDetectedServicesAsync(
         IEnumerable<string> serviceNames,

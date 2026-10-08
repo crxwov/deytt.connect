@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Net.NetworkInformation;
+using System.Text.Json.Nodes;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 using System.Security.AccessControl;
@@ -24,6 +25,7 @@ internal sealed class EngineController
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly SemaphoreSlim _healthRecheck = new(0, 1);
     private Process? _engine;
+    private EngineProcessLifetime? _engineLifetime;
     private CancellationTokenSource? _verification;
     private CancellationTokenSource? _probeCancellation;
     private TunnelHealthMonitorLifetime? _healthMonitor;
@@ -33,6 +35,10 @@ internal sealed class EngineController
     private readonly object _probeProgressLock = new();
     private readonly Dictionary<string, ServiceProbeResult> _probeProgress = new(StringComparer.Ordinal);
     private int _consecutiveHealthFailures;
+
+    internal sealed record AwgResolution(string Profile, IReadOnlySet<string> FailedEndpointTags);
+    internal sealed record ProbeAwgResolution(string Profile, IReadOnlyList<ProbeRouteEndpoint> Endpoints,
+        IReadOnlyList<ServiceProbeResult> FailedResults);
 
     public ServiceSnapshot Snapshot => Volatile.Read(ref _snapshot);
 
@@ -60,6 +66,17 @@ internal sealed class EngineController
             var upstreamInterface = FindActiveHappTunnel();
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
                 upstreamInterface);
+            if (awgConfig is not null)
+            {
+                var resolved = await ResolveAwgPeerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync,
+                    cancellationToken).ConfigureAwait(false);
+                runtimeProfile = resolved.Profile;
+                if (resolved.FailedEndpointTags.Count != 0)
+                {
+                    StopCore();
+                    return SetError("Не удалось разрешить адрес узла AmneziaWG. Проверьте соединение и повторите.");
+                }
+            }
             var tunAddresses = TunnelProfileBuilder.GetTunAddresses(runtimeProfile);
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
@@ -81,6 +98,11 @@ internal sealed class EngineController
                     StopCore();
                     return SetError("Проверка профиля VPN не завершилась вовремя.");
                 }
+                catch (OperationCanceledException)
+                {
+                    TryKill(check);
+                    throw;
+                }
                 if (check.ExitCode != 0)
                 {
                     var diagnostic = await checkError.ConfigureAwait(false);
@@ -90,10 +112,8 @@ internal sealed class EngineController
             }
 
             var runtimeDiagnostic = new EngineRuntimeDiagnostic();
-            _engine = StartEngine(enginePath, "run", _profilePath, out _,
-                runtimeDiagnostic: runtimeDiagnostic);
+            var process = StartOwnedEngine(enginePath, _profilePath, runtimeDiagnostic);
             _routeTag = routeTag;
-            var process = _engine;
             _ = MonitorEngineAsync(process, runtimeDiagnostic);
 
             _verification?.Cancel();
@@ -131,25 +151,23 @@ internal sealed class EngineController
         CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var probeRequestInitialized = false;
+        var probeProfileWritten = false;
         try
         {
             if (Snapshot.State is "connected" or "starting" or "checking" ||
                 _engine is { HasExited: false })
                 return ProbeError("Сначала отключите VPN для проверки маршрутов.");
-            var awgProfilesBytes = awgProfiles.Sum(item => System.Text.Encoding.UTF8.GetByteCount(item.Value));
-            if (System.Text.Encoding.UTF8.GetByteCount(profile) is <= 0 or > MaximumProfileBytes ||
-                routeTags.Count is < 1 or > WindowsPipeProtocol.MaximumProbeRouteCount ||
-                awgProfiles.Count > WindowsPipeProtocol.MaximumAwgProfiles || method is not ("HEAD" or "GET") ||
-                awgProfilesBytes > MaximumAwgProfilesTotalBytes ||
-                awgProfiles.Any(item => !routeTags.Contains(item.Key, StringComparer.Ordinal) ||
-                                        System.Text.Encoding.UTF8.GetByteCount(item.Value) > MaximumAwgProfileBytes))
+            if (!IsProbeRequestValid(profile, routeTags, awgProfiles, method))
                 return ProbeError("Список маршрутов не прошёл проверку.");
 
             using var probeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             Interlocked.Exchange(ref _probeCancellation, probeCancellation)?.Cancel();
+            probeRequestInitialized = true;
             var probeToken = probeCancellation.Token;
 
             var endpoints = CreateProbeEndpoints(routeTags, awgProfiles);
+            var requestedEndpoints = endpoints;
             lock (_probeProgressLock)
             {
                 _probeProgress.Clear();
@@ -159,7 +177,20 @@ internal sealed class EngineController
             }
             var probeProfile = TunnelProfileBuilder.BuildProbeProfile(profile, endpoints,
                 FindActiveHappTunnel());
+            var resolvedProbe = await ResolveProbeAwgHostsAsync(probeProfile, endpoints,
+                ResolveDnsAddressesAsync, probeToken).ConfigureAwait(false);
+            endpoints = resolvedProbe.Endpoints;
+            foreach (var failed in resolvedProbe.FailedResults)
+                PublishProbeProgress(failed);
+            if (endpoints.Count == 0)
+            {
+                var noRoutes = SnapshotProbeProgress();
+                return new ServiceSnapshot("probe_complete", "Проверка маршрутов завершена.",
+                    ProbeResults: noRoutes.ProbeResults);
+            }
+            probeProfile = resolvedProbe.Profile;
             _profilePath = WritePrivateProfile(probeProfile);
+            probeProfileWritten = true;
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return ProbeError("Не найдено ядро VPN. Переустановите приложение.");
@@ -178,6 +209,11 @@ internal sealed class EngineController
                     TryKill(check);
                     return ProbeError("Проверка профиля диагностики не завершилась вовремя.");
                 }
+                catch (OperationCanceledException)
+                {
+                    TryKill(check);
+                    throw;
+                }
                 if (check.ExitCode != 0)
                 {
                     var diagnostic = await checkError.ConfigureAwait(false);
@@ -185,18 +221,73 @@ internal sealed class EngineController
                 }
             }
 
-            _engine = StartEngine(enginePath, "run", _profilePath, out _);
-            var process = _engine;
-            await Task.Delay(TimeSpan.FromMilliseconds(350), probeToken).ConfigureAwait(false);
-            if (process.HasExited)
-                return ProbeError("Ядро VPN остановилось до начала диагностики.");
-
-            var results = await MeasureRoutesAsync(endpoints, method, token, probeToken, PublishProbeProgress)
-                .ConfigureAwait(false);
+            var runtimeDiagnostic = new EngineRuntimeDiagnostic();
+            var process = StartOwnedEngine(enginePath, _profilePath, runtimeDiagnostic);
+            using var measurementCancellation = CancellationTokenSource.CreateLinkedTokenSource(probeToken);
+            using var monitorCancellation = new CancellationTokenSource();
+            var engineMonitor = WatchProbeEngineAsync(process, measurementCancellation, monitorCancellation.Token);
+            IReadOnlyList<ServiceProbeResult> results;
+            try
+            {
+                await ProbeListenerReadiness.WaitAsync(endpoints.Select(endpoint => endpoint.Port).ToArray(),
+                    () => process.HasExited, measurementCancellation.Token).ConfigureAwait(false);
+                var failures = new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+                async Task<long?> Measure(ProbeRouteEndpoint endpoint, string _, CancellationToken ct,
+                    Action<int, long?> report)
+                {
+                    using var client = new HttpClient(RouteProxyTransport.CreateHandler(endpoint)) { Timeout = Timeout.InfiniteTimeSpan };
+                    long? lastSuccessfulSample = null;
+                    var result = await RouteLatencyProbe.MeasureAsync(client, ct,
+                        observation =>
+                        {
+                            if (observation.LatencyMilliseconds is { } value)
+                                lastSuccessfulSample = value;
+                            report(observation.Attempt, lastSuccessfulSample);
+                        }).ConfigureAwait(false);
+                    if (result.Failure is { } failure)
+                        failures[endpoint.RouteTag] = failure;
+                    return result.LatencyMilliseconds;
+                }
+                results = await MeasureRoutesAsync(endpoints, method, token, measurementCancellation.Token,
+                    PublishProbeProgress, Measure, MeasureDownloadAsync,
+                    endpoint => failures.GetValueOrDefault(endpoint.RouteTag)).ConfigureAwait(false);
+            }
+            catch (TimeoutException)
+            {
+                return ProbeError("Ядро VPN не открыло локальные порты диагностики вовремя.");
+            }
+            catch (OperationCanceledException) when (!probeToken.IsCancellationRequested && process.HasExited)
+            {
+                return ProbeError(FormatProbeStartupFailure(process.ExitCode, runtimeDiagnostic.LatestError ?? ""));
+            }
+            catch (InvalidOperationException) when (process.HasExited)
+            {
+                return ProbeError(FormatProbeStartupFailure(process.ExitCode, runtimeDiagnostic.LatestError ?? ""));
+            }
+            finally
+            {
+                monitorCancellation.Cancel();
+                await engineMonitor.ConfigureAwait(false);
+            }
+            if (process.HasExited && !probeToken.IsCancellationRequested)
+            {
+                var failure = runtimeDiagnostic.LatestError is { } reason
+                    ? $"Ядро VPN остановилось: {reason}"
+                    : "Ядро VPN остановилось во время диагностики.";
+                results = results.Select(result => result.Stage == "complete" ? result : result with
+                    { Error = failure, Stage = "error", BytesPerSecond = null }).ToArray();
+                foreach (var result in results)
+                    PublishProbeProgress(result);
+            }
+            var allResults = OrderProbeResults(requestedEndpoints,
+                results.Concat(resolvedProbe.FailedResults).ToArray());
             lock (_probeProgressLock)
                 _probeProgress.Clear();
+            if (probeToken.IsCancellationRequested)
+                return new ServiceSnapshot("probe_cancelled", "Проверка маршрутов остановлена.",
+                    ProbeResults: allResults);
             return new ServiceSnapshot("probe_complete", "Проверка маршрутов завершена.",
-                ProbeResults: results);
+                ProbeResults: allResults);
         }
         catch (InvalidDataException error)
         {
@@ -208,9 +299,8 @@ internal sealed class EngineController
         }
         catch (OperationCanceledException)
         {
-            lock (_probeProgressLock)
-                _probeProgress.Clear();
-            return new ServiceSnapshot("probe_cancelled", "Проверка маршрутов остановлена.", ProbeResults: []);
+            return new ServiceSnapshot("probe_cancelled", "Проверка маршрутов остановлена.",
+                ProbeResults: SnapshotProbeProgress().ProbeResults);
         }
         catch
         {
@@ -218,14 +308,54 @@ internal sealed class EngineController
         }
         finally
         {
-            lock (_probeProgressLock)
-                _probeProgress.Clear();
-            Interlocked.Exchange(ref _probeCancellation, null);
-            StopCore();
-            SetSnapshot(new ServiceSnapshot("disconnected", "VPN выключен"));
+            if (probeRequestInitialized)
+            {
+                lock (_probeProgressLock)
+                    _probeProgress.Clear();
+                Interlocked.Exchange(ref _probeCancellation, null);
+            }
+            if (probeProfileWritten)
+            {
+                StopCore();
+                SetSnapshot(new ServiceSnapshot("disconnected", "VPN выключен"));
+            }
             _gate.Release();
         }
     }
+
+    internal static bool IsProbeRequestValid(string profile, IReadOnlyList<string> routeTags,
+        IReadOnlyDictionary<string, string> awgProfiles, string method)
+    {
+        if (awgProfiles.Any(item => item.Value is null || !IsValidAwgProfileId(item.Key)))
+            return false;
+
+        var awgProfilesBytes = awgProfiles.Sum(item => System.Text.Encoding.UTF8.GetByteCount(item.Value));
+        return System.Text.Encoding.UTF8.GetByteCount(profile) is > 0 and <= MaximumProfileBytes &&
+               routeTags.Count is >= 1 and <= WindowsPipeProtocol.MaximumProbeRouteCount &&
+               routeTags.Distinct(StringComparer.Ordinal).Count() == routeTags.Count &&
+               routeTags.All(IsValidProbeRouteTag) &&
+               awgProfiles.Count <= WindowsPipeProtocol.MaximumAwgProfiles && (method is "HEAD" or "GET") &&
+               awgProfilesBytes <= MaximumAwgProfilesTotalBytes &&
+               awgProfiles.All(item => System.Text.Encoding.UTF8.GetByteCount(item.Value) <= MaximumAwgProfileBytes);
+    }
+
+    private static bool IsValidAwgProfileId(string routeId)
+    {
+        var prefix = routeId.StartsWith("awg15:", StringComparison.Ordinal) ? "awg15:" :
+            routeId.StartsWith("awg31:", StringComparison.Ordinal) ? "awg31:" : null;
+        if (routeId is "awg15" or "awg31")
+            return true;
+        if (prefix is null)
+            return false;
+
+        var id = routeId[prefix.Length..];
+        return id.Length is >= 1 and <= 172 && id.All(character =>
+            char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+    }
+
+    private static bool IsValidProbeRouteTag(string? routeTag) =>
+        routeTag is { Length: > 0 and <= 256 } && routeTag.All(character =>
+            char.IsAsciiLetterOrDigit(character) || character is ':' or '.' or '_' or '-');
 
     public ServiceSnapshot CancelProbe()
     {
@@ -614,8 +744,8 @@ internal sealed class EngineController
         {
             if (!ReferenceEquals(_engine, process))
                 return;
-            StopCore();
             var exitCode = unchecked((uint)process.ExitCode);
+            StopCore();
             var detail = runtimeDiagnostic.LatestError is { } reason
                 ? $"Ядро: {reason}"
                 : "Причина завершения ядра не получена.";
@@ -625,6 +755,192 @@ internal sealed class EngineController
         {
             _gate.Release();
         }
+    }
+
+    internal static async Task<AwgResolution> ResolveAwgPeerHostsAsync(string runtimeProfile,
+        Func<string, CancellationToken, Task<IPAddress[]>> resolve,
+        CancellationToken cancellationToken, TimeSpan? timeout = null)
+    {
+        var root = JsonNode.Parse(runtimeProfile) as JsonObject
+                   ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
+        var awgEndpoints = (root["endpoints"] as JsonArray)?.OfType<JsonObject>()
+            .Where(endpoint => ReadJsonString(endpoint, "type") == "awg").ToArray() ?? [];
+        var hosts = awgEndpoints.SelectMany(endpoint => (endpoint["peers"] as JsonArray)?.OfType<JsonObject>() ?? [])
+            .Select(peer => ReadJsonString(peer, "address"))
+            .Where(address => !string.IsNullOrWhiteSpace(address))
+            .Select(address => address!.Trim('[', ']'))
+            .Where(address => !IPAddress.TryParse(address, out _))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout ?? TimeSpan.FromSeconds(5));
+        using var concurrency = new SemaphoreSlim(8, 8);
+        var resolvedHosts = new System.Collections.Concurrent.ConcurrentDictionary<string, IPAddress>(
+            StringComparer.OrdinalIgnoreCase);
+
+        async Task ResolveOneAsync(string host)
+        {
+            var acquired = false;
+            try
+            {
+                await concurrency.WaitAsync(deadline.Token).ConfigureAwait(false);
+                acquired = true;
+                try
+                {
+                    var addresses = await resolve(host, deadline.Token).WaitAsync(deadline.Token)
+                        .ConfigureAwait(false);
+                    var selected = addresses.Where(address => address.AddressFamily is
+                            AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)
+                        .OrderBy(address => address.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)
+                        .FirstOrDefault();
+                    if (selected is not null)
+                        resolvedHosts[host] = selected;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch
+                {
+                    // A DNS failure is local to this AWG endpoint; other routes may still run.
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                // The shared DNS deadline expired. Unresolved hosts are marked failed below.
+            }
+            finally
+            {
+                if (acquired)
+                    concurrency.Release();
+            }
+        }
+
+        try
+        {
+            await Task.WhenAll(hosts.Select(ResolveOneAsync)).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+
+        var failedTags = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var endpoint in awgEndpoints)
+        {
+            var endpointFailed = false;
+            if (endpoint["peers"] is JsonArray peers)
+            {
+                foreach (var peer in peers.OfType<JsonObject>())
+                {
+                    var addressNode = peer["address"];
+                    if (addressNode is not JsonValue value || !value.TryGetValue<string>(out var rawAddress) ||
+                        string.IsNullOrWhiteSpace(rawAddress))
+                    {
+                        endpointFailed = true;
+                        continue;
+                    }
+                    var address = rawAddress.Trim('[', ']');
+                    if (IPAddress.TryParse(address, out var literal))
+                    {
+                        peer["address"] = literal.ToString();
+                        continue;
+                    }
+                    if (!resolvedHosts.TryGetValue(address, out var resolved))
+                    {
+                        endpointFailed = true;
+                        continue;
+                    }
+                    peer["address"] = resolved.ToString();
+                }
+            }
+            else
+            {
+                endpointFailed = true;
+            }
+
+            if (endpointFailed && ReadJsonString(endpoint, "tag") is { Length: > 0 } tag)
+                failedTags.Add(tag);
+        }
+
+        return new AwgResolution(root.ToJsonString(), failedTags);
+    }
+
+    internal static async Task<ProbeAwgResolution> ResolveProbeAwgHostsAsync(string runtimeProfile,
+        IReadOnlyList<ProbeRouteEndpoint> endpoints,
+        Func<string, CancellationToken, Task<IPAddress[]>> resolve, CancellationToken cancellationToken,
+        TimeSpan? timeout = null)
+    {
+        var resolved = await ResolveAwgPeerHostsAsync(runtimeProfile, resolve, cancellationToken, timeout)
+            .ConfigureAwait(false);
+        if (resolved.FailedEndpointTags.Count == 0)
+            return new ProbeAwgResolution(resolved.Profile, endpoints, []);
+
+        var failed = endpoints.Where(endpoint => endpoint.AwgConfig is not null &&
+            resolved.FailedEndpointTags.Contains(TunnelProfileBuilder.AwgEndpointTag(endpoint.RouteTag)))
+            .ToArray();
+        var viable = endpoints.Except(failed).ToArray();
+        var root = JsonNode.Parse(resolved.Profile) as JsonObject
+                   ?? throw new InvalidDataException("Windows diagnostic profile is invalid.");
+        if (root["endpoints"] is JsonArray endpointNodes)
+        {
+            var failedTags = resolved.FailedEndpointTags;
+            root["endpoints"] = new JsonArray(endpointNodes.OfType<JsonObject>()
+                .Where(node => ReadJsonString(node, "tag") is not { } tag || !failedTags.Contains(tag))
+                .Select(node => (JsonNode?)node.DeepClone()).ToArray());
+        }
+        var failedInboundTags = new HashSet<string>(failed.Select(endpoint => endpoint.InboundTag),
+            StringComparer.Ordinal);
+        if (root["inbounds"] is JsonArray inboundNodes)
+            root["inbounds"] = new JsonArray(inboundNodes.OfType<JsonObject>()
+                .Where(node => ReadJsonString(node, "tag") is not { } tag || !failedInboundTags.Contains(tag))
+                .Select(node => (JsonNode?)node.DeepClone()).ToArray());
+        if (root["route"] is JsonObject route)
+        {
+            if (route["rules"] is JsonArray rules)
+                route["rules"] = new JsonArray(rules.OfType<JsonObject>()
+                    .Where(rule => rule["inbound"] is not JsonArray inboundArray ||
+                        !inboundArray.OfType<JsonValue>().Any(value => value.TryGetValue<string>(out var tag) &&
+                            failedInboundTags.Contains(tag)))
+                    .Select(rule => (JsonNode?)rule.DeepClone()).ToArray());
+            if (viable.Length > 0)
+                route["final"] = viable[0].AwgConfig is null ? viable[0].RouteTag :
+                    TunnelProfileBuilder.AwgEndpointTag(viable[0].RouteTag);
+            else
+                route.Remove("final");
+        }
+        if (viable.Length > 0)
+            TunnelProfileBuilder.PruneProbeDependencies(root, viable);
+
+        var failedResults = failed.Select(endpoint => new ServiceProbeResult(endpoint.RouteTag, null, null,
+            "Не удалось разрешить адрес узла AmneziaWG.", "error")).ToArray();
+        return new ProbeAwgResolution(root.ToJsonString(), viable, failedResults);
+    }
+
+    private static Task<IPAddress[]> ResolveDnsAddressesAsync(string host, CancellationToken cancellationToken) =>
+        Dns.GetHostAddressesAsync(host, cancellationToken);
+
+    private static string? ReadJsonString(JsonObject value, string property) =>
+        value[property] is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var text) ? text : null;
+
+    private static IReadOnlyList<ServiceProbeResult> OrderProbeResults(
+        IReadOnlyList<ProbeRouteEndpoint> requested, IReadOnlyList<ServiceProbeResult> results)
+    {
+        var byTag = results.GroupBy(result => result.RouteTag, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Last(), StringComparer.Ordinal);
+        return requested.Where(endpoint => byTag.ContainsKey(endpoint.RouteTag))
+            .Select(endpoint => byTag[endpoint.RouteTag]).ToArray();
+    }
+
+    private ServiceSnapshot SnapshotProbeProgress()
+    {
+        lock (_probeProgressLock)
+            return new ServiceSnapshot("probe_cancelled", "Проверка маршрутов остановлена.",
+                ProbeResults: _probeProgress.Values.Take(32).ToArray());
     }
 
     private static IReadOnlyList<ProbeRouteEndpoint> CreateProbeEndpoints(IReadOnlyList<string> routeTags,
@@ -648,138 +964,146 @@ internal sealed class EngineController
         return endpoints;
     }
 
-    private static async Task<IReadOnlyList<ServiceProbeResult>> MeasureRoutesAsync(
+    internal static async Task<IReadOnlyList<ServiceProbeResult>> MeasureRoutesAsync(
         IReadOnlyList<ProbeRouteEndpoint> endpoints, string method, string token,
-        CancellationToken cancellationToken, Action<ServiceProbeResult> publish)
+        CancellationToken cancellationToken, Action<ServiceProbeResult> publish,
+        Func<ProbeRouteEndpoint, string, CancellationToken, Action<int, long?>, Task<long?>> measureLatency,
+        Func<ProbeRouteEndpoint, string, CancellationToken, Action<long, long, long?>,
+            Task<DownloadMeasurement>> measureDownload,
+        Func<ProbeRouteEndpoint, string?>? latencyFailure = null)
     {
-        async Task<ServiceProbeResult> MeasureEndpointAsync(ProbeRouteEndpoint endpoint)
+        var canMeasureSpeed = token.Length is >= 32 and <= 256 &&
+                              token.All(character => character is >= '\x21' and <= '\x7e');
+        var latencyResults = new System.Collections.Concurrent.ConcurrentDictionary<string, ServiceProbeResult>(
+            StringComparer.Ordinal);
+        using var latencyConcurrency = new SemaphoreSlim(4, 4);
+
+        async Task MeasureLatencyForEndpointAsync(ProbeRouteEndpoint endpoint)
         {
-            var latency = await MeasureLatencyAsync(endpoint, method, cancellationToken,
-                (attempt, value) => publish(new ServiceProbeResult(endpoint.RouteTag, value, null, null,
-                    attempt == 1 ? "latency" : "retry", attempt))).ConfigureAwait(false);
-            long? speed = null;
-            var error = latency is null ? "Проверочный HTTPS-сервер не ответил." : null;
-            if (latency is not null && token.Length is >= 32 and <= 256 &&
-                token.All(character => character is >= '\x21' and <= '\x7e'))
-            {
-                for (var attempt = 1; attempt <= 2; attempt++)
-                {
-                    publish(new ServiceProbeResult(endpoint.RouteTag, latency, null, null, "waiting_speed", attempt));
-                    try
-                    {
-                        var download = await MeasureDownloadAsync(endpoint, token, cancellationToken,
-                            (received, total, liveSpeed) => publish(new ServiceProbeResult(endpoint.RouteTag,
-                                latency, liveSpeed, null, "download", attempt, received, total)))
-                            .ConfigureAwait(false);
-                        speed = download.BytesPerSecond;
-                        error = download.Error;
-                        if (speed is not null || !download.Retryable)
-                            break;
-                    }
-                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        error = "Сервер скорости не ответил вовремя.";
-                    }
-                    catch (HttpRequestException)
-                    {
-                        error = "HTTPS-запрос скорости не прошёл через маршрут.";
-                    }
-                    catch (IOException)
-                    {
-                        error = "Соединение с сервером скорости прервалось.";
-                    }
-                }
-            }
-            else if (latency is not null)
-            {
-                error = "Скорость недоступна для этой сессии.";
-            }
-
-            var result = new ServiceProbeResult(endpoint.RouteTag, latency, speed, error,
-                error is null ? "complete" : "error", null);
-            publish(result);
-            return result;
-        }
-
-        return await Task.WhenAll(endpoints.Select(MeasureEndpointAsync)).ConfigureAwait(false);
-    }
-
-    private static async Task<long?> MeasureLatencyAsync(ProbeRouteEndpoint endpoint, string method,
-        CancellationToken cancellationToken, Action<int, long?> reportAttempt)
-    {
-        var targets = new[]
-        {
-            (Method: method, Url: "https://cp.cloudflare.com/generate_204"),
-            (Method: "GET", Url: "https://www.cloudflare.com/cdn-cgi/trace"),
-        };
-
-        using var sampleCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        async Task<long?> MeasureTargetAsync((string Method, string Url) target)
-        {
+            long? latency;
+            var acquired = false;
             try
             {
-                using var handler = CreateProxyHandler(endpoint);
-                using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
-                using var request = new HttpRequestMessage(new HttpMethod(target.Method), target.Url);
-                request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
-                request.Headers.ConnectionClose = true;
-                var started = Stopwatch.GetTimestamp();
-                using var response = await client.SendAsync(request,
-                    HttpCompletionOption.ResponseHeadersRead, sampleCancellation.Token).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode)
-                    return null;
-                return (long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+                await latencyConcurrency.WaitAsync(cancellationToken).ConfigureAwait(false);
+                acquired = true;
+                latency = await measureLatency(endpoint, method, cancellationToken,
+                (attempt, value) => publish(new ServiceProbeResult(endpoint.RouteTag, value, null, null,
+                    attempt == 1 ? "latency" : "retry", attempt))).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                throw;
+                var cancelled = new ServiceProbeResult(endpoint.RouteTag, null, null, null, "cancelled");
+                latencyResults[endpoint.RouteTag] = cancelled;
+                publish(cancelled);
+                return;
             }
-            catch (OperationCanceledException)
+            finally
             {
-                return null;
+                if (acquired)
+                    latencyConcurrency.Release();
             }
-            catch (Exception error) when (error is HttpRequestException or IOException)
-            {
-                return null;
-            }
+
+            var error = latency is null ? latencyFailure?.Invoke(endpoint) ?? "Маршрут не ответил на HTTPS-проверку." :
+                canMeasureSpeed ? null : "Скорость недоступна для этой сессии.";
+            var result = new ServiceProbeResult(endpoint.RouteTag, latency, null, error,
+                latency is null || error is not null ? "error" : "waiting_speed");
+            latencyResults[endpoint.RouteTag] = result;
+            publish(result);
         }
 
-        var requests = targets.Select(MeasureTargetAsync).ToList();
+        await Task.WhenAll(endpoints.Select(MeasureLatencyForEndpointAsync)).ConfigureAwait(false);
 
-        long? latency = null;
-        while (requests.Count > 0)
+        foreach (var endpoint in endpoints)
         {
-            var request = await Task.WhenAny(requests).ConfigureAwait(false);
-            requests.Remove(request);
-            latency = await request.ConfigureAwait(false);
-            if (latency is not null)
+            var result = latencyResults[endpoint.RouteTag];
+            if (result.LatencyMilliseconds is null || !canMeasureSpeed)
+                continue;
+
+            long received = 0;
+            long totalBytes = 0;
+            long? liveSpeed = null;
+            string? error = null;
+            long? speed = null;
+            var cancelled = false;
+            for (var attempt = 1; attempt <= 2; attempt++)
+            {
+                received = 0;
+                totalBytes = 0;
+                liveSpeed = null;
+                publish(result with { BytesPerSecond = liveSpeed, Error = null,
+                    Stage = attempt == 1 ? "waiting_speed" : "retry", Attempt = attempt });
+                try
+                {
+                    var download = await measureDownload(endpoint, token, cancellationToken,
+                        (currentReceived, currentTotal, currentSpeed) =>
+                        {
+                            received = currentReceived;
+                            totalBytes = currentTotal;
+                            liveSpeed = currentSpeed;
+                            publish(result with { BytesPerSecond = liveSpeed, Error = null, Stage = "download",
+                                Attempt = attempt, BytesReceived = received, TotalBytes = totalBytes });
+                        }).ConfigureAwait(false);
+                    speed = download.BytesPerSecond;
+                    error = download.Error;
+                    if (speed is not null || !download.Retryable)
+                        break;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    cancelled = true;
+                    break;
+                }
+                catch (OperationCanceledException)
+                {
+                    error = "Сервер скорости не ответил вовремя.";
+                }
+                catch (HttpRequestException)
+                {
+                    error = "HTTPS-запрос скорости не прошёл через маршрут.";
+                }
+                catch (IOException)
+                {
+                    error = "Соединение с сервером скорости прервалось.";
+                }
+            }
+
+            result = result with
+            {
+                BytesPerSecond = cancelled || error is not null ? null : speed,
+                Error = cancelled ? null : error,
+                Stage = cancelled ? "cancelled" : error is null ? "complete" : "error",
+                Attempt = null,
+                BytesReceived = received == 0 ? null : received,
+                TotalBytes = totalBytes == 0 ? null : totalBytes,
+            };
+            latencyResults[endpoint.RouteTag] = result;
+            publish(result);
+            if (cancelled)
                 break;
         }
 
-        sampleCancellation.Cancel();
-        try
+        if (cancellationToken.IsCancellationRequested)
         {
-            await Task.WhenAll(requests).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            // The first valid HTTPS response won; cancel and drain the slower fallback.
+            foreach (var endpoint in endpoints)
+            {
+                var result = latencyResults[endpoint.RouteTag];
+                if (result.Stage is "complete" or "error" or "cancelled")
+                    continue;
+                result = result with { Error = null, Stage = "cancelled" };
+                latencyResults[endpoint.RouteTag] = result;
+                publish(result);
+            }
         }
 
-        reportAttempt(1, latency);
-        return latency;
+        return endpoints.Select(endpoint => latencyResults[endpoint.RouteTag]).ToArray();
     }
 
-    private readonly record struct DownloadMeasurement(long? BytesPerSecond, string? Error, bool Retryable);
+    internal readonly record struct DownloadMeasurement(long? BytesPerSecond, string? Error, bool Retryable);
 
     private static async Task<DownloadMeasurement> MeasureDownloadAsync(ProbeRouteEndpoint endpoint, string token,
         CancellationToken cancellationToken, Action<long, long, long?> reportProgress)
     {
-        using var handler = CreateProxyHandler(endpoint);
+        using var handler = RouteProxyTransport.CreateHandler(endpoint);
         // Bound the request-header wait separately from the five-second streaming
         // sample below; an unreachable server must not leave the route row pending
         // for the old twelve-second default before any live speed can be reported.
@@ -797,12 +1121,23 @@ internal sealed class EngineController
             return new DownloadMeasurement(null, "Сервер скорости временно недоступен.", true);
 
         await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        return await ReadDownloadSampleAsync(body, response.Content.Headers.ContentLength,
+            cancellationToken, reportProgress, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+    }
+
+    internal static async Task<DownloadMeasurement> ReadDownloadSampleAsync(Stream body, long? contentLength,
+        CancellationToken cancellationToken, Action<long, long, long?> reportProgress, TimeSpan sampleDuration)
+    {
+        const long maximumSampleBytes = 32L * 1024 * 1024;
+        const long minimumReliableBytes = 256L * 1024;
+        var expectedBytes = contentLength is > 0 ? Math.Min(contentLength.Value, maximumSampleBytes) : maximumSampleBytes;
         using var sampleTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        sampleTimeout.CancelAfter(TimeSpan.FromSeconds(5));
+        sampleTimeout.CancelAfter(sampleDuration);
         var buffer = new byte[32 * 1024];
         long received = 0;
-        long firstByte = 0;
         long lastProgress = 0;
+        var sampleStarted = Stopwatch.GetTimestamp();
+        var timedOut = false;
         while (received < 32L * 1024 * 1024)
         {
             int count;
@@ -812,6 +1147,7 @@ internal sealed class EngineController
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && received > 0)
             {
+                timedOut = true;
                 break;
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -820,28 +1156,31 @@ internal sealed class EngineController
             }
             if (count <= 0)
                 break;
-            if (firstByte == 0)
-                firstByte = Stopwatch.GetTimestamp();
             received += count;
-            var elapsedMs = Stopwatch.GetElapsedTime(firstByte).TotalMilliseconds;
+            var elapsedMs = Stopwatch.GetElapsedTime(sampleStarted).TotalMilliseconds;
             if (lastProgress == 0 || Stopwatch.GetElapsedTime(lastProgress).TotalMilliseconds >= 200)
             {
-                reportProgress(received, Math.Min(response.Content.Headers.ContentLength ?? 32L * 1024 * 1024,
-                    32L * 1024 * 1024), elapsedMs >= 200 ? (long)(received * 1000d / elapsedMs) : null);
+                reportProgress(received, expectedBytes, elapsedMs >= 200 ? (long)(received * 1000d / elapsedMs) : null);
                 lastProgress = Stopwatch.GetTimestamp();
             }
         }
 
-        if (received == 0 || firstByte == 0)
+        if (received == 0)
             return new DownloadMeasurement(null, "Сервер скорости вернул пустой ответ.", true);
-        var elapsed = Math.Max(1, Stopwatch.GetElapsedTime(firstByte).TotalMilliseconds);
+
+        if (!timedOut && contentLength is > 0 && received < expectedBytes)
+            return new DownloadMeasurement(null, "Сервер скорости вернул неполный объём данных.", true);
+
+        var elapsed = Stopwatch.GetElapsedTime(sampleStarted).TotalMilliseconds;
+        if (elapsed < 100 || (!timedOut && received < minimumReliableBytes))
+            return new DownloadMeasurement(null, "Недостаточно данных для точного замера скорости.", true);
+
         return new DownloadMeasurement((long)(received * 1000d / elapsed), null, false);
     }
 
     private void PublishProbeProgress(ServiceProbeResult result)
     {
-        if (result.RouteTag.Length is < 1 or > 64 || result.RouteTag.Any(character =>
-                !(char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')))
+        if (string.IsNullOrEmpty(result.RouteTag) || result.RouteTag.Length > 256)
             return;
         var safe = result with
         {
@@ -853,19 +1192,13 @@ internal sealed class EngineController
             Error = result.Error is null ? null : result.Error.Length <= 120 ? result.Error : result.Error[..120],
         };
         lock (_probeProgressLock)
-            if (_probeProgress.Count < 32 || _probeProgress.ContainsKey(safe.RouteTag))
-                _probeProgress[safe.RouteTag] = safe;
-    }
-
-    private static HttpClientHandler CreateProxyHandler(ProbeRouteEndpoint endpoint) => new()
-    {
-        UseProxy = true,
-        Proxy = new WebProxy($"http://127.0.0.1:{endpoint.Port}")
         {
-            Credentials = new NetworkCredential(endpoint.Username, endpoint.Password),
-        },
-        AllowAutoRedirect = false,
-    };
+            if (!_probeProgress.ContainsKey(safe.RouteTag))
+                return;
+            if (_probeProgress.Count <= WindowsPipeProtocol.MaximumProbeRouteCount)
+                _probeProgress[safe.RouteTag] = safe;
+        }
+    }
 
     private static ServiceSnapshot ProbeError(string detail) =>
         new("probe_error", detail, ProbeResults: []);
@@ -987,6 +1320,9 @@ internal sealed class EngineController
         return diagnostic;
     }
 
+    private static string FormatProbeStartupFailure(int exitCode, string standardError) =>
+        $"Ядро VPN остановилось до начала диагностики (код {exitCode}): {SummarizeEngineDiagnostic(standardError)}";
+
     private sealed class EngineRuntimeDiagnostic
     {
         private string? _latestError;
@@ -1042,6 +1378,34 @@ internal sealed class EngineController
         return path;
     }
 
+    private Process StartOwnedEngine(string enginePath, string profilePath, EngineRuntimeDiagnostic diagnostic)
+    {
+        var process = StartEngine(enginePath, "run", profilePath, out _, runtimeDiagnostic: diagnostic);
+        try
+        {
+            _engineLifetime = EngineProcessLifetime.Attach(process);
+            _engine = process;
+            return process;
+        }
+        catch
+        {
+            TryKill(process);
+            process.Dispose();
+            throw;
+        }
+    }
+
+    private static async Task WatchProbeEngineAsync(Process process, CancellationTokenSource measurement,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            measurement.Cancel();
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
+
     private void StopCore()
     {
         _healthMonitor?.Stop();
@@ -1053,6 +1417,8 @@ internal sealed class EngineController
 
         var process = _engine;
         _engine = null;
+        _engineLifetime?.Dispose();
+        _engineLifetime = null;
         if (process is not null)
         {
             try

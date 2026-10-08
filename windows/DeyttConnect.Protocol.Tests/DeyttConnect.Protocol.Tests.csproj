@@ -16,12 +16,22 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
+    <Compile Include="..\DeyttConnect.Windows.Service\EngineProcessLifetime.cs"
+             Link="Service\EngineProcessLifetime.cs" />
     <Compile Include="..\DeyttConnect.Windows.Service\TunnelHealthMonitorLifetime.cs"
              Link="Service\TunnelHealthMonitorLifetime.cs" />
     <Compile Include="..\DeyttConnect.Windows.Service\TunnelProfileBuilder.cs"
              Link="Service\TunnelProfileBuilder.cs" />
     <Compile Include="..\DeyttConnect.Windows.Service\RouteProbeModels.cs"
              Link="Service\RouteProbeModels.cs" />
+    <Compile Include="..\DeyttConnect.Windows.Service\EngineController.cs"
+             Link="Service\EngineController.cs" />
+    <Compile Include="..\DeyttConnect.Windows.Service\ProbeListenerReadiness.cs"
+             Link="Service\ProbeListenerReadiness.cs" />
+    <Compile Include="..\DeyttConnect.Windows.Service\RouteProxyTransport.cs"
+             Link="Service\RouteProxyTransport.cs" />
+    <Compile Include="..\DeyttConnect.Windows.Service\RouteLatencyProbe.cs"
+             Link="Service\RouteLatencyProbe.cs" />
     <Compile Include="..\DeyttConnect.Shared\WindowsAwgProfileParser.cs"
              Link="Shared\WindowsAwgProfileParser.cs" />
   </ItemGroup>

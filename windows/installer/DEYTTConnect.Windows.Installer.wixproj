@@ -2,7 +2,7 @@
   <PropertyGroup>
     <InstallerPlatform>x64</InstallerPlatform>
     <Cultures>ru-RU</Cultures>
-    <DefineConstants>$(DefineConstants);PackageStageDir=$(PackageStageDir);ProductVersion=$(ProductVersion)</DefineConstants>
+    <DefineConstants>$(DefineConstants);PackageStageDir=$(PackageStageDir);ProductVersion=$(ProductVersion);SetupProductCode=$(SetupProductCode)</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WixToolset.UI.wixext" Version="6.0.0" />
