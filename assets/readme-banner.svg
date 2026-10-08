@@ -1,37 +1,93 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="560" viewBox="0 0 1600 560" fill="none">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="600" viewBox="0 0 1600 600" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">deytt./connect — Android и Windows</title>
+  <desc id="desc">Клиенты DEYTTT для телефона и компьютера с маршрутами, соединёнными общей сетевой линией.</desc>
   <defs>
-    <linearGradient id="bg" x1="94" y1="48" x2="1470" y2="522" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0B1220"/>
-      <stop offset="1" stop-color="#111B2C"/>
+    <linearGradient id="background" x1="80" y1="0" x2="1510" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#09111F"/><stop offset=".55" stop-color="#101B2E"/><stop offset="1" stop-color="#11152A"/>
     </linearGradient>
-    <linearGradient id="line" x1="973" y1="103" x2="1438" y2="452" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#7DE6C3"/>
-      <stop offset="1" stop-color="#60A5FA"/>
+    <linearGradient id="accent" x1="920" y1="120" x2="1435" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#80F0CE"/><stop offset=".5" stop-color="#42D8CB"/><stop offset="1" stop-color="#79A9FF"/>
     </linearGradient>
-    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="matrix(527 0 0 318 1238 280)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#287E87" stop-opacity=".24"/><stop offset="1" stop-color="#287E87" stop-opacity="0"/>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="matrix(590 16 -28 376 1242 278)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#356D9C" stop-opacity=".34"/><stop offset="1" stop-color="#356D9C" stop-opacity="0"/>
     </radialGradient>
-    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
-      <path d="M48 0H0V48" stroke="#B7C8DD" stroke-opacity=".045"/>
+    <pattern id="grid" width="46" height="46" patternUnits="userSpaceOnUse">
+      <path d="M46 0H0V46" stroke="#BCD0E8" stroke-opacity=".055"/>
     </pattern>
   </defs>
-  <rect width="1600" height="560" rx="34" fill="url(#bg)"/>
-  <rect width="1600" height="560" rx="34" fill="url(#grid)"/>
-  <rect width="1600" height="560" rx="34" fill="url(#glow)"/>
-  <path d="M0 511.5H1600" stroke="#D6E4F0" stroke-opacity=".1"/>
-  <text x="106" y="155" fill="#A4B5C9" font-family="Inter,Arial,sans-serif" font-size="20" font-weight="600" letter-spacing="5">DEYTT · ANDROID CLIENT</text>
-  <text x="100" y="285" fill="#F5F8FC" font-family="Inter,Arial,sans-serif" font-size="104" font-weight="700" letter-spacing="-6">deytt./connect</text>
-  <text x="106" y="350" fill="#BDCAD9" font-family="Inter,Arial,sans-serif" font-size="29">One app. Your subscription. A route you choose.</text>
-  <text x="106" y="420" fill="#7DE6C3" font-family="Inter,Arial,sans-serif" font-size="19" font-weight="600" letter-spacing="2">OPEN SOURCE  ·  ANDROID  ·  GPL-3.0</text>
-  <g opacity=".96">
-    <circle cx="1245" cy="278" r="154" stroke="#AFC4D8" stroke-opacity=".12" stroke-width="1.5"/>
-    <circle cx="1245" cy="278" r="112" stroke="#AFC4D8" stroke-opacity=".2" stroke-width="1.5"/>
-    <circle cx="1245" cy="278" r="69" stroke="#AFC4D8" stroke-opacity=".16" stroke-width="1.5"/>
-    <path d="M1090 278H1400M1245 124V432M1135 168C1204 219 1287 340 1355 388M1354 168C1284 223 1208 336 1137 389" stroke="#AFC4D8" stroke-opacity=".19" stroke-width="1.5"/>
-    <path d="M1088 278C1154 277 1173 221 1231 221C1288 221 1292 330 1350 330C1383 330 1391 301 1402 278" stroke="url(#line)" stroke-width="5" stroke-linecap="round"/>
-    <circle cx="1089" cy="278" r="7" fill="#7DE6C3"/>
-    <circle cx="1401" cy="278" r="7" fill="#60A5FA"/>
-    <circle cx="1232" cy="221" r="5" fill="#E4F7F3"/>
+
+  <rect width="1600" height="600" rx="34" fill="url(#background)"/>
+  <rect width="1600" height="600" rx="34" fill="url(#grid)"/>
+  <rect width="1600" height="600" rx="34" fill="url(#glow)"/>
+  <path d="M80 520H1520" stroke="#CBD7E8" stroke-opacity=".12"/>
+  <circle cx="1260" cy="292" r="224" fill="#58CFC5" fill-opacity=".055"/>
+
+  <g font-family="Inter,Segoe UI,Arial,sans-serif">
+    <rect x="104" y="92" width="274" height="38" rx="19" fill="#18283B" stroke="#39516D"/>
+    <circle cx="126" cy="111" r="5" fill="#70E8C6"/>
+    <text x="143" y="117" fill="#B8C8DC" font-size="14" font-weight="700" letter-spacing="2.3">КЛИЕНТЫ DEYTTT</text>
+
+    <text x="100" y="248" fill="#F5F8FC" font-size="77" font-weight="750" letter-spacing="-4">deytt./connect</text>
+    <text x="106" y="314" fill="#D3DFED" font-size="30" font-weight="500">Одна подписка. Телефон и компьютер.</text>
+    <text x="106" y="358" fill="#9EADC1" font-size="20">Выбирайте маршрут и подключайтесь через Telegram.</text>
+
+    <rect x="105" y="409" width="154" height="42" rx="21" fill="#142B35" stroke="#367A73"/>
+    <path d="M125 421v17m-6-11h12m-9-7h6" stroke="#7DE6C3" stroke-width="2" stroke-linecap="round"/>
+    <text x="145" y="436" fill="#D5F7EE" font-size="14" font-weight="700" letter-spacing="1">ANDROID</text>
+
+    <rect x="272" y="409" width="150" height="42" rx="21" fill="#1B263B" stroke="#45648D"/>
+    <rect x="290" y="421" width="17" height="13" rx="2" stroke="#9EC3FF" stroke-width="1.7"/>
+    <path d="M288 437h21" stroke="#9EC3FF" stroke-width="1.7" stroke-linecap="round"/>
+    <text x="318" y="436" fill="#DCE9FF" font-size="14" font-weight="700" letter-spacing="1">WINDOWS</text>
+
+    <text x="106" y="498" fill="#788BA4" font-size="14" font-weight="600" letter-spacing="1.8">VLESS · TROJAN · HYSTERIA 2 · AMNEZIAWG</text>
   </g>
-  <text x="107" y="524" fill="#718198" font-family="Inter,Arial,sans-serif" font-size="15" letter-spacing="1.4">VLESS  /  TROJAN  /  HYSTERIA 2  /  AMNEZIAWG</text>
+
+  <g opacity=".64">
+    <circle cx="1228" cy="292" r="177" stroke="#AFC4D8" stroke-opacity=".12"/>
+    <circle cx="1228" cy="292" r="129" stroke="#AFC4D8" stroke-opacity=".13"/>
+    <circle cx="1228" cy="292" r="80" stroke="#AFC4D8" stroke-opacity=".14"/>
+    <path d="M1054 292H1402M1228 118V466M1105 169C1160 219 1295 361 1351 414M1350 169C1296 221 1162 359 1106 414" stroke="#AFC4D8" stroke-opacity=".15"/>
+  </g>
+  <path d="M1020 300C1091 300 1110 226 1180 226C1250 226 1261 364 1330 364C1380 364 1394 326 1440 292" stroke="url(#accent)" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="1020" cy="300" r="7" fill="#83F0D0"/>
+  <circle cx="1180" cy="226" r="6" fill="#D5FFF4"/>
+  <circle cx="1330" cy="364" r="7" fill="#57DCCD"/>
+  <circle cx="1440" cy="292" r="7" fill="#91B6FF"/>
+
+  <g>
+    <rect x="1022" y="143" width="348" height="266" rx="20" fill="#0B1423" stroke="#637B99" stroke-opacity=".78" stroke-width="2"/>
+    <rect x="1037" y="158" width="318" height="236" rx="12" fill="#101E31" stroke="#2C405A"/>
+    <path d="M1013 418H1379L1411 442C1415 445 1412 451 1406 451H986C980 451 978 445 983 441L1013 418Z" fill="#283A51" stroke="#7086A0" stroke-opacity=".55"/>
+    <path d="M1083 451H1322" stroke="#94A8BF" stroke-opacity=".4" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="1196" cy="151" r="2.5" fill="#7690AE"/>
+    <path d="M1058 178H1100" stroke="#6A829E" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="1334" cy="178" r="4" fill="#7DE6C3"/>
+    <path d="M1069 274C1103 269 1114 218 1150 218C1185 218 1192 318 1231 318C1259 318 1271 276 1302 268" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="1069" cy="274" r="5" fill="#7DE6C3"/>
+    <circle cx="1150" cy="218" r="5" fill="#D7FFF5"/>
+    <circle cx="1231" cy="318" r="5" fill="#52D6CA"/>
+    <circle cx="1302" cy="268" r="5" fill="#9CB9FF"/>
+    <path d="M1060 349H1145" stroke="#D8E5F2" stroke-opacity=".7" stroke-width="4" stroke-linecap="round"/>
+    <path d="M1060 364H1110" stroke="#8195AE" stroke-opacity=".65" stroke-width="4" stroke-linecap="round"/>
+    <rect x="1242" y="344" width="79" height="28" rx="14" fill="#173B3B" stroke="#3C8C7B"/>
+    <circle cx="1258" cy="358" r="4" fill="#74E7C6"/>
+    <path d="M1269 358H1305" stroke="#C8F5E9" stroke-width="3" stroke-linecap="round"/>
+  </g>
+
+  <g>
+    <rect x="1352" y="247" width="151" height="264" rx="26" fill="#080F1B" stroke="#8CA1BB" stroke-width="2"/>
+    <rect x="1363" y="260" width="129" height="238" rx="17" fill="#111E30" stroke="#2A3D55"/>
+    <rect x="1401" y="267" width="53" height="6" rx="3" fill="#53677F"/>
+    <circle cx="1437" cy="289" r="4" fill="#6FE4C3"/>
+    <path d="M1382 320H1471M1382 337H1440" stroke="#778DA7" stroke-width="4" stroke-linecap="round"/>
+    <path d="M1382 381C1400 380 1405 353 1423 353C1440 353 1446 405 1464 405" stroke="url(#accent)" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="1382" cy="381" r="4" fill="#7DE6C3"/>
+    <circle cx="1423" cy="353" r="4" fill="#D7FFF5"/>
+    <circle cx="1464" cy="405" r="4" fill="#91B6FF"/>
+    <rect x="1380" y="433" width="95" height="31" rx="15.5" fill="#173B3B" stroke="#3C8C7B"/>
+    <circle cx="1397" cy="448.5" r="4" fill="#74E7C6"/>
+    <path d="M1408 448H1458" stroke="#C8F5E9" stroke-width="3" stroke-linecap="round"/>
+    <path d="M1411 482H1444" stroke="#53677F" stroke-width="3" stroke-linecap="round"/>
+  </g>
 </svg>

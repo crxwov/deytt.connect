@@ -1,83 +1,100 @@
-<div align="center">
-  <img src="assets/readme-banner.svg" alt="deytt./connect — open source Android client for DEYTTT" width="100%">
+<p align="center">
+  <img src="assets/readme-banner.svg" alt="deytt./connect — клиенты DEYTTT для Android и Windows" width="100%">
+</p>
 
-  <p><strong>Android-клиент DEYTTT для подключения к своей подписке и выбора VPN-маршрута.</strong></p>
+<h1 align="center">deytt./connect</h1>
+<p align="center">
+  VPN-клиенты DEYTTT для телефона и компьютера.<br>
+  Выбирайте маршрут, подключайтесь и управляйте доступом через Telegram.
+</p>
 
-  <p>
-    <a href="https://github.com/crxwov/deytt.connect/releases/latest">Скачать APK для ARM64</a>
-    · <a href="https://github.com/crxwov/deytt.connect/releases/latest">Релизы</a>
-    · <a href="https://t.me/deyttbot">Поддержка</a>
-    · <a href="https://deytt.space/info">Условия и конфиденциальность</a>
-  </p>
+<p align="center">
+  <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30"><img src="https://img.shields.io/badge/Android-v0.8.30-3DDC84?logo=android&logoColor=white" alt="Android: стабильный релиз v0.8.30"></a>
+  <a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="https://img.shields.io/badge/Windows-v0.8.40-0078D4?logo=windows&logoColor=white" alt="Windows: стабильный релиз v0.8.40"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-8B7CF6" alt="Лицензия GPL-3.0-or-later"></a>
+</p>
 
-  <p>
-    <img src="https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 7.0 and newer">
-    <img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue" alt="GPL-3.0-or-later license">
-    <img src="https://img.shields.io/badge/status-early%20access-f0b45b" alt="Early access">
-  </p>
-</div>
+<p align="center">
+  <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">Android APK</a>
+  · <a href="https://github.com/crxwov/deytt.connect/releases/latest">Windows MSI и portable</a>
+  · <a href="https://t.me/deyttbot">Поддержка</a>
+  · <a href="https://deytt.space/info/">Условия и конфиденциальность</a>
+</p>
 
-> Для использования нужен активный доступ DEYTTT. Сейчас опубликована ARM64-сборка для ручной установки; приложение не распространяется через Google Play.
+Для входа нужен активный доступ DEYTTT. Телефон и компьютер используют отдельные слоты подписки: установка Windows-клиента не занимает слот телефона.
 
-## Подключение
+## Скачать
 
-**Android 7.0+ · ARM64 (`arm64-v8a`)**
+| Платформа | Стабильная версия | Файл |
+| --- | --- | --- |
+| **Android** | [v0.8.30](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30) | Android 7.0+; APK для ARM64 подходит большинству телефонов. Для других устройств выберите сборку с подходящей архитектурой. |
+| **Windows** | [v0.8.40](https://github.com/crxwov/deytt.connect/releases/latest) | Windows 10 1809+ · x64; установщик MSI или portable ZIP. |
 
-1. Скачайте APK для ARM64 из [релизов](https://github.com/crxwov/deytt.connect/releases/latest) и откройте файл в системном установщике Android.
-2. Войдите через Telegram: укажите username, запросите одноразовый код и подтвердите вход. Если код не приходит, откройте [бота DEYTTT](https://t.me/deyttbot) и запросите его ещё раз.
-3. Выберите «Авто» или маршрут подписки, нажмите подключение и подтвердите системный запрос Android на создание VPN-подключения.
-4. Разрешите уведомление о работающем VPN, если Android его запросит. Для отключения используйте кнопку в приложении.
+Для MSI и portable ZIP опубликованы SHA-256. Сборки сейчас не подписаны сертификатом издателя, поэтому Windows может показать предупреждение. Сверьте SHA-256 с файлом из того же релиза. Android-клиент распространяется APK из GitHub и не опубликован в Google Play.
 
-> в `0.8.30` обычный apk сохраняет обновление установок `0.8.18`–`0.8.26`. если установлена версия `0.8.17` со старой подписью, скачайте файл `deytt-connect-0.8.30-legacy-{abi}.apk` из релиза: эта сборка сохраняет старую подпись для android 8.1 и ниже и содержит цепочку ротации для android 9 и новее. apk с именем `app-{abi}-release.apk` выбирает встроенный обновлятор для текущих установок.
+### Установка на Android
 
-## Что умеет приложение
+1. Скачайте APK для своей архитектуры из [стабильного релиза Android](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30). Для большинства устройств подходит ARM64.
+2. Откройте APK в системном установщике Android и войдите через Telegram.
+3. Выберите «Авто» или доступный маршрут, нажмите «Подключить» и подтвердите системный запрос Android на создание VPN-подключения.
 
-- Войти через Telegram и загрузить маршруты активной подписки.
-- Подключаться по VLESS, Trojan, Hysteria 2 и amneziawg 1.5 или 3.1 — если они доступны в подписке.
-- Выбрать автоматический маршрут, отдельный регион или маршрут Russia → Germany.
-- Проверить доступность, задержку и скорость маршрутов.
-- Проверить новые GitHub-релизы и APK перед подтверждением установки.
+Если на телефоне осталась версия 0.8.17 со старой подписью, используйте APK с суффиксом <code>legacy</code> и подходящей архитектурой. Для остальных поддерживаемых обновлений устанавливайте обычный APK; подробности указаны в заметках [релиза Android](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30).
 
-Определение региона на карте можно включить в настройках. Для него используется IP-адрес через [ipinfo.io](https://ipinfo.io), а не GPS. Подробнее — в [политике конфиденциальности и условиях](https://deytt.space/info).
+### Установка на Windows
 
-## Релизы и проверка файла
+- **MSI:** установите <code>deytt-connect-0.8.40.msi</code>. Установщик попросит подтверждение Windows для службы VPN.
+- **Portable:** распакуйте весь <code>deytt-connect-0.8.40-portable.zip</code> и запустите <code>deyttconnect.exe</code>. Для установки службы VPN также потребуется подтверждение администратора.
 
-скачивайте apk из [последнего релиза](https://github.com/crxwov/deytt.connect/releases/latest) и сверяйте опубликованную рядом sha-256. для большинства телефонов подходит `deytt-connect-{version}.apk` (arm64-v8a); для других архитектур выбирайте файл с суффиксом ABI. для установленной версии `0.8.17` используйте apk с суффиксом `legacy` и подходящей архитектурой. файлы `app-{abi}-release.apk` оставлены для встроенного обновлятора.
+Нужен Microsoft Edge WebView2 Runtime. Установщик MSI может загрузить его с сайта Microsoft, если общего runtime ещё нет. Подробности — в [руководстве по установщику](windows/installer/README.md).
 
-release-сборки работают без отладки. в `0.8.30` обычный apk использует цепочку от ключа стабильных версий `0.8.18`–`0.8.26` к новому ключу. отдельный `legacy` apk сохраняет совместимость со старой подписью `0.8.17`. это не означает одобрение антивирусами или магазинами. о предупреждении защиты сообщите в поддержку, приложив его точный текст и версию приложения.
+## Возможности
 
-## Поддержка и сообщения об ошибках
+- Вход через Telegram и загрузка маршрутов активной подписки.
+- Автоматический выбор маршрута, список доступных регионов и диагностика соединения.
+- Проверка доступности, задержки и скорости маршрутов.
+- Обновление приложения и проверка новых релизов из поддерживаемого клиента.
 
-По вопросам входа, подписки и подключения напишите в [бот DEYTTT](https://t.me/deyttbot). При ошибке загрузки подписки укажите код, показанный на экране: он не содержит ссылку подписки или данные аккаунта. Ошибку приложения можно описать в [GitHub Issue](https://github.com/crxwov/deytt.connect/issues): укажите версию приложения и Android, модель устройства и шаги воспроизведения.
+| Протокол | Android | Windows |
+| --- | :---: | :---: |
+| VLESS | ✓ | ✓ |
+| Trojan | ✓ | ✓ |
+| Hysteria 2 | ✓ | ✓ |
+| AmneziaWG 1.5 | ✓ | — |
+| AmneziaWG 3.1 | ✓ | ✓ |
 
-Issues публичные. Не прикладывайте username, коды входа, ссылки подписки, VPN-ключи, конфигурации, IP-адреса или снимки экрана с данными аккаунта.
-
-О проблемах безопасности сообщайте приватно через [Security Advisories](https://github.com/crxwov/deytt.connect/security/advisories/new). Подробности — в [политике безопасности](SECURITY.md).
+На Android карта регионов использует IP-адрес через [ipinfo.io](https://ipinfo.io), а не GPS. Подробнее — в [условиях и политике конфиденциальности](https://deytt.space/info/).
 
 ## Сборка из исходников
 
-Нужны JDK 17, Android SDK 35, NDK 26.1, CMake 3.22.1 и Git submodules:
+Клонируйте проект вместе с подмодулями:
 
-```bash
+~~~bash
 git clone --recurse-submodules https://github.com/crxwov/deytt.connect.git
 cd deytt.connect
+~~~
+
+### Android
+
+Нужны JDK 17, Android SDK 35, NDK 26.1 и CMake 3.22.1:
+
+~~~bash
 ./gradlew assembleDebug
-```
+~~~
 
-Если репозиторий уже клонирован без подмодулей:
+ARM64 APK появится в <code>app/build/outputs/apk/debug/app-arm64-v8a-debug.apk</code>. Для распространения используйте [инструкцию по безопасной сборке релиза](docs/release-security.md).
 
-```bash
-git submodule update --init --recursive
-./gradlew assembleDebug
-```
+### Windows
 
-ARM64 APK появится в `app/build/outputs/apk/debug/app-arm64-v8a-debug.apk`.
+Для компонентов Windows нужны Windows SDK, .NET 10 SDK, Go и рекурсивные подмодули. Сценарии сборки, MSI и portable-пакета находятся в <code>windows/</code>; детали MSI — в [руководстве по установщику](windows/installer/README.md). CI-сборка Windows описана в [windows-release.yml](.github/workflows/windows-release.yml).
 
-Для распространения используйте [сборку и проверку release APK](docs/release-security.md).
+## Поддержка и сообщения об ошибках
 
-Проверки загрузки и изолированный тест на устройстве описаны в [subscription-reliability.md](docs/subscription-reliability.md).
+По вопросам входа, подписки и подключения напишите в [бот DEYTTT](https://t.me/deyttbot).
 
-## Лицензии
+Ошибку клиента можно описать в [GitHub Issue](https://github.com/crxwov/deytt.connect/issues): укажите платформу, версию приложения и ОС, модель устройства и шаги воспроизведения. Issues публичные. Не прикладывайте username, коды входа, ссылки подписки, VPN-ключи, конфигурации, IP-адреса или снимки экрана с данными аккаунта.
 
-Код приложения распространяется по **GNU GPL-3.0-or-later**. Для сторонних компонентов и материалов действуют отдельные условия из [уведомлений о сторонних компонентах](THIRD-PARTY-NOTICES.md) и [атрибуций значков](THIRD_PARTY_NOTICES.md).
+О проблемах безопасности сообщайте приватно через [Security Advisories](https://github.com/crxwov/deytt.connect/security/advisories/new). Подробности — в [политике безопасности](SECURITY.md).
 
+## Лицензия
+
+Код приложения распространяется по **GNU GPL-3.0-or-later**. У сторонних компонентов и материалов отдельные условия: см. [уведомления о сторонних компонентах](THIRD-PARTY-NOTICES.md) и [атрибуции материалов](THIRD_PARTY_NOTICES.md).

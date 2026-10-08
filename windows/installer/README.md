@@ -20,10 +20,7 @@ the elevated installation token. Uninstall stops and removes the managed VPN
 service. MSI-owned files live in Program Files; account data under
 `%LOCALAPPDATA%` is retained for later reinstall.
 
-The Windows installer and runtime are currently unsigned by deytt, so Windows
-may show a publisher warning. The v0.8.31 release is intentionally unsigned
-under the project owner's release instruction. The Microsoft WebView2
-bootstrapper is signature-checked during the Windows build workflow.
+Windows release artifacts are currently unsigned by the publisher, so Windows may show a publisher warning. Download installers from the official project release and compare the published SHA-256 file. The Microsoft WebView2 bootstrapper is signature-checked during the Windows build workflow.
 
 ## Build and verify
 
@@ -33,7 +30,7 @@ service, VPN engine, and `Assets/route-map/index.html`.
 
 ```powershell
 .\Build-Msi.ps1 `
-  -ProductVersion 0.8.31 `
+  -ProductVersion 0.8.40 `
   -PackageStageDir C:\path\to\windows-x64-package `
   -BuildRoot D:\build\deytt-connect
 ```

@@ -6,25 +6,34 @@ body:
     attributes:
       value: |
         Issues публичные. Не указывайте личные данные, Telegram-коды, ссылки подписки, VPN-ключи, конфигурации, IP-адреса и не прикладывайте снимки экрана с аккаунтом. Для вопросов по подписке используйте [поддержку в Telegram](https://t.me/deyttbot).
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Платформа
+      options:
+        - Android
+        - Windows
+    validations:
+      required: true
   - type: input
     id: app_version
     attributes:
       label: Версия приложения
-      placeholder: 0.8.9
+      placeholder: Android 0.8.30 или Windows 0.8.40
     validations:
       required: true
   - type: input
-    id: android_version
+    id: os_version
     attributes:
-      label: Версия Android
-      placeholder: Android 14
+      label: Версия Android или Windows
+      placeholder: Android 14 или Windows 11 24H2
     validations:
       required: true
   - type: input
     id: device
     attributes:
-      label: Модель устройства
-      placeholder: Например, Pixel 8a
+      label: Устройство или компьютер
+      placeholder: Например, Pixel 8a или Lenovo ThinkPad T14
     validations:
       required: true
   - type: textarea
