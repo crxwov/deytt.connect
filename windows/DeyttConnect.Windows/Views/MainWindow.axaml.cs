@@ -577,15 +577,29 @@ public partial class MainWindow : Window
             : Copy("место определяется после подключения", "location resolves after connecting");
     }
 
-    private string SelectedExitPlaceLabel(WindowsRoute? route) => route?.CountryCode switch
+    private string SelectedExitPlaceLabel(WindowsRoute? route)
     {
-        "NL" => Copy("Амстердам", "Amsterdam"),
-        "DE" or "RU-DE" => Copy("Франкфурт", "Frankfurt"),
-        "FI" => Copy("Хельсинки", "Helsinki"),
-        "IT" => Copy("милан", "milan"),
-        "RU" => Copy("Санкт-Петербург", "Saint Petersburg"),
-        _ => RouteTitle(),
-    };
+        if (route is null)
+            return RouteTitle();
+
+        if (route.CountryCode == "IT")
+        {
+            if ((route.Protocol is "AWG15" or "AWG31") &&
+                !string.IsNullOrWhiteSpace(route.ProfileName))
+                return route.ProfileName.Trim();
+
+            return Copy("Италия", "Italy");
+        }
+
+        return route.CountryCode switch
+        {
+            "NL" => Copy("Амстердам", "Amsterdam"),
+            "DE" or "RU-DE" => Copy("Франкфурт", "Frankfurt"),
+            "FI" => Copy("Хельсинки", "Helsinki"),
+            "RU" => Copy("Санкт-Петербург", "Saint Petersburg"),
+            _ => RouteTitle(),
+        };
+    }
 
     private Control BuildConnectionCard()
     {
@@ -825,6 +839,40 @@ public partial class MainWindow : Window
                     Copy("LTE + белые списки", "LTE + whitelist"),
                     Copy("Россия → Германия · двойной маршрут", "Russia → Germany · double route")));
             routeColumn.Children.Add(quick);
+        }
+
+        var hasAmneziaRoute = _routes.Any(route => IsAwgProtocol(route.Protocol));
+        if (!hasAmneziaRoute && _keysSnapshot is { } keys &&
+            (keys.HappAvailable || keys.AmneziaActive || keys.AmneziaClients > 0))
+        {
+            var message = _profileRefreshInProgress
+                ? Copy("Проверяю доступность профилей AmneziaWG…", "Checking AmneziaWG profile availability…")
+                : keys.AmneziaActive && keys.AmneziaClients > 0
+                    ? Copy($"На аккаунте есть активные ключи: {keys.AmneziaClients}. Профиль маршрута не загрузился.",
+                        $"The account has {keys.AmneziaClients} active keys, but the AmneziaWG route profile did not load.")
+                    : keys.AmneziaActive
+                        ? Copy("Подписка отмечена активной, но сервер не сообщил активные ключи AmneziaWG.",
+                            "The subscription is marked active, but the server reports no active AmneziaWG keys.")
+                        : !keys.HappAvailable
+                            ? Copy("Маршрут AmneziaWG появится после активации подписки.",
+                                "The AmneziaWG route becomes available after the subscription is activated.")
+                        : Copy("Сервер пока не сообщил об активной выдаче AmneziaWG для аккаунта.",
+                            "The server has not reported active AmneziaWG provisioning for this account yet.");
+            var refreshAmnezia = DeyttTheme.PrimaryButton(
+                Copy("Обновить профиль", "Refresh profile"),
+                () => _ = RefreshSignedInAccountAsync());
+            refreshAmnezia.IsEnabled = !_profileRefreshInProgress;
+            AutomationProperties.SetAutomationId(refreshAmnezia, "AmneziaRefreshProfile");
+            routeColumn.Children.Add(DeyttTheme.Card(new StackPanel
+            {
+                Spacing = 9,
+                Children =
+                {
+                    DeyttTheme.TextBlock("AmneziaWG", 17, DeyttTheme.Text, FontWeight.SemiBold),
+                    DeyttTheme.TextBlock(message, 13, DeyttTheme.Muted),
+                    refreshAmnezia,
+                },
+            }, DeyttTheme.Surface2, DeyttTheme.Line, 18, new Thickness(16)));
         }
         AddSection(routeColumn, Copy("СТРАНЫ", "COUNTRIES"));
 
@@ -4181,3 +4229,4 @@ public partial class MainWindow : Window
 
     private string Copy(string russian, string english) => (_language == "ru" ? russian : english).ToLowerInvariant();
 }
+
