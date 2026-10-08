@@ -2,33 +2,13 @@
   <img src="assets/deytt-connect-banner.png" alt="Баннер deytt./connect: маршруты и подключение для Android и Windows" width="100%">
 </div>
 
-<div align="center">
-
-  <sub>DEYTT. / OPEN SOURCE / ANDROID + WINDOWS</sub>
-
-  <h1>deytt./connect</h1>
-
-  <p>
-    <strong>Открой. Выбери маршрут. Подключись.</strong><br>
-    Приложение deytt. для Android и Windows — с входом через Telegram,<br>
-    выбором регионов и диагностикой соединения.
-  </p>
-
-  <p>
-    <a href="#скачать-приложение">скачать</a> &nbsp;·&nbsp;
-    <a href="#как-подключиться">начать работу</a> &nbsp;·&nbsp;
-    <a href="#возможности">возможности</a> &nbsp;·&nbsp;
-    <a href="#протоколы">протоколы</a> &nbsp;·&nbsp;
-    <a href="#сборка-из-исходников">для разработчиков</a>
-  </p>
-
-  <p>
-    <a href="https://deytt.space/">сайт ↗</a> &nbsp;·&nbsp;
-    <a href="https://t.me/deyttbot">Telegram ↗</a> &nbsp;·&nbsp;
-    <a href="https://github.com/crxwov/deytt.connect/releases">все релизы ↗</a>
-  </p>
-
-</div>
+<p align="center">
+  <a href="#скачать-приложение">скачать</a> &nbsp;·&nbsp;
+  <a href="#как-подключиться">начать работу</a> &nbsp;·&nbsp;
+  <a href="#возможности">возможности</a> &nbsp;·&nbsp;
+  <a href="#протоколы">протоколы</a> &nbsp;·&nbsp;
+  <a href="#сборка-из-исходников">для разработчиков</a>
+</p>
 
 ---
 
