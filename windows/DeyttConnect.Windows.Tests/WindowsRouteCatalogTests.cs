@@ -150,5 +150,7 @@ public sealed class WindowsRouteCatalogTests
         var current = Assert.Single(routes, route => route.Id == "awg31:aXQ");
         Assert.Equal(("AWG15", "amneziawg 1.5", "IT"), (legacy.Protocol, legacy.ProtocolName, legacy.CountryCode));
         Assert.Equal(("AWG31", "amneziawg 3.1", "IT"), (current.Protocol, current.ProtocolName, current.CountryCode));
+        Assert.Equal("италия 3.1", current.ProfileName);
     }
 }
+
