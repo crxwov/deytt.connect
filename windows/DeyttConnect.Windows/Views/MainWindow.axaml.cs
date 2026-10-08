@@ -862,7 +862,8 @@ public partial class MainWindow : Window
                 Copy("Обновить профиль", "Refresh profile"),
                 () => _ = RefreshSignedInAccountAsync());
             refreshAmnezia.IsEnabled = !_profileRefreshInProgress;
-            AutomationProperties.SetAutomationId(refreshAmnezia, "AmneziaRefreshProfile");
+            if (refreshAmnezia.Child is Button refreshButton)
+                AutomationProperties.SetAutomationId(refreshButton, "AmneziaRefreshProfile");
             routeColumn.Children.Add(DeyttTheme.Card(new StackPanel
             {
                 Spacing = 9,
