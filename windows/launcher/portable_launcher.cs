@@ -18,7 +18,7 @@ internal static class PortableLauncher
         var engine = Path.Combine(root, "vpn", "DeyttVpnEngine.exe");
         if (!File.Exists(app) || !File.Exists(service) || !File.Exists(engine))
         {
-            ShowError("пакет deytt connect неполный. распакуйте весь архив и запустите deyttconnect.exe снова.");
+            ShowError("пакет deytt./connect неполный. распакуйте весь архив и запустите deyttconnect.exe снова.");
             return;
         }
 
@@ -34,7 +34,7 @@ internal static class PortableLauncher
         }
         catch (Exception)
         {
-            ShowError("не удалось открыть deytt connect. проверьте, что пакет распакован полностью.");
+            ShowError("не удалось открыть deytt./connect. проверьте, что пакет распакован полностью.");
         }
     }
 
@@ -71,9 +71,10 @@ internal static class PortableLauncher
 
     private static void ShowError(string message)
     {
-        MessageBoxW(IntPtr.Zero, message, "deytt connect", 0x10);
+        MessageBoxW(IntPtr.Zero, message, "deytt./connect", 0x10);
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int MessageBoxW(IntPtr window, string text, string caption, uint type);
 }
+
