@@ -13,7 +13,7 @@
     <td width="50%" valign="top">
       <h3>Android</h3>
       <p><strong>v0.8.30</strong> · Android 7.0+ · ARM64</p>
-      <p>APK для смартфонов с 64-битным ARM-процессором.</p>
+      <p>APK для телефонов с ARM64.</p>
       <p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.30/deytt-connect-0.8.30.apk"><img src="assets/download-android-outline.svg" width="260" alt="Скачать Android APK v0.8.30"></a></p>
       <p><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">Релиз и SHA-256</a> · APK устанавливается вручную, приложения нет в Google Play.</p>
     </td>
