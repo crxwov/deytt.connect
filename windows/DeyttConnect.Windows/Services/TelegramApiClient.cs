@@ -204,6 +204,10 @@ public sealed class TelegramApiClient
             progress?.Report("optional");
             profileStage = "awg";
             var awgProfiles = await FetchAwgProfilesAsync(subscriptionUri!, token, subscriptionToken);
+            if (awgProfiles.Count == 0 && (awgActive || awgClients > 0))
+                System.Diagnostics.Trace.TraceWarning(
+                    "AmneziaWG is advertised for this account ({0} active key(s)), but no usable route profile was returned.",
+                    awgClients);
             profileStage = "routes";
             var routes = WindowsRouteCatalog.Parse(normalizedProfile.RootElement, awgProfiles);
             progress?.Report("ready");
@@ -1025,3 +1029,4 @@ public sealed class TelegramApiException(string code, HttpStatusCode statusCode)
     public HttpStatusCode StatusCode { get; } = statusCode;
     public bool IsUnauthorized => StatusCode == HttpStatusCode.Unauthorized || Code is "session_invalid" or "session_expired";
 }
+
