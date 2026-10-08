@@ -137,11 +137,12 @@ $actionControl=$setupProgressControls | Where-Object Id -eq 'Action'
 $overlappingActionControls=$setupProgressControls | Where-Object { $_.Id -ne 'Action' -and $_.X -lt ($actionControl.X+$actionControl.Width) -and ($_.X+$_.Width) -gt $actionControl.X -and $_.Y -lt ($actionControl.Y+$actionControl.Height) -and ($_.Y+$_.Height) -gt $actionControl.Y }
 Check ($overlappingActionControls.Count -eq 0) 'SetupProgress.ActionText area overlaps another control'
 $null=Row 'SELECT `Control` FROM `Control` WHERE `Dialog_`=''SetupComplete'' AND `Control`=''Desktop'''
-$launchView=$database.OpenView('SELECT `Control` FROM `Control` WHERE `Dialog_`=''SetupComplete'' AND `Control`=''Launch''')
-$null=$launchView.Execute()
-Check ([bool]$launchView.Fetch()) 'Finish dialog must contain the optional launch checkbox'
-$launchProperty=Row 'SELECT `Property` FROM `Control` WHERE `Dialog_`=''SetupComplete'' AND `Control`=''Launch'''
-Check ($launchProperty.Text -eq 'LAUNCH_CONNECT') 'Launch checkbox must control the launch action'
+$launch=Row 'SELECT `Control` FROM `Control` WHERE `Dialog_`=''SetupComplete'' AND `Control`=''LaunchConnect'' AND `Type`=''CheckBox'' AND `Property`=''LAUNCH_CONNECT'''
+Check ($launch.Text -eq 'LaunchConnect') 'Finish dialog launch checkbox must control LAUNCH_CONNECT'
+$launchValue=Row 'SELECT `Value` FROM `CheckBox` WHERE `Property`=''LAUNCH_CONNECT'''
+Check ($launchValue.Text -eq '1') 'Launch checkbox must set LAUNCH_CONNECT to 1 when checked'
+$launchDefault=Row 'SELECT `Value` FROM `Property` WHERE `Property`=''LAUNCH_CONNECT'''
+Check ($launchDefault.Text -eq '1') 'Launch checkbox must be checked by default'
 $removal=Row 'SELECT `Condition` FROM `InstallExecuteSequence` WHERE `Action`=''RemoveDesktopShortcut'''
 Check ($removal.Text -match 'NOT UPGRADINGPRODUCTCODE') 'Upgrade would remove the desktop shortcut'
 $packageVersion=(Row 'SELECT `Value` FROM `Property` WHERE `Property`=''ProductVersion''').Text
