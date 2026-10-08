@@ -2,10 +2,10 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
-    <Version>0.8.30</Version>
-    <AssemblyVersion>0.8.30.0</AssemblyVersion>
-    <FileVersion>0.8.30.0</FileVersion>
-    <InformationalVersion>0.8.30</InformationalVersion>
+    <Version>0.8.31</Version>
+    <AssemblyVersion>0.8.31.0</AssemblyVersion>
+    <FileVersion>0.8.31.0</FileVersion>
+    <InformationalVersion>0.8.31</InformationalVersion>
     <AssemblyTitle>deytt./connect VPN Service</AssemblyTitle>
     <Company>deytt.</Company>
     <Product>deytt./connect</Product>
