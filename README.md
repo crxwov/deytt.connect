@@ -85,7 +85,7 @@ ARM64 APK появится в <code>app/build/outputs/apk/debug/app-arm64-v8a-de
 
 ### Windows
 
-Для компонентов Windows нужны Windows SDK, .NET 10 SDK, Go и рекурсивные подмодули. Сценарии сборки, MSI и portable-пакета находятся в <code>windows/</code>; детали MSI — в [руководстве по установщику](windows/installer/README.md). CI-сборка Windows описана в [windows-release.yml](.github/workflows/windows-release.yml).
+Для компонентов Windows нужны Windows SDK, .NET 10 SDK, Go и рекурсивные подмодули. Сценарии сборки и упаковки находятся в <code>windows/</code>; детали MSI — в [руководстве по установщику](windows/installer/README.md).
 
 ## Поддержка и сообщения об ошибках
 
