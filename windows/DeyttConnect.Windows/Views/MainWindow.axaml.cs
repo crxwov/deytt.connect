@@ -842,7 +842,8 @@ public partial class MainWindow : Window
         }
 
         var hasAmneziaRoute = _routes.Any(route => IsAwgProtocol(route.Protocol));
-        if (!hasAmneziaRoute && _account?.Subscription.Active == true)
+        var hasActiveSubscription = _account?.Subscription?.Active == true;
+        if (!hasAmneziaRoute && _sessionToken is not null)
         {
             var keys = _keysSnapshot;
             var message = _profileRefreshInProgress
@@ -856,9 +857,12 @@ public partial class MainWindow : Window
                         : keys.AmneziaActive
                         ? Copy("Подписка отмечена активной, но сервер не сообщил активные ключи AmneziaWG.",
                             "The subscription is marked active, but the server reports no active AmneziaWG keys.")
+                        : !hasActiveSubscription
+                            ? Copy("Активируйте подписку, чтобы получить профиль AmneziaWG.",
+                                "Activate a subscription to get an AmneziaWG profile.")
                         : !keys.HappAvailable
-                            ? Copy("Маршрут AmneziaWG появится после активации подписки.",
-                                "The AmneziaWG route becomes available after the subscription is activated.")
+                            ? Copy("Подписка активна, но сервер пока не сообщил доступный профиль AmneziaWG.",
+                                "The subscription is active, but the server has not reported an AmneziaWG profile yet.")
                         : Copy("Сервер пока не сообщил об активной выдаче AmneziaWG для аккаунта.",
                             "The server has not reported active AmneziaWG provisioning for this account yet.");
             var refreshAmnezia = DeyttTheme.PrimaryButton(
