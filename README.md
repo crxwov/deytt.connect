@@ -27,7 +27,7 @@
       <p>APK для большинства современных Android-смартфонов с 64-битным ARM-процессором.</p>
       <p>
         <a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.30/deytt-connect-0.8.30.apk">
-          <img src="assets/download-android.svg" width="260" alt="Скачать Android APK v0.8.30">
+          <img src="assets/download-android-outline.svg" width="260" alt="Скачать Android APK v0.8.30">
         </a>
       </p>
       <p><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">Описание релиза и SHA-256 ↗</a></p>
@@ -40,7 +40,7 @@
       <p>Установщик MSI для обычной установки или ZIP для портативного запуска.</p>
       <p>
         <a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40.msi">
-          <img src="assets/download-windows.svg" width="260" alt="Скачать Windows MSI v0.8.40">
+          <img src="assets/download-windows-outline.svg" width="260" alt="Скачать Windows MSI v0.8.40">
         </a>
       </p>
       <p><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip">Portable ZIP ↗</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40">SHA-256 и релиз ↗</a></p>
