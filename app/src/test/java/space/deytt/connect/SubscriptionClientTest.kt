@@ -348,7 +348,7 @@ class SubscriptionClientTest {
     @Test
     fun deviceSlotRejectionIsExplicitAndNeverRetried() {
         val transport = FakeTransport(SubscriptionClient.SubscriptionHttpResponse(
-            409, body = """{"error":"app_device_limit_reached","device_limit":1}""",
+            409, body = """{"error":"app_device_limit_reached"}""",
         ))
         val error = runCatching {
             SubscriptionClient.requestForTest("https://deytt.space/sub/token", "application/json", true, transport)
@@ -356,10 +356,10 @@ class SubscriptionClientTest {
         assertEquals("app_device_limit_reached", error.code)
         assertEquals(1, transport.calls.size)
         val message = SubscriptionErrorText.userMessage(error)
-        assertTrue(message.contains("один слот на телефон"))
-        assertTrue(message.contains("компьютерные подключения и happ используют отдельные слоты"))
-        assertTrue(message.contains("выйдите из приложения на старом телефоне"))
-        assertTrue(message.contains("не отключает устройство автоматически"))
+        assertTrue(message.contains("по одному телефону и одному компьютеру"))
+        assertTrue(message.contains("их слоты независимы"))
+        assertTrue(message.contains("выйдите из аккаунта на прежнем телефоне"))
+        assertTrue(message.contains("Happ использует отдельную квоту"))
     }
 
     @Test
