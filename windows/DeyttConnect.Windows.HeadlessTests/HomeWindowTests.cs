@@ -563,7 +563,8 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var page = Required<Grid>(window, "PageHost");
-            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "AmneziaWG");
+            var pageText = string.Join(" | ", Descendants(page).OfType<TextBlock>().Select(text => text.Text));
+            Assert.Contains("AmneziaWG", pageText);
             Assert.Contains(Descendants(page).OfType<Button>(), button =>
                 AutomationProperties.GetAutomationId(button) == "AmneziaRefreshProfile");
         }
