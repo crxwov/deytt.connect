@@ -842,13 +842,17 @@ public partial class MainWindow : Window
         }
 
         var hasAmneziaRoute = _routes.Any(route => IsAwgProtocol(route.Protocol));
+        var hasSession = _sessionToken is not null;
         var hasActiveSubscription = _account?.Subscription?.Active == true;
-        if (!hasAmneziaRoute && _sessionToken is not null)
+        if (!hasAmneziaRoute)
         {
             var keys = _keysSnapshot;
             var message = _profileRefreshInProgress
                 ? Copy("Проверяю доступность профилей AmneziaWG…", "Checking AmneziaWG profile availability…")
-                : keys is null
+                : !hasSession
+                    ? Copy("Войдите через Telegram, чтобы получить профиль AmneziaWG.",
+                        "Sign in with Telegram to get an AmneziaWG profile.")
+                    : keys is null
                     ? Copy("Не удалось проверить доступность профиля AmneziaWG. Обновите профиль.",
                         "Could not check AmneziaWG profile availability. Refresh the profile.")
                     : keys.AmneziaActive && keys.AmneziaClients > 0
@@ -868,7 +872,7 @@ public partial class MainWindow : Window
             var refreshAmnezia = DeyttTheme.PrimaryButton(
                 Copy("Обновить профиль", "Refresh profile"),
                 () => _ = RefreshSignedInAccountAsync());
-            refreshAmnezia.IsEnabled = !_profileRefreshInProgress;
+            refreshAmnezia.IsEnabled = hasSession && !_profileRefreshInProgress;
             if (refreshAmnezia.Child is Button refreshButton)
                 AutomationProperties.SetAutomationId(refreshButton, "AmneziaRefreshProfile");
             routeColumn.Children.Add(DeyttTheme.Card(new StackPanel
