@@ -844,10 +844,12 @@ public partial class MainWindow : Window
         var hasAmneziaRoute = _routes.Any(route => IsAwgProtocol(route.Protocol));
         var hasSession = _sessionToken is not null;
         var hasActiveSubscription = _account?.Subscription?.Active == true;
-        if (!hasAmneziaRoute)
         {
             var keys = _keysSnapshot;
-            var message = _profileRefreshInProgress
+            var message = hasAmneziaRoute
+                ? Copy("Профиль AmneziaWG доступен в списке маршрутов ниже.",
+                    "The AmneziaWG profile is available in the route list below.")
+                : _profileRefreshInProgress
                     ? Copy("Проверяю доступность профилей AmneziaWG…", "Checking AmneziaWG profile availability…")
                 : !hasSession
                     ? Copy("Войдите через Telegram, чтобы получить профиль AmneziaWG.",
