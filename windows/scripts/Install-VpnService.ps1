@@ -8,7 +8,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $serviceName = 'DEYTTConnectVpn'
-$displayName = 'deytt connect vpn'
+$displayName = 'deytt./connect VPN'
 $vendorDirectory = Join-Path $env:ProgramFiles 'DEYTT'
 $installDirectory = Join-Path $env:ProgramFiles 'DEYTT\Connect'
 
@@ -100,7 +100,7 @@ New-ItemProperty -Path $registryPath -Name 'AllowedUserSid' -Value $sid.Value -P
 $servicePath = Join-Path $installDirectory 'DeyttConnect.Windows.Service.exe'
 $binaryPath = '"' + $servicePath + '" --service'
 if ($null -eq $service) {
-    New-Service -Name $serviceName -DisplayName $displayName -Description 'runs the deytt connect windows vpn tunnel.' `
+    New-Service -Name $serviceName -DisplayName $displayName -Description 'VPN tunnel service for deytt./connect.' `
         -BinaryPathName $binaryPath -StartupType Automatic | Out-Null
 } else {
     & sc.exe config $serviceName "binPath= $binaryPath" 'start= auto' | Out-Null
@@ -113,3 +113,4 @@ Start-Service -Name $serviceName
 (Get-Service -Name $serviceName).WaitForStatus(
     [System.ServiceProcess.ServiceControllerStatus]::Running, [TimeSpan]::FromSeconds(20))
 exit 0
+
