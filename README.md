@@ -6,31 +6,20 @@
 
 ## скачать приложение
 
-<p align="center"><sub>выберите устройство</sub></p>
+<p align="center">выберите устройство</p>
 
-<table>
-  <tr>
-    <td width="50%" align="center" valign="top">
-      <h3>android</h3>
-      <p>v0.8.30 &nbsp;·&nbsp; android 7+ &nbsp;·&nbsp; ARM64</p>
-      <a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.30/deytt-connect-0.8.30.apk"><img src="assets/download-android-outline.svg" width="260" alt="скачать android APK v0.8.30"></a>
-      <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">релиз и SHA-256</a> &nbsp;·&nbsp; установка через APK</sub></p>
-      <p><sub>приложения нет в google play</sub></p>
-    </td>
-    <td width="50%" align="center" valign="top">
-      <h3>windows</h3>
-      <p>v0.8.40 &nbsp;·&nbsp; windows 10 (1809+) &nbsp;·&nbsp; x64</p>
-      <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40"><img src="assets/download-windows-outline.svg" width="260" alt="Скачать windows MSI или portable ZIP v0.8.40"></a>
-      <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip">portable ZIP</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40">SHA-256 и релиз</a></sub></p>
-      <p><sub>сборки не подписаны сертификатом издателя</sub></p>
-    </td>
-  </tr>
-</table>
+<p align="center"><strong>android</strong><br><sub>v0.8.30 &nbsp;·&nbsp; android 7+ &nbsp;·&nbsp; ARM64</sub></p>
+<p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.30/deytt-connect-0.8.30.apk"><img src="assets/download-android-outline.svg" width="260" alt="скачать android APK v0.8.30"></a></p>
+<p align="center"><sub><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">релиз и SHA-256</a> &nbsp;·&nbsp; приложения нет в google play</sub></p>
 
-<p align="center"><sub>для входа нужен активный доступ deytt. android и компьютер используют отдельные слоты подписки · установка windows не занимает слот телефона</sub></p>
+<p align="center"><strong>windows</strong><br><sub>v0.8.40 &nbsp;·&nbsp; windows 10 (1809+) &nbsp;·&nbsp; x64</sub></p>
+<p align="center"><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40"><img src="assets/download-windows-outline.svg" width="260" alt="скачать windows MSI или portable ZIP v0.8.40"></a></p>
+<p align="center"><sub><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip">portable ZIP</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40">SHA-256 и релиз</a> &nbsp;·&nbsp; сборки не подписаны</sub></p>
+
+<p align="center">доступ deytt. &nbsp;·&nbsp; отдельные слоты для телефона и компьютера<br><sub>установка windows не занимает слот телефона</sub></p>
 
 <p align="center"><img src="assets/readme-route-flow.svg" width="520" alt="доступ соединяется с выбором маршрута и подключением"></p>
-<p align="center"><sub>доступ &nbsp;·&nbsp; маршрут &nbsp;·&nbsp; соединение</sub></p>
+<p align="center">доступ &nbsp;·&nbsp; маршрут &nbsp;·&nbsp; соединение</p>
 
 ## как начать
 
@@ -70,11 +59,11 @@
 
 ## возможности
 
-<p align="center"><sub>telegram-вход &nbsp;·&nbsp; авто-маршрут &nbsp;·&nbsp; диагностика &nbsp;·&nbsp; обновления</sub></p>
+<p align="center">telegram-вход &nbsp;·&nbsp; авто-маршрут<br>диагностика &nbsp;·&nbsp; обновления</p>
 
 ## протоколы
 
-<p align="center"><sub>доступность зависит от платформы и конфигурации маршрута</sub></p>
+<p align="center">доступность зависит от платформы и конфигурации маршрута</p>
 
 | протокол | android | windows |
 | :--- | :---: | :---: |
@@ -115,7 +104,7 @@ cd deytt.connect
 
 </details>
 
-<p align="center"><sub><a href="docs/README.md">документация</a> &nbsp;·&nbsp; <a href="docs/brand-guide.md">стиль проекта</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">участие в проекте</a></sub></p>
+<p align="center"><a href="docs/README.md">документация</a> &nbsp;·&nbsp; <a href="docs/brand-guide.md">стиль проекта</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">участие в проекте</a></sub></p>
 
 ## поддержка
 
