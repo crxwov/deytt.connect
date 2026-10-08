@@ -20,11 +20,11 @@
       <DialogRef Id="ResumeDlg" />
       <DialogRef Id="OutOfDiskDlg" />
       <DialogRef Id="OutOfRbDiskDlg" />
-      <Dialog Id="SetupWelcome" Width="440" Height="300" Title="deytt connect — установка">
-        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}deytt connect" NoPrefix="yes" />
-        <Control Id="Intro" Type="Text" X="24" Y="72" Width="392" Height="40" Text="всё готово для установки vpn. мастер установит приложение, службу подключения и vpn-движок." NoPrefix="yes" />
-        <Control Id="Details" Type="Text" X="24" Y="126" Width="392" Height="62" Text="старую службу connect обновим автоматически. данные входа сохранятся. ярлык появится в меню «пуск», а на последнем шаге можно добавить его на рабочий стол." NoPrefix="yes" />
-        <Control Id="Version" Type="Text" X="24" Y="208" Width="392" Height="20" Text="{\SetupSmall}версия [ProductVersion] · windows x64" NoPrefix="yes" />
+      <Dialog Id="SetupWelcome" Width="440" Height="300" Title="deytt./connect — установка">
+        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}deytt./connect" NoPrefix="yes" />
+        <Control Id="Intro" Type="Text" X="24" Y="72" Width="392" Height="40" Text="Установите deytt./connect и выберите маршрут для подключения." NoPrefix="yes" />
+        <Control Id="Details" Type="Text" X="24" Y="126" Width="392" Height="42" Text="Ярлык появится в меню «Пуск». При обновлении данные входа сохранятся." NoPrefix="yes" />
+        <Control Id="Version" Type="Text" X="24" Y="208" Width="392" Height="20" Text="{\SetupSmall}версия [ProductVersion] · Windows x64" NoPrefix="yes" />
         <Control Id="Line" Type="Line" X="0" Y="252" Width="440" Height="0" />
         <Control Id="Next" Type="PushButton" X="252" Y="270" Width="80" Height="20" Default="yes" Text="&amp;далее">
           <Publish Event="NewDialog" Value="SetupReady" />
@@ -33,9 +33,9 @@
           <Publish Event="SpawnDialog" Value="CancelDlg" />
         </Control>
       </Dialog>
-      <Dialog Id="SetupMaintenance" Width="440" Height="300" Title="deytt connect — обслуживание">
-        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}deytt connect" NoPrefix="yes" />
-        <Control Id="Intro" Type="Text" X="24" Y="78" Width="392" Height="50" Text="приложение уже установлено. восстановите файлы и службу vpn или удалите приложение. данные входа останутся на этом компьютере." NoPrefix="yes" />
+      <Dialog Id="SetupMaintenance" Width="440" Height="300" Title="deytt./connect — обслуживание">
+        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}deytt./connect" NoPrefix="yes" />
+        <Control Id="Intro" Type="Text" X="24" Y="78" Width="392" Height="50" Text="deytt./connect уже установлен. Восстановите установку или удалите приложение." NoPrefix="yes" />
         <Control Id="Repair" Type="PushButton" X="24" Y="154" Width="188" Height="26" Default="yes" Text="&amp;восстановить">
           <Publish Property="REINSTALL" Value="ALL" Order="1" />
           <Publish Property="REINSTALLMODE" Value="amus" Order="2" />
@@ -50,8 +50,8 @@
           <Publish Event="SpawnDialog" Value="CancelDlg" />
         </Control>
       </Dialog>
-      <Dialog Id="SetupRemoveConfirm" Width="300" Height="150" Title="удаление deytt connect">
-        <Control Id="Text" Type="Text" X="18" Y="18" Width="264" Height="68" Text="удалить приложение и службу vpn? активное подключение будет остановлено. данные входа сохранятся для повторной установки." NoPrefix="yes" />
+      <Dialog Id="SetupRemoveConfirm" Width="300" Height="150" Title="удаление deytt./connect">
+        <Control Id="Text" Type="Text" X="18" Y="18" Width="264" Height="68" Text="Удалить deytt./connect? Активное VPN-подключение будет остановлено." NoPrefix="yes" />
         <Control Id="Remove" Type="PushButton" X="104" Y="112" Width="80" Height="20" Text="удалить">
           <Publish Property="REMOVE" Value="ALL" Order="1" />
           <Publish Property="WixUI_InstallMode" Value="Remove" Order="2" />
@@ -61,23 +61,23 @@
           <Publish Event="NewDialog" Value="SetupMaintenance" />
         </Control>
       </Dialog>
-      <Dialog Id="SetupReady" Width="440" Height="300" Title="deytt connect — установка">
-        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}установим connect" NoPrefix="yes" />
+      <Dialog Id="SetupReady" Width="440" Height="300" Title="deytt./connect — установка">
+        <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}установим deytt./connect" NoPrefix="yes" />
         <Control Id="Path" Type="Text" X="24" Y="80" Width="392" Height="48" Text="папка приложения: [INSTALLFOLDER]" NoPrefix="yes" />
-        <Control Id="Details" Type="Text" X="24" Y="142" Width="392" Height="60" Text="windows попросит разрешение администратора для установки службы vpn. если connect уже открыт, закройте его. во время обновления активное vpn-подключение остановится." NoPrefix="yes" />
+        <Control Id="Details" Type="Text" X="24" Y="142" Width="392" Height="60" Text="Подтвердите запрос Windows, чтобы продолжить установку. Во время обновления активное подключение остановится." NoPrefix="yes" />
         <Control Id="Line" Type="Line" X="0" Y="252" Width="440" Height="0" />
         <Control Id="Back" Type="PushButton" X="152" Y="270" Width="80" Height="20" Text="&amp;назад"><Publish Event="NewDialog" Value="SetupWelcome" /></Control>
         <Control Id="Install" Type="PushButton" X="240" Y="270" Width="92" Height="20" Default="yes" ElevationShield="yes" Text="&amp;установить"><Publish Event="EndDialog" Value="Return" /></Control>
         <Control Id="Cancel" Type="PushButton" X="340" Y="270" Width="80" Height="20" Cancel="yes" Text="отмена"><Publish Event="SpawnDialog" Value="CancelDlg" /></Control>
       </Dialog>
-      <Dialog Id="SetupComplete" Width="440" Height="300" Title="deytt connect — завершение">
+      <Dialog Id="SetupComplete" Width="440" Height="300" Title="deytt./connect — завершение">
         <Control Id="Title" Type="Text" X="24" Y="24" Width="392" Height="32" Text="{\SetupTitle}готово" NoPrefix="yes" />
-        <Control Id="InstalledText" Type="Text" X="24" Y="76" Width="392" Height="40" Text="connect установлен. приложение доступно в меню «пуск». выберите, что сделать дальше." NoPrefix="yes" HideCondition="REMOVE~=&quot;ALL&quot;" />
-        <Control Id="RemovedText" Type="Text" X="24" Y="76" Width="392" Height="45" Text="приложение и служба vpn удалены. данные входа сохранены для повторной установки." NoPrefix="yes" Hidden="yes" ShowCondition="REMOVE~=&quot;ALL&quot;" />
+        <Control Id="InstalledText" Type="Text" X="24" Y="76" Width="392" Height="40" Text="deytt./connect установлен." NoPrefix="yes" HideCondition="REMOVE~=&quot;ALL&quot;" />
+        <Control Id="RemovedText" Type="Text" X="24" Y="76" Width="392" Height="45" Text="deytt./connect удалён." NoPrefix="yes" Hidden="yes" ShowCondition="REMOVE~=&quot;ALL&quot;" />
         <Control Id="Desktop" Type="CheckBox" X="24" Y="128" Width="392" Height="20" Property="CREATE_DESKTOP_SHORTCUT" CheckBoxValue="1" Text="добавить ярлык на &amp;рабочий стол" HideCondition="REMOVE~=&quot;ALL&quot;" />
-        <Control Id="Launch" Type="CheckBox" X="24" Y="156" Width="392" Height="20" Property="LAUNCH_CONNECT" CheckBoxValue="1" Text="&amp;запустить deytt connect" HideCondition="REMOVE~=&quot;ALL&quot; OR NOT CAN_LAUNCH_CONNECT OR REBOOTNEEDED" />
-        <Control Id="ManualLaunch" Type="Text" X="24" Y="156" Width="392" Height="35" Text="запустите connect из меню «пуск» в обычной учётной записи windows." Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND NOT CAN_LAUNCH_CONNECT" />
-        <Control Id="Reboot" Type="Text" X="24" Y="190" Width="392" Height="38" Text="для завершения установки потребуется перезагрузка windows." Hidden="yes" ShowCondition="REBOOTNEEDED" />
+        <Control Id="LaunchText" Type="Text" X="24" Y="156" Width="392" Height="30" Text="После нажатия «Готово» откроется deytt./connect." NoPrefix="yes" Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND CAN_LAUNCH_CONNECT AND NOT REBOOTNEEDED" />
+        <Control Id="ManualLaunch" Type="Text" X="24" Y="156" Width="392" Height="35" Text="После завершения установки откройте deytt./connect из меню «Пуск»." NoPrefix="yes" Hidden="yes" ShowCondition="NOT REMOVE~=&quot;ALL&quot; AND (NOT CAN_LAUNCH_CONNECT OR REBOOTNEEDED)" />
+        <Control Id="Reboot" Type="Text" X="24" Y="190" Width="392" Height="38" Text="Для завершения установки потребуется перезагрузка Windows." Hidden="yes" ShowCondition="REBOOTNEEDED" />
         <Control Id="Error" Type="Text" X="24" Y="190" Width="392" Height="54" Text="[FINISH_ERROR]" Hidden="yes" ShowCondition="FINISH_ERROR" />
         <Control Id="Line" Type="Line" X="0" Y="252" Width="440" Height="0" />
         <Control Id="Finish" Type="PushButton" X="324" Y="270" Width="96" Height="20" Default="yes" Cancel="yes" Text="&amp;завершить">
@@ -97,3 +97,4 @@
     <UIRef Id="WixUI_Common" />
   </Fragment>
 </Wix>
+
