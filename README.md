@@ -6,26 +6,26 @@
 
 <h3 align="center">скачать приложение</h3>
 
-<table width="100%">
+<table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
       <td width="50%" align="center" valign="top">
         <h4>android</h4>
         <p><sub>v0.8.30 &nbsp;·&nbsp; android 7+ &nbsp;·&nbsp; ARM64</sub></p>
-        <p><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.30/deytt-connect-0.8.30.apk"><img src="assets/download-android-outline.svg" width="180" alt="скачать android APK v0.8.30"></a></p>
+        <p><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.30/deytt-connect-0.8.30.apk"><img src="assets/download-android-outline.svg" width="220" style="width:100%;max-width:220px;height:auto" alt="скачать android APK v0.8.30"></a></p>
         <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">релиз и SHA-256</a><br>приложения нет в google play</sub></p>
       </td>
       <td width="50%" align="center" valign="top">
         <h4>windows</h4>
         <p><sub>v0.8.40 &nbsp;·&nbsp; windows 10 (1809+) &nbsp;·&nbsp; x64</sub></p>
-        <p><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40"><img src="assets/download-windows-outline.svg" width="180" alt="скачать windows MSI или portable ZIP v0.8.40"></a></p>
+        <p><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40"><img src="assets/download-windows-outline.svg" width="220" style="width:100%;max-width:220px;height:auto" alt="скачать windows MSI или portable ZIP v0.8.40"></a></p>
         <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip">portable ZIP</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40">SHA-256 и релиз</a><br>сборки не подписаны</sub></p>
       </td>
     </tr>
   </tbody>
 </table>
 
-<table width="100%">
+<table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
       <td width="50%" valign="top"><sub>доступ</sub><br>получите его через <a href="https://t.me/deyttbot">telegram-бот</a></td>
@@ -36,7 +36,7 @@
 
 <h3>как начать</h3>
 
-<table width="100%">
+<table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
       <td width="50%" valign="top"><sub>01 &nbsp;·&nbsp; доступ</sub><br>войдите через telegram.</td>
@@ -73,7 +73,7 @@
 
 <h3 align="center">возможности</h3>
 
-<table width="100%">
+<table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
       <td width="50%" align="center"><strong>вход</strong><br><sub>через telegram</sub></td>
@@ -81,7 +81,7 @@
     </tr>
     <tr>
       <td width="50%" align="center"><strong>диагностика</strong><br><sub>состояние соединения</sub></td>
-      <td width="50%" align="center"><strong>обновления</strong><br><sub>android и windows</sub></td>
+      <td width="50%" align="center"><strong>обновления</strong><br><sub>новые версии</sub></td>
     </tr>
   </tbody>
 </table>
@@ -98,7 +98,7 @@
 | AmneziaWG 1.5 | ✓ | — |
 | AmneziaWG 3.1 | ✓ | ✓ |
 
-<table width="100%">
+<table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
       <td width="50%" align="center"><sub>регион на android</sub><br>определяется по ip, не по gps</td>
@@ -116,7 +116,7 @@ git clone --recurse-submodules https://github.com/crxwov/deytt.connect.git
 cd deytt.connect
 ```
 
-<table width="100%">
+<table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
       <td width="50%" valign="top"><strong>android</strong><br><sub>JDK 17 · android SDK 35 · NDK 26.1 · CMake 3.22.1</sub></td>
@@ -144,7 +144,7 @@ windows: исходники и сценарии находятся в катал
 
 <h3 align="center">поддержка</h3>
 
-<table width="100%">
+<table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
       <td width="50%" align="center" valign="top"><strong>аккаунт и приложение</strong><br><sub><a href="https://t.me/deyttbot">доступ и подключение</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/issues">ошибка приложения</a></sub></td>
