@@ -4,7 +4,7 @@
 
 <p align="center"><a href="#скачать-приложение">скачать</a> &nbsp;·&nbsp; <a href="#как-начать">как начать</a> &nbsp;·&nbsp; <a href="#возможности">возможности</a> &nbsp;·&nbsp; <a href="#поддержка">поддержка</a></p>
 
-## скачать приложение
+<h3 align="center">скачать приложение</h3>
 
 <p align="center">выберите устройство</p>
 
@@ -21,7 +21,7 @@
 <p align="center"><img src="assets/readme-route-flow.svg" width="520" alt="доступ соединяется с выбором маршрута и подключением"></p>
 <p align="center">доступ &nbsp;·&nbsp; маршрут &nbsp;·&nbsp; соединение</p>
 
-## как начать
+<h3>как начать</h3>
 
 1. получите доступ через [telegram-бот](https://t.me/deyttbot).
 2. скачайте приложение и войдите через telegram.
@@ -57,11 +57,11 @@
 
 </details>
 
-## возможности
+<h3 align="center">возможности</h3>
 
 <p align="center">telegram-вход &nbsp;·&nbsp; авто-маршрут<br>диагностика &nbsp;·&nbsp; обновления</p>
 
-## протоколы
+<h3>протоколы</h3>
 
 <p align="center">доступность зависит от платформы и конфигурации маршрута</p>
 
@@ -75,7 +75,7 @@
 
 <p align="center"><sub>на android регион определяется по ip, не по gps · <a href="https://deytt.space/info/">условия и конфиденциальность</a></sub></p>
 
-## для разработчиков
+<h3>для разработчиков</h3>
 
 клонируйте репозиторий вместе с подмодулями:
 
@@ -106,7 +106,7 @@ cd deytt.connect
 
 <p align="center"><a href="docs/README.md">документация</a> &nbsp;·&nbsp; <a href="docs/brand-guide.md">стиль проекта</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">участие в проекте</a></sub></p>
 
-## поддержка
+<h3 align="center">поддержка</h3>
 
 <p align="center"><a href="https://t.me/deyttbot">доступ и подключение</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/issues">ошибка приложения</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/security/advisories/new">сообщить об уязвимости</a> &nbsp;·&nbsp; <a href="SECURITY.md">политика безопасности</a></p>
 
