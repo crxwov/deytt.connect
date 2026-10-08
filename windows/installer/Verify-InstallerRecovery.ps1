@@ -61,9 +61,12 @@ foreach($dialog in @('SetupWelcome','SetupReady','SetupComplete','SetupMaintenan
  $null=Row "SELECT ``Dialog`` FROM ``Dialog`` WHERE ``Dialog``='$dialog'"
 }
 $null=Row 'SELECT `Control` FROM `Control` WHERE `Dialog_`=''SetupComplete'' AND `Control`=''Desktop'''
-$launchView=$database.OpenView('SELECT `Control` FROM `Control` WHERE `Dialog_`=''SetupComplete'' AND `Control`=''Launch''')
-$null=$launchView.Execute()
-Check (!$launchView.Fetch()) 'Finish dialog must not contain the obsolete launch checkbox'
+$launch=Row 'SELECT `Control` FROM `Control` WHERE `Dialog_`=''SetupComplete'' AND `Control`=''LaunchConnect'' AND `Type`=''CheckBox'' AND `Property`=''LAUNCH_CONNECT'''
+Check ($launch.Text -eq 'LaunchConnect') 'Finish dialog launch checkbox must control LAUNCH_CONNECT'
+$launchValue=Row 'SELECT `Value` FROM `CheckBox` WHERE `Property`=''LAUNCH_CONNECT'''
+Check ($launchValue.Text -eq '1') 'Launch checkbox must set LAUNCH_CONNECT to 1 when checked'
+$launchDefault=Row 'SELECT `Value` FROM `Property` WHERE `Property`=''LAUNCH_CONNECT'''
+Check ($launchDefault.Text -eq '1') 'Launch checkbox must be checked by default'
 $removal=Row 'SELECT `Condition` FROM `InstallExecuteSequence` WHERE `Action`=''RemoveDesktopShortcut'''
 Check ($removal.Text -match 'NOT UPGRADINGPRODUCTCODE') 'Upgrade would remove the desktop shortcut'
 Write-Host 'MSI SID, service classifier and wizard metadata checks passed; no installation performed. Custom DLL actions need full installer-context acceptance.'
