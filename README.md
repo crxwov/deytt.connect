@@ -49,7 +49,7 @@
 </table>
 
 <details>
-<summary><div align="center"><strong>установка android</strong></div></summary>
+<summary><kbd>установка android</kbd></summary>
 
 1. скачайте APK для ARM64 из [релиза v0.8.30](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30).
 2. откройте файл и подтвердите установку, если android запросит разрешение.
@@ -60,7 +60,7 @@
 </details>
 
 <details>
-<summary><div align="center"><strong>установка windows</strong></div></summary>
+<summary><kbd>установка windows</kbd></summary>
 
 | вариант | установка |
 | :--- | :--- |
@@ -102,7 +102,6 @@
     <tr><td align="center">VLESS</td><td align="center">✓</td><td align="center">✓</td></tr>
     <tr><td align="center">Trojan</td><td align="center">✓</td><td align="center">✓</td></tr>
     <tr><td align="center">Hysteria 2</td><td align="center">✓</td><td align="center">✓</td></tr>
-    <tr><td align="center">AmneziaWG 1.5</td><td align="center">✓</td><td align="center">—</td></tr>
     <tr><td align="center">AmneziaWG 3.1</td><td align="center">✓</td><td align="center">✓</td></tr>
   </tbody>
 </table>
@@ -135,7 +134,7 @@ cd deytt.connect
 </table>
 
 <details>
-<summary><div align="center"><strong>команды сборки</strong></div></summary>
+<summary><kbd>команды сборки</kbd></summary>
 
 android:
 
