@@ -49,7 +49,7 @@
 </table>
 
 <details>
-<summary><kbd>установка android</kbd></summary>
+<summary><img src="assets/readme-toggle-android.svg" width="236" height="48" align="middle" alt="установка android"></summary>
 
 1. скачайте APK для ARM64 из [релиза v0.8.30](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30).
 2. откройте файл и подтвердите установку, если android запросит разрешение.
@@ -60,7 +60,7 @@
 </details>
 
 <details>
-<summary><kbd>установка windows</kbd></summary>
+<summary><img src="assets/readme-toggle-windows.svg" width="236" height="48" align="middle" alt="установка windows"></summary>
 
 | вариант | установка |
 | :--- | :--- |
@@ -134,7 +134,7 @@ cd deytt.connect
 </table>
 
 <details>
-<summary><kbd>команды сборки</kbd></summary>
+<summary><img src="assets/readme-toggle-build.svg" width="236" height="48" align="middle" alt="команды сборки"></summary>
 
 android:
 
