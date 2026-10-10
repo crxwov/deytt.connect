@@ -49,7 +49,7 @@
 </table>
 
 <details>
-<summary align="center"><strong>установка android</strong></summary>
+<summary><div align="center"><strong>установка android</strong></div></summary>
 
 1. скачайте APK для ARM64 из [релиза v0.8.30](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30).
 2. откройте файл и подтвердите установку, если android запросит разрешение.
@@ -60,7 +60,7 @@
 </details>
 
 <details>
-<summary align="center"><strong>установка windows</strong></summary>
+<summary><div align="center"><strong>установка windows</strong></div></summary>
 
 | вариант | установка |
 | :--- | :--- |
@@ -90,13 +90,22 @@
 
 <p align="center"><sub>доступность зависит от платформы и конфигурации маршрута</sub></p>
 
-| протокол | android | windows |
-| :--- | :---: | :---: |
-| VLESS | ✓ | ✓ |
-| Trojan | ✓ | ✓ |
-| Hysteria 2 | ✓ | ✓ |
-| AmneziaWG 1.5 | ✓ | — |
-| AmneziaWG 3.1 | ✓ | ✓ |
+<table align="center">
+  <thead>
+    <tr>
+      <th align="center">протокол</th>
+      <th align="center">android</th>
+      <th align="center">windows</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td align="center">VLESS</td><td align="center">✓</td><td align="center">✓</td></tr>
+    <tr><td align="center">Trojan</td><td align="center">✓</td><td align="center">✓</td></tr>
+    <tr><td align="center">Hysteria 2</td><td align="center">✓</td><td align="center">✓</td></tr>
+    <tr><td align="center">AmneziaWG 1.5</td><td align="center">✓</td><td align="center">—</td></tr>
+    <tr><td align="center">AmneziaWG 3.1</td><td align="center">✓</td><td align="center">✓</td></tr>
+  </tbody>
+</table>
 
 <table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
@@ -109,7 +118,7 @@
 
 <h3 align="center">для разработчиков</h3>
 
-клонируйте репозиторий вместе с подмодулями:
+<p align="center">клонируйте репозиторий вместе с подмодулями:</p>
 
 ```bash
 git clone --recurse-submodules https://github.com/crxwov/deytt.connect.git
@@ -126,7 +135,7 @@ cd deytt.connect
 </table>
 
 <details>
-<summary align="center"><strong>команды сборки</strong></summary>
+<summary><div align="center"><strong>команды сборки</strong></div></summary>
 
 android:
 
@@ -158,3 +167,4 @@ windows: исходники и сценарии находятся в катал
     </tr>
   </tbody>
 </table>
+
