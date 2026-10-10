@@ -1,17 +1,33 @@
-# Участие в проекте
+<h1 align="center">участие в проекте</h1>
 
-Спасибо за интерес к deytt./connect. Перед изменениями посмотрите [основной README](README.md), [памятку по стилю](docs/brand-guide.md) и подходящий раздел [документации](docs/README.md).
+<p align="center">спасибо за интерес к deytt./connect.<br>перед изменениями посмотрите <a href="README.md">основной README</a>, <a href="docs/brand-guide.md">памятку по стилю</a> и <a href="docs/README.md">документацию</a>.</p>
 
-## Ошибка или идея
+<table align="center">
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top"><strong>ошибка</strong><br><sub><a href="https://github.com/crxwov/deytt.connect/issues/new?template=bug_report.yml">сообщить об ошибке</a><br>укажите платформу, версию приложения и ОС, шаги воспроизведения.</sub></td>
+      <td width="50%" align="center" valign="top"><strong>идея</strong><br><sub><a href="https://github.com/crxwov/deytt.connect/issues/new?template=feature_request.yml">предложить улучшение</a><br>опишите, что неудобно и какого результата вы ожидаете.</sub></td>
+    </tr>
+    <tr>
+      <td width="50%" align="center" valign="top"><strong>вход и подключение</strong><br><sub><a href="https://t.me/deyttbot">поддержка deytt</a></sub></td>
+      <td width="50%" align="center" valign="top"><strong>уязвимость</strong><br><sub>отправьте её только через <a href="https://github.com/crxwov/deytt.connect/security/advisories/new">приватный security advisory</a>.</sub></td>
+    </tr>
+  </tbody>
+</table>
 
-- [Сообщить об ошибке](https://github.com/crxwov/deytt.connect/issues/new?template=bug_report.yml) — укажите платформу, версию приложения, версию ОС и шаги воспроизведения.
-- [Предложить улучшение](https://github.com/crxwov/deytt.connect/issues/new?template=feature_request.yml) — опишите, что сейчас неудобно и какого результата вы ожидаете.
-- [Задать вопрос поддержке](https://t.me/deyttbot) — вход, подписка и подключение.
+<p align="center"><sub>issues видны всем. не публикуйте telegram-коды, ссылки подписки, vpn-ключи, конфигурации, ip-адреса и данные аккаунта.</sub></p>
 
-Issues видны всем. Не публикуйте Telegram-коды, ссылки подписки, VPN-ключи, конфигурации, IP-адреса и данные аккаунта. Уязвимости отправляйте только через [приватные Security Advisories](https://github.com/crxwov/deytt.connect/security/advisories/new).
+<h2 align="center">изменения кода и документации</h2>
 
-## Изменения кода и документации
-
-Один pull request — одна понятная задача. Коротко опишите проблему, изменение и проверку. Если меняется экран, приложите снимок до и после без личных данных. Обновите связанные инструкции, когда меняется пользовательское поведение.
-
-Перед отправкой запустите проверки, относящиеся к изменённым компонентам. Для выпусков и подписей соблюдайте [инструкцию по безопасной сборке](docs/release-security.md); не ослабляйте проверки сертификатов и не добавляйте секреты в репозиторий.
+<table align="center">
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top"><strong>одна задача</strong><br><sub>один pull request — одна понятная задача. кратко опишите проблему, изменение и проверку.</sub></td>
+      <td width="50%" align="center" valign="top"><strong>изменение интерфейса</strong><br><sub>приложите снимки до и после без личных данных. обновите инструкции, если меняется поведение.</sub></td>
+    </tr>
+    <tr>
+      <td width="50%" align="center" valign="top"><strong>проверка</strong><br><sub>запустите проверки, относящиеся к изменённым компонентам.</sub></td>
+      <td width="50%" align="center" valign="top"><strong>безопасный выпуск</strong><br><sub>следуйте <a href="docs/release-security.md">инструкции по сборке и подписи</a>. не ослабляйте проверки сертификатов и не добавляйте секреты.</sub></td>
+    </tr>
+  </tbody>
+</table>

@@ -1,26 +1,28 @@
-# Документация
+<h1 align="center">документация</h1>
 
-Загрузки и пользовательские инструкции — в [основном README](../README.md). Здесь собраны материалы о сборке, устройстве приложения и проверках.
+<p align="center">загрузки и инструкции для пользователей находятся в <a href="../README.md">основном README</a>.<br>перед изменением текстов и брендовых изображений сверьтесь с <a href="brand-guide.md">памяткой по стилю</a>.</p>
 
-Перед изменением текстов и брендовых изображений используйте [памятку по стилю](brand-guide.md).
-
-## Сборка и выпуск
-
-- [Сборка установщика Windows](../windows/installer/README.md) — состав MSI, восстановление службы и проверка установщика. Документ на английском.
-- [Подпись и безопасный выпуск](release-security.md) — APK, сертификаты и правила публикации.
-
-## Устройство приложения
-
-- [Загрузка подписки](subscription-reliability.md) — этапы импорта, обработка ошибок и восстановление данных.
-- [Раздельная маршрутизация](split-tunneling.md) — выбор сетевого пути и ограничения.
-- [Метки протоколов](protocol-marks.md) — источники графики и атрибуция.
-
-## Проверки
-
-- [Приёмка Windows 10](windows-10-native-acceptance.md) — сценарии установки, обновления и подключения.
-- [Проверка мобильного релиза 0.8.6](mobile-qa-0.8.6.md) — архивный отчёт.
-
-## Лицензии и материалы
-
-- [Лицензии сторонних компонентов](../THIRD-PARTY-NOTICES.md)
-- [Атрибуция графики](../THIRD_PARTY_NOTICES.md)
+<table align="center">
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top">
+        <strong>сборка и выпуск</strong><br>
+        <sub><a href="../windows/installer/README.md">установщик windows</a><br><a href="release-security.md">подпись и безопасный выпуск</a></sub>
+      </td>
+      <td width="50%" align="center" valign="top">
+        <strong>устройство приложения</strong><br>
+        <sub><a href="subscription-reliability.md">загрузка подписки</a><br><a href="split-tunneling.md">раздельная маршрутизация</a><br><a href="protocol-marks.md">метки протоколов</a></sub>
+      </td>
+    </tr>
+    <tr>
+      <td width="50%" align="center" valign="top">
+        <strong>проверки</strong><br>
+        <sub><a href="windows-10-native-acceptance.md">приёмка windows 10</a><br><a href="mobile-qa-0.8.6.md">архивная проверка мобильного релиза 0.8.6</a></sub>
+      </td>
+      <td width="50%" align="center" valign="top">
+        <strong>лицензии и материалы</strong><br>
+        <sub><a href="../THIRD-PARTY-NOTICES.md">лицензии компонентов</a><br><a href="../THIRD_PARTY_NOTICES.md">атрибуция графики</a></sub>
+      </td>
+    </tr>
+  </tbody>
+</table>

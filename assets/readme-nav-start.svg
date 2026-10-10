@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="54" viewBox="0 0 220 54" role="img" aria-labelledby="title desc">
+  <title id="title">Как начать</title>
+  <desc id="desc">Кнопка перехода к шагам подключения</desc>
+  <rect x="1" y="1" width="218" height="52" rx="16" fill="#0B1222" stroke="#34466D" stroke-width="1.5"/>
+  <circle cx="27" cy="27" r="14" fill="#6378F6" fill-opacity="0.14"/>
+  <text x="27" y="31" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="11" font-weight="700" fill="#A9BEFF">01</text>
+  <text x="112" y="33" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="18" font-weight="600" fill="#F5F8FC">как начать</text>
+  <path d="M197 22l6 5-6 5" fill="none" stroke="#A9BEFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

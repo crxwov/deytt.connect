@@ -2,7 +2,7 @@
   <img src="assets/deytt-connect-banner.png" alt="deytt./connect: маршруты и подключение на android и windows" width="100%">
 </div>
 
-<p align="center"><a href="#скачать-приложение">скачать</a> &nbsp;·&nbsp; <a href="#как-начать">как начать</a> &nbsp;·&nbsp; <a href="#возможности">возможности</a> &nbsp;·&nbsp; <a href="#поддержка">поддержка</a></p>
+<p align="center"><a href="#скачать-приложение"><img src="assets/readme-nav-download.svg" width="145" alt="скачать приложение"></a> &nbsp; <a href="#как-начать"><img src="assets/readme-nav-start.svg" width="145" alt="как начать"></a> &nbsp; <a href="#возможности"><img src="assets/readme-nav-features.svg" width="145" alt="возможности приложения"></a> &nbsp; <a href="#поддержка"><img src="assets/readme-nav-support.svg" width="145" alt="поддержка"></a></p>
 
 <h3 align="center">скачать приложение</h3>
 
@@ -28,28 +28,28 @@
 <table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
-      <td width="50%" valign="top"><sub>доступ</sub><br>получите его через <a href="https://t.me/deyttbot">telegram-бот</a></td>
-      <td width="50%" valign="top"><sub>устройства</sub><br>телефон и компьютер используют отдельные слоты. установка windows не занимает слот телефона.</td>
+      <td width="50%" align="center" valign="top"><sub>доступ</sub><br>получите его через <a href="https://t.me/deyttbot">telegram-бот</a></td>
+      <td width="50%" align="center" valign="top"><sub>устройства</sub><br>телефон и компьютер используют отдельные слоты. установка windows не занимает слот телефона.</td>
     </tr>
   </tbody>
 </table>
 
-<h3>как начать</h3>
+<h3 align="center">как начать</h3>
 
 <table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
-      <td width="50%" valign="top"><sub>01 &nbsp;·&nbsp; доступ</sub><br>войдите через telegram.</td>
-      <td width="50%" valign="top"><sub>02 &nbsp;·&nbsp; приложение</sub><br>скачайте его для своего устройства.</td>
+      <td width="50%" align="center" valign="top"><sub>01 &nbsp;·&nbsp; доступ</sub><br>войдите через telegram.</td>
+      <td width="50%" align="center" valign="top"><sub>02 &nbsp;·&nbsp; приложение</sub><br>скачайте его для своего устройства.</td>
     </tr>
     <tr>
-      <td colspan="2" valign="top"><sub>03 &nbsp;·&nbsp; подключение</sub><br>выберите «Авто» или маршрут и нажмите «Подключить».</td>
+      <td colspan="2" align="center" valign="top"><sub>03 &nbsp;·&nbsp; подключение</sub><br>выберите «Авто» или маршрут и нажмите «Подключить».</td>
     </tr>
   </tbody>
 </table>
 
 <details>
-<summary><strong>установка android</strong></summary>
+<summary align="center"><strong>установка android</strong></summary>
 
 1. скачайте APK для ARM64 из [релиза v0.8.30](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30).
 2. откройте файл и подтвердите установку, если android запросит разрешение.
@@ -60,7 +60,7 @@
 </details>
 
 <details>
-<summary><strong>установка windows</strong></summary>
+<summary align="center"><strong>установка windows</strong></summary>
 
 | вариант | установка |
 | :--- | :--- |
@@ -86,7 +86,7 @@
   </tbody>
 </table>
 
-<h3>протоколы</h3>
+<h3 align="center">протоколы</h3>
 
 <p align="center"><sub>доступность зависит от платформы и конфигурации маршрута</sub></p>
 
@@ -107,7 +107,7 @@
   </tbody>
 </table>
 
-<h3>для разработчиков</h3>
+<h3 align="center">для разработчиков</h3>
 
 клонируйте репозиторий вместе с подмодулями:
 
@@ -119,14 +119,14 @@ cd deytt.connect
 <table width="100%" align="center" style="width:100%;table-layout:fixed;">
   <tbody>
     <tr>
-      <td width="50%" valign="top"><strong>android</strong><br><sub>JDK 17 · android SDK 35 · NDK 26.1 · CMake 3.22.1</sub></td>
-      <td width="50%" valign="top"><strong>windows</strong><br><sub>windows SDK · .NET 10 SDK · Go · подмодули</sub></td>
+      <td width="50%" align="center" valign="top"><strong>android</strong><br><sub>JDK 17 · android SDK 35 · NDK 26.1 · CMake 3.22.1</sub></td>
+      <td width="50%" align="center" valign="top"><strong>windows</strong><br><sub>windows SDK · .NET 10 SDK · Go · подмодули</sub></td>
     </tr>
   </tbody>
 </table>
 
 <details>
-<summary><strong>команды сборки</strong></summary>
+<summary align="center"><strong>команды сборки</strong></summary>
 
 android:
 

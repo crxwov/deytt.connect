@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="54" viewBox="0 0 220 54" role="img" aria-labelledby="title desc">
+  <title id="title">Поддержка</title>
+  <desc id="desc">Кнопка перехода к поддержке deytt.</desc>
+  <rect x="1" y="1" width="218" height="52" rx="16" fill="#0B1222" stroke="#34466D" stroke-width="1.5"/>
+  <circle cx="27" cy="27" r="14" fill="#6378F6" fill-opacity="0.14"/>
+  <path d="M20 21h14v10h-8l-4 4v-4h-2z" fill="none" stroke="#A9BEFF" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="112" y="33" text-anchor="middle" font-family="Inter, Segoe UI, sans-serif" font-size="18" font-weight="600" fill="#F5F8FC">поддержка</text>
+  <path d="M197 22l6 5-6 5" fill="none" stroke="#A9BEFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
