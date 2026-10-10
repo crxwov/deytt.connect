@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="236" height="48" viewBox="0 0 236 48" role="img" aria-labelledby="title desc">
-  <title id="title">установка windows</title>
-  <desc id="desc">кнопка раскрытия инструкции по установке windows</desc>
-  <rect x="1" y="1" width="234" height="46" rx="15" fill="#0B1222" stroke="#34466D" stroke-width="1.5"/>
-  <circle cx="25" cy="24" r="14" fill="#6378F6" fill-opacity="0.16"/>
-  <path d="M17 18l8-1v7h-8zm10-1.2 8-1.1v8.3h-8zm-10 8.6h8v7l-8-1zm10 0h8v8.3l-8-1.1z" fill="#A9BEFF"/>
-  <text x="51" y="29" fill="#F5F8FC" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="600">установка windows</text>
-</svg>

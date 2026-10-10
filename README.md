@@ -48,8 +48,7 @@
   </tbody>
 </table>
 
-<details>
-<summary><img src="assets/readme-toggle-android.svg" width="236" height="48" align="middle" alt="установка android"></summary>
+<h4 align="center">установка android</h4>
 
 1. скачайте APK для ARM64 из [релиза v0.8.30](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30).
 2. откройте файл и подтвердите установку, если android запросит разрешение.
@@ -57,10 +56,7 @@
 
 если установлена версия `0.8.17` со старой подписью, перед обновлением прочитайте [заметки к релизу](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30). в релизе `v0.8.30` нет APK с суффиксом `legacy`. если обновление не устанавливается, обратитесь в [поддержку](https://t.me/deyttbot), прежде чем удалять приложение.
 
-</details>
-
-<details>
-<summary><img src="assets/readme-toggle-windows.svg" width="236" height="48" align="middle" alt="установка windows"></summary>
+<h4 align="center">установка windows</h4>
 
 | вариант | установка |
 | :--- | :--- |
@@ -68,8 +64,6 @@
 | portable ZIP | скачайте [`deytt-connect-0.8.40-portable.zip`](https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip), полностью распакуйте архив и запустите `deyttconnect.exe`. подтвердите запрос администратора windows при установке vpn-службы. |
 
 для работы приложения нужен **microsoft edge webview2 runtime**. если компонента нет, MSI может загрузить его с сайта microsoft. подробнее — в [руководстве по установщику](windows/installer/README.md).
-
-</details>
 
 <h3 align="center">возможности</h3>
 
@@ -133,8 +127,7 @@ cd deytt.connect
   </tbody>
 </table>
 
-<details>
-<summary><img src="assets/readme-toggle-build.svg" width="236" height="48" align="middle" alt="команды сборки"></summary>
+<h4 align="center">команды сборки</h4>
 
 android:
 
@@ -145,8 +138,6 @@ android:
 windows: исходники и сценарии находятся в каталоге [`windows/`](windows/). состав MSI описан в [руководстве по установщику](windows/installer/README.md).
 
 перед публикацией android-приложения прочитайте [инструкцию по безопасной сборке и подписи](docs/release-security.md).
-
-</details>
 
 <p align="center"><a href="docs/README.md">документация</a> &nbsp;·&nbsp; <a href="docs/brand-guide.md">стиль проекта</a> &nbsp;·&nbsp; <a href="CONTRIBUTING.md">участие в проекте</a></p>
 
