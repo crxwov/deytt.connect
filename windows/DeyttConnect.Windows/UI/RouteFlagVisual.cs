@@ -87,19 +87,26 @@ internal static class RouteFlagVisual
 
     private static Control DoubleFlag(double width, double height)
     {
-        var pair = new StackPanel
+        var flagWidth = Math.Max(2, (width - 12) / 2);
+        var pair = new Grid
         {
-            Orientation = Avalonia.Layout.Orientation.Horizontal,
-            Spacing = 2,
+            Width = width - 2,
+            ColumnDefinitions = new ColumnDefinitions("*,10,*"),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
-        pair.Children.Add(Frame(HorizontalStripes(width * 0.36, height * 0.58,
-            "#F7F7F4", "#477CC0", "#C83C4A"), width * 0.36, height * 0.58));
-        pair.Children.Add(DeyttTheme.TextBlock("→", 8, DeyttTheme.Muted,
-            FontWeight.SemiBold, wrap: false));
-        pair.Children.Add(Frame(HorizontalStripes(width * 0.36, height * 0.58,
-            "#17191E", "#C83C4A", "#F0C66B"), width * 0.36, height * 0.58));
+        pair.Children.Add(Frame(HorizontalStripes(flagWidth, height * 0.58,
+            "#F7F7F4", "#477CC0", "#C83C4A"), flagWidth, height * 0.58));
+        var arrow = DeyttTheme.TextBlock("→", 13, DeyttTheme.Muted,
+            FontWeight.SemiBold, wrap: false);
+        arrow.TextAlignment = TextAlignment.Center;
+        arrow.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+        Grid.SetColumn(arrow, 1);
+        pair.Children.Add(arrow);
+        var destination = Frame(HorizontalStripes(flagWidth, height * 0.58,
+            "#17191E", "#C83C4A", "#F0C66B"), flagWidth, height * 0.58);
+        Grid.SetColumn(destination, 2);
+        pair.Children.Add(destination);
         return pair;
     }
 

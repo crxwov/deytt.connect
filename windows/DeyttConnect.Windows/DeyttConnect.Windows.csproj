@@ -17,6 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\DeyttConnect.Windows.Service\RouteLatencyProbe.cs" Link="Shared\RouteLatencyProbe.cs" />
     <Folder Include="Models\" />
     <Content Include="Assets\deyttconnect.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
@@ -24,6 +25,14 @@
     <AvaloniaResource Include="Assets\**" Exclude="Assets\route-map\**" />
     <Content Include="..\..\app\src\main\assets\route-map\**\*"
              Link="Assets\route-map\%(RecursiveDir)%(Filename)%(Extension)"
+             Exclude="..\..\app\src\main\assets\route-map\index.html;..\..\app\src\main\assets\route-map\network-atlas.css;..\..\app\src\main\assets\route-map\atlas-init.js;..\..\app\src\main\assets\route-map\network-atlas.js"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\route-map\index.html;Assets\route-map\network-atlas.css;Assets\route-map\atlas-init.js;Assets\route-map\network-atlas.js"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\Fonts\InterTight-Regular.ttf;Assets\Fonts\InterTight-SemiBold.ttf;Assets\Fonts\InterTight-Bold.ttf;Assets\Fonts\Unbounded-Bold.ttf;Assets\Fonts\JetBrainsMono-Regular.ttf"
+             Link="Assets\route-map\fonts\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="..\..\app\src\main\assets\world-land.json"

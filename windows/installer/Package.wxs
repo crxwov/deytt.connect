@@ -35,7 +35,10 @@
     <Property Id="SETUP_COMMIT_LABEL" Value="&amp;Установить" />
     <Binary Id="SetupSidebar" SourceFile="$(sys.SOURCEFILEDIR)Assets/Sidebar.bmp" />
     <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPNOREPAIR" Value="1" />
+    <Property Id="ARPURLINFOABOUT" Value="https://deytt.space" />
     <Property Id="ARPCOMMENTS" Value="Приложение deytt./connect для VPN." />
+    <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" Sequence="execute" Condition="NOT REMOVE~=&quot;ALL&quot;" />
     <Binary Id="SetupActions" SourceFile="$(var.DeyttConnect.SetupActions.TargetDir)DeyttConnect.SetupActions.CA.dll" />
     <CustomAction Id="DetectLegacyService" BinaryRef="SetupActions" DllEntry="DetectLegacyService" Execute="immediate" Return="check" />
     <CustomAction Id="ValidateInstallDirectory" BinaryRef="SetupActions" DllEntry="ValidateInstallDirectory" Execute="immediate" Return="check" />
@@ -44,6 +47,8 @@
     <CustomAction Id="InstallWebView2" BinaryRef="SetupActions" DllEntry="InstallWebView2" Execute="deferred" Impersonate="no" Return="check" />
     <CustomAction Id="PrepareShortcutRemoval" BinaryRef="SetupActions" DllEntry="PrepareShortcutRemoval" Execute="immediate" Return="check" />
     <CustomAction Id="RemoveDesktopShortcut" BinaryRef="SetupActions" DllEntry="RemoveDesktopShortcut" Execute="deferred" Impersonate="yes" Return="check" />
+    <CustomAction Id="PrepareConnectDataRemoval" BinaryRef="SetupActions" DllEntry="PrepareConnectDataRemoval" Execute="immediate" Return="check" />
+    <CustomAction Id="RemoveConnectData" BinaryRef="SetupActions" DllEntry="RemoveConnectData" Execute="commit" Impersonate="no" Return="ignore" />
     <InstallUISequence>
       <Custom Action="DetectLegacyService" After="AppSearch" />
     </InstallUISequence>
@@ -54,6 +59,8 @@
       <Custom Action="InstallWebView2" After="InstallFiles" Condition="NOT REMOVE~=&quot;ALL&quot; AND NOT WEBVIEW2_PRESENT" />
       <Custom Action="PrepareShortcutRemoval" Before="RemoveDesktopShortcut" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
       <Custom Action="RemoveDesktopShortcut" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="PrepareConnectDataRemoval" Before="RemoveConnectData" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+      <Custom Action="RemoveConnectData" After="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
     </InstallExecuteSequence>
     <Property Id="WINDOWS_BUILD"><RegistrySearch Id="FindWindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" /></Property>
     <UIRef Id="DeyttSetupUI" />
@@ -94,6 +101,7 @@
           </Component>
 
           <Component Id="AllowedUserSidComponent" Guid="9F38881C-88D8-4A09-B682-94A2CF4BE8CC" Bitness="always64">
+            <RemoveRegistryKey Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\DEYTTConnectVpn.Portable" Action="removeOnInstall" />
             <RegistryValue Root="HKLM"
                            Key="SOFTWARE\DEYTT\Connect"
                            Name="AllowedUserSid"
@@ -124,9 +132,21 @@
                       Icon="DeyttConnectProductIcon.exe"
                       IconIndex="0"
                       WorkingDirectory="INSTALLFOLDER" />
+            <Shortcut Id="UiUninstallStartMenuShortcut" Advertise="no" Directory="ApplicationProgramsFolder"
+                      Name="Удалить connect" Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]"
+                      Icon="DeyttConnectProductIcon.exe" WorkingDirectory="INSTALLFOLDER" />
             <RemoveFolder Id="RemoveApplicationProgramsFolder"
                           Directory="ApplicationProgramsFolder"
                           On="uninstall" />
+          </Component>
+
+          <Component Id="UninstallShortcutComponent" Guid="21A29DBB-CA0B-4897-9032-1AF5A5B1CBA4" Bitness="always64">
+            <RegistryValue Root="HKLM" Key="SOFTWARE\DEYTT\Connect" Name="UninstallShortcut" Type="integer" Value="1" KeyPath="yes" />
+            <Shortcut Id="UiUninstallFolderShortcut" Advertise="no" Directory="INSTALLFOLDER"
+                      Name="Удалить connect" Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]"
+                      Icon="DeyttConnectProductIcon.exe" WorkingDirectory="INSTALLFOLDER" />
+            <RemoveFolder Id="RemoveInstalledConnectFolder" Directory="INSTALLFOLDER" On="uninstall" />
+            <RemoveFolder Id="RemoveEmptyVendorFolder" Directory="DEYTTDIR" On="uninstall" />
           </Component>
 
         </Directory>
@@ -138,6 +158,7 @@
       <ComponentRef Id="AllowedUserSidComponent" />
       <ComponentRef Id="UiExecutableComponent" />
       <ComponentRef Id="UiStartMenuShortcutComponent" />
+      <ComponentRef Id="UninstallShortcutComponent" />
       <ComponentRef Id="WebViewBootstrapperComponent" />
       <ComponentGroupRef Id="PayloadFiles" />
     </Feature>

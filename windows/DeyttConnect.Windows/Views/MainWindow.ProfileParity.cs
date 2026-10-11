@@ -14,6 +14,25 @@ public partial class MainWindow
     private readonly HashSet<long> _happDeviceChangesInFlight = [];
     private readonly HashSet<string> _sessionRevokesInFlight = new(StringComparer.Ordinal);
 
+    internal static string NormalizeTariffDisplayName(string? value)
+    {
+        var name = value?.Trim();
+        if (string.IsNullOrEmpty(name))
+            return string.Empty;
+
+        var compact = new string(name.Where(char.IsLetterOrDigit).ToArray());
+        return compact.Equals("deyttultra", StringComparison.OrdinalIgnoreCase) ||
+               compact.Equals("ultra", StringComparison.OrdinalIgnoreCase)
+            ? "deytt. ultra"
+            : name;
+    }
+
+    internal static bool SubscriptionExpiryNeedsHighlight(DateTimeOffset? expiry, DateTimeOffset now) =>
+        expiry is DateTimeOffset value && value <= now.AddDays(8);
+
+    internal static bool SubscriptionDeviceLimitReached(int? used, int? limit) =>
+        used is int current && limit is > 0 && current >= limit.Value;
+
     private Control BuildTelegramIdentityEntry(TelegramAccount? account, bool signedIn, Action onClick)
     {
         var name = AccountDisplayName(account, signedIn);
@@ -321,8 +340,8 @@ public partial class MainWindow
             ? Copy("Освободите место в тарифе, затем повторите восстановление доступа.",
                 "Free a slot in your plan, then retry restoring device access.")
             : deviceMissing
-                ? Copy("Устройство больше не зарегистрировано. Обновите список и повторите действие.",
-                    "This device is no longer registered. Refresh the list and retry the action.")
+                ? Copy("Устройство больше не зарегистрировано. Обновите список, чтобы увидеть актуальные устройства.",
+                    "This device is no longer registered. Refresh the list to see the current devices.")
                 : Copy("Сервер не подтвердил изменение. Проверьте подключение и обновите список.",
                     "The server did not confirm the change. Check your connection and refresh the list.");
         var retry = DeyttTheme.PrimaryButton(Copy("Обновить список", "Refresh list"), () => { });
@@ -338,10 +357,11 @@ public partial class MainWindow
             {
                 DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
                 retry,
-                retryChange,
                 close,
             },
         };
+        if (!deviceMissing)
+            content.Children.Insert(2, retryChange);
         var result = await ShowContentInShellAsync(title, content, 500, dialog =>
         {
             if (retry.Child is Button retryButton)

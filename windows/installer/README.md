@@ -17,8 +17,14 @@ account across upgrades, and rejects a service belonging to another program.
 The completion screen offers independent desktop-shortcut and launch checkboxes.
 Launch occurs only when selected, through the signed-in Windows shell. It never starts with
 the elevated installation token. Uninstall stops and removes the managed VPN
-service. MSI-owned files live in Program Files; account data under
-`%LOCALAPPDATA%` is retained for later reinstall.
+service. Windows Apps and uninstall managers discover the standard machine-wide
+MSI registration. The installed folder and Start Menu contain an uninstall
+shortcut for that registered product. Final uninstall removes known local
+session, subscription, settings, device identity, update downloads, generated
+VPN profiles, and app WebView caches. Upgrades and failed uninstall transactions
+preserve local data. Unknown files, reparse targets, and shared WebView2 Runtime
+are preserved. The subscription and server-side device entry remain in the
+account; release an old device in the bot before reinstalling if its slots are full.
 
 Windows release artifacts are currently unsigned by the publisher, so Windows may show a publisher warning. Download installers from the official project release and compare the published SHA-256 file. The Microsoft WebView2 bootstrapper is signature-checked during the Windows build workflow.
 

@@ -10,7 +10,7 @@ namespace DeyttConnect.Windows.Services;
 public sealed class TelegramApiClient
 {
     private static readonly Uri ApiBase = new("https://deytt.space");
-    private static readonly Regex UsernamePattern = new("^[A-Za-z0-9_]{5,32}$", RegexOptions.CultureInvariant);
+    private static readonly Regex UsernamePattern = new("\\A[A-Za-z0-9_]{5,32}\\z", RegexOptions.CultureInvariant);
     private static readonly Regex CodePattern = new("^[0-9]{6}$", RegexOptions.CultureInvariant);
     private static readonly HttpClient SharedHttp = new(new SocketsHttpHandler
     {
@@ -45,17 +45,27 @@ public sealed class TelegramApiClient
 
     internal TelegramApiClient(HttpClient http) => _http = http ?? throw new ArgumentNullException(nameof(http));
 
+    /// <summary>Returns the display form with one @; API requests omit that prefix.</summary>
+    public static bool TryNormalizeUsername(string? username, out string normalized)
+    {
+        normalized = "";
+        var candidate = username?.Trim() ?? "";
+        if (candidate.StartsWith('@'))
+            candidate = candidate[1..];
+        if (!UsernamePattern.IsMatch(candidate))
+            return false;
+        normalized = $"@{candidate}";
+        return true;
+    }
+
     public async Task<PairingStart> StartPairingAsync(string username, CancellationToken cancellationToken = default)
     {
-        var normalized = username.Trim();
-        if (normalized.StartsWith('@'))
-            normalized = normalized[1..];
-        if (!UsernamePattern.IsMatch(normalized))
+        if (!TryNormalizeUsername(username, out var normalized))
             throw new TelegramApiException("invalid_username", HttpStatusCode.UnprocessableEntity);
 
         using var response = await SendJsonAsync(
             "/api/tg/mobile/pair/start", HttpMethod.Post,
-            new { username = normalized }, null, cancellationToken);
+            new { username = normalized[1..] }, null, cancellationToken);
 
         var root = response.RootElement;
         return new PairingStart(

@@ -50,7 +50,8 @@ public sealed record WindowsTunnelSnapshot(
     string? RouteTag = null,
     DateTimeOffset? ConnectedAt = null,
     IReadOnlyList<WindowsRouteProbeResult>? ProbeResults = null,
-    DateTimeOffset? HealthCheckedAt = null);
+    DateTimeOffset? HealthCheckedAt = null,
+    string? ActiveRouteTag = null);
 
 public sealed record WindowsRouteProbeResult(
     string RouteTag,

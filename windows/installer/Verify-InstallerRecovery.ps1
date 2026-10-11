@@ -61,6 +61,68 @@ $guard=Row 'SELECT `Condition` FROM `LaunchCondition` WHERE `Condition`=''NOT EX
 if (!$ActionsAssemblyPath) { $ActionsAssemblyPath=Join-Path (Split-Path $MsiPath) 'net472/DeyttConnect.SetupActions.dll' }
 $null=[Reflection.Assembly]::LoadFrom((Join-Path (Split-Path $ActionsAssemblyPath) 'WixToolset.Dtf.WindowsInstaller.dll'))
 $actionsAssembly=[Reflection.Assembly]::LoadFrom($ActionsAssemblyPath)
+$allUsers=Row 'SELECT `Value` FROM `Property` WHERE `Property`=''ALLUSERS'''
+Check ($allUsers.Text -eq '1') 'MSI must register a machine-wide Apps/Uninstall entry'
+$installLocation=Row 'SELECT `Target` FROM `CustomAction` WHERE `Source`=''ARPINSTALLLOCATION'''
+Check ($installLocation.Text -eq '[INSTALLFOLDER]') 'Windows uninstall tools must receive the resolved install location'
+foreach($hiddenProperty in @('ARPSYSTEMCOMPONENT','ARPNOREMOVE')) {
+ Check ((QueryRows "SELECT ``Value`` FROM ``Property`` WHERE ``Property``='$hiddenProperty'").Count -eq 0) 'Uninstall entry must remain visible and removable'
+}
+foreach($shortcut in @('UiUninstallFolderShortcut','UiUninstallStartMenuShortcut')) {
+ $target=Row "SELECT ``Target`` FROM ``Shortcut`` WHERE ``Shortcut``='$shortcut'"
+ $arguments=Row "SELECT ``Arguments`` FROM ``Shortcut`` WHERE ``Shortcut``='$shortcut'"
+ Check ($target.Text -eq '[System64Folder]msiexec.exe' -and $arguments.Text -eq '/x [ProductCode]') 'Uninstall shortcut must use the registered product'
+}
+$dataRemoval=Row 'SELECT `Condition` FROM `InstallExecuteSequence` WHERE `Action`=''RemoveConnectData'''
+Check ($dataRemoval.Text -eq 'REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE') 'Upgrade must preserve user data'
+$dataAction=Row 'SELECT `Type` FROM `CustomAction` WHERE `Action`=''RemoveConnectData'''
+Check (($dataAction.Number -band 0x600) -eq 0x600) 'User cleanup must execute only on commit so a rolled-back uninstall preserves data'
+$cleanup=$actionsAssembly.GetType('DeyttConnect.Setup.ConnectDataCleanup')
+$fixtureRoot=Join-Path (Split-Path $MsiPath) ('cleanup-fixture-'+[Guid]::NewGuid().ToString('N'))
+$fixtureRoot=[IO.Path]::GetFullPath($fixtureRoot)
+$fixtureParent=[IO.Path]::GetFullPath((Split-Path $MsiPath)).TrimEnd('\')+'\'
+Check ($fixtureRoot.StartsWith($fixtureParent,[StringComparison]::OrdinalIgnoreCase)) 'Unsafe cleanup fixture path'
+$userFixture=Join-Path $fixtureRoot 'user'
+$runtimeFixture=Join-Path $fixtureRoot 'runtime'
+$outsideFixture=Join-Path $fixtureRoot 'personal'
+$junction=Join-Path $userFixture 'updates'
+try {
+ New-Item -ItemType Directory -Path $userFixture,$runtimeFixture,$outsideFixture -Force | Out-Null
+ foreach($name in @('telegram-session.dat','subscription-profile.dat','preferences.json','installation-id','notes.txt')) {
+  Set-Content -LiteralPath (Join-Path $userFixture $name) -Value 'Synthetic fixture'
+ }
+ Set-Content -LiteralPath (Join-Path $outsideFixture 'keep.txt') -Value 'Personal fixture'
+ $atomicTemporary=Join-Path $userFixture ('preferences.json.'+[Guid]::NewGuid().ToString('N')+'.tmp')
+ Set-Content -LiteralPath $atomicTemporary -Value '{}'
+ Set-Content -LiteralPath (Join-Path $userFixture 'preferences.json.notes.tmp') -Value 'Unrelated fixture'
+ New-Item -ItemType Junction -Path $junction -Target $outsideFixture | Out-Null
+ $cleanup.GetMethod('RemoveUserData').Invoke($null,@([string]$userFixture)) | Out-Null
+ Check ((Test-Path -LiteralPath (Join-Path $userFixture 'notes.txt')) -and (Test-Path -LiteralPath (Join-Path $outsideFixture 'keep.txt'))) 'Cleanup deleted unrelated files or followed a reparse point'
+ Check (!(Test-Path -LiteralPath $atomicTemporary) -and (Test-Path -LiteralPath (Join-Path $userFixture 'preferences.json.notes.tmp'))) 'Cleanup must remove only generated atomic-write remnants'
+ foreach($name in @('telegram-session.dat','subscription-profile.dat','preferences.json','installation-id')) {
+  Check (!(Test-Path -LiteralPath (Join-Path $userFixture $name))) 'Known app user data survived fixture cleanup'
+ }
+ Remove-Item -LiteralPath $junction -Force
+ New-Item -ItemType Directory -Path $junction | Out-Null
+ Set-Content -LiteralPath (Join-Path $junction 'download.partial') -Value 'Cached fixture'
+ $webViewCache=Join-Path $userFixture 'WebView2'
+ New-Item -ItemType Directory -Path $webViewCache | Out-Null
+ Set-Content -LiteralPath (Join-Path $webViewCache 'cache.bin') -Value 'WebView fixture'
+ $cleanup.GetMethod('RemoveUserData').Invoke($null,@([string]$userFixture)) | Out-Null
+ Check (!(Test-Path -LiteralPath $junction)) 'Plain product update cache was not removed'
+ Check (!(Test-Path -LiteralPath $webViewCache)) 'Plain product WebView cache was not removed'
+ $ownedProfile=Join-Path $runtimeFixture ([Guid]::NewGuid().ToString('N')+'.json')
+ Set-Content -LiteralPath $ownedProfile -Value '{}'
+ Set-Content -LiteralPath (Join-Path $runtimeFixture 'notes.json') -Value '{}'
+ $cleanup.GetMethod('RemoveRuntime').Invoke($null,@([string]$runtimeFixture)) | Out-Null
+ Check (!(Test-Path -LiteralPath $ownedProfile) -and (Test-Path -LiteralPath (Join-Path $runtimeFixture 'notes.json'))) 'Runtime cleanup must remove only generated profile files'
+} finally {
+ if (Test-Path -LiteralPath $junction) {
+  $item=Get-Item -LiteralPath $junction -Force
+  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Remove-Item -LiteralPath $junction -Force }
+ }
+ if (Test-Path -LiteralPath $fixtureRoot) { Remove-Item -LiteralPath $fixtureRoot -Recurse -Force }
+}
 $classifier=$actionsAssembly.GetType('DeyttConnect.Setup.SetupActions').GetMethod('IsConnectService')
 $cases=@(
  @('"C:\Program Files\DEYTT\Connect\DeyttConnect.Windows.Service.exe" --service',$true),
@@ -172,4 +234,4 @@ $launchCases=@(@('','1','',$false),@('1','1','',$true),@('1','','',$false),@('1'
 foreach($case in $launchCases) {
  Check ($launchClassifier.Invoke($null,@($case[0],$case[1],$case[2])) -eq $case[3]) 'Unchecked launch or unavailable shell/reboot must not launch the client'
 }
-Write-Host 'MSI identity, version modes, downgrade, progress layout, brand, launch, SID, service and wizard checks passed; no installation performed. Real install/update/removal remains manual acceptance.'
+Write-Host 'MSI identity, visible uninstall entry, shortcuts, upgrade-safe cleanup fixtures, version modes, downgrade, progress layout, brand, launch, SID, service and wizard checks passed; no installation performed. Real install/update/removal remains manual acceptance.'

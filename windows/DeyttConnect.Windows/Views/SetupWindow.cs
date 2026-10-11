@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
@@ -30,6 +32,8 @@ public sealed record SetupWindowOptions
     public string Language { get; init; } = "ru";
     public string? InitialImportUrl { get; init; }
     public bool RestoreExistingSession { get; init; } = true;
+    /// <summary>Only an existing usable subscription may leave setup without importing.</summary>
+    public bool AllowCancel { get; init; } = true;
     /// <summary>Keep the current account intact until a fresh pairing imports usable routes.</summary>
     public bool DeferSessionSaveUntilImport { get; init; }
     public SetupUrlImportHandler? ImportUrlAsync { get; init; }
@@ -124,7 +128,7 @@ public sealed class SetupWindow : UserControl
         _api = _options.ApiClient ?? new TelegramApiClient();
         _language = string.Equals(_options.Language, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "ru";
 
-        _headline = DeyttTheme.TextBlock(Copy("Подключите DEYTT", "Set up DEYTT"), 25, DeyttTheme.Text, FontWeight.Bold,
+        _headline = DeyttTheme.RawTextBlock(_language == "en" ? "Set up ./Connect" : "Подключите ./Connect", 25, DeyttTheme.Text, FontWeight.Bold,
             DeyttTheme.Unbounded);
         _intro = DeyttTheme.TextBlock(
             Copy("Войдите через Telegram, чтобы загрузить подписку и маршруты.",
@@ -209,6 +213,14 @@ public sealed class SetupWindow : UserControl
 
     /// <summary>Cancels in-flight setup work and asks the host to leave this view once.</summary>
     public void Cancel()
+    {
+        if (!_options.AllowCancel)
+            return;
+        Abort();
+    }
+
+    /// <summary>Stops pending work when the host closes, including mandatory first-run setup.</summary>
+    internal void Abort()
     {
         if (_backRequested || _completed)
             return;
@@ -310,14 +322,16 @@ public sealed class SetupWindow : UserControl
         if (_busy)
             return;
         _completeAfterPairing = false;
-        _username = _usernameInput?.Text?.Trim() ?? _username;
-        if (_username.Length == 0)
+        if (!TelegramApiClient.TryNormalizeUsername(_usernameInput?.Text ?? _username, out var username))
         {
-            SetStatus(Copy("Введи Telegram username, например @username.",
-                "Enter your Telegram username, for example @username."), DeyttTheme.Amber);
+            SetStatus(Copy("Введи @username: от 5 до 32 латинских букв, цифр или знаков подчёркивания.",
+                "Enter @username: 5 to 32 Latin letters, digits, or underscores."), DeyttTheme.Amber);
             _usernameInput?.Focus();
             return;
         }
+        _username = username;
+        if (_usernameInput is not null)
+            _usernameInput.Text = username;
 
         SetBusy(true);
         Render(ViewState.Refreshing, Copy("Создаём защищённый запрос на вход…", "Starting secure sign-in…"), DeyttTheme.Blue);
@@ -326,7 +340,6 @@ public sealed class SetupWindow : UserControl
             var pairing = await _api.StartPairingAsync(_username, _lifetime.Token);
             _challenge = pairing.Challenge;
             _botUrl = pairing.BotUrl;
-            _username = _username.Trim().TrimStart('@');
             var needsBotStart = pairing.Delivery != "sent";
             Render(ViewState.Code,
                 pairing.Delivery switch
@@ -345,8 +358,8 @@ public sealed class SetupWindow : UserControl
         {
             if (IsDeviceSlotConflict(error))
                 Render(ViewState.DeviceConflict, Copy(
-                    "Для аккаунта достигнут лимит приложений. Удали старый сеанс DEYTT в Telegram и затем попробуй снова.",
-                    "This account has reached its app limit. Remove an old DEYTT session in Telegram, then try again."),
+                    "Слот компьютера занят. Отключите прежний компьютер Connect в Telegram-боте и повторите вход.",
+                    "The computer slot is in use. Disconnect the previous Connect computer in the Telegram bot and sign in again."),
                     DeyttTheme.Amber);
             else
                 Render(ViewState.Username, PairingError(error), ErrorColor(error));
@@ -418,8 +431,8 @@ public sealed class SetupWindow : UserControl
             if (IsDeviceSlotConflict(error))
             {
                 Render(ViewState.DeviceConflict, Copy(
-                    "Для аккаунта достигнут лимит приложений. Удали старый сеанс DEYTT в Telegram и затем попробуй снова.",
-                    "This account has reached its app limit. Remove an old DEYTT session in Telegram, then try again."),
+                    "Слот компьютера занят. Отключите прежний компьютер Connect в Telegram-боте и повторите вход.",
+                    "The computer slot is in use. Disconnect the previous Connect computer in the Telegram bot and sign in again."),
                     DeyttTheme.Amber);
             }
             else
@@ -525,8 +538,8 @@ public sealed class SetupWindow : UserControl
         catch (TelegramApiException error) when (IsDeviceSlotConflict(error))
         {
             Render(ViewState.DeviceConflict, Copy(
-                "Слот компьютера уже занят другим компьютером. На аккаунт доступно по одному телефону и одному компьютеру; слот телефона и квота Happ отдельные. Если нужно заменить компьютер, обратись в поддержку.",
-                "The computer slot is already used by another computer. Each account has one phone slot and one computer slot; the phone slot and Happ allowance are separate. Contact support if you need to replace the computer."),
+                "Слот компьютера занят. Отключите прежний компьютер Connect в Telegram-боте и повторите проверку.",
+                "The computer slot is in use. Disconnect the previous Connect computer in the Telegram bot and retry the check."),
                 DeyttTheme.Amber);
         }
         catch (TelegramApiException error) when (error.Code == "device_blocked")
@@ -801,8 +814,16 @@ public sealed class SetupWindow : UserControl
             "Enter the username of the account that has the subscription."), 15, DeyttTheme.Text));
 
         _usernameInput = CreateInput("@username", 44);
-        _usernameInput.MaxLength = 33;
+        // Validate the whole pasted value rather than silently truncating it into another account.
+        _usernameInput.MaxLength = 256;
+        _usernameInput.Name = "TelegramUsernameInput";
+        Avalonia.Automation.AutomationProperties.SetName(_usernameInput, Copy("Telegram username", "Telegram username"));
         _usernameInput.Text = _username;
+        _usernameInput.LostFocus += (_, _) =>
+        {
+            if (TelegramApiClient.TryNormalizeUsername(_usernameInput.Text, out var normalized))
+                _usernameInput.Text = normalized;
+        };
         _usernameInput.KeyDown += (_, args) =>
         {
             if (args.Key == Key.Enter)
@@ -934,11 +955,16 @@ public sealed class SetupWindow : UserControl
         _body.Children.Add(DeyttTheme.TextBlock(Copy("Слот компьютера занят.",
             "The computer slot is in use."), 15,
             DeyttTheme.Text, FontWeight.SemiBold));
+        _body.Children.Add(DeyttTheme.TextBlock(Copy(
+            "Удаление или переустановка приложения не отключает прежний сеанс на сервере. Откройте бота → Устройства → предыдущий компьютер ./Connect → Отключить и подтвердите действие. Слот телефона и устройства Happ отдельные.",
+            "Uninstalling or reinstalling the app does not disconnect the previous server session. Open the bot → Devices → previous ./Connect computer → Disconnect, then confirm. The phone slot and Happ devices are separate."),
+            13, DeyttTheme.Muted));
+        _body.Children.Add(BuildTextButton(Copy("Открыть Telegram-бота", "Open the Telegram bot"), OpenBot));
         if (_sessionToken is { Length: > 0 })
         {
             _body.Children.Add(DeyttTheme.TextBlock(Copy(
-                "Выйди из deytt./connect на прежнем компьютере и повтори проверку. Слоты телефона и Happ отдельные. Если прежний компьютер недоступен, попроси поддержку освободить слот. Приложение не отключает устройства автоматически.",
-                "Sign out of deytt./connect on the previous computer, then retry the check. Phone and Happ slots are separate. If the previous computer is unavailable, ask support to free its slot. The app does not disconnect devices automatically."),
+                "После отключения прежнего компьютера повторите проверку. Если управлять устройствами не удаётся, обратитесь в поддержку.",
+                "After disconnecting the previous computer, retry the check. Contact support if you cannot manage your devices."),
                 13, DeyttTheme.Muted));
             _body.Children.Add(BuildPrimary(Copy("Повторить проверку", "Retry the check"), () =>
             {
@@ -958,16 +984,17 @@ public sealed class SetupWindow : UserControl
         else
         {
             _body.Children.Add(DeyttTheme.TextBlock(Copy(
-                "Сначала подключи аккаунт Telegram. Если прежний компьютер недоступен, войди в аккаунт и обратись в поддержку, чтобы освободить компьютерный слот.",
-                "Sign in to Telegram first. If the previous computer is unavailable, contact support to free the computer slot."),
+                "После отключения прежнего компьютера повторите вход с вашим Telegram username.",
+                "After disconnecting the previous computer, sign in again with your Telegram username."),
                 13, DeyttTheme.Muted));
             _body.Children.Add(BuildPrimary(Copy("Попробовать снова", "Try again"), () => Render(ViewState.Username)));
         }
-        _body.Children.Add(BuildTextButton(Copy("Назад к коду", "Back to code"), () =>
-        {
-            if (!_busy)
-                Render(ViewState.Code);
-        }));
+        if (_challenge.Length > 0)
+            _body.Children.Add(BuildTextButton(Copy("Назад к коду", "Back to code"), () =>
+            {
+                if (!_busy)
+                    Render(ViewState.Code);
+            }));
     }
 
     private async Task RequestDeviceTransferAsync()
@@ -1217,7 +1244,14 @@ public sealed class SetupWindow : UserControl
             Spacing = 11,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        brandLine.Children.Add(DeyttTheme.IconTile("◉", 42, DeyttTheme.Mint));
+        using (var icon = AssetLoader.Open(new Uri("avares://DeyttConnect.Windows/Assets/deyttconnect.ico")))
+            brandLine.Children.Add(new Image
+            {
+                Source = new Bitmap(icon),
+                Width = 42,
+                Height = 42,
+                Stretch = Stretch.Uniform,
+            });
         var brand = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         brand.Children.Add(DeyttTheme.TextBlock("deytt./connect", 10, DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
@@ -1236,10 +1270,13 @@ public sealed class SetupWindow : UserControl
         Grid.SetColumn(heading, 0);
         header.Children.Add(heading);
 
-        var backButton = BuildTextButton(Copy("← Назад", "← Back"), Cancel);
-        backButton.VerticalAlignment = VerticalAlignment.Top;
-        Grid.SetColumn(backButton, 1);
-        header.Children.Add(backButton);
+        if (_options.AllowCancel)
+        {
+            var backButton = BuildTextButton(Copy("← Назад", "← Back"), Cancel);
+            backButton.VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetColumn(backButton, 1);
+            header.Children.Add(backButton);
+        }
         return header;
     }
 
@@ -1274,15 +1311,15 @@ public sealed class SetupWindow : UserControl
     {
         (_headline.Text, _intro.Text) = state switch
         {
-            ViewState.Username => (Copy("Подключите DEYTT", "Set up DEYTT"),
+            ViewState.Username => (_language == "en" ? "Set up ./Connect" : "Подключите ./Connect",
                 Copy("Войдите через Telegram, чтобы загрузить подписку и выбрать первый маршрут.",
                     "Sign in with Telegram to load your subscription and choose the first route.")),
             ViewState.Code => (Copy("Подтвердите вход", "Confirm sign-in"),
                 Copy("Одноразовый код связывает Windows-приложение с вашим Telegram-аккаунтом.",
                     "A one-time code links this Windows app to your Telegram account.")),
             ViewState.DeviceConflict => (Copy("Нужен свободный слот компьютера", "A computer slot is needed"),
-                Copy("Освободи слот на прежнем компьютере и повтори проверку. Если он недоступен, обратись в поддержку. Слоты телефона и happ отдельные.",
-                    "Free the slot on the previous computer and retry. If it is unavailable, contact support. Phone and happ slots are separate.")),
+                Copy("Управляйте своими устройствами Connect в Telegram-боте.",
+                    "Manage your Connect devices in the Telegram bot.")),
             ViewState.Refreshing => (Copy("Загружаем данные", "Loading your data"),
                 Copy("Сверяем аккаунт и получаем готовые маршруты подписки.",
                     "Checking your account and loading subscription routes.")),
@@ -1298,7 +1335,7 @@ public sealed class SetupWindow : UserControl
             ViewState.Success => (Copy("Маршруты готовы", "Routes are ready"),
                 Copy("Выберите стартовый выход и передайте профиль в deytt./connect.",
                     "Choose your starting route and import the profile into deytt./connect.")),
-            _ => (Copy("Подключите DEYTT", "Set up DEYTT"),
+            _ => (_language == "en" ? "Set up ./Connect" : "Подключите ./Connect",
                 Copy("Войдите через Telegram, чтобы загрузить подписку и выбрать первый маршрут.",
                     "Sign in with Telegram to load your subscription and choose the first route.")),
         };
@@ -1369,7 +1406,8 @@ public sealed class SetupWindow : UserControl
 
     private void OpenBot()
     {
-        if (!Uri.TryCreate(_botUrl, UriKind.Absolute, out var uri) ||
+        var botUrl = _botUrl.Length > 0 ? _botUrl : "https://t.me/deyttbot";
+        if (!Uri.TryCreate(botUrl, UriKind.Absolute, out var uri) ||
             uri.Scheme != Uri.UriSchemeHttps || !uri.Host.Equals("t.me", StringComparison.OrdinalIgnoreCase))
         {
             SetStatus(Copy("Ссылка Telegram недоступна. Повтори запрос кода.",

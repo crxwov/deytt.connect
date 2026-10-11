@@ -136,7 +136,7 @@ internal static class PipeServer
             result.ConnectedAt, result.ProbeResults?.Select(probe => new WindowsRouteProbeResult(
                 probe.RouteTag, probe.LatencyMilliseconds, probe.BytesPerSecond, probe.Error,
                 probe.Stage, probe.Attempt, probe.BytesReceived, probe.TotalBytes)).ToArray(),
-            result.HealthCheckedAt);
+            result.HealthCheckedAt, result.ActiveRouteTag);
         var responsePayload = WindowsPipeProtocol.SerializeResponse(response);
         await WindowsPipeProtocol.WriteFrameAsync(pipe, responsePayload, WindowsPipeProtocol.MaximumResponseBytes,
             cancellationToken).ConfigureAwait(false);

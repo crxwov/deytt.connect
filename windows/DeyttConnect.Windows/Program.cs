@@ -24,7 +24,8 @@ internal sealed record QaHomeFixture(
     bool RouteProbeInProgress = false,
     bool RouteProbeCancelRequested = false,
     string? ExpandedRouteCountry = null,
-    bool DisableNativeMapInitialization = false);
+    bool DisableNativeMapInitialization = false,
+    string? ThemePreference = null);
 
 sealed class Program
 {

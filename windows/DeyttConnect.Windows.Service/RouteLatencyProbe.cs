@@ -20,7 +20,8 @@ internal static class RouteLatencyProbe
         HttpClient proxyClient,
         CancellationToken cancellationToken,
         Action<RouteLatencyProbeObservation>? reportProgress = null,
-        RouteLatencyProbeTimeouts? timeouts = null)
+        RouteLatencyProbeTimeouts? timeouts = null,
+        IReadOnlyList<Uri>? targets = null)
     {
         ArgumentNullException.ThrowIfNull(proxyClient);
         cancellationToken.ThrowIfCancellationRequested();
@@ -39,16 +40,18 @@ internal static class RouteLatencyProbe
         using var overallCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         overallCancellation.CancelAfter(limits.Overall);
 
-        var coldOutcomes = new List<RouteLatencyProbeAttempt>(ColdTargets.Length * 2);
+        var coldTargets = targets ?? ColdTargets;
+        if (coldTargets.Count == 0) throw new ArgumentException("At least one latency target is required.", nameof(targets));
+        var coldOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count * 2);
         RouteLatencyProbeAttempt? selectedCold = null;
 
         for (var round = 1; round <= 2 && selectedCold is null && !overallCancellation.IsCancellationRequested; round++)
         {
             using var coldCancellation = CancellationTokenSource.CreateLinkedTokenSource(overallCancellation.Token);
-            var coldTasks = ColdTargets.Select(target => MeasureRequestAsync(proxyClient, target,
+            var coldTasks = coldTargets.Select(target => MeasureRequestAsync(proxyClient, target,
                 coldCancellation.Token, cancellationToken, overallCancellation.Token, limits.Individual)).ToArray();
             var pendingCold = new HashSet<Task<RouteLatencyProbeAttempt>>(coldTasks);
-            var roundOutcomes = new List<RouteLatencyProbeAttempt>(ColdTargets.Length);
+            var roundOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count);
             try
             {
                 while (pendingCold.Count > 0 && selectedCold is null)

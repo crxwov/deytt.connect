@@ -1,0 +1,254 @@
+using System.Reflection;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using DeyttConnect.Protocol;
+using DeyttConnect.Windows.Services;
+using DeyttConnect.Windows.Views;
+using Xunit;
+
+namespace DeyttConnect.Windows.HeadlessTests;
+
+public sealed class TrayLifecycleTests
+{
+    private const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
+    private static readonly WindowsRoute Route = new("nl", "qa:nl", "NL", "Нидерланды", "🇳🇱", "VLESS", "VLESS");
+    private static readonly WindowsRoute Bypass = new("chain", "qa:chain", "RU-DE", "Россия → Германия", "", "CHAIN", "RU → DE");
+
+    private static MainWindow Window(string language = "ru", string state = "disconnected") =>
+        new(new QaHomeFixture(false, language, Route.Id, "settings", null, null, [Route, Bypass],
+            new WindowsTunnelSnapshot(state, "Synthetic only"), DisableNativeMapInitialization: true));
+
+    private static void Set(MainWindow window, string field, object? value)
+    {
+        if (typeof(MainWindow).GetField(field, PrivateInstance) is { } member) member.SetValue(window, value);
+        else typeof(MainWindow).GetProperty(field, PrivateInstance)!.SetValue(window, value);
+    }
+    private static T Get<T>(MainWindow window, string field) => (T)(
+        typeof(MainWindow).GetField(field, PrivateInstance)?.GetValue(window) ??
+        typeof(MainWindow).GetProperty(field, PrivateInstance)!.GetValue(window))!;
+    private static object? Invoke(MainWindow window, string method, params object?[] arguments) =>
+        typeof(MainWindow).GetMethod(method, PrivateInstance)!.Invoke(window, arguments);
+    private static NativeMenu Menu(MainWindow window)
+    {
+        var menu = new NativeMenu();
+        Invoke(window, "PopulateTrayMenu", menu);
+        return menu;
+    }
+
+    [AvaloniaTheory]
+    [InlineData("ru", "disconnected", "подключить vpn", "сервер", "обход белых списков")]
+    [InlineData("en", "connected", "disconnect vpn", "server", "allowlist bypass")]
+    [InlineData("en", "checking", "cancel connection", "server", "allowlist bypass")]
+    public void MenuUsesLocalizedActionAndSeparatesBypass(string language, string state,
+        string action, string server, string bypass)
+    {
+        var window = Window(language, state);
+        try
+        {
+            var menu = Menu(window);
+            Assert.Equal(action, Assert.IsType<NativeMenuItem>(menu.Items[1]).Header);
+            var servers = Assert.IsType<NativeMenuItem>(menu.Items[2]);
+            var bypasses = Assert.IsType<NativeMenuItem>(menu.Items[3]);
+            Assert.Equal(server, servers.Header);
+            Assert.Equal(bypass, bypasses.Header);
+            Assert.Single(servers.Menu!.Items);
+            Assert.Single(bypasses.Menu!.Items);
+            Assert.StartsWith("✓ ", Assert.IsType<NativeMenuItem>(servers.Menu.Items[0]).Header!);
+            Assert.DoesNotContain("✓ ", Assert.IsType<NativeMenuItem>(bypasses.Menu.Items[0]).Header!);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void QuitAndSessionRestoreDisableTunnelAndRouteActions()
+    {
+        var window = Window();
+        try
+        {
+            Set(window, "_quitInProgress", true);
+            var menu = Menu(window);
+            Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[1]).IsEnabled);
+            Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[2]).IsEnabled);
+            Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[3]).IsEnabled);
+            Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[5]).IsEnabled);
+            Set(window, "_quitInProgress", false);
+            Set(window, "_sessionRestoreComplete", false);
+            menu = Menu(window);
+            Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[1]).IsEnabled);
+            Assert.All(Assert.IsType<NativeMenuItem>(menu.Items[2]).Menu!.Items,
+                item => Assert.False(Assert.IsType<NativeMenuItem>(item).IsEnabled));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(false, false, WindowCloseReason.WindowClosing, true)]
+    [InlineData(true, false, WindowCloseReason.WindowClosing, false)]
+    [InlineData(false, true, WindowCloseReason.WindowClosing, false)]
+    [InlineData(false, false, WindowCloseReason.OSShutdown, false)]
+    [InlineData(false, false, WindowCloseReason.ApplicationShutdown, false)]
+    public void CloseHidesForTrayButAllowsQaAuthorizedExitAndShutdown(bool qa, bool authorized,
+        WindowCloseReason reason, bool hide)
+    {
+        var window = Window();
+        using var tray = new TrayIcon { IsVisible = false };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Set(window, "_trayIcon", tray);
+            Set(window, "_qaFixture", qa);
+            Set(window, "_exitAuthorized", authorized);
+            var args = (WindowClosingEventArgs)Activator.CreateInstance(typeof(WindowClosingEventArgs),
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [reason, false], null)!;
+            Invoke(window, "OnTrayWindowClosing", window, args);
+            Assert.Equal(hide, args.Cancel);
+            Assert.Equal(!hide, window.IsVisible);
+        }
+        finally { Set(window, "_qaFixture", true); Set(window, "_trayIcon", null); window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task DeferredConnectedPollCannotReplaceCompletedDisconnect()
+    {
+        var window = Window(state: "connected");
+        var pending = new TaskCompletionSource<WindowsTunnelSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var polling = window.RefreshVpnStatusAsync(() => pending.Task);
+            Assert.False(polling.IsCompleted);
+            Set(window, "_vpnOperationVersion", Get<long>(window, "_vpnOperationVersion") + 1);
+            var stopped = new WindowsTunnelSnapshot("disconnected", "Latest completed stop");
+            Set(window, "_vpnSnapshot", stopped);
+            Set(window, "_vpnServiceAvailable", false);
+            pending.SetResult(new WindowsTunnelSnapshot("connected", "Obsolete poll"));
+            await polling;
+            Assert.Same(stopped, Get<WindowsTunnelSnapshot>(window, "_vpnSnapshot"));
+            Assert.False(Get<bool>(window, "_vpnServiceAvailable"));
+            Assert.False(Get<bool>(window, "_vpnStatusRefreshRunning"));
+        }
+        finally { pending.TrySetCanceled(); window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task DeferredStatusFailureCannotEraseNewerConnectionState()
+    {
+        var window = Window();
+        var pending = new TaskCompletionSource<WindowsTunnelSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            var polling = window.RefreshVpnStatusAsync(() => pending.Task);
+            Set(window, "_vpnOperationVersion", Get<long>(window, "_vpnOperationVersion") + 1);
+            var newer = new WindowsTunnelSnapshot("checking", "Latest connect");
+            Set(window, "_vpnSnapshot", newer);
+            Set(window, "_vpnServiceAvailable", true);
+            pending.SetException(new IOException("Obsolete failed status"));
+            await polling;
+            Assert.Same(newer, Get<WindowsTunnelSnapshot>(window, "_vpnSnapshot"));
+            Assert.True(Get<bool>(window, "_vpnServiceAvailable"));
+            Assert.False(Get<bool>(window, "_vpnStatusRefreshRunning"));
+        }
+        finally { pending.TrySetCanceled(); window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task InstallerCancellationReleasesQuitAndPendingConnectFlags()
+    {
+        var window = Window(state: "checking");
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Set(window, "_vpnConnectTask", Task.FromResult(new WindowsTunnelSnapshot("checking", "Synthetic")));
+            Set(window, "_vpnCancelInProgress", true);
+            await Assert.ThrowsAsync<OperationCanceledException>(() => window.ExitForVerifiedUpdateAsync(
+                () => Task.FromException(new OperationCanceledException("Synthetic MSI launch cancellation"))));
+            Assert.False(Get<bool>(window, "_quitInProgress"));
+            Assert.False(Get<bool>(window, "_vpnActionInProgress"));
+            Assert.False(Get<bool>(window, "_vpnCancelInProgress"));
+            Assert.False(Get<bool>(window, "_vpnCancelRequested"));
+            Assert.False(Get<bool>(window, "_exitAuthorized"));
+            Assert.Null(typeof(MainWindow).GetField("_vpnConnectTask", PrivateInstance)!.GetValue(window));
+            Assert.True(window.IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task QuitLockBlocksActionsWhileInstallerLaunchIsPending()
+    {
+        var window = Window(state: "checking");
+        var installer = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var quitting = window.ExitForVerifiedUpdateAsync(() => installer.Task);
+            var version = Get<long>(window, "_vpnOperationVersion");
+            await (Task)Invoke(window, "ToggleVpnAsync")!;
+            await (Task)Invoke(window, "CancelVpnConnectionAsync")!;
+            await (Task)Invoke(window, "SwitchTrayRouteAsync", Bypass)!;
+            Invoke(window, "SelectRoute", Bypass.Id);
+            Assert.Equal(Route.Id, Get<string>(window, "_selectedRoute"));
+            Assert.Equal(version, Get<long>(window, "_vpnOperationVersion"));
+            Assert.False(quitting.IsCompleted);
+            installer.SetException(new OperationCanceledException("Synthetic cancellation"));
+            await Assert.ThrowsAsync<OperationCanceledException>(() => quitting);
+            Assert.False(Get<bool>(window, "_vpnActionInProgress"));
+        }
+        finally { installer.TrySetCanceled(); window.Close(); }
+    }
+
+    [Fact]
+    public async Task ExitStopWaitsForConnectBeforeDisconnectAndAcceptsFailedConnect()
+    {
+        var pending = new TaskCompletionSource<WindowsTunnelSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var disconnectCalled = false;
+        var stopping = MainWindow.StopVpnBeforeExitAsync(pending.Task, () =>
+        {
+            disconnectCalled = true;
+            return Task.FromResult(new WindowsTunnelSnapshot("disconnected", "Stopped"));
+        });
+        Assert.False(disconnectCalled);
+        pending.SetException(new InvalidOperationException("Failed connect still needs cleanup"));
+        Assert.Equal("disconnected", (await stopping).State);
+        Assert.True(disconnectCalled);
+    }
+
+    [Fact]
+    public async Task HungConnectDoesNotAuthorizeExitOrSendAnEarlierDisconnect()
+    {
+        var pending = new TaskCompletionSource<WindowsTunnelSnapshot>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var disconnectCalled = false;
+        await Assert.ThrowsAsync<TimeoutException>(() => MainWindow.StopVpnBeforeExitAsync(pending.Task, () =>
+        {
+            disconnectCalled = true;
+            return Task.FromResult(new WindowsTunnelSnapshot("disconnected", "Stopped"));
+        }, TimeSpan.FromMilliseconds(20)));
+        Assert.False(disconnectCalled);
+        pending.SetResult(new WindowsTunnelSnapshot("checking", "Later connect"));
+    }
+
+    [Fact]
+    public async Task ExitRequiresExplicitDisconnectedAcknowledgement()
+    {
+        await Assert.ThrowsAsync<IOException>(() => MainWindow.StopVpnBeforeExitAsync(null,
+            () => Task.FromResult(new WindowsTunnelSnapshot("checking", "Still running"))));
+    }
+
+    [Fact]
+    public async Task VerifiedStoppedOrAbsentServiceAllowsExitWithoutUnavailablePipe()
+    {
+        var stopped = await MainWindow.StopVpnBeforeExitAsync(null,
+            () => throw new InvalidOperationException("No pipe can exist for a stopped service"), serviceInactive: () => true);
+        Assert.Equal("disconnected", stopped.State);
+    }
+
+    [Fact]
+    public async Task UnknownOrRunningServiceStillRequiresDisconnectAcknowledgement()
+    {
+        await Assert.ThrowsAsync<IOException>(() => MainWindow.StopVpnBeforeExitAsync(null,
+            () => Task.FromException<WindowsTunnelSnapshot>(new IOException("Service pipe unavailable")), serviceInactive: () => false));
+    }
+}

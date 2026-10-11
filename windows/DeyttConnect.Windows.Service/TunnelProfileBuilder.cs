@@ -21,6 +21,30 @@ internal static class TunnelProfileBuilder
     private static readonly HashSet<string> DomainOnlyKeys =
         ["domain", "domain_suffix", "domain_keyword", "domain_regex"];
 
+    // The shared subscription includes Russia. Windows automatic selection is
+    // intentionally limited to the supported European, single-country routes.
+    private static void ConfigureEuropeanAutoRoute(JsonArray outbounds, string autoTag)
+    {
+        var byTag = outbounds.OfType<JsonObject>().ToDictionary(
+            outbound => ReadString(outbound, "tag")!, StringComparer.Ordinal);
+        var automatic = byTag[autoTag];
+        if (ReadString(automatic, "type") is not ("urltest" or "selector"))
+            throw new InvalidDataException("Automatic route must select European servers.");
+
+        string[] countries = ["NL", "DE", "FI", "IT"];
+        var candidates = countries.SelectMany(country => Protocols.Select(protocol => $"route:{country}:{protocol}"))
+            .Where(tag => byTag.TryGetValue(tag, out var outbound) &&
+                          ReadString(outbound, "type") is "vless" or "trojan" or "hysteria2" &&
+                          string.IsNullOrEmpty(ReadString(outbound, "detour")))
+            .ToArray();
+        if (candidates.Length == 0)
+            throw new InvalidDataException("В подписке нет европейских серверов для автоподбора. Обновите доступ или выберите маршрут вручную.");
+
+        automatic["outbounds"] = new JsonArray(candidates.Select(tag => (JsonNode?)JsonValue.Create(tag)).ToArray());
+        if (ReadString(automatic, "default") is { } defaultTag && !candidates.Contains(defaultTag, StringComparer.Ordinal))
+            automatic.Remove("default");
+    }
+
     public static IReadOnlyList<string> GetTunAddresses(string runtimeProfile)
     {
         var root = JsonNode.Parse(runtimeProfile) as JsonObject
@@ -58,6 +82,15 @@ internal static class TunnelProfileBuilder
             throw new InvalidDataException("Subscription JSON is invalid.", error);
         }
 
+        // Runtime diagnostics belong to the service's bounded pipe readers.
+        // Subscription logging can suppress startup errors or write arbitrary
+        // paths as SYSTEM; always emit errors to the engine's console instead.
+        root["log"] = new JsonObject
+        {
+            ["disabled"] = false,
+            ["level"] = "error",
+        };
+
         var inboundArray = root["inbounds"] as JsonArray
                            ?? throw new InvalidDataException("Subscription has no inbounds.");
         var tunInbound = inboundArray.OfType<JsonObject>()
@@ -69,6 +102,8 @@ internal static class TunnelProfileBuilder
         var tun = (JsonObject)tunInbound.DeepClone();
         // The shared profile includes an Android-only field that this engine rejects.
         tun.Remove("dns_mode");
+        // A subscription's generic name can collide with other sing-box clients.
+        tun["interface_name"] = "deytt-connect";
         tun["auto_route"] = true;
         tun["strict_route"] = upstreamInterface is null;
         root["inbounds"] = new JsonArray(tun);
@@ -132,6 +167,8 @@ internal static class TunnelProfileBuilder
                 throw new InvalidDataException("Selected route is not supported.");
             if (!tags.Contains(selectedTag))
                 throw new InvalidDataException("Selected route is unavailable in the subscription.");
+            if (selectedTag == autoTag)
+                ConfigureEuropeanAutoRoute(outboundArray, autoTag);
             engineTag = selectedTag;
         }
 

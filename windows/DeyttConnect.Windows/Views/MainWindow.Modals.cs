@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using DeyttConnect.Windows.UI;
@@ -101,6 +102,8 @@ public partial class MainWindow
         };
         Closed += closedHandler;
         var gateAcquired = false;
+        Bitmap? homePreview = null;
+        Task<Bitmap?>? previewCaptureTask = null;
         Control? previousFocus = null;
         (bool Sidebar, bool BottomNavigation, bool Page, bool Header) previousEnabled = default;
 
@@ -108,6 +111,27 @@ public partial class MainWindow
         {
             await _shellModalGate.WaitAsync(closingCancellation.Token);
             gateAcquired = true;
+            if (_activeTab == MainTab.Home && _routeGlobe is not null)
+            {
+                try
+                {
+                    previewCaptureTask = _routeGlobe.CapturePreviewAsync();
+                    homePreview = await previewCaptureTask.WaitAsync(
+                        TimeSpan.FromMilliseconds(200), closingCancellation.Token);
+                }
+                catch (TimeoutException)
+                {
+                    // Use the theme surface when the atlas cannot be captured quickly.
+                    if (previewCaptureTask is not null)
+                        _ = previewCaptureTask.ContinueWith(task => task.Result?.Dispose(),
+                            CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion,
+                            TaskScheduler.Default);
+                }
+                catch (OperationCanceledException) when (closingCancellation.IsCancellationRequested)
+                {
+                    return null;
+                }
+            }
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 previousFocus = FocusManager?.GetFocusedElement() as Control;
@@ -133,7 +157,7 @@ public partial class MainWindow
                 };
                 Grid.SetColumn(close, 1);
 
-                var availableCardHeight = Math.Max(340, Bounds.Height - 60);
+                var availableCardHeight = Math.Max(96, Bounds.Height - 44);
                 var availableCardWidth = Bounds.Width > 0
                     ? Math.Max(320, Bounds.Width - 44)
                     : maxWidth;
@@ -147,7 +171,7 @@ public partial class MainWindow
                 var body = new ScrollViewer
                 {
                     Content = content,
-                    MaxHeight = Math.Max(96, availableCardHeight - 104 - footerHeight),
+                    MaxHeight = Math.Max(48, availableCardHeight - 104 - footerHeight),
                     VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
                     HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                 };
@@ -158,7 +182,21 @@ public partial class MainWindow
                 };
                 if (footer is not null)
                     cardContents.Children.Add(footer);
-                var card = DeyttTheme.Card(cardContents, DeyttTheme.Surface2, DeyttTheme.Line, 21,
+                // On short windows let the header and footer scroll with the
+                // body, so every action remains reachable.
+                Control dialogContents = cardContents;
+                if (availableCardHeight < 360)
+                {
+                    body.MaxHeight = double.PositiveInfinity;
+                    dialogContents = new ScrollViewer
+                    {
+                        Content = cardContents,
+                        MaxHeight = Math.Max(48, availableCardHeight - 48),
+                        VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                        HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                    };
+                }
+                var card = DeyttTheme.Card(dialogContents, DeyttTheme.Surface2, DeyttTheme.Line, 21,
                     new Thickness(24));
                 card.MaxWidth = cardMaxWidth;
                 card.MaxHeight = availableCardHeight;
@@ -168,10 +206,24 @@ public partial class MainWindow
 
                 var overlay = new Grid
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(208, 3, 7, 12)),
+                    Background = Brushes.Transparent,
                     Focusable = true,
                 };
                 KeyboardNavigation.SetTabNavigation(overlay, KeyboardNavigationMode.Cycle);
+                if (homePreview is not null)
+                    overlay.Children.Add(new Image
+                    {
+                        Source = homePreview,
+                        Stretch = Stretch.Fill,
+                        IsHitTestVisible = false,
+                    });
+                var pageTone = DeyttTheme.Background;
+                overlay.Children.Add(new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(208,
+                        pageTone.R, pageTone.G, pageTone.B)),
+                    IsHitTestVisible = false,
+                });
                 overlay.Children.Add(card);
                 overlay.KeyDown += (_, args) =>
                 {
@@ -194,6 +246,7 @@ public partial class MainWindow
                 ModalOverlayHost.Children.Clear();
                 ModalOverlayHost.Children.Add(overlay);
                 ModalOverlayHost.IsVisible = true;
+                _ = PlayEntranceAsync(card, closingCancellation.Token);
                 Dispatcher.UIThread.Post(() => (modal.InitialFocusTarget ?? close).Focus(),
                     DispatcherPriority.Input);
             });
@@ -228,21 +281,23 @@ public partial class MainWindow
                             : _compactLayout
                                 ? _activeTab switch
                                 {
-                                    MainTab.Routes => BottomRoutesNav,
-                                    MainTab.Profile or MainTab.Support => BottomProfileNav,
-                                    MainTab.Settings => BottomSettingsNav,
-                                    _ => BottomHomeNav,
+                                    MainTab.Routes => TopRoutesNav,
+                                    MainTab.Profile or MainTab.Support => TopProfileNav,
+                                    MainTab.Settings => TopSettingsNav,
+                                    _ => TopHomeNav,
                                 }
                                 : _activeTab switch
                                 {
-                                    MainTab.Routes => RoutesNav,
-                                    MainTab.Profile or MainTab.Support => ProfileNav,
-                                    MainTab.Settings => SettingsNav,
-                                    _ => HomeNav,
+                                    MainTab.Routes => TopRoutesNav,
+                                    MainTab.Profile or MainTab.Support => TopProfileNav,
+                                    MainTab.Settings => TopSettingsNav,
+                                    _ => TopHomeNav,
                                 };
                         Dispatcher.UIThread.Post(() => focusTarget.Focus(), DispatcherPriority.Input);
                     }
                 });
+                homePreview?.Dispose();
+                homePreview = null;
                 _shellModalGate.Release();
             }
         }

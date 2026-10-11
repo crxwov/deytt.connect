@@ -14,7 +14,9 @@ public sealed class WindowsTunnelClient
         CancellationToken cancellationToken = default) =>
         SendAsync(new WindowsPipeRequest
             { Command = WindowsPipeCommand.Connect, Profile = profile, RouteTag = routeTag, AwgConfig = awgConfig },
-            cancellationToken, 40);
+            // Includes bounded DNS bootstrap, AWG resolution and engine check.
+            // A cold start must not abandon a still-valid service request.
+            cancellationToken, 75);
 
     public Task<WindowsTunnelSnapshot> DisconnectAsync(CancellationToken cancellationToken = default) =>
         SendAsync(new WindowsPipeRequest { Command = WindowsPipeCommand.Disconnect }, cancellationToken, 15);

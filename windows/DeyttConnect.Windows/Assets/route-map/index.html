@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self';">
+  <title>deytt. · подключение</title>
+  <link rel="stylesheet" href="network-atlas.css">
+  <script defer src="network-atlas.js"></script>
+  <script defer src="atlas-init.js"></script>
+</head>
+<body>
+  <main class="network-atlas" data-atlas-status="loading" data-atlas-variant="home">
+    <div class="home-scene">
+      <div class="network-atlas__canvas-wrap">
+        <canvas data-atlas-interactive tabindex="0" role="img" aria-label="интерактивный глобус маршрута deytt."></canvas>
+        <span class="network-atlas__loader" data-atlas-status role="status" aria-live="polite">загружаю глобус</span>
+        <span class="network-atlas__tooltip" data-atlas-tooltip role="status" aria-live="polite" hidden></span>
+        <div class="traffic-hint" data-traffic-hint role="status" aria-live="polite" hidden></div>
+        <div class="traffic-legend sr-only" data-traffic-legend aria-label="traffic colors">
+          <button type="button" class="legend-upload" data-legend-upload data-flow="upload">исходящие данные</button>
+          <button type="button" class="legend-download" data-legend-download data-flow="download">ответный трафик</button>
+          <button type="button" class="legend-control" data-legend-control data-flow="control">служебный трафик</button>
+        </div>
+        <section class="traffic-inspector" data-traffic-inspector data-traffic-inspector-card role="region" aria-label="описание выбранного потока" hidden>
+          <span class="traffic-inspector__eyebrow" data-inspector-kind></span>
+          <h2 data-inspector-title></h2>
+          <p class="traffic-inspector__path" data-inspector-path></p>
+          <p data-inspector-body></p>
+          <span class="traffic-inspector__item" data-inspector-item></span>
+          <p class="traffic-inspector__note" data-inspector-note></p>
+          <button type="button" data-inspector-resume>Показать все линии</button>
+        </section>
+      </div>
+
+      <section class="home-panel-shell" aria-label="управление подключением">
+        <div class="home-panel">
+          <div class="panel-copy status-copy">
+            <h1 id="home-status" class="sr-only" aria-live="polite">не подключено</h1>
+            <p id="home-error" class="home-error" hidden></p>
+          </div>
+          <div class="panel-copy route-copy">
+            <div class="route-heading">
+              <span id="home-flag" class="route-flag" aria-hidden="true">🌐</span>
+              <div class="route-labels">
+                <span id="home-country" class="home-country">автоподбор</span>
+                <strong id="home-city" class="home-city">выход выберется автоматически</strong>
+                <span id="home-protocol" class="home-protocol" hidden></span>
+              </div>
+            </div>
+          </div>
+          <button id="home-action" class="home-action panel-copy" type="button" data-action="home-connect">
+            <span data-action-label>Подключиться</span>
+            <span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          </button>
+          <div class="home-metrics panel-copy" aria-label="последний замер маршрута">
+            <div class="metric">
+              <span class="metric-label" id="latency-label">отклик</span>
+              <strong id="home-latency">—</strong><small id="home-latency-unit">мс</small>
+            </div>
+            <div class="metric">
+              <span class="metric-label" id="speed-label">скорость</span>
+              <strong id="home-speed">—</strong><small id="home-speed-unit">Мбит/с</small>
+            </div>
+          </div>
+          <p id="home-measurement-note" class="measurement-note panel-copy" hidden></p>
+          <button id="home-measure" class="home-measure" type="button" data-action="home-measure">обновить замер</button>
+          <p id="home-route-description" class="sr-only" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="home-compact" aria-label="текущее подключение" aria-hidden="true" inert>
+        <div class="home-compact-content">
+          <div class="compact-summary">
+            <div class="compact-status-line sr-only">
+              <span class="compact-status-dot" aria-hidden="true"></span>
+              <span id="compact-status" class="compact-status" data-tone="normal">не подключено</span>
+            </div>
+            <div class="compact-route">
+              <span id="compact-flag" class="route-flag" aria-hidden="true">🌐</span>
+              <div class="route-labels">
+                <span id="compact-country" class="home-country">автоподбор</span>
+                <strong id="compact-city" class="home-city">выход выберется автоматически</strong>
+                <span id="compact-protocol" class="home-protocol" hidden></span>
+              </div>
+            </div>
+          </div>
+          <button id="compact-action" class="compact-action" type="button" data-action="home-connect"><span data-action-label>Подключиться</span><span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span></button>
+          <button id="immersive-exit" class="compact-exit" type="button" aria-label="вернуться к окну" title="вернуться к окну · esc" hidden>↙</button>
+          <p id="compact-error" class="compact-error" role="status" hidden></p>
+          <div class="compact-metrics"><span id="compact-latency">— мс</span><span id="compact-speed">— Мбит/с</span></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

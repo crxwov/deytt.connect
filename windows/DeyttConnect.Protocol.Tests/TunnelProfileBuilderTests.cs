@@ -7,6 +7,61 @@ namespace DeyttConnect.Protocol.Tests;
 public sealed class TunnelProfileBuilderTests
 {
     private const string AutoTag = "🌍 автоподбор";
+
+    [Theory]
+    [InlineData("urltest")]
+    [InlineData("selector")]
+    public void AutomaticSelectionUsesOnlyEuropeanSingleCountryServers(string type)
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS", "route:DE:TROJAN", "route:FI:HYSTERIA2",
+            "route:IT:VLESS", "route:RU:VLESS", "route:RU-DE:CHAIN"))!.AsObject();
+        var automatic = profile["outbounds"]![0]!.AsObject();
+        automatic["type"] = type;
+        automatic["outbounds"] = new JsonArray("route:RU:VLESS", "route:RU-DE:CHAIN", "route:NL:VLESS");
+        automatic["default"] = "route:RU:VLESS";
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), AutoTag))!;
+        var selector = runtime["outbounds"]!.AsArray().OfType<JsonObject>()
+            .Single(outbound => outbound["tag"]!.GetValue<string>() == AutoTag);
+        Assert.Equal(new[] { "route:NL:VLESS", "route:DE:TROJAN", "route:FI:HYSTERIA2", "route:IT:VLESS" },
+            selector["outbounds"]!.AsArray().Select(tag => tag!.GetValue<string>()));
+        Assert.False(selector.ContainsKey("default"));
+        Assert.DoesNotContain("route:RU", selector["outbounds"]!.ToJsonString());
+    }
+
+    [Fact]
+    public void AutomaticSelectionCannotFallBackToRussiaOrRussianDetour()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS", "route:RU:VLESS"))!.AsObject();
+        profile["outbounds"]![1]!["detour"] = "route:RU:VLESS";
+        Assert.Throws<InvalidDataException>(() => TunnelProfileBuilder.Build(profile.ToJsonString(), AutoTag));
+        Assert.Throws<InvalidDataException>(() => TunnelProfileBuilder.Build(Profile("route:RU:VLESS"), AutoTag));
+    }
+
+    [Fact]
+    public void ExplicitRussianRouteRemainsAvailable()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:RU:VLESS"), "route:RU:VLESS"))!;
+        Assert.Equal("route:RU:VLESS", runtime["route"]!["final"]!.GetValue<string>());
+    }
+    [Theory]
+    [InlineData(true, "trace")]
+    [InlineData(false, "info")]
+    public void WindowsRuntimeKeepsErrorsOnConsoleWithoutSubscriptionLogFiles(bool disabled, string level)
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        profile["log"] = new JsonObject
+        {
+            ["disabled"] = disabled,
+            ["level"] = level,
+            ["output"] = "untrusted-subscription-output.log",
+        };
+
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), "route:NL:VLESS"))!;
+        Assert.False(runtime["log"]!["disabled"]!.GetValue<bool>());
+        Assert.Equal("error", runtime["log"]!["level"]!.GetValue<string>());
+        Assert.False(runtime["log"]!.AsObject().ContainsKey("output"));
+    }
+
     private const string LegacyAwgProfile = """
         [Interface]
         PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
@@ -118,6 +173,7 @@ public sealed class TunnelProfileBuilderTests
 
         var tun = Assert.Single(inbounds);
         Assert.Equal("tun", tun!["type"]!.GetValue<string>());
+        Assert.Equal("deytt-connect", tun["interface_name"]!.GetValue<string>());
         Assert.Equal("subscription-tun", tun["tag"]!.GetValue<string>());
         Assert.False(tun.AsObject().ContainsKey("dns_mode"));
     }

@@ -298,6 +298,42 @@ namespace DeyttConnect.Setup
         }
 
         [CustomAction]
+        public static ActionResult PrepareConnectDataRemoval(Session session)
+        {
+            var data = new CustomActionData();
+            data["InstallDirectory"] = session["INSTALLFOLDER"];
+            var ownerSid = session["ALLOWEDUSERSID"];
+            using (var profile = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\" + ownerSid))
+            {
+                var profilePath = profile?.GetValue("ProfileImagePath") as string;
+                if (!string.IsNullOrEmpty(profilePath))
+                    data["UserDirectory"] = Path.Combine(Environment.ExpandEnvironmentVariables(profilePath), "AppData", "Local", "DEYTT", "Connect");
+            }
+            data["RuntimeDirectory"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "DEYTT", "Connect", "runtime");
+            session["RemoveConnectData"] = data.ToString();
+            return ActionResult.Success;
+        }
+
+        [CustomAction]
+        public static ActionResult RemoveConnectData(Session session)
+        {
+            // This action is never scheduled for a major upgrade.
+            try
+            {
+                var data = session.CustomActionData;
+                if (data.ContainsKey("UserDirectory")) ConnectDataCleanup.RemoveUserData(data["UserDirectory"]);
+                ConnectDataCleanup.RemoveRuntime(data["RuntimeDirectory"]);
+                ConnectDataCleanup.RemoveInstalledCache(data["InstallDirectory"]);
+            }
+            catch (Exception exception)
+            {
+                session.Log("Connect data cleanup failed: {0}", exception.GetType().Name);
+                return ActionResult.Failure;
+            }
+            return ActionResult.Success;
+        }
+
+        [CustomAction]
         public static ActionResult PrepareShortcutRemoval(Session session)
         {
             var data = new CustomActionData();

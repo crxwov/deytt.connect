@@ -26,6 +26,8 @@
              Link="Service\RouteProbeModels.cs" />
     <Compile Include="..\DeyttConnect.Windows.Service\EngineController.cs"
              Link="Service\EngineController.cs" />
+    <Compile Include="..\DeyttConnect.Windows.Service\ActiveRouteTelemetry.cs"
+             Link="Service\ActiveRouteTelemetry.cs" />
     <Compile Include="..\DeyttConnect.Windows.Service\ProbeListenerReadiness.cs"
              Link="Service\ProbeListenerReadiness.cs" />
     <Compile Include="..\DeyttConnect.Windows.Service\RouteProxyTransport.cs"
