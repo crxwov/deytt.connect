@@ -118,4 +118,30 @@ public sealed class TunnelProfileBuilderTests
         Assert.Throws<InvalidDataException>(() =>
             TunnelProfileBuilder.Build(Profile(routeTag), routeTag, "not a profile"));
     }
+
+    [Fact]
+    public void BuildRejectsUnsafeSingBoxPrivilegeEscalationFields()
+    {
+        var withLogOutput = JsonNode.Parse(Profile("route:DE:VLESS"))!.AsObject();
+        withLogOutput["log"] = new JsonObject { ["level"] = "info", ["output"] = @"C:\Windows\System32\evil.log" };
+        Assert.Throws<InvalidDataException>(() =>
+            TunnelProfileBuilder.Build(withLogOutput.ToJsonString(), "route:DE:VLESS"));
+
+        var withExperimental = JsonNode.Parse(Profile("route:DE:VLESS"))!.AsObject();
+        withExperimental["experimental"] = new JsonObject
+        {
+            ["cache_file"] = new JsonObject { ["enabled"] = true, ["path"] = @"C:\Windows\System32\cache.db" },
+        };
+        Assert.Throws<InvalidDataException>(() =>
+            TunnelProfileBuilder.Build(withExperimental.ToJsonString(), "route:DE:VLESS"));
+
+        var withCertPath = JsonNode.Parse(Profile("route:DE:VLESS"))!.AsObject();
+        withCertPath["outbounds"]!.AsArray()[1]!["tls"] = new JsonObject
+        {
+            ["enabled"] = true,
+            ["certificate_path"] = @"C:\Windows\win.ini",
+        };
+        Assert.Throws<InvalidDataException>(() =>
+            TunnelProfileBuilder.Build(withCertPath.ToJsonString(), "route:DE:VLESS"));
+    }
 }

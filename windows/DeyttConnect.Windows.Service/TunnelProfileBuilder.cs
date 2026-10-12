@@ -44,6 +44,39 @@ internal static class TunnelProfileBuilder
         return result;
     }
 
+    private static readonly HashSet<string> AllowedTopLevelKeys = new(StringComparer.Ordinal)
+    {
+        "log", "inbounds", "outbounds", "endpoints", "dns", "route",
+    };
+
+    private static readonly HashSet<string> ForbiddenNestedKeys = new(StringComparer.Ordinal)
+    {
+        "certificate_path",
+        "key_path",
+        "client_certificate_path",
+        "client_key_path",
+        "data_directory",
+        "external_ui",
+        "external_ui_download_url",
+        "external_ui_download_detour",
+        "cache_file",
+        "clash_api",
+        "v2ray_api",
+        "acme",
+        "ech_key_path",
+        "rule_set",
+    };
+
+    private static readonly HashSet<string> AllowedOutboundTypes = new(StringComparer.Ordinal)
+    {
+        "vless", "trojan", "hysteria2", "selector", "urltest", "direct", "block", "dns",
+    };
+
+    private static readonly HashSet<string> AllowedEndpointTypes = new(StringComparer.Ordinal)
+    {
+        "wireguard", "awg",
+    };
+
     public static string Build(string profileJson, string selectedTag, string? awgConfig = null,
         string? upstreamInterface = null)
     {
@@ -57,6 +90,8 @@ internal static class TunnelProfileBuilder
         {
             throw new InvalidDataException("Subscription JSON is invalid.", error);
         }
+
+        ValidateNoUnsafeFields(root);
 
         var inboundArray = root["inbounds"] as JsonArray
                            ?? throw new InvalidDataException("Subscription has no inbounds.");
@@ -78,7 +113,10 @@ internal static class TunnelProfileBuilder
         var tags = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in outboundArray)
         {
-            if (node is not JsonObject outbound || ReadString(outbound, "tag") is not { Length: > 0 } tag ||
+            if (node is not JsonObject outbound ||
+                ReadString(outbound, "type") is not { Length: > 0 } outType ||
+                !AllowedOutboundTypes.Contains(outType) ||
+                ReadString(outbound, "tag") is not { Length: > 0 } tag ||
                 !tags.Add(tag))
                 throw new InvalidDataException("Subscription has invalid outbound tags.");
         }
@@ -89,7 +127,10 @@ internal static class TunnelProfileBuilder
         {
             foreach (var node in endpointArray)
             {
-                if (node is not JsonObject endpoint || ReadString(endpoint, "tag") is not { Length: > 0 } tag ||
+                if (node is not JsonObject endpoint ||
+                    ReadString(endpoint, "type") is not { Length: > 0 } epType ||
+                    !AllowedEndpointTypes.Contains(epType) ||
+                    ReadString(endpoint, "tag") is not { Length: > 0 } tag ||
                     !usedTags.Add(tag))
                     throw new InvalidDataException("Subscription has invalid or duplicate endpoint tags.");
             }
@@ -153,7 +194,49 @@ internal static class TunnelProfileBuilder
         }
 
         ApplyDomainBypass(root, route);
-        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
+
+        var sanitizedRoot = new JsonObject
+        {
+            ["log"] = new JsonObject { ["level"] = "info", ["timestamp"] = true },
+            ["inbounds"] = root["inbounds"]!.DeepClone(),
+            ["outbounds"] = root["outbounds"]!.DeepClone(),
+            ["dns"] = root["dns"]!.DeepClone(),
+            ["route"] = root["route"]!.DeepClone(),
+        };
+        if (root["endpoints"] is JsonArray endpointsClone && endpointsClone.Count > 0)
+            sanitizedRoot["endpoints"] = endpointsClone.DeepClone();
+
+        return sanitizedRoot.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
+    }
+
+    private static void ValidateNoUnsafeFields(JsonObject root)
+    {
+        foreach (var kvp in root)
+        {
+            if (!AllowedTopLevelKeys.Contains(kvp.Key))
+                throw new InvalidDataException($"Subscription contains unsupported top-level section '{kvp.Key}'.");
+        }
+        if (root["log"] is JsonObject logObj && logObj.ContainsKey("output"))
+            throw new InvalidDataException("Subscription log output path is not permitted.");
+        CheckNodeForForbiddenKeys(root);
+    }
+
+    private static void CheckNodeForForbiddenKeys(JsonNode? node)
+    {
+        if (node is JsonObject obj)
+        {
+            foreach (var kvp in obj)
+            {
+                if (ForbiddenNestedKeys.Contains(kvp.Key))
+                    throw new InvalidDataException($"Subscription contains forbidden configuration key '{kvp.Key}'.");
+                CheckNodeForForbiddenKeys(kvp.Value);
+            }
+        }
+        else if (node is JsonArray arr)
+        {
+            foreach (var item in arr)
+                CheckNodeForForbiddenKeys(item);
+        }
     }
 
     public static string BuildProbeProfile(string profileJson, IReadOnlyList<ProbeRouteEndpoint> endpoints,
