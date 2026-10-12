@@ -190,6 +190,11 @@ internal sealed class EngineController
             await Task.Delay(TimeSpan.FromMilliseconds(350), probeToken).ConfigureAwait(false);
             if (process.HasExited)
                 return ProbeError("Ядро VPN остановилось до начала диагностики.");
+            if (!await VerifyProbeListenersOwnedByEngineAsync(process, endpoints, probeToken).ConfigureAwait(false))
+            {
+                StopCore();
+                return ProbeError("Локальный порт диагностики недоступен или занят сторонним процессом.");
+            }
 
             var results = await MeasureRoutesAsync(endpoints, method, token, probeToken, PublishProbeProgress)
                 .ConfigureAwait(false);
@@ -634,12 +639,19 @@ internal sealed class EngineController
             throw new InvalidDataException("The diagnostic route list has duplicate entries.");
 
         var endpoints = new List<ProbeRouteEndpoint>(routeTags.Count);
+        var allocatedPorts = new HashSet<int>();
         for (var index = 0; index < routeTags.Count; index++)
         {
-            var listener = new TcpListener(IPAddress.Loopback, 0);
-            listener.Start();
-            var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-            listener.Stop();
+            var port = 0;
+            for (var attempt = 0; attempt < 8; attempt++)
+            {
+                var listener = new TcpListener(IPAddress.Loopback, 0);
+                listener.Start();
+                port = ((IPEndPoint)listener.LocalEndpoint).Port;
+                listener.Stop();
+                if (allocatedPorts.Add(port))
+                    break;
+            }
 
             var entropy = Guid.NewGuid().ToString("N");
             endpoints.Add(new ProbeRouteEndpoint(routeTags[index], $"deytt-probe-{index}", port,
@@ -647,6 +659,112 @@ internal sealed class EngineController
         }
         return endpoints;
     }
+
+    private static async Task<bool> VerifyProbeListenersOwnedByEngineAsync(
+        Process process,
+        IReadOnlyList<ProbeRouteEndpoint> endpoints,
+        CancellationToken cancellationToken)
+    {
+        if (!OperatingSystem.IsWindows())
+            return true;
+
+        var expectedPid = (uint)process.Id;
+        for (var attempt = 0; attempt < 15; attempt++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (process.HasExited)
+                return false;
+
+            var listeners = GetLoopbackTcpListenerPids();
+            var allBoundByEngine = true;
+            foreach (var endpoint in endpoints)
+            {
+                if (!listeners.TryGetValue(endpoint.Port, out var ownerPid))
+                {
+                    allBoundByEngine = false;
+                    continue;
+                }
+
+                if (ownerPid != expectedPid)
+                    return false;
+            }
+
+            if (allBoundByEngine)
+                return true;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(150), cancellationToken).ConfigureAwait(false);
+        }
+
+        return false;
+    }
+
+    private static Dictionary<int, uint> GetLoopbackTcpListenerPids()
+    {
+        const int AfInet = 2;
+        const int TcpTableOwnerPidListener = 3;
+        const uint ErrorInsufficientBuffer = 122;
+        const uint LoopbackIpv4NetworkOrder = 0x0100007Fu;
+
+        var result = new Dictionary<int, uint>();
+        var bufferSize = 0;
+        var status = GetExtendedTcpTable(IntPtr.Zero, ref bufferSize, false, AfInet, TcpTableOwnerPidListener);
+        if (status != ErrorInsufficientBuffer && status != 0)
+            return result;
+
+        for (var retry = 0; retry < 3 && bufferSize > 0; retry++)
+        {
+            var buffer = Marshal.AllocHGlobal(bufferSize);
+            try
+            {
+                status = GetExtendedTcpTable(buffer, ref bufferSize, false, AfInet, TcpTableOwnerPidListener);
+                if (status == ErrorInsufficientBuffer)
+                    continue;
+                if (status != 0)
+                    return result;
+
+                var count = Marshal.ReadInt32(buffer);
+                var rowPtr = IntPtr.Add(buffer, sizeof(int));
+                var rowSize = Marshal.SizeOf<MibTcpRowOwnerPid>();
+                for (var index = 0; index < count; index++)
+                {
+                    var row = Marshal.PtrToStructure<MibTcpRowOwnerPid>(rowPtr);
+                    rowPtr = IntPtr.Add(rowPtr, rowSize);
+                    if (row.LocalAddr != LoopbackIpv4NetworkOrder && row.LocalAddr != 0u)
+                        continue;
+
+                    var port = (int)(((row.LocalPort & 0xFFu) << 8) | ((row.LocalPort >> 8) & 0xFFu));
+                    result[port] = row.OwningPid;
+                }
+                return result;
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+
+        return result;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MibTcpRowOwnerPid
+    {
+        public uint State;
+        public uint LocalAddr;
+        public uint LocalPort;
+        public uint RemoteAddr;
+        public uint RemotePort;
+        public uint OwningPid;
+    }
+
+    [DllImport("iphlpapi.dll", ExactSpelling = true)]
+    private static extern uint GetExtendedTcpTable(
+        IntPtr pTcpTable,
+        ref int pdwSize,
+        [MarshalAs(UnmanagedType.Bool)] bool bOrder,
+        int ulAf,
+        int tableClass,
+        uint reserved = 0);
 
     private static async Task<IReadOnlyList<ServiceProbeResult>> MeasureRoutesAsync(
         IReadOnlyList<ProbeRouteEndpoint> endpoints, string method, string token,
