@@ -195,6 +195,50 @@ namespace DeyttConnect.Setup
             return ActionResult.Success;
         }
 
+        private const string RegistryKeyPath = @"SOFTWARE\DEYTT\Connect";
+        private const string LegacyRegistryKeyPath = @"SOFTWARE\DeyttConnect";
+        private const string RegistryValueName = "AllowedUserSid";
+
+        public static void WriteUserSidRegistry(string userSid)
+        {
+            using (var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
+            {
+                if (string.IsNullOrEmpty(userSid))
+                {
+                    using (var key = baseKey.OpenSubKey(RegistryKeyPath, writable: true))
+                        key?.DeleteValue(RegistryValueName, throwOnMissingValue: false);
+                    using (var legacyKey = baseKey.OpenSubKey(LegacyRegistryKeyPath, writable: true))
+                        legacyKey?.DeleteValue(RegistryValueName, throwOnMissingValue: false);
+                    return;
+                }
+
+                var sid = new SecurityIdentifier(userSid);
+                using (var key = baseKey.CreateSubKey(RegistryKeyPath, writable: true))
+                    key?.SetValue(RegistryValueName, sid.Value, RegistryValueKind.String);
+            }
+        }
+
+        public static int RunSc(string arguments, int timeoutMilliseconds = 30000)
+        {
+            var scPath = Path.Combine(Environment.SystemDirectory, "sc.exe");
+            using (var process = Process.Start(new ProcessStartInfo(scPath, arguments)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            }))
+            {
+                if (process == null)
+                    throw new IOException("не удалось запустить системную утилиту sc.exe.");
+                if (!process.WaitForExit(timeoutMilliseconds))
+                {
+                    try { process.Kill(); } catch { }
+                    throw new TimeoutException("команда sc.exe не завершилась вовремя.");
+                }
+                return process.ExitCode;
+            }
+        }
+
         [CustomAction]
         public static ActionResult RemoveDesktopShortcut(Session session)
         {

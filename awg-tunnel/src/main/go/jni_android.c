@@ -38,8 +38,11 @@ JNIEXPORT jlong JNICALL Java_space_deytt_awg_AwgProxyBackend_nativeStart(
     if ((*env)->GetJavaVM(env, &handle->vm) != JNI_OK) { free(handle); return 0; }
     handle->object = (*env)->NewGlobalRef(env, protector);
     jclass type = (*env)->GetObjectClass(env, protector);
-    handle->method = (*env)->GetMethodID(env, type, "protect", "(I)Z");
-    (*env)->DeleteLocalRef(env, type);
+    handle->method = type ? (*env)->GetMethodID(env, type, "protect", "(I)Z") : NULL;
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+    }
+    if (type) (*env)->DeleteLocalRef(env, type);
     if (!handle->object || !handle->method) {
         if (handle->object) (*env)->DeleteGlobalRef(env, handle->object);
         free(handle); return 0;
@@ -71,6 +74,9 @@ JNIEXPORT void JNICALL Java_space_deytt_awg_AwgProxyBackend_nativeStop(JNIEnv *e
     proxy_handle *handle = (proxy_handle *)(uintptr_t)raw;
     if (!handle) return;
     deyttStop(handle->native_handle);
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+    }
     (*env)->DeleteGlobalRef(env, handle->object);
     free(handle);
 }
