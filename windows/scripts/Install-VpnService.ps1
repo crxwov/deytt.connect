@@ -87,6 +87,7 @@ $directorySecurity.AddAccessRule([System.Security.AccessControl.FileSystemAccess
     $usersSid, [System.Security.AccessControl.FileSystemRights]::ReadAndExecute,
     [System.Security.AccessControl.InheritanceFlags]::ContainerInherit -bor [System.Security.AccessControl.InheritanceFlags]::ObjectInherit,
     [System.Security.AccessControl.PropagationFlags]::None, [System.Security.AccessControl.AccessControlType]::Allow))
+Set-Acl -LiteralPath $vendorDirectory -AclObject $directorySecurity
 Set-Acl -LiteralPath $installDirectory -AclObject $directorySecurity
 if (-not $inPlaceMsiPayload) {
     Copy-Item -Path (Join-Path $serviceSource '*') -Destination $installDirectory -Recurse -Force
@@ -99,11 +100,12 @@ New-ItemProperty -Path $registryPath -Name 'AllowedUserSid' -Value $sid.Value -P
 
 $servicePath = Join-Path $installDirectory 'DeyttConnect.Windows.Service.exe'
 $binaryPath = '"' + $servicePath + '" --service'
+$scPath = Join-Path $env:SystemRoot 'System32\sc.exe'
 if ($null -eq $service) {
     New-Service -Name $serviceName -DisplayName $displayName -Description 'runs the deytt connect windows vpn tunnel.' `
         -BinaryPathName $binaryPath -StartupType Automatic | Out-Null
 } else {
-    & sc.exe config $serviceName "binPath= $binaryPath" 'start= auto' | Out-Null
+    & $scPath config $serviceName "binPath= $binaryPath" 'start= auto' | Out-Null
     if ($LASTEXITCODE -ne 0) {
         throw 'windows could not update the vpn service configuration.'
     }

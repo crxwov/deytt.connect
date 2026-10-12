@@ -3,7 +3,8 @@ namespace DeyttConnect.Windows.Services;
 internal static class WindowsPortableLayout
 {
     internal static string ResolveBundleRoot(string appBaseDirectory) =>
-        FindPortableRoot(appBaseDirectory) ?? Path.GetFullPath(appBaseDirectory);
+        (FindPortableRoot(appBaseDirectory) ?? Path.GetFullPath(appBaseDirectory))
+        .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     internal static string? FindPortableRoot(string appBaseDirectory)
     {

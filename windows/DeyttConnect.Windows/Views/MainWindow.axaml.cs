@@ -2849,7 +2849,8 @@ public partial class MainWindow : Window
 
             var powerShellPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
                 "WindowsPowerShell", "v1.0", "powershell.exe");
-            var bundleRoot = WindowsPortableLayout.ResolveBundleRoot(AppContext.BaseDirectory);
+            var bundleRoot = WindowsPortableLayout.ResolveBundleRoot(AppContext.BaseDirectory)
+                .TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
             var start = new ProcessStartInfo
             {
                 FileName = powerShellPath,
