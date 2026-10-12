@@ -6,7 +6,7 @@ namespace DeyttConnect.Windows.Service;
 
 internal static class RouteLatencyProbe
 {
-    private static readonly Uri[] ColdTargets =
+    internal static readonly Uri[] DefaultTargets =
     [
         new("https://cp.cloudflare.com/generate_204"),
         new("https://connectivitycheck.gstatic.com/generate_204"),
@@ -40,47 +40,40 @@ internal static class RouteLatencyProbe
         using var overallCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         overallCancellation.CancelAfter(limits.Overall);
 
-        var coldTargets = targets ?? ColdTargets;
+        var coldTargets = targets ?? DefaultTargets;
         if (coldTargets.Count == 0) throw new ArgumentException("At least one latency target is required.", nameof(targets));
-        var coldOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count * 2);
+        var coldOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count);
         RouteLatencyProbeAttempt? selectedCold = null;
 
         for (var round = 1; round <= 2 && selectedCold is null && !overallCancellation.IsCancellationRequested; round++)
         {
-            using var coldCancellation = CancellationTokenSource.CreateLinkedTokenSource(overallCancellation.Token);
-            var coldTasks = coldTargets.Select(target => MeasureRequestAsync(proxyClient, target,
-                coldCancellation.Token, cancellationToken, overallCancellation.Token, limits.Individual)).ToArray();
-            var pendingCold = new HashSet<Task<RouteLatencyProbeAttempt>>(coldTasks);
             var roundOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count);
-            try
+            foreach (var target in coldTargets)
             {
-                while (pendingCold.Count > 0 && selectedCold is null)
+                if (overallCancellation.IsCancellationRequested)
+                    break;
+
+                var outcome = await MeasureRequestAsync(proxyClient, target,
+                    overallCancellation.Token, cancellationToken, overallCancellation.Token, limits.Individual)
+                    .ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                coldOutcomes.Add(outcome);
+                roundOutcomes.Add(outcome);
+                reportProgress?.Invoke(new RouteLatencyProbeObservation(round,
+                    RouteLatencyProbePhase.ColdConnect, outcome.LatencyMilliseconds));
+                if (outcome.LatencyMilliseconds is not null)
                 {
-                    var finished = await Task.WhenAny(pendingCold).ConfigureAwait(false);
-                    pendingCold.Remove(finished);
-                    var outcome = await finished.ConfigureAwait(false);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    coldOutcomes.Add(outcome);
-                    roundOutcomes.Add(outcome);
-                    reportProgress?.Invoke(new RouteLatencyProbeObservation(round,
-                        RouteLatencyProbePhase.ColdConnect, outcome.LatencyMilliseconds));
-                    if (outcome.LatencyMilliseconds is not null)
-                        selectedCold = outcome;
+                    selectedCold = outcome;
+                    break;
                 }
             }
-            finally
-            {
-                coldCancellation.Cancel();
-                try { await Task.WhenAll(coldTasks).ConfigureAwait(false); }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-            }
-            if (selectedCold is null && !roundOutcomes.Any(IsRetryable))
+
+            if (selectedCold is not null || !roundOutcomes.Any(IsRetryable) || round == 2 ||
+                overallCancellation.IsCancellationRequested)
                 break;
-            if (selectedCold is null && round == 1 && !overallCancellation.IsCancellationRequested)
-            {
-                try { await Task.Delay(200, overallCancellation.Token).ConfigureAwait(false); }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
-            }
+
+            try { await Task.Delay(TimeSpan.FromMilliseconds(200), overallCancellation.Token).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -238,7 +231,8 @@ internal static class RouteLatencyProbe
     {
         RouteLatencyProbeFailure.AttemptTimedOut or RouteLatencyProbeFailure.OverallTimedOut or
             RouteLatencyProbeFailure.RequestFailed or RouteLatencyProbeFailure.DnsFailed => true,
-        RouteLatencyProbeFailure.InvalidResponse => attempt.StatusCode == (HttpStatusCode)429 || (int?)attempt.StatusCode >= 500,
+        RouteLatencyProbeFailure.InvalidResponse => attempt.StatusCode is { } status &&
+            (status == (HttpStatusCode)429 || (int)status >= 500),
         _ => false,
     };
 

@@ -68,6 +68,7 @@ public partial class MainWindow : Window
     private Task<WindowsTunnelSnapshot>? _vpnConnectTask;
     private long _vpnOperationVersion;
     private readonly string? _initialImportUrl;
+    private string? _pendingExternalImportUrl;
     private bool _supportViewActivated;
     private bool _homeMapInitializationAllowed;
     private bool _disableNativeMapInitialization;
@@ -241,8 +242,6 @@ public partial class MainWindow : Window
 
         if (OperatingSystem.IsWindows())
             await ShowStartupExternalVpnNoticeAsync();
-        if (!IsVisible)
-            return;
 
         using var startupRestoreTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         try
@@ -254,11 +253,14 @@ public partial class MainWindow : Window
             _sessionRestoreComplete = true;
             if (IsVisible)
                 ShowTab(_activeTab);
+            RefreshTrayMenu();
         }
         if (!IsVisible)
             return;
 
-        if (_initialImportUrl is { Length: > 0 } importUrl)
+        var startupImportUrl = _pendingExternalImportUrl ?? _initialImportUrl;
+        _pendingExternalImportUrl = null;
+        if (startupImportUrl is { Length: > 0 } importUrl)
             await ShowSetupWindowAsync(importUrl);
         else if (string.IsNullOrWhiteSpace(_keysSnapshot?.ProfileJson) || _routes.Count == 0)
             await ShowSetupWindowAsync();
@@ -327,7 +329,11 @@ public partial class MainWindow : Window
     private void RequestNavigation(MainTab destination)
     {
         if (_activeTab == destination)
+        {
+            if (destination == MainTab.Home)
+                RenderActiveTabPreservingScroll();
             return;
+        }
         if (_activeTab == MainTab.Setup)
         {
             _activeSetupView?.Cancel();
@@ -2799,6 +2805,8 @@ public partial class MainWindow : Window
         _selectedRoute = route.Id;
         SavePreferences();
         ShowTab(MainTab.Home);
+        if (!IsVisible || WindowState == Avalonia.Controls.WindowState.Minimized)
+            ShowFromTray();
     }
 
     private async Task ShowLanguagePickerAsync()
@@ -3148,8 +3156,7 @@ public partial class MainWindow : Window
         _pendingRouteProbeQueue.Clear();
         _pendingRouteProbeNodes.Clear();
         _routeCountryProbeStates.Clear();
-        if (_activeRouteProbeCountry is not null && _routeProbeInProgress &&
-            !_routeProbeCancelRequested)
+        if (_routeProbeInProgress && !_routeProbeCancelRequested)
             _ = CancelRouteProbeAsync(renderProgress: false);
     }
 
@@ -3210,11 +3217,11 @@ public partial class MainWindow : Window
 
         _routeProbeInProgress = true;
         _routeProbeCancelRequested = false;
-        RenderProbeProgressPreservingFocus();
         string[]? activeRouteTags = null;
         var previousRouteResults = new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal);
         try
         {
+            RenderProbeProgressPreservingFocus();
             var availableTags = _routes.Select(route => route.Tag).ToHashSet(StringComparer.Ordinal);
             var routeTags = requestedRouteTags is { Count: > 0 }
                 ? requestedRouteTags.Where(availableTags.Contains).Distinct(StringComparer.Ordinal).ToArray()
@@ -3318,6 +3325,7 @@ public partial class MainWindow : Window
             }
             RenderProbeProgressPreservingFocus();
             StartNextCountryProbe();
+            RefreshTrayMenu();
         }
     }
 
@@ -3402,7 +3410,12 @@ public partial class MainWindow : Window
 
     private void RenderProbeProgressPreservingFocus()
     {
-        if (_activeTab == MainTab.Home && _routeGlobe?.Parent is not null)
+        if (_activeTab == MainTab.Home &&
+            _routeGlobe is { } map &&
+            _pageViews.TryGetValue(MainTab.Home, out var homePage) &&
+            ReferenceEquals(map.Parent, homePage.View) &&
+            homePage.View.Children.Contains(map) &&
+            PageHost.Children.Contains(homePage.View))
         {
             UpdateShellStatus();
             return;

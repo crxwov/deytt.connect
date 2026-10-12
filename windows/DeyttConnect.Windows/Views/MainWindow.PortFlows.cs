@@ -73,6 +73,11 @@ public partial class MainWindow
             _setupFlowCompletion = null;
             if (IsVisible && _activeTab == MainTab.Setup)
                 ShowTab(completedResult is null ? returnTab : MainTab.Home);
+            if (IsVisible && _pendingExternalImportUrl is { Length: > 0 } queuedImportUrl)
+            {
+                _pendingExternalImportUrl = null;
+                _ = ShowSetupWindowAsync(queuedImportUrl);
+            }
         }
     }
 

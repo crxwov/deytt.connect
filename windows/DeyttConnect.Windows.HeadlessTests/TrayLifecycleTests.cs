@@ -37,25 +37,30 @@ public sealed class TrayLifecycleTests
     }
 
     [AvaloniaTheory]
-    [InlineData("ru", "disconnected", "подключить vpn", "сервер", "обход белых списков")]
-    [InlineData("en", "connected", "disconnect vpn", "server", "allowlist bypass")]
-    [InlineData("en", "checking", "cancel connection", "server", "allowlist bypass")]
+    [InlineData("ru", "disconnected", "подключить vpn", "сменить обход")]
+    [InlineData("en", "connected", "disconnect vpn", "change bypass")]
+    [InlineData("en", "checking", "connecting vpn…", "change bypass")]
     public void MenuUsesLocalizedActionAndSeparatesBypass(string language, string state,
-        string action, string server, string bypass)
+        string action, string bypass)
     {
         var window = Window(language, state);
         try
         {
             var menu = Menu(window);
+            Assert.Equal(5, menu.Items.Count);
             Assert.Equal(action, Assert.IsType<NativeMenuItem>(menu.Items[1]).Header);
-            var servers = Assert.IsType<NativeMenuItem>(menu.Items[2]);
-            var bypasses = Assert.IsType<NativeMenuItem>(menu.Items[3]);
-            Assert.Equal(server, servers.Header);
+            var bypasses = Assert.IsType<NativeMenuItem>(menu.Items[2]);
             Assert.Equal(bypass, bypasses.Header);
-            Assert.Single(servers.Menu!.Items);
-            Assert.Single(bypasses.Menu!.Items);
-            Assert.StartsWith("✓ ", Assert.IsType<NativeMenuItem>(servers.Menu.Items[0]).Header!);
-            Assert.DoesNotContain("✓ ", Assert.IsType<NativeMenuItem>(bypasses.Menu.Items[0]).Header!);
+            Assert.IsType<NativeMenuItemSeparator>(menu.Items[3]);
+            Assert.Equal(language == "ru" ? "выйти" : "exit",
+                Assert.IsType<NativeMenuItem>(menu.Items[4]).Header);
+            var choices = bypasses.Menu!.Items;
+            Assert.Equal(2, choices.Count);
+            Assert.Equal("ru + de", Assert.IsType<NativeMenuItem>(choices[0]).Header);
+            var country = Assert.IsType<NativeMenuItem>(choices[1]);
+            Assert.Equal(language == "ru" ? "нидерланды" : "netherlands", country.Header);
+            var protocol = Assert.Single(country.Menu!.Items);
+            Assert.Equal("✓ vless", Assert.IsType<NativeMenuItem>(protocol).Header);
         }
         finally { window.Close(); }
     }
@@ -70,14 +75,21 @@ public sealed class TrayLifecycleTests
             var menu = Menu(window);
             Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[1]).IsEnabled);
             Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[2]).IsEnabled);
-            Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[3]).IsEnabled);
-            Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[5]).IsEnabled);
+            Assert.All(Assert.IsType<NativeMenuItem>(menu.Items[2]).Menu!.Items,
+                item => Assert.False(Assert.IsType<NativeMenuItem>(item).IsEnabled));
+            Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[4]).IsEnabled);
             Set(window, "_quitInProgress", false);
             Set(window, "_sessionRestoreComplete", false);
             menu = Menu(window);
             Assert.False(Assert.IsType<NativeMenuItem>(menu.Items[1]).IsEnabled);
             Assert.All(Assert.IsType<NativeMenuItem>(menu.Items[2]).Menu!.Items,
-                item => Assert.False(Assert.IsType<NativeMenuItem>(item).IsEnabled));
+                item =>
+                {
+                    var route = Assert.IsType<NativeMenuItem>(item);
+                    Assert.False(route.IsEnabled);
+                    if (route.Menu is { } protocols)
+                        Assert.All(protocols.Items, protocol => Assert.False(Assert.IsType<NativeMenuItem>(protocol).IsEnabled));
+                });
         }
         finally { window.Close(); }
     }

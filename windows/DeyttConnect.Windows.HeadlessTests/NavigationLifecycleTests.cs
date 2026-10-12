@@ -14,6 +14,46 @@ namespace DeyttConnect.Windows.HeadlessTests;
 public sealed class NavigationLifecycleTests
 {
     [AvaloniaFact]
+    public void Home_globe_is_reinserted_after_a_shell_dialog_detaches_it()
+    {
+        var window = CreateWindow();
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var pageHost = window.FindControl<Grid>("PageHost")!;
+            var globe = Assert.Single(pageHost.GetVisualDescendants().OfType<RouteGlobeWebView>());
+            var homePage = Assert.IsAssignableFrom<Panel>(globe.Parent);
+
+            // Shell dialogs detach WebView2 before showing their overlay.
+            homePage.Children.Remove(globe);
+            Assert.Null(globe.Parent);
+
+            typeof(MainWindow).GetMethod("RenderActiveTabPreservingScroll",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Same(homePage, globe.Parent);
+            Assert.Same(globe, Assert.Single(pageHost.GetVisualDescendants().OfType<RouteGlobeWebView>()));
+            Assert.True(globe.HostActive);
+
+            homePage.Children.Remove(globe);
+            var requestNavigation = typeof(MainWindow).GetMethod("RequestNavigation",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var homeTab = Enum.Parse(requestNavigation.GetParameters()[0].ParameterType, "Home");
+            requestNavigation.Invoke(window, [homeTab]);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Same(homePage, globe.Parent);
+            Assert.Same(globe, Assert.Single(pageHost.GetVisualDescendants().OfType<RouteGlobeWebView>()));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
     public void Home_globe_is_retained_and_host_activity_tracks_repeated_navigation()
     {
         var window = CreateWindow();
@@ -54,12 +94,12 @@ public sealed class NavigationLifecycleTests
             Dispatcher.UIThread.RunJobs();
             ShowTab(window, "Routes");
             var routesPage = Assert.Single(window.FindControl<Grid>("PageHost")!.Children
-                .OfType<Grid>().Where(page => page.DataContext is RoutesViewModel));
+                .OfType<Grid>(), page => page.DataContext is RoutesViewModel);
 
             await Task.Delay(45);
             ShowTab(window, "Profile");
             var profilePage = Assert.Single(window.FindControl<Grid>("PageHost")!.Children
-                .OfType<Grid>().Where(page => page.DataContext is ProfileViewModel));
+                .OfType<Grid>(), page => page.DataContext is ProfileViewModel);
 
             await Task.Delay(45);
             ShowTab(window, "Home");

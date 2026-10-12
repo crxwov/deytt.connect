@@ -100,8 +100,25 @@ public partial class MainWindow
     {
         if (_routeGlobe is not { } map)
             return;
+
         ConfigureHomeMap(map);
         _homeMapPanel = map;
+
+        if (_pageViews.TryGetValue(MainTab.Home, out var homePage) &&
+            !homePage.View.Children.Contains(map))
+        {
+            if (map.Parent is Panel oldHost)
+                oldHost.Children.Remove(map);
+
+            foreach (var child in homePage.View.Children.OfType<Control>().ToArray())
+            {
+                if (!ReferenceEquals(child, map))
+                    homePage.View.Children.Remove(child);
+            }
+
+            homePage.View.Children.Add(map);
+        }
+
         UpdateHomeColumns();
     }
 
@@ -525,23 +542,25 @@ public partial class MainWindow
                             ? Copy("откройте профиль и обновите подписку", "open your profile and refresh the subscription")
                             : null;
         var action = tunnelActive ? "home-disconnect" : canCancel ? "home-cancel" : "home-connect";
-          var actionLabel = restoring
-              ? CopyExact("Подготовка…", "Preparing…")
-              : connected
-                  ? CopyExact("Подключено", "Connected")
-                  : stopping
-                      ? CopyExact("Отключаемся…", "Disconnecting…")
-                      : connecting || _vpnActionInProgress
-                          ? CopyExact("Подключаемся", "Connecting")
-                          : routeProbeActive
-                              ? CopyExact("Подождите…", "Please wait…")
-                              : _sessionToken is null
-                                  ? CopyExact("Войти через Telegram", "Sign in through Telegram")
-                                  : _keysSnapshot?.HappAvailable != true || string.IsNullOrWhiteSpace(_keysSnapshot.ProfileJson)
-                                      ? CopyExact("Открыть профиль", "Open profile")
-                                      : !_vpnServiceAvailable
-                                          ? CopyExact("Проверить службу", "Check service")
-                                          : failed ? CopyExact("Повторить", "Retry") : CopyExact("Подключиться", "Connect");
+        var actionLabel = restoring
+            ? CopyExact("подготовка…", "preparing…")
+            : stopping
+                ? CopyExact("отключение…", "disconnecting…")
+                : canCancel
+                    ? CopyExact("отменить подключение", "cancel connection")
+                    : tunnelActive
+                        ? CopyExact("отключить", "disconnect")
+                        : connecting || _vpnActionInProgress
+                            ? CopyExact("подключаемся…", "connecting…")
+                            : routeProbeActive
+                                ? CopyExact("подождите…", "please wait…")
+                                : _sessionToken is null
+                                    ? CopyExact("войти через telegram", "sign in through telegram")
+                                    : _keysSnapshot?.HappAvailable != true || string.IsNullOrWhiteSpace(_keysSnapshot.ProfileJson)
+                                        ? CopyExact("открыть профиль", "open profile")
+                                        : !_vpnServiceAvailable
+                                            ? CopyExact("проверить службу", "check service")
+                                            : failed ? CopyExact("повторить", "retry") : CopyExact("подключиться", "connect");
         if (!tunnelActive && !canCancel)
         {
             if (_sessionToken is null)

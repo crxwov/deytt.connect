@@ -112,7 +112,7 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
             var pageHost = Required<Grid>(window, "PageHost");
-            var originalPage = Assert.Single(pageHost.Children);
+            var originalPage = ActivePage(pageHost);
             var originalContent = Assert.Single(Assert.IsType<Grid>(originalPage).Children);
 
             var alternateNavigationId = tab == "settings" ? "TopRoutesNav" : "TopSettingsNav";
@@ -121,7 +121,7 @@ public sealed class HomeWindowTests
             Required<Button>(window, navigationAutomationId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Same(originalPage, Assert.Single(pageHost.Children));
+            Assert.Same(originalPage, ActivePage(pageHost));
             Assert.Same(originalContent, Assert.Single(Assert.IsType<Grid>(originalPage).Children));
         }
         finally
@@ -139,7 +139,7 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
             var pageHost = Required<Grid>(window, "PageHost");
-            var originalPage = Assert.Single(pageHost.Children);
+            var originalPage = ActivePage(pageHost);
             var pageViewModel = Assert.IsType<RoutesViewModel>(originalPage.DataContext);
 
             Required<Button>(window, "TopSettingsNav").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -151,7 +151,7 @@ public sealed class HomeWindowTests
 
             Required<Button>(window, "TopRoutesNav").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Dispatcher.UIThread.RunJobs();
-            var refreshedPage = Assert.Single(pageHost.Children);
+            var refreshedPage = ActivePage(pageHost);
 
             Assert.Same(originalPage, refreshedPage);
             Assert.Same(pageViewModel, refreshedPage.DataContext);
@@ -220,7 +220,7 @@ public sealed class HomeWindowTests
 
             Assert.True(Required<Control>(window, "WorkspaceHeader").IsVisible);
             var pageHost = Required<Grid>(window, "PageHost");
-            Assert.Single(pageHost.Children);
+            Assert.NotNull(ActivePage(pageHost));
             var homeMap = Assert.Single(Descendants(pageHost).OfType<RouteGlobeWebView>());
             Assert.True(homeMap.HomePresentation?.ActionEnabled);
         }
@@ -662,14 +662,14 @@ public sealed class HomeWindowTests
             var snapshot = new WindowsRouteProbeResult("qa:nl-vless", null, null, null, "retry", 2);
             Assert.True(window.ApplyProbeProgress([snapshot], [snapshot.RouteTag]));
             Dispatcher.UIThread.RunJobs();
-            var changedPage = Assert.Single(pageHost.Children);
+            var changedPage = ActivePage(pageHost);
             var focusedAfterChange = Assert.IsType<Button>(window.FocusManager?.GetFocusedElement());
             var buttonsAfterChange = Descendants(pageHost).OfType<Button>()
                 .Where(button => button.IsEnabled && button.IsEffectivelyVisible).ToArray();
             Assert.True(buttonsAfterChange[focusIndex].IsFocused);
 
             Assert.False(window.ApplyProbeProgress([snapshot], [snapshot.RouteTag]));
-            Assert.Same(changedPage, Assert.Single(pageHost.Children));
+            Assert.Same(changedPage, ActivePage(pageHost));
             Assert.Same(focusedAfterChange, window.FocusManager?.GetFocusedElement());
         }
         finally
@@ -1298,6 +1298,9 @@ public sealed class HomeWindowTests
 
     private static string ProfileSummary(MainWindow window) => string.Join(" ",
         Descendants(Required<Grid>(window, "PageHost")).OfType<TextBlock>().Select(text => text.Text));
+
+    private static Control ActivePage(Grid pageHost) => Assert.Single(pageHost.Children.OfType<Control>(),
+        child => child.IsVisible && child.IsHitTestVisible);
 
     private static T Required<T>(Control control, string name) where T : Control =>
         control.FindControl<T>(name) ?? throw new Xunit.Sdk.XunitException($"Missing control: {name}");

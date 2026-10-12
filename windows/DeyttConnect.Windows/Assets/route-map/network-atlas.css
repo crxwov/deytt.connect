@@ -215,7 +215,7 @@ button { color: inherit; font: inherit; }
 .home-panel {
   display: grid;
   gap: 24px;
-  transform: rotateY(var(--panel-angle, -28deg));
+  transform: rotateY(var(--panel-angle, 0deg));
   transform-origin: right center;
   transform-style: preserve-3d;
   backface-visibility: hidden;
@@ -245,7 +245,7 @@ button { color: inherit; font: inherit; }
   transform: rotateY(0deg);
 }
 }
-.home-panel-shell:focus-within .home-panel { transform: rotateY(0deg); }
+.home-panel-shell:focus-within .home-panel { transform: rotateY(var(--panel-angle, 0deg)); }
 .home-panel h1[data-tone="good"] { color: var(--mint); }
 .home-panel h1[data-tone="warn"] { color: var(--amber); }
 .home-panel h1[data-tone="error"] { color: var(--coral); }
@@ -527,12 +527,12 @@ html.is-immersive .compact-action { width: auto; }
 /* Readable supporting copy and one shared compact connection summary. */
 :root { --muted: #b2bed1; }
 html[data-theme="light"] { --muted: #46546b; }
-.home-panel { transform: none; transform-style: flat; backface-visibility: visible; will-change: auto; }
+.home-panel { transform: rotateY(var(--panel-angle, 0deg)); transform-style: preserve-3d; backface-visibility: hidden; will-change: transform; transition: none; }
 .metric-label, .measurement-note, .home-measure { font-size: 14px; }
 .home-country, .home-protocol { font-size: 18px; }
 .home-compact .home-country, .home-compact .home-protocol { font-size: 13px; }
 .compact-metrics { grid-column: 1 / -1; display: flex; gap: 20px; font-size: 14px; font-weight: 600; border-top: 1px solid var(--line); padding-top: 10px; }
-.network-atlas.is-zoomed .home-compact { left: 50%; right: auto; bottom: 22px; width: min(620px, calc(100% - 40px)); transform: translateX(-50%); }
+.network-atlas.is-zoomed .home-compact { left: 50%; right: auto; bottom: 22px; width: min(620px, calc(100% - 40px)); transform: translateX(-50%) rotateY(var(--panel-angle, 0deg)); transform-origin: center center; transform-style: preserve-3d; }
 .network-atlas.is-zoomed.reduce-motion .home-compact { transform: translateX(-50%) !important; }
 .traffic-legend { position: absolute; z-index: 3; top: 18px; left: 22px; display: flex; flex-wrap: wrap; gap: 8px 16px; max-width: calc(100% - 44px); padding: 9px 12px; border-radius: 12px; background: color-mix(in srgb, var(--surface) 90%, transparent); font-size: 13px; color: var(--muted); pointer-events: none; }
 .traffic-legend span { display: inline-flex; gap: 7px; align-items: center; }
@@ -624,7 +624,7 @@ html[data-theme="light"] .traffic-inspector__path, html[data-theme="light"] .tra
 }
 .reduce-motion .home-action:hover, .reduce-motion .compact-action:hover,
 .reduce-motion .home-action:active, .reduce-motion .compact-action:active { transform: none; }
-.home-panel-shell:hover .home-panel { transform: none; }
+.home-panel-shell:hover .home-panel { transform: rotateY(var(--panel-angle, 0deg)); }
 .home-compact { transition-duration: 260ms; }
 .traffic-legend.sr-only:focus-within { position: absolute; width: auto; height: auto; clip-path: none; clip: auto; overflow: visible; pointer-events: auto; }
 .traffic-legend button { color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; }

@@ -27,6 +27,12 @@ public partial class MainWindow
         TrayIcon.SetIcons(Application.Current, new TrayIcons { _trayIcon });
     }
 
+    private void RefreshTrayMenu()
+    {
+        if (_trayIcon?.Menu is NativeMenu menu)
+            PopulateTrayMenu(menu);
+    }
+
     private NativeMenuItem TrayAction(string label, Action action, bool enabled = true)
     {
         var item = new NativeMenuItem { Header = label, IsEnabled = enabled };
@@ -37,31 +43,46 @@ public partial class MainWindow
     private void PopulateTrayMenu(NativeMenu menu)
     {
         menu.Items.Clear();
-        menu.Items.Add(TrayAction(CopyExact("Открыть ./Connect", "Open ./Connect"), ShowFromTray));
+        menu.Items.Add(TrayAction(CopyExact("открыть ./connect", "open ./connect"), ShowFromTray,
+            !_exitAuthorized));
         var busy = _vpnActionInProgress || _vpnCancelInProgress || _quitInProgress || _routeProbeInProgress;
         var active = IsVpnTunnelActive(_vpnSnapshot.State);
         var connecting = _vpnSnapshot.State is "starting" or "checking";
-        var canCancelConnection = connecting && !_vpnCancelRequested && !_vpnCancelInProgress &&
-                                  !_routeProbeInProgress && !_quitInProgress && !_exitAuthorized;
+        var stopping = _vpnSnapshot.State == "stopping";
         var vpnAction = connecting
-            ? CopyExact("Отменить подключение", "Cancel connection")
-            : active ? CopyExact("Отключить VPN", "Disconnect VPN") : CopyExact("Подключить VPN", "Connect VPN");
+            ? CopyExact("подключение vpn…", "connecting vpn…")
+            : stopping
+                ? CopyExact("отключение vpn…", "disconnecting vpn…")
+                : active
+                    ? CopyExact("отключить vpn", "disconnect vpn")
+                    : CopyExact("подключить vpn", "connect vpn");
         menu.Items.Add(TrayAction(vpnAction,
             () => { ShowFromTray(); HandleHomePrimaryAction(); },
-            _sessionRestoreComplete && !_exitAuthorized && (canCancelConnection || !busy)));
+            _sessionRestoreComplete && !_exitAuthorized && !busy && !connecting && !stopping));
 
-        var servers = new NativeMenu();
-        var selectableRoutes = _routes.Where(value => value.CountryCode != "RU-DE").ToArray();
-        foreach (var route in selectableRoutes.Where(value =>
-                     string.Equals(value.CountryCode, "AUTO", StringComparison.OrdinalIgnoreCase) || value.Id == "auto"))
+        var bypasses = new NativeMenu();
+        foreach (var route in _routes.Where(value =>
+                     string.Equals(value.CountryCode, "AUTO", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(value.Id, "auto", StringComparison.OrdinalIgnoreCase)))
         {
             var selected = route.Id == _selectedRoute;
-            servers.Items.Add(TrayAction((selected ? "✓ " : "") + CopyExact("Автоподбор", "Auto-select"),
+            bypasses.Items.Add(TrayAction((selected ? "✓ " : "") + CopyExact("автоподбор", "auto-select"),
                 () => _ = SwitchTrayRouteAsync(route), !busy && _sessionRestoreComplete));
         }
 
-        foreach (var country in selectableRoutes
-                     .Where(value => !string.Equals(value.CountryCode, "AUTO", StringComparison.OrdinalIgnoreCase) && value.Id != "auto")
+        foreach (var route in _routes.Where(value =>
+                     string.Equals(value.CountryCode, "RU-DE", StringComparison.OrdinalIgnoreCase)))
+        {
+            var selected = route.Id == _selectedRoute;
+            bypasses.Items.Add(TrayAction((selected ? "✓ " : "") + "ru + de",
+                () => _ = SwitchTrayRouteAsync(route), !busy && _sessionRestoreComplete));
+        }
+
+        foreach (var country in _routes
+                     .Where(value =>
+                         !string.Equals(value.CountryCode, "AUTO", StringComparison.OrdinalIgnoreCase) &&
+                         !string.Equals(value.CountryCode, "RU-DE", StringComparison.OrdinalIgnoreCase) &&
+                         !string.Equals(value.Id, "auto", StringComparison.OrdinalIgnoreCase))
                      .GroupBy(value => value.CountryCode, StringComparer.OrdinalIgnoreCase))
         {
             var routes = country.ToArray();
@@ -75,29 +96,24 @@ public partial class MainWindow
                 var selected = route.Id == _selectedRoute;
                 var profile = repeatedProtocols.Contains(route.ProtocolName)
                     ? " · " + (string.IsNullOrWhiteSpace(route.ProfileName) ? route.Id : route.ProfileName)
+                        .ToLowerInvariant()
                     : "";
-                protocols.Items.Add(TrayAction((selected ? "✓ " : "") + route.ProtocolName + profile,
+                protocols.Items.Add(TrayAction((selected ? "✓ " : "") + route.ProtocolName.ToLowerInvariant() + profile,
                     () => _ = SwitchTrayRouteAsync(route), !busy && _sessionRestoreComplete));
             }
-            var countryName = routes.Length > 0 ? RouteCountryName(routes[0]) : country.Key;
-            if (!string.IsNullOrWhiteSpace(countryName))
-                countryName = char.ToUpperInvariant(countryName[0]) + countryName[1..];
-            servers.Items.Add(new NativeMenuItem { Header = countryName, Menu = protocols,
+            var countryName = (routes.Length > 0 ? RouteCountryName(routes[0]) : country.Key)
+                .ToLowerInvariant();
+            bypasses.Items.Add(new NativeMenuItem { Header = countryName, Menu = protocols,
                 IsEnabled = protocols.Items.Count > 0 && !busy && _sessionRestoreComplete });
         }
-        menu.Items.Add(new NativeMenuItem { Header = CopyExact("Сменить сервер", "Change server"), Menu = servers,
-            IsEnabled = servers.Items.Count > 0 && !busy && _sessionRestoreComplete });
-        var bypassRoutes = _routes.Where(value => value.CountryCode == "RU-DE").ToArray();
-        var bypass = new NativeMenu();
-        foreach (var route in bypassRoutes)
-            bypass.Items.Add(TrayAction((route.Id == _selectedRoute ? "✓ " : "") + route.ProtocolName,
-                () => _ = SwitchTrayRouteAsync(route), !busy && _sessionRestoreComplete));
-        menu.Items.Add(new NativeMenuItem { Header = CopyExact("Обход белых списков", "Allowlist bypass"), Menu = bypass,
-            IsEnabled = bypassRoutes.Length > 0 && !busy && _sessionRestoreComplete });
+        menu.Items.Add(new NativeMenuItem { Header = CopyExact("сменить обход", "change bypass"), Menu = bypasses,
+            IsEnabled = bypasses.Items.Count > 0 && !busy && _sessionRestoreComplete });
         menu.Items.Add(new NativeMenuItemSeparator());
-        menu.Items.Add(TrayAction(CopyExact("Выйти", "Exit"), () => _ = QuitFromTrayAsync(), !_quitInProgress));
+        menu.Items.Add(TrayAction(CopyExact("выйти", "exit"), () => _ = QuitFromTrayAsync(),
+            !_quitInProgress && !_exitAuthorized));
         if (_trayIcon is not null)
-            _trayIcon.ToolTipText = "./Connect · " + (active ? Copy("VPN работает", "VPN active") : Copy("VPN отключён", "VPN inactive"));
+            _trayIcon.ToolTipText = "./connect · " +
+                                    (active ? Copy("vpn работает", "vpn active") : Copy("vpn отключён", "vpn inactive"));
     }
 
     private void ShowFromTray()
@@ -114,6 +130,18 @@ public partial class MainWindow
             _vpnStatusTimer.Start();
             _ = CheckForStartupUpdateAsync();
         }
+    }
+
+    internal void ActivateFromExternalLaunch(string? importUrl)
+    {
+        ShowFromTray();
+        if (string.IsNullOrWhiteSpace(importUrl)) return;
+        if (!_sessionRestoreComplete || _setupFlowCompletion is not null)
+        {
+            _pendingExternalImportUrl = importUrl;
+            return;
+        }
+        _ = ShowSetupWindowAsync(importUrl);
     }
 
     private void OnTrayWindowClosing(object? sender, WindowClosingEventArgs args)
@@ -133,14 +161,14 @@ public partial class MainWindow
     private async Task SwitchTrayRouteAsync(WindowsRoute route)
     {
         if (_vpnActionInProgress || _vpnCancelInProgress || _quitInProgress || _exitAuthorized || !_sessionRestoreComplete || route.Id == _selectedRoute) return;
-        var reconnect = WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State);
+        var disconnectActiveTunnel = WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State);
         var operationVersion = ++_vpnOperationVersion;
         _vpnActionInProgress = true;
         try
         {
-            if (reconnect)
+            if (disconnectActiveTunnel)
             {
-                _vpnSnapshot = new WindowsTunnelSnapshot("stopping", Copy("Меняем сервер…", "Switching server…"));
+                _vpnSnapshot = new WindowsTunnelSnapshot("stopping", Copy("меняем обход…", "changing bypass…"));
                 RenderActiveTabPreservingScroll();
                 var stopped = await _tunnelClient.DisconnectAsync();
                 if (operationVersion != _vpnOperationVersion || _quitInProgress || _exitAuthorized) return;
@@ -155,7 +183,6 @@ public partial class MainWindow
             _vpnServiceAvailable = false;
             _vpnSnapshot = VpnServiceUnavailableSnapshot();
             ShowFromTray();
-            reconnect = false;
         }
         finally
         {
@@ -165,7 +192,6 @@ public partial class MainWindow
                 RenderActiveTabPreservingScroll();
             }
         }
-        if (reconnect && operationVersion == _vpnOperationVersion && !_quitInProgress && !_exitAuthorized) await ToggleVpnAsync();
     }
 
     private async Task QuitFromTrayAsync() => await ExitForVerifiedUpdateAsync(null);

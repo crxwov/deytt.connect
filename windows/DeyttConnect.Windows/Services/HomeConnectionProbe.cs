@@ -15,8 +15,7 @@ internal static class HomeConnectionProbe
         using var handler = new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false };
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(6) };
         var latency = await RouteLatencyProbe.MeasureAsync(client, cancellationToken,
-            sample => report(new(routeTag, sample.LatencyMilliseconds, null, null, "latency")),
-            targets: [new Uri("https://connectivitycheck.gstatic.com/generate_204")])
+            sample => report(new(routeTag, sample.LatencyMilliseconds, null, null, "latency")))
             .ConfigureAwait(false);
         var result = new WindowsRouteProbeResult(routeTag, latency.LatencyMilliseconds, null,
             latency.Failure, "complete");
