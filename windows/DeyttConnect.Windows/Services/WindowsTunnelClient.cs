@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Security.Principal;
 using DeyttConnect.Protocol;
 
 namespace DeyttConnect.Windows.Services;
@@ -6,6 +7,12 @@ namespace DeyttConnect.Windows.Services;
 public sealed class WindowsTunnelClient
 {
     private const string PipeName = "DEYTT.Connect.v1";
+    private readonly string _pipeName;
+
+    public WindowsTunnelClient(string pipeName = PipeName)
+    {
+        _pipeName = string.IsNullOrWhiteSpace(pipeName) ? PipeName : pipeName;
+    }
 
     public Task<WindowsTunnelSnapshot> GetStatusAsync(CancellationToken cancellationToken = default) =>
         SendAsync(new WindowsPipeRequest { Command = WindowsPipeCommand.Status }, cancellationToken, 5);
@@ -32,14 +39,25 @@ public sealed class WindowsTunnelClient
     public Task<WindowsTunnelSnapshot> GetProbeProgressAsync(CancellationToken cancellationToken = default) =>
         SendAsync(new WindowsPipeRequest { Command = WindowsPipeCommand.ProbeProgress }, cancellationToken, 5);
 
-    private static async Task<WindowsTunnelSnapshot> SendAsync(WindowsPipeRequest request,
+    private async Task<WindowsTunnelSnapshot> SendAsync(WindowsPipeRequest request,
         CancellationToken cancellationToken, int timeoutSeconds)
     {
-        await using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut,
-            PipeOptions.Asynchronous);
+        await using var pipe = new NamedPipeClientStream(".", _pipeName, PipeDirection.InOut,
+            PipeOptions.Asynchronous, TokenImpersonationLevel.Anonymous);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
         await pipe.ConnectAsync(timeout.Token).ConfigureAwait(false);
+        if (OperatingSystem.IsWindows() &&
+            string.Equals(_pipeName, PipeName, StringComparison.OrdinalIgnoreCase))
+        {
+            var ownerSid = PipesAclExtensions.GetAccessControl(pipe).GetOwner(typeof(SecurityIdentifier)) as SecurityIdentifier;
+            if (ownerSid is null ||
+                (!ownerSid.IsWellKnown(WellKnownSidType.LocalSystemSid) &&
+                 !ownerSid.IsWellKnown(WellKnownSidType.BuiltinAdministratorsSid)))
+            {
+                throw new UnauthorizedAccessException("Служба DeyttConnect запущена от недоверенной учётной записи.");
+            }
+        }
 
         var payload = WindowsPipeProtocol.SerializeRequest(request);
         await WindowsPipeProtocol.WriteFrameAsync(pipe, payload, WindowsPipeProtocol.MaximumRequestBytes, timeout.Token)
