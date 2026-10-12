@@ -676,12 +676,12 @@ object RouteProbeClient {
         }
         // Cancellation acknowledgements must survive Activity.onStop and recreation.
         // Keep the receiver for the application process lifetime, without retaining an Activity.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            app.registerReceiver(receiver, IntentFilter(ACTION_RESULT), Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            app.registerReceiver(receiver, IntentFilter(ACTION_RESULT))
-        }
+        androidx.core.content.ContextCompat.registerReceiver(
+            app,
+            receiver,
+            IntentFilter(ACTION_RESULT),
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
         completionReceiverRegistered = true
     }
 
