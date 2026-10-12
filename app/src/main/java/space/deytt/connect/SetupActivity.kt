@@ -398,7 +398,11 @@ class SetupActivity : Activity() {
         }
         openBot.setOnClickListener {
             botUrl?.let { link ->
-                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+                runCatching {
+                    val uri = Uri.parse(link)
+                    check(uri.scheme?.lowercase() in setOf("https", "tg")) { "Unsupported URL scheme" }
+                    startActivity(Intent(Intent.ACTION_VIEW, uri))
+                }
                     .onFailure { status.text = "Не удалось открыть ссылку. Попробуй ещё раз." }
             }
         }

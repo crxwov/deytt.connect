@@ -4172,7 +4172,14 @@ public partial class MainWindow : Window
     {
         try
         {
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var parsedUri) ||
+                (!string.Equals(parsedUri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) &&
+                 !string.Equals(parsedUri.Scheme, "tg", StringComparison.OrdinalIgnoreCase)))
+            {
+                return;
+            }
+
+            Process.Start(new ProcessStartInfo(parsedUri.AbsoluteUri) { UseShellExecute = true });
         }
         catch (Exception error)
         {

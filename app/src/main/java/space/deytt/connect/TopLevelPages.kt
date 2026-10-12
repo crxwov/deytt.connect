@@ -1256,7 +1256,11 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         fun openBotLink() {
             val link = botUrl ?: return
-            runCatching { host.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+            runCatching {
+                val uri = Uri.parse(link)
+                check(uri.scheme?.lowercase() in setOf("https", "tg")) { "Unsupported URL scheme" }
+                host.startActivity(Intent(Intent.ACTION_VIEW, uri))
+            }
                 .onFailure { status.text = "Ссылка готова. Открой бота ещё раз кнопкой ниже." }
         }
 
@@ -1494,7 +1498,11 @@ internal class PrimaryPages(private val host: MainActivity) {
     }
 
     private fun openUrl(url: String) {
-        runCatching { host.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        runCatching {
+            val uri = Uri.parse(url)
+            if (uri.scheme?.lowercase() !in setOf("https", "tg")) return
+            host.startActivity(Intent(Intent.ACTION_VIEW, uri))
+        }
     }
 
     private fun formatBytes(value: Long): String {
