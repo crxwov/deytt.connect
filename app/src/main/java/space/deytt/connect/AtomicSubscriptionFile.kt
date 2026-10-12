@@ -28,7 +28,7 @@ internal object AtomicSubscriptionFile {
             snapshot.put(name, if (file.isFile) file.readText(Charsets.UTF_8) else JSONObject.NULL)
         }
         val journal = File(directory, JOURNAL)
-        write(journal, snapshot.toString())
+        writeEncrypted(journal, snapshot.toString())
         activeDirectories.get().add(key)
         try {
             block()
@@ -48,7 +48,9 @@ internal object AtomicSubscriptionFile {
         if (directory.canonicalPath in activeDirectories.get()) return@synchronized
         val journal = File(directory, JOURNAL)
         if (!journal.exists()) return@synchronized
-        val snapshot = try { JSONObject(journal.readText(Charsets.UTF_8)) } catch (error: Exception) {
+        val snapshot = try {
+            JSONObject(LocalSecretCipher.decryptOrPlaintext(journal.readText(Charsets.UTF_8)))
+        } catch (error: Exception) {
             throw IOException("Не удалось восстановить подписку", error)
         }
         // Validate the entire journal before restoring anything; never guess through corruption.
@@ -65,6 +67,13 @@ internal object AtomicSubscriptionFile {
         if (!journal.delete()) throw IOException("Не удалось завершить восстановление подписки")
     }
 
+    fun writeEncrypted(target: File, content: String) =
+        write(target, LocalSecretCipher.encrypt(content))
+
+    fun readDecrypted(target: File): String? =
+        target.takeIf { it.isFile && it.length() > 0L }
+            ?.readText(Charsets.UTF_8)
+            ?.let(LocalSecretCipher::decryptOrPlaintext)
 
     fun write(target: File, content: String) = write(target) {
         it.write(content.toByteArray(Charsets.UTF_8))

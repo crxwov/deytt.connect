@@ -448,17 +448,16 @@ class MainActivity : Activity() {
 
     private fun refreshSubscriptionIfNeeded() {
         if (isFinishing || isDestroyed || subscriptionRefreshInFlight) return
-        val prefs = getSharedPreferences("profile_settings", MODE_PRIVATE)
-        val url = prefs.getString("subscription_url", null)?.trim()?.takeIf(String::isNotEmpty) ?: return
+        val url = SubscriptionClient.getSavedSubscriptionUrl(this)?.trim()?.takeIf(String::isNotEmpty) ?: return
         val now = SystemClock.elapsedRealtime()
         if (subscriptionRefreshLastStartedAt > 0 && now - subscriptionRefreshLastStartedAt < 30_000) return
 
-        subscriptionRefreshLastStartedAt = now
         subscriptionRefreshInFlight = true
+        subscriptionRefreshLastStartedAt = now
         subscriptionExecutor.execute {
             val result = runCatching {
                 SubscriptionClient.import(this@MainActivity, url, beforeCommit = {
-                    if (prefs.getString("subscription_url", null) != url) {
+                    if (SubscriptionClient.getSavedSubscriptionUrl(this@MainActivity) != url) {
                         throw SubscriptionCancelledException()
                     }
                 })

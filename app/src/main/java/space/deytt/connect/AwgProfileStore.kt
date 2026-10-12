@@ -62,7 +62,8 @@ class AwgProfileStore internal constructor(private val directory: File) {
 
     fun read15(): String? = profiles().firstOrNull { it.version == "15" }?.config
     fun read31(): String? = profiles().firstOrNull { it.version == "31" }?.config
-    fun read(id: String): String? = profiles().firstOrNull { it.id == id }?.config
+    fun read(id: String): String? = activeProfileForRoute(id)?.config
+    fun activeProfileForRoute(routeId: String): AwgProfile? = profiles().firstOrNull { it.id == routeId }
 
     fun save(config31: String?) = save(
         listOfNotNull(config31?.let { AwgProfile("awg31", "31", "Основной", "AWG", it) }),
@@ -81,7 +82,7 @@ class AwgProfileStore internal constructor(private val directory: File) {
             AtomicSubscriptionFile.transaction(directory) {
                 supportedProfiles.forEachIndexed { position, profile ->
                     val name = "awg-$generation-${profile.version}-$position.conf"
-                    writeAtomic(name, profile.config)
+                    writeAtomic(name, LocalSecretCipher.encrypt(profile.config))
                     activeFiles += name
                     index.put(
                         JSONObject()
@@ -111,9 +112,12 @@ class AwgProfileStore internal constructor(private val directory: File) {
         Unit
     }
 
-    private fun readFile(name: String): String? = File(directory, name)
+    internal fun readConfigText(name: String): String? = File(directory, name)
         .takeIf { it.isFile && it.length() > 0L }
         ?.readText(Charsets.UTF_8)
+        ?.let(LocalSecretCipher::decryptOrPlaintext)
+
+    private fun readFile(name: String): String? = readConfigText(name)
 
     private fun readLegacyProfile(name: String, version: String): AwgProfile? = runCatching {
         readFile(name)?.let {

@@ -114,7 +114,7 @@ object SubscriptionClient {
             checkCancellation()
             onBeforeCommit()
             val settings = context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
-            val previousUrl = settings.getString("subscription_url", null)
+            val previousUrl = getSavedSubscriptionUrl(context)
             // Read ownership and last-good files under the commit lock: another
             // completed import must not be replaced by an older fallback snapshot.
             val sameSubscription = previousUrl != null && runCatching {
@@ -132,7 +132,7 @@ object SubscriptionClient {
             if (runCatching { SubscriptionMetadataStore(context).save(metadata) }.isFailure) {
                 warnings += "Маршруты сохранены, но сведения о тарифе не обновились. Повторите обновление позже."
             }
-            val edit = settings.edit().putString("subscription_url", baseUrl)
+            val edit = settings.edit().putString("subscription_url", LocalSecretCipher.encrypt(baseUrl))
             if (warnings.isEmpty()) edit.remove("subscription_warning")
             else edit.putString("subscription_warning", warnings.joinToString("\n"))
             if (!edit.commit()) throw SubscriptionStorageException()
@@ -147,6 +147,17 @@ object SubscriptionClient {
             warnings = warnings,
         )
     }
+
+    fun getSavedSubscriptionUrl(context: android.content.Context): String? =
+        context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
+            .getString("subscription_url", null)
+            ?.let { raw -> runCatching { LocalSecretCipher.decryptOrPlaintext(raw) }.getOrNull() }
+
+    fun saveSubscriptionUrl(context: android.content.Context, url: String): Boolean =
+        context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putString("subscription_url", LocalSecretCipher.encrypt(url))
+            .commit()
 
     internal fun validateDownloadedProfile(content: String): ProfileSummary = try {
         ProfileValidator.validate(content).also {

@@ -225,4 +225,32 @@ class SubscriptionStorageTest {
     @Test fun trafficCountersCannotOverflow() {
         assertEquals(Long.MAX_VALUE, SubscriptionMetadata(uploadBytes = Long.MAX_VALUE, downloadBytes = 1).usedBytes)
     }
+
+    @Test fun encryptsSubscriptionAndAwgFilesOnDiskAndReadsLegacyPlaintext() {
+        val directory = temporary.newFolder()
+        val store = SubscriptionStore(directory)
+        val awgStore = AwgProfileStore(directory)
+        store.saveValidated("first-profile")
+        store.commitValidated(
+            "second-profile",
+            awgStore,
+            listOf(AwgProfile("awg31:nl", "31", "Amsterdam", "NL", VALID_AWG_CONFIG)),
+        )
+        val currentRaw = File(directory, "current.json").readText(Charsets.UTF_8)
+        val previousRaw = File(directory, "previous.json").readText(Charsets.UTF_8)
+        val awgConfFile = directory.listFiles { f -> f.name.startsWith("awg-") && f.extension == "conf" }!!.single()
+        val awgRaw = awgConfFile.readText(Charsets.UTF_8)
+
+        assertTrue(currentRaw.startsWith(LocalSecretCipher.PREFIX))
+        assertTrue(previousRaw.startsWith(LocalSecretCipher.PREFIX))
+        assertTrue(awgRaw.startsWith(LocalSecretCipher.PREFIX))
+        assertFalse(awgRaw.contains("PrivateKey"))
+
+        assertEquals("second-profile", store.readCurrent())
+        assertEquals("first-profile", store.readPrevious())
+        assertEquals(VALID_AWG_CONFIG, awgStore.activeProfileForRoute("awg31:nl")?.config)
+
+        File(directory, "current.json").writeText("legacy-plaintext-profile", Charsets.UTF_8)
+        assertEquals("legacy-plaintext-profile", store.readCurrent())
+    }
 }

@@ -1321,8 +1321,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                                 if (subscriptionUrl != null) {
                                     val currentRouteId = SelectedRouteStore(host).read().id
                                     val imported = SubscriptionClient.import(host, subscriptionUrl)
-                                    host.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
-                                        .edit().putString("subscription_url", imported.url).apply()
+                                    SubscriptionClient.saveSubscriptionUrl(host, imported.url)
                                     val routes = RouteCatalog.from(
                                         SubscriptionStore(host).readCurrent().orEmpty(),
                                         AwgProfileStore(host).profiles(),
