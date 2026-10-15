@@ -83,6 +83,12 @@ type FramePuller interface {
 	SetFrameSource(src func(max int) [][]byte)
 }
 
+// PacketReorderer marks an aggregate whose independently scheduled paths can
+// deliver later packets first. Such a lane cannot prove loss by ACK order.
+type PacketReorderer interface {
+	ReordersPackets() bool
+}
+
 // LossReporter is implemented by lanes that know their recent uplink loss
 // fraction (0..1), for the stats.
 type LossReporter interface {
@@ -161,6 +167,10 @@ var (
 // FIFO end to end (one RTP stream), so any later piece will do.
 const laneReorderSlack = 0
 
+// Legacy peers infer loss from any later same-lane ACK. Briefly hide selective
+// receipts on unordered carriers; persistent holes still reach fast recovery.
+const unorderedAckGrace = 150 * time.Millisecond
+
 // LaneSource creates additional lanes on demand and may ask for one itself
 // (e.g. a receiver that sees a new peer lane nobody is watching yet).
 type LaneSource interface {
@@ -230,6 +240,14 @@ func (s *StripedTransport) addLane(why string) {
 // attach wires lane idx: its receive side, and its send side - a pull source
 // when the lane has a send clock of its own, a pump goroutine otherwise.
 func (s *StripedTransport) attach(idx int, l Transport) {
+	reorders := false
+	if lane, ok := l.(PacketReorderer); ok {
+		reorders = lane.ReordersPackets()
+	}
+	s.snd.setLaneReordering(idx, reorders)
+	if reorders {
+		s.ro.enableAckReorderingGrace()
+	}
 	l.Receive(func(b []byte) { s.onLane(idx, b) })
 	if p, ok := l.(FramePuller); ok {
 		p.SetFrameSource(func(max int) [][]byte { return s.pull(idx, max) })
@@ -489,11 +507,12 @@ func (s *StripedTransport) ackLoop() {
 			return
 		case now := <-t.C:
 			gen, holes, ok := s.ro.ackState()
-			if !ok || (gen == lastGen && (!holes || now.Sub(lastAt) < 4*ackInterval)) {
+			graceExpired := s.ro.ackGraceExpired(lastAt, now)
+			if !ok || (gen == lastGen && (!holes || now.Sub(lastAt) < 4*ackInterval) && !graceExpired) {
 				continue
 			}
 			lastGen, lastAt = gen, now
-			s.snd.setAck(s.ro.ackFrame())
+			s.snd.setAck(s.ro.ackFrameAt(now))
 			s.ackSent.Add(1)
 			s.wakePumps()
 		}
@@ -782,9 +801,10 @@ type sender struct {
 	delivered uint64 // pieces the far end acked
 	rtxTime   uint64 // retransmissions caused by the timeout, not by acks
 
-	laneTx  [maxStripeLanes]uint64 // transmissions per lane, in send order
-	laneAck [maxStripeLanes]uint64 // highest of them known delivered
-	lane    [maxStripeLanes]laneState
+	laneTx       [maxStripeLanes]uint64 // transmissions per lane, in send order
+	laneAck      [maxStripeLanes]uint64 // highest of them known delivered
+	lane         [maxStripeLanes]laneState
+	laneReorders [maxStripeLanes]bool
 
 	srtt, rttvar time.Duration
 	minRTT       time.Duration
@@ -823,6 +843,15 @@ func (q *sender) init() {
 	// receiver still keeps for its previous run.
 	q.seq = mrand.Uint32()
 	q.low = q.seq + 1
+}
+
+func (q *sender) setLaneReordering(i int, reorders bool) {
+	if i < 0 || i >= maxStripeLanes {
+		return
+	}
+	q.mu.Lock()
+	q.laneReorders[i] = reorders
+	q.mu.Unlock()
 }
 
 // enqueue adds a frame to the send queue; false if the queue is full.
@@ -1235,7 +1264,9 @@ func (q *sender) detectLocked(now time.Time) bool {
 		if e.queued {
 			continue
 		}
-		byLane := q.laneAck[e.lane] > e.laneIdx+laneReorderSlack
+		// An aggregate such as Cups round-robins independent room streams.
+		// Its later ACK can indicate reordering; retain adaptive RTO recovery.
+		byLane := !q.laneReorders[e.lane] && q.laneAck[e.lane] > e.laneIdx+laneReorderSlack
 		if !byLane {
 			wait := rto << min(max(int(e.tries)-1, 0), 1)
 			if now.Sub(e.at) < wait {
@@ -1358,6 +1389,11 @@ type reorderBuffer struct {
 	deliveryDone chan struct{}
 	gapNext      bool
 
+	ackGraceEnabled bool
+	ackGapActive    bool
+	ackGapNext      uint32
+	ackGapSince     time.Time
+
 	delivered, skipped, late uint64
 	gaps                     [8]uint64 // runs of seqs jumped over on arrival: 1, 2-3, 4-7, ... 128+
 }
@@ -1395,11 +1431,43 @@ func newReorderBuffer(deliver func([]byte, bool)) *reorderBuffer {
 
 func seqBefore(a, b uint32) bool { return int32(a-b) < 0 }
 
-// push files piece seq; low is the sender's lowest unacknowledged seq.
-func (r *reorderBuffer) push(seq, low uint32, data []byte) {
+func (r *reorderBuffer) enableAckReorderingGrace() {
+	r.mu.Lock()
+	r.ackGraceEnabled = true
+	r.mu.Unlock()
+}
+
+// Only an advancing missing sequence starts another grace period. Additional
+// higher packets must not postpone selective ACKs for a genuine persistent loss.
+func (r *reorderBuffer) noteAckGap(now time.Time) {
+	if !r.ackGraceEnabled || r.count == 0 {
+		r.ackGapActive = false
+		return
+	}
+	if !r.ackGapActive || r.ackGapNext != r.next {
+		r.ackGapActive = true
+		r.ackGapNext, r.ackGapSince = r.next, now
+	}
+}
+
+func (r *reorderBuffer) ackGraceExpired(lastAck, now time.Time) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	now := time.Now()
+	if !r.ackGraceEnabled || !r.ackGapActive || r.count == 0 {
+		return false
+	}
+	deadline := r.ackGapSince.Add(unorderedAckGrace)
+	return lastAck.Before(deadline) && !now.Before(deadline)
+}
+
+// push files piece seq; low is the sender's lowest unacknowledged seq.
+func (r *reorderBuffer) push(seq, low uint32, data []byte) {
+	r.pushAt(seq, low, data, time.Now())
+}
+
+func (r *reorderBuffer) pushAt(seq, low uint32, data []byte, now time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if !r.started {
 		r.started = true
 		r.startAt(seq, low)
@@ -1436,6 +1504,7 @@ func (r *reorderBuffer) push(seq, low uint32, data []byte) {
 		r.hi = seq
 	}
 	r.drainLocked()
+	r.noteAckGap(now)
 }
 
 func (r *reorderBuffer) resyncLocked(seq, low uint32) {
@@ -1516,6 +1585,7 @@ func (r *reorderBuffer) run(done chan struct{}) {
 			}
 			utils.Infof("[STRIPE] gave up on %d piece(s) from seq %d after %s", low-r.next, r.next, waited.Round(time.Millisecond))
 			r.skipToLocked(low)
+			r.noteAckGap(time.Now())
 		}
 		r.mu.Unlock()
 	}
@@ -1530,8 +1600,20 @@ func (r *reorderBuffer) ackState() (gen uint64, holes, ok bool) {
 
 // ackFrame builds an ack of the current state (see the wire formats).
 func (r *reorderBuffer) ackFrame() []byte {
+	return r.ackFrameAt(time.Now())
+}
+
+func (r *reorderBuffer) ackFrameAt(now time.Time) []byte {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	r.noteAckGap(now)
+	if r.ackGraceEnabled && r.ackGapActive && now.Sub(r.ackGapSince) < unorderedAckGrace {
+		b := make([]byte, ackHeader)
+		b[0] = stripeAckMagic
+		binary.BigEndian.PutUint32(b[1:5], r.next)
+		binary.BigEndian.PutUint32(b[5:9], r.next-1)
+		return b
+	}
 	hi := r.hi
 	if seqBefore(hi, r.next) {
 		hi = r.next - 1

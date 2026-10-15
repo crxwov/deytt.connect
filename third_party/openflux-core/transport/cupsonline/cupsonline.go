@@ -1370,6 +1370,9 @@ func (t *CupsonlineTransport) Send(data []byte) error {
 	return ws.Send(data)
 }
 
+// ReordersPackets reports that independently paced rooms do not form one FIFO.
+func (*CupsonlineTransport) ReordersPackets() bool { return true }
+
 // pickRoom returns the next connected room in round-robin order, or nil when
 // none is up.
 func (t *CupsonlineTransport) pickRoom() *cupsWS {
