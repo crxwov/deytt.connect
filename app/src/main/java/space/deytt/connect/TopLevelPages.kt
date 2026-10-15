@@ -228,6 +228,13 @@ internal class PrimaryPages(private val host: MainActivity) {
         updateHandler.removeCallbacks(updateCycle)
     }
 
+    fun cancelRouteDiagnosticsForSelection() {
+        pendingCountries.clear()
+        routeProbeStates.values.forEach { it.cancelled = true }
+        activeAwgCountry?.cancelled = true
+        if (RouteProbeClient.isRunning(host)) RouteProbeClient.cancel(host)
+    }
+
     private fun scrollPage(content: LinearLayout): ScrollView = ScrollView(host).apply {
         isFillViewport = true
         clipToPadding = false
@@ -288,11 +295,7 @@ internal class PrimaryPages(private val host: MainActivity) {
 
         root.addView(spacer(24, host))
         root.addView(host.sectionLabel(copy("Страны", "Countries")))
-        val orderedCodes = listOf("NL", "DE", "RU", "FI", "AWG_UNKNOWN")
-        val countries = routes.filter { it.countryCode in orderedCodes }
-            .groupBy { it.countryCode }
-        orderedCodes.filter { it in countries }.forEach { code ->
-            val countryRoutes = countries[code].orEmpty().distinctBy { it.id }
+        RouteCatalog.countryGroups(routes).forEach { (code, countryRoutes) ->
             val networkRoutes = countryRoutes.filter { it.engine == TunnelEngine.LIBBOX }
                 .sortedBy { routeProtocolOrder(it.protocol) }
             val awgRoutes = countryRoutes.filter { it.engine == TunnelEngine.AMNEZIAWG }

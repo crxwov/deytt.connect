@@ -24,6 +24,16 @@ data class VpnSnapshot(
 enum class VpnControlAction { START, STOP }
 
 object VpnControlDecision {
+    fun canResumeQueuedStart(
+        requestedRouteId: String,
+        selectedRouteId: String,
+        requestedGeneration: Long,
+        currentGeneration: Long,
+        libboxRunning: Boolean,
+        awgRunning: Boolean,
+    ): Boolean = requestedRouteId == selectedRouteId && requestedGeneration == currentGeneration &&
+        !libboxRunning && !awgRunning
+
     fun decide(persisted: VpnPhase, libboxRunning: Boolean, awgRunning: Boolean): VpnControlAction =
         if (libboxRunning || awgRunning) VpnControlAction.STOP else VpnControlAction.START
 

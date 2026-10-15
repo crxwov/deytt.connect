@@ -1,9 +1,20 @@
 package space.deytt.connect
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VpnRuntimeStateTest {
+    @Test
+    fun queuedConnectResumesOnlyForItsUnchangedIdleRouteAndIntent() {
+        assertTrue(VpnControlDecision.canResumeQueuedStart("openflux:DE", "openflux:DE", 4L, 4L, false, false))
+        assertFalse(VpnControlDecision.canResumeQueuedStart("openflux:DE", "route:IT:VLESS", 4L, 4L, false, false))
+        assertFalse(VpnControlDecision.canResumeQueuedStart("openflux:DE", "openflux:DE", 4L, 5L, false, false))
+        assertFalse(VpnControlDecision.canResumeQueuedStart("openflux:DE", "openflux:DE", 4L, 4L, true, false))
+        assertFalse(VpnControlDecision.canResumeQueuedStart("openflux:DE", "openflux:DE", 4L, 4L, false, true))
+    }
+
     @Test
     fun staleConnectedCopyNeverTurnsTapIntoStop() {
         assertEquals(

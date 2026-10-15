@@ -64,6 +64,7 @@ class MainActivity : Activity() {
     private val homePingSamples = mutableListOf<Long>()
     private var temporaryAwgMeasurement = false
     private var restoreAwgMeasurement: (() -> Unit)? = null
+    private var cancelAwgMeasurementForSelection: (() -> Unit)? = null
     private lateinit var pager: ViewPager2
     private lateinit var navigationBar: DeyttUi.PrimaryNavigationBar
     private lateinit var pageAdapter: TopLevelViewPagerAdapter
@@ -100,6 +101,7 @@ class MainActivity : Activity() {
     private var pendingRouteProbeHasOutcome = false
     private var homePingErrorRouteId: String? = null
     private var homeConnectQueued = false
+    private var homeConnectGeneration = 0L
     private var lastRouteLatency: Pair<String, Long>? = null
     private var pendingRouteProbeAuthorization: (() -> Unit)? = null
     private var selectedRouteLatencyInFlight = false
@@ -313,6 +315,7 @@ class MainActivity : Activity() {
         setMapTrafficActive(false)
         cancelHomeRouteDownload()
         homeConnectQueued = false
+        homeConnectGeneration++
         latencyGeneration++
         restoreAwgMeasurement?.invoke()
         runCatching { unregisterReceiver(statusReceiver) }
@@ -694,34 +697,43 @@ class MainActivity : Activity() {
 
     private fun toggleTunnel() {
         if (homeConnectQueued) return
+        val connectGeneration = ++homeConnectGeneration
         latencyGeneration++
-        if (pendingRouteProbeId != null && RouteProbeClient.isRunning(this)) {
-            homeConnectQueued = true
-            pendingRouteProbeId = null
-            runCatching { RouteProbeClient.cancel(this) }
-            action.isEnabled = false
-            action.alpha = .65f
-            awaitEnginesStopped(waitForDiagnostics = true, onFailure = {
-                homeConnectQueued = false
-                if (!isFinishing && !isDestroyed) { action.isEnabled = true; action.alpha = 1f }
-            }, action = {
-                if (!homeConnectQueued) return@awaitEnginesStopped
-                homeConnectQueued = false
-                toggleTunnel()
-            })
-            return
-        }
-        if (temporaryAwgMeasurement) { restoreAwgMeasurement?.invoke(); return }
-        if (RouteProbeClient.isRunning(this)) {
-            if (::detailText.isInitialized) detailText.text = "Сначала дождитесь проверки маршрута."
-            return
-        }
         val saved = VpnStateStore(this).read()
         val decision = VpnControlDecision.decide(
             saved.phase,
             ConnectVpnService.isRunning(),
             AwgTunnelController.isRunning(),
         )
+        if (decision == VpnControlAction.START && RouteProbeClient.isRunning(this)) {
+            val selected = SelectedRouteStore(this).read()
+            homeConnectQueued = true
+            pendingRouteProbeId = null
+            if (::primaryPages.isInitialized) primaryPages.cancelRouteDiagnosticsForSelection()
+            runCatching { RouteProbeClient.cancel(this) }
+            action.isEnabled = false
+            action.alpha = .65f
+            awaitEnginesStopped(waitForDiagnostics = true,
+                isCurrent = { homeConnectQueued && connectGeneration == homeConnectGeneration }, onFailure = {
+                if (connectGeneration != homeConnectGeneration) return@awaitEnginesStopped
+                homeConnectQueued = false
+                if (!isFinishing && !isDestroyed) { action.isEnabled = true; action.alpha = 1f }
+            }, action = {
+                if (!homeConnectQueued || connectGeneration != homeConnectGeneration) return@awaitEnginesStopped
+                homeConnectQueued = false
+                if (!VpnControlDecision.canResumeQueuedStart(
+                        selected.id, SelectedRouteStore(this).read().id,
+                        connectGeneration, homeConnectGeneration,
+                        ConnectVpnService.isRunning(), AwgTunnelController.isRunning(),
+                    )) {
+                    renderStoredState()
+                    return@awaitEnginesStopped
+                }
+                requestSelectedTunnel(selected)
+            })
+            return
+        }
+        if (temporaryAwgMeasurement) { restoreAwgMeasurement?.invoke(); return }
         if (decision == VpnControlAction.STOP) {
             val libboxRunning = ConnectVpnService.isRunning()
             renderStatus(VpnPhase.STOPPING, "Отключаем соединение…", null)
@@ -735,7 +747,13 @@ class MainActivity : Activity() {
             })
             return
         }
-        pendingRoute = SelectedRouteStore(this).read()
+        requestSelectedTunnel(SelectedRouteStore(this).read())
+    }
+
+    private fun requestSelectedTunnel(route: SelectedRoute) {
+        pendingRoute = route
+        action.isEnabled = true
+        action.alpha = 1f
         val permission = VpnService.prepare(this)
         if (permission != null) startActivityForResult(permission, VPN_PERMISSION_REQUEST) else startSelectedTunnel()
     }
@@ -750,8 +768,14 @@ class MainActivity : Activity() {
     }
 
     internal fun selectRoute(route: DeyttRoute, navigateHome: Boolean = true) {
-        if (temporaryAwgMeasurement) return
-        if (SelectedRouteStore(this).read().id == route.id) return
+        if (temporaryAwgMeasurement) {
+            applyRouteSelection(route, navigateHome)
+            return
+        }
+        if (SelectedRouteStore(this).read().id == route.id) {
+            if (navigateHome) selectTab(0)
+            return
+        }
         val connected = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         if (connected) {
             AppDialog.Builder(this)
@@ -766,7 +790,14 @@ class MainActivity : Activity() {
     }
 
     private fun applyRouteSelection(route: DeyttRoute, navigateHome: Boolean = true) {
+        homeConnectGeneration++
+        homeConnectQueued = false
         cancelHomeRouteDownload()
+        if (::primaryPages.isInitialized) primaryPages.cancelRouteDiagnosticsForSelection()
+        // A manual choice owns the selection immediately; a diagnostic restore
+        // must never write the old route or reconnect it after this point.
+        cancelAwgMeasurementForSelection?.invoke()
+        pendingRoute = null
         if (RouteProbeClient.isRunning(this)) {
             runCatching { RouteProbeClient.cancel(this) }
             pendingRouteProbeId = null
@@ -830,6 +861,7 @@ class MainActivity : Activity() {
         val app = applicationContext
         val handler = Handler(Looper.getMainLooper())
         var restorationRequested = false
+        var restorationReconnectRequested = false
         var completionSent = false
         var switchedTunnel = false
         var allSuccessful = true
@@ -839,6 +871,7 @@ class MainActivity : Activity() {
             completionSent = true
             temporaryAwgMeasurement = false
             restoreAwgMeasurement = null
+            cancelAwgMeasurementForSelection = null
             if (restored && wasConnected) refreshNetworkLocation(force = true)
             if (!isFinishing && !isDestroyed) { rebuildRouteRow(); renderStoredState() }
             onComplete(restored && allSuccessful)
@@ -904,6 +937,7 @@ class MainActivity : Activity() {
                     reconnectStarted = true
                     reconnectAt = SystemClock.elapsedRealtime()
                     VpnStateStore(app).write(VpnPhase.STARTING, "Восстанавливаем соединение…")
+                    restorationReconnectRequested = true
                     runCatching {
                         ContextCompat.startForegroundService(app,
                             Intent(app, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START))
@@ -914,6 +948,15 @@ class MainActivity : Activity() {
             handler.post(finish)
         }
         restoreAwgMeasurement = ::restore
+        cancelAwgMeasurementForSelection = {
+            restorationRequested = true
+            activeStep++
+            if (restorationReconnectRequested) {
+                startService(Intent(app, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
+            }
+            AwgTunnelController.stop(app, publishStatus = false)
+            complete(false)
+        }
         lateinit var advance: (Int) -> Unit
         advance = next@ { index ->
             if (restorationRequested || completionSent) return@next
@@ -1814,7 +1857,9 @@ class MainActivity : Activity() {
         attempt: Int = 0,
         waitForDiagnostics: Boolean = false,
         onFailure: (() -> Unit)? = null,
+        isCurrent: () -> Boolean = { true },
     ) {
+        if (!isCurrent()) return
         if (isFinishing || isDestroyed) {
             onFailure?.invoke()
             return
@@ -1833,7 +1878,7 @@ class MainActivity : Activity() {
             return
         }
         window.decorView.postDelayed({
-            awaitEnginesStopped(action, attempt + 1, waitForDiagnostics, onFailure)
+            awaitEnginesStopped(action, attempt + 1, waitForDiagnostics, onFailure, isCurrent)
         }, 50L)
     }
 
@@ -1955,7 +2000,7 @@ class MainActivity : Activity() {
             VpnPhase.IDLE -> "Подключить"
         })
         action.contentDescription = action.text.toString()
-        action.isEnabled = currentPhase != VpnPhase.STOPPING
+        action.isEnabled = currentPhase != VpnPhase.STOPPING && !homeConnectQueued
         action.alpha = if (action.isEnabled) 1f else .66f
     }
 
