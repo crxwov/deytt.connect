@@ -84,15 +84,48 @@ class OpenFluxProfileTest {
         assertEquals(1, store.profiles("owner", now).size)
     }
 
-    @Test fun openFluxIsExplicitAndNeverBecomesAutomatic() {
-        val config = """{"outbounds":[{"type":"selector","tag":"автоподбор"},{"type":"vless","tag":"route:DE:VLESS"},{"type":"trojan","tag":"route:RU-DE:CHAIN"}]}"""
-        val original = RouteCatalog.from(config, emptyList())
-        val routes = RouteCatalog.from(config, emptyList(), OpenFluxProfile.parse(payload(profile()), now))
-        assertEquals(original, routes.take(original.size))
+    private val routeConfig = """{"outbounds":[{"type":"selector","tag":"автоподбор"},{"type":"vless","tag":"route:DE:VLESS"},{"type":"trojan","tag":"route:RU-DE:CHAIN"}],"route":{"final":"автоподбор"}}"""
+
+    @Test fun managedRouteRemainsDiscoverableWithoutCachedCredentials() {
+        val routes = RouteCatalog.from(routeConfig, emptyList())
+        val bypass = routes.single { it.protocol == RouteProtocol.OPENFLUX }
+        assertEquals("openflux:DE", bypass.id)
+        assertEquals(TunnelEngine.OPENFLUX, bypass.engine)
+        assertEquals("DE", bypass.countryCode)
+        assertEquals("", bypass.configTag)
+        assertNull(bypass.profileName)
+        assertTrue(RouteCatalog.countryGroups(routes).toMap().getValue("DE").contains(bypass))
+        assertTrue(OpenFluxProfile.parse(payload(), now).isEmpty())
+    }
+
+    @Test fun expiredLeaseCannotHideRouteOrSupplyItsLabel() {
+        val expiredPayload = payload(profile(now - 1).put("label", "expired channel"))
+        val expired = OpenFluxProfile.parse(expiredPayload, now - 1800).single()
+        assertFalse(expired.isCurrent(now))
+        assertTrue(OpenFluxProfile.parse(expiredPayload, now).isEmpty())
+        val absent = RouteCatalog.from(routeConfig, emptyList()).single { it.protocol == RouteProtocol.OPENFLUX }
+        val expiredRoute = RouteCatalog.from(routeConfig, emptyList(), listOf(expired))
+            .single { it.protocol == RouteProtocol.OPENFLUX }
+        assertEquals(absent, expiredRoute)
+    }
+
+    @Test fun currentLeaseKeepsOneStableSelectionAndNeverChangesAutomaticRoute() {
+        val profile = OpenFluxProfile.parse(payload(profile().put("label", "managed cups channel")), now).single()
+        val original = RouteCatalog.from(routeConfig, emptyList())
+        val routes = RouteCatalog.from(routeConfig, emptyList(), listOf(profile, profile))
+        val bypass = routes.single { it.protocol == RouteProtocol.OPENFLUX }
+        assertEquals("managed cups channel", bypass.profileName)
+        assertEquals("openflux:DE", bypass.id)
+        assertEquals(TunnelEngine.OPENFLUX, bypass.engine)
+        assertEquals("", bypass.configTag)
+        assertEquals(original.filterNot { it.protocol == RouteProtocol.OPENFLUX },
+            routes.filterNot { it.protocol == RouteProtocol.OPENFLUX })
+        val selectedId = bypass.id
+        assertEquals(selectedId, original.single { it.id == selectedId }.id)
         assertEquals(RouteProtocol.AUTO, routes.first().protocol)
-        assertEquals(TunnelEngine.OPENFLUX, routes.last().engine)
-        assertEquals("DE", routes.last().countryCode)
-        assertEquals("", routes.last().configTag)
+        assertEquals(TunnelEngine.LIBBOX, routes.first().engine)
+        assertEquals("автоподбор", routes.first().configTag)
+        assertEquals("автоподбор", ProfileRoutes.selected(routeConfig))
         assertTrue(routes.any { it.protocol == RouteProtocol.RU_DE })
     }
 

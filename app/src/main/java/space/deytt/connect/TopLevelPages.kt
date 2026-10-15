@@ -286,7 +286,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         routes.firstOrNull { it.protocol == RouteProtocol.OPENFLUX }?.let { route ->
             appendToGroup(quickGroup, host.row(
-                copy("Обход · Германия", "Bypass · Germany"),
+                copy("Обход Cups · Германия", "Cups bypass · Germany"),
                 copy("Через cups · выбрать вручную", "Via cups · select manually"),
                 route.flag, "выбрать", selectedId == route.id,
             ).apply { setOnClickListener { host.selectRoute(route) } })
