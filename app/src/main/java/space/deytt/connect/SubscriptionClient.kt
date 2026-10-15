@@ -20,6 +20,8 @@ data class ImportedSubscription(
     val warnings: List<String> = emptyList(),
 )
 
+internal class OpenFluxUnavailableException(message: String) : IOException(message)
+
 object SubscriptionClient {
     private const val MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024
     private const val MAX_AWG_PROFILE_BYTES = 256 * 1024
@@ -194,10 +196,20 @@ object SubscriptionClient {
         val profiles: List<OpenFluxProfile> = emptyList(),
         val keepPrevious: Boolean = false,
         val warning: String? = null,
-    )
+    ) {
+        fun availableProfiles(previous: List<OpenFluxProfile>, nowSeconds: Long = System.currentTimeMillis() / 1000): List<OpenFluxProfile> =
+            (if (keepPrevious) previous else profiles).filter { it.isCurrent(nowSeconds) }
+
+        fun requireProfiles(previous: List<OpenFluxProfile>, nowSeconds: Long = System.currentTimeMillis() / 1000): List<OpenFluxProfile> {
+            val usable = availableProfiles(previous, nowSeconds)
+            if (usable.isEmpty()) throw OpenFluxUnavailableException(warning
+                ?: "Обход Cups сейчас недоступен для этой подписки. Попробуйте позже или выберите другой маршрут.")
+            return usable
+        }
+    }
 
     /** Refresh a managed lease without replacing the running sing-box/AWG profile. */
-    internal fun refreshOpenFlux(context: android.content.Context): List<OpenFluxProfile> {
+    internal fun refreshOpenFlux(context: android.content.Context, requireAvailable: Boolean = false): List<OpenFluxProfile> {
         val baseUrl = getSavedSubscriptionUrl(context)?.let(::normalizeBaseUrl) ?: return emptyList()
         val headers = SubscriptionRequestIdentity.headers(context)
         val owner = OpenFluxProfileStore.ownerKey(baseUrl, headers["X-TG-App-Token"])
@@ -208,23 +220,41 @@ object SubscriptionClient {
         return synchronized(AtomicSubscriptionFile.lock) {
             if (OpenFluxProfileStore.owner(context) != owner) throw SubscriptionCancelledException()
             val store = OpenFluxProfileStore(context)
-            if (result.keepPrevious) store.profiles(owner) else {
-                store.save(owner, result.profiles)
-                result.profiles
-            }
+            val previous = if (result.keepPrevious) store.profiles(owner) else emptyList()
+            // A denied/empty response revokes cached credentials before reporting
+            // the error. Transient failures may only retain an unexpired lease.
+            if (!result.keepPrevious) store.save(owner, result.profiles)
+            // Renewal needs an explicit empty list for revocation; startup needs
+            // an actionable error. Do not turn a terminal response into a retry.
+            if (requireAvailable) result.requireProfiles(previous) else result.availableProfiles(previous)
         }
     }
 
     internal fun fetchOpenFluxProfiles(baseUrl: String, transport: SubscriptionHttpTransport): OpenFluxFetchResult {
         return try {
             val response = request(withFormat(baseUrl, "openflux"), "application/json", false, transport)
-                ?: return OpenFluxFetchResult(keepPrevious = true)
+                ?: return OpenFluxFetchResult(keepPrevious = true,
+                    warning = "Сервер подписки пока не поддерживает обход Cups. Выберите другой маршрут.")
             OpenFluxFetchResult(OpenFluxProfile.parse(response.body))
         } catch (error: Exception) {
             if (error is SubscriptionCancelledException) throw error
             val denied = error is SubscriptionHttpFailure && error.statusCode in setOf(401, 403, 409, 410)
             OpenFluxFetchResult(keepPrevious = !denied,
-                warning = "Профиль обхода не обновлён. Основные маршруты доступны; повторите обновление позже.")
+                warning = when {
+                    error is SubscriptionHttpFailure && error.statusCode in setOf(401, 410) ->
+                        "Для обхода Cups войдите в аккаунт заново и повторите подключение."
+                    error is SubscriptionHttpFailure && error.statusCode == 409 ->
+                        "Обход Cups недоступен: достигнут лимит устройств аккаунта. Проверьте устройства в профиле."
+                    error is SubscriptionHttpFailure && error.statusCode == 403 && error.code == "device_blocked" ->
+                        "Обход Cups недоступен: устройство заблокировано. Обратитесь в поддержку."
+                    error is SubscriptionHttpFailure && error.statusCode == 403 ->
+                        "Обход Cups недоступен для этого аккаунта. Проверьте подписку и вход в аккаунт."
+                    error is SubscriptionHttpFailure && error.statusCode in setOf(429, 502, 503, 504) ->
+                        "Сервер обхода Cups временно недоступен или занят. Повторите позже либо выберите другой маршрут."
+                    error is IOException ->
+                        "Не удалось получить профиль Cups. Проверьте интернет и повторите подключение."
+                    else -> "Сервер вернул некорректный профиль Cups. Повторите позже либо выберите другой маршрут."
+                })
         }
     }
 

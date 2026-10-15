@@ -517,7 +517,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 val cached = OpenFluxProfileStore(this).profiles(openFluxOwner).firstOrNull { it.id == selected.id }
                 val profile = if (cached == null || OpenFluxLeaseSchedule.needsRefreshBeforeStart(
                         cached.expiresAt, System.currentTimeMillis() / 1000)) {
-                    SubscriptionClient.refreshOpenFlux(this).firstOrNull { it.id == selected.id }
+                    SubscriptionClient.refreshOpenFlux(this, requireAvailable = true).firstOrNull { it.id == selected.id }
                 } else cached
                 profile
                     ?: throw OpenFluxRouteException("Обновите подписку: профиль обхода отсутствует или истёк")
@@ -1016,7 +1016,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     private fun errorMessage(error: Throwable, fallback: String): String =
         when {
-            error is OpenFluxRouteException -> error.message ?: fallback
+            error is OpenFluxRouteException || error is OpenFluxUnavailableException -> error.message ?: fallback
             error is TunnelVerificationException -> error.message ?: fallback
             error.message.orEmpty().contains("проверочный сайт ответил HTTP") -> error.message.orEmpty()
             error.message.orEmpty().contains("DNS через соединение не отвечает") -> error.message.orEmpty()
