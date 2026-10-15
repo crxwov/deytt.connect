@@ -81,6 +81,14 @@ object RouteCatalog {
         "IT" to ("🇮🇹" to "италия"),
     )
 
+    /** Derive visible countries from the same supported catalog used to parse routes. */
+    fun countryGroups(routes: List<DeyttRoute>): List<Pair<String, List<DeyttRoute>>> {
+        val grouped = routes.groupBy { it.countryCode }
+        return (countries.keys.filter { it != "RU-DE" } + "AWG_UNKNOWN").mapNotNull { code ->
+            grouped[code]?.distinctBy { it.id }?.takeIf { it.isNotEmpty() }?.let { code to it }
+        }
+    }
+
     private fun awgCountry(profile: AwgProfile): Pair<String, Pair<String, String>>? {
         val mark = Regex("^(NL|DE|RU|FI|IT)(?:$|[-_\\s])", RegexOption.IGNORE_CASE)
             .find(profile.shortLabel.trim())?.groupValues?.get(1)?.uppercase()

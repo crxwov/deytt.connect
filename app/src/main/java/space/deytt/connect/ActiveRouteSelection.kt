@@ -3,7 +3,7 @@ package space.deytt.connect
 /** A country/route pair parsed only from sing-box outbound tags, never from IP geolocation. */
 data class ActiveRouteSelection(val exitCountry: String, val routeKey: String) {
     companion object {
-        private val directRoute = Regex("^route:(NL|DE|FI|RU)(?::|$)", RegexOption.IGNORE_CASE)
+        private val directRoute = Regex("^route:(NL|DE|FI|RU|IT)(?::|$)", RegexOption.IGNORE_CASE)
 
         fun fromOutboundTag(tag: String): ActiveRouteSelection? {
             val normalized = tag.trim()
@@ -16,6 +16,7 @@ data class ActiveRouteSelection(val exitCountry: String, val routeKey: String) {
                 "DE" -> "de"
                 "FI" -> "fi"
                 "RU" -> "ru"
+                "IT" -> "it"
                 else -> return null
             }
             return ActiveRouteSelection(country, routeKey)
