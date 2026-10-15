@@ -173,7 +173,7 @@ class SetupActivity : Activity() {
                     }
                     val routes = runCatching {
                         val config = SubscriptionStore(this).readCurrent() ?: throw SubscriptionStorageException()
-                        RouteCatalog.from(config, AwgProfileStore(this@SetupActivity).profiles())
+                        RouteCatalog.from(config, AwgProfileStore(this@SetupActivity).profiles(), OpenFluxProfileStore(this@SetupActivity).profiles(this@SetupActivity))
                     }.getOrElse {
                         loadingStage = "save"
                         showLoadFailure(SubscriptionStorageException())
@@ -256,7 +256,7 @@ class SetupActivity : Activity() {
         state.setTextColor(DeyttUi.BLUE)
         state.text = uiCopy("Отправляем запрос в поддержку…")
         state.announceForAccessibility(state.text)
-        val message = "Здравствуйте! Не получается подключить deytt.connect: сервер отвечает HTTP 409 app_device_limit_reached (download/http_409). Прошу проверить и заменить слот телефона; слот компьютера должен оставаться отдельным."
+        val message = "Здравствуйте! Не получается подключить deytt.connect: сервер отвечает HTTP 409 app_device_limit_reached (download/http_409). Прошу проверить и перенести приложение на это устройство."
         executor.execute {
             val result = runCatching {
                 check(TelegramSessionStore.read(this) == token) { "Сессия Telegram изменилась" }
@@ -398,7 +398,11 @@ class SetupActivity : Activity() {
         }
         openBot.setOnClickListener {
             botUrl?.let { link ->
-                runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+                runCatching {
+                    val uri = Uri.parse(link)
+                    check(uri.scheme?.lowercase() in setOf("https", "tg")) { "Unsupported URL scheme" }
+                    startActivity(Intent(Intent.ACTION_VIEW, uri))
+                }
                     .onFailure { status.text = "Не удалось открыть ссылку. Попробуй ещё раз." }
             }
         }

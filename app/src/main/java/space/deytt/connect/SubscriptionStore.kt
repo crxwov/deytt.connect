@@ -18,7 +18,7 @@ class SubscriptionStore internal constructor(private val directory: File) {
         try {
             AtomicSubscriptionFile.recover(directory)
             readIfPresent(file)
-        } catch (_: IOException) {
+        } catch (_: Exception) {
             // Keep the journal for recovery; never expose a partially restored generation.
             null
         }
@@ -27,15 +27,19 @@ class SubscriptionStore internal constructor(private val directory: File) {
     fun saveValidated(content: String) = synchronized(AtomicSubscriptionFile.lock) {
         require(content.isNotBlank()) { "Сервер вернул пустую подписку" }
         AtomicSubscriptionFile.transaction(directory) {
-            readIfPresent(currentFile)?.let { AtomicSubscriptionFile.write(previousFile, it) }
-            AtomicSubscriptionFile.write(currentFile, content)
+            readIfPresent(currentFile)?.let { AtomicSubscriptionFile.writeEncrypted(previousFile, it) }
+            AtomicSubscriptionFile.writeEncrypted(currentFile, content)
         }
     }
 
-    internal fun commitValidated(content: String, awgStore: AwgProfileStore, profiles: List<AwgProfile>) {
-        awgStore.saveWithCommit(profiles) { saveValidated(content) }
+    internal fun commitValidated(content: String, awgStore: AwgProfileStore, profiles: List<AwgProfile>,
+        commitOptional: () -> Unit = {}) {
+        awgStore.saveWithCommit(profiles) {
+            saveValidated(content)
+            commitOptional()
+        }
     }
 
     private fun readIfPresent(file: File): String? =
-        file.takeIf { it.isFile && it.length() > 0L }?.readText(Charsets.UTF_8)
+        AtomicSubscriptionFile.readDecrypted(file)
 }

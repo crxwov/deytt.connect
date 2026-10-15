@@ -128,7 +128,7 @@ class ProtocolActivity : Activity() {
         val requestedVersion = intent.getStringExtra("version")?.takeIf { it in setOf("15", "31") }
         val config = SubscriptionStore(this).readCurrent() ?: run { finish(); return }
         val awg = AwgProfileStore(this)
-        val routes = RouteCatalog.from(config, awg.profiles())
+        val routes = RouteCatalog.from(config, awg.profiles(), OpenFluxProfileStore(this).profiles(this))
             .filter { route ->
                 route.countryCode == code &&
                     (requestedVersion == null || route.protocol == when (requestedVersion) {
@@ -429,7 +429,7 @@ class ProtocolActivity : Activity() {
             return
         }
 
-        if (route.engine == TunnelEngine.AMNEZIAWG && !active) {
+        if (route.engine != TunnelEngine.LIBBOX && !active) {
             view.text = "HTTP после подключения"
             view.isEnabled = true
             view.alpha = 1f

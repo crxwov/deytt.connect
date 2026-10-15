@@ -44,18 +44,23 @@ import io.nekohasekai.libbox.SystemProxyStatus
 import io.nekohasekai.libbox.TunOptions
 import io.nekohasekai.libbox.WIFIState
 import java.net.URL
+import java.net.Inet4Address
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorCompletionService
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.HttpsURLConnection
 import org.amnezia.awg.config.Config
 import space.deytt.awg.AwgProxyBackend
+import space.deytt.openflux.OpenFluxProxyBackend
 import java.io.BufferedReader
 import java.io.StringReader
 import java.util.UUID
+
+private class OpenFluxRouteException(message: String) : IllegalStateException(message)
 
 open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface {
     companion object {
@@ -73,6 +78,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         private const val CHANNEL_ID = "vpn"
         private const val NOTIFICATION_ID = 42
         private const val TAG = "deytt-connect"
+        private const val MAX_CARRIER_DNS_SERVERS = 4
+        private val FALLBACK_CARRIER_DNS = arrayOf("1.1.1.1", "8.8.8.8")
         // A hostname-backed HTTPS probe avoids treating a TLS handshake to a
         // bare CDN IP as a route failure. DNS is checked separately below.
         private const val TRANSPORT_CANARY = "https://www.cloudflare.com/cdn-cgi/trace"
@@ -96,10 +103,14 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     private val executor = Executors.newSingleThreadExecutor()
+    private val openFluxExecutor = Executors.newSingleThreadExecutor()
+    private var openFluxMonitor: Future<*>? = null
     private var commandServer: CommandServer? = null
     private var commandClient: CommandClient? = null
     private var tunnel: ParcelFileDescriptor? = null
     private var awgProxy: AwgProxyBackend? = null
+    private var openFluxProxy: OpenFluxProxyBackend? = null
+    private var openFluxExpiry: Long? = null
     private var activeRuntimeConfig: String? = null
     private var started = false
     private var routeProbeOnly = false
@@ -175,6 +186,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         if (this is RouteProbeVpnService || routeProbeOnly) closeRouteProbeCore() else stopTunnel()
         probeWorkers?.shutdownNow()
         executor.shutdownNow()
+        openFluxExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -479,6 +491,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     private fun startTunnel(operationId: Long) {
+        var pendingOpenFlux: OpenFluxProxyBackend? = null
         try {
             val config = SubscriptionStore(this).readCurrent()
             if (config == null) {
@@ -494,9 +507,43 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             // Endpoint hostname resolution must not hold the lifecycle lock:
             // Android calls stop/revoke on its main thread.
             val awgUserspace = parsedAwg?.toAwgUserspaceString()
+            val openFluxOwner = if (selected.engine == TunnelEngine.OPENFLUX) OpenFluxProfileStore.owner(this)
+                ?: throw OpenFluxRouteException("Подключите аккаунт и обновите подписку") else null
+            val openFluxProfile = if (selected.engine == TunnelEngine.OPENFLUX) {
+                val cached = OpenFluxProfileStore(this).profiles(openFluxOwner).firstOrNull { it.id == selected.id }
+                val profile = if (cached == null || OpenFluxLeaseSchedule.needsRefreshBeforeStart(
+                        cached.expiresAt, System.currentTimeMillis() / 1000)) {
+                    SubscriptionClient.refreshOpenFlux(this).firstOrNull { it.id == selected.id }
+                } else cached
+                profile
+                    ?: throw OpenFluxRouteException("Обновите подписку: профиль обхода отсутствует или истёк")
+                if (OpenFluxLeaseSchedule.needsRefreshBeforeStart(profile.expiresAt, System.currentTimeMillis() / 1000)) {
+                    throw OpenFluxRouteException("Обновите подписку: профиль обхода скоро истечёт")
+                }
+                profile
+            } else null
+            val openFluxUsername = UUID.randomUUID().toString()
+            val openFluxPassword = UUID.randomUUID().toString()
+            if (openFluxProfile != null) {
+                ensureCurrent(operationId)
+                if (OpenFluxProfileStore.owner(this) != openFluxOwner) throw OpenFluxRouteException("Аккаунт изменён")
+                pendingOpenFlux = OpenFluxProxyBackend.start(openFluxProfile.nativeJson(),
+                    openFluxUsername, openFluxPassword, object : OpenFluxProxyBackend.SocketProtector {
+                        override fun protect(fd: Int): Boolean = this@ConnectVpnService.protect(fd)
+                        override fun dnsServers(): Array<String> = physicalDnsServers()
+                    })
+            }
             synchronized(this) {
                 ensureCurrent(operationId)
-                val routed = if (parsedAwg != null) {
+                val routed = if (pendingOpenFlux != null) {
+                    check(openFluxOwner != null && OpenFluxProfileStore.owner(this) == openFluxOwner) { "Аккаунт изменён" }
+                    val proxy = pendingOpenFlux!!
+                    openFluxProxy = proxy
+                    pendingOpenFlux = null
+                    openFluxExpiry = openFluxProfile!!.expiresAt
+                    check(proxy.isConnected()) { "Маршрут обхода ещё не подтвердил защищённое соединение" }
+                    SplitTunnelProfile.forOpenFlux(config, proxy.port(), openFluxUsername, openFluxPassword)
+                } else if (parsedAwg != null) {
                     val local = parsedAwg.`interface`
                     val username = UUID.randomUUID().toString()
                     val password = UUID.randomUUID().toString()
@@ -530,16 +577,107 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             verifyTunnel()
             synchronized(this) {
                 ensureCurrent(operationId)
+                openFluxProxy?.let {
+                    check(it.isConnected() && it.bytesSent() > 0 && it.bytesReceived() > 0) { "Маршрут обхода не передаёт трафик" }
+                    Log.i(TAG, "OpenFlux carrier verified sent=${it.bytesSent()} received=${it.bytesReceived()}")
+                }
                 updateNotification("Подключено")
                 publishStatus(VpnPhase.CONNECTED, "Подключено")
+                if (openFluxProfile != null) {
+                    openFluxMonitor = openFluxExecutor.submit {
+                        try {
+                            monitorOpenFlux(operationId, openFluxProfile, openFluxOwner!!)
+                        } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                        } catch (_: Throwable) {
+                            synchronized(this) {
+                                if (operation.get() == operationId && runtimeRunning) fail("Маршрут обхода отключился")
+                            }
+                        }
+                    }
+                }
             }
             Log.i(TAG, "VPN service started")
         } catch (error: Throwable) {
+            runCatching { pendingOpenFlux?.close() }
             Log.e(TAG, "Unable to start VPN", error)
             if (operation.get() == operationId) {
                 fail(errorMessage(error, "Не удалось запустить соединение"))
             }
         }
+    }
+
+    private fun monitorOpenFlux(operationId: Long, profile: OpenFluxProfile, owner: String) {
+        // A separate interruptible worker keeps lease I/O off the start/stop queue.
+        var renewAt = android.os.SystemClock.elapsedRealtime() + OpenFluxLeaseSchedule.renewalDelayMillis(
+            profile.expiresAt, System.currentTimeMillis() / 1000)
+        var reportAt = android.os.SystemClock.elapsedRealtime() + 30_000L
+        while (operation.get() == operationId && runtimeRunning) {
+            Thread.sleep(2_000)
+            synchronized(this) {
+                if (operation.get() != operationId || !runtimeRunning) return
+                if (OpenFluxProfileStore.owner(this) != owner) {
+                    fail("Аккаунт изменён. Подключитесь заново")
+                    return
+                }
+                if ((openFluxExpiry ?: 0) <= System.currentTimeMillis() / 1000) {
+                    fail("Профиль обхода истёк. Обновите подписку")
+                    return
+                }
+            }
+            if (android.os.SystemClock.elapsedRealtime() >= renewAt) {
+                val renewed = runCatching { SubscriptionClient.refreshOpenFlux(this) }
+                    .getOrNull()
+                var extended = false
+                synchronized(this) {
+                    if (operation.get() != operationId || !runtimeRunning) return
+                    val sameChannel = renewed?.firstOrNull { it.id == profile.id && profile.sameChannel(it) }
+                    if (renewed != null && sameChannel == null) {
+                        fail("Профиль обхода отозван. Обновите подписку")
+                        return
+                    }
+                    if (sameChannel != null) {
+                        extended = sameChannel.expiresAt > (openFluxExpiry ?: 0)
+                        openFluxExpiry = sameChannel.expiresAt
+                    }
+                }
+                // Retry a transient outage before the current lease expires.
+                renewAt = android.os.SystemClock.elapsedRealtime() + OpenFluxLeaseSchedule.renewalDelayMillis(
+                    openFluxExpiry ?: 0, System.currentTimeMillis() / 1000, retry = !extended)
+            }
+            synchronized(this) {
+                if (operation.get() != operationId || !runtimeRunning) return
+                if (OpenFluxProfileStore.owner(this) != owner) {
+                    fail("Аккаунт изменён. Подключитесь заново")
+                    return
+                }
+                val expired = (openFluxExpiry ?: 0) <= System.currentTimeMillis() / 1000
+                if (expired || openFluxProxy?.isConnected() != true) {
+                    fail(if (expired) "Профиль обхода истёк. Обновите подписку" else "Маршрут обхода отключился")
+                    return
+                }
+                if (android.os.SystemClock.elapsedRealtime() >= reportAt) {
+                    openFluxProxy?.let { Log.i(TAG, "OpenFlux carrier sent=${it.bytesSent()} received=${it.bytesReceived()}") }
+                    reportAt = android.os.SystemClock.elapsedRealtime() + 30_000L
+                }
+            }
+        }
+    }
+
+    private fun physicalDnsServers(): Array<String> {
+        val manager = getSystemService(ConnectivityManager::class.java)
+        val physical = manager.allNetworks.filter { network ->
+            manager.getNetworkCapabilities(network)?.let { capabilities ->
+                !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            } == true
+        }
+        val preferred = physical.sortedBy { if (it == manager.activeNetwork) 0 else 1 }
+        return preferred.firstNotNullOfOrNull { network ->
+            manager.getLinkProperties(network)?.dnsServers?.filterIsInstance<Inet4Address>()
+                ?.mapNotNull { it.hostAddress }?.distinct()?.take(MAX_CARRIER_DNS_SERVERS)
+                ?.takeIf { it.isNotEmpty() }
+        }?.toTypedArray() ?: FALLBACK_CARRIER_DNS.copyOf()
     }
 
     private fun ensureCurrent(operationId: Long) {
@@ -706,6 +844,11 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         commandServer = null
         runCatching { awgProxy?.close() }
         awgProxy = null
+        openFluxMonitor?.cancel(true)
+        openFluxMonitor = null
+        runCatching { openFluxProxy?.close() }
+        openFluxProxy = null
+        openFluxExpiry = null
         activeRuntimeConfig = null
         runCatching { tunnel?.close() }
         tunnel = null
@@ -717,7 +860,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     @Synchronized
     private fun stopTunnel() {
-        if (!started && commandServer == null && tunnel == null && awgProxy == null) {
+        if (!started && commandServer == null && tunnel == null && awgProxy == null && openFluxProxy == null) {
             runtimeRunning = false
             stopForeground(STOP_FOREGROUND_REMOVE)
             if (VpnStateStore(this).read().phase != VpnPhase.ERROR)
@@ -732,6 +875,11 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         commandServer = null
         runCatching { awgProxy?.close() }
         awgProxy = null
+        openFluxMonitor?.cancel(true)
+        openFluxMonitor = null
+        runCatching { openFluxProxy?.close() }
+        openFluxProxy = null
+        openFluxExpiry = null
         activeRuntimeConfig = null
         runCatching { tunnel?.close() }
         tunnel = null
@@ -759,6 +907,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     private fun errorMessage(error: Throwable, fallback: String): String =
         when {
+            error is OpenFluxRouteException -> error.message ?: fallback
             error.message.orEmpty().contains("проверочный сайт ответил HTTP") -> error.message.orEmpty()
             error.message.orEmpty().contains("DNS через соединение не отвечает") -> error.message.orEmpty()
             error.message.orEmpty().contains("Проверка соединения не прошла") -> error.message.orEmpty()

@@ -10,7 +10,8 @@ import org.json.JSONObject
 internal object AtomicSubscriptionFile {
     val lock = Any()
     private const val JOURNAL = ".subscription-transaction.json"
-    private val snapshotNames = listOf("current.json", "previous.json", "awg-profiles.json")
+    private val legacySnapshotNames = listOf("current.json", "previous.json", "awg-profiles.json")
+    private val snapshotNames = legacySnapshotNames + OpenFluxProfileStore.FILE_NAME
     private val activeDirectories = ThreadLocal.withInitial { mutableSetOf<String>() }
 
     /** Undo journal is published before any live file changes; deletion is the commit point. */
@@ -28,7 +29,7 @@ internal object AtomicSubscriptionFile {
             snapshot.put(name, if (file.isFile) file.readText(Charsets.UTF_8) else JSONObject.NULL)
         }
         val journal = File(directory, JOURNAL)
-        write(journal, snapshot.toString())
+        writeEncrypted(journal, snapshot.toString())
         activeDirectories.get().add(key)
         try {
             block()
@@ -48,16 +49,19 @@ internal object AtomicSubscriptionFile {
         if (directory.canonicalPath in activeDirectories.get()) return@synchronized
         val journal = File(directory, JOURNAL)
         if (!journal.exists()) return@synchronized
-        val snapshot = try { JSONObject(journal.readText(Charsets.UTF_8)) } catch (error: Exception) {
+        val snapshot = try {
+            JSONObject(LocalSecretCipher.decryptOrPlaintext(journal.readText(Charsets.UTF_8)))
+        } catch (error: Exception) {
             throw IOException("Не удалось восстановить подписку", error)
         }
         // Validate the entire journal before restoring anything; never guess through corruption.
-        if (snapshotNames.any { !snapshot.has(it) || (!snapshot.isNull(it) && snapshot.opt(it) !is String) }) {
+        if (legacySnapshotNames.any { !snapshot.has(it) } ||
+            snapshotNames.any { snapshot.has(it) && !snapshot.isNull(it) && snapshot.opt(it) !is String }) {
             throw IOException("Журнал подписки повреждён")
         }
         snapshotNames.forEach { name ->
             val file = File(directory, name)
-            if (snapshot.isNull(name)) {
+            if (!snapshot.has(name) || snapshot.isNull(name)) {
                 if (file.exists() && !file.delete()) throw IOException("Не удалось восстановить подписку")
             } else write(file, snapshot.getString(name))
         }
@@ -65,6 +69,13 @@ internal object AtomicSubscriptionFile {
         if (!journal.delete()) throw IOException("Не удалось завершить восстановление подписки")
     }
 
+    fun writeEncrypted(target: File, content: String) =
+        write(target, LocalSecretCipher.encrypt(content))
+
+    fun readDecrypted(target: File): String? =
+        target.takeIf { it.isFile && it.length() > 0L }
+            ?.readText(Charsets.UTF_8)
+            ?.let(LocalSecretCipher::decryptOrPlaintext)
 
     fun write(target: File, content: String) = write(target) {
         it.write(content.toByteArray(Charsets.UTF_8))
@@ -83,10 +94,24 @@ internal object AtomicSubscriptionFile {
             }
             // Same-directory rename replaces atomically on Android. Never truncate the live file.
             if (!temporary.renameTo(target)) {
-                throw IOException("Не удалось сохранить подписку")
+                // Android/Linux rename replaces atomically; Windows JVMs require
+                // the explicit replace operation for the same storage checks.
+                if (!System.getProperty("os.name", "").startsWith("Windows")) {
+                    throw IOException("Не удалось сохранить подписку")
+                }
+                WindowsAtomicReplace.move(temporary, target)
             }
         } finally {
             temporary.delete()
+        }
+    }
+
+    /** Loaded only on a Windows JVM, never on Android API 24/25. */
+    @android.annotation.TargetApi(26)
+    private object WindowsAtomicReplace {
+        fun move(source: File, target: File) {
+            java.nio.file.Files.move(source.toPath(), target.toPath(),
+                java.nio.file.StandardCopyOption.ATOMIC_MOVE, java.nio.file.StandardCopyOption.REPLACE_EXISTING)
         }
     }
 }

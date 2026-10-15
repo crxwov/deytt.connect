@@ -24,6 +24,7 @@ class SplitTunnelInstrumentation : Instrumentation() {
             fun runtime(config: String) = RuntimeProfile.withPrivateCacheFile(config, "${targetContext.cacheDir}/split-test.db")
             Libbox.checkConfig(runtime(SplitTunnelProfile.apply(source)))
             Libbox.checkConfig(runtime(SplitTunnelProfile.forAwg(source, 12345, "synthetic-test-user", "synthetic-test-password")))
+            Libbox.checkConfig(runtime(SplitTunnelProfile.forOpenFlux(source, 12345, "synthetic-test-user", "synthetic-test-password")))
             val protects = AtomicInteger()
             val key = KeyPair().privateKey.toHex()
             val failure = runCatching {
@@ -43,7 +44,7 @@ class SplitTunnelInstrumentation : Instrumentation() {
                 }
                 Libbox.checkConfig(runtime(SplitTunnelProfile.apply(source)))
             }
-            results.putString("stream", "PASS libbox split/AWG schemas; native protect rejection; three native start/close cycles\n")
+            results.putString("stream", "PASS libbox split/AWG/OpenFlux schemas; native protect rejection; three native start/close cycles\n")
             finish(-1, results)
         } catch (error: Throwable) {
             results.putString("stream", "FAIL ${error.javaClass.simpleName}: ${error.message}\n")

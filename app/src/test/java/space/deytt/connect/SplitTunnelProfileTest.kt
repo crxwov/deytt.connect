@@ -56,4 +56,32 @@ class SplitTunnelProfileTest {
             root.getJSONObject("dns").getJSONArray("servers").getJSONObject(1).getString("detour"))
         ProfileValidator.validate(root.toString())
     }
+
+    @Test fun openFluxCapturesAndRejectsIpv6AndUsesTcpDnsInsideCarrier() {
+        val root = JSONObject(SplitTunnelProfile.forOpenFlux(config, 23456, "random-user", "random-password"))
+        assertEquals(SplitTunnelProfile.OPENFLUX_OUTBOUND, root.getJSONObject("route").getString("final"))
+        val rules = root.getJSONObject("route").getJSONArray("rules")
+        assertEquals(6, rules.getJSONObject(0).getInt("ip_version"))
+        assertEquals("reject", rules.getJSONObject(0).getString("action"))
+        assertEquals("sniff", rules.getJSONObject(1).getString("action"))
+        assertEquals("hijack-dns", rules.getJSONObject(2).getString("action"))
+        val inbound = root.getJSONArray("inbounds").getJSONObject(0)
+        assertTrue(inbound.getBoolean("auto_route"))
+        assertTrue(inbound.getJSONArray("address").toString().contains("fdfe:"))
+        val socks = root.getJSONArray("outbounds").getJSONObject(1)
+        assertEquals("tcp", socks.getString("network"))
+        assertEquals("127.0.0.1", socks.getString("server"))
+        assertEquals("random-password", socks.getString("password"))
+        val dns = root.getJSONObject("dns")
+        assertEquals("ipv4_only", dns.getString("strategy"))
+        val remote = dns.getJSONArray("servers").getJSONObject(1)
+        assertEquals("https", remote.getString("type"))
+        assertEquals(SplitTunnelProfile.OPENFLUX_OUTBOUND, remote.getString("detour"))
+        assertEquals("local-dns", dns.getJSONArray("rules").getJSONObject(0).getString("server"))
+        assertFalse(root.has("endpoints"))
+        val runtime = JSONObject(RuntimeProfile.withPrivateCacheFile(root.toString(), "/private/test/cache.db"))
+        assertEquals("remote-dns", runtime.getJSONObject("route").getString("default_domain_resolver"))
+        assertEquals("local-dns", runtime.getJSONArray("outbounds").getJSONObject(0).getString("domain_resolver"))
+        ProfileValidator.validate(root.toString())
+    }
 }

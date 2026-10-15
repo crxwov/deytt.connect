@@ -244,6 +244,11 @@ internal object AppLanguage {
         "Открыть официальный релиз" to "Open official release",
         "Главная" to "Home",
         "Маршруты" to "Routes",
+        "обход · германия" to "bypass · germany",
+        "через cups → германию" to "via cups → germany",
+        "Пинг: после подключения" to "Ping: after connecting",
+        "Обновите подписку: профиль обхода отсутствует или истёк" to "Refresh your subscription: the bypass profile is missing or expired",
+        "Подключите аккаунт и обновите подписку" to "Link your account and refresh your subscription",
         "Профиль" to "Profile",
         "Настройки" to "Settings",
         "Автоподбор: Нидерланды, Германия, Финляндия, Россия" to "Auto-select: Netherlands, Germany, Finland, Russia",
@@ -268,8 +273,8 @@ internal object AppLanguage {
         "Настраиваем защищённый туннель" to "Setting up the secure tunnel",
         "профиль amneziawg 1.5 не загружен. обновите подписку." to "amneziawg 1.5 profile is missing. refresh the subscription.",
         "профиль amneziawg 3.1 не загружен. обновите подписку." to "amneziawg 3.1 profile is missing. refresh the subscription.",
-        "Слот телефона уже занят другим телефоном. На аккаунт доступно по одному телефону и одному компьютеру; их слоты независимы. Для замены телефона выйдите из аккаунта на прежнем телефоне или завершите его сессию в профиле, затем обновите подписку. Happ использует отдельную квоту." to
-            "The phone slot is already used by another phone. Each account has one phone slot and one computer slot; the slots are independent. To replace a phone, sign out on the previous phone or revoke its session in your profile, then refresh the subscription. Happ has its own allowance.",
+        "deytt.connect использует один слот на телефон. выйдите из приложения на старом телефоне, чтобы освободить слот, затем повторите проверку. компьютерные подключения и happ используют отдельные слоты. приложение не отключает устройство автоматически; если старый телефон недоступен или слот не освободился, обратитесь в поддержку." to
+            "deytt.connect uses one phone slot. sign out on the old phone to release it, then retry the check. computer connections and happ use separate slots. the app does not disconnect devices automatically; contact support if the old phone is unavailable or the slot stays occupied.",
         "ВХОД" to "ENTRY",
         "ВЫХОД" to "EXIT",
         "Ищем регион…" to "Locating region…",

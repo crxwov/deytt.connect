@@ -87,7 +87,6 @@ class MainActivity : Activity() {
     private var renderedPhase: VpnPhase? = null
     private var initialPage = 0
     private var hasStartedBefore = false
-    private var awgProfilesAvailableForSettings: Boolean? = null
     private var currentNetworkLocation: IpNetworkLocation? = null
     private var currentEgressLocation: IpNetworkLocation? = null
     private var currentAutoRouteKey: String? = null
@@ -298,7 +297,6 @@ class MainActivity : Activity() {
             pageAdapter.refresh(1)
             pageAdapter.refresh(2)
         }
-        refreshAmneziaSettingsIfNeeded()
         hasStartedBefore = true
         refreshNetworkLocation()
         refreshTelegramAccount()
@@ -448,30 +446,30 @@ class MainActivity : Activity() {
         for (position in 0..3) pageAdapter.refresh(position)
     }
 
-    private fun refreshAmneziaSettingsIfNeeded() {
-        if (!::pageAdapter.isInitialized) return
-        val hasProfiles = AwgProfileStore(this).profiles().isNotEmpty()
-        val previous = awgProfilesAvailableForSettings
-        awgProfilesAvailableForSettings = hasProfiles
-        if (previous != null && previous != hasProfiles) pageAdapter.refresh(3)
-    }
-
     private fun refreshSubscriptionIfNeeded() {
         if (isFinishing || isDestroyed || subscriptionRefreshInFlight) return
-        val prefs = getSharedPreferences("profile_settings", MODE_PRIVATE)
-        val url = prefs.getString("subscription_url", null)?.trim()?.takeIf(String::isNotEmpty) ?: return
+        val url = SubscriptionClient.getSavedSubscriptionUrl(this)?.trim()?.takeIf(String::isNotEmpty)
+        if (url == null) {
+            android.util.Log.i("DeyttSubscription", "Background refresh skipped: no readable saved subscription URL")
+            return
+        }
         val now = SystemClock.elapsedRealtime()
         if (subscriptionRefreshLastStartedAt > 0 && now - subscriptionRefreshLastStartedAt < 30_000) return
 
-        subscriptionRefreshLastStartedAt = now
         subscriptionRefreshInFlight = true
+        subscriptionRefreshLastStartedAt = now
         subscriptionExecutor.execute {
             val result = runCatching {
                 SubscriptionClient.import(this@MainActivity, url, beforeCommit = {
-                    if (prefs.getString("subscription_url", null) != url) {
+                    if (SubscriptionClient.getSavedSubscriptionUrl(this@MainActivity) != url) {
                         throw SubscriptionCancelledException()
                     }
                 })
+            }
+            result.onFailure { failure ->
+                val status = (failure as? SubscriptionHttpFailure)?.statusCode
+                android.util.Log.w("DeyttSubscription",
+                    "Background refresh failed (${failure.javaClass.simpleName}, HTTP ${status ?: 0})")
             }
             runOnUiThread {
                 subscriptionRefreshInFlight = false
@@ -479,7 +477,7 @@ class MainActivity : Activity() {
 
                 val routes = runCatching {
                     val config = SubscriptionStore(this).readCurrent() ?: return@runCatching emptyList()
-                    RouteCatalog.from(config, AwgProfileStore(this).profiles())
+                    RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
                 }.getOrNull() ?: return@runOnUiThread
                 if (routes.none { it.id == SelectedRouteStore(this).read().id }) {
                     routes.firstOrNull()?.let { SelectedRouteStore(this).save(it) }
@@ -489,7 +487,6 @@ class MainActivity : Activity() {
                     pageAdapter.refresh(1)
                     pageAdapter.refresh(2)
                 }
-                refreshAmneziaSettingsIfNeeded()
             }
         }
     }
@@ -811,7 +808,7 @@ class MainActivity : Activity() {
         }
         val previous = SelectedRouteStore(this).read()
         val config = SubscriptionStore(this).readCurrent()
-        val previousRoute = config?.let { RouteCatalog.from(it, AwgProfileStore(this).profiles()) }
+        val previousRoute = config?.let { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }
             ?.firstOrNull { it.id == previous.id }
         val wasConnected = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         if (config == null || previousRoute == null || (!wasConnected && isSystemTunnelActive())) {
@@ -999,11 +996,11 @@ class MainActivity : Activity() {
             else -> return
         }
         val config = SubscriptionStore(this).readCurrent() ?: return
-        val routes = RouteCatalog.from(config, AwgProfileStore(this).profiles())
+        val routes = RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
         val automatic = routes.firstOrNull { it.protocol == RouteProtocol.AUTO }
         val countryRoutes = routes.filter {
             it.countryCode == countryCode && (
-                it.engine == TunnelEngine.AMNEZIAWG ||
+                it.engine == TunnelEngine.AMNEZIAWG || it.engine == TunnelEngine.OPENFLUX ||
                     it.engine == TunnelEngine.LIBBOX &&
                     it.protocol in setOf(RouteProtocol.VLESS, RouteProtocol.TROJAN, RouteProtocol.HYSTERIA2)
                 )
@@ -1230,7 +1227,7 @@ class MainActivity : Activity() {
 
     private fun selectedExitLabel(selected: SelectedRoute): String {
         val config = SubscriptionStore(this).readCurrent()
-        val route = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles()) }.getOrNull() }
+        val route = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrNull() }
             ?.firstOrNull { it.id == selected.id }
         if (route == null) return uiCopy(selected.title)
         val city = when (route.countryCode) {
@@ -1238,7 +1235,6 @@ class MainActivity : Activity() {
             "DE", "RU-DE" -> "Франкфурт"
             "RU" -> "Санкт-Петербург"
             "FI" -> "Хельсинки"
-            "IT" -> "Милан"
             else -> return uiCopy(selected.title)
         }
         return (if (route.countryCode == "RU-DE") "🇩🇪" else route.flag) + " " + uiCopy(city)
@@ -1389,7 +1385,7 @@ class MainActivity : Activity() {
 
     private fun availableMapLocations(): Set<String> {
         val config = SubscriptionStore(this).readCurrent().orEmpty()
-        val routes = runCatching { RouteCatalog.from(config, AwgProfileStore(this).profiles()) }.getOrDefault(emptyList())
+        val routes = runCatching { RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrDefault(emptyList())
         return routes.flatMap { route ->
             when (route.countryCode.uppercase()) {
                 "NL" -> listOf("nl")
@@ -1563,7 +1559,7 @@ class MainActivity : Activity() {
         if (!::downloadText.isInitialized) return
         val selected = SelectedRouteStore(this).read()
         val config = SubscriptionStore(this).readCurrent()
-        val route = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles()) }.getOrNull() }
+        val route = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrNull() }
             ?.firstOrNull { it.id == selected.id }
         if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
             RouteProtocol.AUTO -> uiCopy("Автоподбор")
@@ -1635,7 +1631,7 @@ class MainActivity : Activity() {
         if (now - homeSpeedConnectedAt < 1_500L || (homeSpeedAttemptAt > 0L && now - homeSpeedAttemptAt < 60_000L)) return
         val token = TelegramSessionStore.read(this) ?: return
         val config = SubscriptionStore(this).readCurrent() ?: return
-        val route = RouteCatalog.from(config, AwgProfileStore(this).profiles()).firstOrNull { it.id == selected.id } ?: return
+        val route = RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)).firstOrNull { it.id == selected.id } ?: return
         if (route.engine == TunnelEngine.LIBBOX && (!ConnectVpnService.isRunning() || !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName))) return
         if (route.engine == TunnelEngine.AMNEZIAWG && !AwgTunnelController.isRunning()) return
         homeSpeedAttemptAt = now
@@ -2010,7 +2006,7 @@ class MainActivity : Activity() {
         homePingSamples.clear()
         val selected = SelectedRouteStore(this).read()
         val config = SubscriptionStore(this).readCurrent() ?: return
-        val route = RouteCatalog.from(config, AwgProfileStore(this).profiles())
+        val route = RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
             .firstOrNull { it.id == selected.id } ?: return
         val method = RouteProbePreferences.method(this)
         val previousLatency = lastRouteLatency?.takeIf {
@@ -2091,6 +2087,12 @@ class MainActivity : Activity() {
             latencyText.alpha = 1f
             latencyText.setTextColor(DeyttUi.AMBER)
             latencyText.contentDescription = uiCopy("Для HTTP-проверки подключите выбранный профиль AmneziaWG")
+            return
+        }
+        if (route.engine == TunnelEngine.OPENFLUX) {
+            latencyText.text = uiCopy("Пинг: после подключения")
+            latencyText.isEnabled = true
+            latencyText.alpha = 1f
             return
         }
         val vpnPermission = VpnService.prepare(this)

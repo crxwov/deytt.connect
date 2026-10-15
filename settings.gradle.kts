@@ -21,3 +21,4 @@ dependencyResolutionManagement {
 rootProject.name = "deytt-connect"
 include(":app")
 include(":awg-tunnel")
+include(":openflux-tunnel")
