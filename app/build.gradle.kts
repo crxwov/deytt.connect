@@ -6,6 +6,7 @@ plugins {
 android {
     namespace = "space.deytt.connect"
     compileSdk = 35
+    ndkVersion = "26.1.10909125"
 
     buildFeatures {
         buildConfig = true
@@ -15,6 +16,8 @@ android {
         applicationId = if (providers.gradleProperty("isolatedQa").orNull == "true") "space.deytt.connect.qa" else "space.deytt.connect"
         minSdk = 24
         targetSdk = 35
+        // One APK covers supported phones and emulators without ABI-specific downloads.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
         } else 60
@@ -52,14 +55,6 @@ android {
         jniLibs.excludes += setOf("**/libwg.so", "**/libwg-quick.so")
     }
 
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = true
-        }
-    }
 }
 
 dependencies {

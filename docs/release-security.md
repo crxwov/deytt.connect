@@ -5,7 +5,11 @@
 Public APKs use the `release` build type with both Java and native debugging
 disabled. `assembleRelease` deliberately produces unsigned artifacts; signing is
 an explicit, verified step. Never rename a debug build to a release filename.
-The updater selects a release APK matching the device ABI, checks its package,
+Each release publishes one universal APK (`app-universal-release.apk`) covering
+arm64-v8a, armeabi-v7a and x86_64, plus its checksum and corresponding source.
+The app pins the NDK used to strip native debug symbols and filters unsupported
+ABIs, keeping the universal download below the updater's 120 MiB limit.
+The updater selects that universal APK, checks its package,
 version and signing identity, and asks Android to install it after user action.
 Production builds reject debuggable update candidates.
 
@@ -24,10 +28,11 @@ OpenFlux engine (`libopenflux_jni.so`) are packaged. The unused privileged `wg` 
 `release/signing-policy.json` records the current standard family's certificate
 fingerprints. Standard APKs carry the previous standard signer on API 24–27 and
 its successor on API 28+, with `release/signing-lineage.bin` proving rotation.
-Separate legacy APKs use the historical legacy signer on API 24–27 and the same
-successor on API 28+, with `release/signing-lineage-legacy.bin`. Keep these two
-families separate: an old Android installation needs the family matching its
-installed certificate. Do not require an uninstall for an update that can retain
+Historical legacy APKs used a different signer on API 24–27 and the same
+successor on API 28+, with `release/signing-lineage-legacy.bin`. Keep this lineage
+for recovery, but do not publish a parallel legacy build. Older API 24–27
+installations from that family need their matching historical migration path.
+Do not require an uninstall for an update that can retain
 the existing identity and data. Verify a signed update on the connected phone.
 
 Future updates are compatible only while the new private key is preserved and
@@ -46,8 +51,8 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
   --no-daemon --console=plain --max-workers=2
 
 python3 scripts/release.py sign \
-  app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk \
-  --output output/release/deytt-connect-0.11.0-arm64-v8a.apk \
+  app/build/outputs/apk/release/app-release-unsigned.apk \
+  --output output/release/app-universal-release.apk \
   --keystore /secure/signing/release.p12 \
   --password-file /secure/signing/release.password \
   --legacy-keystore /secure/signing/previous-standard.p12 \
@@ -55,7 +60,7 @@ python3 scripts/release.py sign \
   --legacy-password-env DEYTT_LEGACY_PASSWORD \
   --expected-version 0.11.0 --expected-version-code 60
 
-python3 scripts/release.py verify output/release/deytt-connect-0.11.0-arm64-v8a.apk
+python3 scripts/release.py verify output/release/app-universal-release.apk
 ```
 
 The release script refuses
@@ -63,9 +68,9 @@ debuggable APKs, unexpected package identities, SDK levels, permissions, legacy
 root tools, missing AWG/OpenFlux engines, bad alignment, and mismatching certificates.
 It verifies both API 24–27 and API 28+ signatures and writes a SHA-256 sidecar.
 `--qa` only permits the isolated `.qa` package; it is not a distribution APK.
-For the legacy family also supply its key alias, lineage file and expected
-legacy certificate explicitly; the default policy remains the standard family.
-Publish ABI-specific APKs, their SHA-256 sidecars and corresponding source.
+The default policy is the standard signing family. Do not publish separate ABI
+packages or duplicate updater/branded filenames. Retain old files locally until
+the new single APK has passed signature, size, device-update and download checks.
 Windows builds can use `scripts/prepare-awg-windows.py` to prepare the pinned,
 patched Go SDK without modifying a shared Go installation. See
 [`openflux-tunnel/README.md`](../openflux-tunnel/README.md) for OpenFlux prerequisites.
