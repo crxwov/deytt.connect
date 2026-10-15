@@ -45,6 +45,7 @@ internal object TelegramSessionStore {
 
     fun save(context: Context, token: String) = synchronized(AtomicSubscriptionFile.lock) {
         require(token.length in 32..256)
+        if (read(context) != token) OpenFluxProfileStore(context).clear()
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         cipher.updateAAD(aad)
@@ -58,6 +59,7 @@ internal object TelegramSessionStore {
     fun clear(context: Context) = synchronized(AtomicSubscriptionFile.lock) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .remove(TOKEN).remove(IV).commit()
+        OpenFluxProfileStore(context).clear()
     }
 
     fun clearIfMatches(context: Context, expected: String?): Boolean = synchronized(AtomicSubscriptionFile.lock) {

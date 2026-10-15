@@ -5,9 +5,44 @@ import java.util.ArrayDeque
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class SubscriptionClientTest {
+    @Test fun openFluxUsesSameSubscriptionAndDistinguishesRevocationFromOutage() {
+        val unavailable = SubscriptionClient.fetchOpenFluxProfiles(
+            SubscriptionClient.normalizeBaseUrlForTest("https://deytt.space/sub/token?format=singbox&app=1"),
+            SubscriptionClient.SubscriptionHttpTransport { url, accept ->
+                assertTrue(url.contains("format=openflux"))
+                assertTrue(url.contains("app=1"))
+                assertFalse(url.contains("format=singbox"))
+                assertEquals("application/json", accept)
+                SubscriptionClient.SubscriptionHttpResponse(404)
+            })
+        assertTrue(unavailable.keepPrevious)
+        val revoked = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> SubscriptionClient.SubscriptionHttpResponse(200,
+                """{"version":1,"profiles":[]}""") })
+        assertFalse(revoked.keepPrevious)
+        assertTrue(revoked.profiles.isEmpty())
+        val denied = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> SubscriptionClient.SubscriptionHttpResponse(409) })
+        assertFalse(denied.keepPrevious)
+        val malformed = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> SubscriptionClient.SubscriptionHttpResponse(200, "bad json") })
+        assertTrue(malformed.keepPrevious)
+        assertFalse(malformed.warning.isNullOrBlank())
+    }
+
+    @Test fun interruptedOpenFluxFetchPreservesCancellation() {
+        Thread.currentThread().interrupt()
+        try {
+            val error = runCatching { SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+                SubscriptionClient.SubscriptionHttpTransport { _, _ -> fail("Unexpected request"); error("unreachable") }) }.exceptionOrNull()
+            assertTrue(error is SubscriptionCancelledException)
+        } finally { Thread.interrupted() }
+    }
+
     @Test
     fun longServerBackoffReturnsControlWithoutHammeringEndpoint() {
         val transport = FakeTransport(SubscriptionClient.SubscriptionHttpResponse(429, retryAfterMillis = 60_000))

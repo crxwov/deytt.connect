@@ -35,9 +35,12 @@ object SubscriptionClient {
         var awg15Budget: SubscriptionRequestBudget? = null
         var awg31Budget: SubscriptionRequestBudget? = null
         var otherOptionalBudget: SubscriptionRequestBudget? = null
+        var openFluxBudget: SubscriptionRequestBudget? = null
         try {
             return import(context, rawUrl, SubscriptionHttpTransport { url, accept ->
-                val budget = if (accept == "application/json") coreBudget else {
+                val budget = if (url.contains("format=openflux")) {
+                    openFluxBudget ?: SubscriptionRequestBudget(60_000).also { openFluxBudget = it }
+                } else if (accept == "application/json") coreBudget else {
                     // Give each generation its own bounded deadline. A slow or
                     // unavailable legacy endpoint must not consume the 3.1
                     // endpoint's entire optional-fetch window (or vice versa).
@@ -87,6 +90,7 @@ object SubscriptionClient {
         // `format=amneziawg31` endpoint. Each generation has a fair 10-second
         // optional-fetch budget, separate from the required sing-box request.
         val awgResults = fetchAwgGenerations(baseUrl, transport)
+        val openFluxResult = fetchOpenFluxProfiles(baseUrl, transport)
         // An optional AWG endpoint must not make a valid core subscription unusable.
         // Keep a last-known-good family when its gateway is temporarily failing.
         fun mergedProfiles(previousAwgProfiles: List<AwgProfile>) = awgResults.flatMap { result ->
@@ -110,6 +114,7 @@ object SubscriptionClient {
         checkCancellation()
         onStage("save")
         val warnings = awgResults.mapNotNull { it.warning }.toMutableList()
+        openFluxResult.warning?.let(warnings::add)
         val awgProfiles = synchronized(AtomicSubscriptionFile.lock) {
             checkCancellation()
             onBeforeCommit()
@@ -121,11 +126,18 @@ object SubscriptionClient {
                 normalizeBaseUrl(previousUrl) == baseUrl
             }.getOrDefault(false)
             val profiles = mergedProfiles(if (sameSubscription) awgStore.profiles() else emptyList())
+            val openFluxStore = OpenFluxProfileStore(context)
+            val owner = OpenFluxProfileStore.owner(context, baseUrl)!!
+            val openFluxProfiles = if (openFluxResult.keepPrevious && sameSubscription) {
+                openFluxStore.profiles(owner)
+            } else openFluxResult.profiles
             // Invalidate ownership before the multi-file commit. After a process/disk
             // failure no old account's AWG config may be reused for a new source.
             if (!settings.edit().remove("subscription_url").commit()) throw SubscriptionStorageException()
             try {
-                SubscriptionStore(context).commitValidated(content, awgStore, profiles)
+                SubscriptionStore(context).commitValidated(content, awgStore, profiles) {
+                    openFluxStore.save(owner, openFluxProfiles)
+                }
             } catch (error: IOException) {
                 throw SubscriptionStorageException()
             }
@@ -177,6 +189,44 @@ object SubscriptionClient {
     )
 
     internal enum class AwgFetchState { AVAILABLE, NOT_AVAILABLE, PARTIAL_FAILURE, TRANSIENT_FAILURE }
+
+    internal data class OpenFluxFetchResult(
+        val profiles: List<OpenFluxProfile> = emptyList(),
+        val keepPrevious: Boolean = false,
+        val warning: String? = null,
+    )
+
+    /** Refresh a managed lease without replacing the running sing-box/AWG profile. */
+    internal fun refreshOpenFlux(context: android.content.Context): List<OpenFluxProfile> {
+        val baseUrl = getSavedSubscriptionUrl(context)?.let(::normalizeBaseUrl) ?: return emptyList()
+        val headers = SubscriptionRequestIdentity.headers(context)
+        val owner = OpenFluxProfileStore.ownerKey(baseUrl, headers["X-TG-App-Token"])
+        val budget = SubscriptionRequestBudget(60_000)
+        val result = fetchOpenFluxProfiles(baseUrl, SubscriptionHttpTransport { url, accept ->
+            requestUrlConnection(url, accept, headers, budget)
+        })
+        return synchronized(AtomicSubscriptionFile.lock) {
+            if (OpenFluxProfileStore.owner(context) != owner) throw SubscriptionCancelledException()
+            val store = OpenFluxProfileStore(context)
+            if (result.keepPrevious) store.profiles(owner) else {
+                store.save(owner, result.profiles)
+                result.profiles
+            }
+        }
+    }
+
+    internal fun fetchOpenFluxProfiles(baseUrl: String, transport: SubscriptionHttpTransport): OpenFluxFetchResult {
+        return try {
+            val response = request(withFormat(baseUrl, "openflux"), "application/json", false, transport)
+                ?: return OpenFluxFetchResult(keepPrevious = true)
+            OpenFluxFetchResult(OpenFluxProfile.parse(response.body))
+        } catch (error: Exception) {
+            if (error is SubscriptionCancelledException) throw error
+            val denied = error is SubscriptionHttpFailure && error.statusCode in setOf(401, 403, 409, 410)
+            OpenFluxFetchResult(keepPrevious = !denied,
+                warning = "Профиль обхода не обновлён. Основные маршруты доступны; повторите обновление позже.")
+        }
+    }
 
     internal data class AwgFetchResult(
         val version: String,
@@ -302,7 +352,10 @@ object SubscriptionClient {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = minOf(10_000, budget.remainingMillis())
-            readTimeout = minOf(12_000, budget.remainingMillis())
+            // First carrier provisioning can take ~45 seconds. Its optional
+            // endpoint has a separate total deadline and must receive that window.
+            readTimeout = if (url.contains("format=openflux")) budget.remainingMillis()
+                else minOf(12_000, budget.remainingMillis())
             useCaches = false
             // A subscription URL is a bearer token. Do not let the HTTP stack
             // silently forward it to an untrusted host.

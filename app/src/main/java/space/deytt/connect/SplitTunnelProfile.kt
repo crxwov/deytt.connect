@@ -6,6 +6,7 @@ import org.json.JSONObject
 /** Uses the subscription's bypass list for both DNS and every tunnel transport. */
 object SplitTunnelProfile {
     const val AWG_OUTBOUND = "deytt-awg"
+    const val OPENFLUX_OUTBOUND = "deytt-openflux"
     private val domainKeys = listOf("domain", "domain_suffix", "domain_regex", "domain_keyword")
 
     fun bypassSites(config: String): List<String> {
@@ -69,11 +70,58 @@ object SplitTunnelProfile {
     }
 
     fun forAwg(config: String, port: Int, username: String, password: String): String {
+        return forLocalProxy(config, port, username, password, AWG_OUTBOUND)
+    }
+
+    fun forOpenFlux(config: String, port: Int, username: String, password: String): String {
+        val root = JSONObject(forLocalProxy(config, port, username, password, OPENFLUX_OUTBOUND))
+        val route = root.getJSONObject("route")
+        val original = route.getJSONArray("rules")
+        // The carrier exit supports IPv4 TCP. Capture IPv6 in the same TUN and
+        // reject it before direct exceptions so Android cannot leak around it.
+        val rules = JSONArray().put(JSONObject().put("ip_version", 6).put("action", "reject"))
+        for (i in 0 until original.length()) rules.put(original.getJSONObject(i))
+        route.put("rules", rules)
+        val inbounds = root.getJSONArray("inbounds")
+        for (i in 0 until inbounds.length()) {
+            val inbound = inbounds.getJSONObject(i)
+            if (inbound.optString("type") != "tun") continue
+            val addresses = inbound.getJSONArray("address")
+            if ((0 until addresses.length()).none { addresses.getString(it).contains(':') }) {
+                addresses.put("fdfe:dcba:9876::1/126")
+            }
+            inbound.put("auto_route", true)
+            inbound.remove("route_address")
+            inbound.remove("route_exclude_address")
+        }
+        // TCP DoH uses the encrypted carrier; local DNS remains only for the
+        // existing explicit bypass domains. No UDP or direct remote resolver.
+        val dns = root.getJSONObject("dns")
+        dns.put("strategy", "ipv4_only")
+        val bypassRules = JSONArray()
+        val dnsRules = dns.getJSONArray("rules")
+        for (i in 0 until dnsRules.length()) {
+            val rule = dnsRules.getJSONObject(i)
+            if (rule.optString("server") == "local-dns") bypassRules.put(rule)
+        }
+        dns.put("rules", bypassRules)
+        dns.put("servers", JSONArray()
+            .put(JSONObject().put("type", "local").put("tag", "local-dns"))
+            .put(JSONObject().put("type", "https").put("tag", "remote-dns")
+                .put("server", "1.1.1.1").put("server_port", 443).put("path", "/dns-query")
+                .put("detour", OPENFLUX_OUTBOUND)))
+        dns.put("final", "remote-dns")
+        root.getJSONArray("outbounds").getJSONObject(0).put("domain_resolver", "local-dns")
+        root.getJSONArray("outbounds").getJSONObject(1).put("network", "tcp")
+        return root.toString()
+    }
+
+    private fun forLocalProxy(config: String, port: Int, username: String, password: String, outbound: String): String {
         require(port in 1..65535 && username.isNotBlank() && password.isNotBlank())
         val root = JSONObject(apply(config))
         root.put("outbounds", JSONArray()
             .put(JSONObject().put("type", "direct").put("tag", "direct"))
-            .put(JSONObject().put("type", "socks").put("tag", AWG_OUTBOUND)
+            .put(JSONObject().put("type", "socks").put("tag", outbound)
                 .put("server", "127.0.0.1").put("server_port", port).put("version", "5")
                 .put("username", username).put("password", password)))
         root.remove("endpoints")
@@ -84,11 +132,11 @@ object SplitTunnelProfile {
             val rule = original.getJSONObject(i)
             if (rule.optString("action") in listOf("sniff", "hijack-dns") || rule.optString("outbound") == "direct") rules.put(rule)
         }
-        route.put("rules", rules).put("final", AWG_OUTBOUND)
+        route.put("rules", rules).put("final", outbound)
         val servers = root.getJSONObject("dns").getJSONArray("servers")
         for (i in 0 until servers.length()) {
             val server = servers.getJSONObject(i)
-            if (server.optString("tag") != "local-dns") server.put("detour", AWG_OUTBOUND)
+            if (server.optString("tag") != "local-dns") server.put("detour", outbound)
         }
         return root.toString()
     }

@@ -64,13 +64,56 @@ internal object LocalSecretCipher {
         }.getOrElse { fallbackKey }
     }
 
-    private fun base64Encode(bytes: ByteArray): String =
-        runCatching { android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP) }
-            .getOrNull()
-            ?: java.util.Base64.getEncoder().encodeToString(bytes)
+    private fun base64Encode(bytes: ByteArray): String = LocalBase64.encode(bytes)
 
-    private fun base64Decode(encoded: String): ByteArray =
-        runCatching { android.util.Base64.decode(encoded, android.util.Base64.NO_WRAP) }
-            .getOrNull()
-            ?: java.util.Base64.getDecoder().decode(encoded)
+    private fun base64Decode(encoded: String): ByteArray = LocalBase64.decode(encoded)
+}
+
+/** RFC 4648 encoding shared by Android API 24 and host-JVM storage checks. */
+internal object LocalBase64 {
+    private const val STANDARD = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    private const val URL_SAFE = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+    fun encode(bytes: ByteArray): String = buildString((bytes.size + 2) / 3 * 4) {
+        var buffer = 0
+        var bits = 0
+        for (byte in bytes) {
+            buffer = (buffer shl 8) or (byte.toInt() and 255)
+            bits += 8
+            while (bits >= 6) {
+                bits -= 6
+                append(STANDARD[(buffer ushr bits) and 63])
+            }
+            buffer = buffer and ((1 shl bits) - 1)
+        }
+        if (bits > 0) append(STANDARD[buffer shl (6 - bits)])
+        while (length % 4 != 0) append('=')
+    }
+
+    fun decode(encoded: String, urlSafe: Boolean = false): ByteArray {
+        val body = encoded.trimEnd('=')
+        val padding = encoded.length - body.length
+        require(padding <= 2 && body.length % 4 != 1) { "Invalid Base64 length" }
+        require(padding == 0 || (encoded.length % 4 == 0 && padding == (4 - body.length % 4) % 4)) {
+            "Invalid Base64 padding"
+        }
+        val alphabet = if (urlSafe) URL_SAFE else STANDARD
+        val result = ByteArray(body.length * 6 / 8)
+        var position = 0
+        var buffer = 0
+        var bits = 0
+        for (character in body) {
+            val value = alphabet.indexOf(character)
+            require(value >= 0) { "Invalid Base64 character" }
+            buffer = (buffer shl 6) or value
+            bits += 6
+            if (bits >= 8) {
+                bits -= 8
+                result[position++] = (buffer ushr bits).toByte()
+                buffer = buffer and ((1 shl bits) - 1)
+            }
+        }
+        require(buffer == 0) { "Noncanonical Base64 padding bits" }
+        return result
+    }
 }

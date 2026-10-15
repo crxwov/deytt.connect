@@ -32,8 +32,12 @@ class SubscriptionStore internal constructor(private val directory: File) {
         }
     }
 
-    internal fun commitValidated(content: String, awgStore: AwgProfileStore, profiles: List<AwgProfile>) {
-        awgStore.saveWithCommit(profiles) { saveValidated(content) }
+    internal fun commitValidated(content: String, awgStore: AwgProfileStore, profiles: List<AwgProfile>,
+        commitOptional: () -> Unit = {}) {
+        awgStore.saveWithCommit(profiles) {
+            saveValidated(content)
+            commitOptional()
+        }
     }
 
     private fun readIfPresent(file: File): String? =

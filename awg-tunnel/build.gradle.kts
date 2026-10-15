@@ -24,7 +24,7 @@ val prepareDeyttAwgBackend by tasks.registering {
             exclude("org/amnezia/awg/util/RootShell.java")
             exclude("org/amnezia/awg/util/ToolsInstaller.java")
         }
-        val source = upstream.readText()
+        val source = upstream.readText().replace("\r\n", "\n")
         var patched = source
         patched = patched.replace(
             "import android.content.Context;\nimport android.content.Intent;\nimport android.os.Build;",
@@ -133,6 +133,7 @@ val prepareDeyttAwgBackendMakefile by tasks.registering {
     val upstreamMakefile = file("../third_party/amneziawg-android/tunnel/tools/libwg-go/Makefile")
     outputs.upToDateWhen { false }
     doLast {
+        if (System.getProperty("os.name").startsWith("Windows")) return@doLast
         check(upstreamMakefile.isFile) { "AmneziaWG Go backend Makefile is missing; initialize the vendored submodule" }
         val oldSymbol = "github.com/amnezia-vpn/amneziawg-go/ipc.socketDirectory"
         val newSymbol = "github.com/amnezia-vpn/amneziawg-go/v3/ipc.socketDirectory"
@@ -180,8 +181,27 @@ val prepareDeyttAwgBackendMakefile by tasks.registering {
     }
 }
 
+// The upstream Makefile requires a Unix host. Keep its BOOTTIME runtime patch
+// on Windows too, using a private SDK rather than modifying the installed Go.
+val windowsBuildHost = System.getProperty("os.name").startsWith("Windows")
+val windowsAwgSdk = layout.buildDirectory.dir("toolchain/go")
+val prepareWindowsAwgGo by tasks.registering {
+    onlyIf { windowsBuildHost }
+    val runtimePatch = file("../third_party/amneziawg-android/tunnel/tools/libwg-go/goruntime-boottime-over-monotonic.diff")
+    inputs.file(runtimePatch)
+    outputs.dir(windowsAwgSdk)
+    doLast {
+        project.exec {
+            commandLine("python", file("../scripts/prepare-awg-windows.py"),
+                "--go", providers.environmentVariable("DEYTT_AWG_GO").orNull ?: "go",
+                "--output", windowsAwgSdk.get().asFile, "--patch", runtimePatch)
+        }
+    }
+}
+
 tasks.matching { it.name.startsWith("configureCMake") || it.name.startsWith("buildCMake") }.configureEach {
     dependsOn(prepareDeyttAwgBackendMakefile)
+    dependsOn(prepareWindowsAwgGo)
 }
 
 // AGP's annotation extraction reads the generated source directly and must
@@ -207,6 +227,9 @@ android {
                     "-DANDROID_PACKAGE_NAME=space.deytt.connect",
                     "-DGRADLE_USER_HOME=${project.gradle.gradleUserHomeDir}",
                 )
+                if (windowsBuildHost) {
+                    arguments("-DDEYTT_GO_EXECUTABLE=${windowsAwgSdk.get().file("bin/go.exe").asFile.absolutePath}")
+                }
                 targets("libwg-go.so", "libdeytt-awg.so")
             }
         }

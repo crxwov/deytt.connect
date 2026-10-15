@@ -242,7 +242,7 @@ internal class PrimaryPages(private val host: MainActivity) {
     private fun routePage(): View {
         val config = SubscriptionStore(host).readCurrent()
         val profiles = AwgProfileStore(host).profiles()
-        val routes = config?.let { RouteCatalog.from(it, profiles) }.orEmpty()
+        val routes = config?.let { RouteCatalog.from(it, profiles, OpenFluxProfileStore(host).profiles(host)) }.orEmpty()
         val selectedId = SelectedRouteStore(host).read().id
         val root = host.screen(withBackdrop = true)
         root.addView(host.header("выходы · выбор · диагностика", "Маршруты"))
@@ -257,6 +257,11 @@ internal class PrimaryPages(private val host: MainActivity) {
         )
             .apply { setPadding(0, 0, 0, host.dp(18)) })
 
+        root.addView(host.button("Обновить подписку", secondary = true).apply {
+            setOnClickListener { host.openSetup() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(52)))
+        root.addView(spacer(20, host))
+
         root.addView(host.sectionLabel("быстрый выбор"))
         val quickGroup = routeGroup()
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { route ->
@@ -270,6 +275,13 @@ internal class PrimaryPages(private val host: MainActivity) {
                 "ROUTE_RU_DE",
                 "выбрать",
                 selectedId == route.id,
+            ).apply { setOnClickListener { host.selectRoute(route) } })
+        }
+        routes.firstOrNull { it.protocol == RouteProtocol.OPENFLUX }?.let { route ->
+            appendToGroup(quickGroup, host.row(
+                copy("Обход · Германия", "Bypass · Germany"),
+                copy("Через cups · выбрать вручную", "Via cups · select manually"),
+                route.flag, "выбрать", selectedId == route.id,
             ).apply { setOnClickListener { host.selectRoute(route) } })
         }
         if (quickGroup.childCount > 0) root.addView(quickGroup)
@@ -291,6 +303,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 when (route.engine) {
                     TunnelEngine.LIBBOX -> route.protocol.title
                     TunnelEngine.AMNEZIAWG -> route.protocol.title
+                    TunnelEngine.OPENFLUX -> route.protocol.title
                 }
             }.distinct().joinToString(" · ")
             val detail = routeGroup().apply { visibility = View.GONE }
@@ -419,6 +432,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         RouteProtocol.TROJAN -> "◇"
         RouteProtocol.HYSTERIA2 -> "H2"
         RouteProtocol.RU_DE -> "RU→DE"
+        RouteProtocol.OPENFLUX -> "DE"
         else -> "·"
     }
 
@@ -453,6 +467,11 @@ internal class PrimaryPages(private val host: MainActivity) {
         val token = TelegramSessionStore.read(host)
         country.speedCheckEnabled = !token.isNullOrBlank()
         country.rows.values.forEach { row ->
+            if (row.route.engine == TunnelEngine.OPENFLUX) {
+                row.progress.setLoading(false)
+                row.status.text = copy("Проверка после подключения", "Measure after connecting")
+                return@forEach
+            }
             row.status.text = copy("Пинг: —", "Ping: —")
             row.status.setTextColor(DeyttUi.SKY)
             row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
@@ -1329,6 +1348,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                                     val routes = RouteCatalog.from(
                                         SubscriptionStore(host).readCurrent().orEmpty(),
                                         AwgProfileStore(host).profiles(),
+                                        OpenFluxProfileStore(host).profiles(host),
                                     )
                                     if (routes.none { it.id == currentRouteId }) {
                                         routes.firstOrNull()?.let { SelectedRouteStore(host).save(it) }

@@ -173,7 +173,7 @@ class SetupActivity : Activity() {
                     }
                     val routes = runCatching {
                         val config = SubscriptionStore(this).readCurrent() ?: throw SubscriptionStorageException()
-                        RouteCatalog.from(config, AwgProfileStore(this@SetupActivity).profiles())
+                        RouteCatalog.from(config, AwgProfileStore(this@SetupActivity).profiles(), OpenFluxProfileStore(this@SetupActivity).profiles(this@SetupActivity))
                     }.getOrElse {
                         loadingStage = "save"
                         showLoadFailure(SubscriptionStorageException())

@@ -17,8 +17,8 @@ android {
         targetSdk = 35
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        } else 38
-        versionName = "0.8.25"
+        } else 60
+        versionName = "0.11.0"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }
@@ -66,6 +66,7 @@ dependencies {
     // GPL-3.0-or-later shared sing-box engine, pinned for reproducible builds.
     implementation("com.github.singbox-android:libbox:1.14.1")
     implementation(project(":awg-tunnel"))
+    implementation(project(":openflux-tunnel"))
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.viewpager2:viewpager2:1.1.0")
     testImplementation("junit:junit:4.13.2")

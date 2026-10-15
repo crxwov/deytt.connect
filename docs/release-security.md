@@ -15,22 +15,20 @@ access. The VPN services require Android's `BIND_VPN_SERVICE` permission and
 foreground notifications. Imported subscription links require a tap before
 network requests or replacement of an active configuration.
 
-Only AmneziaWG's userspace engines (`libwg-go.so` and `libdeytt-awg.so`) are
-packaged. The unused privileged `wg` / `wg-quick` tools and Java root-shell
-backend are excluded; their removal is not evidence they caused antivirus alerts.
+AmneziaWG's userspace engines (`libwg-go.so`, `libdeytt-awg.so`) and the protected
+OpenFlux engine (`libopenflux_jni.so`) are packaged. The unused privileged `wg` /
+`wg-quick` tools and Java root-shell backend are excluded.
 
 ## Signing identity and migration
 
-`release/signing-policy.json` records the expected public certificate SHA-256.
-The historical `release/signing-lineage.bin` proves a previous rotation but
-cannot authorize the new identity. The historical `0.8.18-preview.1` release
-introduced the new signer on API 24 and newer because the previous private key
-was lost. Android rejects this signer over APKs signed with the old identity.
-That release's APK assets use `manual-reinstall` names, which the in-app updater
-does not select. Users moving from the old identity must uninstall the old app
-and then install the matching APK; Android may erase local settings and
-credentials. Keep access to the account needed to sign in and restore its
-server-backed subscription.
+`release/signing-policy.json` records the current standard family's certificate
+fingerprints. Standard APKs carry the previous standard signer on API 24–27 and
+its successor on API 28+, with `release/signing-lineage.bin` proving rotation.
+Separate legacy APKs use the historical legacy signer on API 24–27 and the same
+successor on API 28+, with `release/signing-lineage-legacy.bin`. Keep these two
+families separate: an old Android installation needs the family matching its
+installed certificate. Do not require an uninstall for an update that can retain
+the existing identity and data. Verify a signed update on the connected phone.
 
 Future updates are compatible only while the new private key is preserved and
 used for every APK. Private keystores and password files must stay outside the
@@ -49,18 +47,28 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
 
 python3 scripts/release.py sign \
   app/build/outputs/apk/release/app-arm64-v8a-release-unsigned.apk \
-  --output output/release/deytt-connect-0.8.25-manual-reinstall-arm64-v8a.apk \
+  --output output/release/deytt-connect-0.11.0-arm64-v8a.apk \
   --keystore /secure/signing/release.p12 \
-  --password-file /secure/signing/release.password
+  --password-file /secure/signing/release.password \
+  --legacy-keystore /secure/signing/previous-standard.p12 \
+  --legacy-key-alias deytt-connect \
+  --legacy-password-env DEYTT_LEGACY_PASSWORD \
+  --expected-version 0.11.0 --expected-version-code 60
 
-python3 scripts/release.py verify output/release/deytt-connect-0.8.25-manual-reinstall-arm64-v8a.apk
+python3 scripts/release.py verify output/release/deytt-connect-0.11.0-arm64-v8a.apk
 ```
 
 The release script refuses
 debuggable APKs, unexpected package identities, SDK levels, permissions, legacy
-root tools, missing AWG engines, bad alignment, and mismatching certificates.
+root tools, missing AWG/OpenFlux engines, bad alignment, and mismatching certificates.
 It verifies both API 24–27 and API 28+ signatures and writes a SHA-256 sidecar.
 `--qa` only permits the isolated `.qa` package; it is not a distribution APK.
+For the legacy family also supply its key alias, lineage file and expected
+legacy certificate explicitly; the default policy remains the standard family.
+Publish ABI-specific APKs, their SHA-256 sidecars and corresponding source.
+Windows builds can use `scripts/prepare-awg-windows.py` to prepare the pinned,
+patched Go SDK without modifying a shared Go installation. See
+[`openflux-tunnel/README.md`](../openflux-tunnel/README.md) for OpenFlux prerequisites.
 
 Gradle checks the wrapper ZIP against the official distribution SHA-256.
 Dependency verification locks the baseline Maven artifact/metadata SHA-256

@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.core.content.edit
 import org.json.JSONObject
 
-enum class TunnelEngine { LIBBOX, AMNEZIAWG }
+enum class TunnelEngine { LIBBOX, AMNEZIAWG, OPENFLUX }
 
 enum class RouteProtocol(val title: String, val detail: String) {
     AUTO("автоподбор", "приложение выберет лучший доступный маршрут"),
@@ -14,6 +14,7 @@ enum class RouteProtocol(val title: String, val detail: String) {
     HYSTERIA2("hysteria 2", "быстрый quic-маршрут"),
     AWG15("amneziawg 1.5", "маскировка трафика"),
     AWG31("amneziawg 3.1", "новая маскировка трафика"),
+    OPENFLUX("обход · германия", "через cups → германию"),
 }
 
 data class DeyttRoute(
@@ -87,7 +88,7 @@ object RouteCatalog {
         return awgCountries[mark]?.let { mark to it }
     }
 
-    fun from(config: String, awgProfiles: List<AwgProfile>): List<DeyttRoute> {
+    fun from(config: String, awgProfiles: List<AwgProfile>, openFluxProfiles: List<OpenFluxProfile> = emptyList()): List<DeyttRoute> {
         val automaticTag = autoTag(config)
         require(automaticTag.isNotBlank()) { "В подписке отсутствует автоподбор" }
         val routes = mutableListOf(
@@ -127,6 +128,11 @@ object RouteCatalog {
                 TunnelEngine.AMNEZIAWG,
                 profileName = profile.label,
             )
+        }
+        for (profile in openFluxProfiles.filter { it.isCurrent(System.currentTimeMillis() / 1000) }) {
+            val presentation = countries[profile.country] ?: continue
+            routes += DeyttRoute(profile.id, profile.country, presentation.second, presentation.first,
+                RouteProtocol.OPENFLUX, TunnelEngine.OPENFLUX, profileName = profile.label)
         }
         return routes
     }

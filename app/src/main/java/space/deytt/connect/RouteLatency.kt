@@ -13,6 +13,7 @@ object RouteLatency {
     private val pingTime = Regex("time[=<]([0-9.]+)\\s*ms", RegexOption.IGNORE_CASE)
     fun target(config: String, route: DeyttRoute, awgConfig: String? = null): LatencyTarget? {
         if (route.engine == TunnelEngine.AMNEZIAWG) return awgConfig?.let(::awgTarget)
+        if (route.engine == TunnelEngine.OPENFLUX) return null
         val outbounds = JSONObject(config).optJSONArray("outbounds") ?: return null
         val byTag = buildMap<String, JSONObject> {
             for (index in 0 until outbounds.length()) {
