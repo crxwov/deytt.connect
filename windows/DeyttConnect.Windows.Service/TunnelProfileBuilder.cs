@@ -116,6 +116,8 @@ internal static class TunnelProfileBuilder
             if (node is not JsonObject outbound || ReadString(outbound, "tag") is not { Length: > 0 } tag ||
                 !tags.Add(tag))
                 throw new InvalidDataException("Subscription has invalid outbound tags.");
+
+            SanitizeHysteriaOutbound(outbound);
         }
 
         var usedTags = new HashSet<string>(tags, StringComparer.Ordinal);
@@ -540,6 +542,43 @@ internal static class TunnelProfileBuilder
         foreach (var value in values.Order(StringComparer.OrdinalIgnoreCase))
             array.Add(value);
         return array;
+    }
+
+    private static void SanitizeHysteriaOutbound(JsonObject outbound)
+    {
+        if (outbound["server_ports"] is not JsonArray serverPorts)
+            return;
+
+        var hasServerPort = outbound["server_port"]?.GetValue<int>() is > 0;
+        if (hasServerPort)
+        {
+            outbound.Remove("server_ports");
+            outbound.Remove("hop_interval");
+            outbound.Remove("hop_interval_max");
+            return;
+        }
+
+        var validRanges = new JsonArray();
+        foreach (var item in serverPorts)
+        {
+            var str = item?.GetValue<string>()?.Trim();
+            if (string.IsNullOrEmpty(str)) continue;
+            if (str.All(char.IsDigit))
+                validRanges.Add($"{str}:{str}");
+            else if (str.Contains(':') || str.Contains('-'))
+                validRanges.Add(str.Replace('-', ':'));
+        }
+
+        if (validRanges.Count > 0)
+        {
+            outbound["server_ports"] = validRanges;
+        }
+        else
+        {
+            outbound.Remove("server_ports");
+            outbound.Remove("hop_interval");
+            outbound.Remove("hop_interval_max");
+        }
     }
 
     private static string? ReadString(JsonObject source, string name) =>
