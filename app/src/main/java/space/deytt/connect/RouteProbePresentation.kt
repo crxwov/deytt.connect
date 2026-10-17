@@ -44,6 +44,12 @@ internal object RouteProbePresentation {
                 if (english) "server address could not be resolved" else "не удалось найти сервер"
             causes.any { it is IOException } || message.contains("http", ignoreCase = true) ->
                 if (english) "no response from server" else "нет ответа от сервера"
+            message.contains("не ответил", ignoreCase = true) ||
+                message.contains("did not respond", ignoreCase = true) ->
+                if (english) "route did not respond" else "маршрут не ответил"
+            message.contains("не удалось запустить", ignoreCase = true) ||
+                message.contains("сбой запуска", ignoreCase = true) ->
+                if (english) "failed to start probe" else "сбой запуска проверки"
             else -> if (english) "speed unavailable" else "скорость недоступна"
         }
     }
