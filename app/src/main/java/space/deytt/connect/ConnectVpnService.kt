@@ -8,11 +8,13 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.util.Log
 import io.nekohasekai.libbox.BridgeOptions
 import io.nekohasekai.libbox.BridgeSession
@@ -120,7 +122,50 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     private var notificationText = "Запуск deytt./connect"
     private val operation = AtomicLong(0)
     @Volatile private var probeWorkers: ExecutorService? = null
-    private val networkBridge by lazy { AndroidNetworkBridge(this) }
+    private var wakeLock: PowerManager.WakeLock? = null
+    private val networkBridge by lazy {
+        AndroidNetworkBridge(this) { network ->
+            applyUnderlyingNetworks(network)
+        }
+    }
+
+    private fun applyUnderlyingNetworks(network: Network?) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                setUnderlyingNetworks(if (network != null) arrayOf(network) else null)
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to apply underlying network", e)
+        }
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            if (wakeLock == null) {
+                val pm = getSystemService(POWER_SERVICE) as? PowerManager
+                wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "deytt:vpn_connection")?.apply {
+                    setReferenceCounted(false)
+                }
+            }
+            wakeLock?.let {
+                if (!it.isHeld) it.acquire()
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to acquire wake lock", e)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let {
+                if (it.isHeld) it.release()
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to release wake lock", e)
+        } finally {
+            wakeLock = null
+        }
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_RESTORE_NOTIFICATION) {
@@ -166,6 +211,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         if (!started) {
             started = true
             runtimeRunning = true
+            acquireWakeLock()
             val operationId = operation.incrementAndGet()
             try {
                 startForegroundCompat("Запуск deytt./connect")
@@ -961,6 +1007,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         tunnel = null
         started = false
         runtimeRunning = false
+        releaseWakeLock()
         stopForegroundCompat()
         stopSelf()
     }
@@ -971,6 +1018,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         activeCanary = null
         if (!started && commandServer == null && tunnel == null && awgProxy == null && openFluxProxy == null) {
             runtimeRunning = false
+            releaseWakeLock()
             stopForeground(STOP_FOREGROUND_REMOVE)
             if (VpnStateStore(this).read().phase != VpnPhase.ERROR)
                 VpnStateStore(this).write(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
@@ -994,6 +1042,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         tunnel = null
         started = false
         runtimeRunning = false
+        releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         if (VpnStateStore(this).read().phase != VpnPhase.ERROR) {
             publishStatus(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
@@ -1241,6 +1290,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
         tunnel?.close()
         tunnel = builder.establish() ?: error("Android не выдал TUN-интерфейс")
+        applyUnderlyingNetworks(networkBridge.currentNetwork)
         return tunnel!!.fd
     }
 
