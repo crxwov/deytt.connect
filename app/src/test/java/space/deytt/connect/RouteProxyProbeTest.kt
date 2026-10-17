@@ -80,6 +80,8 @@ class RouteProxyProbeTest {
         )))
         val servers = result.getJSONObject("dns").getJSONArray("servers")
         repeat(servers.length()) { assertFalse(servers.getJSONObject(it).has("detour")) }
+        assertEquals("local-dns", result.getJSONObject("dns").getString("final"))
+        assertEquals(0, result.getJSONObject("dns").getJSONArray("rules").length())
         assertEquals("route:DE:VLESS", source.getJSONObject("dns").getJSONArray("servers").getJSONObject(1).getString("detour"))
     }
 

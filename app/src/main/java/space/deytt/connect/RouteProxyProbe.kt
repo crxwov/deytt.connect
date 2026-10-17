@@ -154,11 +154,22 @@ object RouteProxyProbe {
         routing.put("rules", rules).put("final", sessions.keys.first())
         // Resolve test and endpoint names on the underlying network. Otherwise
         // one failed selected route's DNS detour would fail every candidate.
-        val dnsServers = root.optJSONObject("dns")?.optJSONArray("servers")
-        repeat(dnsServers?.length() ?: 0) { index ->
-            // A direct outbound has no dialer options: libbox 1.14 rejects it
-            // as a DNS detour. Omitting detour selects the direct dialer.
-            dnsServers!!.optJSONObject(index)?.remove("detour")
+        val dns = root.optJSONObject("dns")
+        if (dns != null) {
+            val dnsServers = dns.optJSONArray("servers") ?: JSONArray().also { dns.put("servers", it) }
+            var hasLocalDns = false
+            repeat(dnsServers.length()) { index ->
+                val server = dnsServers.optJSONObject(index) ?: return@repeat
+                server.remove("detour")
+                if (server.optString("tag") == "local-dns") {
+                    hasLocalDns = true
+                }
+            }
+            if (!hasLocalDns) {
+                dnsServers.put(JSONObject().put("type", "local").put("tag", "local-dns"))
+            }
+            dns.put("rules", JSONArray())
+            dns.put("final", "local-dns")
         }
         return root.toString()
     }
