@@ -144,4 +144,38 @@ public sealed class TunnelProfileBuilderTests
         Assert.Throws<InvalidDataException>(() =>
             TunnelProfileBuilder.Build(withCertPath.ToJsonString(), "route:DE:VLESS"));
     }
+
+    [Fact]
+    public void BuildEnforcesIpv6LeakProtectionAndIpv4OnlyDnsStrategy()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:DE:VLESS"), "route:DE:VLESS"))!;
+        var inbounds = runtime["inbounds"]!.AsArray();
+        var tun = Assert.Single(inbounds)!.AsObject();
+
+        var addresses = tun["address"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Contains("172.19.0.1/30", addresses);
+        Assert.Contains("fdfe:dcba:9876::1/126", addresses);
+
+        Assert.Equal("mixed", tun["stack"]!.GetValue<string>());
+        Assert.True(tun["strict_route"]!.GetValue<bool>());
+
+        var dns = runtime["dns"]!.AsObject();
+        Assert.Equal("ipv4_only", dns["strategy"]!.GetValue<string>());
+
+        var rules = runtime["route"]!["rules"]!.AsArray();
+        var ipv6RejectRule = rules.OfType<JsonObject>().FirstOrDefault(r => r["ip_version"]?.GetValue<int>() == 6);
+        Assert.NotNull(ipv6RejectRule);
+        Assert.Equal("reject", ipv6RejectRule["action"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void GetTunAddressesReturnsBothIpv4AndIpv6Addresses()
+    {
+        var runtime = TunnelProfileBuilder.Build(Profile("route:DE:VLESS"), "route:DE:VLESS");
+        var addresses = TunnelProfileBuilder.GetTunAddresses(runtime);
+
+        Assert.Equal(2, addresses.Count);
+        Assert.Equal("172.19.0.1/30", addresses[0]);
+        Assert.Equal("fdfe:dcba:9876::1/126", addresses[1]);
+    }
 }

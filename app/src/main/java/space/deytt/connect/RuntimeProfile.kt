@@ -1,5 +1,6 @@
 package space.deytt.connect
 
+import org.json.JSONArray
 import org.json.JSONObject
 
 /** Adds Android-only paths without persisting device-specific data in the subscription. */
@@ -26,7 +27,20 @@ object RuntimeProfile {
             ?: throw IllegalArgumentException("В профиле отсутствуют входящие подключения")
         for (index in 0 until inbounds.length()) {
             val inbound = inbounds.optJSONObject(index) ?: continue
-            if (inbound.optString("type") == "tun") inbound.put("dns_mode", "hijack")
+            if (inbound.optString("type") == "tun") {
+                inbound.put("dns_mode", "hijack")
+                val addresses = inbound.optJSONArray("address")
+                    ?: JSONArray().also { inbound.put("address", it) }
+                val hasIpv6 = (0 until addresses.length()).any {
+                    addresses.optString(it).contains(':')
+                }
+                if (!hasIpv6) {
+                    addresses.put("fdfe:dcba:9876::1/126")
+                }
+                inbound.put("auto_route", true)
+                inbound.put("strict_route", true)
+                inbound.put("stack", "mixed")
+            }
         }
 
         sanitizeOutbounds(root.optJSONArray("outbounds"))
@@ -34,6 +48,7 @@ object RuntimeProfile {
 
         val dns = root.optJSONObject("dns")
             ?: throw IllegalArgumentException("В профиле отсутствуют настройки DNS")
+        dns.put("strategy", "ipv4_only")
         val servers = dns.optJSONArray("servers")
             ?: throw IllegalArgumentException("В профиле отсутствуют DNS-серверы")
         var bootstrapFound = false
@@ -60,6 +75,30 @@ object RuntimeProfile {
         route.put("default_domain_resolver", if (route.optString("final") == SplitTunnelProfile.OPENFLUX_OUTBOUND) {
             "remote-dns"
         } else "local-dns")
+
+        val rules = route.optJSONArray("rules") ?: JSONArray().also { route.put("rules", it) }
+        val hasIpv6Reject = (0 until rules.length()).any { index ->
+            val rule = rules.optJSONObject(index)
+            rule != null && rule.optInt("ip_version") == 6 && rule.optString("action") == "reject"
+        }
+        if (!hasIpv6Reject) {
+            val mergedRules = JSONArray()
+            var inserted = false
+            val rejectRule = JSONObject().put("ip_version", 6).put("action", "reject")
+            for (index in 0 until rules.length()) {
+                val rule = rules.optJSONObject(index) ?: continue
+                if (!inserted && rule.optString("action") !in listOf("sniff", "hijack-dns")) {
+                    mergedRules.put(rejectRule)
+                    inserted = true
+                }
+                mergedRules.put(rule)
+            }
+            if (!inserted) {
+                mergedRules.put(rejectRule)
+            }
+            route.put("rules", mergedRules)
+        }
+
         return root.toString()
     }
 

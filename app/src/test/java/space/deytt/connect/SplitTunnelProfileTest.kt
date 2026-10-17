@@ -37,6 +37,30 @@ class SplitTunnelProfileTest {
         assertEquals("cp.cloudflare.com", rules.getJSONObject(3).getJSONArray("domain").getString(0))
     }
 
+    @Test fun applyEnforcesIpv6ProtectionMixedStackAndIpv4OnlyDns() {
+        val root = JSONObject(SplitTunnelProfile.apply(config))
+        val inbounds = root.getJSONArray("inbounds")
+        val tun = inbounds.getJSONObject(0)
+        assertEquals("mixed", tun.getString("stack"))
+        assertTrue(tun.getBoolean("strict_route"))
+        val addresses = (0 until tun.getJSONArray("address").length()).map { tun.getJSONArray("address").getString(it) }
+        assertTrue(addresses.contains("172.19.0.1/30"))
+        assertTrue(addresses.contains("fdfe:dcba:9876::1/126"))
+
+        assertEquals("ipv4_only", root.getJSONObject("dns").getString("strategy"))
+
+        val rules = root.getJSONObject("route").getJSONArray("rules")
+        var foundReject = false
+        for (i in 0 until rules.length()) {
+            val rule = rules.getJSONObject(i)
+            if (rule.optInt("ip_version") == 6 && rule.optString("action") == "reject") {
+                foundReject = true
+                break
+            }
+        }
+        assertTrue(foundReject)
+    }
+
     @Test fun awgUsesSameExceptionsAndNoOtherVpnTransport() {
         val root = JSONObject(SplitTunnelProfile.forAwg(config, 23456, "random-user", "random-password"))
         val outbounds = root.getJSONArray("outbounds")

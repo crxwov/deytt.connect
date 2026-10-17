@@ -37,9 +37,16 @@ object SplitTunnelProfile {
                 for (i in 0 until values.length()) exact += values.getString(i)
             }
         }
+        val hasIpv6Reject = (0 until rules.length()).any { index ->
+            val rule = rules.optJSONObject(index)
+            rule != null && rule.optInt("ip_version") == 6 && rule.optString("action") == "reject"
+        }
         val added = JSONArray()
             .put(JSONObject().put("domain_suffix", JSONArray(suffixes)).put("outbound", "direct"))
             .put(JSONObject().put("domain", JSONArray(exact)).put("outbound", "direct"))
+        if (!hasIpv6Reject) {
+            added.put(JSONObject().put("ip_version", 6).put("action", "reject"))
+        }
         // DNS/sniff actions must still run before any final routing decision.
         val merged = JSONArray()
         var inserted = false
@@ -53,7 +60,28 @@ object SplitTunnelProfile {
         }
         if (!inserted) for (i in 0 until added.length()) merged.put(added.getJSONObject(i))
         route.put("rules", merged)
+
+        val inbounds = root.optJSONArray("inbounds")
+        if (inbounds != null) {
+            for (index in 0 until inbounds.length()) {
+                val inbound = inbounds.optJSONObject(index) ?: continue
+                if (inbound.optString("type") == "tun") {
+                    val addresses = inbound.optJSONArray("address") ?: JSONArray().also { inbound.put("address", it) }
+                    val hasIpv6 = (0 until addresses.length()).any {
+                        addresses.optString(it).contains(':')
+                    }
+                    if (!hasIpv6) {
+                        addresses.put("fdfe:dcba:9876::1/126")
+                    }
+                    inbound.put("auto_route", true)
+                    inbound.put("strict_route", true)
+                    inbound.put("stack", "mixed")
+                }
+            }
+        }
+
         val dns = root.getJSONObject("dns")
+        dns.put("strategy", "ipv4_only")
         val dnsRules = JSONArray()
             .put(JSONObject().put("domain_suffix", JSONArray(suffixes)).put("action", "route").put("server", "local-dns"))
             .put(JSONObject().put("domain", JSONArray(exact)).put("action", "route").put("server", "local-dns"))

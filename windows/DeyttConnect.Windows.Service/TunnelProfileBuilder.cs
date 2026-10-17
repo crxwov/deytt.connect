@@ -104,8 +104,14 @@ internal static class TunnelProfileBuilder
         var tun = (JsonObject)tunInbound.DeepClone();
         // The shared profile includes an Android-only field that this engine rejects.
         tun.Remove("dns_mode");
+        if (tun["address"] is JsonArray addresses &&
+            !addresses.Any(node => node is JsonValue val && val.TryGetValue<string>(out var text) && text.Contains(':')))
+        {
+            addresses.Add("fdfe:dcba:9876::1/126");
+        }
         tun["auto_route"] = true;
-        tun["strict_route"] = upstreamInterface is null;
+        tun["strict_route"] = true;
+        tun["stack"] = "mixed";
         root["inbounds"] = new JsonArray(tun);
 
         var outboundArray = root["outbounds"] as JsonArray
@@ -361,6 +367,11 @@ internal static class TunnelProfileBuilder
             AddDomains(rule["domain"] as JsonArray, exact, removeLeadingDot: false);
         }
 
+        var ipv6Reject = new JsonObject
+        {
+            ["ip_version"] = 6,
+            ["action"] = "reject",
+        };
         var bypassRules = new JsonArray
         {
             new JsonObject { ["domain_suffix"] = ToJsonArray(suffixes), ["outbound"] = "direct" },
@@ -368,11 +379,14 @@ internal static class TunnelProfileBuilder
         };
         var merged = new JsonArray();
         var inserted = false;
+        var hasIpv6Rule = routeRules.OfType<JsonObject>().Any(r => r["ip_version"]?.GetValue<int>() == 6);
         foreach (var rule in routeRules)
         {
             if (!inserted && rule is JsonObject obj &&
                 ReadString(obj, "action") is not ("sniff" or "hijack-dns"))
             {
+                if (!hasIpv6Rule)
+                    merged.Add(ipv6Reject.DeepClone());
                 foreach (var bypass in bypassRules)
                     merged.Add(bypass?.DeepClone());
                 inserted = true;
@@ -380,12 +394,17 @@ internal static class TunnelProfileBuilder
             merged.Add(rule?.DeepClone());
         }
         if (!inserted)
+        {
+            if (!hasIpv6Rule)
+                merged.Add(ipv6Reject.DeepClone());
             foreach (var bypass in bypassRules)
                 merged.Add(bypass?.DeepClone());
+        }
         route["rules"] = merged;
 
         var dns = root["dns"] as JsonObject
                   ?? throw new InvalidDataException("Subscription has no DNS policy.");
+        dns["strategy"] = "ipv4_only";
         var dnsRules = new JsonArray
         {
             new JsonObject
