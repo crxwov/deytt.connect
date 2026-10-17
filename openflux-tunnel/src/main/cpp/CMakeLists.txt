@@ -2,7 +2,11 @@ cmake_minimum_required(VERSION 3.22.1)
 project("DeyttOpenFlux")
 
 set(OPENFLUX_GO_OUTPUT "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}/libopenflux_jni.so")
-if(EXISTS "${OPENFLUX_GO_OUTPUT}")
+set(OPENFLUX_PRECOMPILED "${CMAKE_CURRENT_SOURCE_DIR}/../../../../app/src/main/jniLibs/${ANDROID_ABI}/libopenflux_jni.so")
+if(EXISTS "${OPENFLUX_PRECOMPILED}")
+    configure_file("${OPENFLUX_PRECOMPILED}" "${OPENFLUX_GO_OUTPUT}" COPYONLY)
+    add_custom_target(libopenflux_jni.so)
+elseif(EXISTS "${OPENFLUX_GO_OUTPUT}")
     add_custom_target(libopenflux_jni.so)
 else()
     if(NOT OPENFLUX_GO_EXECUTABLE OR OPENFLUX_GO_EXECUTABLE STREQUAL "go")
@@ -23,9 +27,20 @@ else()
     endif()
     set(OPENFLUX_GO_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../go")
     set(OPENFLUX_CORE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/openflux-core")
+    set(DEYTT_GOTMP "${CMAKE_BINARY_DIR}/gotmp")
+    set(DEYTT_GOCACHE "${CMAKE_BINARY_DIR}/gocache")
+    set(DEYTT_GOPATH "${CMAKE_BINARY_DIR}/gopath")
+    file(MAKE_DIRECTORY "${DEYTT_GOTMP}")
+    file(MAKE_DIRECTORY "${DEYTT_GOCACHE}")
+    file(MAKE_DIRECTORY "${DEYTT_GOPATH}")
     file(GLOB_RECURSE OPENFLUX_GO_INPUTS CONFIGURE_DEPENDS "${OPENFLUX_GO_SOURCE}/*.go" "${OPENFLUX_GO_SOURCE}/*.c" "${OPENFLUX_GO_SOURCE}/*.h" "${OPENFLUX_CORE}/*.go")
     add_custom_command(OUTPUT "${OPENFLUX_GO_OUTPUT}"
         COMMAND "${CMAKE_COMMAND}" -E env
+            "TMP=${DEYTT_GOTMP}"
+            "TEMP=${DEYTT_GOTMP}"
+            "GOTMPDIR=${DEYTT_GOTMP}"
+            "GOCACHE=${DEYTT_GOCACHE}"
+            "GOPATH=${DEYTT_GOPATH}"
             GOOS=android "GOARCH=${OPENFLUX_GO_ARCH}" GOARM=7 CGO_ENABLED=1 GOTOOLCHAIN=local
             "CC=${CMAKE_C_COMPILER}"
             "CGO_CFLAGS=--target=${CMAKE_C_COMPILER_TARGET} --sysroot=${CMAKE_SYSROOT}"
