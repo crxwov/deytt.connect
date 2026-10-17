@@ -22,7 +22,10 @@ import java.util.concurrent.ConcurrentHashMap
 import io.nekohasekai.libbox.NetworkInterface as LibboxNetworkInterface
 
 /** Android network services required by libbox's local DNS and auto-detection. */
-internal class AndroidNetworkBridge(context: Context) {
+internal class AndroidNetworkBridge(
+    context: Context,
+    private val onUnderlyingNetworkChanged: ((Network?) -> Unit)? = null,
+) {
     companion object {
         private const val TAG = "deytt-network"
         private const val RCODE_NXDOMAIN = 3
@@ -31,7 +34,8 @@ internal class AndroidNetworkBridge(context: Context) {
     private val connectivity = context.getSystemService(ConnectivityManager::class.java)
     private val callbacks = ConcurrentHashMap<InterfaceUpdateListener, ConnectivityManager.NetworkCallback>()
     @Volatile
-    private var currentNetwork: Network? = null
+    private var _currentNetwork: Network? = null
+    val currentNetwork: Network? get() = _currentNetwork ?: runCatching { underlyingNetwork() }.getOrNull()
 
     private val localResolver = object : LocalDNSTransport {
         override fun raw(): Boolean = false
@@ -118,15 +122,19 @@ internal class AndroidNetworkBridge(context: Context) {
         if (callbacks.containsKey(listener)) return
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
-                currentNetwork = network
+                _currentNetwork = network
+                onUnderlyingNetworkChanged?.invoke(network)
                 publishDefaultInterface(listener, network)
             }
             override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                currentNetwork = network
+                _currentNetwork = network
+                onUnderlyingNetworkChanged?.invoke(network)
                 publishDefaultInterface(listener, network)
             }
             override fun onLost(network: Network) {
-                if (currentNetwork == network) currentNetwork = null
+                if (_currentNetwork == network) _currentNetwork = null
+                val fallback = runCatching { underlyingNetwork() }.getOrNull()
+                onUnderlyingNetworkChanged?.invoke(fallback)
                 runCatching { publishDefaultInterface(listener, underlyingNetwork()) }
                     .onFailure { listener.updateDefaultInterface("", -1, false, false) }
             }
