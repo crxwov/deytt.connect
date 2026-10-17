@@ -22,3 +22,4 @@ output/
 windows/**/bin/
 windows/**/obj/
 windows/artifacts/
+app/src/main/jniLibs/

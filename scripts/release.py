@@ -52,6 +52,7 @@ def inspect_apk(apk, qa=False, expected_version=None, expected_version_code=None
         "android.permission.CHANGE_NETWORK_STATE", "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED",
         "android.permission.POST_NOTIFICATIONS", "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.WAKE_LOCK",
         package + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
     }
     permissions = set(re.findall(r"^uses-permission: name='([^']+)'", badging, re.M))

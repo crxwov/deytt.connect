@@ -120,7 +120,31 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     private var started = false
     private var routeProbeOnly = false
     private var notificationText = "Запуск deytt./connect"
+    private var lastActiveAutoRoute: ActiveRouteSelection? = null
     private val operation = AtomicLong(0)
+
+    private fun formatConnectedNotificationText(autoRoute: ActiveRouteSelection? = lastActiveAutoRoute): String {
+        val selected = SelectedRouteStore(this).read()
+        return if (selected.id == "auto" || selected.protocol == RouteProtocol.AUTO) {
+            val route = autoRoute ?: lastActiveAutoRoute
+            if (route != null) {
+                val flag = RouteCatalog.flag(route.exitCountry)
+                val country = route.routeKey.lowercase()
+                "$flag ./auto $country"
+            } else {
+                "✦ ./auto"
+            }
+        } else {
+            val flag = selected.flag.ifBlank { RouteCatalog.flag(selected.countryCode) }
+            val country = selected.countryCode.lowercase()
+            val protocol = selected.protocol.bypassNotificationLabel
+            if (country.isNotBlank()) {
+                "$flag ./$country $protocol"
+            } else {
+                "$flag ./$protocol"
+            }
+        }
+    }
     @Volatile private var probeWorkers: ExecutorService? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val networkBridge by lazy {
@@ -632,7 +656,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                     check(it.isConnected() && it.bytesSent() > 0 && it.bytesReceived() > 0) { "Маршрут обхода не передаёт трафик" }
                     Log.i(TAG, "OpenFlux carrier verified sent=${it.bytesSent()} received=${it.bytesReceived()}")
                 }
-                updateNotification("Подключено")
+                updateNotification(formatConnectedNotificationText())
                 publishStatus(VpnPhase.CONNECTED, "Подключено")
                 if (openFluxProfile != null) {
                     openFluxMonitor = openFluxExecutor.submit {
@@ -748,7 +772,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                             recovery.confirmed()
                             recovering = false
                             publishStatus(VpnPhase.CONNECTED, "Подключено")
-                            updateNotification("Подключено")
+                            updateNotification(formatConnectedNotificationText())
                             Log.i(TAG, "OpenFlux carrier recovered; HTTPS verified")
                         }
                     }
@@ -831,6 +855,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     private fun publishActiveAutoRoute(route: ActiveRouteSelection?) {
+        lastActiveAutoRoute = route
         val preferences = getSharedPreferences(STATE_PREFS, MODE_PRIVATE).edit()
         if (route == null) {
             preferences.remove(EXTRA_ACTIVE_ROUTE_KEY).remove(EXTRA_ACTIVE_EXIT_COUNTRY)
@@ -844,6 +869,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 .putExtra(EXTRA_ACTIVE_ROUTE_KEY, route?.routeKey.orEmpty())
                 .putExtra(EXTRA_ACTIVE_EXIT_COUNTRY, route?.exitCountry.orEmpty()),
         )
+        if (started && runtimeRunning && VpnStateStore(this).read().phase == VpnPhase.CONNECTED) {
+            updateNotification(formatConnectedNotificationText(route))
+        }
     }
 
     private fun closeCommandClient() {
