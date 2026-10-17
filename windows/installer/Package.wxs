@@ -8,7 +8,8 @@
            Scope="perMachine">
     <Icon Id="DeyttConnectProductIcon.exe" SourceFile="$(var.PackageStageDir)/Assets/deyttconnect.ico" />
     <Property Id="ARPPRODUCTICON" Value="DeyttConnectProductIcon.exe" />
-    <MajorUpgrade Schedule="afterInstallInitialize" IgnoreLanguage="yes" DowngradeErrorMessage="на компьютере уже установлена более новая версия deytt./connect." />
+    <MajorUpgrade Schedule="afterInstallInitialize" IgnoreLanguage="yes" AllowSameVersionUpgrades="yes" DowngradeErrorMessage="на компьютере уже установлена более новая версия deytt./connect." />
+    <Property Id="REINSTALLMODE" Value="amus" />
     <MediaTemplate EmbedCab="yes" />
 
     <Property Id="ALLOWEDUSERSID" Secure="yes">

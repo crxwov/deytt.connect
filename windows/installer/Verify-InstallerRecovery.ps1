@@ -59,8 +59,11 @@ Check ($session.EvaluateCondition($condition.Text) -eq 0) 'Existing owner would 
 $session.Property('Installed')=''; $session.Property('WIX_UPGRADE_DETECTED')=''
 $guard=Row 'SELECT `Condition` FROM `LaunchCondition` WHERE `Condition`=''NOT EXISTING_SERVICE_PATH OR CONNECT_SERVICE_COMPATIBLE = "1" OR REMOVE~="ALL"'''
 if (!$ActionsAssemblyPath) { $ActionsAssemblyPath=Join-Path (Split-Path $MsiPath) 'net472/DeyttConnect.SetupActions.dll' }
-$null=[Reflection.Assembly]::LoadFrom((Join-Path (Split-Path $ActionsAssemblyPath) 'WixToolset.Dtf.WindowsInstaller.dll'))
-$actionsAssembly=[Reflection.Assembly]::LoadFrom($ActionsAssemblyPath)
+# Load the exact locally built validation assemblies without .NET Framework's
+# file-URI zone classification, which rejects some redirected workspace paths.
+$dtfPath=Join-Path (Split-Path $ActionsAssemblyPath) 'WixToolset.Dtf.WindowsInstaller.dll'
+$null=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($dtfPath))
+$actionsAssembly=[Reflection.Assembly]::Load([IO.File]::ReadAllBytes($ActionsAssemblyPath))
 $allUsers=Row 'SELECT `Value` FROM `Property` WHERE `Property`=''ALLUSERS'''
 Check ($allUsers.Text -eq '1') 'MSI must register a machine-wide Apps/Uninstall entry'
 $installLocation=Row 'SELECT `Target` FROM `CustomAction` WHERE `Source`=''ARPINSTALLLOCATION'''
@@ -102,7 +105,9 @@ try {
  foreach($name in @('telegram-session.dat','subscription-profile.dat','preferences.json','installation-id')) {
   Check (!(Test-Path -LiteralPath (Join-Path $userFixture $name))) 'Known app user data survived fixture cleanup'
  }
- Remove-Item -LiteralPath $junction -Force
+ # Remove only this synthetic junction, never recurse through its target.
+ Check ([IO.Path]::GetFullPath($junction).StartsWith([IO.Path]::GetFullPath($fixtureRoot)+[IO.Path]::DirectorySeparatorChar)) 'Fixture junction escaped its root'
+ [IO.Directory]::Delete($junction)
  New-Item -ItemType Directory -Path $junction | Out-Null
  Set-Content -LiteralPath (Join-Path $junction 'download.partial') -Value 'Cached fixture'
  $webViewCache=Join-Path $userFixture 'WebView2'
@@ -119,7 +124,10 @@ try {
 } finally {
  if (Test-Path -LiteralPath $junction) {
   $item=Get-Item -LiteralPath $junction -Force
-  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { Remove-Item -LiteralPath $junction -Force }
+  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+   Check ([IO.Path]::GetFullPath($junction).StartsWith([IO.Path]::GetFullPath($fixtureRoot)+[IO.Path]::DirectorySeparatorChar)) 'Fixture junction escaped its root'
+   [IO.Directory]::Delete($junction)
+  }
  }
  if (Test-Path -LiteralPath $fixtureRoot) { Remove-Item -LiteralPath $fixtureRoot -Recurse -Force }
 }
