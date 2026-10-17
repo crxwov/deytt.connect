@@ -136,6 +136,8 @@ object RouteProxyProbe {
             ProfileRoutes.select(config, tag) // Reject internal, unknown or removed routes.
         }
         val root = JSONObject(config)
+        RuntimeProfile.sanitizeOutbounds(root.optJSONArray("outbounds"))
+        RuntimeProfile.sanitizeOutbounds(root.optJSONArray("endpoints"))
         val inbounds = JSONArray()
         val rules = JSONArray()
         sessions.entries.forEachIndexed { index, (tag, session) ->

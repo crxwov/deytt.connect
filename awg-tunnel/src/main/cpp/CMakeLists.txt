@@ -23,15 +23,30 @@ endif()
 
 if(CMAKE_HOST_WIN32)
     set(DEYTT_WG_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../../../../third_party/amneziawg-android/tunnel/tools/libwg-go")
-    if(EXISTS "${DEYTT_WG_OUTPUT}")
+    set(DEYTT_PRECOMPILED_WG "${CMAKE_CURRENT_SOURCE_DIR}/../../../../app/src/main/jniLibs/${ANDROID_ABI}/libwg-go.so")
+    if(EXISTS "${DEYTT_PRECOMPILED_WG}")
+        configure_file("${DEYTT_PRECOMPILED_WG}" "${DEYTT_WG_OUTPUT}" COPYONLY)
+        add_custom_target(libwg-go.so)
+    elseif(EXISTS "${DEYTT_WG_OUTPUT}")
         add_custom_target(libwg-go.so)
     else()
         if(NOT DEYTT_GO_EXECUTABLE)
             find_program(DEYTT_GO_EXECUTABLE go REQUIRED)
         endif()
+        set(DEYTT_GOTMP "${CMAKE_BINARY_DIR}/gotmp")
+        set(DEYTT_GOCACHE "${CMAKE_BINARY_DIR}/gocache")
+        set(DEYTT_GOPATH "${CMAKE_BINARY_DIR}/gopath")
+        file(MAKE_DIRECTORY "${DEYTT_GOTMP}")
+        file(MAKE_DIRECTORY "${DEYTT_GOCACHE}")
+        file(MAKE_DIRECTORY "${DEYTT_GOPATH}")
         file(GLOB DEYTT_WG_INPUTS CONFIGURE_DEPENDS "${DEYTT_WG_SOURCE}/*.go" "${DEYTT_WG_SOURCE}/*.c")
         add_custom_command(OUTPUT "${DEYTT_WG_OUTPUT}"
             COMMAND "${CMAKE_COMMAND}" -E env
+                "TMP=${DEYTT_GOTMP}"
+                "TEMP=${DEYTT_GOTMP}"
+                "GOTMPDIR=${DEYTT_GOTMP}"
+                "GOCACHE=${DEYTT_GOCACHE}"
+                "GOPATH=${DEYTT_GOPATH}"
                 GOOS=android "GOARCH=${DEYTT_GO_ARCH}" GOARM=7 CGO_ENABLED=1 GOTOOLCHAIN=local
                 "CC=${CMAKE_C_COMPILER}"
                 "CGO_CFLAGS=--target=${CMAKE_C_COMPILER_TARGET} --sysroot=${CMAKE_SYSROOT}"
@@ -46,15 +61,30 @@ if(CMAKE_HOST_WIN32)
     endif()
 endif()
 set(DEYTT_GO_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/../go")
-if(EXISTS "${DEYTT_GO_OUTPUT}")
+set(DEYTT_PRECOMPILED_GO "${CMAKE_CURRENT_SOURCE_DIR}/../../../../app/src/main/jniLibs/${ANDROID_ABI}/libdeytt-awg.so")
+if(EXISTS "${DEYTT_PRECOMPILED_GO}")
+    configure_file("${DEYTT_PRECOMPILED_GO}" "${DEYTT_GO_OUTPUT}" COPYONLY)
+    add_custom_target(libdeytt-awg.so)
+elseif(EXISTS "${DEYTT_GO_OUTPUT}")
     add_custom_target(libdeytt-awg.so)
 else()
     if(NOT DEYTT_GO_EXECUTABLE)
         find_program(DEYTT_GO_EXECUTABLE go REQUIRED)
     endif()
+    set(DEYTT_GOTMP "${CMAKE_BINARY_DIR}/gotmp")
+    set(DEYTT_GOCACHE "${CMAKE_BINARY_DIR}/gocache")
+    set(DEYTT_GOPATH "${CMAKE_BINARY_DIR}/gopath")
+    file(MAKE_DIRECTORY "${DEYTT_GOTMP}")
+    file(MAKE_DIRECTORY "${DEYTT_GOCACHE}")
+    file(MAKE_DIRECTORY "${DEYTT_GOPATH}")
     file(GLOB_RECURSE DEYTT_GO_INPUTS CONFIGURE_DEPENDS "${DEYTT_GO_SOURCE}/*.go" "${DEYTT_GO_SOURCE}/*.c" "${DEYTT_GO_SOURCE}/*.h")
     add_custom_command(OUTPUT "${DEYTT_GO_OUTPUT}"
         COMMAND "${CMAKE_COMMAND}" -E env
+            "TMP=${DEYTT_GOTMP}"
+            "TEMP=${DEYTT_GOTMP}"
+            "GOTMPDIR=${DEYTT_GOTMP}"
+            "GOCACHE=${DEYTT_GOCACHE}"
+            "GOPATH=${DEYTT_GOPATH}"
             GOOS=android "GOARCH=${DEYTT_GO_ARCH}" GOARM=7 CGO_ENABLED=1
             "CC=${CMAKE_C_COMPILER}"
             "CGO_CFLAGS=--target=${CMAKE_C_COMPILER_TARGET} --sysroot=${CMAKE_SYSROOT}"

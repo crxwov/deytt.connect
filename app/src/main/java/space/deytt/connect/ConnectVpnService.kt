@@ -422,9 +422,10 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 }
             }
         } catch (error: Throwable) {
-            Log.w(TAG, "Route proxy probe failed at $stage (${probeFailureKind(error)})")
+            Log.w(TAG, "Route proxy probe failed at $stage (${probeFailureKind(error)}): ${error.message}", error)
+            val detail = error.message?.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
             val message = if (stage == "batch routes setup" || stage == "command server start" || stage == "libbox setup")
-                "Не удалось запустить диагностику" else routeProbeError(error)
+                "Сбой запуска ядра$detail" else routeProbeError(error)
             routeTags.forEach { tag ->
                 sendRouteProbeResult(requestId, tag, null, message)
             }

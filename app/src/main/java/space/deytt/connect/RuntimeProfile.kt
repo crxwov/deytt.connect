@@ -29,6 +29,9 @@ object RuntimeProfile {
             if (inbound.optString("type") == "tun") inbound.put("dns_mode", "hijack")
         }
 
+        sanitizeOutbounds(root.optJSONArray("outbounds"))
+        sanitizeOutbounds(root.optJSONArray("endpoints"))
+
         val dns = root.optJSONObject("dns")
             ?: throw IllegalArgumentException("В профиле отсутствуют настройки DNS")
         val servers = dns.optJSONArray("servers")
@@ -58,5 +61,39 @@ object RuntimeProfile {
             "remote-dns"
         } else "local-dns")
         return root.toString()
+    }
+
+    fun sanitizeOutbounds(items: org.json.JSONArray?) {
+        if (items == null) return
+        for (index in 0 until items.length()) {
+            val item = items.optJSONObject(index) ?: continue
+            sanitizeOutbound(item)
+        }
+    }
+
+    fun sanitizeOutbound(outbound: JSONObject) {
+        val serverPorts = outbound.optJSONArray("server_ports") ?: return
+        val hasServerPort = outbound.has("server_port") && outbound.optInt("server_port") > 0
+        val validRanges = org.json.JSONArray()
+        for (i in 0 until serverPorts.length()) {
+            val entry = serverPorts.optString(i).trim()
+            if (entry.isEmpty()) continue
+            if (entry.all { it.isDigit() }) {
+                validRanges.put("$entry:$entry")
+            } else if (entry.contains(":") || entry.contains("-")) {
+                validRanges.put(entry.replace("-", ":"))
+            }
+        }
+        if (hasServerPort) {
+            outbound.remove("server_ports")
+            outbound.remove("hop_interval")
+            outbound.remove("hop_interval_max")
+        } else if (validRanges.length() > 0) {
+            outbound.put("server_ports", validRanges)
+        } else {
+            outbound.remove("server_ports")
+            outbound.remove("hop_interval")
+            outbound.remove("hop_interval_max")
+        }
     }
 }
