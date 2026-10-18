@@ -11,9 +11,9 @@
     <tr>
       <td width="50%" align="center" valign="top">
         <h4>android</h4>
-        <p><sub>v0.8.30 &nbsp;·&nbsp; android 7+ &nbsp;·&nbsp; ARM64</sub></p>
-        <p><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.30/deytt-connect-0.8.30.apk"><img src="assets/download-android-outline.svg" width="220" style="width:100%;max-width:220px;height:auto" alt="скачать android APK v0.8.30"></a></p>
-        <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30">релиз и SHA-256</a><br>приложения нет в google play</sub></p>
+        <p><sub>android 7+ &nbsp;·&nbsp; универсальный APK</sub></p>
+        <p><a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="assets/download-android-outline.svg" width="220" style="width:100%;max-width:220px;height:auto" alt="скачать универсальный android APK"></a></p>
+        <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/latest">последний релиз и SHA-256</a><br>приложения нет в google play</sub></p>
       </td>
       <td width="50%" align="center" valign="top">
         <h4>windows</h4>
@@ -50,11 +50,18 @@
 
 <h4 align="center">установка android</h4>
 
-1. скачайте APK для ARM64 из [релиза v0.8.30](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30).
+1. скачайте универсальный APK из [последнего релиза](https://github.com/crxwov/deytt.connect/releases/latest).
 2. откройте файл и подтвердите установку, если android запросит разрешение.
 3. войдите через telegram, выберите маршрут и подтвердите создание vpn-подключения.
 
-если установлена версия `0.8.17` со старой подписью, перед обновлением прочитайте [заметки к релизу](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.30). в релизе `v0.8.30` нет APK с суффиксом `legacy`. если обновление не устанавливается, обратитесь в [поддержку](https://t.me/deyttbot), прежде чем удалять приложение.
+> **переход со старой подписи**
+>
+> если android сообщает о несовпадении подписи, старую установку нельзя обновить поверх: прежний закрытый ключ утерян.
+>
+> 1. если старое приложение доступно, выйдите из аккаунта, чтобы освободить слот телефона.
+> 2. удалите старое приложение и установите APK из последнего стабильного релиза.
+>
+> локальные настройки могут удалиться — потребуется войти снова. это нужно только при переходе со старого ключа; следующие обновления устанавливаются поверх обычным способом. если старое приложение недоступно или слот не освободился, обратитесь в [поддержку](https://t.me/deyttbot).
 
 <h4 align="center">установка windows</h4>
 
