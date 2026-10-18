@@ -1,12 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="260" height="60" viewBox="0 0 260 60" role="img" aria-labelledby="title desc">
   <title id="title">Скачать APK</title>
-  <desc id="desc">Тёмная кнопка с пиктограммой телефона и маршрута</desc>
+  <desc id="desc">Тёмная кнопка с логотипом Android</desc>
   <rect x="1" y="1" width="258" height="58" rx="20" fill="#0B1222" stroke="#34466D" stroke-width="1.5"/>
-  <rect x="20" y="12.5" width="23" height="35" rx="5" fill="none" stroke="#65E6CD" stroke-width="2.2"/>
-  <path d="M27.5 17h8M28.5 42.5h6" fill="none" stroke="#65E6CD" stroke-linecap="round" stroke-width="2"/>
-  <path d="M25 32.5c4 0 4-7 8-7s4 7 8 7" fill="none" stroke="#65E6CD" stroke-linecap="round" stroke-width="2.2"/>
-  <circle cx="25" cy="32.5" r="2.5" fill="#65E6CD"/>
-  <circle cx="41" cy="32.5" r="2.5" fill="#65E6CD"/>
+  <g fill="none" stroke="#65E6CD" stroke-linecap="round" stroke-width="2">
+    <path d="m25 18-3-5m17 5 3-5"/>
+  </g>
+  <g fill="#65E6CD">
+    <rect x="15.5" y="27" width="4.5" height="12" rx="2.25"/>
+    <rect x="44" y="27" width="4.5" height="12" rx="2.25"/>
+    <rect x="23" y="37" width="5" height="10" rx="2.5"/>
+    <rect x="32" y="37" width="5" height="10" rx="2.5"/>
+    <path d="M20 26a12 12 0 0 1 24 0v1H20z"/>
+    <rect x="20" y="27" width="24" height="12" rx="2.5"/>
+  </g>
+  <g fill="#0B1222">
+    <circle cx="27" cy="22.5" r="1"/>
+    <circle cx="37" cy="22.5" r="1"/>
+  </g>
   <text x="61" y="37" fill="#F5F8FC" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650">Скачать APK</text>
   <path d="M222 30h15m-6-6 6 6-6 6" fill="none" stroke="#65E6CD" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
 </svg>

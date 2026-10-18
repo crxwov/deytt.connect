@@ -1,12 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="260" height="60" viewBox="0 0 260 60" role="img" aria-labelledby="title desc">
   <title id="title">Скачать MSI или ZIP</title>
-  <desc id="desc">Тёмная кнопка с пиктограммой монитора и маршрута</desc>
+  <desc id="desc">Тёмная кнопка с логотипом Windows</desc>
   <rect x="1" y="1" width="258" height="58" rx="20" fill="#0B1222" stroke="#34466D" stroke-width="1.5"/>
-  <rect x="17.5" y="12.5" width="31" height="22" rx="3" fill="none" stroke="#A9BEFF" stroke-width="2.2"/>
-  <path d="M22.5 27c4 0 4-7 8-7s4 7 8 7" fill="none" stroke="#A9BEFF" stroke-linecap="round" stroke-width="2.2"/>
-  <circle cx="22.5" cy="27" r="2.5" fill="#A9BEFF"/>
-  <circle cx="38.5" cy="27" r="2.5" fill="#A9BEFF"/>
-  <path d="M33 35v5m-7 4h14m-12-4-2 4m12-4 2 4" fill="none" stroke="#A9BEFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"/>
+  <g fill="#A9BEFF">
+    <path d="m16 17 14-2v14H16z"/>
+    <path d="m32 14.7 16-2.5v16.8H32z"/>
+    <path d="M16 31h14v14l-14-2z"/>
+    <path d="M32 31h16v16.4l-16-2.2z"/>
+  </g>
   <text x="61" y="37" fill="#F5F8FC" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="650">Скачать MSI / ZIP</text>
   <path d="M222 30h15m-6-6 6 6-6 6" fill="none" stroke="#A9BEFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
 </svg>
