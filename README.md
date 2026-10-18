@@ -14,7 +14,7 @@
       <td width="50%" align="center" valign="top">
         <h3>Android</h3>
         <p><sub>Android 7+ &nbsp;·&nbsp; универсальный APK</sub></p>
-        <a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="assets/download-android-outline.svg" width="240" alt="Скачать APK для Android"></a>
+        <a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="assets/download-android.svg" width="240" alt="Скачать APK для Android"></a>
         <p><sub>SHA-256 — в релизе<br>приложения нет в Google Play</sub></p>
       </td>
       <td width="50%" align="center" valign="top">
