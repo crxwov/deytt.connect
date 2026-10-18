@@ -1,15 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="260" height="64" viewBox="0 0 260 64" role="img" aria-labelledby="title desc">
-  <title id="title">Скачать Windows-клиент</title>
-  <desc id="desc">Яркая лавандовая кнопка загрузки MSI или portable ZIP</desc>
-  <defs>
-    <linearGradient id="windowsButton" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#C5D0FF"/>
-      <stop offset="1" stop-color="#94A9FF"/>
-    </linearGradient>
-  </defs>
-  <rect x="1" y="1" width="258" height="62" rx="19" fill="url(#windowsButton)" stroke="#E0E6FF" stroke-width="1.5"/>
-  <path d="m19 21 11-2v10H19zm14-2 12-2v12H33zM19 32h11v10l-11-2zm14 0h12v12l-12-2z" fill="#0B1222"/>
-  <text x="58" y="38" fill="#0B1222" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="750">Скачать MSI / ZIP</text>
-  <circle cx="229" cy="32" r="15" fill="#0B1222" fill-opacity="0.11"/>
-  <path d="M222 32h14m-5-5 5 5-5 5" fill="none" stroke="#0B1222" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="260" height="60" viewBox="0 0 260 60" role="img" aria-labelledby="title desc">
+  <title id="title">Скачать MSI или ZIP</title>
+  <desc id="desc">Тёмная кнопка с пиктограммой монитора и маршрута</desc>
+  <rect x="1" y="1" width="258" height="58" rx="20" fill="#0B1222" stroke="#34466D" stroke-width="1.5"/>
+  <rect x="17.5" y="12.5" width="31" height="22" rx="3" fill="none" stroke="#A9BEFF" stroke-width="2.2"/>
+  <path d="M22.5 27c4 0 4-7 8-7s4 7 8 7" fill="none" stroke="#A9BEFF" stroke-linecap="round" stroke-width="2.2"/>
+  <circle cx="22.5" cy="27" r="2.5" fill="#A9BEFF"/>
+  <circle cx="38.5" cy="27" r="2.5" fill="#A9BEFF"/>
+  <path d="M33 35v5m-7 4h14m-12-4-2 4m12-4 2 4" fill="none" stroke="#A9BEFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"/>
+  <text x="61" y="37" fill="#F5F8FC" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="650">Скачать MSI / ZIP</text>
+  <path d="M222 30h15m-6-6 6 6-6 6" fill="none" stroke="#A9BEFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
 </svg>
