@@ -1,8 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="260" height="60" viewBox="0 0 260 60" role="img" aria-labelledby="title desc">
   <title id="title">Скачать MSI или ZIP</title>
-  <desc id="desc">Тёмная кнопка с голубым значком Windows и стрелкой к MSI или portable ZIP в GitHub Releases</desc>
+  <desc id="desc">Тёмная кнопка с логотипом Windows</desc>
   <rect x="1" y="1" width="258" height="58" rx="20" fill="#0B1222" stroke="#34466D" stroke-width="1.5"/>
-  <path d="m19 21 11-2v10H19zm14-2 12-2v12H33zM19 32h11v10l-11-2zm14 0h12v12l-12-2z" fill="#A9BEFF"/>
+  <g fill="#A9BEFF">
+    <path d="m16 17 14-2v14H16z"/>
+    <path d="m32 14.7 16-2.5v16.8H32z"/>
+    <path d="M16 31h14v14l-14-2z"/>
+    <path d="M32 31h16v16.4l-16-2.2z"/>
+  </g>
   <text x="61" y="37" fill="#F5F8FC" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="650">Скачать MSI / ZIP</text>
   <path d="M222 30h15m-6-6 6 6-6 6" fill="none" stroke="#A9BEFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/>
 </svg>
