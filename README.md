@@ -1,43 +1,73 @@
 <div align="center">
-  <img src="assets/deytt-connect-banner.png" alt="deytt./connect для android и windows" width="100%">
-  <p><strong>vpn-клиент для android и windows</strong></p>
-  <p><a href="#скачать">скачать</a> · <a href="#начало-работы">начало работы</a> · <a href="#поддержка-и-безопасность">поддержка</a></p>
+  <img src="assets/deytt-connect-banner.png" alt="deytt./connect: маршруты и подключение для Android и Windows" width="100%">
+  <p>
+    <a href="#скачать"><img src="assets/readme-nav-download.svg" width="160" alt="скачать"></a>
+    &nbsp;
+    <a href="#как-начать"><img src="assets/readme-nav-start.svg" width="160" alt="как начать"></a>
+    &nbsp;
+    <a href="#возможности"><img src="assets/readme-nav-features.svg" width="160" alt="возможности"></a>
+    &nbsp;
+    <a href="#поддержка"><img src="assets/readme-nav-support.svg" width="160" alt="поддержка"></a>
+  </p>
 </div>
 
 ## Скачать
 
-| Платформа | Требования | Скачать |
-|:--|:--|:--|
-| Android | Android 7+, универсальный APK | [Последний APK и SHA-256](https://github.com/crxwov/deytt.connect/releases/latest) |
-| Windows | Windows 10 (1809+), x64 | [MSI и SHA-256](https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40) · [Portable ZIP](https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip) |
+<table width="100%" align="center">
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top">
+        <h3>android</h3>
+        <p><sub>android 7+ &nbsp;·&nbsp; универсальный APK</sub></p>
+        <a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="assets/download-android-outline.svg" width="230" alt="скачать APK для Android"></a>
+        <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/latest">APK и SHA-256 в последнем релизе</a><br>приложения нет в google play</sub></p>
+      </td>
+      <td width="50%" align="center" valign="top">
+        <h3>windows</h3>
+        <p><sub>windows 10 (1809+) &nbsp;·&nbsp; x64 &nbsp;·&nbsp; v0.8.40</sub></p>
+        <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40"><img src="assets/download-windows-outline.svg" width="230" alt="скачать MSI или portable ZIP для Windows"></a>
+        <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip">portable ZIP</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40">SHA-256 и релиз</a><br>сборки не подписаны</sub></p>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
-Приложения нет в Google Play. Сборки Windows не подписаны.
+<p align="center"><sub>доступ выдаёт <a href="https://t.me/deyttbot">telegram-бот</a> &nbsp;·&nbsp; телефон и компьютер используют отдельные слоты</sub></p>
 
-## Начало работы
+## Как начать
 
-Получите доступ через [Telegram-бота](https://t.me/deyttbot), установите приложение, войдите через Telegram и выберите маршрут. Для подключения нажмите **«Подключить»**. Устройства используют отдельные слоты: установка Windows не занимает слот телефона.
+1. Получите доступ через [Telegram-бота](https://t.me/deyttbot) и установите приложение.
+2. Войдите через Telegram и выберите «Авто» или нужный маршрут.
+3. Нажмите **«Подключить»** и подтвердите запрос VPN на устройстве.
 
 ### Android
 
-Скачайте APK, откройте файл и разрешите установку, если Android запросит подтверждение. При первом подключении подтвердите создание VPN-подключения.
+Установите APK из [последнего релиза](https://github.com/crxwov/deytt.connect/releases/latest). Если Android запросит разрешение на установку из этого источника, подтвердите его.
 
-Если Android сообщает о несовпадении подписи, удалите старую версию и установите APK заново: прежний ключ подписи утерян, поэтому обновление поверх невозможно. Перед удалением выйдите из аккаунта в старом приложении, чтобы освободить слот телефона. Настройки могут удалиться; потребуется войти снова. Если старое приложение недоступно или слот не освободился, обратитесь в [поддержку](https://t.me/deyttbot). Это разовая миграция; дальнейшие обновления устанавливаются поверх.
+> **Если Android сообщает о несовпадении подписи:** старую версию нельзя обновить поверх, прежний ключ подписи утерян. Выйдите из аккаунта в старом приложении, удалите его и установите новый APK. Настройки могут удалиться, а для подключения потребуется снова войти. Это разовая миграция; следующие обновления устанавливаются поверх. Если старое приложение недоступно или слот не освободился, обратитесь в [поддержку](https://t.me/deyttbot).
 
 ### Windows
 
-Запустите MSI и подтвердите установку VPN-службы. Для portable-версии полностью распакуйте ZIP, запустите `deyttconnect.exe` и подтвердите запрос администратора при установке службы.
+Установите [MSI](https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40.msi) или распакуйте [portable ZIP](https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip) целиком и запустите `deyttconnect.exe`. При установке VPN-службы подтвердите запрос администратора Windows.
 
-Для работы нужен [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). Если его нет, MSI может загрузить компонент. Подробности есть в [руководстве по установщику](windows/installer/README.md).
+Нужен [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/). Если компонента нет, MSI может скачать его.
 
 ## Возможности
 
-- Вход через Telegram
-- Автоматический или выбранный маршрут
-- Диагностика состояния соединения
-- Обновление приложения
-- Регион Android определяется по IP, не по GPS
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%" valign="top"><strong>маршруты</strong><br><sub>автоматический выбор или конкретный регион</sub></td>
+      <td width="50%" valign="top"><strong>подключение</strong><br><sub>один аккаунт Telegram на Android и Windows</sub></td>
+    </tr>
+    <tr>
+      <td width="50%" valign="top"><strong>диагностика</strong><br><sub>состояние соединения и доступность маршрутов</sub></td>
+      <td width="50%" valign="top"><strong>регион Android</strong><br><sub>определяется по IP, не по GPS</sub></td>
+    </tr>
+  </tbody>
+</table>
 
-## Протоколы
+### Протоколы
 
 Доступность зависит от платформы и конфигурации маршрута.
 
@@ -50,9 +80,9 @@
 
 [Условия и конфиденциальность](https://deytt.space/info/)
 
-## Разработка
+## Для разработчиков
 
-Клонируйте репозиторий вместе с подмодулями:
+Склонируйте репозиторий вместе с подмодулями:
 
 ```bash
 git clone --recurse-submodules https://github.com/crxwov/deytt.connect.git
@@ -60,18 +90,23 @@ cd deytt.connect
 ```
 
 - **Android**: JDK 17, Android SDK 35, NDK 26.1, CMake 3.22.1. Сборка: `./gradlew assembleDebug`
-- **Windows**: Windows SDK, .NET 10 SDK, Go и подмодули. Исходники и сценарии находятся в [`windows/`](windows/); состав MSI описан в [руководстве по установщику](windows/installer/README.md).
+- **Windows**: Windows SDK, .NET 10 SDK, Go и подмодули. Исходники: [`windows/`](windows/). [Состав MSI](windows/installer/README.md).
 
 Перед публикацией Android-приложения прочитайте [инструкцию по безопасной сборке и подписи](docs/release-security.md).
 
-[Документация](docs/README.md) · [Стиль проекта](docs/brand-guide.md) · [Участие в проекте](CONTRIBUTING.md)
+[Документация](docs/README.md) &nbsp;·&nbsp; [Стиль проекта](docs/brand-guide.md) &nbsp;·&nbsp; [Участие в проекте](CONTRIBUTING.md)
 
-## Поддержка и безопасность
+## Поддержка
 
-- Аккаунт и подключение: [Telegram-бот](https://t.me/deyttbot)
-- Ошибки приложения: [GitHub Issues](https://github.com/crxwov/deytt.connect/issues)
-- Уязвимости: [сообщить конфиденциально](https://github.com/crxwov/deytt.connect/security/advisories/new) · [политика безопасности](SECURITY.md)
+<table width="100%">
+  <tbody>
+    <tr>
+      <td width="50%" valign="top"><strong>аккаунт и приложение</strong><br><sub><a href="https://t.me/deyttbot">telegram-бот</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/issues">ошибка приложения</a></sub></td>
+      <td width="50%" valign="top"><strong>безопасность</strong><br><sub><a href="https://github.com/crxwov/deytt.connect/security/advisories/new">сообщить об уязвимости</a> &nbsp;·&nbsp; <a href="SECURITY.md">политика безопасности</a></sub></td>
+    </tr>
+  </tbody>
+</table>
 
 Issues публичны. Не публикуйте коды входа, ссылки подписки, VPN-ключи, конфигурации, IP-адреса и данные аккаунта.
 
-Исходный код распространяется по [GNU GPL-3.0-or-later](LICENSE). Сторонние материалы: [уведомления](THIRD-PARTY-NOTICES.md) · [атрибуции](THIRD_PARTY_NOTICES.md).
+Исходный код: [GNU GPL-3.0-or-later](LICENSE) &nbsp;·&nbsp; материалы сторонних авторов: [уведомления](THIRD-PARTY-NOTICES.md) и [атрибуции](THIRD_PARTY_NOTICES.md).
