@@ -8,8 +8,8 @@
   <g fill="#65E6CD">
     <rect x="15.5" y="27" width="4.5" height="12" rx="2.25"/>
     <rect x="44" y="27" width="4.5" height="12" rx="2.25"/>
-    <rect x="23" y="37" width="5" height="10" rx="2.5"/>
-    <rect x="32" y="37" width="5" height="10" rx="2.5"/>
+    <rect x="25.5" y="37" width="5" height="10" rx="2.5"/>
+    <rect x="34.5" y="37" width="5" height="10" rx="2.5"/>
     <path d="M20 26a12 12 0 0 1 24 0v1H20z"/>
     <rect x="20" y="27" width="24" height="12" rx="2.5"/>
   </g>
