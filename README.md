@@ -2,7 +2,11 @@
   <img src="assets/deytt-connect-banner.png" alt="deytt./connect для Android и Windows" width="100%">
 </div>
 
-## Скачать
+<p align="center"><sub>Клиент для выбора маршрута и подключения на Android и Windows</sub></p>
+
+## 📥 Скачать
+
+Выберите версию для своего устройства.
 
 <table width="100%" align="center">
   <tbody>
@@ -23,32 +27,39 @@
   </tbody>
 </table>
 
-<p align="center"><sub>Войдите через <a href="https://t.me/deyttbot">Telegram-бота</a> &nbsp;·&nbsp; для телефона и компьютера нужны отдельные слоты</sub></p>
+> [!NOTE]
+> Для входа используйте [Telegram-бота](https://t.me/deyttbot). Телефон и компьютер занимают разные слоты аккаунта.
 
-## Подключение
+## 🚀 Подключение
 
 1. Установите приложение и войдите через Telegram.
 2. Выберите «Авто» или нужный маршрут.
 3. Нажмите **«Подключить»** и подтвердите запрос на подключение VPN.
 
-### Android
+> [!TIP]
+> Не знаете, какой маршрут выбрать? Начните с «Авто».
+
+### 📱 Android
 
 Скачайте [APK из последнего релиза](https://github.com/crxwov/deytt.connect/releases/latest) и установите его. Если телефон попросит разрешение, подтвердите установку.
 
-### Windows
+### 🪟 Windows
 
-Запустите MSI или распакуйте ZIP и откройте `deyttconnect.exe`. Чтобы установить VPN-службу, подтвердите запрос прав администратора. Если на компьютере нет [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/), MSI может скачать его.
+- **MSI:** запустите установщик. Если на компьютере нет [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/), MSI может скачать его.
+- **ZIP:** распакуйте архив и откройте `deyttconnect.exe`.
+- При установке VPN-службы подтвердите запрос прав администратора Windows.
 
-## Протоколы
+## 🧩 Протоколы
 
-VLESS &nbsp;·&nbsp; Trojan &nbsp;·&nbsp; Hysteria 2 &nbsp;·&nbsp; AmneziaWG 3.1
+`VLESS` &nbsp;·&nbsp; `Trojan` &nbsp;·&nbsp; `Hysteria 2` &nbsp;·&nbsp; `AmneziaWG 3.1`
 
-Доступные протоколы зависят от платформы и маршрута. [Условия и конфиденциальность](https://deytt.space/info/).
+Доступность зависит от платформы и маршрута. [Условия и конфиденциальность](https://deytt.space/info/).
 
-## Поддержка
+## 💬 Поддержка
 
-[Telegram-бот](https://t.me/deyttbot) &nbsp;·&nbsp; [ошибки приложения](https://github.com/crxwov/deytt.connect/issues) &nbsp;·&nbsp; [сообщить об уязвимости](https://github.com/crxwov/deytt.connect/security/advisories/new) &nbsp;·&nbsp; [политика безопасности](SECURITY.md)
+[Telegram-бот](https://t.me/deyttbot) &nbsp;·&nbsp; [сообщить об ошибке](https://github.com/crxwov/deytt.connect/issues) &nbsp;·&nbsp; [сообщить об уязвимости](https://github.com/crxwov/deytt.connect/security/advisories/new) &nbsp;·&nbsp; [политика безопасности](SECURITY.md)
 
-Сообщения в Issues видны всем. Не указывайте там коды входа, ссылки на подписку, VPN-ключи и конфигурации, IP-адреса или данные аккаунта.
+> [!WARNING]
+> Сообщения об ошибках видны всем. Не публикуйте там коды входа, ссылки на подписку, VPN-ключи, конфигурации, IP-адреса или данные аккаунта.
 
-[GNU GPL-3.0-or-later](LICENSE) &nbsp;·&nbsp; [уведомления о сторонних материалах](THIRD-PARTY-NOTICES.md)
+<p align="center"><sub>📄 <a href="LICENSE">GNU GPL-3.0-or-later</a> &nbsp;·&nbsp; <a href="THIRD-PARTY-NOTICES.md">уведомления о сторонних материалах</a></sub></p>
