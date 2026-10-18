@@ -193,6 +193,16 @@ class MainActivity : Activity() {
             val stage = event.getStringExtra(RouteProbeClient.EXTRA_STAGE).orEmpty()
             val elapsed = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
             val error = event.getStringExtra(RouteProbeClient.EXTRA_ERROR)
+            if (stage == "cancelled") {
+                if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false) &&
+                    event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID) == pendingRouteProbeId
+                ) {
+                    pendingRouteProbeId = null
+                    latencyText.isEnabled = true
+                    latencyText.alpha = 1f
+                }
+                return
+            }
             if (stage == "latency_sample") {
                 if (RouteProbeStatistics.isValidLatencyMillis(elapsed)) homePingSamples += elapsed
                 RouteProbeStatistics.medianLatencyMillis(homePingSamples)?.let { median ->

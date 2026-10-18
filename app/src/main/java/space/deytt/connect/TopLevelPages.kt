@@ -508,6 +508,20 @@ internal class PrimaryPages(private val host: MainActivity) {
             if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) launchNextCountry()
             return
         }
+        if (event.getStringExtra(RouteProbeClient.EXTRA_STAGE) == "cancelled") {
+            if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
+                routeProbeStates.remove(requestId)
+                country.cancelled = true
+                country.rows.values.filter { it.route.engine == TunnelEngine.LIBBOX }.forEach { row ->
+                    row.progress.setLoading(false)
+                    if (row.route.id !in country.samples) {
+                        row.status.text = copy("Проверка отменена · откройте страну снова", "Measurement cancelled · reopen country")
+                    }
+                }
+                launchNextCountry()
+            }
+            return
+        }
         if (country.cancelled) {
             if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
                 routeProbeStates.remove(requestId)

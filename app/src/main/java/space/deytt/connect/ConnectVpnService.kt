@@ -119,6 +119,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     private var activeRuntimeConfig: String? = null
     private var started = false
     private var routeProbeOnly = false
+    @Volatile private var activeRouteProbeRequestId: String? = null
     private var notificationText = "Запуск deytt./connect"
     private var lastActiveAutoRoute: ActiveRouteSelection? = null
     private val operation = AtomicLong(0)
@@ -197,6 +198,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_ROUTE_PROBE) {
+            activeRouteProbeRequestId = intent.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID)
             if (!started && !runtimeRunning) {
                 try {
                     startForegroundCompat("Подготавливаем проверку маршрутов")
@@ -218,7 +220,12 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         }
         if (intent?.action == ACTION_CANCEL_ROUTE_PROBE) {
             if (routeProbeOnly) cancelRouteProbe(startId)
-            else if (!started) stopSelf(startId)
+            else if (!started) {
+                intent.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID)?.let { requestId ->
+                    sendRouteProbeResult(requestId, "", null, null, complete = true, stage = "cancelled")
+                }
+                stopSelf(startId)
+            }
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_STOP) {
@@ -256,7 +263,12 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     override fun onDestroy() {
         operation.incrementAndGet()
-        if (this is RouteProbeVpnService || routeProbeOnly) closeRouteProbeCore() else stopTunnel()
+        if (this is RouteProbeVpnService || routeProbeOnly) {
+            closeRouteProbeCore()
+            activeRouteProbeRequestId?.let { requestId ->
+                sendRouteProbeResult(requestId, "", null, null, complete = true, stage = "cancelled")
+            }
+        } else stopTunnel()
         probeWorkers?.shutdownNow()
         executor.shutdownNow()
         openFluxExecutor.shutdownNow()
@@ -443,6 +455,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     private fun cancelRouteProbe(startId: Int) {
+        val requestId = activeRouteProbeRequestId
         operation.incrementAndGet()
         routeProbeRunning = false
         probeWorkers?.shutdownNow()
@@ -450,7 +463,10 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         started = false
         routeProbeOnly = false
         stopForegroundCompat()
-        stopSelf(startId)
+        if (startId > 0) stopSelf(startId) else stopSelf()
+        if (!requestId.isNullOrBlank()) {
+            sendRouteProbeResult(requestId, "", null, null, complete = true, stage = "cancelled")
+        }
     }
 
     @Synchronized
@@ -472,7 +488,10 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         bytesPerSecond: Long? = null,
         sampleIndex: Int? = null,
     ) {
-        if (complete) RouteProbeClient.clear(this, requestId)
+        if (complete) {
+            if (activeRouteProbeRequestId == requestId) activeRouteProbeRequestId = null
+            RouteProbeClient.clear(this, requestId)
+        }
         val intent = Intent(RouteProbeClient.ACTION_RESULT)
             .setPackage(packageName)
             .putExtra(RouteProbeClient.EXTRA_REQUEST_ID, requestId)
@@ -1146,10 +1165,15 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         )
         val stopAction = if (routeProbeOnly) ACTION_CANCEL_ROUTE_PROBE else ACTION_STOP
         val stopTitle = if (routeProbeOnly) "Отменить проверку" else "Отключить"
+        val disconnectIntent = Intent(this, if (routeProbeOnly) RouteProbeVpnService::class.java else ConnectVpnService::class.java)
+            .setAction(stopAction)
+        if (routeProbeOnly) activeRouteProbeRequestId?.let { requestId ->
+            disconnectIntent.putExtra(RouteProbeClient.EXTRA_REQUEST_ID, requestId)
+        }
         val disconnect = PendingIntent.getService(
             this,
             NOTIFICATION_ID + 1,
-            Intent(this, if (routeProbeOnly) RouteProbeVpnService::class.java else ConnectVpnService::class.java).setAction(stopAction),
+            disconnectIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val restore = PendingIntent.getService(
@@ -1210,7 +1234,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     override fun onRevoke() {
         operation.incrementAndGet()
-        stopTunnel()
+        if (routeProbeOnly) cancelRouteProbe(0) else stopTunnel()
         super.onRevoke()
     }
 

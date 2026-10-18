@@ -737,8 +737,9 @@ object RouteProbeClient {
     }
 
     fun cancel(context: Context) {
-        if (activeRequestId == null) return
+        val requestId = activeRequestId ?: return
         context.startService(Intent(context, RouteProbeVpnService::class.java)
-            .setAction(ConnectVpnService.ACTION_CANCEL_ROUTE_PROBE))
+            .setAction(ConnectVpnService.ACTION_CANCEL_ROUTE_PROBE)
+            .putExtra(EXTRA_REQUEST_ID, requestId))
     }
 }
