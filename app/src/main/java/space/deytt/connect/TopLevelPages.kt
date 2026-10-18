@@ -1331,9 +1331,10 @@ internal class PrimaryPages(private val host: MainActivity) {
                                     else -> "Этого аккаунта пока нет в боте. Открой ./c ниже один раз — код придёт в чат."
                                 }
                             }.onFailure {
+                                val reference = SubscriptionLoadDiagnostics.record(host, "pair", it)
                                 primary.text = "Продолжить"
                                 status.setTextColor(DeyttUi.CORAL)
-                                status.text = pairingError(it)
+                                status.text = "${pairingError(it)} Код: $reference"
                             }
                         }
                     }
@@ -1390,9 +1391,10 @@ internal class PrimaryPages(private val host: MainActivity) {
                                 host.refreshTelegramAccount()
                                 host.refreshAccountViews()
                             }.onFailure {
+                                val reference = SubscriptionLoadDiagnostics.record(host, "pair", it)
                                 primary.text = "Подтвердить код"
                                 status.setTextColor(DeyttUi.CORAL)
-                                status.text = pairingError(it)
+                                status.text = "${pairingError(it)} Код: $reference"
                             }
                         }
                     }

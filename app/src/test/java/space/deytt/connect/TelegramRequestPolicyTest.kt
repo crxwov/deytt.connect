@@ -76,6 +76,8 @@ class TelegramRequestPolicyTest {
     @Test fun diagnosticReferenceCannotContainSensitiveMessagesOrStages() {
         val error = UnknownHostException("https://private.example/sub/token/secret")
         assertEquals("download/dns", SubscriptionLoadDiagnostics.reference("secret", error))
+        assertEquals("pair/dns", SubscriptionLoadDiagnostics.reference("pair", error))
         assertEquals("account/http_503", SubscriptionLoadDiagnostics.reference("account", TelegramPairingException("secret", 503)))
+        assertEquals("pair/http_503", SubscriptionLoadDiagnostics.reference("pair", TelegramPairingException("secret", 503)))
     }
 }

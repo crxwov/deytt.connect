@@ -435,12 +435,13 @@ class SetupActivity : Activity() {
                                 else -> "Этого username пока нет в боте. Открой ./c ниже один раз."
                             }
                         }.onFailure { error ->
+                            val reference = SubscriptionLoadDiagnostics.record(this, "pair", error)
                             primary.text = "Получить код"
                             status.setTextColor(DeyttUi.CORAL)
                             status.text = when ((error as? TelegramPairingException)?.code) {
                                 "invalid_username" -> "Проверь username Telegram."
                                 "pairing_rate_limited", "rate_limited" -> "Слишком часто. Подожди и попробуй ещё раз."
-                                else -> "Не удалось начать вход. Проверь соединение и попробуй снова."
+                                else -> "Не удалось начать вход. Проверь соединение и попробуй снова. Код: $reference"
                             }
                         }
                     }
