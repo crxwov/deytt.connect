@@ -2377,18 +2377,20 @@ public partial class MainWindow : Window
         var connection = new StackPanel { Spacing = 4 };
         var splitStoreConfig = WindowsSplitTunnelStore.Load();
         var customCount = (splitStoreConfig.CustomDomains?.Count ?? 0) + (splitStoreConfig.CustomProcesses?.Count ?? 0);
+        var activePreset = splitStoreConfig.Presets?.FirstOrDefault(p => string.Equals(p.Id, splitStoreConfig.ActivePresetId, StringComparison.OrdinalIgnoreCase));
+        var presetPrefix = activePreset is not null ? $"{activePreset.Name} · " : string.Empty;
         string splitSubtitle;
         if (splitStoreConfig.IsVpnOnly)
         {
             splitSubtitle = customCount > 0
-                ? Copy($"VPN только для списка · {customCount} правил", $"VPN only for list · {customCount} rules")
-                : Copy("VPN только для списка · список пуст", "VPN only for list · empty list");
+                ? Copy($"{presetPrefix}VPN только для списка · {customCount} правил", $"{presetPrefix}VPN only for list · {customCount} rules")
+                : Copy($"{presetPrefix}VPN только для списка · список пуст", $"{presetPrefix}VPN only for list · empty list");
         }
         else
         {
             splitSubtitle = customCount > 0
-                ? Copy($"Обход VPN для списка · {customCount} правил", $"Bypass VPN for list · {customCount} rules")
-                : Copy("Обход VPN для списка · базовые правила", "Bypass VPN for list · base rules");
+                ? Copy($"{presetPrefix}Обход VPN для списка · {customCount} правил", $"{presetPrefix}Bypass VPN for list · {customCount} rules")
+                : Copy($"{presetPrefix}Обход VPN для списка · базовые правила", $"{presetPrefix}Bypass VPN for list · base rules");
         }
         connection.Children.Add(SettingsEntry("↗", Copy("Раздельное туннелирование", "Split tunneling"),
             splitSubtitle, "›",

@@ -122,6 +122,8 @@ public partial class MainWindow
     {
         var baseSites = ReadBypassSites();
         var currentConfig = WindowsSplitTunnelStore.Load();
+        var presets = new List<SplitTunnelPreset>(currentConfig.Presets ?? []);
+        var activePresetId = currentConfig.ActivePresetId ?? "default";
         var customDomains = new List<string>(currentConfig.CustomDomains ?? []);
         var customProcesses = new List<string>(currentConfig.CustomProcesses ?? []);
         var currentMode = currentConfig.Mode ?? WindowsSplitTunnelConfig.ModeBypass;
@@ -133,6 +135,209 @@ public partial class MainWindow
                 "Configure which traffic goes through VPN and which goes directly through your ISP."),
             13, DeyttTheme.Muted);
         rootStack.Children.Add(subtitleText);
+
+        Action? refreshAllDynamicUi = null;
+
+        void SyncCurrentStateToPreset()
+        {
+            var idx = presets.FindIndex(p => string.Equals(p.Id, activePresetId, StringComparison.OrdinalIgnoreCase));
+            if (idx >= 0)
+            {
+                presets[idx] = presets[idx] with
+                {
+                    Mode = currentMode,
+                    CustomDomains = customDomains.ToArray(),
+                    CustomProcesses = customProcesses.ToArray()
+                };
+            }
+        }
+
+        void SwitchPreset(string targetPresetId)
+        {
+            SyncCurrentStateToPreset();
+            var target = presets.FirstOrDefault(p => string.Equals(p.Id, targetPresetId, StringComparison.OrdinalIgnoreCase));
+            if (target is null) return;
+
+            activePresetId = target.Id;
+            currentMode = target.Mode ?? WindowsSplitTunnelConfig.ModeBypass;
+            customDomains.Clear();
+            customDomains.AddRange(target.CustomDomains ?? []);
+            customProcesses.Clear();
+            customProcesses.AddRange(target.CustomProcesses ?? []);
+
+            SaveAndRefresh();
+        }
+
+        void SaveAndRefresh()
+        {
+            SyncCurrentStateToPreset();
+            WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(
+                customDomains,
+                customProcesses,
+                currentMode,
+                activePresetId,
+                presets));
+            refreshAllDynamicUi?.Invoke();
+        }
+
+        void DeletePreset(string presetId)
+        {
+            if (presets.Count <= 1) return;
+            var idx = presets.FindIndex(p => string.Equals(p.Id, presetId, StringComparison.OrdinalIgnoreCase));
+            if (idx < 0) return;
+
+            presets.RemoveAt(idx);
+            if (string.Equals(activePresetId, presetId, StringComparison.OrdinalIgnoreCase))
+            {
+                var nextPreset = presets[0];
+                activePresetId = nextPreset.Id;
+                currentMode = nextPreset.Mode ?? WindowsSplitTunnelConfig.ModeBypass;
+                customDomains.Clear();
+                customDomains.AddRange(nextPreset.CustomDomains ?? []);
+                customProcesses.Clear();
+                customProcesses.AddRange(nextPreset.CustomProcesses ?? []);
+            }
+            SaveAndRefresh();
+        }
+
+        // 0. Presets Section
+        var presetsSection = new Border
+        {
+            Background = DeyttTheme.Brush(DeyttTheme.Surface),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(14, 12)
+        };
+
+        var presetsCardStack = new StackPanel { Spacing = 10 };
+        presetsSection.Child = presetsCardStack;
+
+        var presetsHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var presetsTitleRow = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        presetsTitleRow.Children.Add(DeyttTheme.TextBlock(Copy("ПРЕСЕТЫ НАСТРОЕК", "PRESETS"), 11, DeyttTheme.Muted, FontWeight.Bold));
+        var presetsCountBadge = DeyttTheme.TextBlock(Copy($"{presets.Count}", $"{presets.Count}"), 11, DeyttTheme.Blue, FontWeight.SemiBold);
+        presetsTitleRow.Children.Add(presetsCountBadge);
+        presetsHeader.Children.Add(presetsTitleRow);
+
+        var addPresetBtn = new Button
+        {
+            Content = Copy("+ Новый пресет", "+ New preset"),
+            Classes = { "deytt-button" },
+            Background = Brushes.Transparent,
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Thickness(1),
+            Foreground = DeyttTheme.Brush(DeyttTheme.Blue),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 4),
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+        };
+        presetsHeader.Children.Add(addPresetBtn);
+        Grid.SetColumn(addPresetBtn, 1);
+        presetsCardStack.Children.Add(presetsHeader);
+
+        // Inline Add Preset Form
+        var addPresetRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"),
+            ColumnSpacing = 6,
+            IsVisible = false
+        };
+        var presetNameBox = new TextBox
+        {
+            PlaceholderText = Copy("Название (например: Игры, Работа...)", "Preset name (e.g. Gaming, Work...)"),
+            FontSize = 12,
+            CornerRadius = new CornerRadius(8),
+            MinHeight = 32,
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center
+        };
+        var confirmAddPresetBtn = new Button
+        {
+            Content = Copy("Создать", "Create"),
+            Classes = { "deytt-button" },
+            Background = DeyttTheme.Brush(DeyttTheme.Blue),
+            Foreground = Brushes.White,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12, 4),
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            MinHeight = 32,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+        };
+        var cancelAddPresetBtn = new Button
+        {
+            Content = Copy("Отмена", "Cancel"),
+            Classes = { "deytt-button" },
+            Background = Brushes.Transparent,
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Thickness(1),
+            Foreground = DeyttTheme.Brush(DeyttTheme.Muted),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10, 4),
+            FontSize = 11,
+            MinHeight = 32,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+        };
+
+        void DoAddPreset()
+        {
+            var name = presetNameBox.Text?.Trim();
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                var newId = Guid.NewGuid().ToString("N")[..8];
+                var newPreset = new SplitTunnelPreset(
+                    newId,
+                    name,
+                    WindowsSplitTunnelConfig.ModeBypass,
+                    [],
+                    []);
+                presets.Add(newPreset);
+                presetNameBox.Text = "";
+                addPresetRow.IsVisible = false;
+                SwitchPreset(newId);
+            }
+        }
+
+        confirmAddPresetBtn.Click += (_, _) => DoAddPreset();
+        presetNameBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                e.Handled = true;
+                DoAddPreset();
+            }
+            else if (e.Key == Avalonia.Input.Key.Escape)
+            {
+                e.Handled = true;
+                addPresetRow.IsVisible = false;
+            }
+        };
+        cancelAddPresetBtn.Click += (_, _) =>
+        {
+            presetNameBox.Text = "";
+            addPresetRow.IsVisible = false;
+        };
+        addPresetBtn.Click += (_, _) =>
+        {
+            addPresetRow.IsVisible = !addPresetRow.IsVisible;
+            if (addPresetRow.IsVisible)
+                presetNameBox.Focus();
+        };
+
+        addPresetRow.Children.Add(presetNameBox);
+        addPresetRow.Children.Add(confirmAddPresetBtn);
+        addPresetRow.Children.Add(cancelAddPresetBtn);
+        Grid.SetColumn(presetNameBox, 0);
+        Grid.SetColumn(confirmAddPresetBtn, 1);
+        Grid.SetColumn(cancelAddPresetBtn, 2);
+        presetsCardStack.Children.Add(addPresetRow);
+
+        var presetsWrapPanel = new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
+        presetsCardStack.Children.Add(presetsWrapPanel);
+
+        rootStack.Children.Add(presetsSection);
 
         // 1. Mode Selector (Segmented Cards)
         var modeSelectorGrid = new Grid
@@ -147,14 +352,6 @@ public partial class MainWindow
         TextBlock? vpnOnlyModeTitle = null;
         TextBlock? bypassModeCheck = null;
         TextBlock? vpnOnlyModeCheck = null;
-
-        Action? refreshAllDynamicUi = null;
-
-        void SaveAndRefresh()
-        {
-            WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses, currentMode));
-            refreshAllDynamicUi?.Invoke();
-        }
 
         // Card 1: Bypass mode
         var bypassHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -775,6 +972,100 @@ public partial class MainWindow
 
                     processListStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(12, 6)));
                 }
+            }
+
+            // Refresh Presets Chips
+            presetsCountBadge.Text = $"{presets.Count}";
+            presetsWrapPanel.Children.Clear();
+            foreach (var pr in presets)
+            {
+                var isActive = string.Equals(pr.Id, activePresetId, StringComparison.OrdinalIgnoreCase);
+                var isVpnOnlyMode = string.Equals(pr.Mode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
+                var ruleCount = (pr.CustomDomains?.Count ?? 0) + (pr.CustomProcesses?.Count ?? 0);
+
+                var chipCard = new Border
+                {
+                    CornerRadius = new CornerRadius(10),
+                    BorderThickness = new Thickness(isActive ? 1.5 : 1),
+                    BorderBrush = DeyttTheme.Brush(isActive ? DeyttTheme.SelectedLine : DeyttTheme.Line),
+                    Background = DeyttTheme.Brush(isActive ? DeyttTheme.Selected : DeyttTheme.Surface2),
+                    Padding = new Thickness(10, 6),
+                    Margin = new Thickness(0, 0, 8, 8),
+                    Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+                };
+
+                var chipContent = new StackPanel
+                {
+                    Orientation = Avalonia.Layout.Orientation.Horizontal,
+                    Spacing = 6,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+                };
+
+                if (isActive)
+                {
+                    chipContent.Children.Add(DeyttTheme.TextBlock("✓", 11, DeyttTheme.Blue, FontWeight.Bold));
+                }
+
+                chipContent.Children.Add(DeyttTheme.TextBlock(
+                    pr.Name,
+                    12,
+                    isActive ? DeyttTheme.Blue : DeyttTheme.Text,
+                    FontWeight.SemiBold));
+
+                // Small badge showing mode (обход / vpn)
+                var modeBadge = DeyttTheme.Card(
+                    DeyttTheme.TextBlock(
+                        isVpnOnlyMode ? Copy("vpn", "vpn") : Copy("обход", "bypass"),
+                        9,
+                        DeyttTheme.Muted),
+                    DeyttTheme.Surface,
+                    DeyttTheme.Line,
+                    4,
+                    new Thickness(5, 1));
+                chipContent.Children.Add(modeBadge);
+
+                if (ruleCount > 0)
+                {
+                    chipContent.Children.Add(DeyttTheme.TextBlock(
+                        $"{ruleCount}",
+                        10,
+                        DeyttTheme.Muted));
+                }
+
+                // Delete button (only if more than 1 preset exists)
+                if (presets.Count > 1)
+                {
+                    var delBtn = new Button
+                    {
+                        Content = "✕",
+                        Classes = { "deytt-button" },
+                        Background = Brushes.Transparent,
+                        Foreground = DeyttTheme.Brush(DeyttTheme.Muted),
+                        Padding = new Thickness(4, 0),
+                        FontSize = 10,
+                        Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+                    };
+                    var capturedId = pr.Id;
+                    delBtn.Click += (_, e) =>
+                    {
+                        e.Handled = true;
+                        DeletePreset(capturedId);
+                    };
+                    chipContent.Children.Add(delBtn);
+                }
+
+                chipCard.Child = chipContent;
+
+                var targetId = pr.Id;
+                chipCard.PointerPressed += (_, _) =>
+                {
+                    if (!string.Equals(activePresetId, targetId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        SwitchPreset(targetId);
+                    }
+                };
+
+                presetsWrapPanel.Children.Add(chipCard);
             }
         };
 
