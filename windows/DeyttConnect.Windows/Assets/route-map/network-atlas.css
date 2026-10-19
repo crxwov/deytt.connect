@@ -215,6 +215,12 @@ button { color: inherit; font: inherit; }
 .home-panel {
   display: grid;
   gap: 24px;
+  transform: rotateY(var(--panel-angle, 0deg));
+  transform-origin: right center;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform;
+  transition: transform 180ms var(--ease-out);
 }
 .status-copy { margin-bottom: 8px; }
 .home-panel h1 {

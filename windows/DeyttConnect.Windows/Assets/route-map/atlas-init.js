@@ -4,6 +4,9 @@
   const root = document.querySelector(".network-atlas");
   const mainPanel = root.querySelector(".home-panel-shell");
   const compactPanel = root.querySelector(".home-compact");
+  const panelTiltStartZoom = 1;
+  const panelTiltRampZoom = 0.25;
+  const panelTiltMaxDegrees = 20;
   const strings = {
     "en": {
       "latency": "response", "speed": "speed", "measurement": "last route measurement",
@@ -119,6 +122,13 @@
     if (zoomPresentationKey === key) return;
     zoomPresentationKey = key;
     const wide = atlas.width >= 1180;
+    const panelTilt = wide && !compact && !immersive && !motionIsReduced()
+      ? Math.min(panelTiltMaxDegrees, Math.max(0,
+          ((zoom - panelTiltStartZoom) / panelTiltRampZoom) * panelTiltMaxDegrees))
+      : 0;
+    const panelAngle = panelTilt > 0.005 ? `-${panelTilt.toFixed(2)}deg` : "0deg";
+    if (root.style.getPropertyValue("--panel-angle") !== panelAngle)
+      root.style.setProperty("--panel-angle", panelAngle);
     // Dock just before the growing globe reaches the readable panel content.
     // Wheel zoom changes only this scene; fullscreen is an explicit command.
     const geometryKey = [atlas.width, atlas.height, atlas.radius, language, presentationLanguage].join("|");

@@ -615,7 +615,9 @@ internal sealed class EngineController
     private static async Task<WindowsTunnelCanaryInterface> WaitForTunInterfaceAsync(Process process,
         IReadOnlyList<string> tunAddresses, CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < 30; attempt++)
+        const int maximumAttempts = 150;
+        var pollInterval = TimeSpan.FromMilliseconds(200);
+        for (var attempt = 0; attempt < maximumAttempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (process.HasExited)
@@ -623,7 +625,7 @@ internal sealed class EngineController
             var tunnelInterface = FindTunInterface(tunAddresses);
             if (tunnelInterface is not null)
                 return tunnelInterface;
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+            await Task.Delay(pollInterval, cancellationToken).ConfigureAwait(false);
         }
         throw new InvalidOperationException("The configured TUN address is not assigned to an active interface.");
     }
@@ -740,7 +742,7 @@ internal sealed class EngineController
         deadline.CancelAfter(timeout ?? TimeSpan.FromSeconds(15));
         var resolved = new System.Collections.Concurrent.ConcurrentDictionary<string, IPAddress[]>(
             StringComparer.OrdinalIgnoreCase);
-        await Task.WhenAll(TunnelCanaries.Select(canary => new Uri(canary.Url).Host)
+        var lookups = TunnelCanaries.Select(canary => new Uri(canary.Url).Host)
             .Distinct(StringComparer.OrdinalIgnoreCase).Select(async host =>
         {
             try
@@ -771,9 +773,37 @@ internal sealed class EngineController
                 }
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
-        })).ConfigureAwait(false);
+        }).ToList();
+        try
+        {
+            while (lookups.Count != 0 && resolved.IsEmpty && !deadline.IsCancellationRequested)
+            {
+                var completed = await Task.WhenAny(lookups).ConfigureAwait(false);
+                lookups.Remove(completed);
+                await completed.ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            deadline.Cancel();
+            _ = DisposeAfterCanaryLookupsAsync(lookups, deadline);
+            throw;
+        }
+        if (lookups.Count == 0)
+            deadline.Dispose();
+        else
+            // Keep late DNS results available to tunnel verification.
+            _ = DisposeAfterCanaryLookupsAsync(lookups, deadline);
         cancellationToken.ThrowIfCancellationRequested();
         return resolved;
+    }
+
+    private static async Task DisposeAfterCanaryLookupsAsync(IEnumerable<Task> lookups,
+        CancellationTokenSource deadline)
+    {
+        try { await Task.WhenAll(lookups).ConfigureAwait(false); }
+        catch { /* A successful bootstrap address remains valid if an optional canary fails. */ }
+        finally { deadline.Dispose(); }
     }
 
     private static HttpClient CreateTunnelHttpClient(WindowsTunnelCanaryInterface tunnelInterface,

@@ -9,20 +9,22 @@ namespace DeyttConnect.Protocol.Tests;
 public sealed class CanaryBootstrapTests
 {
     [Fact]
-    public async Task ColdDnsFailureRetriesAndRetainsBothAddressFamilies()
+    public async Task ColdDnsFailureRetriesUntilOneCanaryRetainsBothAddressFamilies()
     {
         var attempts = new ConcurrentDictionary<string, int>();
         var addresses = new[] { IPAddress.Parse("192.0.2.5"), IPAddress.Parse("2001:db8::5") };
         var result = await EngineController.ResolveCanaryAddressesAsync((host, _) =>
         {
+            if (host == "www.gstatic.com")
+                throw new SocketException((int)SocketError.HostNotFound);
             if (attempts.AddOrUpdate(host, 1, (_, count) => count + 1) == 1)
                 throw new SocketException((int)SocketError.TryAgain);
             return Task.FromResult(addresses);
         }, CancellationToken.None);
 
-        Assert.Equal(2, result.Count);
-        Assert.All(result.Values, value => Assert.Equal(addresses, value));
-        Assert.All(attempts.Values, count => Assert.Equal(2, count));
+        Assert.Single(result);
+        Assert.Equal(addresses, result["www.cloudflare.com"]);
+        Assert.Equal(2, attempts["www.cloudflare.com"]);
     }
 
     [Fact]
@@ -34,6 +36,29 @@ public sealed class CanaryBootstrapTests
 
         Assert.Single(result);
         Assert.True(result.ContainsKey("www.gstatic.com"));
+    }
+
+    [Fact]
+    public async Task SuccessfulCanaryDoesNotWaitForAnotherSlowDnsLookup()
+    {
+        var slowLookupStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSlowLookup = new TaskCompletionSource<IPAddress[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        async Task<IPAddress[]> Resolve(string host, CancellationToken token)
+        {
+            if (host == "www.cloudflare.com")
+                return [IPAddress.Parse("192.0.2.5")];
+            slowLookupStarted.TrySetResult();
+            return await releaseSlowLookup.Task.WaitAsync(token);
+        }
+
+        var bootstrap = EngineController.ResolveCanaryAddressesAsync(Resolve, CancellationToken.None);
+        await slowLookupStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+        var result = await bootstrap.WaitAsync(TimeSpan.FromSeconds(1));
+
+        Assert.Single(result);
+        Assert.Contains("www.cloudflare.com", result.Keys);
+        releaseSlowLookup.SetResult([IPAddress.Parse("2001:db8::5")]);
+        Assert.True(SpinWait.SpinUntil(() => result.Count == 2, TimeSpan.FromSeconds(1)));
     }
 
     [Fact]
