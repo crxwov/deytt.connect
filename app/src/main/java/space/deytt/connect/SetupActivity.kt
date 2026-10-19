@@ -219,7 +219,7 @@ class SetupActivity : Activity() {
         if (!deviceSlotConflict) transferRequestSent = false
         state.visibility = View.VISIBLE
         state.setTextColor(DeyttUi.CORAL)
-        state.text = "${uiCopy(SubscriptionLoadDiagnostics.userMessage(error))}\n\nкод: $reference"
+        state.text = "${uiCopy(SubscriptionLoadDiagnostics.userMessage(error))}\n\n${uiCopy("код")}: $reference"
         lastFailureMessage = state.text.toString()
         state.announceForAccessibility(state.text)
         accountAction.text = uiCopy(when {
@@ -282,7 +282,7 @@ class SetupActivity : Activity() {
                     accountAction.text = uiCopy("Повторить проверку")
                 }.onFailure { error ->
                     state.setTextColor(DeyttUi.CORAL)
-                    state.text = "${SubscriptionErrorText.userMessage(error)}\n\n${uiCopy("Не удалось отправить обращение. Проверьте интернет и повторите попытку.")}"
+                    state.text = "${uiCopy(SubscriptionErrorText.userMessage(error))}\n\n${uiCopy("Не удалось отправить обращение. Проверьте интернет и повторите попытку.")}"
                     lastFailureMessage = state.text.toString()
                     accountAction.text = uiCopy("Обратиться в поддержку")
                 }
@@ -494,7 +494,7 @@ class SetupActivity : Activity() {
                             status.text = when ((error as? TelegramPairingException)?.code) {
                                 "pair_code_invalid" -> "Код неверный или истёк. Запроси новый."
                                 "pair_code_locked" -> "Попытки закончились. Начни вход заново."
-                                else -> "${SubscriptionLoadDiagnostics.userMessage(error)} Если код уже использован, запроси новый."
+                                else -> "${uiCopy(SubscriptionLoadDiagnostics.userMessage(error))} ${uiCopy("Если код уже использован, запроси новый.")}"
                             }
                             SubscriptionLoadDiagnostics.record(this, "pair", error)
                         }

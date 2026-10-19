@@ -12,9 +12,8 @@ object SplitTunnelProfile {
     fun bypassSites(config: String): List<String> {
         val rules = JSONObject(apply(config)).getJSONObject("dns").getJSONArray("rules")
         val suffixes = rules.getJSONObject(0).getJSONArray("domain_suffix")
-        val exact = rules.getJSONObject(1).getJSONArray("domain")
-        return (0 until suffixes.length()).map { "*.${suffixes.getString(it)}" } +
-            (0 until exact.length()).map(exact::getString)
+        val activeSuffixes = (0 until suffixes.length()).map { "*.${suffixes.getString(it)}" }.toSet()
+        return listOf("*.ru", "*.su", "*.рф", "*.xn--p1ai").filter { it in activeSuffixes }
     }
 
     fun apply(

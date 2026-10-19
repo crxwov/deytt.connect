@@ -95,12 +95,12 @@ internal object AppLanguage {
             "Быстрый QUIC-маршрут" to "QUIC transport",
             "Сброс ключей отключит выбранные подключения. Завершение сессии приложения отключает только доступ к аккаунту." to "Key reset disconnects the selected connections. Ending an app session only revokes account access."
         )
-        additions[value]?.let { return it }
-        additions[value.lowercase(Locale.ROOT)]?.let { return if (value == value.uppercase(Locale.ROOT)) it.uppercase(Locale.ROOT) else it }
+        (additions[value] ?: additions.entries.firstOrNull { it.key.equals(value, ignoreCase = true) }?.value)?.let {
+            return if (value == value.uppercase(Locale.ROOT)) it.uppercase(Locale.ROOT) else it
+        }
 
         val upperCase = value == value.uppercase(Locale.ROOT)
-        val normalized = if (upperCase) value.lowercase(Locale.ROOT) else value
-        (translations[value] ?: translations[normalized])?.let {
+        (translations[value] ?: normalizedTranslations[value.lowercase(Locale.ROOT)])?.let {
             return if (upperCase) it.uppercase(Locale.ROOT) else it
         }
         Regex("^версия (.+)$").matchEntire(value)?.let { return "VERSION ${it.groupValues[1]}" }
@@ -193,6 +193,25 @@ internal object AppLanguage {
         Regex("^Проверить задержку через выход (.+): два HTTPS-запроса HEAD или GET, тайм-аут 10 секунд$")
             .matchEntire(value)?.let {
                 return "Check latency through ${it.groupValues[1]}: two HEAD or GET HTTPS requests, 10-second timeout"
+            }
+        Regex("^Проверка выхода через прокси: (.+)$").matchEntire(value)?.let {
+            return "Proxy exit check: ${english(it.groupValues[1])}"
+        }
+        Regex("^Выбранный выход: (.+)$").matchEntire(value)?.let {
+            return "Selected exit: ${english(it.groupValues[1])}"
+        }
+        Regex("^Пинг через выбранный маршрут: ([0-9]+) миллисекунд$").matchEntire(value)?.let {
+            return "Selected route ping: ${it.groupValues[1]} milliseconds"
+        }
+        Regex("^Медиана HTTPS-ответов через активное соединение: ([0-9]+) миллисекунд$").matchEntire(value)?.let {
+            return "Median HTTPS response time through the active connection: ${it.groupValues[1]} milliseconds"
+        }
+        Regex("^Проверяю выход тремя HTTPS-запросами методом (.+), общий тайм-аут 8 секунд$").matchEntire(value)?.let {
+            return "Checking the exit with three ${it.groupValues[1]} HTTPS requests, 8-second total timeout"
+        }
+        Regex("^Медиана трёх HTTPS-ответов через выбранный выход после установки TLS: ([0-9]+) миллисекунд$")
+            .matchEntire(value)?.let {
+                return "Median of three HTTPS response times through the selected exit after TLS setup: ${it.groupValues[1]} milliseconds"
             }
         Regex("^Среднее время HTTPS-ответа через выбранный выход после установки TLS: ([0-9]+) миллисекунд$")
             .matchEntire(value)?.let {
@@ -323,6 +342,46 @@ internal object AppLanguage {
         "через прокси…" to "checking route…",
         "ошибка" to "error",
         "тайм-аут" to "timed out",
+        "Пинг: нет ответа через выбранный маршрут" to "Ping: no response via the selected route",
+        "Проверить пинг через выбранный маршрут" to "Check ping via the selected route",
+        "Пинг: отключите соединение" to "Ping: disconnect first",
+        "Чтобы проверить другой выход, сначала отключите текущее соединение" to "Disconnect the current connection to check another exit",
+        "Пинг: подключите AmneziaWG" to "Ping: connect AmneziaWG",
+        "Для HTTP-проверки подключите выбранный профиль AmneziaWG" to "Connect the selected AmneziaWG profile for HTTP checks",
+        "HTTPS-проверка через активное соединение не ответила за 8 секунд" to "HTTPS check through the active connection timed out after 8 seconds",
+        "Пинг: ошибка" to "Ping: error",
+        "Не удалось запустить проверку через прокси" to "Could not start the proxy check",
+        "Получаем маршруты…" to "Loading routes…",
+        "Создать" to "Create",
+        "Готов к безопасному соединению" to "Ready for a secure connection",
+        "Показывать ваш примерный регион?" to "Show your approximate region?",
+        "не сейчас" to "not now",
+        "Укажи username Telegram. Если аккаунт уже есть в боте, код придёт сюда." to "Enter your Telegram username. If you already have a bot account, the code will arrive here.",
+        "код" to "code",
+        "Если код уже использован, запроси новый." to "If the code was already used, request a new one.",
+        "Сессия Telegram истекла. Войдите через Telegram снова, чтобы обновить подписку." to "Your Telegram session expired. Sign in to Telegram again to refresh your subscription.",
+        "Подписка неактивна. Проверьте срок действия и тариф в Telegram." to "The subscription is inactive. Check its expiry and plan in Telegram.",
+        "Подписка принадлежит другому аккаунту. Войдите в нужный аккаунт Telegram." to "This subscription belongs to another account. Sign in to the correct Telegram account.",
+        "не удалось определить устройство. перезапустите приложение и повторите попытку." to "Could not identify this device. Restart the app and try again.",
+        "Достигнут лимит устройств. Войдите через Telegram для отдельного места deytt.connect или обратитесь в поддержку." to "The device limit was reached. Sign in with Telegram for a separate deytt.connect slot or contact support.",
+        "Доступ к подписке или этому устройству заблокирован. Обратитесь в поддержку." to "Access to this subscription or device is blocked. Contact support.",
+        "Загрузка отменена. Повторите обновление, когда будете готовы." to "Loading was cancelled. Refresh again when you're ready.",
+        "Не удалось найти сервер подписки. Проверьте интернет и DNS или попробуйте другую сеть." to "Could not find the subscription server. Check your connection and DNS, or try another network.",
+        "Не удалось подключиться к серверу подписки. Проверьте интернет или попробуйте другую сеть." to "Could not connect to the subscription server. Check your connection or try another network.",
+        "Не удалось установить защищённое соединение. Проверьте дату и время телефона или попробуйте другую сеть." to "Could not establish a secure connection. Check your phone's date and time or try another network.",
+        "Не удалось сохранить подписку. Проверьте свободное место на телефоне и повторите обновление." to "Could not save the subscription. Check your phone's free space and refresh again.",
+        "Сервер вернул некорректную подписку. Повторите обновление позже или обратитесь в поддержку." to "The server returned an invalid subscription. Refresh later or contact support.",
+        "Слишком много запросов. Подождите немного и повторите обновление." to "Too many requests. Wait a moment and refresh again.",
+        "Сервер перенаправляет запрос. Получите актуальную ссылку через Telegram." to "The server redirected the request. Get the current link through Telegram.",
+        "Сервер оборвал соединение. Проверьте ссылку и повторите обновление." to "The server closed the connection. Check the link and refresh again.",
+        "Сервер не ответил вовремя. Повторите обновление через несколько секунд." to "The server did not respond in time. Refresh again in a few seconds.",
+        "Сервер подписки временно недоступен. Повторите обновление через несколько секунд." to "The subscription server is temporarily unavailable. Refresh again in a few seconds.",
+        "Ссылка на подписку недействительна или срок её действия истёк." to "The subscription link is invalid or has expired.",
+        "Ссылка на подписку не найдена. Проверьте её и повторите попытку." to "The subscription link was not found. Check it and try again.",
+        "Ссылка должна вести на официальный домен deytt.space." to "The link must point to the official deytt.space domain.",
+        "Нужна полная HTTPS-ссылка на подписку." to "A complete HTTPS subscription link is required.",
+        "Не удалось обновить подписку. Проверьте ссылку и повторите попытку." to "Could not refresh the subscription. Check the link and try again.",
+        "Удалить" to "Delete",
         "Проверяю выход через локальный прокси методом HEAD, два запроса, тайм-аут 10 секунд" to "Checking the exit with two HEAD requests, 10-second timeout",
         "обновить" to "refresh",
         "Профили не найдены. Обновить подписку" to "No profiles found. Refresh subscription",
@@ -560,4 +619,8 @@ internal object AppLanguage {
         "Финляндия" to "Finland",
         "Нидерланды" to "Netherlands",
     )
+
+    private val normalizedTranslations by lazy {
+        translations.entries.associate { it.key.lowercase(Locale.ROOT) to it.value }
+    }
 }

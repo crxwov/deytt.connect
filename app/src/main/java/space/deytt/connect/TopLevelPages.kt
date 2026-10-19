@@ -1228,14 +1228,38 @@ internal class PrimaryPages(private val host: MainActivity) {
                 orientation = LinearLayout.VERTICAL
                 background = host.rounded(SURFACE_2, 14f, LINE)
                 setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
-                addView(host.text(copy("Нельзя отключить или удалить. Обновляются вместе с подпиской.", "Cannot be disabled or removed. Updated with your subscription."), 11f, MUTED))
-                val sitesText = if (subscriptionSites.isNotEmpty()) subscriptionSites.joinToString("\n") else copy("Загрузка правил подписки…", "Loading subscription rules…")
-                val textList = host.text(sitesText, 12f, TEXT).apply {
-                    typeface = android.graphics.Typeface.MONOSPACE
-                    setPadding(0, host.dp(6), 0, 0)
-                    setLineSpacing(host.dp(2).toFloat(), 1f)
+                val ruleHeader = LinearLayout(host).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(host.text("🔒", 12f, MUTED))
+                    addView(host.text(copy("базовые правила подписки", "base subscription rules"), 12f, TEXT, android.graphics.Typeface.BOLD),
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = host.dp(6) })
+                    addView(host.text(copy("всегда без vpn", "always bypass VPN"), 10f, SKY, android.graphics.Typeface.BOLD).apply {
+                        setPadding(host.dp(8), host.dp(5), host.dp(8), host.dp(5))
+                        background = host.rounded(0x1F8494FF.toInt(), 10f, 0x3F8494FF.toInt())
+                    })
                 }
-                addView(textList)
+                addView(ruleHeader)
+                val chips = LinearLayout(host).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(0, host.dp(8), 0, host.dp(6))
+                }
+                if (subscriptionSites.isNotEmpty()) {
+                    subscriptionSites.forEachIndexed { index, site ->
+                        chips.addView(host.text(site, 11f, TEXT).apply {
+                            typeface = android.graphics.Typeface.MONOSPACE
+                            setPadding(host.dp(8), host.dp(5), host.dp(8), host.dp(5))
+                            background = host.rounded(SURFACE, 8f, LINE)
+                        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                            if (index > 0) marginStart = host.dp(5)
+                        })
+                    }
+                } else {
+                    chips.addView(host.text(copy("Загрузка правил подписки…", "Loading subscription rules…"), 11f, MUTED))
+                }
+                addView(chips)
+                addView(host.text(copy("Встроены в конфигурацию подписки для стабильной работы российских сервисов и госуслуг.", "Included in the subscription profile for reliable access to Russian services and public services."), 11f, MUTED))
             }
             content.addView(subCard)
 
