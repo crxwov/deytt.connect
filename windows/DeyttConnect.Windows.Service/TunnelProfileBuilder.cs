@@ -509,12 +509,22 @@ internal static class TunnelProfileBuilder
             if (validProcesses.Count > 0)
             {
                 var procArr = new JsonArray();
+                var added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var p in validProcesses)
                 {
-                    procArr.Add(p);
-                    var lower = p.ToLowerInvariant();
-                    if (!string.Equals(lower, p, StringComparison.Ordinal))
-                        procArr.Add(lower);
+                    var baseName = p.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? p[..^4] : p;
+                    var withExe = baseName + ".exe";
+
+                    if (added.Add(p)) procArr.Add(p);
+                    if (added.Add(baseName)) procArr.Add(baseName);
+                    if (added.Add(withExe)) procArr.Add(withExe);
+
+                    var pLower = p.ToLowerInvariant();
+                    if (added.Add(pLower)) procArr.Add(pLower);
+                    var baseLower = baseName.ToLowerInvariant();
+                    if (added.Add(baseLower)) procArr.Add(baseLower);
+                    var exeLower = withExe.ToLowerInvariant();
+                    if (added.Add(exeLower)) procArr.Add(exeLower);
                 }
                 processRules.Add(new JsonObject
                 {
