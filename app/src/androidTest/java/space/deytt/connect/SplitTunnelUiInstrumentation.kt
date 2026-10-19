@@ -48,6 +48,13 @@ class SplitTunnelUiInstrumentation : Instrumentation() {
             waitForIdleSync()
             runOnMainSync { activity.selectTab(3) }
             waitForIdleSync()
+            // Dismiss the first-launch location disclosure when it covers Settings.
+            uiAutomation.rootInActiveWindow?.let { root ->
+                listOf("Не сейчас", "Not now").asSequence()
+                    .flatMap { root.findAccessibilityNodeInfosByText(it).asSequence() }
+                    .firstOrNull()?.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+            }
+            waitForIdleSync()
             Thread.sleep(500)
 
             // 4. Find the split tunneling row in settings
@@ -69,9 +76,11 @@ class SplitTunnelUiInstrumentation : Instrumentation() {
                 allTexts = textViews.map { it.text?.toString().orEmpty() }
                 for (tv in textViews) {
                     val text = tv.text?.toString().orEmpty()
-                    if (text.contains("раздельное туннелирование", ignoreCase = true) ||
-                        text.contains("split tunneling", ignoreCase = true)) {
-                        splitRow = tv.parent as? View ?: tv
+                    if (tv.isShown && (text.contains("раздельное туннелирование", ignoreCase = true) ||
+                        text.contains("split tunneling", ignoreCase = true))) {
+                        var target: View? = tv
+                        while (target != null && !target.isClickable) target = target.parent as? View
+                        splitRow = target
                         break
                     }
                 }
@@ -86,25 +95,48 @@ class SplitTunnelUiInstrumentation : Instrumentation() {
             Thread.sleep(1200)
 
             // 6. Verify the bottom sheet opened
-            var foundSheetTitle = false
-            runOnMainSync {
-                val sheetViews = findAllTextViews(activity.window.decorView)
-                for (tv in sheetViews) {
-                    val text = tv.text?.toString().orEmpty()
-                    if (text.contains("раздельное туннелирование", ignoreCase = true) ||
-                        text.contains("split tunneling", ignoreCase = true)) {
-                        foundSheetTitle = true
-                        break
-                    }
+            val roots = (uiAutomation.windows.mapNotNull { it.root } +
+                listOfNotNull(uiAutomation.rootInActiveWindow)).distinctBy { it.windowId }
+            val sheetRoot = roots.firstOrNull { root ->
+                listOf("Раздельное туннелирование", "Split tunneling").any {
+                    root.findAccessibilityNodeInfosByText(it).isNotEmpty()
                 }
             }
-            check(foundSheetTitle) { "Bottom sheet was not opened after click" }
+            check(sheetRoot != null) {
+                val windowTexts = roots.map { root ->
+                    val texts = mutableListOf<String>()
+                    fun collect(node: android.view.accessibility.AccessibilityNodeInfo) {
+                        node.text?.toString()?.takeIf { it.isNotBlank() }?.let(texts::add)
+                        for (index in 0 until node.childCount) node.getChild(index)?.let(::collect)
+                    }
+                    collect(root)
+                    texts.joinToString(" | ")
+                }
+                "Bottom sheet was not opened after click. Windows: ${windowTexts.joinToString(" || ")}"
+            }
+            val modeControl = listOf("Обход VPN для списка", "Bypass VPN for list")
+                .asSequence().flatMap { sheetRoot.findAccessibilityNodeInfosByText(it).asSequence() }.firstOrNull()
+            check(modeControl != null) { "Split tunnel mode control was not rendered" }
+            modeControl.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+            waitForIdleSync()
+            Thread.sleep(250)
+            val choiceRoot = uiAutomation.windows.mapNotNull { it.root }
+                .firstOrNull { root -> listOf("Режим", "Mode").any { root.findAccessibilityNodeInfosByText(it).isNotEmpty() } }
+                ?: uiAutomation.rootInActiveWindow
+            check(choiceRoot != null) { "Mode choices were not shown" }
+            val vpnOnlyChoice = listOf("VPN только для списка", "VPN only for list")
+                .asSequence().flatMap { choiceRoot.findAccessibilityNodeInfosByText(it).asSequence() }.firstOrNull()
+            check(vpnOnlyChoice != null) { "VPN-only mode choice was not shown" }
+            vpnOnlyChoice.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+            waitForIdleSync()
+            Thread.sleep(250)
+            check(store.readMode() == UserSplitTunnelStore.MODE_VPN_ONLY) { "VPN-only mode selection was not saved" }
 
             // 7. Clean up
             store.clearAll()
             activity.finish()
 
-            results.putString("stream", "PASS SplitTunnelUi verified on device: settings row rendered, summary displayed 2 custom rules, and bottom sheet dialog opened successfully\n")
+            results.putString("stream", "PASS SplitTunnelUi verified on device: settings row rendered, bottom sheet opened, and VPN-only mode selection persisted\n")
             finish(-1, results)
         } catch (error: Throwable) {
             results.putString("stream", "FAIL ${error.javaClass.simpleName}: ${error.message}\n")

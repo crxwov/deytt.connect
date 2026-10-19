@@ -3,6 +3,7 @@ package space.deytt.connect
 import android.app.Instrumentation
 import android.os.Bundle
 import io.nekohasekai.libbox.Libbox
+import org.json.JSONObject
 import org.amnezia.awg.crypto.KeyPair
 import space.deytt.awg.AwgProxyBackend
 import java.util.concurrent.atomic.AtomicInteger
@@ -33,6 +34,12 @@ class SplitTunnelInstrumentation : Instrumentation() {
             store.clearAll()
             check(store.readDomains().isEmpty()) { "Store must start empty" }
             check(store.readPackages().isEmpty()) { "Store must start empty" }
+            targetContext.getSharedPreferences("user_split_tunnel", android.content.Context.MODE_PRIVATE).edit()
+                .putString("custom_domains", "[\"legacy.example\"]")
+                .putString("custom_packages", "[\"com.example.legacy\"]").commit()
+            check(store.readDomains() == listOf("legacy.example")) { "Legacy domains did not migrate to the default preset" }
+            check(store.readPackages() == listOf("com.example.legacy")) { "Legacy packages did not migrate to the default preset" }
+            store.clearAll()
             check(store.addDomain("https://*.custom-bypass.org/path")) { "Failed to add domain" }
             check(store.addDomain("myapp-direct.net")) { "Failed to add domain" }
             check(!store.addDomain("invalid..domain")) { "Must reject invalid domain" }
@@ -47,6 +54,24 @@ class SplitTunnelInstrumentation : Instrumentation() {
             check(!store.readDomains().contains("myapp-direct.net")) { "Domain removal failed" }
             store.removePackage("com.android.chrome")
             check(!store.readPackages().contains("com.android.chrome")) { "Package removal failed" }
+
+            check(store.createPreset("Игры")) { "Failed to create preset" }
+            check(store.addDomain("vpn-only.example")) { "Failed to add preset domain" }
+            check(store.addPackage("com.example.vpn")) { "Failed to add preset package" }
+            store.setMode(UserSplitTunnelStore.MODE_VPN_ONLY)
+            val gamePreset = store.activePreset()
+            check(gamePreset.mode == UserSplitTunnelStore.MODE_VPN_ONLY) { "Preset mode was not saved" }
+            check(gamePreset.domains == listOf("vpn-only.example")) { "Preset domains were not saved" }
+            check(UserSplitTunnelStore(targetContext).activePreset() == gamePreset) { "Preset was not persisted" }
+            check(store.createPreset("Работа")) { "Failed to create second preset" }
+            check(store.readDomains().isEmpty() && store.readMode() == UserSplitTunnelStore.MODE_BYPASS) { "New preset inherited rules" }
+            check(store.selectPreset(gamePreset.id)) { "Failed to switch preset" }
+            check(store.readDomains() == listOf("vpn-only.example")) { "Preset switch lost its rules" }
+            val vpnOnly = SplitTunnelProfile.apply(source, store.readDomains(), store.readPackages(), store.readMode())
+            Libbox.checkConfig(runtime(vpnOnly))
+            check(JSONObject(vpnOnly).getJSONObject("route").getString("final") == "direct") { "VPN-only fallback must be direct" }
+            check(store.deleteActivePreset()) { "Failed to delete selected preset" }
+            check(store.activePreset().id != gamePreset.id) { "Deleted preset remained active" }
             store.clearAll()
 
             // Verify libbox schemas with custom domains and packages

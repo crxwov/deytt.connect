@@ -115,18 +115,25 @@ class SplitTunnelProfileTest {
         val root = JSONObject(SplitTunnelProfile.apply(config, customDomains, customPackages))
 
         val routeRules = root.getJSONObject("route").getJSONArray("rules")
-        val suffixesRule = routeRules.getJSONObject(2).getJSONArray("domain_suffix")
-        val suffixes = (0 until suffixesRule.length()).map(suffixesRule::getString).toSet()
+        val suffixes = (0 until routeRules.length()).flatMap { ruleIndex ->
+            routeRules.optJSONObject(ruleIndex)?.optJSONArray("domain_suffix")?.let { values ->
+                (0 until values.length()).map(values::getString)
+            }.orEmpty()
+        }.toSet()
         assertTrue(suffixes.contains("ru"))
         assertTrue(suffixes.contains("xn--p1ai"))
         assertTrue(suffixes.contains("customwild.org"))
 
-        val exactRule = routeRules.getJSONObject(3).getJSONArray("domain")
-        val exact = (0 until exactRule.length()).map(exactRule::getString).toSet()
+        val exact = (0 until routeRules.length()).flatMap { ruleIndex ->
+            routeRules.optJSONObject(ruleIndex)?.optJSONArray("domain")?.let { values ->
+                (0 until values.length()).map(values::getString)
+            }.orEmpty()
+        }.toSet()
         assertTrue(exact.contains("cp.cloudflare.com"))
         assertTrue(exact.contains("custom.example.com"))
 
-        val packageRule = routeRules.getJSONObject(4).getJSONArray("package_name")
+        val packageRule = (0 until routeRules.length()).map(routeRules::getJSONObject)
+            .first { it.has("package_name") }.getJSONArray("package_name")
         val packages = (0 until packageRule.length()).map(packageRule::getString).toSet()
         assertTrue(packages.contains("org.telegram.messenger"))
         assertTrue(packages.contains("com.google.android.youtube"))
@@ -153,5 +160,75 @@ class SplitTunnelProfileTest {
         assertTrue(UserSplitTunnelStore.isValidPackage("com.example.app_1"))
         assertFalse(UserSplitTunnelStore.isValidPackage("invalid package"))
         assertFalse(UserSplitTunnelStore.isValidPackage("1com.example"))
+    }
+
+    @Test fun vpnOnlyRoutesSelectedRulesThroughProxyAndEverythingElseDirect() {
+        val root = JSONObject(SplitTunnelProfile.apply(
+            config, listOf("custom.example.com", "*.customwild.org", "yandex.net"), listOf("org.telegram.messenger"),
+            UserSplitTunnelStore.MODE_VPN_ONLY
+        ))
+        val route = root.getJSONObject("route")
+        assertEquals("direct", route.getString("final"))
+        val rules = route.getJSONArray("rules")
+        assertTrue((0 until rules.length()).any { index ->
+            val rule = rules.getJSONObject(index)
+            rule.optString("outbound") == "selected" &&
+                rule.optJSONArray("domain")?.toString()?.contains("custom.example.com") == true
+        })
+        assertTrue((0 until rules.length()).any { index ->
+            val rule = rules.getJSONObject(index)
+            rule.optString("outbound") == "selected" &&
+                rule.optJSONArray("package_name")?.toString()?.contains("org.telegram.messenger") == true
+        })
+        val dns = root.getJSONObject("dns").getJSONArray("rules")
+        assertTrue((0 until dns.length()).any { index ->
+            val rule = dns.getJSONObject(index)
+            rule.optString("server") == "remote-dns" &&
+                rule.optJSONArray("domain")?.toString()?.contains("custom.example.com") == true
+        })
+        val tun = root.getJSONArray("inbounds").getJSONObject(0)
+        assertFalse(tun.has("exclude_package"))
+        val baseDirectIndex = (0 until rules.length()).first { index ->
+            val rule = rules.getJSONObject(index)
+            rule.optString("outbound") == "direct" &&
+                rule.optJSONArray("domain_suffix")?.toString()?.contains("yandex.net") == true
+        }
+        val selectedIndex = (0 until rules.length()).first { index ->
+            val rule = rules.getJSONObject(index)
+            rule.optString("outbound") == "selected" &&
+                rule.optJSONArray("domain")?.toString()?.contains("yandex.net") == true
+        }
+        assertTrue("Subscription bypass must keep precedence over custom rules", baseDirectIndex < selectedIndex)
+        ProfileValidator.validate(root.toString())
+    }
+
+    @Test fun vpnOnlyAwgKeepsCustomRulesOnAwgOutbound() {
+        val root = JSONObject(SplitTunnelProfile.forAwg(
+            config, 23456, "random-user", "random-password",
+            listOf("custom.example.com"), listOf("org.telegram.messenger"),
+            UserSplitTunnelStore.MODE_VPN_ONLY
+        ))
+        val route = root.getJSONObject("route")
+        assertEquals("direct", route.getString("final"))
+        val rules = route.getJSONArray("rules")
+        assertTrue((0 until rules.length()).any { rules.getJSONObject(it).optString("outbound") == SplitTunnelProfile.AWG_OUTBOUND })
+        assertFalse(root.getJSONArray("inbounds").getJSONObject(0).has("exclude_package"))
+        ProfileValidator.validate(root.toString())
+    }
+
+    @Test fun vpnOnlyOpenFluxKeepsSelectedRulesInsideCarrier() {
+        val root = JSONObject(SplitTunnelProfile.forOpenFlux(
+            config, 23456, "random-user", "random-password",
+            listOf("custom.example.com"), listOf("org.telegram.messenger"),
+            UserSplitTunnelStore.MODE_VPN_ONLY
+        ))
+        val route = root.getJSONObject("route")
+        assertEquals("direct", route.getString("final"))
+        val rules = route.getJSONArray("rules")
+        assertTrue((0 until rules.length()).any { rules.getJSONObject(it).optString("outbound") == SplitTunnelProfile.OPENFLUX_OUTBOUND })
+        assertFalse(root.getJSONArray("inbounds").getJSONObject(0).has("exclude_package"))
+        assertEquals(SplitTunnelProfile.OPENFLUX_OUTBOUND,
+            root.getJSONObject("dns").getJSONArray("servers").getJSONObject(1).getString("detour"))
+        ProfileValidator.validate(root.toString())
     }
 }

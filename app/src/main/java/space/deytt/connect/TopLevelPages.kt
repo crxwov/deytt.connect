@@ -933,14 +933,104 @@ internal class PrimaryPages(private val host: MainActivity) {
         sheet.addView(host.text(copy("Раздельное туннелирование", "Split tunneling"), 20f, TEXT, android.graphics.Typeface.BOLD).apply {
             setPadding(0, host.dp(6), 0, host.dp(4))
         })
-        sheet.addView(host.text(
-            copy(
-                "Трафик выбранных сайтов и приложений идёт напрямую без VPN. Базовые правила из подписки активны всегда.",
-                "Traffic for selected sites and apps bypasses the VPN. Subscription rules are always active."
-            ),
-            12f,
-            MUTED
-        ).apply { setLineSpacing(host.dp(2).toFloat(), 1f) })
+        val modeDescription = host.text("", 12f, MUTED).apply { setLineSpacing(host.dp(2).toFloat(), 1f) }
+        sheet.addView(modeDescription)
+
+        val presetName = host.text("", 12f, SKY, android.graphics.Typeface.BOLD).apply {
+            setPadding(host.dp(10), host.dp(10), host.dp(10), host.dp(10))
+            background = host.rounded(SURFACE_2, 12f, LINE)
+            isClickable = true
+        }
+        val modeButton = host.text("", 12f, SKY, android.graphics.Typeface.BOLD).apply {
+            setPadding(host.dp(10), host.dp(10), host.dp(10), host.dp(10))
+            background = host.rounded(SURFACE_2, 12f, LINE)
+            isClickable = true
+        }
+        val addPreset = host.text("+", 16f, SKY, android.graphics.Typeface.BOLD).apply {
+            setPadding(host.dp(12), host.dp(8), host.dp(12), host.dp(8))
+            background = host.rounded(SURFACE_2, 12f, LINE)
+            isClickable = true
+        }
+        val deletePreset = host.text("✕", 14f, DeyttUi.CORAL, android.graphics.Typeface.BOLD).apply {
+            setPadding(host.dp(12), host.dp(8), host.dp(12), host.dp(8))
+            background = host.rounded(SURFACE_2, 12f, LINE)
+            isClickable = true
+        }
+        val presetRow = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, host.dp(10), 0, host.dp(2))
+            addView(presetName, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(addPreset, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = host.dp(6) })
+            addView(deletePreset, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginStart = host.dp(6) })
+        }
+        sheet.addView(presetRow)
+        sheet.addView(modeButton)
+
+        lateinit var renderContent: () -> Unit
+        fun updatePresetControls() {
+            val active = store.activePreset()
+            val vpnOnly = active.mode == UserSplitTunnelStore.MODE_VPN_ONLY
+            presetName.text = active.name + "  ▾"
+            deletePreset.visibility = if (active.id == "default") View.GONE else View.VISIBLE
+            modeButton.text = copy(
+                if (vpnOnly) "VPN только для списка" else "Обход VPN для списка",
+                if (vpnOnly) "VPN only for list" else "Bypass VPN for list"
+            ) + "  ▾"
+            modeDescription.text = copy(
+                if (vpnOnly) "Через VPN идут только выбранные сайты и приложения. Базовые правила подписки остаются активны." else "Выбранные сайты и приложения идут напрямую без VPN. Базовые правила подписки остаются активны.",
+                if (vpnOnly) "Only selected sites and apps use VPN. Subscription rules stay active." else "Selected sites and apps bypass VPN. Subscription rules stay active."
+            )
+        }
+
+        presetName.setOnClickListener {
+            val presets = store.readPresets()
+            AlertDialog.Builder(host).setTitle(copy("Выберите пресет", "Choose a preset"))
+                .setItems(presets.map { it.name }.toTypedArray()) { _, index ->
+                    store.selectPreset(presets[index].id)
+                    updatePresetControls()
+                    renderContent()
+                    onChanged()
+                }.show()
+        }
+        addPreset.setOnClickListener {
+            val input = EditText(host).apply {
+                hint = copy("Например, Работа", "For example, Work")
+                filters = arrayOf(InputFilter.LengthFilter(32))
+            }
+            AppDialog.Builder(host).setTitle(copy("Новый пресет", "New preset")).setView(input)
+                .setNegativeButton(host.uiCopy("Отмена"), null)
+                .setPositiveButton(host.uiCopy("Создать")) { _, _ ->
+                    if (store.createPreset(input.text.toString())) {
+                        updatePresetControls()
+                        renderContent()
+                        onChanged()
+                    } else AlertDialog.Builder(host).setMessage(copy("Имя пустое или уже занято.", "Name is empty or already used."))
+                        .setPositiveButton("OK", null).show()
+                }.show()
+        }
+        deletePreset.setOnClickListener {
+            AppDialog.Builder(host).setTitle(copy("Удалить пресет?", "Delete preset?"))
+                .setNegativeButton(host.uiCopy("Отмена"), null)
+                .setPositiveButton(host.uiCopy("Удалить")) { _, _ ->
+                    store.deleteActivePreset()
+                    updatePresetControls()
+                    renderContent()
+                    onChanged()
+                }.show()
+        }
+        modeButton.setOnClickListener {
+            val modes = arrayOf(copy("Обход VPN для списка", "Bypass VPN for list"), copy("VPN только для списка", "VPN only for list"))
+            val selected = if (store.readMode() == UserSplitTunnelStore.MODE_VPN_ONLY) 1 else 0
+            AlertDialog.Builder(host).setTitle(copy("Режим", "Mode")).setSingleChoiceItems(modes, selected) { choice, index ->
+                store.setMode(if (index == 1) UserSplitTunnelStore.MODE_VPN_ONLY else UserSplitTunnelStore.MODE_BYPASS)
+                choice.dismiss()
+                updatePresetControls()
+                renderContent()
+                onChanged()
+            }.setNegativeButton(host.uiCopy("Отмена"), null).show()
+        }
+        updatePresetControls()
 
         val scroll = ScrollView(host).apply {
             isFillViewport = true
@@ -954,14 +1044,15 @@ internal class PrimaryPages(private val host: MainActivity) {
 
         sheet.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
 
-        fun renderContent() {
+        renderContent = {
             content.removeAllViews()
+            val vpnOnly = store.readMode() == UserSplitTunnelStore.MODE_VPN_ONLY
 
             // 1. Свои сайты
             val sitesHeader = LinearLayout(host).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                addView(host.sectionLabel(copy("сайты без vpn", "bypass sites")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(host.sectionLabel(if (vpnOnly) copy("сайты через vpn", "sites through vpn") else copy("сайты без vpn", "bypass sites")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 val addBtn = host.text("+ " + copy("Добавить", "Add"), 12f, SKY, android.graphics.Typeface.BOLD).apply {
                     setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
                     background = host.rounded(0x1F8494FF.toInt(), 12f, 0x3F8494FF.toInt())
@@ -1030,7 +1121,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                         val textCol = LinearLayout(host).apply {
                             orientation = LinearLayout.VERTICAL
                             addView(host.text(domain, 14f, TEXT, android.graphics.Typeface.BOLD))
-                            addView(host.text(copy("Прямое соединение без VPN", "Direct connection without VPN"), 11f, MUTED))
+                            addView(host.text(if (vpnOnly) copy("Через VPN", "Through VPN") else copy("Прямое соединение без VPN", "Direct connection without VPN"), 11f, MUTED))
                         }
                         addView(textCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                         val delBtn = host.text("✕", 14f, DeyttUi.CORAL, android.graphics.Typeface.BOLD).apply {
@@ -1054,12 +1145,12 @@ internal class PrimaryPages(private val host: MainActivity) {
             val appsHeader = LinearLayout(host).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                addView(host.sectionLabel(copy("приложения без vpn", "bypass apps")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(host.sectionLabel(if (vpnOnly) copy("приложения через vpn", "apps through vpn") else copy("приложения без vpn", "bypass apps")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 val addBtn = host.text("+ " + copy("Добавить", "Add"), 12f, SKY, android.graphics.Typeface.BOLD).apply {
                     setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
                     background = host.rounded(0x1F8494FF.toInt(), 12f, 0x3F8494FF.toInt())
                     setOnClickListener {
-                        showAppPickerSheet { selectedPkg ->
+                        showAppPickerSheet(vpnOnly) { selectedPkg ->
                             store.addPackage(selectedPkg)
                             renderContent()
                             onChanged()
@@ -1166,7 +1257,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         showSheet(dialog, sheet)
     }
 
-    private fun showAppPickerSheet(onSelected: (String) -> Unit) {
+    private fun showAppPickerSheet(vpnOnly: Boolean, onSelected: (String) -> Unit) {
         val dialog = Dialog(host)
         val sheet = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
@@ -1180,8 +1271,8 @@ internal class PrimaryPages(private val host: MainActivity) {
         })
         sheet.addView(host.text(
             copy(
-                "Трафик выбранного приложения будет идти напрямую в обход VPN.",
-                "Traffic for the selected application will bypass the VPN."
+                if (vpnOnly) "Трафик выбранного приложения будет идти через VPN." else "Трафик выбранного приложения будет идти напрямую в обход VPN.",
+                if (vpnOnly) "Traffic for the selected application will use VPN." else "Traffic for the selected application will bypass VPN."
             ),
             12f,
             MUTED
@@ -1350,11 +1441,9 @@ internal class PrimaryPages(private val host: MainActivity) {
         val splitStore = UserSplitTunnelStore(host)
         fun splitTunnelSummary(): String {
             val count = splitStore.readDomains().size + splitStore.readPackages().size
-            return if (count > 0) {
-                copy("Подписка + $count своих правил", "Subscription + $count custom rules")
-            } else {
-                copy("Сайты и приложения без VPN", "Sites and apps without VPN")
-            }
+            val mode = if (splitStore.readMode() == UserSplitTunnelStore.MODE_VPN_ONLY) copy("VPN только для списка", "VPN only for list")
+                else copy("обход VPN", "bypass VPN")
+            return splitStore.activePreset().name + " · " + mode + " · " + count
         }
         val splitRow = host.row(
             copy("Раздельное туннелирование", "Split tunneling"),
