@@ -8,11 +8,13 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.net.ConnectivityManager
+import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.Build
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
+import android.os.PowerManager
 import android.util.Log
 import io.nekohasekai.libbox.BridgeOptions
 import io.nekohasekai.libbox.BridgeSession
@@ -44,18 +46,24 @@ import io.nekohasekai.libbox.SystemProxyStatus
 import io.nekohasekai.libbox.TunOptions
 import io.nekohasekai.libbox.WIFIState
 import java.net.URL
+import java.net.Inet4Address
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorCompletionService
 import java.util.concurrent.ExecutorService
+import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import javax.net.ssl.HttpsURLConnection
 import org.amnezia.awg.config.Config
 import space.deytt.awg.AwgProxyBackend
+import space.deytt.openflux.OpenFluxProxyBackend
 import java.io.BufferedReader
 import java.io.StringReader
 import java.util.UUID
+
+private class OpenFluxRouteException(message: String) : IllegalStateException(message)
+private class TunnelVerificationException(message: String, cause: Throwable?) : IllegalStateException(message, cause)
 
 open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInterface {
     companion object {
@@ -73,10 +81,10 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         private const val CHANNEL_ID = "vpn"
         private const val NOTIFICATION_ID = 42
         private const val TAG = "deytt-connect"
-        // A hostname-backed HTTPS probe avoids treating a TLS handshake to a
-        // bare CDN IP as a route failure. DNS is checked separately below.
-        private const val TRANSPORT_CANARY = "https://www.cloudflare.com/cdn-cgi/trace"
-        private const val DNS_CANARY = "https://www.gstatic.com/generate_204"
+        private const val MAX_CARRIER_DNS_SERVERS = 4
+        private val FALLBACK_CARRIER_DNS = arrayOf("1.1.1.1", "8.8.8.8")
+        private const val CANARY_TIMEOUT_MILLIS = 6_000
+        private const val CANARY_BUDGET_MILLIS = 36_000L
         const val STATE_PREFS = "vpn_state"
         const val STATE_STATUS = "status"
         const val STATE_ERROR = "error"
@@ -96,17 +104,92 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     private val executor = Executors.newSingleThreadExecutor()
+    private val openFluxExecutor = Executors.newSingleThreadExecutor()
+    private val openFluxLeaseExecutor = Executors.newSingleThreadExecutor()
+    private val canaryTimeoutExecutor = Executors.newSingleThreadScheduledExecutor()
+    private var openFluxMonitor: Future<*>? = null
     private var commandServer: CommandServer? = null
     private var commandClient: CommandClient? = null
     private var tunnel: ParcelFileDescriptor? = null
     private var awgProxy: AwgProxyBackend? = null
+    private var openFluxProxy: OpenFluxProxyBackend? = null
+    private var openFluxExpiry: Long? = null
+    @Volatile private var activeCanary: HttpsURLConnection? = null
+    @Volatile private var previousVpnNetworks: Set<android.net.Network> = emptySet()
     private var activeRuntimeConfig: String? = null
     private var started = false
     private var routeProbeOnly = false
     private var notificationText = "Запуск deytt./connect"
+    private var lastActiveAutoRoute: ActiveRouteSelection? = null
     private val operation = AtomicLong(0)
+
+    private fun formatConnectedNotificationText(autoRoute: ActiveRouteSelection? = lastActiveAutoRoute): String {
+        val selected = SelectedRouteStore(this).read()
+        return if (selected.id == "auto" || selected.protocol == RouteProtocol.AUTO) {
+            val route = autoRoute ?: lastActiveAutoRoute
+            if (route != null) {
+                val flag = RouteCatalog.flag(route.exitCountry)
+                val country = route.routeKey.lowercase()
+                "$flag ./auto $country"
+            } else {
+                "✦ ./auto"
+            }
+        } else {
+            val flag = selected.flag.ifBlank { RouteCatalog.flag(selected.countryCode) }
+            val country = selected.countryCode.lowercase()
+            val protocol = selected.protocol.bypassNotificationLabel
+            if (country.isNotBlank()) {
+                "$flag ./$country $protocol"
+            } else {
+                "$flag ./$protocol"
+            }
+        }
+    }
     @Volatile private var probeWorkers: ExecutorService? = null
-    private val networkBridge by lazy { AndroidNetworkBridge(this) }
+    private var wakeLock: PowerManager.WakeLock? = null
+    private val networkBridge by lazy {
+        AndroidNetworkBridge(this) { network ->
+            applyUnderlyingNetworks(network)
+        }
+    }
+
+    private fun applyUnderlyingNetworks(network: Network?) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                setUnderlyingNetworks(if (network != null) arrayOf(network) else null)
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to apply underlying network", e)
+        }
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            if (wakeLock == null) {
+                val pm = getSystemService(POWER_SERVICE) as? PowerManager
+                wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "deytt:vpn_connection")?.apply {
+                    setReferenceCounted(false)
+                }
+            }
+            wakeLock?.let {
+                if (!it.isHeld) it.acquire()
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to acquire wake lock", e)
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let {
+                if (it.isHeld) it.release()
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Failed to release wake lock", e)
+        } finally {
+            wakeLock = null
+        }
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_RESTORE_NOTIFICATION) {
@@ -152,6 +235,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         if (!started) {
             started = true
             runtimeRunning = true
+            acquireWakeLock()
             val operationId = operation.incrementAndGet()
             try {
                 startForegroundCompat("Запуск deytt./connect")
@@ -175,6 +259,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         if (this is RouteProbeVpnService || routeProbeOnly) closeRouteProbeCore() else stopTunnel()
         probeWorkers?.shutdownNow()
         executor.shutdownNow()
+        openFluxExecutor.shutdownNow()
+        openFluxLeaseExecutor.shutdownNow()
+        canaryTimeoutExecutor.shutdownNow()
         super.onDestroy()
     }
 
@@ -203,7 +290,6 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
         started = true
         routeProbeOnly = true
-        runtimeRunning = false
         routeProbeRunning = true
         val operationId = operation.incrementAndGet()
         try {
@@ -336,9 +422,10 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 }
             }
         } catch (error: Throwable) {
-            Log.w(TAG, "Route proxy probe failed at $stage (${probeFailureKind(error)})")
+            Log.w(TAG, "Route proxy probe failed at $stage (${probeFailureKind(error)}): ${error.message}", error)
+            val detail = error.message?.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
             val message = if (stage == "batch routes setup" || stage == "command server start" || stage == "libbox setup")
-                "Не удалось запустить диагностику" else routeProbeError(error)
+                "Сбой запуска ядра$detail" else routeProbeError(error)
             routeTags.forEach { tag ->
                 sendRouteProbeResult(requestId, tag, null, message)
             }
@@ -347,7 +434,6 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             probeWorkers = null
             closeRouteProbeCore()
             started = false
-            runtimeRunning = false
             routeProbeOnly = false
             routeProbeRunning = false
             stopForegroundCompat()
@@ -479,6 +565,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     private fun startTunnel(operationId: Long) {
+        var pendingOpenFlux: OpenFluxProxyBackend? = null
         try {
             val config = SubscriptionStore(this).readCurrent()
             if (config == null) {
@@ -486,6 +573,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 return
             }
             val selected = SelectedRouteStore(this).read()
+            Log.i(TAG, "VPN start engine=${selected.engine}")
             val parsedAwg = if (selected.engine == TunnelEngine.AMNEZIAWG) {
                 val raw = AwgProfileStore(this).read(selected.id)
                     ?: error("Обновите подписку: профиль AmneziaWG отсутствует")
@@ -494,9 +582,44 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             // Endpoint hostname resolution must not hold the lifecycle lock:
             // Android calls stop/revoke on its main thread.
             val awgUserspace = parsedAwg?.toAwgUserspaceString()
+            val openFluxOwner = if (selected.engine == TunnelEngine.OPENFLUX) OpenFluxProfileStore.owner(this)
+                ?: throw OpenFluxRouteException("Подключите аккаунт и обновите подписку") else null
+            val openFluxProfile = if (selected.engine == TunnelEngine.OPENFLUX) {
+                val cached = OpenFluxProfileStore(this).profiles(openFluxOwner).firstOrNull { it.id == selected.id }
+                val profile = if (cached == null || OpenFluxLeaseSchedule.needsRefreshBeforeStart(
+                        cached.expiresAt, System.currentTimeMillis() / 1000)) {
+                    SubscriptionClient.refreshOpenFlux(this, requireAvailable = true).firstOrNull { it.id == selected.id }
+                } else cached
+                profile
+                    ?: throw OpenFluxRouteException("Обновите подписку: профиль обхода отсутствует или истёк")
+                if (OpenFluxLeaseSchedule.needsRefreshBeforeStart(profile.expiresAt, System.currentTimeMillis() / 1000)) {
+                    throw OpenFluxRouteException("Обновите подписку: профиль обхода скоро истечёт")
+                }
+                profile
+            } else null
+            val openFluxUsername = UUID.randomUUID().toString()
+            val openFluxPassword = UUID.randomUUID().toString()
+            if (openFluxProfile != null) {
+                ensureCurrent(operationId)
+                if (OpenFluxProfileStore.owner(this) != openFluxOwner) throw OpenFluxRouteException("Аккаунт изменён")
+                pendingOpenFlux = OpenFluxProxyBackend.start(openFluxProfile.nativeJson(),
+                    openFluxUsername, openFluxPassword, object : OpenFluxProxyBackend.SocketProtector {
+                        override fun protect(fd: Int): Boolean = this@ConnectVpnService.protect(fd)
+                        override fun dnsServers(): Array<String> = physicalDnsServers()
+                    })
+            }
             synchronized(this) {
                 ensureCurrent(operationId)
-                val routed = if (parsedAwg != null) {
+                previousVpnNetworks = ownedVpnNetworks().toSet()
+                val routed = if (pendingOpenFlux != null) {
+                    check(openFluxOwner != null && OpenFluxProfileStore.owner(this) == openFluxOwner) { "Аккаунт изменён" }
+                    val proxy = pendingOpenFlux!!
+                    openFluxProxy = proxy
+                    pendingOpenFlux = null
+                    openFluxExpiry = openFluxProfile!!.expiresAt
+                    check(proxy.isConnected()) { "Маршрут обхода ещё не подтвердил защищённое соединение" }
+                    SplitTunnelProfile.forOpenFlux(config, proxy.port(), openFluxUsername, openFluxPassword)
+                } else if (parsedAwg != null) {
                     val local = parsedAwg.`interface`
                     val username = UUID.randomUUID().toString()
                     val password = UUID.randomUUID().toString()
@@ -527,19 +650,163 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             ensureCurrent(operationId)
             publishStatus(VpnPhase.CHECKING, "Проверяем туннель…", "Проверяю доступ к интернету через выбранный маршрут")
             updateNotification("Проверяем туннель…")
-            verifyTunnel()
+            verifyTunnel(operationId, openFluxOwner)
             synchronized(this) {
                 ensureCurrent(operationId)
-                updateNotification("Подключено")
+                openFluxProxy?.let {
+                    check(it.isConnected() && it.bytesSent() > 0 && it.bytesReceived() > 0) { "Маршрут обхода не передаёт трафик" }
+                    Log.i(TAG, "OpenFlux carrier verified sent=${it.bytesSent()} received=${it.bytesReceived()}")
+                }
+                updateNotification(formatConnectedNotificationText())
                 publishStatus(VpnPhase.CONNECTED, "Подключено")
+                if (openFluxProfile != null) {
+                    openFluxMonitor = openFluxExecutor.submit {
+                        try {
+                            monitorOpenFlux(operationId, openFluxProfile, openFluxOwner!!)
+                        } catch (_: InterruptedException) {
+                            Thread.currentThread().interrupt()
+                        } catch (error: Throwable) {
+                            synchronized(this) {
+                                if (operation.get() == operationId && runtimeRunning)
+                                    fail(errorMessage(error, "Маршрут обхода отключился"))
+                            }
+                        }
+                    }
+                }
             }
             Log.i(TAG, "VPN service started")
         } catch (error: Throwable) {
+            runCatching { pendingOpenFlux?.close() }
             Log.e(TAG, "Unable to start VPN", error)
             if (operation.get() == operationId) {
                 fail(errorMessage(error, "Не удалось запустить соединение"))
             }
         }
+    }
+
+    private fun monitorOpenFlux(operationId: Long, profile: OpenFluxProfile, owner: String) {
+        // A separate interruptible worker keeps lease I/O off the start/stop queue.
+        var renewAt = android.os.SystemClock.elapsedRealtime() + OpenFluxLeaseSchedule.renewalDelayMillis(
+            profile.expiresAt, System.currentTimeMillis() / 1000)
+        var reportAt = android.os.SystemClock.elapsedRealtime() + 30_000L
+        val recovery = OpenFluxReconnectGrace()
+        var recovering = false
+        var renewal: Future<List<OpenFluxProfile>?>? = null
+        try {
+        while (operation.get() == operationId && runtimeRunning) {
+            Thread.sleep(2_000)
+            synchronized(this) {
+                if (operation.get() != operationId || !runtimeRunning) return
+                if (OpenFluxProfileStore.owner(this) != owner) {
+                    fail("Аккаунт изменён. Подключитесь заново")
+                    return
+                }
+                if ((openFluxExpiry ?: 0) <= System.currentTimeMillis() / 1000) {
+                    fail("Профиль обхода истёк. Обновите подписку")
+                    return
+                }
+            }
+            if (android.os.SystemClock.elapsedRealtime() >= renewAt && renewal == null) {
+                // Lease HTTP must not suspend expiry, owner or recovery checks.
+                renewal = openFluxLeaseExecutor.submit<List<OpenFluxProfile>?> {
+                    runCatching { SubscriptionClient.refreshOpenFlux(this) }.getOrNull()
+                }
+            }
+            if (renewal?.isDone == true) {
+                val renewed = runCatching { renewal?.get() }.getOrNull()
+                renewal = null
+                var extended = false
+                synchronized(this) {
+                    if (operation.get() != operationId || !runtimeRunning) return
+                    val sameChannel = renewed?.firstOrNull { it.id == profile.id && profile.sameChannel(it) }
+                    if (renewed != null && sameChannel == null) {
+                        fail("Профиль обхода отозван. Обновите подписку")
+                        return
+                    }
+                    if (sameChannel != null) {
+                        extended = sameChannel.expiresAt > (openFluxExpiry ?: 0)
+                        openFluxExpiry = sameChannel.expiresAt
+                    }
+                }
+                // Retry a transient outage before the current lease expires.
+                renewAt = android.os.SystemClock.elapsedRealtime() + OpenFluxLeaseSchedule.renewalDelayMillis(
+                    openFluxExpiry ?: 0, System.currentTimeMillis() / 1000, retry = !extended)
+            }
+            val recoveryState = synchronized(this) {
+                if (operation.get() != operationId || !runtimeRunning) return
+                if (OpenFluxProfileStore.owner(this) != owner) {
+                    fail("Аккаунт изменён. Подключитесь заново")
+                    return
+                }
+                if ((openFluxExpiry ?: 0) <= System.currentTimeMillis() / 1000) {
+                    fail("Профиль обхода истёк. Обновите подписку")
+                    return
+                }
+                val state = recovery.observe(openFluxProxy?.isConnected() == true,
+                    android.os.SystemClock.elapsedRealtime())
+                if (state == OpenFluxReconnectGrace.State.EXPIRED) {
+                    fail("Маршрут обхода не восстановился. Повторите подключение")
+                    return
+                }
+                if (state == OpenFluxReconnectGrace.State.WAIT && !recovering) {
+                    recovering = true
+                    publishStatus(VpnPhase.CHECKING, "Восстанавливаем обход…")
+                    updateNotification("Восстанавливаем обход…")
+                }
+                if (android.os.SystemClock.elapsedRealtime() >= reportAt) {
+                    openFluxProxy?.let { Log.i(TAG, "OpenFlux carrier sent=${it.bytesSent()} received=${it.bytesReceived()}") }
+                    reportAt = android.os.SystemClock.elapsedRealtime() + 30_000L
+                }
+                state
+            }
+            if (recoveryState == OpenFluxReconnectGrace.State.VERIFY) {
+                try {
+                    verifyTunnel(operationId, owner, recovery.deadlineMillis)
+                    synchronized(this) {
+                        ensureCurrent(operationId)
+                        if (OpenFluxProfileStore.owner(this) != owner)
+                            throw OpenFluxRouteException("Аккаунт изменён. Подключитесь заново")
+                        if ((openFluxExpiry ?: 0) <= System.currentTimeMillis() / 1000)
+                            throw OpenFluxRouteException("Профиль обхода истёк. Обновите подписку")
+                        if (openFluxProxy?.isConnected() == true && recovery.observe(true,
+                                android.os.SystemClock.elapsedRealtime()) == OpenFluxReconnectGrace.State.VERIFY) {
+                            recovery.confirmed()
+                            recovering = false
+                            publishStatus(VpnPhase.CONNECTED, "Подключено")
+                            updateNotification(formatConnectedNotificationText())
+                            Log.i(TAG, "OpenFlux carrier recovered; HTTPS verified")
+                        }
+                    }
+                } catch (error: InterruptedException) {
+                    throw error
+                } catch (error: OpenFluxRouteException) {
+                    throw error
+                } catch (_: Exception) {
+                    // Socket recovery alone is insufficient; retain checking until
+                    // fresh VPN-bound HTTPS succeeds or the original grace expires.
+                    ensureCurrent(operationId)
+                }
+            }
+        }
+        } finally {
+            renewal?.cancel(true)
+        }
+    }
+
+    private fun physicalDnsServers(): Array<String> {
+        val manager = getSystemService(ConnectivityManager::class.java)
+        val physical = manager.allNetworks.filter { network ->
+            manager.getNetworkCapabilities(network)?.let { capabilities ->
+                !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            } == true
+        }
+        val preferred = physical.sortedBy { if (it == manager.activeNetwork) 0 else 1 }
+        return preferred.firstNotNullOfOrNull { network ->
+            manager.getLinkProperties(network)?.dnsServers?.filterIsInstance<Inet4Address>()
+                ?.mapNotNull { it.hostAddress }?.distinct()?.take(MAX_CARRIER_DNS_SERVERS)
+                ?.takeIf { it.isNotEmpty() }
+        }?.toTypedArray() ?: FALLBACK_CARRIER_DNS.copyOf()
     }
 
     private fun ensureCurrent(operationId: Long) {
@@ -589,6 +856,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     }
 
     private fun publishActiveAutoRoute(route: ActiveRouteSelection?) {
+        lastActiveAutoRoute = route
         val preferences = getSharedPreferences(STATE_PREFS, MODE_PRIVATE).edit()
         if (route == null) {
             preferences.remove(EXTRA_ACTIVE_ROUTE_KEY).remove(EXTRA_ACTIVE_EXIT_COUNTRY)
@@ -602,6 +870,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 .putExtra(EXTRA_ACTIVE_ROUTE_KEY, route?.routeKey.orEmpty())
                 .putExtra(EXTRA_ACTIVE_EXIT_COUNTRY, route?.exitCountry.orEmpty()),
         )
+        if (started && runtimeRunning && VpnStateStore(this).read().phase == VpnPhase.CONNECTED) {
+            updateNotification(formatConnectedNotificationText(route))
+        }
     }
 
     private fun closeCommandClient() {
@@ -646,55 +917,104 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
      * `startOrReloadService` only confirms that libbox accepted the config.
      * Keep Android's full-route TUN only after one request has passed through it.
      */
-    private fun verifyTunnel() {
+    private fun verifyTunnel(operationId: Long, openFluxOwner: String? = null, recoveryDeadline: Long? = null) {
         var lastError: Throwable? = null
-        repeat(3) { attempt ->
+        val now = android.os.SystemClock.elapsedRealtime()
+        val leaseDeadline = openFluxExpiry?.let { now + maxOf(0L, it - System.currentTimeMillis() / 1000) * 1_000 }
+        val deadline = minOf(now + CANARY_BUDGET_MILLIS, recoveryDeadline ?: Long.MAX_VALUE,
+            leaseDeadline ?: Long.MAX_VALUE)
+        val checkpoint = {
+            synchronized(this) {
+                ensureCurrent(operationId)
+                if (openFluxOwner != null) {
+                    if (OpenFluxProfileStore.owner(this) != openFluxOwner)
+                        throw OpenFluxRouteException("Аккаунт изменён. Подключитесь заново")
+                    if ((openFluxExpiry ?: 0) <= System.currentTimeMillis() / 1000)
+                        throw OpenFluxRouteException("Профиль обхода истёк. Обновите подписку")
+                }
+            }
+            if (android.os.SystemClock.elapsedRealtime() >= deadline)
+                throw java.net.SocketTimeoutException("VPN verification timed out")
+        }
+        repeat(2) { attempt ->
             try {
-                verifyTunnelOnce(TRANSPORT_CANARY, null, "Туннель не передаёт HTTPS-трафик")
-                verifyTunnelOnce(DNS_CANARY, 204, "DNS через соединение не отвечает")
+                var vpnNetwork = TunnelCanary.currentNetwork(ownedVpnNetworks(), previousVpnNetworks)
+                while (vpnNetwork == null) {
+                    checkpoint()
+                    Thread.sleep(100)
+                    vpnNetwork = TunnelCanary.currentNetwork(ownedVpnNetworks(), previousVpnNetworks)
+                }
+                val currentNetwork = vpnNetwork
+                TunnelCanary.verifyAny(checkpoint = checkpoint) { endpoint ->
+                    val remaining = deadline - android.os.SystemClock.elapsedRealtime()
+                    if (remaining <= 0) throw java.net.SocketTimeoutException("VPN verification timed out")
+                    verifyTunnelOnce(currentNetwork, endpoint.url, endpoint.expectedStatus, operationId, deadline,
+                        minOf(CANARY_TIMEOUT_MILLIS.toLong(), remaining).toInt())
+                }
                 return
             } catch (error: Throwable) {
+                ensureCurrent(operationId)
+                if (error is InterruptedException) throw error
+                if (error is OpenFluxRouteException) throw error
                 lastError = error
-                if (attempt < 2) Thread.sleep(1_500)
+                if (attempt == 0 && android.os.SystemClock.elapsedRealtime() < deadline) Thread.sleep(1_500)
             }
         }
-        val detail = lastError?.message
-            ?.takeIf { it.contains("проверочный сайт ответил HTTP") || it.contains("не отвечает") || it.contains("не завершилась") }
-            ?: "Проверка соединения не прошла"
-        throw IllegalStateException(detail, lastError)
+        val reason = lastError?.let(::safeNetworkFailure) ?: "нет ответа"
+        throw TunnelVerificationException(
+            "Выбранный маршрут не прошёл HTTPS-проверку: $reason. Смените обход или повторите попытку.", lastError)
     }
 
-    private fun verifyTunnelOnce(url: String, expectedStatus: Int?, failurePrefix: String) {
+    private fun ownedVpnNetworks(): List<android.net.Network> {
         val connectivity = getSystemService(ConnectivityManager::class.java)
-        val vpnNetwork = connectivity.allNetworks.firstOrNull { network ->
+        return connectivity.allNetworks.filter { network ->
             val capabilities = connectivity.getNetworkCapabilities(network)
             capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true &&
                 (Build.VERSION.SDK_INT < Build.VERSION_CODES.R || capabilities.ownerUid == applicationInfo.uid)
-        } ?: error("Системный интерфейс VPN ещё не готов")
+        }
+    }
+
+    private fun verifyTunnelOnce(vpnNetwork: android.net.Network, url: String, expectedStatus: Int?,
+        operationId: Long, deadline: Long, timeoutMillis: Int) {
         // Bind the canary to this VPN generation. The process HTTP pool may still
         // contain sockets from the previous AWG/TUN network after a handoff.
         val connection = (vpnNetwork.openConnection(URL(url)) as HttpsURLConnection).apply {
             requestMethod = "GET"
-            connectTimeout = 10_000
-            readTimeout = 10_000
+            connectTimeout = timeoutMillis
+            readTimeout = timeoutMillis
             instanceFollowRedirects = false
             useCaches = false
             setRequestProperty("Connection", "close")
             setRequestProperty("Cache-Control", "no-cache")
         }
+        val endpointDeadline = minOf(deadline, android.os.SystemClock.elapsedRealtime() + timeoutMillis)
+        val watchdog = canaryTimeoutExecutor.schedule({ runCatching { connection.disconnect() } },
+            maxOf(1, endpointDeadline - android.os.SystemClock.elapsedRealtime()), TimeUnit.MILLISECONDS)
         try {
-            check(TunnelCanary.acceptsHttpResponse(connection.responseCode, expectedStatus)) {
-                "$failurePrefix: проверочный сайт ответил HTTP ${connection.responseCode}"
+            synchronized(this) {
+                ensureCurrent(operationId)
+                activeCanary = connection
             }
+            val status = connection.responseCode
+            if (android.os.SystemClock.elapsedRealtime() >= endpointDeadline)
+                throw java.net.SocketTimeoutException("VPN verification timed out")
+            if (!TunnelCanary.acceptsHttpResponse(status, expectedStatus)) throw TunnelCanary.HttpFailure(status)
         } catch (error: Throwable) {
-            throw IllegalStateException("$failurePrefix: ${safeNetworkFailure(error)}", error)
+            Log.w(TAG, "VPN HTTPS verification host=${URL(url).host}: ${safeNetworkFailure(error)}")
+            throw error
         } finally {
+            watchdog.cancel(false)
+            synchronized(this) {
+                if (activeCanary === connection) activeCanary = null
+            }
             connection.disconnect()
         }
     }
 
     @Synchronized
     private fun fail(message: String) {
+        runCatching { activeCanary?.disconnect() }
+        activeCanary = null
         closeCommandClient()
         publishActiveAutoRoute(null)
         publishStatus(VpnPhase.ERROR, "Ошибка запуска соединения", message)
@@ -706,19 +1026,28 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         commandServer = null
         runCatching { awgProxy?.close() }
         awgProxy = null
+        openFluxMonitor?.cancel(true)
+        openFluxMonitor = null
+        runCatching { openFluxProxy?.close() }
+        openFluxProxy = null
+        openFluxExpiry = null
         activeRuntimeConfig = null
         runCatching { tunnel?.close() }
         tunnel = null
         started = false
         runtimeRunning = false
+        releaseWakeLock()
         stopForegroundCompat()
         stopSelf()
     }
 
     @Synchronized
     private fun stopTunnel() {
-        if (!started && commandServer == null && tunnel == null && awgProxy == null) {
+        runCatching { activeCanary?.disconnect() }
+        activeCanary = null
+        if (!started && commandServer == null && tunnel == null && awgProxy == null && openFluxProxy == null) {
             runtimeRunning = false
+            releaseWakeLock()
             stopForeground(STOP_FOREGROUND_REMOVE)
             if (VpnStateStore(this).read().phase != VpnPhase.ERROR)
                 VpnStateStore(this).write(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
@@ -732,11 +1061,17 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         commandServer = null
         runCatching { awgProxy?.close() }
         awgProxy = null
+        openFluxMonitor?.cancel(true)
+        openFluxMonitor = null
+        runCatching { openFluxProxy?.close() }
+        openFluxProxy = null
+        openFluxExpiry = null
         activeRuntimeConfig = null
         runCatching { tunnel?.close() }
         tunnel = null
         started = false
         runtimeRunning = false
+        releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         if (VpnStateStore(this).read().phase != VpnPhase.ERROR) {
             publishStatus(VpnPhase.IDLE, VpnStateStore.IDLE_TITLE)
@@ -759,6 +1094,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     private fun errorMessage(error: Throwable, fallback: String): String =
         when {
+            error is OpenFluxRouteException || error is OpenFluxUnavailableException -> error.message ?: fallback
+            error is TunnelVerificationException -> error.message ?: fallback
             error.message.orEmpty().contains("проверочный сайт ответил HTTP") -> error.message.orEmpty()
             error.message.orEmpty().contains("DNS через соединение не отвечает") -> error.message.orEmpty()
             error.message.orEmpty().contains("Проверка соединения не прошла") -> error.message.orEmpty()
@@ -772,6 +1109,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         }
 
     private fun safeNetworkFailure(error: Throwable): String = when {
+        error is TunnelCanary.HttpFailure -> "проверочный сайт ответил HTTP ${error.status}"
+        error is java.net.UnknownHostException -> "DNS через VPN не отвечает"
+        error is javax.net.ssl.SSLException -> "не удалось установить защищённое HTTPS-соединение"
         errorChainContains(error, "timeout") || errorChainContains(error, "timed out") ->
             "проверка не завершилась вовремя"
         errorChainContains(error, "unexpected end of stream") ||
@@ -979,6 +1319,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
         tunnel?.close()
         tunnel = builder.establish() ?: error("Android не выдал TUN-интерфейс")
+        applyUnderlyingNetworks(networkBridge.currentNetwork)
         return tunnel!!.fd
     }
 

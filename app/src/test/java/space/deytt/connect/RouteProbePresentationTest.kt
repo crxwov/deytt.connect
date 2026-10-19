@@ -43,4 +43,12 @@ class RouteProbePresentationTest {
             RouteProbePresentation.speedProgress("500 ms", english = true, bytesPerSecond = 1_000_000L),
         )
     }
+
+    @Test
+    fun reportsExplicitRouteFailureMessages() {
+        assertEquals("маршрут не ответил", RouteProbePresentation.failureMessage("маршрут не ответил", english = false))
+        assertEquals("route did not respond", RouteProbePresentation.failureMessage("маршрут не ответил", english = true))
+        assertEquals("сбой запуска проверки", RouteProbePresentation.failureMessage("Не удалось запустить диагностику", english = false))
+        assertEquals("failed to start probe", RouteProbePresentation.failureMessage("Не удалось запустить диагностику", english = true))
+    }
 }

@@ -21,6 +21,8 @@ def run(*args):
 def tool(name):
     sdk = Path(os.environ.get("ANDROID_HOME", ROOT / ".toolchain/android-sdk"))
     path = sdk / "build-tools/35.0.0" / name
+    if os.name == "nt":
+        path = path.with_suffix(".bat" if name == "apksigner" else ".exe")
     if not path.is_file():
         raise ValueError(f"install android build-tools 35.0.0: missing {name}")
     return str(path)
@@ -50,6 +52,7 @@ def inspect_apk(apk, qa=False, expected_version=None, expected_version_code=None
         "android.permission.CHANGE_NETWORK_STATE", "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED",
         "android.permission.POST_NOTIFICATIONS", "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.WAKE_LOCK",
         package + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
     }
     permissions = set(re.findall(r"^uses-permission: name='([^']+)'", badging, re.M))
@@ -63,6 +66,8 @@ def inspect_apk(apk, qa=False, expected_version=None, expected_version_code=None
             raise ValueError("amneziawg userspace backend missing")
         if not any(name.endswith("/libdeytt-awg.so") for name in names):
             raise ValueError("amneziawg domain-routing backend missing")
+        if not any(name.endswith("/libopenflux_jni.so") for name in names):
+            raise ValueError("OpenFlux transport backend missing")
     run(tool("zipalign"), "-c", "-P", "16", "4", str(apk))
     return identity
 

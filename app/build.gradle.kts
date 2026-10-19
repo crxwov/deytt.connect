@@ -6,6 +6,7 @@ plugins {
 android {
     namespace = "space.deytt.connect"
     compileSdk = 35
+    ndkVersion = "26.1.10909125"
 
     buildFeatures {
         buildConfig = true
@@ -15,10 +16,12 @@ android {
         applicationId = if (providers.gradleProperty("isolatedQa").orNull == "true") "space.deytt.connect.qa" else "space.deytt.connect"
         minSdk = 24
         targetSdk = 35
+        // One APK covers supported phones and emulators without ABI-specific downloads.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        } else 44
-        versionName = "0.8.31"
+        } else 66
+        versionName = "0.11.6"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }
@@ -52,20 +55,13 @@ android {
         jniLibs.excludes += setOf("**/libwg.so", "**/libwg-quick.so")
     }
 
-    splits {
-        abi {
-            isEnable = true
-            reset()
-            include("arm64-v8a", "armeabi-v7a", "x86_64")
-            isUniversalApk = true
-        }
-    }
 }
 
 dependencies {
     // GPL-3.0-or-later shared sing-box engine, pinned for reproducible builds.
     implementation("com.github.singbox-android:libbox:1.14.1")
     implementation(project(":awg-tunnel"))
+    implementation(project(":openflux-tunnel"))
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.viewpager2:viewpager2:1.1.0")
     testImplementation("junit:junit:4.13.2")

@@ -20,6 +20,8 @@ data class ImportedSubscription(
     val warnings: List<String> = emptyList(),
 )
 
+internal class OpenFluxUnavailableException(message: String) : IOException(message)
+
 object SubscriptionClient {
     private const val MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024
     private const val MAX_AWG_PROFILE_BYTES = 256 * 1024
@@ -35,9 +37,12 @@ object SubscriptionClient {
         var awg15Budget: SubscriptionRequestBudget? = null
         var awg31Budget: SubscriptionRequestBudget? = null
         var otherOptionalBudget: SubscriptionRequestBudget? = null
+        var openFluxBudget: SubscriptionRequestBudget? = null
         try {
             return import(context, rawUrl, SubscriptionHttpTransport { url, accept ->
-                val budget = if (accept == "application/json") coreBudget else {
+                val budget = if (url.contains("format=openflux")) {
+                    openFluxBudget ?: SubscriptionRequestBudget(60_000).also { openFluxBudget = it }
+                } else if (accept == "application/json") coreBudget else {
                     // Give each generation its own bounded deadline. A slow or
                     // unavailable legacy endpoint must not consume the 3.1
                     // endpoint's entire optional-fetch window (or vice versa).
@@ -87,6 +92,7 @@ object SubscriptionClient {
         // `format=amneziawg31` endpoint. Each generation has a fair 10-second
         // optional-fetch budget, separate from the required sing-box request.
         val awgResults = fetchAwgGenerations(baseUrl, transport)
+        val openFluxResult = fetchOpenFluxProfiles(baseUrl, transport)
         // An optional AWG endpoint must not make a valid core subscription unusable.
         // Keep a last-known-good family when its gateway is temporarily failing.
         fun mergedProfiles(previousAwgProfiles: List<AwgProfile>) = awgResults.flatMap { result ->
@@ -110,29 +116,37 @@ object SubscriptionClient {
         checkCancellation()
         onStage("save")
         val warnings = awgResults.mapNotNull { it.warning }.toMutableList()
+        openFluxResult.warning?.let(warnings::add)
         val awgProfiles = synchronized(AtomicSubscriptionFile.lock) {
             checkCancellation()
             onBeforeCommit()
             val settings = context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
-            val previousUrl = settings.getString("subscription_url", null)
+            val previousUrl = getSavedSubscriptionUrl(context)
             // Read ownership and last-good files under the commit lock: another
             // completed import must not be replaced by an older fallback snapshot.
             val sameSubscription = previousUrl != null && runCatching {
                 normalizeBaseUrl(previousUrl) == baseUrl
             }.getOrDefault(false)
             val profiles = mergedProfiles(if (sameSubscription) awgStore.profiles() else emptyList())
+            val openFluxStore = OpenFluxProfileStore(context)
+            val owner = OpenFluxProfileStore.owner(context, baseUrl)!!
+            val openFluxProfiles = if (openFluxResult.keepPrevious && sameSubscription) {
+                openFluxStore.profiles(owner)
+            } else openFluxResult.profiles
             // Invalidate ownership before the multi-file commit. After a process/disk
             // failure no old account's AWG config may be reused for a new source.
             if (!settings.edit().remove("subscription_url").commit()) throw SubscriptionStorageException()
             try {
-                SubscriptionStore(context).commitValidated(content, awgStore, profiles)
+                SubscriptionStore(context).commitValidated(content, awgStore, profiles) {
+                    openFluxStore.save(owner, openFluxProfiles)
+                }
             } catch (error: IOException) {
                 throw SubscriptionStorageException()
             }
             if (runCatching { SubscriptionMetadataStore(context).save(metadata) }.isFailure) {
                 warnings += "Маршруты сохранены, но сведения о тарифе не обновились. Повторите обновление позже."
             }
-            val edit = settings.edit().putString("subscription_url", baseUrl)
+            val edit = settings.edit().putString("subscription_url", LocalSecretCipher.encrypt(baseUrl))
             if (warnings.isEmpty()) edit.remove("subscription_warning")
             else edit.putString("subscription_warning", warnings.joinToString("\n"))
             if (!edit.commit()) throw SubscriptionStorageException()
@@ -147,6 +161,17 @@ object SubscriptionClient {
             warnings = warnings,
         )
     }
+
+    fun getSavedSubscriptionUrl(context: android.content.Context): String? =
+        context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
+            .getString("subscription_url", null)
+            ?.let { raw -> runCatching { LocalSecretCipher.decryptOrPlaintext(raw) }.getOrNull() }
+
+    fun saveSubscriptionUrl(context: android.content.Context, url: String): Boolean =
+        context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
+            .edit()
+            .putString("subscription_url", LocalSecretCipher.encrypt(url))
+            .commit()
 
     internal fun validateDownloadedProfile(content: String): ProfileSummary = try {
         ProfileValidator.validate(content).also {
@@ -166,6 +191,72 @@ object SubscriptionClient {
     )
 
     internal enum class AwgFetchState { AVAILABLE, NOT_AVAILABLE, PARTIAL_FAILURE, TRANSIENT_FAILURE }
+
+    internal data class OpenFluxFetchResult(
+        val profiles: List<OpenFluxProfile> = emptyList(),
+        val keepPrevious: Boolean = false,
+        val warning: String? = null,
+    ) {
+        fun availableProfiles(previous: List<OpenFluxProfile>, nowSeconds: Long = System.currentTimeMillis() / 1000): List<OpenFluxProfile> =
+            (if (keepPrevious) previous else profiles).filter { it.isCurrent(nowSeconds) }
+
+        fun requireProfiles(previous: List<OpenFluxProfile>, nowSeconds: Long = System.currentTimeMillis() / 1000): List<OpenFluxProfile> {
+            val usable = availableProfiles(previous, nowSeconds)
+            if (usable.isEmpty()) throw OpenFluxUnavailableException(warning
+                ?: "Обход Cups сейчас недоступен для этой подписки. Попробуйте позже или выберите другой маршрут.")
+            return usable
+        }
+    }
+
+    /** Refresh a managed lease without replacing the running sing-box/AWG profile. */
+    internal fun refreshOpenFlux(context: android.content.Context, requireAvailable: Boolean = false): List<OpenFluxProfile> {
+        val baseUrl = getSavedSubscriptionUrl(context)?.let(::normalizeBaseUrl) ?: return emptyList()
+        val headers = SubscriptionRequestIdentity.headers(context)
+        val owner = OpenFluxProfileStore.ownerKey(baseUrl, headers["X-TG-App-Token"])
+        val budget = SubscriptionRequestBudget(60_000)
+        val result = fetchOpenFluxProfiles(baseUrl, SubscriptionHttpTransport { url, accept ->
+            requestUrlConnection(url, accept, headers, budget)
+        })
+        return synchronized(AtomicSubscriptionFile.lock) {
+            if (OpenFluxProfileStore.owner(context) != owner) throw SubscriptionCancelledException()
+            val store = OpenFluxProfileStore(context)
+            val previous = if (result.keepPrevious) store.profiles(owner) else emptyList()
+            // A denied/empty response revokes cached credentials before reporting
+            // the error. Transient failures may only retain an unexpired lease.
+            if (!result.keepPrevious) store.save(owner, result.profiles)
+            // Renewal needs an explicit empty list for revocation; startup needs
+            // an actionable error. Do not turn a terminal response into a retry.
+            if (requireAvailable) result.requireProfiles(previous) else result.availableProfiles(previous)
+        }
+    }
+
+    internal fun fetchOpenFluxProfiles(baseUrl: String, transport: SubscriptionHttpTransport): OpenFluxFetchResult {
+        return try {
+            val response = request(withFormat(baseUrl, "openflux"), "application/json", false, transport)
+                ?: return OpenFluxFetchResult(keepPrevious = true,
+                    warning = "Сервер подписки пока не поддерживает обход Cups. Выберите другой маршрут.")
+            OpenFluxFetchResult(OpenFluxProfile.parse(response.body))
+        } catch (error: Exception) {
+            if (error is SubscriptionCancelledException) throw error
+            val denied = error is SubscriptionHttpFailure && error.statusCode in setOf(401, 403, 409, 410)
+            OpenFluxFetchResult(keepPrevious = !denied,
+                warning = when {
+                    error is SubscriptionHttpFailure && error.statusCode in setOf(401, 410) ->
+                        "Для обхода Cups войдите в аккаунт заново и повторите подключение."
+                    error is SubscriptionHttpFailure && error.statusCode == 409 ->
+                        "Обход Cups недоступен: достигнут лимит устройств аккаунта. Проверьте устройства в профиле."
+                    error is SubscriptionHttpFailure && error.statusCode == 403 && error.code == "device_blocked" ->
+                        "Обход Cups недоступен: устройство заблокировано. Обратитесь в поддержку."
+                    error is SubscriptionHttpFailure && error.statusCode == 403 ->
+                        "Обход Cups недоступен для этого аккаунта. Проверьте подписку и вход в аккаунт."
+                    error is SubscriptionHttpFailure && error.statusCode in setOf(429, 502, 503, 504) ->
+                        "Сервер обхода Cups временно недоступен или занят. Повторите позже либо выберите другой маршрут."
+                    error is IOException ->
+                        "Не удалось получить профиль Cups. Проверьте интернет и повторите подключение."
+                    else -> "Сервер вернул некорректный профиль Cups. Повторите позже либо выберите другой маршрут."
+                })
+        }
+    }
 
     internal data class AwgFetchResult(
         val version: String,
@@ -291,7 +382,10 @@ object SubscriptionClient {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
             connectTimeout = minOf(10_000, budget.remainingMillis())
-            readTimeout = minOf(12_000, budget.remainingMillis())
+            // First carrier provisioning can take ~45 seconds. Its optional
+            // endpoint has a separate total deadline and must receive that window.
+            readTimeout = if (url.contains("format=openflux")) budget.remainingMillis()
+                else minOf(12_000, budget.remainingMillis())
             useCaches = false
             // A subscription URL is a bearer token. Do not let the HTTP stack
             // silently forward it to an untrusted host.
@@ -393,43 +487,19 @@ object SubscriptionClient {
                 transport = transport,
             )
                 ?: return AwgFetchResult(version, emptyList(), AwgFetchState.NOT_AVAILABLE)
-            val manifestFallback = runCatching {
-                AwgProfile("awg$version", version, "основной", "awg", first.body).also { profile ->
-                    requireAwgProfileSize(profile.config)
-                    AwgProfileStore.validate(profile.config)
-                }
-            }.getOrNull()
-            fun malformedManifestResult(): AwgFetchResult? = manifestFallback?.let { profile ->
-                AwgFetchResult(
-                    version = version,
-                    profiles = listOf(profile),
-                    state = AwgFetchState.PARTIAL_FAILURE,
-                    warning = "${awgName(version)}: список серверов повреждён. Добавлен первый профиль; обновите подписку для полного списка.",
-                )
-            }
-            val servers = try { JSONArray(first.awgServers?.takeIf { it.isNotBlank() } ?: "[]") } catch (error: Exception) {
-                malformedManifestResult()?.let { return it }
+            val servers = try { JSONArray(first.awgServers ?: "[]") } catch (error: Exception) {
                 throw SubscriptionPayloadException()
             }
-            if (servers.length() > 16) {
-                malformedManifestResult()?.let { return it }
-                throw SubscriptionPayloadException()
-            }
+            if (servers != null && servers.length() > 16) throw SubscriptionPayloadException()
             val advertisedIds = mutableSetOf<String>()
-            for (index in 0 until servers.length()) {
-                val item = servers.optJSONObject(index) ?: run {
-                    malformedManifestResult()?.let { return it }
-                    throw SubscriptionPayloadException()
-                }
+            if (servers != null) for (index in 0 until servers.length()) {
+                val item = servers.optJSONObject(index) ?: throw SubscriptionPayloadException()
                 val id = item.optString("id").trim()
-                if (id.isEmpty() || id.length > 128 || !advertisedIds.add(id)) {
-                    malformedManifestResult()?.let { return it }
-                    throw SubscriptionPayloadException()
-                }
+                if (id.isEmpty() || id.length > 128 || !advertisedIds.add(id)) throw SubscriptionPayloadException()
             }
             val failedIds = mutableSetOf<String>()
             var failedRequestsAreTransient = true
-            val profiles = if (servers.length() == 0) {
+            val profiles = if (servers == null || servers.length() == 0) {
                 listOf(AwgProfile("awg$version", version, "основной", "awg", first.body)).also {
                     requireAwgProfileSize(first.body)
                     it.forEach { profile -> AwgProfileStore.validate(profile.config) }
@@ -490,7 +560,7 @@ object SubscriptionClient {
                     }
                 }
             }
-            if (servers.length() > 0 && profiles.isEmpty() && failedIds.isEmpty()) {
+            if (servers != null && servers.length() > 0 && profiles.isEmpty() && failedIds.isEmpty()) {
                 throw IOException("Сервер не вернул ни одного профиля AmneziaWG")
             }
             if (profiles.isEmpty() && failedIds.isNotEmpty()) {

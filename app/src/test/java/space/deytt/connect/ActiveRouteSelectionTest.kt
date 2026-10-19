@@ -11,6 +11,7 @@ class ActiveRouteSelectionTest {
         assertEquals(ActiveRouteSelection("NL", "nl"), ActiveRouteSelection.fromOutboundTag("route:NL"))
         assertEquals(ActiveRouteSelection("FI", "fi"), ActiveRouteSelection.fromOutboundTag("route:FI:TROJAN"))
         assertEquals(ActiveRouteSelection("RU", "ru"), ActiveRouteSelection.fromOutboundTag("route:RU:HYSTERIA2"))
+        assertEquals(ActiveRouteSelection("IT", "it"), ActiveRouteSelection.fromOutboundTag("route:IT:VLESS"))
         assertEquals(ActiveRouteSelection("DE", "ru-de"), ActiveRouteSelection.fromOutboundTag("route:RU-DE:CHAIN"))
         assertNull(ActiveRouteSelection.fromOutboundTag("unrelated outbound"))
     }

@@ -1,5 +1,18 @@
 # Third-party notices
 
+## OpenFlux
+
+The Android transport adapter includes a source subset of OpenFlux pinned to
+`edcf77a1848a72370cfba9f346d3b897b61e7e7d` under `third_party/openflux-core`.
+It is licensed under GNU GPL v3.0-or-later. Original notices and the upstream
+license remain in that directory; the local integration and source modifications
+are described in `openflux-tunnel/README.md`. The distributed release source must
+include this code, its build scripts and the dependency/module version pins.
+
+- Upstream: <https://github.com/p1neappleXpress/OpenFlux>
+- License: GNU GPL v3.0-or-later
+- Initial supported carrier: cups.online collaborative editing rooms
+
 ## sing-box / libbox
 
 The Android app links against the pinned `com.github.singbox-android:libbox:1.14.1`

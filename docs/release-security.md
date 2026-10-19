@@ -5,7 +5,11 @@
 Public APKs use the `release` build type with both Java and native debugging
 disabled. `assembleRelease` deliberately produces unsigned artifacts; signing is
 an explicit, verified step. Never rename a debug build to a release filename.
-The updater selects a release APK matching the device ABI, checks its package,
+Each release publishes one universal APK (`app-universal-release.apk`) covering
+arm64-v8a, armeabi-v7a and x86_64, plus its checksum and corresponding source.
+The app pins the NDK used to strip native debug symbols and filters unsupported
+ABIs, keeping the universal download below the updater's 120 MiB limit.
+The updater selects that universal APK, checks its package,
 version and signing identity, and asks Android to install it after user action.
 Production builds reject debuggable update candidates.
 
@@ -15,31 +19,21 @@ access. The VPN services require Android's `BIND_VPN_SERVICE` permission and
 foreground notifications. Imported subscription links require a tap before
 network requests or replacement of an active configuration.
 
-Only AmneziaWG's userspace engines (`libwg-go.so` and `libdeytt-awg.so`) are
-packaged. The unused privileged `wg` / `wg-quick` tools and Java root-shell
-backend are excluded; their removal is not evidence they caused antivirus alerts.
+AmneziaWG's userspace engines (`libwg-go.so`, `libdeytt-awg.so`) and the protected
+OpenFlux engine (`libopenflux_jni.so`) are packaged. The unused privileged `wg` /
+`wg-quick` tools and Java root-shell backend are excluded.
 
 ## Signing identity and migration
 
-`release/signing-policy.json` records the expected public certificate SHA-256.
-The normal v0.8.30 APK keeps the v0.8.18–v0.8.26 signer on Android 8.1 and
-lower, and uses the supplied release key (`release.p12`, certificate SHA-256
-`bb39b663e555c7ed7b725c543ed73ea2602432b003591b2e1370f0359c4c4333`) on
-Android 9 and newer.
-
-Uploaded Android assets must be exactly `deytt-connect-{version}.apk` and its
-matching `.apk.sha256` checksum. No ABI suffixes, legacy variants, or unversioned
-updater aliases are published. Future builds use the universal release APK.
-The existing v0.8.30 canonical APK is ARM64 and remains byte-for-byte unchanged.
-Older clients that require `app-{abi}-release.apk` need manual installation;
-future updater code prefers the canonical name for the exact release tag.
-Historical v0.8.17 installations on Android 8.1 and lower cannot use the normal
-APK as an in-place signing upgrade. Do not weaken certificate checks.
-
-Windows assets must be `deytt-connect-{version}.msi` and
-`deytt-connect-{version}-portable.zip`, with matching SHA256 sidecars.
-Publish Windows only after native acceptance and signing gates pass.
-GitHub-generated source archives are managed by GitHub, not uploaded binaries.
+`release/signing-policy.json` records the current standard family's certificate
+fingerprints. Standard APKs carry the previous standard signer on API 24–27 and
+its successor on API 28+, with `release/signing-lineage.bin` proving rotation.
+Historical legacy APKs used a different signer on API 24–27 and the same
+successor on API 28+, with `release/signing-lineage-legacy.bin`. Keep this lineage
+for recovery, but do not publish a parallel legacy build. Older API 24–27
+installations from that family need their matching historical migration path.
+Do not require an uninstall for an update that can retain
+the existing identity and data. Verify a signed update on the connected phone.
 
 Future updates are compatible only while the new private key is preserved and
 used for every APK. Private keystores and password files must stay outside the
@@ -57,21 +51,29 @@ in the project. Set `JAVA_HOME`, `PATH` and `ANDROID_HOME` for that toolchain.
   --no-daemon --console=plain --max-workers=2
 
 python3 scripts/release.py sign \
-  app/build/outputs/apk/release/app-universal-release-unsigned.apk \
-  --output output/release/deytt-connect-0.8.30.apk \
+  app/build/outputs/apk/release/app-release-unsigned.apk \
+  --output output/release/app-universal-release.apk \
   --keystore /secure/signing/release.p12 \
   --password-file /secure/signing/release.password \
-  --legacy-keystore /secure/signing/current-release.p12 \
-  --legacy-key-alias deytt-connect
+  --legacy-keystore /secure/signing/previous-standard.p12 \
+  --legacy-key-alias deytt-connect \
+  --legacy-password-env DEYTT_LEGACY_PASSWORD \
+  --expected-version 0.11.0 --expected-version-code 60
 
-python3 scripts/release.py verify output/release/deytt-connect-0.8.30.apk
+python3 scripts/release.py verify output/release/app-universal-release.apk
 ```
 
 The release script refuses
 debuggable APKs, unexpected package identities, SDK levels, permissions, legacy
-root tools, missing AWG engines, bad alignment, and mismatching certificates.
+root tools, missing AWG/OpenFlux engines, bad alignment, and mismatching certificates.
 It verifies both API 24–27 and API 28+ signatures and writes a SHA-256 sidecar.
 `--qa` only permits the isolated `.qa` package; it is not a distribution APK.
+The default policy is the standard signing family. Do not publish separate ABI
+packages or duplicate updater/branded filenames. Retain old files locally until
+the new single APK has passed signature, size, device-update and download checks.
+Windows builds can use `scripts/prepare-awg-windows.py` to prepare the pinned,
+patched Go SDK without modifying a shared Go installation. See
+[`openflux-tunnel/README.md`](../openflux-tunnel/README.md) for OpenFlux prerequisites.
 
 Gradle checks the wrapper ZIP against the official distribution SHA-256.
 Dependency verification locks the baseline Maven artifact/metadata SHA-256

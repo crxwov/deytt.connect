@@ -7,6 +7,7 @@ class RouteGlobeViewTest {
     @Test
     fun mapsPersistedProfileIdsToTheirRoute() {
         assertEquals("de", RouteGlobeView.routeKeyFor("route:DE:VLESS"))
+        assertEquals("de", RouteGlobeView.routeKeyFor("openflux:DE"))
         assertEquals("nl", RouteGlobeView.routeKeyFor("route:NL:HYSTERIA"))
         assertEquals("fi", RouteGlobeView.routeKeyFor("route:FI:TROJAN"))
         assertEquals("ru", RouteGlobeView.routeKeyFor("route:RU:AWG31"))

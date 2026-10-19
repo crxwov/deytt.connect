@@ -228,6 +228,13 @@ internal class PrimaryPages(private val host: MainActivity) {
         updateHandler.removeCallbacks(updateCycle)
     }
 
+    fun cancelRouteDiagnosticsForSelection() {
+        pendingCountries.clear()
+        routeProbeStates.values.forEach { it.cancelled = true }
+        activeAwgCountry?.cancelled = true
+        if (RouteProbeClient.isRunning(host)) RouteProbeClient.cancel(host)
+    }
+
     private fun scrollPage(content: LinearLayout): ScrollView = ScrollView(host).apply {
         isFillViewport = true
         clipToPadding = false
@@ -242,7 +249,7 @@ internal class PrimaryPages(private val host: MainActivity) {
     private fun routePage(): View {
         val config = SubscriptionStore(host).readCurrent()
         val profiles = AwgProfileStore(host).profiles()
-        val routes = config?.let { RouteCatalog.from(it, profiles) }.orEmpty()
+        val routes = config?.let { RouteCatalog.from(it, profiles, OpenFluxProfileStore(host).profiles(host)) }.orEmpty()
         val selectedId = SelectedRouteStore(host).read().id
         val root = host.screen(withBackdrop = true)
         root.addView(host.header("выходы · выбор · диагностика", "Маршруты"))
@@ -256,6 +263,11 @@ internal class PrimaryPages(private val host: MainActivity) {
             MUTED,
         )
             .apply { setPadding(0, 0, 0, host.dp(18)) })
+
+        root.addView(host.button("Обновить подписку", secondary = true).apply {
+            setOnClickListener { host.openSetup() }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(52)))
+        root.addView(spacer(20, host))
 
         root.addView(host.sectionLabel("быстрый выбор"))
         val quickGroup = routeGroup()
@@ -272,25 +284,18 @@ internal class PrimaryPages(private val host: MainActivity) {
                 selectedId == route.id,
             ).apply { setOnClickListener { host.selectRoute(route) } })
         }
-        if (quickGroup.childCount > 0) root.addView(quickGroup)
-
-        if (profiles.isEmpty()) {
-            root.addView(spacer(18, host))
-            root.addView(host.row(
-                copy("Обновить ключи AmneziaWG", "Refresh AmneziaWG keys"),
-                copy("Ключи ещё не загружены", "Keys are not loaded yet"),
-                "↻",
-                copy("обновить", "refresh"),
-            ).apply { setOnClickListener { host.startActivity(Intent(host, SetupActivity::class.java)) } })
+        routes.firstOrNull { it.protocol == RouteProtocol.OPENFLUX }?.let { route ->
+            appendToGroup(quickGroup, host.row(
+                copy("Обход Cups · Германия", "Cups bypass · Germany"),
+                copy("Через cups · выбрать вручную", "Via cups · select manually"),
+                route.flag, "выбрать", selectedId == route.id,
+            ).apply { setOnClickListener { host.selectRoute(route) } })
         }
+        if (quickGroup.childCount > 0) root.addView(quickGroup)
 
         root.addView(spacer(24, host))
         root.addView(host.sectionLabel(copy("Страны", "Countries")))
-        val orderedCodes = listOf("NL", "DE", "RU", "FI", "IT", "AWG_UNKNOWN")
-        val countries = routes.filter { it.countryCode in orderedCodes }
-            .groupBy { it.countryCode }
-        orderedCodes.filter { it in countries }.forEach { code ->
-            val countryRoutes = countries[code].orEmpty().distinctBy { it.id }
+        RouteCatalog.countryGroups(routes).forEach { (code, countryRoutes) ->
             val networkRoutes = countryRoutes.filter { it.engine == TunnelEngine.LIBBOX }
                 .sortedBy { routeProtocolOrder(it.protocol) }
             val awgRoutes = countryRoutes.filter { it.engine == TunnelEngine.AMNEZIAWG }
@@ -301,6 +306,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 when (route.engine) {
                     TunnelEngine.LIBBOX -> route.protocol.title
                     TunnelEngine.AMNEZIAWG -> route.protocol.title
+                    TunnelEngine.OPENFLUX -> route.protocol.title
                 }
             }.distinct().joinToString(" · ")
             val detail = routeGroup().apply { visibility = View.GONE }
@@ -429,6 +435,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         RouteProtocol.TROJAN -> "◇"
         RouteProtocol.HYSTERIA2 -> "H2"
         RouteProtocol.RU_DE -> "RU→DE"
+        RouteProtocol.OPENFLUX -> "DE"
         else -> "·"
     }
 
@@ -463,6 +470,11 @@ internal class PrimaryPages(private val host: MainActivity) {
         val token = TelegramSessionStore.read(host)
         country.speedCheckEnabled = !token.isNullOrBlank()
         country.rows.values.forEach { row ->
+            if (row.route.engine == TunnelEngine.OPENFLUX) {
+                row.progress.setLoading(false)
+                row.status.text = copy("Проверка после подключения", "Measure after connecting")
+                return@forEach
+            }
             row.status.text = copy("Пинг: —", "Ping: —")
             row.status.setTextColor(DeyttUi.SKY)
             row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
@@ -929,15 +941,6 @@ internal class PrimaryPages(private val host: MainActivity) {
 
         root.addView(spacer(16, host))
         root.addView(host.sectionLabel(copy("подключение", "connection")))
-        val awgProfiles = AwgProfileStore(host).profiles()
-        if (awgProfiles.isNotEmpty()) {
-            root.addView(host.row(
-                copy("Обновить ключи AmneziaWG", "Refresh AmneziaWG keys"),
-                copy("Повторно загрузить подписку и профили", "Reload subscription and profiles"),
-                "↻",
-                copy("обновить", "refresh"),
-            ).apply { setOnClickListener { host.startActivity(Intent(host, SetupActivity::class.java)) } })
-        }
         root.addView(host.row(
             copy("Раздельное туннелирование", "Split tunneling"),
             copy("Сайты из подписки · все протоколы", "Subscription sites · all protocols"), "↗", "›",
@@ -1275,7 +1278,11 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         fun openBotLink() {
             val link = botUrl ?: return
-            runCatching { host.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+            runCatching {
+                val uri = Uri.parse(link)
+                check(uri.scheme?.lowercase() in setOf("https", "tg")) { "Unsupported URL scheme" }
+                host.startActivity(Intent(Intent.ACTION_VIEW, uri))
+            }
                 .onFailure { status.text = "Ссылка готова. Открой бота ещё раз кнопкой ниже." }
         }
 
@@ -1340,11 +1347,11 @@ internal class PrimaryPages(private val host: MainActivity) {
                                 if (subscriptionUrl != null) {
                                     val currentRouteId = SelectedRouteStore(host).read().id
                                     val imported = SubscriptionClient.import(host, subscriptionUrl)
-                                    host.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
-                                        .edit().putString("subscription_url", imported.url).apply()
+                                    SubscriptionClient.saveSubscriptionUrl(host, imported.url)
                                     val routes = RouteCatalog.from(
                                         SubscriptionStore(host).readCurrent().orEmpty(),
                                         AwgProfileStore(host).profiles(),
+                                        OpenFluxProfileStore(host).profiles(host),
                                     )
                                     if (routes.none { it.id == currentRouteId }) {
                                         routes.firstOrNull()?.let { SelectedRouteStore(host).save(it) }
@@ -1514,7 +1521,11 @@ internal class PrimaryPages(private val host: MainActivity) {
     }
 
     private fun openUrl(url: String) {
-        runCatching { host.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+        runCatching {
+            val uri = Uri.parse(url)
+            if (uri.scheme?.lowercase() !in setOf("https", "tg")) return
+            host.startActivity(Intent(Intent.ACTION_VIEW, uri))
+        }
     }
 
     private fun formatBytes(value: Long): String {

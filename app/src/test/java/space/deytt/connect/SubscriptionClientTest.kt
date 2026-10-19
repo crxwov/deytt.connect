@@ -5,9 +5,103 @@ import java.util.ArrayDeque
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 
 class SubscriptionClientTest {
+    private fun cupsProfile(expiry: Long): OpenFluxProfile {
+        val room = LocalBase64.encode("[\"12345678-1234-1234-1234-123456789abc\"]".toByteArray())
+            .replace('+', '-').replace('/', '_').trimEnd('=')
+        val payload = """{"version":1,"profiles":[{"id":"openflux:DE","country":"DE","label":"германия","expires_at":$expiry,"secret":"${"A".repeat(43)}","context":"test-channel-context","transports":[{"type":"cupsonline","name":"cupsonline","url":"$room","priority":100}]}]}"""
+        return OpenFluxProfile.parse(payload, expiry - 1800).single()
+    }
+
+    @Test fun unavailableCupsGivesSafeActionableErrorWithoutRemovingOtherRoutes() {
+        val result = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ ->
+                SubscriptionClient.SubscriptionHttpResponse(503, """{"error":"private-controller-detail"}""")
+            })
+        assertTrue(result.keepPrevious)
+        val error = runCatching { result.requireProfiles(emptyList()) }.exceptionOrNull()
+        assertTrue(error is OpenFluxUnavailableException)
+        assertTrue(error!!.message.orEmpty().contains("Cups"))
+        assertTrue(error.message.orEmpty().contains("занят"))
+        assertFalse(error.message.orEmpty().contains("private-controller-detail"))
+        val config = """{"outbounds":[{"type":"selector","tag":"автоподбор"},{"type":"vless","tag":"route:DE:VLESS"},{"type":"trojan","tag":"route:RU-DE:CHAIN"}]}"""
+        val routes = RouteCatalog.from(config, emptyList(), result.profiles)
+        assertTrue(routes.any { it.id == "openflux:DE" })
+        assertTrue(routes.any { it.protocol == RouteProtocol.RU_DE })
+        assertEquals(RouteProtocol.AUTO, routes.first().protocol)
+    }
+
+    @Test fun transientCupsOutageRetainsOnlyUnexpiredLeaseAndDenialNeverReusesIt() {
+        val now = System.currentTimeMillis() / 1000
+        val current = cupsProfile(now + 1800)
+        val outage = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> throw IOException("private URL or credential") })
+        assertEquals(listOf(current), outage.requireProfiles(listOf(current), now))
+        assertTrue(runCatching { outage.requireProfiles(listOf(current), now + 1800) }.exceptionOrNull()
+            is OpenFluxUnavailableException)
+        val denied = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> SubscriptionClient.SubscriptionHttpResponse(409) })
+        assertFalse(denied.keepPrevious)
+        assertTrue(denied.availableProfiles(listOf(current), now).isEmpty())
+        val error = runCatching { denied.requireProfiles(listOf(current), now) }.exceptionOrNull()
+        assertTrue(error is OpenFluxUnavailableException)
+        assertTrue(error!!.message.orEmpty().contains("лимит устройств"))
+        assertFalse(outage.warning.orEmpty().contains("private URL"))
+    }
+
+    @Test fun explicitlyRevokedCupsAndMissingEndpointCannotUseExpiredOrForeignFallback() {
+        val now = System.currentTimeMillis() / 1000
+        val current = cupsProfile(now + 1800)
+        val revoked = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> SubscriptionClient.SubscriptionHttpResponse(200,
+                """{"version":1,"profiles":[]}""") })
+        assertTrue(revoked.availableProfiles(listOf(current), now).isEmpty())
+        assertTrue(runCatching { revoked.requireProfiles(listOf(current), now) }.exceptionOrNull()
+            is OpenFluxUnavailableException)
+        val missing = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> SubscriptionClient.SubscriptionHttpResponse(404) })
+        val error = runCatching { missing.requireProfiles(emptyList(), now) }.exceptionOrNull()
+        assertTrue(error is OpenFluxUnavailableException)
+        assertTrue(error!!.message.orEmpty().contains("не поддерживает"))
+    }
+
+    @Test fun openFluxUsesSameSubscriptionAndDistinguishesRevocationFromOutage() {
+        val unavailable = SubscriptionClient.fetchOpenFluxProfiles(
+            SubscriptionClient.normalizeBaseUrlForTest("https://deytt.space/sub/token?format=singbox&app=1"),
+            SubscriptionClient.SubscriptionHttpTransport { url, accept ->
+                assertTrue(url.contains("format=openflux"))
+                assertTrue(url.contains("app=1"))
+                assertFalse(url.contains("format=singbox"))
+                assertEquals("application/json", accept)
+                SubscriptionClient.SubscriptionHttpResponse(404)
+            })
+        assertTrue(unavailable.keepPrevious)
+        val revoked = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> SubscriptionClient.SubscriptionHttpResponse(200,
+                """{"version":1,"profiles":[]}""") })
+        assertFalse(revoked.keepPrevious)
+        assertTrue(revoked.profiles.isEmpty())
+        val denied = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> SubscriptionClient.SubscriptionHttpResponse(409) })
+        assertFalse(denied.keepPrevious)
+        val malformed = SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+            SubscriptionClient.SubscriptionHttpTransport { _, _ -> SubscriptionClient.SubscriptionHttpResponse(200, "bad json") })
+        assertTrue(malformed.keepPrevious)
+        assertFalse(malformed.warning.isNullOrBlank())
+    }
+
+    @Test fun interruptedOpenFluxFetchPreservesCancellation() {
+        Thread.currentThread().interrupt()
+        try {
+            val error = runCatching { SubscriptionClient.fetchOpenFluxProfiles("https://deytt.space/sub/token",
+                SubscriptionClient.SubscriptionHttpTransport { _, _ -> fail("Unexpected request"); error("unreachable") }) }.exceptionOrNull()
+            assertTrue(error is SubscriptionCancelledException)
+        } finally { Thread.interrupted() }
+    }
+
     @Test
     fun longServerBackoffReturnsControlWithoutHammeringEndpoint() {
         val transport = FakeTransport(SubscriptionClient.SubscriptionHttpResponse(429, retryAfterMillis = 60_000))
@@ -72,10 +166,7 @@ class SubscriptionClientTest {
         val result = SubscriptionClient.fetchAwgProfilesForTest("https://deytt.space/sub/token", "amneziawg31", "31",
             FakeTransport(SubscriptionClient.SubscriptionHttpResponse(200, VALID_AWG31_CONFIG,
                 awgServers = "[{\"id\":\"nl\"},{\"id\":\"nl\"}]")))
-        assertEquals(SubscriptionClient.AwgFetchState.PARTIAL_FAILURE, result.state)
-        assertEquals("awg31", result.profiles.single().id)
-        assertEquals(VALID_AWG31_CONFIG, result.profiles.single().config)
-        assertTrue(!result.warning.isNullOrBlank())
+        assertEquals(SubscriptionClient.AwgFetchState.TRANSIENT_FAILURE, result.state)
     }
 
     @Test
@@ -348,7 +439,7 @@ class SubscriptionClientTest {
     @Test
     fun deviceSlotRejectionIsExplicitAndNeverRetried() {
         val transport = FakeTransport(SubscriptionClient.SubscriptionHttpResponse(
-            409, body = """{"error":"app_device_limit_reached"}""",
+            409, body = """{"error":"app_device_limit_reached","device_limit":1}""",
         ))
         val error = runCatching {
             SubscriptionClient.requestForTest("https://deytt.space/sub/token", "application/json", true, transport)
@@ -356,10 +447,10 @@ class SubscriptionClientTest {
         assertEquals("app_device_limit_reached", error.code)
         assertEquals(1, transport.calls.size)
         val message = SubscriptionErrorText.userMessage(error)
-        assertTrue(message.contains("по одному телефону и одному компьютеру"))
-        assertTrue(message.contains("их слоты независимы"))
-        assertTrue(message.contains("выйдите из аккаунта на прежнем телефоне"))
-        assertTrue(message.contains("Happ использует отдельную квоту"))
+        assertTrue(message.contains("один слот на телефон"))
+        assertTrue(message.contains("компьютерные подключения и happ используют отдельные слоты"))
+        assertTrue(message.contains("выйдите из приложения на старом телефоне"))
+        assertTrue(message.contains("не отключает устройство автоматически"))
     }
 
     @Test
