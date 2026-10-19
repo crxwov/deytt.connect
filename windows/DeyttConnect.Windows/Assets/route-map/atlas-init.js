@@ -6,7 +6,7 @@
   const compactPanel = root.querySelector(".home-compact");
   const panelTiltStartZoom = 1;
   const panelTiltRampZoom = 0.25;
-  const panelTiltMaxDegrees = 4;
+  const panelTiltMaxDegrees = 20;
   const strings = {
     "en": {
       "latency": "response", "speed": "speed", "measurement": "last route measurement",
@@ -528,7 +528,7 @@
         control: "#B897FF", controlHot: "#D9C9FF",
         node: "#F2F5FC", nodeCore: "#39E8BD", label: "#E6ECF5", labelMuted: "#A3B0C2", labelBg: "rgba(15,23,35,.88)", labelLeader: "#A3B0C2", labelBorder: "rgba(163,176,194,.16)"
       } : {
-        sphereLight: "#E5EDF4", sphereMid: "#B7C8D8", sphereShade: "#667C90",
+        sphereLight: "#FFFFFF", sphereMid: "#FFFFFF", sphereShade: "#FFFFFF",
         sphereEdge: "rgba(195,207,244,.30)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
         grid: null, land: "#1299DC", landDim: "#1299DC", landHot: "#1299DC", landAlpha: 1,
         landHighlight: "#1299DC", landRelief: "rgba(22,64,98,.32)", landLow: "#1299DC",
