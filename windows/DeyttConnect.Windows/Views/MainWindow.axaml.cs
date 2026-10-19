@@ -2377,9 +2377,19 @@ public partial class MainWindow : Window
         var connection = new StackPanel { Spacing = 4 };
         var splitStoreConfig = WindowsSplitTunnelStore.Load();
         var customCount = (splitStoreConfig.CustomDomains?.Count ?? 0) + (splitStoreConfig.CustomProcesses?.Count ?? 0);
-        var splitSubtitle = customCount > 0
-            ? Copy($"Сайты из подписки · {customCount} своих правил", $"Subscription sites · {customCount} custom rules")
-            : Copy("Сайты из подписки · все протоколы", "Subscription sites · all protocols");
+        string splitSubtitle;
+        if (splitStoreConfig.IsVpnOnly)
+        {
+            splitSubtitle = customCount > 0
+                ? Copy($"VPN только для списка · {customCount} правил", $"VPN only for list · {customCount} rules")
+                : Copy("VPN только для списка · список пуст", "VPN only for list · empty list");
+        }
+        else
+        {
+            splitSubtitle = customCount > 0
+                ? Copy($"Обход VPN для списка · {customCount} правил", $"Bypass VPN for list · {customCount} rules")
+                : Copy("Обход VPN для списка · базовые правила", "Bypass VPN for list · base rules");
+        }
         connection.Children.Add(SettingsEntry("↗", Copy("Раздельное туннелирование", "Split tunneling"),
             splitSubtitle, "›",
             ShowSplitTunnelingInfo));
@@ -2952,7 +2962,7 @@ public partial class MainWindow : Window
             }
             var splitConfig = WindowsSplitTunnelStore.Load();
             _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig,
-                splitConfig.CustomDomains, splitConfig.CustomProcesses);
+                splitConfig.CustomDomains, splitConfig.CustomProcesses, splitConfig.Mode);
             var result = await _vpnConnectTask;
             if (operationVersion == _vpnOperationVersion && !_vpnCancelRequested)
             {
@@ -3018,7 +3028,7 @@ public partial class MainWindow : Window
 
             var splitConfig = WindowsSplitTunnelStore.Load();
             _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig,
-                splitConfig.CustomDomains, splitConfig.CustomProcesses);
+                splitConfig.CustomDomains, splitConfig.CustomProcesses, splitConfig.Mode);
             var result = await _vpnConnectTask;
             if (operationVersion == _vpnOperationVersion && !_vpnCancelRequested)
             {

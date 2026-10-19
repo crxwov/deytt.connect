@@ -5,7 +5,14 @@ namespace DeyttConnect.Windows.Services;
 
 public sealed record WindowsSplitTunnelConfig(
     IReadOnlyList<string>? CustomDomains = null,
-    IReadOnlyList<string>? CustomProcesses = null);
+    IReadOnlyList<string>? CustomProcesses = null,
+    string? Mode = "bypass")
+{
+    public const string ModeBypass = "bypass";
+    public const string ModeVpnOnly = "vpn_only";
+
+    public bool IsVpnOnly => string.Equals(Mode, ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
+}
 
 public static class WindowsSplitTunnelStore
 {
@@ -22,16 +29,16 @@ public static class WindowsSplitTunnelStore
         EnsureWindows();
         var path = SplitTunnelPath;
         if (!File.Exists(path))
-            return new WindowsSplitTunnelConfig([], []);
+            return new WindowsSplitTunnelConfig([], [], WindowsSplitTunnelConfig.ModeBypass);
 
         try
         {
             var info = new FileInfo(path);
             if (info.Length is < 1 or > 64 * 1024)
-                return new WindowsSplitTunnelConfig([], []);
+                return new WindowsSplitTunnelConfig([], [], WindowsSplitTunnelConfig.ModeBypass);
             var value = JsonSerializer.Deserialize<WindowsSplitTunnelConfig>(File.ReadAllBytes(path), JsonOptions);
             if (value is null)
-                return new WindowsSplitTunnelConfig([], []);
+                return new WindowsSplitTunnelConfig([], [], WindowsSplitTunnelConfig.ModeBypass);
 
             var domains = (value.CustomDomains ?? [])
                 .Select(NormalizeDomain)
@@ -49,11 +56,15 @@ public static class WindowsSplitTunnelStore
                 .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            return new WindowsSplitTunnelConfig(domains, processes);
+            var mode = string.Equals(value.Mode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase)
+                ? WindowsSplitTunnelConfig.ModeVpnOnly
+                : WindowsSplitTunnelConfig.ModeBypass;
+
+            return new WindowsSplitTunnelConfig(domains, processes, mode);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         {
-            return new WindowsSplitTunnelConfig([], []);
+            return new WindowsSplitTunnelConfig([], [], WindowsSplitTunnelConfig.ModeBypass);
         }
     }
 
@@ -76,7 +87,11 @@ public static class WindowsSplitTunnelStore
             .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        var safe = new WindowsSplitTunnelConfig(domains, processes);
+        var mode = string.Equals(config.Mode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase)
+            ? WindowsSplitTunnelConfig.ModeVpnOnly
+            : WindowsSplitTunnelConfig.ModeBypass;
+
+        var safe = new WindowsSplitTunnelConfig(domains, processes, mode);
         var path = SplitTunnelPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";

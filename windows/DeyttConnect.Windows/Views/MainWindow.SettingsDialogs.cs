@@ -107,9 +107,10 @@ public partial class MainWindow
                     .Select(value => value!);
             }
 
-            return ReadDomains(entries[0], "domain_suffix").Select(domain => $"*.{domain}")
-                .Concat(ReadDomains(entries[1], "domain"))
-                .ToArray();
+            var suffixes = ReadDomains(entries[0], "domain_suffix")
+                .Select(domain => domain.StartsWith('.') ? $"*{domain}" : $"*.{domain}");
+            var exact = ReadDomains(entries[1], "domain");
+            return suffixes.Concat(exact).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         }
         catch (JsonException)
         {
@@ -123,194 +124,350 @@ public partial class MainWindow
         var currentConfig = WindowsSplitTunnelStore.Load();
         var customDomains = new List<string>(currentConfig.CustomDomains ?? []);
         var customProcesses = new List<string>(currentConfig.CustomProcesses ?? []);
+        var currentMode = currentConfig.Mode ?? WindowsSplitTunnelConfig.ModeBypass;
 
-        var rootStack = new StackPanel { Spacing = 14 };
+        var rootStack = new StackPanel { Spacing = 16 };
 
-        rootStack.Children.Add(DeyttTheme.TextBlock(
-            Copy("Трафик этих сайтов и приложений идёт напрямую без VPN. Существующие правила подписки являются базовыми и их нельзя отключить.",
-                "Traffic for these sites and applications goes directly without VPN. Existing subscription rules are immutable base rules."),
-            13, DeyttTheme.Muted));
+        var subtitleText = DeyttTheme.TextBlock(
+            Copy("Настройте, какой трафик направлять через VPN, а какой — напрямую через вашего провайдера.",
+                "Configure which traffic goes through VPN and which goes directly through your ISP."),
+            13, DeyttTheme.Muted);
+        rootStack.Children.Add(subtitleText);
 
-        // 1. Base Subscription Rules Card (read-only)
-        var baseSection = new StackPanel { Spacing = 8 };
-        baseSection.Children.Add(DeyttTheme.RawTextBlock(
-            Copy("ПРАВИЛА ПОДПИСКИ (БАЗОВЫЕ, НЕЛЬЗЯ УБРАТЬ)", "SUBSCRIPTION RULES (BASE, IMMUTABLE)"),
-            12, DeyttTheme.Muted, FontWeight.SemiBold));
-
-        if (baseSites is null || baseSites.Count == 0)
+        // 1. Mode Selector (Segmented Cards)
+        var modeSelectorGrid = new Grid
         {
-            baseSection.Children.Add(DeyttTheme.TextBlock(
-                Copy("Правила подписки не загружены.", "Subscription rules not loaded."),
-                12, DeyttTheme.Amber));
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
+            ColumnSpacing = 10,
+        };
+
+        Border? bypassModeCard = null;
+        Border? vpnOnlyModeCard = null;
+        TextBlock? bypassModeTitle = null;
+        TextBlock? vpnOnlyModeTitle = null;
+        TextBlock? bypassModeCheck = null;
+        TextBlock? vpnOnlyModeCheck = null;
+
+        Action? refreshAllDynamicUi = null;
+
+        void SaveAndRefresh()
+        {
+            WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses, currentMode));
+            refreshAllDynamicUi?.Invoke();
+        }
+
+        // Card 1: Bypass mode
+        var bypassHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        bypassModeTitle = DeyttTheme.TextBlock(Copy("Обход VPN для списка", "Bypass VPN for list"), 13, weight: FontWeight.SemiBold);
+        bypassModeCheck = DeyttTheme.TextBlock("✓", 13, DeyttTheme.Blue, FontWeight.Bold);
+        bypassHeader.Children.Add(bypassModeTitle);
+        bypassHeader.Children.Add(bypassModeCheck);
+        Grid.SetColumn(bypassModeTitle, 0);
+        Grid.SetColumn(bypassModeCheck, 1);
+
+        var bypassStack = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                bypassHeader,
+                DeyttTheme.TextBlock(
+                    Copy("Весь интернет через VPN. Сайты и программы из списка идут напрямую.",
+                        "All traffic through VPN. Sites and apps in the list go direct."),
+                    11, DeyttTheme.Muted)
+            }
+        };
+
+        bypassModeCard = new Border
+        {
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(14, 12),
+            BorderThickness = new Thickness(1.5),
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+            Child = bypassStack,
+        };
+        bypassModeCard.PointerPressed += (_, _) =>
+        {
+            currentMode = WindowsSplitTunnelConfig.ModeBypass;
+            SaveAndRefresh();
+        };
+
+        // Card 2: VPN only mode
+        var vpnOnlyHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        vpnOnlyModeTitle = DeyttTheme.TextBlock(Copy("VPN только для списка", "VPN only for list"), 13, weight: FontWeight.SemiBold);
+        vpnOnlyModeCheck = DeyttTheme.TextBlock("✓", 13, DeyttTheme.Blue, FontWeight.Bold);
+        vpnOnlyHeader.Children.Add(vpnOnlyModeTitle);
+        vpnOnlyHeader.Children.Add(vpnOnlyModeCheck);
+        Grid.SetColumn(vpnOnlyModeTitle, 0);
+        Grid.SetColumn(vpnOnlyModeCheck, 1);
+
+        var vpnOnlyStack = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                vpnOnlyHeader,
+                DeyttTheme.TextBlock(
+                    Copy("Весь интернет напрямую. Через VPN идут только сайты и программы из списка.",
+                        "All traffic direct. Only sites and apps in the list go through VPN."),
+                    11, DeyttTheme.Muted)
+            }
+        };
+
+        vpnOnlyModeCard = new Border
+        {
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(14, 12),
+            BorderThickness = new Thickness(1.5),
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+            Child = vpnOnlyStack,
+        };
+        vpnOnlyModeCard.PointerPressed += (_, _) =>
+        {
+            currentMode = WindowsSplitTunnelConfig.ModeVpnOnly;
+            SaveAndRefresh();
+        };
+
+        modeSelectorGrid.Children.Add(bypassModeCard);
+        modeSelectorGrid.Children.Add(vpnOnlyModeCard);
+        Grid.SetColumn(bypassModeCard, 0);
+        Grid.SetColumn(vpnOnlyModeCard, 1);
+        rootStack.Children.Add(modeSelectorGrid);
+
+        void UpdateModeCardsVisual()
+        {
+            var isVpnOnly = string.Equals(currentMode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
+            if (!isVpnOnly)
+            {
+                bypassModeCard!.Background = DeyttTheme.Brush(DeyttTheme.Selected);
+                bypassModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine);
+                bypassModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Blue);
+                bypassModeCheck!.IsVisible = true;
+
+                vpnOnlyModeCard!.Background = DeyttTheme.Brush(DeyttTheme.Surface);
+                vpnOnlyModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.Line);
+                vpnOnlyModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
+                vpnOnlyModeCheck!.IsVisible = false;
+            }
+            else
+            {
+                bypassModeCard!.Background = DeyttTheme.Brush(DeyttTheme.Surface);
+                bypassModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.Line);
+                bypassModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
+                bypassModeCheck!.IsVisible = false;
+
+                vpnOnlyModeCard!.Background = DeyttTheme.Brush(DeyttTheme.Selected);
+                vpnOnlyModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine);
+                vpnOnlyModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Blue);
+                vpnOnlyModeCheck!.IsVisible = true;
+            }
+        }
+
+        // 2. Base Rules Card (Lock icon, chips, subtle badge)
+        var baseRulesSection = new StackPanel { Spacing = 8 };
+        var baseHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var baseTitleRow = new StackPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+            Spacing = 6,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            Children =
+            {
+                DeyttTheme.TextBlock("🔒", 12),
+                DeyttTheme.RawTextBlock(Copy("Базовые правила подписки", "Base subscription rules"), 12, DeyttTheme.Text, FontWeight.SemiBold),
+            }
+        };
+        baseHeaderGrid.Children.Add(baseTitleRow);
+        Grid.SetColumn(baseTitleRow, 0);
+
+        var baseBadge = new Border
+        {
+            Background = DeyttTheme.Brush(DeyttTheme.Selected),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(8, 2),
+            Child = DeyttTheme.TextBlock(Copy("всегда без vpn", "always direct"), 10, DeyttTheme.Mint, FontWeight.SemiBold, wrap: false)
+        };
+        baseHeaderGrid.Children.Add(baseBadge);
+        Grid.SetColumn(baseBadge, 1);
+        baseRulesSection.Children.Add(baseHeaderGrid);
+
+        var chipsWrap = new WrapPanel
+        {
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
+        };
+        if (baseSites is not null && baseSites.Count > 0)
+        {
+            foreach (var site in baseSites)
+            {
+                var chip = new Border
+                {
+                    Background = DeyttTheme.Brush(DeyttTheme.Surface2),
+                    BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(8, 3),
+                    Margin = new Thickness(0, 0, 6, 6),
+                    Child = DeyttTheme.TextBlock(site, 11, DeyttTheme.Muted, family: DeyttTheme.JetBrainsMono, wrap: false)
+                };
+                chipsWrap.Children.Add(chip);
+            }
         }
         else
         {
-            var baseList = DeyttTheme.TextBlock(string.Join("\n", baseSites), 12,
-                DeyttTheme.Text, family: DeyttTheme.JetBrainsMono);
-            baseSection.Children.Add(DeyttTheme.Card(new ScrollViewer
-            {
-                Content = baseList,
-                MaxHeight = 120,
-                VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-            }, DeyttTheme.Surface, DeyttTheme.Line, 12, new Thickness(10, 8)));
+            chipsWrap.Children.Add(DeyttTheme.TextBlock(Copy("Правила подписки не загружены.", "Subscription rules not loaded."), 12, DeyttTheme.Amber));
         }
-        rootStack.Children.Add(baseSection);
 
-        // 2. Custom Domains Section
+        var baseCardContent = new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                chipsWrap,
+                DeyttTheme.TextBlock(
+                    Copy("Встроены в конфигурацию подписки для стабильной работы российских сервисов и госуслуг.",
+                        "Built into subscription to ensure reliable access to essential services."),
+                    11, DeyttTheme.Muted)
+            }
+        };
+        baseRulesSection.Children.Add(DeyttTheme.Card(baseCardContent, DeyttTheme.Surface, DeyttTheme.Line, 14, new Thickness(14, 12)));
+        rootStack.Children.Add(baseRulesSection);
+
+        // 3. Custom Domains Section
         var domainsSection = new StackPanel { Spacing = 8 };
-        domainsSection.Children.Add(DeyttTheme.RawTextBlock(
-            Copy("СВОИ САЙТЫ БЕЗ VPN", "CUSTOM SITES WITHOUT VPN"),
-            12, DeyttTheme.Blue, FontWeight.SemiBold));
+        var domainsHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var domainsTitle = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.Blue, FontWeight.SemiBold);
+        domainsHeaderGrid.Children.Add(domainsTitle);
+        Grid.SetColumn(domainsTitle, 0);
+
+        var domainsCountBadge = DeyttTheme.TextBlock(string.Empty, 11, DeyttTheme.Muted);
+        domainsHeaderGrid.Children.Add(domainsCountBadge);
+        Grid.SetColumn(domainsCountBadge, 1);
+        domainsSection.Children.Add(domainsHeaderGrid);
 
         var domainInputGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            Margin = new Thickness(0, 0, 0, 4)
+            ColumnSpacing = 8,
         };
         var domainTextBox = new TextBox
         {
-            PlaceholderText = Copy("например: mydomain.com или *.org", "e.g. mydomain.com or *.org"),
+            PlaceholderText = Copy("например: mydomain.com или *.domain.ru", "e.g. mydomain.com or *.domain.ru"),
             FontSize = 13,
             FontFamily = DeyttTheme.JetBrainsMono,
-            Height = 38,
+            Height = 40,
+            CornerRadius = new CornerRadius(10),
             VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
         domainInputGrid.Children.Add(domainTextBox);
         Grid.SetColumn(domainTextBox, 0);
 
-        var domainsListStack = new StackPanel { Spacing = 6 };
-
-        void RefreshDomainsList()
-        {
-            domainsListStack.Children.Clear();
-            if (customDomains.Count == 0)
-            {
-                domainsListStack.Children.Add(DeyttTheme.TextBlock(
-                    Copy("Нет добавленных сайтов", "No custom sites added"), 12, DeyttTheme.Muted));
-                return;
-            }
-
-            foreach (var d in customDomains.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray())
-            {
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-                var text = DeyttTheme.TextBlock(d, 12, DeyttTheme.Text, family: DeyttTheme.JetBrainsMono);
-                text.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-                row.Children.Add(text);
-                Grid.SetColumn(text, 0);
-
-                var deleteBtn = new Button
-                {
-                    Content = "✕",
-                    Background = Brushes.Transparent,
-                    BorderThickness = new Thickness(0),
-                    Foreground = DeyttTheme.Brush(DeyttTheme.Coral),
-                    Padding = new Thickness(8, 2),
-                    FontSize = 14,
-                    Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
-                };
-                deleteBtn.Click += (_, _) =>
-                {
-                    customDomains.Remove(d);
-                    WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses));
-                    RefreshDomainsList();
-                };
-                row.Children.Add(deleteBtn);
-                Grid.SetColumn(deleteBtn, 1);
-
-                domainsListStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(10, 6)));
-            }
-        }
-
         var addDomainBtn = new Button
         {
-            Content = Copy("Добавить", "Add"),
-            Height = 38,
-            Margin = new Thickness(8, 0, 0, 0),
+            Content = Copy("+ Добавить", "+ Add"),
+            Height = 40,
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(16, 0),
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            FontWeight = FontWeight.SemiBold
+            FontWeight = FontWeight.SemiBold,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
         };
-        addDomainBtn.Click += (_, _) =>
+
+        void AddDomainAction()
         {
             var normalized = WindowsSplitTunnelStore.NormalizeDomain(domainTextBox.Text);
             if (!string.IsNullOrWhiteSpace(normalized) && !customDomains.Contains(normalized, StringComparer.OrdinalIgnoreCase))
             {
                 customDomains.Add(normalized);
-                WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses));
                 domainTextBox.Text = string.Empty;
-                RefreshDomainsList();
+                SaveAndRefresh();
+            }
+        }
+        addDomainBtn.Click += (_, _) => AddDomainAction();
+        domainTextBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                AddDomainAction();
+                e.Handled = true;
             }
         };
         domainInputGrid.Children.Add(addDomainBtn);
         Grid.SetColumn(addDomainBtn, 1);
-
         domainsSection.Children.Add(domainInputGrid);
-        RefreshDomainsList();
+
+        var domainsListStack = new StackPanel { Spacing = 6 };
         domainsSection.Children.Add(new ScrollViewer
         {
             Content = domainsListStack,
-            MaxHeight = 150,
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+            MaxHeight = 160,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
         });
         rootStack.Children.Add(domainsSection);
 
-        // 3. Custom Processes Section with running process picker
+        // 4. Custom Processes Section
         var processSection = new StackPanel { Spacing = 8 };
-        processSection.Children.Add(DeyttTheme.RawTextBlock(
-            Copy("СВОИ ПРИЛОЖЕНИЯ И ПРОЦЕССЫ БЕЗ VPN", "CUSTOM APPLICATIONS & PROCESSES WITHOUT VPN"),
-            12, DeyttTheme.Blue, FontWeight.SemiBold));
-        processSection.Children.Add(DeyttTheme.TextBlock(
-            Copy("Весь исходящий трафик выбранных процессов направляется напрямую в обход VPN на любые серверы и адреса.",
-                "All outgoing traffic from selected processes goes directly without VPN to any server or address."),
-            12, DeyttTheme.Muted));
+        var processHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var processTitle = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.Blue, FontWeight.SemiBold);
+        processHeaderGrid.Children.Add(processTitle);
+        Grid.SetColumn(processTitle, 0);
 
-        var processListStack = new StackPanel { Spacing = 6 };
+        var processCountBadge = DeyttTheme.TextBlock(string.Empty, 11, DeyttTheme.Muted);
+        processHeaderGrid.Children.Add(processCountBadge);
+        Grid.SetColumn(processCountBadge, 1);
+        processSection.Children.Add(processHeaderGrid);
 
-        void RefreshProcessList()
+        var processDesc = DeyttTheme.TextBlock(string.Empty, 11, DeyttTheme.Muted);
+        processSection.Children.Add(processDesc);
+
+        // Process Action Buttons (Side by Side)
+        var processActionsGrid = new Grid
         {
-            processListStack.Children.Clear();
-            if (customProcesses.Count == 0)
-            {
-                processListStack.Children.Add(DeyttTheme.TextBlock(
-                    Copy("Нет добавленных процессов", "No custom processes added"), 12, DeyttTheme.Muted));
-                return;
-            }
+            ColumnDefinitions = new ColumnDefinitions("*,*"),
+            ColumnSpacing = 8,
+        };
 
-            foreach (var p in customProcesses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray())
-            {
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-                var text = DeyttTheme.TextBlock(p, 12, DeyttTheme.Text, family: DeyttTheme.JetBrainsMono);
-                text.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-                row.Children.Add(text);
-                Grid.SetColumn(text, 0);
+        var pickRunningBtn = new Button
+        {
+            Content = Copy("⚡ Выбрать из запущенных", "⚡ Pick from running apps"),
+            Height = 38,
+            Background = DeyttTheme.Brush(DeyttTheme.Selected),
+            Foreground = DeyttTheme.Brush(DeyttTheme.Blue),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            FontWeight = FontWeight.SemiBold,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+        };
 
-                var deleteBtn = new Button
-                {
-                    Content = "✕",
-                    Background = Brushes.Transparent,
-                    BorderThickness = new Thickness(0),
-                    Foreground = DeyttTheme.Brush(DeyttTheme.Coral),
-                    Padding = new Thickness(8, 2),
-                    FontSize = 14,
-                    Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
-                };
-                deleteBtn.Click += (_, _) =>
-                {
-                    customProcesses.Remove(p);
-                    WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses));
-                    RefreshProcessList();
-                };
-                row.Children.Add(deleteBtn);
-                Grid.SetColumn(deleteBtn, 1);
+        var browseFileBtn = new Button
+        {
+            Content = Copy("📁 Выбрать .exe файл…", "📁 Browse .exe file…"),
+            Height = 38,
+            Background = DeyttTheme.Brush(DeyttTheme.Surface),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            FontWeight = FontWeight.SemiBold,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+        };
 
-                processListStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(10, 6)));
-            }
-        }
+        processActionsGrid.Children.Add(pickRunningBtn);
+        processActionsGrid.Children.Add(browseFileBtn);
+        Grid.SetColumn(pickRunningBtn, 0);
+        Grid.SetColumn(browseFileBtn, 1);
+        processSection.Children.Add(processActionsGrid);
 
         // Running processes selector panel
         var runningPickerCard = new Border
         {
-            Background = DeyttTheme.Brush(DeyttTheme.Surface2),
+            Background = DeyttTheme.Brush(DeyttTheme.Surface),
             BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),
@@ -321,10 +478,11 @@ public partial class MainWindow
         var runningPickerContent = new StackPanel { Spacing = 8 };
         var searchProcessBox = new TextBox
         {
-            PlaceholderText = Copy("Поиск по названию или имени процесса...", "Search by title or process name..."),
+            PlaceholderText = Copy("Поиск по названию окна или имени процесса...", "Search by window title or process name..."),
             FontSize = 12,
             FontFamily = DeyttTheme.JetBrainsMono,
-            Height = 34,
+            Height = 36,
+            CornerRadius = new CornerRadius(8),
             VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
         runningPickerContent.Children.Add(searchProcessBox);
@@ -336,6 +494,7 @@ public partial class MainWindow
             MaxHeight = 180,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
         });
+        runningPickerCard.Child = runningPickerContent;
 
         void RenderRunningList(string filter)
         {
@@ -366,7 +525,7 @@ public partial class MainWindow
                 var isAlreadyAdded = customProcesses.Contains(app.ProcessName, StringComparer.OrdinalIgnoreCase);
                 if (isAlreadyAdded)
                 {
-                    var addedLabel = DeyttTheme.TextBlock(Copy("✓ Добавлен", "✓ Added"), 11, DeyttTheme.Mint);
+                    var addedLabel = DeyttTheme.TextBlock(Copy("✓ Добавлен", "✓ Added"), 11, DeyttTheme.Mint, FontWeight.SemiBold);
                     addedLabel.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
                     row.Children.Add(addedLabel);
                     Grid.SetColumn(addedLabel, 1);
@@ -377,7 +536,9 @@ public partial class MainWindow
                     {
                         Content = Copy("+ Добавить", "+ Add"),
                         FontSize = 11,
-                        Padding = new Thickness(8, 4),
+                        FontWeight = FontWeight.SemiBold,
+                        Padding = new Thickness(10, 4),
+                        CornerRadius = new CornerRadius(6),
                         Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
                     };
                     addBtn.Click += (_, _) =>
@@ -385,8 +546,7 @@ public partial class MainWindow
                         if (!customProcesses.Contains(app.ProcessName, StringComparer.OrdinalIgnoreCase))
                         {
                             customProcesses.Add(app.ProcessName);
-                            WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses));
-                            RefreshProcessList();
+                            SaveAndRefresh();
                             RenderRunningList(searchProcessBox.Text ?? string.Empty);
                         }
                     };
@@ -394,7 +554,7 @@ public partial class MainWindow
                     Grid.SetColumn(addBtn, 1);
                 }
 
-                runningItemsStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 6, new Thickness(8, 5)));
+                runningItemsStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface2, DeyttTheme.Line, 8, new Thickness(10, 6)));
             }
         }
 
@@ -404,21 +564,6 @@ public partial class MainWindow
                 RenderRunningList(searchProcessBox.Text ?? string.Empty);
         };
 
-        var pickRunningBtn = new Button
-        {
-            Content = Copy("⚡ Выбрать из запущенных процессов", "⚡ Pick from running processes"),
-            Height = 36,
-            Background = DeyttTheme.Brush(DeyttTheme.Selected),
-            Foreground = DeyttTheme.Brush(DeyttTheme.Blue),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            FontWeight = FontWeight.SemiBold,
-            Padding = new Thickness(14, 0),
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
-        };
         pickRunningBtn.Click += (_, _) =>
         {
             runningPickerCard.IsVisible = !runningPickerCard.IsVisible;
@@ -426,62 +571,13 @@ public partial class MainWindow
                 RenderRunningList(searchProcessBox.Text ?? string.Empty);
         };
 
-        runningPickerCard.Child = runningPickerContent;
-
-        var processInputGrid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"),
-            Margin = new Thickness(0, 0, 0, 4)
-        };
-        var processTextBox = new TextBox
-        {
-            PlaceholderText = Copy("или имя процесса вручную: game.exe", "or enter process name: game.exe"),
-            FontSize = 12,
-            FontFamily = DeyttTheme.JetBrainsMono,
-            Height = 38,
-            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
-        processInputGrid.Children.Add(processTextBox);
-        Grid.SetColumn(processTextBox, 0);
-
-        var addProcessBtn = new Button
-        {
-            Content = Copy("Добавить", "Add"),
-            Height = 38,
-            Margin = new Thickness(8, 0, 0, 0),
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            FontWeight = FontWeight.SemiBold
-        };
-        addProcessBtn.Click += (_, _) =>
-        {
-            var normalized = WindowsSplitTunnelStore.NormalizeProcess(processTextBox.Text);
-            if (!string.IsNullOrWhiteSpace(normalized) && !customProcesses.Contains(normalized, StringComparer.OrdinalIgnoreCase))
-            {
-                customProcesses.Add(normalized);
-                WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses));
-                processTextBox.Text = string.Empty;
-                RefreshProcessList();
-                if (runningPickerCard.IsVisible)
-                    RenderRunningList(searchProcessBox.Text ?? string.Empty);
-            }
-        };
-        processInputGrid.Children.Add(addProcessBtn);
-        Grid.SetColumn(addProcessBtn, 1);
-
-        var browseFileBtn = new Button
-        {
-            Content = Copy("Обзор…", "Browse…"),
-            Height = 38,
-            Margin = new Thickness(8, 0, 0, 0),
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
-        };
         browseFileBtn.Click += async (_, _) =>
         {
             var topLevel = TopLevel.GetTopLevel(this);
             if (topLevel is null) return;
             var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                Title = Copy("Выберите приложение для обхода VPN", "Select application to bypass VPN"),
+                Title = Copy("Выберите приложение для правила", "Select application for rule"),
                 AllowMultiple = false,
                 FileTypeFilter = [new FilePickerFileType("Executable (*.exe)") { Patterns = ["*.exe"] }]
             });
@@ -492,47 +588,211 @@ public partial class MainWindow
                 if (!string.IsNullOrWhiteSpace(normalized) && !customProcesses.Contains(normalized, StringComparer.OrdinalIgnoreCase))
                 {
                     customProcesses.Add(normalized);
-                    WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses));
-                    RefreshProcessList();
+                    SaveAndRefresh();
                     if (runningPickerCard.IsVisible)
                         RenderRunningList(searchProcessBox.Text ?? string.Empty);
                 }
             }
         };
-        processInputGrid.Children.Add(browseFileBtn);
-        Grid.SetColumn(browseFileBtn, 2);
 
-        processSection.Children.Add(pickRunningBtn);
         processSection.Children.Add(runningPickerCard);
+
+        // Manual process input
+        var processInputGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ColumnSpacing = 8,
+        };
+        var processTextBox = new TextBox
+        {
+            PlaceholderText = Copy("или введите имя процесса вручную (например: discord.exe)", "or enter process name manually: discord.exe"),
+            FontSize = 12,
+            FontFamily = DeyttTheme.JetBrainsMono,
+            Height = 38,
+            CornerRadius = new CornerRadius(10),
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        processInputGrid.Children.Add(processTextBox);
+        Grid.SetColumn(processTextBox, 0);
+
+        var addProcessBtn = new Button
+        {
+            Content = Copy("+ Добавить", "+ Add"),
+            Height = 38,
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(16, 0),
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            FontWeight = FontWeight.SemiBold,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+        };
+
+        void AddProcessAction()
+        {
+            var normalized = WindowsSplitTunnelStore.NormalizeProcess(processTextBox.Text);
+            if (!string.IsNullOrWhiteSpace(normalized) && !customProcesses.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+            {
+                customProcesses.Add(normalized);
+                processTextBox.Text = string.Empty;
+                SaveAndRefresh();
+                if (runningPickerCard.IsVisible)
+                    RenderRunningList(searchProcessBox.Text ?? string.Empty);
+            }
+        }
+        addProcessBtn.Click += (_, _) => AddProcessAction();
+        processTextBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                AddProcessAction();
+                e.Handled = true;
+            }
+        };
+        processInputGrid.Children.Add(addProcessBtn);
+        Grid.SetColumn(addProcessBtn, 1);
         processSection.Children.Add(processInputGrid);
-        RefreshProcessList();
+
+        var processListStack = new StackPanel { Spacing = 6 };
         processSection.Children.Add(new ScrollViewer
         {
             Content = processListStack,
-            MaxHeight = 130,
-            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+            MaxHeight = 160,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
         });
         rootStack.Children.Add(processSection);
 
+        // Dynamic Refresh Function
+        refreshAllDynamicUi = () =>
+        {
+            UpdateModeCardsVisual();
+            var isVpnOnly = string.Equals(currentMode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
+
+            domainsTitle.Text = isVpnOnly
+                ? Copy("САЙТЫ ЧЕРЕЗ VPN", "SITES THROUGH VPN")
+                : Copy("САЙТЫ В ОБХОД VPN", "SITES BYPASSING VPN");
+            domainsCountBadge.Text = Copy($"{customDomains.Count} сайтов", $"{customDomains.Count} sites");
+
+            processTitle.Text = isVpnOnly
+                ? Copy("ПРИЛОЖЕНИЯ ЧЕРЕЗ VPN", "APPLICATIONS THROUGH VPN")
+                : Copy("ПРИЛОЖЕНИЯ В ОБХОД VPN", "APPLICATIONS BYPASSING VPN");
+            processCountBadge.Text = Copy($"{customProcesses.Count} приложений", $"{customProcesses.Count} apps");
+
+            processDesc.Text = isVpnOnly
+                ? Copy("Весь исходящий трафик выбранных процессов направляется через VPN.",
+                    "All outgoing traffic from selected processes goes through VPN.")
+                : Copy("Весь исходящий трафик выбранных процессов направляется напрямую в обход VPN на любые серверы и адреса.",
+                    "All outgoing traffic from selected processes goes directly without VPN to any server or address.");
+
+            // Refresh domains list
+            domainsListStack.Children.Clear();
+            if (customDomains.Count == 0)
+            {
+                domainsListStack.Children.Add(DeyttTheme.Card(
+                    DeyttTheme.TextBlock(Copy("Список пуст. Введите домен выше и нажмите «+ Добавить».",
+                        "List is empty. Enter domain above and click «+ Add»."), 12, DeyttTheme.Muted),
+                    DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(12, 10)));
+            }
+            else
+            {
+                foreach (var d in customDomains.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray())
+                {
+                    var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
+                    var icon = DeyttTheme.TextBlock("🌐", 12);
+                    row.Children.Add(icon);
+                    Grid.SetColumn(icon, 0);
+
+                    var text = DeyttTheme.TextBlock(d, 12, DeyttTheme.Text, family: DeyttTheme.JetBrainsMono);
+                    text.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+                    row.Children.Add(text);
+                    Grid.SetColumn(text, 1);
+
+                    var deleteBtn = new Button
+                    {
+                        Content = "✕",
+                        Background = Brushes.Transparent,
+                        BorderThickness = new Thickness(0),
+                        Foreground = DeyttTheme.Brush(DeyttTheme.Coral),
+                        Padding = new Thickness(8, 2),
+                        FontSize = 13,
+                        FontWeight = FontWeight.SemiBold,
+                        Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+                    };
+                    deleteBtn.Click += (_, _) =>
+                    {
+                        customDomains.Remove(d);
+                        SaveAndRefresh();
+                    };
+                    row.Children.Add(deleteBtn);
+                    Grid.SetColumn(deleteBtn, 2);
+
+                    domainsListStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(12, 6)));
+                }
+            }
+
+            // Refresh process list
+            processListStack.Children.Clear();
+            if (customProcesses.Count == 0)
+            {
+                processListStack.Children.Add(DeyttTheme.Card(
+                    DeyttTheme.TextBlock(Copy("Список пуст. Выберите процесс из запущенных или укажите .exe файл.",
+                        "List is empty. Pick a running process or browse an .exe file."), 12, DeyttTheme.Muted),
+                    DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(12, 10)));
+            }
+            else
+            {
+                foreach (var p in customProcesses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray())
+                {
+                    var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
+                    var icon = DeyttTheme.TextBlock("⚡", 12, DeyttTheme.Sky);
+                    row.Children.Add(icon);
+                    Grid.SetColumn(icon, 0);
+
+                    var text = DeyttTheme.TextBlock(p, 12, DeyttTheme.Text, family: DeyttTheme.JetBrainsMono);
+                    text.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+                    row.Children.Add(text);
+                    Grid.SetColumn(text, 1);
+
+                    var deleteBtn = new Button
+                    {
+                        Content = "✕",
+                        Background = Brushes.Transparent,
+                        BorderThickness = new Thickness(0),
+                        Foreground = DeyttTheme.Brush(DeyttTheme.Coral),
+                        Padding = new Thickness(8, 2),
+                        FontSize = 13,
+                        FontWeight = FontWeight.SemiBold,
+                        Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+                    };
+                    deleteBtn.Click += (_, _) =>
+                    {
+                        customProcesses.Remove(p);
+                        SaveAndRefresh();
+                        if (runningPickerCard.IsVisible)
+                            RenderRunningList(searchProcessBox.Text ?? string.Empty);
+                    };
+                    row.Children.Add(deleteBtn);
+                    Grid.SetColumn(deleteBtn, 2);
+
+                    processListStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(12, 6)));
+                }
+            }
+        };
+
+        refreshAllDynamicUi();
+
         ShellContentDialog? dialog = null;
-        var close = DeyttTheme.PrimaryButton(Copy("Готово", "Done"), () =>
+        var footerButton = DeyttTheme.PrimaryButton(Copy("Готово", "Done"), () =>
         {
             dialog?.Close();
         });
-        rootStack.Children.Add(close);
 
-        var body = new StackPanel
-        {
-            Spacing = 14,
-            Children =
-            {
-                DeyttTheme.TextBlock(Copy("Раздельное туннелирование", "Split tunneling"),
-                    21, DeyttTheme.Text, FontWeight.Bold),
-                rootStack,
-            },
-        };
-        await ShowContentInShellAsync(Copy("Без VPN", "Without VPN"), body, 760,
-            shellDialog => dialog = shellDialog);
+        await ShowContentInShellAsync(
+            Copy("Раздельное туннелирование", "Split tunneling"),
+            rootStack,
+            720,
+            shellDialog => dialog = shellDialog,
+            footerButton);
+
         await ApplySplitTunnelRulesAsync();
     }
 }
