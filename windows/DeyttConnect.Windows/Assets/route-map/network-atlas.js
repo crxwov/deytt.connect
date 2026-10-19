@@ -657,7 +657,7 @@
         const dark = document.documentElement.dataset.theme !== "light";
         return dark ? {
           sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
-          sphereEdge: "rgba(141,161,185,.22)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+          sphereEdge: "rgba(141,161,185,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
           grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
           landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
           border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
@@ -665,7 +665,7 @@
           node: "#F2F5FC", nodeCore: "#39E8BD", label: "#F2F5FC", labelMuted: "#98A6BF", labelBg: "rgba(17,26,41,.94)"
         } : {
           sphereLight: "#FFFFFF", sphereMid: "#F4F7FB", sphereShade: "#E8EEF5",
-          sphereEdge: "rgba(195,207,244,.45)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+          sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
           grid: null, land: "#1299DC", landDim: "#1299DC", landHot: "#1299DC", landAlpha: 1,
           landHighlight: "#1299DC", landRelief: "rgba(22,64,98,.18)", landLow: "#1299DC",
           border: "#AFE0F5", borderAlpha: .62, borderWidth: .8, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
@@ -754,7 +754,7 @@
       context.restore();
 
       context.strokeStyle = colors.sphereEdge;
-      context.lineWidth = 1.25;
+      context.lineWidth = 1.5;
       context.beginPath();
       context.arc(x, y, radius, 0, TAU);
       context.stroke();

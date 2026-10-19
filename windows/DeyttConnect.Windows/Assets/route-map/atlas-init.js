@@ -4,9 +4,6 @@
   const root = document.querySelector(".network-atlas");
   const mainPanel = root.querySelector(".home-panel-shell");
   const compactPanel = root.querySelector(".home-compact");
-  const panelTiltStartZoom = 1;
-  const panelTiltRampZoom = 0.25;
-  const panelTiltMaxDegrees = 20;
   const strings = {
     "en": {
       "latency": "response", "speed": "speed", "measurement": "last route measurement",
@@ -122,13 +119,6 @@
     if (zoomPresentationKey === key) return;
     zoomPresentationKey = key;
     const wide = atlas.width >= 1180;
-    const panelTiltProgress = (zoom - panelTiltStartZoom) / panelTiltRampZoom;
-    const panelTilt = wide && !immersive && !motionIsReduced()
-      ? Math.min(panelTiltMaxDegrees, Math.max(0, panelTiltProgress * panelTiltMaxDegrees))
-      : 0;
-    const panelAngle = panelTilt > 0.005 ? `-${panelTilt.toFixed(2)}deg` : "0deg";
-    if (root.style.getPropertyValue("--panel-angle") !== panelAngle)
-      root.style.setProperty("--panel-angle", panelAngle);
     // Dock just before the growing globe reaches the readable panel content.
     // Wheel zoom changes only this scene; fullscreen is an explicit command.
     const geometryKey = [atlas.width, atlas.height, atlas.radius, language, presentationLanguage].join("|");
@@ -520,7 +510,7 @@
       const dark = document.documentElement.dataset.theme !== "light";
       return dark ? {
         sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
-        sphereEdge: "rgba(141,161,185,.22)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+        sphereEdge: "rgba(141,161,185,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
         grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
         landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
         border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
@@ -529,7 +519,7 @@
         node: "#F2F5FC", nodeCore: "#39E8BD", label: "#E6ECF5", labelMuted: "#A3B0C2", labelBg: "rgba(15,23,35,.88)", labelLeader: "#A3B0C2", labelBorder: "rgba(163,176,194,.16)"
       } : {
         sphereLight: "#FFFFFF", sphereMid: "#FFFFFF", sphereShade: "#FFFFFF",
-        sphereEdge: "rgba(195,207,244,.30)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+        sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
         grid: null, land: "#1299DC", landDim: "#1299DC", landHot: "#1299DC", landAlpha: 1,
         landHighlight: "#1299DC", landRelief: "rgba(22,64,98,.32)", landLow: "#1299DC",
         border: "#AFE0F5", borderAlpha: .62, borderWidth: .8, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
