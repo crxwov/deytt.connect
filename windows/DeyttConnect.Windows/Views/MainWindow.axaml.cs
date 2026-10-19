@@ -2987,6 +2987,70 @@ public partial class MainWindow : Window
             _ = MonitorVpnConnectionAsync();
     }
 
+    internal async Task ApplySplitTunnelRulesAsync()
+    {
+        if (!IsVpnTunnelActive(_vpnSnapshot.State) ||
+            _vpnActionInProgress || _vpnCancelInProgress || _routeProbeInProgress || _quitInProgress || _exitAuthorized)
+        {
+            RenderActiveTabPreservingScroll();
+            return;
+        }
+
+        if (_keysSnapshot?.ProfileJson is not { Length: > 0 } profile ||
+            _routes.FirstOrDefault(route => route.Id == _selectedRoute) is not { } route)
+        {
+            RenderActiveTabPreservingScroll();
+            return;
+        }
+
+        var operationVersion = ++_vpnOperationVersion;
+        _vpnCancelRequested = false;
+        _vpnActionInProgress = true;
+        _vpnSnapshot = new WindowsTunnelSnapshot("starting",
+            Copy("Обновляем правила раздельного туннелирования…", "Updating split tunneling rules…"), route.Tag);
+        RenderActiveTabPreservingScroll();
+
+        try
+        {
+            var awgConfig = GetAwgConfig(route);
+            if (IsAwgProtocol(route.Protocol) && awgConfig is null)
+                return;
+
+            var splitConfig = WindowsSplitTunnelStore.Load();
+            _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig,
+                splitConfig.CustomDomains, splitConfig.CustomProcesses);
+            var result = await _vpnConnectTask;
+            if (operationVersion == _vpnOperationVersion && !_vpnCancelRequested)
+            {
+                _vpnSnapshot = result;
+                _vpnServiceAvailable = true;
+                RefreshHomeConnectionMeasurement();
+                RenderActiveTabPreservingScroll();
+            }
+        }
+        catch (Exception error) when (IsTunnelTransportError(error))
+        {
+            if (operationVersion == _vpnOperationVersion && !_vpnCancelRequested)
+            {
+                _vpnSnapshot = VpnServiceUnavailableSnapshot();
+                _vpnServiceAvailable = false;
+                RenderActiveTabPreservingScroll();
+            }
+        }
+        finally
+        {
+            if (operationVersion == _vpnOperationVersion)
+            {
+                _vpnActionInProgress = false;
+                _vpnConnectTask = null;
+            }
+            RenderActiveTabPreservingScroll();
+        }
+
+        if (operationVersion == _vpnOperationVersion && _vpnSnapshot.State is ("starting" or "checking"))
+            _ = MonitorVpnConnectionAsync();
+    }
+
     private async Task CancelVpnConnectionAsync()
     {
         if (_quitInProgress || _exitAuthorized || _vpnCancelInProgress || _vpnSnapshot.State is not ("starting" or "checking"))

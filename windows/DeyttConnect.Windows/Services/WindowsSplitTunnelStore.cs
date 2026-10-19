@@ -118,10 +118,17 @@ public static class WindowsSplitTunnelStore
     public static string? NormalizeProcess(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return null;
-        var trimmed = raw.Trim();
+        var trimmed = raw.Trim().Trim('"', '\'');
         var fileName = Path.GetFileName(trimmed);
-        if (string.IsNullOrWhiteSpace(fileName)) return null;
-        if (!fileName.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) return null;
+        if (string.IsNullOrWhiteSpace(fileName))
+            fileName = trimmed;
+        var invalid = Path.GetInvalidFileNameChars();
+        if (fileName.IndexOfAny(invalid) >= 0)
+        {
+            var clean = new string(fileName.Where(c => !invalid.Contains(c)).ToArray()).Trim();
+            if (string.IsNullOrWhiteSpace(clean)) return null;
+            fileName = clean;
+        }
         return fileName;
     }
 

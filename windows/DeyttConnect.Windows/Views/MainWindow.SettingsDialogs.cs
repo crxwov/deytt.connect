@@ -117,7 +117,7 @@ public partial class MainWindow
         }
     }
 
-    private void ShowSplitTunnelingInfo()
+    private async void ShowSplitTunnelingInfo()
     {
         var baseSites = ReadBypassSites();
         var currentConfig = WindowsSplitTunnelStore.Load();
@@ -518,7 +518,6 @@ public partial class MainWindow
         var close = DeyttTheme.PrimaryButton(Copy("Готово", "Done"), () =>
         {
             dialog?.Close();
-            RenderActiveTabPreservingScroll();
         });
         rootStack.Children.Add(close);
 
@@ -532,7 +531,8 @@ public partial class MainWindow
                 rootStack,
             },
         };
-        _ = ShowContentInShellAsync(Copy("Без VPN", "Without VPN"), body, 760,
+        await ShowContentInShellAsync(Copy("Без VPN", "Without VPN"), body, 760,
             shellDialog => dialog = shellDialog);
+        await ApplySplitTunnelRulesAsync();
     }
 }

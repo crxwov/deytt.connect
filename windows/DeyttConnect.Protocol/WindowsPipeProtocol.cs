@@ -99,6 +99,8 @@ public static class WindowsPipeProtocol
             {
                 command = "connect", profile = request.Profile, routeTag = request.RouteTag,
                 awgConfig = request.AwgConfig,
+                customBypassDomains = request.CustomBypassDomains,
+                customBypassProcesses = request.CustomBypassProcesses,
             }, RequestOptions, MaximumRequestBytes),
             WindowsPipeCommand.Probe => Serialize(new
             {

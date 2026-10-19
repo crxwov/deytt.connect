@@ -356,4 +356,25 @@ public sealed class TunnelProfileBuilderTests
         Assert.Contains("customsub.org", allSuffixes);
         Assert.Contains("mycustomdomain.com", allSuffixes);
     }
+
+    [Fact]
+    public void WindowsPipeProtocolSerializesCustomBypass()
+    {
+        var request = new WindowsPipeRequest
+        {
+            Command = WindowsPipeCommand.Connect,
+            Profile = "{}",
+            RouteTag = "route:DE:HYSTERIA2",
+            CustomBypassDomains = new[] { "2ip.io", "example.com" },
+            CustomBypassProcesses = new[] { "curl.exe", "discord" }
+        };
+
+        var payload = WindowsPipeProtocol.SerializeRequest(request);
+        var deserialized = WindowsPipeProtocol.DeserializeRequest(payload);
+
+        Assert.NotNull(deserialized.CustomBypassDomains);
+        Assert.Equal(new[] { "2ip.io", "example.com" }, deserialized.CustomBypassDomains);
+        Assert.NotNull(deserialized.CustomBypassProcesses);
+        Assert.Equal(new[] { "curl.exe", "discord" }, deserialized.CustomBypassProcesses);
+    }
 }
