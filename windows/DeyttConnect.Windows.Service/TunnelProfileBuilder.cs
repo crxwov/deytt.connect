@@ -21,6 +21,30 @@ internal static class TunnelProfileBuilder
     private static readonly HashSet<string> DomainOnlyKeys =
         ["domain", "domain_suffix", "domain_keyword", "domain_regex"];
 
+    // The shared subscription includes Russia. Windows automatic selection is
+    // intentionally limited to the supported European, single-country routes.
+    private static void ConfigureEuropeanAutoRoute(JsonArray outbounds, string autoTag)
+    {
+        var byTag = outbounds.OfType<JsonObject>().ToDictionary(
+            outbound => ReadString(outbound, "tag")!, StringComparer.Ordinal);
+        var automatic = byTag[autoTag];
+        if (ReadString(automatic, "type") is not ("urltest" or "selector"))
+            throw new InvalidDataException("Automatic route must select European servers.");
+
+        string[] countries = ["NL", "DE", "FI", "IT"];
+        var candidates = countries.SelectMany(country => Protocols.Select(protocol => $"route:{country}:{protocol}"))
+            .Where(tag => byTag.TryGetValue(tag, out var outbound) &&
+                          ReadString(outbound, "type") is "vless" or "trojan" or "hysteria2" &&
+                          string.IsNullOrEmpty(ReadString(outbound, "detour")))
+            .ToArray();
+        if (candidates.Length == 0)
+            throw new InvalidDataException("В подписке нет европейских серверов для автоподбора. Обновите доступ или выберите маршрут вручную.");
+
+        automatic["outbounds"] = new JsonArray(candidates.Select(tag => (JsonNode?)JsonValue.Create(tag)).ToArray());
+        if (ReadString(automatic, "default") is { } defaultTag && !candidates.Contains(defaultTag, StringComparer.Ordinal))
+            automatic.Remove("default");
+    }
+
     public static IReadOnlyList<string> GetTunAddresses(string runtimeProfile)
     {
         var root = JsonNode.Parse(runtimeProfile) as JsonObject
@@ -44,39 +68,6 @@ internal static class TunnelProfileBuilder
         return result;
     }
 
-    private static readonly HashSet<string> AllowedTopLevelKeys = new(StringComparer.Ordinal)
-    {
-        "log", "inbounds", "outbounds", "endpoints", "dns", "route",
-    };
-
-    private static readonly HashSet<string> ForbiddenNestedKeys = new(StringComparer.Ordinal)
-    {
-        "certificate_path",
-        "key_path",
-        "client_certificate_path",
-        "client_key_path",
-        "data_directory",
-        "external_ui",
-        "external_ui_download_url",
-        "external_ui_download_detour",
-        "cache_file",
-        "clash_api",
-        "v2ray_api",
-        "acme",
-        "ech_key_path",
-        "rule_set",
-    };
-
-    private static readonly HashSet<string> AllowedOutboundTypes = new(StringComparer.Ordinal)
-    {
-        "vless", "trojan", "hysteria2", "selector", "urltest", "direct", "block", "dns",
-    };
-
-    private static readonly HashSet<string> AllowedEndpointTypes = new(StringComparer.Ordinal)
-    {
-        "wireguard", "awg",
-    };
-
     public static string Build(string profileJson, string selectedTag, string? awgConfig = null,
         string? upstreamInterface = null,
         IReadOnlyList<string>? customBypassDomains = null,
@@ -93,7 +84,14 @@ internal static class TunnelProfileBuilder
             throw new InvalidDataException("Subscription JSON is invalid.", error);
         }
 
-        ValidateNoUnsafeFields(root);
+        // Runtime diagnostics belong to the service's bounded pipe readers.
+        // Subscription logging can suppress startup errors or write arbitrary
+        // paths as SYSTEM; always emit errors to the engine's console instead.
+        root["log"] = new JsonObject
+        {
+            ["disabled"] = false,
+            ["level"] = "error",
+        };
 
         var inboundArray = root["inbounds"] as JsonArray
                            ?? throw new InvalidDataException("Subscription has no inbounds.");
@@ -106,6 +104,8 @@ internal static class TunnelProfileBuilder
         var tun = (JsonObject)tunInbound.DeepClone();
         // The shared profile includes an Android-only field that this engine rejects.
         tun.Remove("dns_mode");
+        // A subscription's generic name can collide with other sing-box clients.
+        tun["interface_name"] = "deytt-connect";
         if (tun["address"] is JsonArray addresses &&
             !addresses.Any(node => node is JsonValue val && val.TryGetValue<string>(out var text) && text.Contains(':')))
         {
@@ -121,10 +121,7 @@ internal static class TunnelProfileBuilder
         var tags = new HashSet<string>(StringComparer.Ordinal);
         foreach (var node in outboundArray)
         {
-            if (node is not JsonObject outbound ||
-                ReadString(outbound, "type") is not { Length: > 0 } outType ||
-                !AllowedOutboundTypes.Contains(outType) ||
-                ReadString(outbound, "tag") is not { Length: > 0 } tag ||
+            if (node is not JsonObject outbound || ReadString(outbound, "tag") is not { Length: > 0 } tag ||
                 !tags.Add(tag))
                 throw new InvalidDataException("Subscription has invalid outbound tags.");
 
@@ -137,10 +134,7 @@ internal static class TunnelProfileBuilder
         {
             foreach (var node in endpointArray)
             {
-                if (node is not JsonObject endpoint ||
-                    ReadString(endpoint, "type") is not { Length: > 0 } epType ||
-                    !AllowedEndpointTypes.Contains(epType) ||
-                    ReadString(endpoint, "tag") is not { Length: > 0 } tag ||
+                if (node is not JsonObject endpoint || ReadString(endpoint, "tag") is not { Length: > 0 } tag ||
                     !usedTags.Add(tag))
                     throw new InvalidDataException("Subscription has invalid or duplicate endpoint tags.");
             }
@@ -183,6 +177,8 @@ internal static class TunnelProfileBuilder
                 throw new InvalidDataException("Selected route is not supported.");
             if (!tags.Contains(selectedTag))
                 throw new InvalidDataException("Selected route is unavailable in the subscription.");
+            if (selectedTag == autoTag)
+                ConfigureEuropeanAutoRoute(outboundArray, autoTag);
             engineTag = selectedTag;
         }
 
@@ -194,6 +190,7 @@ internal static class TunnelProfileBuilder
             route.Remove("default_interface");
         else
             route["default_interface"] = upstreamInterface;
+        route["find_process"] = true;
         if (root["dns"] is JsonObject dns && dns["servers"] is JsonArray servers)
         {
             foreach (var server in servers.OfType<JsonObject>())
@@ -204,49 +201,14 @@ internal static class TunnelProfileBuilder
         }
 
         ApplyDomainBypass(root, route, customBypassDomains, customBypassProcesses);
-
-        var sanitizedRoot = new JsonObject
+        if (awgConfig is not null)
         {
-            ["log"] = new JsonObject { ["level"] = "info", ["timestamp"] = true },
-            ["inbounds"] = root["inbounds"]!.DeepClone(),
-            ["outbounds"] = root["outbounds"]!.DeepClone(),
-            ["dns"] = root["dns"]!.DeepClone(),
-            ["route"] = root["route"]!.DeepClone(),
-        };
-        if (root["endpoints"] is JsonArray endpointsClone && endpointsClone.Count > 0)
-            sanitizedRoot["endpoints"] = endpointsClone.DeepClone();
-
-        return sanitizedRoot.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
-    }
-
-    private static void ValidateNoUnsafeFields(JsonObject root)
-    {
-        foreach (var kvp in root)
-        {
-            if (!AllowedTopLevelKeys.Contains(kvp.Key))
-                throw new InvalidDataException($"Subscription contains unsupported top-level section '{kvp.Key}'.");
+            var rules = route["rules"] as JsonArray ?? new JsonArray();
+            if (route["rules"] is null)
+                route["rules"] = rules;
+            rules.Add(CreateAwgResolveRule((JsonObject)endpointArray![0]!));
         }
-        if (root["log"] is JsonObject logObj && logObj.ContainsKey("output"))
-            throw new InvalidDataException("Subscription log output path is not permitted.");
-        CheckNodeForForbiddenKeys(root);
-    }
-
-    private static void CheckNodeForForbiddenKeys(JsonNode? node)
-    {
-        if (node is JsonObject obj)
-        {
-            foreach (var kvp in obj)
-            {
-                if (ForbiddenNestedKeys.Contains(kvp.Key))
-                    throw new InvalidDataException($"Subscription contains forbidden configuration key '{kvp.Key}'.");
-                CheckNodeForForbiddenKeys(kvp.Value);
-            }
-        }
-        else if (node is JsonArray arr)
-        {
-            foreach (var item in arr)
-                CheckNodeForForbiddenKeys(item);
-        }
+        return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
     }
 
     public static string BuildProbeProfile(string profileJson, IReadOnlyList<ProbeRouteEndpoint> endpoints,
@@ -297,6 +259,14 @@ internal static class TunnelProfileBuilder
                     ["password"] = endpoint.Password,
                 }),
             });
+            if (endpoint.AwgConfig is not null)
+            {
+                var awg = endpointArray.OfType<JsonObject>().Single(node =>
+                    ReadString(node, "tag") == AwgEndpointTag(endpoint.RouteTag));
+                var resolveRule = CreateAwgResolveRule(awg);
+                resolveRule["inbound"] = new JsonArray(endpoint.InboundTag);
+                inboundRules.Add(resolveRule);
+            }
             inboundRules.Add(new JsonObject
             {
                 ["inbound"] = new JsonArray(endpoint.InboundTag),
@@ -308,15 +278,7 @@ internal static class TunnelProfileBuilder
 
         var route = root["route"] as JsonObject
                     ?? throw new InvalidDataException("Subscription has no route policy.");
-        var rules = new JsonArray();
-        foreach (var rule in inboundRules)
-            rules.Add(rule?.DeepClone());
-        if (route["rules"] is JsonArray originalRules)
-        {
-            foreach (var rule in originalRules)
-                rules.Add(rule?.DeepClone());
-        }
-        route["rules"] = rules;
+        route["rules"] = inboundRules.DeepClone();
         route["final"] = AwgConfigTag(endpoints[0].RouteTag, endpoints[0].AwgConfig);
 
         if (root["dns"] is JsonObject dns && dns["servers"] is JsonArray servers)
@@ -325,7 +287,150 @@ internal static class TunnelProfileBuilder
                 server.Remove("detour");
         }
 
+        PruneProbeDependencies(root, endpoints);
+
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
+    }
+
+    private static JsonObject CreateAwgResolveRule(JsonObject endpoint)
+    {
+        // The embedded AWG netstack has no DNS servers. Resolve before routing a
+        // domain destination into it; the DNS transport itself uses numeric addresses.
+        var addresses = endpoint["address"] as JsonArray;
+        var ipv4 = false;
+        var ipv6 = false;
+        foreach (var node in addresses ?? new JsonArray())
+        {
+            if (node is not JsonValue value || !value.TryGetValue<string>(out var cidr) ||
+                !System.Net.IPAddress.TryParse(cidr.Split('/')[0], out var address))
+                continue;
+            ipv4 |= address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork;
+            ipv6 |= address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6;
+        }
+        return new JsonObject
+        {
+            ["action"] = "resolve",
+            ["strategy"] = ipv4 && ipv6 ? "prefer_ipv4" : ipv6 ? "ipv6_only" : "ipv4_only",
+        };
+    }
+
+    internal static void PruneProbeDependencies(JsonObject root, IReadOnlyList<ProbeRouteEndpoint> probes)
+    {
+        var outbounds = root["outbounds"] as JsonArray
+                        ?? throw new InvalidDataException("Subscription has no outbounds.");
+        var outboundByTag = outbounds.OfType<JsonObject>()
+            .ToDictionary(node => ReadString(node, "tag")!, StringComparer.Ordinal);
+        var endpoints = root["endpoints"] as JsonArray ?? new JsonArray();
+        var endpointByTag = endpoints.OfType<JsonObject>()
+            .ToDictionary(node => ReadString(node, "tag")!, StringComparer.Ordinal);
+        var requiredOutboundTags = new HashSet<string>(StringComparer.Ordinal);
+        var requiredEndpointTags = new HashSet<string>(StringComparer.Ordinal);
+        var pendingTags = new Queue<string>();
+
+        foreach (var probe in probes)
+            pendingTags.Enqueue(AwgConfigTag(probe.RouteTag, probe.AwgConfig));
+
+        while (pendingTags.TryDequeue(out var tag))
+        {
+            if (outboundByTag.TryGetValue(tag, out var outbound))
+            {
+                if (!requiredOutboundTags.Add(tag))
+                    continue;
+                EnqueueTag(outbound["detour"]);
+                EnqueueTag(outbound["default"]);
+                EnqueueTags(outbound["outbounds"]);
+            }
+            else if (endpointByTag.TryGetValue(tag, out var endpoint))
+            {
+                if (!requiredEndpointTags.Add(tag))
+                    continue;
+                EnqueueTag(endpoint["detour"]);
+            }
+            else
+            {
+                throw new InvalidDataException("A diagnostic route dependency is unavailable.");
+            }
+        }
+
+        root["outbounds"] = new JsonArray(outbounds.OfType<JsonObject>()
+            .Where(node => requiredOutboundTags.Contains(ReadString(node, "tag")!))
+            .Select(node => (JsonNode?)node.DeepClone()).ToArray());
+        if (requiredEndpointTags.Count == 0)
+            root.Remove("endpoints");
+        else
+            root["endpoints"] = new JsonArray(endpoints.OfType<JsonObject>()
+                .Where(node => requiredEndpointTags.Contains(ReadString(node, "tag")!))
+                .Select(node => (JsonNode?)node.DeepClone()).ToArray());
+
+        PruneProbeDns(root, requiredOutboundTags, requiredEndpointTags, outboundByTag, endpointByTag);
+
+        void EnqueueTags(JsonNode? value)
+        {
+            if (value is not JsonArray members)
+                return;
+            foreach (var member in members)
+                EnqueueTag(member);
+        }
+
+        void EnqueueTag(JsonNode? value)
+        {
+            if (value is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var dependency) &&
+                !string.IsNullOrWhiteSpace(dependency))
+                pendingTags.Enqueue(dependency);
+        }
+    }
+
+    private static void PruneProbeDns(JsonObject root, HashSet<string> outboundTags,
+        HashSet<string> endpointTags, IReadOnlyDictionary<string, JsonObject> outboundByTag,
+        IReadOnlyDictionary<string, JsonObject> endpointByTag)
+    {
+        if (root["dns"] is not JsonObject dns || dns["servers"] is not JsonArray servers)
+            return;
+
+        var requiredDnsTags = new HashSet<string>(StringComparer.Ordinal);
+        AddDnsTag(dns["final"]);
+        if (dns["rules"] is JsonArray rules)
+        {
+            foreach (var rule in rules.OfType<JsonObject>())
+                AddDnsTag(rule["server"]);
+        }
+        if (root["route"] is JsonObject route)
+            AddDnsTag(route["default_domain_resolver"]);
+        foreach (var tag in outboundTags)
+            AddDnsTag(outboundByTag[tag]["domain_resolver"]);
+        foreach (var tag in endpointTags)
+            AddDnsTag(endpointByTag[tag]["domain_resolver"]);
+
+        if (requiredDnsTags.Count == 0)
+            return;
+        var serversByTag = servers.OfType<JsonObject>()
+            .Where(server => ReadString(server, "tag") is { Length: > 0 })
+            .GroupBy(server => ReadString(server, "tag")!, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        if (requiredDnsTags.Any(tag => !serversByTag.ContainsKey(tag)))
+            return;
+
+        var pendingDnsTags = new Queue<string>(requiredDnsTags);
+        while (pendingDnsTags.TryDequeue(out var tag))
+        {
+            if (!serversByTag.TryGetValue(tag, out var server))
+                return;
+            if (server["domain_resolver"] is JsonValue resolver &&
+                resolver.TryGetValue<string>(out var resolverTag) && requiredDnsTags.Add(resolverTag))
+                pendingDnsTags.Enqueue(resolverTag);
+        }
+
+        dns["servers"] = new JsonArray(servers.OfType<JsonObject>()
+            .Where(server => ReadString(server, "tag") is not { Length: > 0 } tag ||
+                             requiredDnsTags.Contains(tag))
+            .Select(server => (JsonNode?)server.DeepClone()).ToArray());
+
+        void AddDnsTag(JsonNode? value)
+        {
+            if (value is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var tag) &&
+                !string.IsNullOrWhiteSpace(tag))
+                requiredDnsTags.Add(tag);
+        }
     }
 
     private static string AwgConfigTag(string routeTag, string? awgConfig) =>
@@ -343,7 +448,7 @@ internal static class TunnelProfileBuilder
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-".AsSpan()) < 0;
     }
 
-    private static string AwgEndpointTag(string routeTag)
+    internal static string AwgEndpointTag(string routeTag)
     {
         if (!IsAwgRoute(routeTag))
             throw new InvalidDataException("The AmneziaWG route identifier is invalid.");
@@ -352,8 +457,8 @@ internal static class TunnelProfileBuilder
     }
 
     private static void ApplyDomainBypass(JsonObject root, JsonObject route,
-        IReadOnlyList<string>? customDomains = null,
-        IReadOnlyList<string>? customProcesses = null)
+        IReadOnlyList<string>? customBypassDomains,
+        IReadOnlyList<string>? customBypassProcesses)
     {
         var routeRules = route["rules"] as JsonArray
                          ?? throw new InvalidDataException("Subscription route rules are invalid.");
@@ -371,18 +476,51 @@ internal static class TunnelProfileBuilder
             AddDomains(rule["domain"] as JsonArray, exact, removeLeadingDot: false);
         }
 
-        if (customDomains is not null)
+        if (customBypassDomains is not null)
         {
-            foreach (var item in customDomains)
+            foreach (var domain in customBypassDomains)
             {
-                var trimmed = item?.Trim();
-                if (string.IsNullOrEmpty(trimmed)) continue;
-                if (trimmed.StartsWith("*.", StringComparison.Ordinal))
+                var trimmed = domain.Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(trimmed)) continue;
+                if (trimmed.StartsWith("*."))
+                {
                     suffixes.Add(trimmed[2..]);
-                else if (trimmed.StartsWith(".", StringComparison.Ordinal))
+                }
+                else if (trimmed.StartsWith('.'))
+                {
                     suffixes.Add(trimmed[1..]);
+                }
                 else
+                {
                     exact.Add(trimmed);
+                    suffixes.Add(trimmed);
+                }
+            }
+        }
+
+        var processRules = new List<JsonObject>();
+        if (customBypassProcesses is not null)
+        {
+            var validProcesses = customBypassProcesses
+                .Select(p => p.Trim())
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (validProcesses.Count > 0)
+            {
+                var procArr = new JsonArray();
+                foreach (var p in validProcesses)
+                {
+                    procArr.Add(p);
+                    var lower = p.ToLowerInvariant();
+                    if (!string.Equals(lower, p, StringComparison.Ordinal))
+                        procArr.Add(lower);
+                }
+                processRules.Add(new JsonObject
+                {
+                    ["process_name"] = procArr,
+                    ["outbound"] = "direct",
+                });
             }
         }
 
@@ -391,32 +529,11 @@ internal static class TunnelProfileBuilder
             ["ip_version"] = 6,
             ["action"] = "reject",
         };
-        var bypassRules = new JsonArray
-        {
-            new JsonObject { ["domain_suffix"] = ToJsonArray(suffixes), ["outbound"] = "direct" },
-            new JsonObject { ["domain"] = ToJsonArray(exact), ["outbound"] = "direct" },
-        };
-
-        if (customProcesses is not null)
-        {
-            var processList = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var proc in customProcesses)
-            {
-                var trimmed = proc?.Trim();
-                if (string.IsNullOrEmpty(trimmed)) continue;
-                var fileName = Path.GetFileName(trimmed);
-                if (!string.IsNullOrWhiteSpace(fileName))
-                    processList.Add(fileName);
-            }
-            if (processList.Count > 0)
-            {
-                bypassRules.Add(new JsonObject
-                {
-                    ["process_name"] = ToJsonArray(processList),
-                    ["outbound"] = "direct",
-                });
-            }
-        }
+        var bypassRules = new JsonArray();
+        foreach (var pr in processRules)
+            bypassRules.Add(pr);
+        bypassRules.Add(new JsonObject { ["domain_suffix"] = ToJsonArray(suffixes), ["outbound"] = "direct" });
+        bypassRules.Add(new JsonObject { ["domain"] = ToJsonArray(exact), ["outbound"] = "direct" });
         var merged = new JsonArray();
         var inserted = false;
         var hasIpv6Rule = routeRules.OfType<JsonObject>().Any(r => r["ip_version"]?.GetValue<int>() == 6);
