@@ -190,6 +190,7 @@ internal static class TunnelProfileBuilder
             route.Remove("default_interface");
         else
             route["default_interface"] = upstreamInterface;
+        route["find_process"] = true;
         if (root["dns"] is JsonObject dns && dns["servers"] is JsonArray servers)
         {
             foreach (var server in servers.OfType<JsonObject>())
@@ -509,7 +510,12 @@ internal static class TunnelProfileBuilder
             {
                 var procArr = new JsonArray();
                 foreach (var p in validProcesses)
+                {
                     procArr.Add(p);
+                    var lower = p.ToLowerInvariant();
+                    if (!string.Equals(lower, p, StringComparison.Ordinal))
+                        procArr.Add(lower);
+                }
                 processRules.Add(new JsonObject
                 {
                     ["process_name"] = procArr,

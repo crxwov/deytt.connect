@@ -338,6 +338,7 @@ public sealed class TunnelProfileBuilderTests
             Profile("route:DE:VLESS"), "route:DE:VLESS", null, null,
             customDomains, customProcesses))!;
 
+        Assert.True(runtime["route"]!["find_process"]!.GetValue<bool>());
         var rules = runtime["route"]!["rules"]!.AsArray();
 
         var processRule = rules.OfType<JsonObject>().FirstOrDefault(r => r.ContainsKey("process_name"));

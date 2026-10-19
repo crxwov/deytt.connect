@@ -10,6 +10,74 @@ namespace DeyttConnect.Windows.Views;
 
 public partial class MainWindow
 {
+    private sealed record RunningAppInfo(string ProcessName, string DisplayName, bool HasWindow);
+
+    private static List<RunningAppInfo> GetRunningApplications()
+    {
+        var result = new List<RunningAppInfo>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var systemProcesses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "System", "Idle", "Registry", "smss", "csrss", "wininit", "services",
+            "lsass", "svchost", "fontdrvhost", "winlogon", "dwm", "conhost",
+            "sihost", "taskhostw", "explorer", "ctfmon", "SecurityHealthSystray",
+            "SecurityHealthService", "SearchHost", "StartMenuExperienceHost",
+            "ShellExperienceHost", "RuntimeBroker", "audiodg", "wlanext",
+            "DeyttConnect.Windows", "DeyttConnect.Windows.Service", "DeyttVpnEngine"
+        };
+
+        try
+        {
+            var processes = System.Diagnostics.Process.GetProcesses();
+            foreach (var p in processes)
+            {
+                try
+                {
+                    var name = p.ProcessName;
+                    if (string.IsNullOrWhiteSpace(name) || systemProcesses.Contains(name))
+                        continue;
+
+                    var exeName = name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name : name + ".exe";
+                    if (!seen.Add(exeName))
+                        continue;
+
+                    string? windowTitle = null;
+                    try
+                    {
+                        if (p.MainWindowHandle != IntPtr.Zero && !string.IsNullOrWhiteSpace(p.MainWindowTitle))
+                            windowTitle = p.MainWindowTitle.Trim();
+                    }
+                    catch
+                    {
+                    }
+
+                    var hasWindow = !string.IsNullOrWhiteSpace(windowTitle);
+                    var displayName = hasWindow ? windowTitle! : exeName;
+                    if (displayName.Length > 45)
+                        displayName = displayName.Substring(0, 42) + "…";
+
+                    result.Add(new RunningAppInfo(exeName, displayName, hasWindow));
+                }
+                catch
+                {
+                }
+                finally
+                {
+                    try { p.Dispose(); } catch { }
+                }
+            }
+        }
+        catch
+        {
+        }
+
+        return result
+            .OrderByDescending(x => x.HasWindow)
+            .ThenBy(x => x.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
     private IReadOnlyList<string>? ReadBypassSites()
     {
         if (_keysSnapshot?.ProfileJson is not { Length: > 0 } profile)
@@ -186,27 +254,15 @@ public partial class MainWindow
         });
         rootStack.Children.Add(domainsSection);
 
-        // 3. Custom Processes (.exe) Section
+        // 3. Custom Processes Section with running process picker
         var processSection = new StackPanel { Spacing = 8 };
         processSection.Children.Add(DeyttTheme.RawTextBlock(
-            Copy("СВОИ ПРИЛОЖЕНИЯ БЕЗ VPN (.EXE)", "CUSTOM APPLICATIONS WITHOUT VPN (.EXE)"),
+            Copy("СВОИ ПРИЛОЖЕНИЯ И ПРОЦЕССЫ БЕЗ VPN", "CUSTOM APPLICATIONS & PROCESSES WITHOUT VPN"),
             12, DeyttTheme.Blue, FontWeight.SemiBold));
-
-        var processInputGrid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"),
-            Margin = new Thickness(0, 0, 0, 4)
-        };
-        var processTextBox = new TextBox
-        {
-            PlaceholderText = Copy("имя процесса, например: game.exe", "process name, e.g. game.exe"),
-            FontSize = 13,
-            FontFamily = DeyttTheme.JetBrainsMono,
-            Height = 38,
-            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
-        processInputGrid.Children.Add(processTextBox);
-        Grid.SetColumn(processTextBox, 0);
+        processSection.Children.Add(DeyttTheme.TextBlock(
+            Copy("Весь исходящий трафик выбранных процессов направляется напрямую в обход VPN на любые серверы и адреса.",
+                "All outgoing traffic from selected processes goes directly without VPN to any server or address."),
+            12, DeyttTheme.Muted));
 
         var processListStack = new StackPanel { Spacing = 6 };
 
@@ -216,7 +272,7 @@ public partial class MainWindow
             if (customProcesses.Count == 0)
             {
                 processListStack.Children.Add(DeyttTheme.TextBlock(
-                    Copy("Нет добавленных приложений", "No custom applications added"), 12, DeyttTheme.Muted));
+                    Copy("Нет добавленных процессов", "No custom processes added"), 12, DeyttTheme.Muted));
                 return;
             }
 
@@ -251,6 +307,143 @@ public partial class MainWindow
             }
         }
 
+        // Running processes selector panel
+        var runningPickerCard = new Border
+        {
+            Background = DeyttTheme.Brush(DeyttTheme.Surface2),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(14),
+            Padding = new Thickness(12),
+            IsVisible = false
+        };
+
+        var runningPickerContent = new StackPanel { Spacing = 8 };
+        var searchProcessBox = new TextBox
+        {
+            PlaceholderText = Copy("Поиск по названию или имени процесса...", "Search by title or process name..."),
+            FontSize = 12,
+            FontFamily = DeyttTheme.JetBrainsMono,
+            Height = 34,
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        runningPickerContent.Children.Add(searchProcessBox);
+
+        var runningItemsStack = new StackPanel { Spacing = 4 };
+        runningPickerContent.Children.Add(new ScrollViewer
+        {
+            Content = runningItemsStack,
+            MaxHeight = 180,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+        });
+
+        void RenderRunningList(string filter)
+        {
+            runningItemsStack.Children.Clear();
+            var allRunning = GetRunningApplications();
+            var filtered = string.IsNullOrWhiteSpace(filter)
+                ? allRunning
+                : allRunning.Where(a =>
+                    a.DisplayName.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+                    a.ProcessName.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToList();
+
+            if (filtered.Count == 0)
+            {
+                runningItemsStack.Children.Add(DeyttTheme.TextBlock(
+                    Copy("Ничего не найдено", "No running applications found"), 12, DeyttTheme.Muted));
+                return;
+            }
+
+            foreach (var app in filtered)
+            {
+                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+                var textPanel = new StackPanel { Spacing = 1 };
+                textPanel.Children.Add(DeyttTheme.RawTextBlock(app.DisplayName, 12, DeyttTheme.Text, FontWeight.SemiBold));
+                textPanel.Children.Add(DeyttTheme.RawTextBlock(app.ProcessName, 11, DeyttTheme.Muted, family: DeyttTheme.JetBrainsMono));
+                row.Children.Add(textPanel);
+                Grid.SetColumn(textPanel, 0);
+
+                var isAlreadyAdded = customProcesses.Contains(app.ProcessName, StringComparer.OrdinalIgnoreCase);
+                if (isAlreadyAdded)
+                {
+                    var addedLabel = DeyttTheme.TextBlock(Copy("✓ Добавлен", "✓ Added"), 11, DeyttTheme.Mint);
+                    addedLabel.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+                    row.Children.Add(addedLabel);
+                    Grid.SetColumn(addedLabel, 1);
+                }
+                else
+                {
+                    var addBtn = new Button
+                    {
+                        Content = Copy("+ Добавить", "+ Add"),
+                        FontSize = 11,
+                        Padding = new Thickness(8, 4),
+                        Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+                    };
+                    addBtn.Click += (_, _) =>
+                    {
+                        if (!customProcesses.Contains(app.ProcessName, StringComparer.OrdinalIgnoreCase))
+                        {
+                            customProcesses.Add(app.ProcessName);
+                            WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses));
+                            RefreshProcessList();
+                            RenderRunningList(searchProcessBox.Text ?? string.Empty);
+                        }
+                    };
+                    row.Children.Add(addBtn);
+                    Grid.SetColumn(addBtn, 1);
+                }
+
+                runningItemsStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 6, new Thickness(8, 5)));
+            }
+        }
+
+        searchProcessBox.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == TextBox.TextProperty)
+                RenderRunningList(searchProcessBox.Text ?? string.Empty);
+        };
+
+        var pickRunningBtn = new Button
+        {
+            Content = Copy("⚡ Выбрать из запущенных процессов", "⚡ Pick from running processes"),
+            Height = 36,
+            Background = DeyttTheme.Brush(DeyttTheme.Selected),
+            Foreground = DeyttTheme.Brush(DeyttTheme.Blue),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(10),
+            FontWeight = FontWeight.SemiBold,
+            Padding = new Thickness(14, 0),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+        };
+        pickRunningBtn.Click += (_, _) =>
+        {
+            runningPickerCard.IsVisible = !runningPickerCard.IsVisible;
+            if (runningPickerCard.IsVisible)
+                RenderRunningList(searchProcessBox.Text ?? string.Empty);
+        };
+
+        runningPickerCard.Child = runningPickerContent;
+
+        var processInputGrid = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"),
+            Margin = new Thickness(0, 0, 0, 4)
+        };
+        var processTextBox = new TextBox
+        {
+            PlaceholderText = Copy("или имя процесса вручную: game.exe", "or enter process name: game.exe"),
+            FontSize = 12,
+            FontFamily = DeyttTheme.JetBrainsMono,
+            Height = 38,
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        processInputGrid.Children.Add(processTextBox);
+        Grid.SetColumn(processTextBox, 0);
+
         var addProcessBtn = new Button
         {
             Content = Copy("Добавить", "Add"),
@@ -268,6 +461,8 @@ public partial class MainWindow
                 WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses));
                 processTextBox.Text = string.Empty;
                 RefreshProcessList();
+                if (runningPickerCard.IsVisible)
+                    RenderRunningList(searchProcessBox.Text ?? string.Empty);
             }
         };
         processInputGrid.Children.Add(addProcessBtn);
@@ -299,18 +494,22 @@ public partial class MainWindow
                     customProcesses.Add(normalized);
                     WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(customDomains, customProcesses));
                     RefreshProcessList();
+                    if (runningPickerCard.IsVisible)
+                        RenderRunningList(searchProcessBox.Text ?? string.Empty);
                 }
             }
         };
         processInputGrid.Children.Add(browseFileBtn);
         Grid.SetColumn(browseFileBtn, 2);
 
+        processSection.Children.Add(pickRunningBtn);
+        processSection.Children.Add(runningPickerCard);
         processSection.Children.Add(processInputGrid);
         RefreshProcessList();
         processSection.Children.Add(new ScrollViewer
         {
             Content = processListStack,
-            MaxHeight = 150,
+            MaxHeight = 130,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
         });
         rootStack.Children.Add(processSection);
