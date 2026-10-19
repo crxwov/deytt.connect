@@ -929,7 +929,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             background = host.rounded(SURFACE, 24f, LINE)
         }
 
-        sheet.addView(host.mono("./c · РАЗДЕЛЬНОЕ ТУННЕЛИРОВАНИЕ", 9f, MUTED, 650))
+        sheet.addView(host.mono(copy("./c · РАЗДЕЛЬНОЕ ТУННЕЛИРОВАНИЕ", "./c · SPLIT TUNNELING"), 9f, MUTED, 650))
         sheet.addView(host.text(copy("Раздельное туннелирование", "Split tunneling"), 20f, TEXT, android.graphics.Typeface.BOLD).apply {
             setPadding(0, host.dp(6), 0, host.dp(4))
         })
@@ -971,7 +971,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         fun updatePresetControls() {
             val active = store.activePreset()
             val vpnOnly = active.mode == UserSplitTunnelStore.MODE_VPN_ONLY
-            presetName.text = active.name + "  ▾"
+            presetName.text = (if (active.id == "default") copy(active.name, "Main") else active.name) + "  ▾"
             deletePreset.visibility = if (active.id == "default") View.GONE else View.VISIBLE
             modeButton.text = copy(
                 if (vpnOnly) "VPN только для списка" else "Обход VPN для списка",
@@ -986,7 +986,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         presetName.setOnClickListener {
             val presets = store.readPresets()
             AlertDialog.Builder(host).setTitle(copy("Выберите пресет", "Choose a preset"))
-                .setItems(presets.map { it.name }.toTypedArray()) { _, index ->
+                .setItems(presets.map { if (it.id == "default") copy(it.name, "Main") else it.name }.toTypedArray()) { _, index ->
                     store.selectPreset(presets[index].id)
                     updatePresetControls()
                     renderContent()

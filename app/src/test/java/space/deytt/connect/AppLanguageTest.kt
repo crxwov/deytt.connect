@@ -26,6 +26,12 @@ class AppLanguageTest {
 
     @Test
     fun translatesDynamicTrafficAndConnectionCopy() {
+          assertEquals("Main", AppLanguage.english("Основной"))
+          assertEquals("Connection failed to start", AppLanguage.english("Ошибка запуска соединения"))
+          assertEquals(
+              "Selected route failed the HTTPS check: the check timed out. Change the bypass setting or try again.",
+              AppLanguage.english("Выбранный маршрут не прошёл HTTPS-проверку: проверка не завершилась вовремя. Смените обход или повторите попытку."),
+          )
         assertEquals(
             "14 GB used of 20 GB. 10 GB downloaded, 4 GB uploaded.",
             AppLanguage.english("Использовано 14 GB из 20 GB. Скачано 10 GB, отправлено 4 GB."),
