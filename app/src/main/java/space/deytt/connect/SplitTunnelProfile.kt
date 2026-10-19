@@ -29,7 +29,7 @@ object SplitTunnelProfile {
         val vpnOnly = mode == UserSplitTunnelStore.MODE_VPN_ONLY
         val selectedOutbound = proxyOutbound ?: route.optString("final")
         // These are the additional explicit rules in the provider's Happ profile.
-        val suffixes = linkedSetOf("ru", "xn--p1ai")
+        val suffixes = linkedSetOf("ru", "su", "рф", "xn--p1ai")
         val exact = linkedSetOf("cp.cloudflare.com")
         for (index in 0 until rules.length()) {
             val rule = rules.getJSONObject(index)

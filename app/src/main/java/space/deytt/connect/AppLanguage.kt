@@ -291,6 +291,7 @@ internal object AppLanguage {
         "состояние соединения" to "connection status",
         "./c · без аккаунта" to "./c · not linked",
         "Состояние соединения" to "Connection status",
+        "Основной" to "Main",
         "Ошибка запуска соединения" to "Connection failed to start",
         "проверка не завершилась вовремя" to "the check timed out",
         "DNS через VPN не отвечает" to "DNS did not respond through the VPN",

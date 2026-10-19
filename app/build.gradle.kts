@@ -20,8 +20,8 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        } else 74
-        versionName = "0.11.14"
+        } else 75
+        versionName = "0.11.15"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }
