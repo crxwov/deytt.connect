@@ -754,7 +754,7 @@
       context.restore();
 
       context.strokeStyle = colors.sphereEdge;
-      context.lineWidth = 1;
+      context.lineWidth = 1.25;
       context.beginPath();
       context.arc(x, y, radius, 0, TAU);
       context.stroke();
