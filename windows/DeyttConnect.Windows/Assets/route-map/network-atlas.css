@@ -533,6 +533,7 @@ html[data-theme="light"] { --muted: #46546b; }
 .home-compact .home-country, .home-compact .home-protocol { font-size: 13px; }
 .compact-metrics { grid-column: 1 / -1; display: flex; gap: 20px; font-size: 14px; font-weight: 600; border-top: 1px solid var(--line); padding-top: 10px; }
 .network-atlas.is-zoomed .home-compact { left: 50%; right: auto; bottom: 22px; width: min(620px, calc(100% - 40px)); transform: translateX(-50%) rotateY(var(--panel-angle, 0deg)); transform-origin: center center; transform-style: preserve-3d; }
+.network-atlas.is-zoomed .home-compact-content { transform: rotateY(calc(0deg - var(--panel-angle, 0deg))); }
 .network-atlas.is-zoomed.reduce-motion .home-compact { transform: translateX(-50%) !important; }
 .traffic-legend { position: absolute; z-index: 3; top: 18px; left: 22px; display: flex; flex-wrap: wrap; gap: 8px 16px; max-width: calc(100% - 44px); padding: 9px 12px; border-radius: 12px; background: color-mix(in srgb, var(--surface) 90%, transparent); font-size: 13px; color: var(--muted); pointer-events: none; }
 .traffic-legend span { display: inline-flex; gap: 7px; align-items: center; }
