@@ -109,8 +109,8 @@ internal static class PipeServer
                 if (request.Profile is null || request.RouteTag is null)
                     throw new JsonException("Missing connection details.");
                 result = await engine.ConnectAsync(request.Profile, request.RouteTag, request.AwgConfig,
-                    request.CustomBypassDomains, request.CustomBypassProcesses,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken, request.CustomBypassDomains, request.CustomBypassProcesses,
+                    request.SplitTunnelMode).ConfigureAwait(false);
                 break;
             case WindowsPipeCommand.Probe:
                 if (request.Profile is null || request.RouteTags is null || request.Method is null ||
@@ -137,7 +137,7 @@ internal static class PipeServer
             result.ConnectedAt, result.ProbeResults?.Select(probe => new WindowsRouteProbeResult(
                 probe.RouteTag, probe.LatencyMilliseconds, probe.BytesPerSecond, probe.Error,
                 probe.Stage, probe.Attempt, probe.BytesReceived, probe.TotalBytes)).ToArray(),
-            result.HealthCheckedAt);
+            result.HealthCheckedAt, result.ActiveRouteTag);
         var responsePayload = WindowsPipeProtocol.SerializeResponse(response);
         await WindowsPipeProtocol.WriteFrameAsync(pipe, responsePayload, WindowsPipeProtocol.MaximumResponseBytes,
             cancellationToken).ConfigureAwait(false);

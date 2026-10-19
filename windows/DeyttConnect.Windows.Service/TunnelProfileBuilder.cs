@@ -71,7 +71,8 @@ internal static class TunnelProfileBuilder
     public static string Build(string profileJson, string selectedTag, string? awgConfig = null,
         string? upstreamInterface = null,
         IReadOnlyList<string>? customBypassDomains = null,
-        IReadOnlyList<string>? customBypassProcesses = null)
+        IReadOnlyList<string>? customBypassProcesses = null,
+        string? splitTunnelMode = null)
     {
         JsonObject root;
         try
@@ -182,9 +183,17 @@ internal static class TunnelProfileBuilder
             engineTag = selectedTag;
         }
 
+        var isVpnOnly = string.Equals(splitTunnelMode, "vpn_only", StringComparison.OrdinalIgnoreCase);
+
+        if (!tags.Contains("direct"))
+        {
+            outboundArray.Add(new JsonObject { ["type"] = "direct", ["tag"] = "direct" });
+            tags.Add("direct");
+        }
+
         var route = root["route"] as JsonObject
                     ?? throw new InvalidDataException("Subscription has no route policy.");
-        route["final"] = engineTag;
+        route["final"] = isVpnOnly ? "direct" : engineTag;
         route["auto_detect_interface"] = upstreamInterface is null;
         if (upstreamInterface is null)
             route.Remove("default_interface");
@@ -200,7 +209,7 @@ internal static class TunnelProfileBuilder
             }
         }
 
-        ApplyDomainBypass(root, route, customBypassDomains, customBypassProcesses);
+        ApplyDomainBypass(root, route, customBypassDomains, customBypassProcesses, isVpnOnly, engineTag);
         if (awgConfig is not null)
         {
             var rules = route["rules"] as JsonArray ?? new JsonArray();
@@ -458,7 +467,9 @@ internal static class TunnelProfileBuilder
 
     private static void ApplyDomainBypass(JsonObject root, JsonObject route,
         IReadOnlyList<string>? customBypassDomains,
-        IReadOnlyList<string>? customBypassProcesses)
+        IReadOnlyList<string>? customBypassProcesses,
+        bool isVpnOnly,
+        string engineTag)
     {
         var routeRules = route["rules"] as JsonArray
                          ?? throw new InvalidDataException("Subscription route rules are invalid.");
@@ -476,6 +487,8 @@ internal static class TunnelProfileBuilder
             AddDomains(rule["domain"] as JsonArray, exact, removeLeadingDot: false);
         }
 
+        var customSuffixes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var customExact = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         if (customBypassDomains is not null)
         {
             foreach (var domain in customBypassDomains)
@@ -484,16 +497,16 @@ internal static class TunnelProfileBuilder
                 if (string.IsNullOrWhiteSpace(trimmed)) continue;
                 if (trimmed.StartsWith("*."))
                 {
-                    suffixes.Add(trimmed[2..]);
+                    customSuffixes.Add(trimmed[2..]);
                 }
                 else if (trimmed.StartsWith('.'))
                 {
-                    suffixes.Add(trimmed[1..]);
+                    customSuffixes.Add(trimmed[1..]);
                 }
                 else
                 {
-                    exact.Add(trimmed);
-                    suffixes.Add(trimmed);
+                    customExact.Add(trimmed);
+                    customSuffixes.Add(trimmed);
                 }
             }
         }
@@ -529,7 +542,7 @@ internal static class TunnelProfileBuilder
                 processRules.Add(new JsonObject
                 {
                     ["process_name"] = procArr,
-                    ["outbound"] = "direct",
+                    ["outbound"] = isVpnOnly ? engineTag : "direct",
                 });
             }
         }
@@ -539,11 +552,26 @@ internal static class TunnelProfileBuilder
             ["ip_version"] = 6,
             ["action"] = "reject",
         };
-        var bypassRules = new JsonArray();
+
+        var customRuleNodes = new JsonArray();
         foreach (var pr in processRules)
-            bypassRules.Add(pr);
-        bypassRules.Add(new JsonObject { ["domain_suffix"] = ToJsonArray(suffixes), ["outbound"] = "direct" });
-        bypassRules.Add(new JsonObject { ["domain"] = ToJsonArray(exact), ["outbound"] = "direct" });
+            customRuleNodes.Add(pr);
+
+        if (isVpnOnly)
+        {
+            if (customSuffixes.Count > 0)
+                customRuleNodes.Add(new JsonObject { ["domain_suffix"] = ToJsonArray(customSuffixes), ["outbound"] = engineTag });
+            if (customExact.Count > 0)
+                customRuleNodes.Add(new JsonObject { ["domain"] = ToJsonArray(customExact), ["outbound"] = engineTag });
+        }
+        else
+        {
+            foreach (var s in customSuffixes) suffixes.Add(s);
+            foreach (var e in customExact) exact.Add(e);
+            customRuleNodes.Add(new JsonObject { ["domain_suffix"] = ToJsonArray(suffixes), ["outbound"] = "direct" });
+            customRuleNodes.Add(new JsonObject { ["domain"] = ToJsonArray(exact), ["outbound"] = "direct" });
+        }
+
         var merged = new JsonArray();
         var inserted = false;
         var hasIpv6Rule = routeRules.OfType<JsonObject>().Any(r => r["ip_version"]?.GetValue<int>() == 6);
@@ -554,8 +582,8 @@ internal static class TunnelProfileBuilder
             {
                 if (!hasIpv6Rule)
                     merged.Add(ipv6Reject.DeepClone());
-                foreach (var bypass in bypassRules)
-                    merged.Add(bypass?.DeepClone());
+                foreach (var node in customRuleNodes)
+                    merged.Add(node?.DeepClone());
                 inserted = true;
             }
             merged.Add(rule?.DeepClone());
@@ -564,40 +592,73 @@ internal static class TunnelProfileBuilder
         {
             if (!hasIpv6Rule)
                 merged.Add(ipv6Reject.DeepClone());
-            foreach (var bypass in bypassRules)
-                merged.Add(bypass?.DeepClone());
+            foreach (var node in customRuleNodes)
+                merged.Add(node?.DeepClone());
         }
         route["rules"] = merged;
 
         var dns = root["dns"] as JsonObject
                   ?? throw new InvalidDataException("Subscription has no DNS policy.");
         dns["strategy"] = "ipv4_only";
-        var dnsRules = new JsonArray
-        {
-            new JsonObject
-            {
-                ["domain_suffix"] = ToJsonArray(suffixes),
-                ["action"] = "route",
-                ["server"] = "local-dns",
-            },
-            new JsonObject
-            {
-                ["domain"] = ToJsonArray(exact),
-                ["action"] = "route",
-                ["server"] = "local-dns",
-            },
-        };
-
-        if (dns["rules"] is JsonArray originalDnsRules)
-        {
-            foreach (var node in originalDnsRules)
-            {
-                if (node is not JsonObject rule || !IsLegacyLocalDomainRule(rule))
-                    dnsRules.Add(node?.DeepClone());
-            }
-        }
-        dns["rules"] = dnsRules;
         dns["reverse_mapping"] = true;
+
+        if (isVpnOnly)
+        {
+            var dnsServers = dns["servers"] as JsonArray;
+            var remoteDnsTag = dnsServers?.OfType<JsonObject>()
+                .FirstOrDefault(s => ReadString(s, "tag") != "local-dns")?["tag"]?.GetValue<string>()
+                ?? "remote-dns";
+
+            var dnsRules = new JsonArray();
+            if (customSuffixes.Count > 0)
+            {
+                dnsRules.Add(new JsonObject
+                {
+                    ["domain_suffix"] = ToJsonArray(customSuffixes),
+                    ["action"] = "route",
+                    ["server"] = remoteDnsTag,
+                });
+            }
+            if (customExact.Count > 0)
+            {
+                dnsRules.Add(new JsonObject
+                {
+                    ["domain"] = ToJsonArray(customExact),
+                    ["action"] = "route",
+                    ["server"] = remoteDnsTag,
+                });
+            }
+            dns["rules"] = dnsRules;
+            dns["final"] = "local-dns";
+        }
+        else
+        {
+            var dnsRules = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["domain_suffix"] = ToJsonArray(suffixes),
+                    ["action"] = "route",
+                    ["server"] = "local-dns",
+                },
+                new JsonObject
+                {
+                    ["domain"] = ToJsonArray(exact),
+                    ["action"] = "route",
+                    ["server"] = "local-dns",
+                },
+            };
+
+            if (dns["rules"] is JsonArray originalDnsRules)
+            {
+                foreach (var node in originalDnsRules)
+                {
+                    if (node is not JsonObject rule || !IsLegacyLocalDomainRule(rule))
+                        dnsRules.Add(node?.DeepClone());
+                }
+            }
+            dns["rules"] = dnsRules;
+        }
     }
 
     private static bool IsLegacyLocalDomainRule(JsonObject rule) =>

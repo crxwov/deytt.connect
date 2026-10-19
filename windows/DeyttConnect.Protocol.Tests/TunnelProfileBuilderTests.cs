@@ -377,4 +377,78 @@ public sealed class TunnelProfileBuilderTests
         Assert.NotNull(deserialized.CustomBypassProcesses);
         Assert.Equal(new[] { "curl.exe", "discord" }, deserialized.CustomBypassProcesses);
     }
+
+    [Fact]
+    public void BuildAppliesVpnOnlyMode()
+    {
+        var profile = Profile("route:NL:VLESS");
+        var customDomains = new[] { "targetdomain.com", "*.targetsub.org" };
+        var customProcesses = new[] { "game.exe", "customapp" };
+
+        var runtimeJson = TunnelProfileBuilder.Build(
+            profile,
+            "route:NL:VLESS",
+            customBypassDomains: customDomains,
+            customBypassProcesses: customProcesses,
+            splitTunnelMode: "vpn_only");
+
+        var runtime = JsonNode.Parse(runtimeJson)!.AsObject();
+
+        // In vpn_only mode, default route is direct!
+        Assert.Equal("direct", runtime["route"]!["final"]!.GetValue<string>());
+        Assert.True(runtime["route"]!["find_process"]!.GetValue<bool>());
+
+        // Direct outbound must exist
+        var outbounds = runtime["outbounds"]!.AsArray();
+        Assert.Contains(outbounds.OfType<JsonObject>(), o => o["tag"]?.GetValue<string>() == "direct");
+
+        var rules = runtime["route"]!["rules"]!.AsArray();
+
+        // Process rule should route to VPN (route:NL:VLESS)
+        var processRule = rules.OfType<JsonObject>().FirstOrDefault(r => r.ContainsKey("process_name"));
+        Assert.NotNull(processRule);
+        Assert.Equal("route:NL:VLESS", processRule["outbound"]!.GetValue<string>());
+        var procNames = processRule["process_name"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
+        Assert.Contains("game.exe", procNames);
+        Assert.Contains("customapp", procNames);
+        Assert.Contains("customapp.exe", procNames);
+
+        // Domain rule should route to VPN (route:NL:VLESS)
+        var vpnDomainRules = rules.OfType<JsonObject>()
+            .Where(r => r["outbound"]?.GetValue<string>() == "route:NL:VLESS" && r.ContainsKey("domain_suffix"))
+            .ToArray();
+        var allVpnSuffixes = vpnDomainRules
+            .SelectMany(r => r["domain_suffix"]!.AsArray().Select(n => n!.GetValue<string>()))
+            .ToArray();
+        Assert.Contains("targetsub.org", allVpnSuffixes);
+        Assert.Contains("targetdomain.com", allVpnSuffixes);
+
+        // DNS should have final local-dns and route custom domains to remote-dns
+        Assert.Equal("local-dns", runtime["dns"]!["final"]!.GetValue<string>());
+        var dnsRules = runtime["dns"]!["rules"]!.AsArray();
+        var customDnsRule = dnsRules.OfType<JsonObject>().FirstOrDefault(r => r["action"]?.GetValue<string>() == "route");
+        Assert.NotNull(customDnsRule);
+        Assert.Equal("remote-dns", customDnsRule["server"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void WindowsPipeProtocolSerializesSplitTunnelMode()
+    {
+        var request = new WindowsPipeRequest
+        {
+            Command = WindowsPipeCommand.Connect,
+            Profile = "{}",
+            RouteTag = "route:DE:HYSTERIA2",
+            CustomBypassDomains = new[] { "2ip.io" },
+            CustomBypassProcesses = new[] { "curl.exe" },
+            SplitTunnelMode = "vpn_only"
+        };
+
+        var payload = WindowsPipeProtocol.SerializeRequest(request);
+        var deserialized = WindowsPipeProtocol.DeserializeRequest(payload);
+
+        Assert.Equal("vpn_only", deserialized.SplitTunnelMode);
+        Assert.Equal(new[] { "2ip.io" }, deserialized.CustomBypassDomains);
+        Assert.Equal(new[] { "curl.exe" }, deserialized.CustomBypassProcesses);
+    }
 }

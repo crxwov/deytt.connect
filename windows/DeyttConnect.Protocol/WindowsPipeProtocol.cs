@@ -48,6 +48,9 @@ public sealed record WindowsPipeRequest
 
     [JsonPropertyName("customBypassProcesses")]
     public IReadOnlyList<string>? CustomBypassProcesses { get; init; }
+
+    [JsonPropertyName("splitTunnelMode")]
+    public string? SplitTunnelMode { get; init; }
 }
 
 public sealed record WindowsTunnelSnapshot(
@@ -101,6 +104,7 @@ public static class WindowsPipeProtocol
                 awgConfig = request.AwgConfig,
                 customBypassDomains = request.CustomBypassDomains,
                 customBypassProcesses = request.CustomBypassProcesses,
+                splitTunnelMode = request.SplitTunnelMode,
             }, RequestOptions, MaximumRequestBytes),
             WindowsPipeCommand.Probe => Serialize(new
             {
