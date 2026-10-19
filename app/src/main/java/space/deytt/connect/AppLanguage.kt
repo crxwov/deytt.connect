@@ -103,6 +103,13 @@ internal object AppLanguage {
         (translations[value] ?: normalizedTranslations[value.lowercase(Locale.ROOT)])?.let {
             return if (upperCase) it.uppercase(Locale.ROOT) else it
         }
+        Regex("^Выбранный маршрут не прошёл HTTPS-проверку: (.+)\\. Смените обход или повторите попытку\\.$")
+            .matchEntire(value)?.let {
+                return "Selected route failed the HTTPS check: ${english(it.groupValues[1])}. Change the bypass setting or try again."
+            }
+        Regex("^проверочный сайт ответил HTTP ([0-9]+)$").matchEntire(value)?.let {
+            return "the check endpoint returned HTTP ${it.groupValues[1]}"
+        }
         Regex("^версия (.+)$").matchEntire(value)?.let { return "VERSION ${it.groupValues[1]}" }
         Regex("^Проверяем маршрут и интернет · (.+)$").matchEntire(value)?.let {
             return "Checking route and internet · ${it.groupValues[1]}"
@@ -284,6 +291,12 @@ internal object AppLanguage {
         "состояние соединения" to "connection status",
         "./c · без аккаунта" to "./c · not linked",
         "Состояние соединения" to "Connection status",
+        "Ошибка запуска соединения" to "Connection failed to start",
+        "проверка не завершилась вовремя" to "the check timed out",
+        "DNS через VPN не отвечает" to "DNS did not respond through the VPN",
+        "не удалось установить защищённое HTTPS-соединение" to "could not establish a secure HTTPS connection",
+        "соединение оборвалось во время проверки" to "the connection dropped during the check",
+        "не удалось выполнить HTTPS-проверку" to "could not complete the HTTPS check",
         "Не подключено" to "Not connected",
         "Подключено" to "Connected",
         "Готово к подключению" to "Ready to connect",
