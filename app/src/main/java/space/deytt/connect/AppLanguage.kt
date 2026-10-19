@@ -345,7 +345,7 @@ internal object AppLanguage {
         "Выберем доступный узел" to "Choose an available node",
         "Россия → Германия" to "Russia → Germany",
         "Двойной маршрут · Санкт-Петербург → Франкфурт" to "Double route · Saint Petersburg → Frankfurt",
-        "AmneziaWG · готовые профили" to "AmneziaWG · ready profiles",
+        "AmneziaWG · готовые профили" to "AmneziaWG · profiles",
         "Профили не найдены · обновите подписку" to "No profiles found · refresh the subscription",
         "1 сервер · выбрать точку" to "1 server · choose a node",
         "пинг" to "ping",
