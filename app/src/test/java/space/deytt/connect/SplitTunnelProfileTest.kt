@@ -108,4 +108,50 @@ class SplitTunnelProfileTest {
         assertEquals("local-dns", runtime.getJSONArray("outbounds").getJSONObject(0).getString("domain_resolver"))
         ProfileValidator.validate(root.toString())
     }
+
+    @Test fun applyIncludesCustomDomainsAndPackagesAndPreservesBaseRules() {
+        val customDomains = listOf("custom.example.com", "*.customwild.org")
+        val customPackages = listOf("org.telegram.messenger", "com.google.android.youtube")
+        val root = JSONObject(SplitTunnelProfile.apply(config, customDomains, customPackages))
+
+        val routeRules = root.getJSONObject("route").getJSONArray("rules")
+        val suffixesRule = routeRules.getJSONObject(2).getJSONArray("domain_suffix")
+        val suffixes = (0 until suffixesRule.length()).map(suffixesRule::getString).toSet()
+        assertTrue(suffixes.contains("ru"))
+        assertTrue(suffixes.contains("xn--p1ai"))
+        assertTrue(suffixes.contains("customwild.org"))
+
+        val exactRule = routeRules.getJSONObject(3).getJSONArray("domain")
+        val exact = (0 until exactRule.length()).map(exactRule::getString).toSet()
+        assertTrue(exact.contains("cp.cloudflare.com"))
+        assertTrue(exact.contains("custom.example.com"))
+
+        val packageRule = routeRules.getJSONObject(4).getJSONArray("package_name")
+        val packages = (0 until packageRule.length()).map(packageRule::getString).toSet()
+        assertTrue(packages.contains("org.telegram.messenger"))
+        assertTrue(packages.contains("com.google.android.youtube"))
+
+        val tunInbound = root.getJSONArray("inbounds").getJSONObject(0)
+        val tunExcluded = tunInbound.getJSONArray("exclude_package")
+        val tunExcludedSet = (0 until tunExcluded.length()).map(tunExcluded::getString).toSet()
+        assertTrue(tunExcludedSet.contains("org.telegram.messenger"))
+        assertTrue(tunExcludedSet.contains("com.google.android.youtube"))
+
+        ProfileValidator.validate(root.toString())
+    }
+
+    @Test fun userSplitTunnelStoreNormalizesDomainsCorrectly() {
+        assertEquals("example.com", UserSplitTunnelStore.normalizeDomain("https://example.com/path?arg=1"))
+        assertEquals("example.com", UserSplitTunnelStore.normalizeDomain("http://Example.COM:8080/"))
+        assertEquals("*.example.com", UserSplitTunnelStore.normalizeDomain("*.EXAMPLE.com"))
+        assertEquals("*.example.com", UserSplitTunnelStore.normalizeDomain(".example.com"))
+        assertNull(UserSplitTunnelStore.normalizeDomain("not a domain"))
+        assertNull(UserSplitTunnelStore.normalizeDomain(""))
+        assertNull(UserSplitTunnelStore.normalizeDomain("http://"))
+
+        assertTrue(UserSplitTunnelStore.isValidPackage("org.telegram.messenger"))
+        assertTrue(UserSplitTunnelStore.isValidPackage("com.example.app_1"))
+        assertFalse(UserSplitTunnelStore.isValidPackage("invalid package"))
+        assertFalse(UserSplitTunnelStore.isValidPackage("1com.example"))
+    }
 }

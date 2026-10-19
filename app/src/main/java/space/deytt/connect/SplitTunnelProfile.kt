@@ -17,7 +17,11 @@ object SplitTunnelProfile {
             (0 until exact.length()).map(exact::getString)
     }
 
-    fun apply(config: String): String {
+    fun apply(
+        config: String,
+        customDomains: Collection<String> = emptyList(),
+        customPackages: Collection<String> = emptyList(),
+    ): String {
         val root = JSONObject(config)
         val route = root.getJSONObject("route")
         val rules = route.getJSONArray("rules")
@@ -37,6 +41,15 @@ object SplitTunnelProfile {
                 for (i in 0 until values.length()) exact += values.getString(i)
             }
         }
+        for (item in customDomains) {
+            val clean = item.trim().lowercase(java.util.Locale.ROOT)
+            if (clean.isBlank()) continue
+            if (clean.startsWith("*.")) {
+                suffixes += clean.removePrefix("*.").removePrefix(".")
+            } else {
+                exact += clean
+            }
+        }
         val hasIpv6Reject = (0 until rules.length()).any { index ->
             val rule = rules.optJSONObject(index)
             rule != null && rule.optInt("ip_version") == 6 && rule.optString("action") == "reject"
@@ -44,6 +57,10 @@ object SplitTunnelProfile {
         val added = JSONArray()
             .put(JSONObject().put("domain_suffix", JSONArray(suffixes)).put("outbound", "direct"))
             .put(JSONObject().put("domain", JSONArray(exact)).put("outbound", "direct"))
+        val normalizedPackages = customPackages.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (normalizedPackages.isNotEmpty()) {
+            added.put(JSONObject().put("package_name", JSONArray(normalizedPackages)).put("outbound", "direct"))
+        }
         if (!hasIpv6Reject) {
             added.put(JSONObject().put("ip_version", 6).put("action", "reject"))
         }
@@ -76,6 +93,15 @@ object SplitTunnelProfile {
                     inbound.put("auto_route", true)
                     inbound.put("strict_route", true)
                     inbound.put("stack", "mixed")
+                    if (normalizedPackages.isNotEmpty()) {
+                        val currentExclude = inbound.optJSONArray("exclude_package") ?: JSONArray().also { inbound.put("exclude_package", it) }
+                        val existingSet = (0 until currentExclude.length()).map { currentExclude.optString(it) }.toMutableSet()
+                        normalizedPackages.forEach { pkg ->
+                            if (existingSet.add(pkg)) {
+                                currentExclude.put(pkg)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -97,12 +123,26 @@ object SplitTunnelProfile {
         return root.toString()
     }
 
-    fun forAwg(config: String, port: Int, username: String, password: String): String {
-        return forLocalProxy(config, port, username, password, AWG_OUTBOUND)
+    fun forAwg(
+        config: String,
+        port: Int,
+        username: String,
+        password: String,
+        customDomains: Collection<String> = emptyList(),
+        customPackages: Collection<String> = emptyList(),
+    ): String {
+        return forLocalProxy(config, port, username, password, AWG_OUTBOUND, customDomains, customPackages)
     }
 
-    fun forOpenFlux(config: String, port: Int, username: String, password: String): String {
-        val root = JSONObject(forLocalProxy(config, port, username, password, OPENFLUX_OUTBOUND))
+    fun forOpenFlux(
+        config: String,
+        port: Int,
+        username: String,
+        password: String,
+        customDomains: Collection<String> = emptyList(),
+        customPackages: Collection<String> = emptyList(),
+    ): String {
+        val root = JSONObject(forLocalProxy(config, port, username, password, OPENFLUX_OUTBOUND, customDomains, customPackages))
         val route = root.getJSONObject("route")
         val original = route.getJSONArray("rules")
         // The carrier exit supports IPv4 TCP. Capture IPv6 in the same TUN and
@@ -144,9 +184,17 @@ object SplitTunnelProfile {
         return root.toString()
     }
 
-    private fun forLocalProxy(config: String, port: Int, username: String, password: String, outbound: String): String {
+    private fun forLocalProxy(
+        config: String,
+        port: Int,
+        username: String,
+        password: String,
+        outbound: String,
+        customDomains: Collection<String> = emptyList(),
+        customPackages: Collection<String> = emptyList(),
+    ): String {
         require(port in 1..65535 && username.isNotBlank() && password.isNotBlank())
-        val root = JSONObject(apply(config))
+        val root = JSONObject(apply(config, customDomains, customPackages))
         root.put("outbounds", JSONArray()
             .put(JSONObject().put("type", "direct").put("tag", "direct"))
             .put(JSONObject().put("type", "socks").put("tag", outbound)

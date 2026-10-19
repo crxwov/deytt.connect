@@ -25,6 +25,35 @@ class SplitTunnelInstrumentation : Instrumentation() {
             Libbox.checkConfig(runtime(SplitTunnelProfile.apply(source)))
             Libbox.checkConfig(runtime(SplitTunnelProfile.forAwg(source, 12345, "synthetic-test-user", "synthetic-test-password")))
             Libbox.checkConfig(runtime(SplitTunnelProfile.forOpenFlux(source, 12345, "synthetic-test-user", "synthetic-test-password")))
+            val customDomains = setOf("*.custom-bypass.org", "myapp-direct.net")
+            val customPackages = setOf("com.example.bypassed", "com.android.chrome")
+
+            // Verify UserSplitTunnelStore on device
+            val store = UserSplitTunnelStore(targetContext)
+            store.clearAll()
+            check(store.readDomains().isEmpty()) { "Store must start empty" }
+            check(store.readPackages().isEmpty()) { "Store must start empty" }
+            check(store.addDomain("https://*.custom-bypass.org/path")) { "Failed to add domain" }
+            check(store.addDomain("myapp-direct.net")) { "Failed to add domain" }
+            check(!store.addDomain("invalid..domain")) { "Must reject invalid domain" }
+            check(store.addPackage("com.android.chrome")) { "Failed to add package" }
+            check(!store.addPackage("bad package name!")) { "Must reject invalid package" }
+            val readDomains = store.readDomains()
+            check(readDomains.contains("*.custom-bypass.org")) { "Missing custom domain" }
+            check(readDomains.contains("myapp-direct.net")) { "Missing custom domain" }
+            val readPackages = store.readPackages()
+            check(readPackages.contains("com.android.chrome")) { "Missing custom package" }
+            store.removeDomain("myapp-direct.net")
+            check(!store.readDomains().contains("myapp-direct.net")) { "Domain removal failed" }
+            store.removePackage("com.android.chrome")
+            check(!store.readPackages().contains("com.android.chrome")) { "Package removal failed" }
+            store.clearAll()
+
+            // Verify libbox schemas with custom domains and packages
+            Libbox.checkConfig(runtime(SplitTunnelProfile.apply(source, customDomains, customPackages)))
+            Libbox.checkConfig(runtime(SplitTunnelProfile.forAwg(source, 12345, "synthetic-test-user", "synthetic-test-password", customDomains, customPackages)))
+            Libbox.checkConfig(runtime(SplitTunnelProfile.forOpenFlux(source, 12345, "synthetic-test-user", "synthetic-test-password", customDomains, customPackages)))
+
             val protects = AtomicInteger()
             val key = KeyPair().privateKey.toHex()
             val failure = runCatching {
@@ -40,11 +69,11 @@ class SplitTunnelInstrumentation : Instrumentation() {
                     check(proxy.port in 1..65535)
                     // Two Go shared libraries must never reuse each other's
                     // thread-local runtime state, even while both are active.
-                    Libbox.checkConfig(runtime(SplitTunnelProfile.forAwg(source, proxy.port, "synthetic-test-user", "synthetic-test-password")))
+                    Libbox.checkConfig(runtime(SplitTunnelProfile.forAwg(source, proxy.port, "synthetic-test-user", "synthetic-test-password", customDomains, customPackages)))
                 }
-                Libbox.checkConfig(runtime(SplitTunnelProfile.apply(source)))
+                Libbox.checkConfig(runtime(SplitTunnelProfile.apply(source, customDomains, customPackages)))
             }
-            results.putString("stream", "PASS libbox split/AWG/OpenFlux schemas; native protect rejection; three native start/close cycles\n")
+            results.putString("stream", "PASS libbox split/AWG/OpenFlux schemas with custom rules; store validation; native protect rejection; three native start/close cycles\n")
             finish(-1, results)
         } catch (error: Throwable) {
             results.putString("stream", "FAIL ${error.javaClass.simpleName}: ${error.message}\n")

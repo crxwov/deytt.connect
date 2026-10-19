@@ -630,6 +630,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             synchronized(this) {
                 ensureCurrent(operationId)
                 previousVpnNetworks = ownedVpnNetworks().toSet()
+                val userSplitStore = UserSplitTunnelStore(this)
+                val customDomains = userSplitStore.readDomains()
+                val customPackages = userSplitStore.readPackages()
                 val routed = if (pendingOpenFlux != null) {
                     check(openFluxOwner != null && OpenFluxProfileStore.owner(this) == openFluxOwner) { "Аккаунт изменён" }
                     val proxy = pendingOpenFlux!!
@@ -637,7 +640,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                     pendingOpenFlux = null
                     openFluxExpiry = openFluxProfile!!.expiresAt
                     check(proxy.isConnected()) { "Маршрут обхода ещё не подтвердил защищённое соединение" }
-                    SplitTunnelProfile.forOpenFlux(config, proxy.port(), openFluxUsername, openFluxPassword)
+                    SplitTunnelProfile.forOpenFlux(config, proxy.port(), openFluxUsername, openFluxPassword, customDomains, customPackages)
                 } else if (parsedAwg != null) {
                     val local = parsedAwg.`interface`
                     val username = UUID.randomUUID().toString()
@@ -649,12 +652,12 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                         local.mtu.orElse(1280), username, password, this::protect,
                     )
                     awgProxy = proxy
-                    SplitTunnelProfile.forAwg(config, proxy.port, username, password)
+                    SplitTunnelProfile.forAwg(config, proxy.port, username, password, customDomains, customPackages)
                 } else {
                     val selectedConfig = if (selected.configTag.isNotBlank()) {
                         ProfileRoutes.select(config, selected.configTag)
                     } else config
-                    SplitTunnelProfile.apply(selectedConfig)
+                    SplitTunnelProfile.apply(selectedConfig, customDomains, customPackages)
                 }
                 val runtimeConfig = runtimeConfig(routed)
                 ProfileValidator.validate(runtimeConfig)
@@ -1337,7 +1340,18 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 builder.addAllowedApplication(packageName)
             }
             stringIterator(options.getExcludePackage()).forEach { packageName ->
-                builder.addDisallowedApplication(packageName)
+                try {
+                    builder.addDisallowedApplication(packageName)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Failed to exclude package $packageName", e)
+                }
+            }
+            UserSplitTunnelStore(this).readPackages().forEach { packageName ->
+                try {
+                    builder.addDisallowedApplication(packageName)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "Failed to exclude custom package $packageName", e)
+                }
             }
         }
 

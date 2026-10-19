@@ -44,6 +44,8 @@ internal sealed class EngineController
     }
 
     public async Task<ServiceSnapshot> ConnectAsync(string profile, string routeTag, string? awgConfig,
+        IReadOnlyList<string>? customBypassDomains,
+        IReadOnlyList<string>? customBypassProcesses,
         CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -59,7 +61,7 @@ internal sealed class EngineController
 
             var upstreamInterface = FindActiveHappTunnel();
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
-                upstreamInterface);
+                upstreamInterface, customBypassDomains, customBypassProcesses);
             var tunAddresses = TunnelProfileBuilder.GetTunAddresses(runtimeProfile);
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))

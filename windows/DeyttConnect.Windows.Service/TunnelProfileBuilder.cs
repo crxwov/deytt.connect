@@ -78,7 +78,9 @@ internal static class TunnelProfileBuilder
     };
 
     public static string Build(string profileJson, string selectedTag, string? awgConfig = null,
-        string? upstreamInterface = null)
+        string? upstreamInterface = null,
+        IReadOnlyList<string>? customBypassDomains = null,
+        IReadOnlyList<string>? customBypassProcesses = null)
     {
         JsonObject root;
         try
@@ -201,7 +203,7 @@ internal static class TunnelProfileBuilder
             }
         }
 
-        ApplyDomainBypass(root, route);
+        ApplyDomainBypass(root, route, customBypassDomains, customBypassProcesses);
 
         var sanitizedRoot = new JsonObject
         {
@@ -349,7 +351,9 @@ internal static class TunnelProfileBuilder
         return "deytt-awg-" + digest[..16];
     }
 
-    private static void ApplyDomainBypass(JsonObject root, JsonObject route)
+    private static void ApplyDomainBypass(JsonObject root, JsonObject route,
+        IReadOnlyList<string>? customDomains = null,
+        IReadOnlyList<string>? customProcesses = null)
     {
         var routeRules = route["rules"] as JsonArray
                          ?? throw new InvalidDataException("Subscription route rules are invalid.");
@@ -367,6 +371,21 @@ internal static class TunnelProfileBuilder
             AddDomains(rule["domain"] as JsonArray, exact, removeLeadingDot: false);
         }
 
+        if (customDomains is not null)
+        {
+            foreach (var item in customDomains)
+            {
+                var trimmed = item?.Trim();
+                if (string.IsNullOrEmpty(trimmed)) continue;
+                if (trimmed.StartsWith("*.", StringComparison.Ordinal))
+                    suffixes.Add(trimmed[2..]);
+                else if (trimmed.StartsWith(".", StringComparison.Ordinal))
+                    suffixes.Add(trimmed[1..]);
+                else
+                    exact.Add(trimmed);
+            }
+        }
+
         var ipv6Reject = new JsonObject
         {
             ["ip_version"] = 6,
@@ -377,6 +396,27 @@ internal static class TunnelProfileBuilder
             new JsonObject { ["domain_suffix"] = ToJsonArray(suffixes), ["outbound"] = "direct" },
             new JsonObject { ["domain"] = ToJsonArray(exact), ["outbound"] = "direct" },
         };
+
+        if (customProcesses is not null)
+        {
+            var processList = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var proc in customProcesses)
+            {
+                var trimmed = proc?.Trim();
+                if (string.IsNullOrEmpty(trimmed)) continue;
+                var fileName = Path.GetFileName(trimmed);
+                if (!string.IsNullOrWhiteSpace(fileName))
+                    processList.Add(fileName);
+            }
+            if (processList.Count > 0)
+            {
+                bypassRules.Add(new JsonObject
+                {
+                    ["process_name"] = ToJsonArray(processList),
+                    ["outbound"] = "direct",
+                });
+            }
+        }
         var merged = new JsonArray();
         var inserted = false;
         var hasIpv6Rule = routeRules.OfType<JsonObject>().Any(r => r["ip_version"]?.GetValue<int>() == 6);

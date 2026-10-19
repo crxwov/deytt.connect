@@ -25,10 +25,15 @@ import android.text.InputType
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
+import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
+import android.text.TextWatcher
+import android.text.Editable
 import androidx.recyclerview.widget.RecyclerView
 import java.text.DateFormat
 import java.util.Date
@@ -38,6 +43,7 @@ import java.util.concurrent.Executors
 import space.deytt.connect.DeyttUi.AMBER
 import space.deytt.connect.DeyttUi.BLUE
 import space.deytt.connect.DeyttUi.BLUE_DEEP
+import space.deytt.connect.DeyttUi.SKY
 import space.deytt.connect.DeyttUi.LINE
 import space.deytt.connect.DeyttUi.MUTED
 import space.deytt.connect.DeyttUi.SURFACE
@@ -914,6 +920,392 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun profilePage(): View = profileFlows.page()
 
+    private fun showSplitTunnelingSheet(onChanged: () -> Unit) {
+        val dialog = Dialog(host)
+        val store = UserSplitTunnelStore(host)
+        val sheet = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(18))
+            background = host.rounded(SURFACE, 24f, LINE)
+        }
+
+        sheet.addView(host.mono("./c · РАЗДЕЛЬНОЕ ТУННЕЛИРОВАНИЕ", 9f, MUTED, 650))
+        sheet.addView(host.text(copy("Раздельное туннелирование", "Split tunneling"), 20f, TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, host.dp(6), 0, host.dp(4))
+        })
+        sheet.addView(host.text(
+            copy(
+                "Трафик выбранных сайтов и приложений идёт напрямую без VPN. Базовые правила из подписки активны всегда.",
+                "Traffic for selected sites and apps bypasses the VPN. Subscription rules are always active."
+            ),
+            12f,
+            MUTED
+        ).apply { setLineSpacing(host.dp(2).toFloat(), 1f) })
+
+        val scroll = ScrollView(host).apply {
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_NEVER
+        }
+        val content = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, host.dp(12), 0, host.dp(12))
+        }
+        scroll.addView(content, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        sheet.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+
+        fun renderContent() {
+            content.removeAllViews()
+
+            // 1. Свои сайты
+            val sitesHeader = LinearLayout(host).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(host.sectionLabel(copy("сайты без vpn", "bypass sites")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                val addBtn = host.text("+ " + copy("Добавить", "Add"), 12f, SKY, android.graphics.Typeface.BOLD).apply {
+                    setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
+                    background = host.rounded(0x1F8494FF.toInt(), 12f, 0x3F8494FF.toInt())
+                    setOnClickListener {
+                        val input = EditText(host).apply {
+                            hint = "notion.so " + copy("или", "or") + " *.domain.com"
+                            setTextColor(TEXT)
+                            setHintTextColor(MUTED)
+                            textSize = 14f
+                            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+                            background = host.rounded(SURFACE_2, 12f, LINE)
+                            setPadding(host.dp(14), host.dp(12), host.dp(14), host.dp(12))
+                        }
+                        val container = FrameLayout(host).apply {
+                            setPadding(host.dp(20), host.dp(12), host.dp(20), host.dp(4))
+                            addView(input)
+                        }
+                        AppDialog.Builder(host)
+                            .setTitle(copy("Добавить сайт", "Add website"))
+                            .setMessage(copy("Укажите домен (например, notion.so или *.example.com для поддоменов).", "Enter a domain (e.g. notion.so or *.example.com for subdomains)."))
+                            .setView(container)
+                            .setNegativeButton(host.uiCopy("Отмена"), null)
+                            .setPositiveButton(host.uiCopy("Добавить")) { _, _ ->
+                                val domain = input.text.toString()
+                                val normalized = UserSplitTunnelStore.normalizeDomain(domain)
+                                if (normalized != null) {
+                                    store.addDomain(normalized)
+                                    renderContent()
+                                    onChanged()
+                                } else {
+                                    AppDialog.Builder(host)
+                                        .setTitle(copy("Некорректный адрес", "Invalid address"))
+                                        .setMessage(copy("Введите корректное имя домена, например domain.com или *.domain.com.", "Please enter a valid domain name, e.g. domain.com or *.domain.com."))
+                                        .setPositiveButton("OK", null)
+                                        .show()
+                                }
+                            }
+                            .show()
+                    }
+                }
+                addView(addBtn)
+            }
+            content.addView(sitesHeader)
+
+            val customDomains = store.readDomains()
+            if (customDomains.isEmpty()) {
+                val empty = host.text(copy("Нет добавленных сайтов. Нажмите «+ Добавить», чтобы открывать сайт без VPN.", "No custom sites added. Tap \"+ Add\" to bypass a site."), 12f, MUTED).apply {
+                    setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
+                    background = host.rounded(SURFACE_2, 14f, LINE)
+                }
+                content.addView(empty)
+            } else {
+                val listCard = LinearLayout(host).apply {
+                    orientation = LinearLayout.VERTICAL
+                    background = host.rounded(SURFACE_2, 14f, LINE)
+                    setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
+                }
+                customDomains.forEachIndexed { index, domain ->
+                    if (index > 0) {
+                        listCard.addView(View(host).apply { setBackgroundColor(LINE) }, LinearLayout.LayoutParams(-1, host.dp(1)))
+                    }
+                    val row = LinearLayout(host).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(host.dp(4), host.dp(8), host.dp(4), host.dp(8))
+                        val textCol = LinearLayout(host).apply {
+                            orientation = LinearLayout.VERTICAL
+                            addView(host.text(domain, 14f, TEXT, android.graphics.Typeface.BOLD))
+                            addView(host.text(copy("Прямое соединение без VPN", "Direct connection without VPN"), 11f, MUTED))
+                        }
+                        addView(textCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                        val delBtn = host.text("✕", 14f, DeyttUi.CORAL, android.graphics.Typeface.BOLD).apply {
+                            setPadding(host.dp(10), host.dp(8), host.dp(10), host.dp(8))
+                            setOnClickListener {
+                                store.removeDomain(domain)
+                                renderContent()
+                                onChanged()
+                            }
+                        }
+                        addView(delBtn)
+                    }
+                    listCard.addView(row)
+                }
+                content.addView(listCard)
+            }
+
+            content.addView(spacer(16, host))
+
+            // 2. Свои приложения
+            val appsHeader = LinearLayout(host).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(host.sectionLabel(copy("приложения без vpn", "bypass apps")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                val addBtn = host.text("+ " + copy("Добавить", "Add"), 12f, SKY, android.graphics.Typeface.BOLD).apply {
+                    setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
+                    background = host.rounded(0x1F8494FF.toInt(), 12f, 0x3F8494FF.toInt())
+                    setOnClickListener {
+                        showAppPickerSheet { selectedPkg ->
+                            store.addPackage(selectedPkg)
+                            renderContent()
+                            onChanged()
+                        }
+                    }
+                }
+                addView(addBtn)
+            }
+            content.addView(appsHeader)
+
+            val customPackages = store.readPackages()
+            if (customPackages.isEmpty()) {
+                val empty = host.text(copy("Нет исключённых приложений. Нажмите «+ Добавить», чтобы выбрать приложение из списка.", "No excluded apps. Tap \"+ Add\" to select an application."), 12f, MUTED).apply {
+                    setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
+                    background = host.rounded(SURFACE_2, 14f, LINE)
+                }
+                content.addView(empty)
+            } else {
+                val listCard = LinearLayout(host).apply {
+                    orientation = LinearLayout.VERTICAL
+                    background = host.rounded(SURFACE_2, 14f, LINE)
+                    setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
+                }
+                val pm = host.packageManager
+                customPackages.forEachIndexed { index, pkg ->
+                    if (index > 0) {
+                        listCard.addView(View(host).apply { setBackgroundColor(LINE) }, LinearLayout.LayoutParams(-1, host.dp(1)))
+                    }
+                    val appLabel = runCatching { pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
+                    val appIcon = runCatching { pm.getApplicationIcon(pkg) }.getOrNull()
+
+                    val row = LinearLayout(host).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(host.dp(4), host.dp(8), host.dp(4), host.dp(8))
+                        if (appIcon != null) {
+                            val iv = ImageView(host).apply {
+                                setImageDrawable(appIcon)
+                                scaleType = ImageView.ScaleType.FIT_CENTER
+                            }
+                            addView(iv, LinearLayout.LayoutParams(host.dp(32), host.dp(32)).apply {
+                                marginEnd = host.dp(10)
+                            })
+                        }
+                        val textCol = LinearLayout(host).apply {
+                            orientation = LinearLayout.VERTICAL
+                            addView(host.text(appLabel, 14f, TEXT, android.graphics.Typeface.BOLD))
+                            addView(host.mono(pkg, 11f, MUTED))
+                        }
+                        addView(textCol, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                        val delBtn = host.text("✕", 14f, DeyttUi.CORAL, android.graphics.Typeface.BOLD).apply {
+                            setPadding(host.dp(10), host.dp(8), host.dp(10), host.dp(8))
+                            setOnClickListener {
+                                store.removePackage(pkg)
+                                renderContent()
+                                onChanged()
+                            }
+                        }
+                        addView(delBtn)
+                    }
+                    listCard.addView(row)
+                }
+                content.addView(listCard)
+            }
+
+            content.addView(spacer(16, host))
+
+            // 3. Базовые правила из подписки
+            content.addView(host.sectionLabel(copy("правила из подписки (всегда активны)", "subscription rules (always active)")))
+            val subscriptionSites = SubscriptionStore(host).readCurrent()?.let { config ->
+                runCatching { SplitTunnelProfile.bypassSites(config) }.getOrNull()
+            } ?: emptyList()
+
+            val subCard = LinearLayout(host).apply {
+                orientation = LinearLayout.VERTICAL
+                background = host.rounded(SURFACE_2, 14f, LINE)
+                setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
+                addView(host.text(copy("Нельзя отключить или удалить. Обновляются вместе с подпиской.", "Cannot be disabled or removed. Updated with your subscription."), 11f, MUTED))
+                val sitesText = if (subscriptionSites.isNotEmpty()) subscriptionSites.joinToString("\n") else copy("Загрузка правил подписки…", "Loading subscription rules…")
+                val textList = host.text(sitesText, 12f, TEXT).apply {
+                    typeface = android.graphics.Typeface.MONOSPACE
+                    setPadding(0, host.dp(6), 0, 0)
+                    setLineSpacing(host.dp(2).toFloat(), 1f)
+                }
+                addView(textList)
+            }
+            content.addView(subCard)
+
+            content.addView(spacer(10, host))
+            content.addView(host.text(copy("Изменения вступают в силу при переподключении VPN.", "Changes take effect when VPN reconnects."), 11f, MUTED).apply {
+                gravity = Gravity.CENTER
+            })
+        }
+
+        renderContent()
+
+        val doneBtn = host.button(copy("Готово", "Done")).apply {
+            setOnClickListener { dialog.dismiss() }
+        }
+        sheet.addView(doneBtn, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(48)).apply {
+            topMargin = host.dp(8)
+        })
+
+        showSheet(dialog, sheet)
+    }
+
+    private fun showAppPickerSheet(onSelected: (String) -> Unit) {
+        val dialog = Dialog(host)
+        val sheet = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(18))
+            background = host.rounded(SURFACE, 24f, LINE)
+        }
+
+        sheet.addView(host.mono("./c · ВЫБОР ПРИЛОЖЕНИЯ", 9f, MUTED, 650))
+        sheet.addView(host.text(copy("Выберите приложение", "Select application"), 20f, TEXT, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, host.dp(6), 0, host.dp(4))
+        })
+        sheet.addView(host.text(
+            copy(
+                "Трафик выбранного приложения будет идти напрямую в обход VPN.",
+                "Traffic for the selected application will bypass the VPN."
+            ),
+            12f,
+            MUTED
+        ))
+
+        val searchInput = EditText(host).apply {
+            hint = copy("Поиск приложения…", "Search application…")
+            setTextColor(TEXT)
+            setHintTextColor(MUTED)
+            textSize = 14f
+            background = host.rounded(SURFACE_2, 12f, LINE)
+            setPadding(host.dp(14), host.dp(10), host.dp(14), host.dp(10))
+        }
+        sheet.addView(searchInput, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = host.dp(10)
+            bottomMargin = host.dp(8)
+        })
+
+        val progress = ProgressBar(host).apply {
+            isIndeterminate = true
+        }
+        val progressContainer = FrameLayout(host).apply {
+            addView(progress, FrameLayout.LayoutParams(host.dp(36), host.dp(36), Gravity.CENTER))
+            setPadding(0, host.dp(24), 0, host.dp(24))
+        }
+        sheet.addView(progressContainer)
+
+        val scroll = ScrollView(host).apply {
+            isFillViewport = true
+            overScrollMode = View.OVER_SCROLL_NEVER
+            visibility = View.GONE
+        }
+        val listContainer = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+        scroll.addView(listContainer)
+        sheet.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(320)))
+
+        val closeBtn = host.button(copy("Закрыть", "Close"), secondary = true).apply {
+            setOnClickListener { dialog.dismiss() }
+        }
+        sheet.addView(closeBtn, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(46)).apply {
+            topMargin = host.dp(8)
+        })
+
+        val executor = Executors.newSingleThreadExecutor()
+        class AppEntry(val name: String, val packageName: String, val icon: Drawable?)
+        var allApps = listOf<AppEntry>()
+
+        fun renderList(query: String = "") {
+            listContainer.removeAllViews()
+            val filtered = if (query.isBlank()) allApps else {
+                val q = query.lowercase(Locale.ROOT)
+                allApps.filter { it.name.lowercase(Locale.ROOT).contains(q) || it.packageName.lowercase(Locale.ROOT).contains(q) }
+            }
+            if (filtered.isEmpty()) {
+                listContainer.addView(host.text(copy("Ничего не найдено", "No apps found"), 13f, MUTED).apply {
+                    setPadding(0, host.dp(16), 0, host.dp(16))
+                    gravity = Gravity.CENTER
+                })
+                return
+            }
+            filtered.forEach { app ->
+                val row = LinearLayout(host).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(host.dp(8), host.dp(8), host.dp(8), host.dp(8))
+                    background = host.rounded(Color.TRANSPARENT, 12f)
+                    if (app.icon != null) {
+                        val iv = ImageView(host).apply {
+                            setImageDrawable(app.icon)
+                            scaleType = ImageView.ScaleType.FIT_CENTER
+                        }
+                        addView(iv, LinearLayout.LayoutParams(host.dp(36), host.dp(36)).apply { marginEnd = host.dp(12) })
+                    }
+                    val col = LinearLayout(host).apply {
+                        orientation = LinearLayout.VERTICAL
+                        addView(host.text(app.name, 14f, TEXT, android.graphics.Typeface.BOLD))
+                        addView(host.mono(app.packageName, 11f, MUTED))
+                    }
+                    addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    isClickable = true
+                    setOnClickListener {
+                        onSelected(app.packageName)
+                        dialog.dismiss()
+                    }
+                }
+                listContainer.addView(row)
+            }
+        }
+
+        executor.execute {
+            val pm = host.packageManager
+            val installed = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+                .filter { it.packageName != host.packageName && pm.getLaunchIntentForPackage(it.packageName) != null }
+                .map { info ->
+                    AppEntry(
+                        name = pm.getApplicationLabel(info).toString(),
+                        packageName = info.packageName,
+                        icon = runCatching { pm.getApplicationIcon(info) }.getOrNull()
+                    )
+                }
+                .sortedBy { it.name.lowercase(Locale.ROOT) }
+
+            host.runOnUiThread {
+                if (host.isFinishing || host.isDestroyed || !dialog.isShowing) return@runOnUiThread
+                allApps = installed
+                progressContainer.visibility = View.GONE
+                scroll.visibility = View.VISIBLE
+                renderList(searchInput.text.toString())
+            }
+        }
+
+        searchInput.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                renderList(s?.toString().orEmpty())
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        showSheet(dialog, sheet)
+    }
+
     private fun showSheet(dialog: Dialog, content: View) {
         dialog.setContentView(content)
         dialog.setCanceledOnTouchOutside(true)
@@ -955,26 +1347,27 @@ internal class PrimaryPages(private val host: MainActivity) {
 
         root.addView(spacer(16, host))
         root.addView(host.sectionLabel(copy("подключение", "connection")))
-        root.addView(host.row(
-            copy("Раздельное туннелирование", "Split tunneling"),
-            copy("Сайты из подписки · все протоколы", "Subscription sites · all protocols"), "↗", "›",
-        ).apply {
-            setOnClickListener {
-                val sites = SubscriptionStore(host).readCurrent()?.let { config ->
-                    runCatching { SplitTunnelProfile.bypassSites(config) }.getOrNull()
-                }
-                val message = if (sites == null) {
-                    copy("Добавьте подписку, чтобы загрузить список сайтов.", "Add a subscription to load the site list.")
-                } else {
-                    copy(
-                        "Указанные сайты открываются без VPN. Звёздочка включает поддомены. Остальной трафик идёт через выбранное соединение, включая AmneziaWG. Список обновляется вместе с подпиской.",
-                        "These sites bypass the VPN. An asterisk includes subdomains. Other traffic uses the selected connection, including AmneziaWG. The list updates with your subscription.",
-                    ) + "\n\n" + sites.joinToString("\n")
-                }
-                AppDialog.Builder(host).setTitle(copy("Без VPN", "Without VPN"))
-                    .setMessage(message).setPositiveButton("OK", null).show()
+        val splitStore = UserSplitTunnelStore(host)
+        fun splitTunnelSummary(): String {
+            val count = splitStore.readDomains().size + splitStore.readPackages().size
+            return if (count > 0) {
+                copy("Подписка + $count своих правил", "Subscription + $count custom rules")
+            } else {
+                copy("Сайты и приложения без VPN", "Sites and apps without VPN")
             }
-        })
+        }
+        val splitRow = host.row(
+            copy("Раздельное туннелирование", "Split tunneling"),
+            splitTunnelSummary(), "↗", "›",
+        )
+        val splitSummaryView = (splitRow.getChildAt(1) as? LinearLayout)?.getChildAt(1) as? TextView
+        splitRow.setOnClickListener {
+            showSplitTunnelingSheet {
+                splitSummaryView?.text = splitTunnelSummary()
+                splitRow.contentDescription = copy("Раздельное туннелирование", "Split tunneling") + ". " + splitTunnelSummary()
+            }
+        }
+        root.addView(splitRow)
         val probeSummary = { copy("HTTP ${RouteProbePreferences.method(host).title} · быстрая проверка, загрузка 1 с", "HTTP ${RouteProbePreferences.method(host).title} · fast check, 1 s download") }
         root.addView(host.row(copy("Проверка маршрута", "Route check"), probeSummary(), "↻", "›").apply {
             val summary = (getChildAt(1) as? LinearLayout)?.getChildAt(1) as? TextView

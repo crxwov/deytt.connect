@@ -178,4 +178,49 @@ public sealed class TunnelProfileBuilderTests
         Assert.Equal("172.19.0.1/30", addresses[0]);
         Assert.Equal("fdfe:dcba:9876::1/126", addresses[1]);
     }
+
+    [Fact]
+    public void BuildAppliesCustomBypassDomainsToRouteAndDns()
+    {
+        var customDomains = new[] { "*.my-suffix.org", "exact-domain.com" };
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(
+            Profile("route:DE:VLESS"), "route:DE:VLESS", customBypassDomains: customDomains))!;
+
+        var rules = runtime["route"]!["rules"]!.AsArray();
+        var suffixRule = rules.OfType<JsonObject>().FirstOrDefault(r =>
+            r.ContainsKey("domain_suffix") && r["outbound"]?.GetValue<string>() == "direct");
+        Assert.NotNull(suffixRule);
+        var suffixes = suffixRule["domain_suffix"]!.AsArray().Select(s => s!.GetValue<string>()).ToArray();
+        Assert.Contains("my-suffix.org", suffixes);
+        Assert.Contains("ru", suffixes);
+
+        var exactRule = rules.OfType<JsonObject>().FirstOrDefault(r =>
+            r.ContainsKey("domain") && r["outbound"]?.GetValue<string>() == "direct");
+        Assert.NotNull(exactRule);
+        var exacts = exactRule["domain"]!.AsArray().Select(s => s!.GetValue<string>()).ToArray();
+        Assert.Contains("exact-domain.com", exacts);
+        Assert.Contains("cp.cloudflare.com", exacts);
+
+        var dnsRules = runtime["dns"]!["rules"]!.AsArray();
+        var dnsSuffix = dnsRules.OfType<JsonObject>().FirstOrDefault(r =>
+            r.ContainsKey("domain_suffix") && r["server"]?.GetValue<string>() == "local-dns");
+        Assert.NotNull(dnsSuffix);
+        Assert.Contains("my-suffix.org", dnsSuffix["domain_suffix"]!.AsArray().Select(s => s!.GetValue<string>()));
+    }
+
+    [Fact]
+    public void BuildAppliesCustomBypassProcessesToRoute()
+    {
+        var customProcesses = new[] { @"C:\Games\Game.exe", "discord.exe", "  " };
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(
+            Profile("route:DE:VLESS"), "route:DE:VLESS", customBypassProcesses: customProcesses))!;
+
+        var rules = runtime["route"]!["rules"]!.AsArray();
+        var procRule = rules.OfType<JsonObject>().FirstOrDefault(r =>
+            r.ContainsKey("process_name") && r["outbound"]?.GetValue<string>() == "direct");
+        Assert.NotNull(procRule);
+        var procs = procRule["process_name"]!.AsArray().Select(s => s!.GetValue<string>()).ToArray();
+        Assert.Contains("Game.exe", procs);
+        Assert.Contains("discord.exe", procs);
+    }
 }
