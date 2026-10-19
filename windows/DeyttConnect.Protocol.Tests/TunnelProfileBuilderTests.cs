@@ -294,4 +294,65 @@ public sealed class TunnelProfileBuilderTests
         Assert.Throws<InvalidDataException>(() =>
             TunnelProfileBuilder.Build(Profile(routeTag), routeTag, "not a profile"));
     }
+
+    [Fact]
+    public void BuildEnforcesIpv6LeakProtectionAndIpv4OnlyDnsStrategy()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:DE:VLESS"), "route:DE:VLESS"))!;
+        var inbounds = runtime["inbounds"]!.AsArray();
+        var tun = Assert.Single(inbounds)!.AsObject();
+
+        var addresses = tun["address"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Contains("172.19.0.1/30", addresses);
+        Assert.Contains("fdfe:dcba:9876::1/126", addresses);
+
+        Assert.Equal("mixed", tun["stack"]!.GetValue<string>());
+        Assert.True(tun["strict_route"]!.GetValue<bool>());
+
+        var dns = runtime["dns"]!.AsObject();
+        Assert.Equal("ipv4_only", dns["strategy"]!.GetValue<string>());
+
+        var rules = runtime["route"]!["rules"]!.AsArray();
+        var ipv6RejectRule = rules.OfType<JsonObject>().FirstOrDefault(r => r["ip_version"]?.GetValue<int>() == 6);
+        Assert.NotNull(ipv6RejectRule);
+        Assert.Equal("reject", ipv6RejectRule["action"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void GetTunAddressesReturnsBothIpv4AndIpv6Addresses()
+    {
+        var runtime = TunnelProfileBuilder.Build(Profile("route:DE:VLESS"), "route:DE:VLESS");
+        var addresses = TunnelProfileBuilder.GetTunAddresses(runtime);
+
+        Assert.Equal(2, addresses.Count);
+        Assert.Equal("172.19.0.1/30", addresses[0]);
+        Assert.Equal("fdfe:dcba:9876::1/126", addresses[1]);
+    }
+
+    [Fact]
+    public void BuildAppliesCustomBypassDomainsAndProcesses()
+    {
+        var customDomains = new[] { "mycustomdomain.com", "*.customsub.org" };
+        var customProcesses = new[] { "game.exe", "customapp.exe" };
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(
+            Profile("route:DE:VLESS"), "route:DE:VLESS", null, null,
+            customDomains, customProcesses))!;
+
+        var rules = runtime["route"]!["rules"]!.AsArray();
+
+        var processRule = rules.OfType<JsonObject>().FirstOrDefault(r => r.ContainsKey("process_name"));
+        Assert.NotNull(processRule);
+        Assert.Equal("direct", processRule["outbound"]!.GetValue<string>());
+        var procNames = processRule["process_name"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
+        Assert.Contains("game.exe", procNames);
+        Assert.Contains("customapp.exe", procNames);
+
+        var domainRules = rules.OfType<JsonObject>().Where(r => r["outbound"]?.GetValue<string>() == "direct").ToArray();
+        var allSuffixes = domainRules
+            .Where(r => r.ContainsKey("domain_suffix"))
+            .SelectMany(r => r["domain_suffix"]!.AsArray().Select(n => n!.GetValue<string>()))
+            .ToArray();
+        Assert.Contains("customsub.org", allSuffixes);
+        Assert.Contains("mycustomdomain.com", allSuffixes);
+    }
 }

@@ -42,6 +42,12 @@ public sealed record WindowsPipeRequest
 
     [JsonPropertyName("awgProfiles")]
     public IReadOnlyDictionary<string, string>? AwgProfiles { get; init; }
+
+    [JsonPropertyName("customBypassDomains")]
+    public IReadOnlyList<string>? CustomBypassDomains { get; init; }
+
+    [JsonPropertyName("customBypassProcesses")]
+    public IReadOnlyList<string>? CustomBypassProcesses { get; init; }
 }
 
 public sealed record WindowsTunnelSnapshot(

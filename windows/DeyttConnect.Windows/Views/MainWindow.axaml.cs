@@ -2375,8 +2375,13 @@ public partial class MainWindow : Window
             }));
 
         var connection = new StackPanel { Spacing = 4 };
+        var splitStoreConfig = WindowsSplitTunnelStore.Load();
+        var customCount = (splitStoreConfig.CustomDomains?.Count ?? 0) + (splitStoreConfig.CustomProcesses?.Count ?? 0);
+        var splitSubtitle = customCount > 0
+            ? Copy($"Сайты из подписки · {customCount} своих правил", $"Subscription sites · {customCount} custom rules")
+            : Copy("Сайты из подписки · все протоколы", "Subscription sites · all protocols");
         connection.Children.Add(SettingsEntry("↗", Copy("Раздельное туннелирование", "Split tunneling"),
-            Copy("Сайты из подписки · все протоколы", "Subscription sites · all protocols"), "›",
+            splitSubtitle, "›",
             ShowSplitTunnelingInfo));
         connection.Children.Add(SettingsEntry("↻", Copy("Проверка маршрута", "Route check"),
             $"HTTP {_probeMethod} · {Copy("быстрая проверка, загрузка 1 с", "fast check, 1 s download")}", "›",
@@ -2945,7 +2950,9 @@ public partial class MainWindow : Window
                 RenderActiveTabPreservingScroll();
                 return;
             }
-            _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig);
+            var splitConfig = WindowsSplitTunnelStore.Load();
+            _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig,
+                splitConfig.CustomDomains, splitConfig.CustomProcesses);
             var result = await _vpnConnectTask;
             if (operationVersion == _vpnOperationVersion && !_vpnCancelRequested)
             {

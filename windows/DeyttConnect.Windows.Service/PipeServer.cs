@@ -109,7 +109,7 @@ internal static class PipeServer
                 if (request.Profile is null || request.RouteTag is null)
                     throw new JsonException("Missing connection details.");
                 result = await engine.ConnectAsync(request.Profile, request.RouteTag, request.AwgConfig,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken, request.CustomBypassDomains, request.CustomBypassProcesses).ConfigureAwait(false);
                 break;
             case WindowsPipeCommand.Probe:
                 if (request.Profile is null || request.RouteTags is null || request.Method is null ||

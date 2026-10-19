@@ -69,7 +69,9 @@ internal static class TunnelProfileBuilder
     }
 
     public static string Build(string profileJson, string selectedTag, string? awgConfig = null,
-        string? upstreamInterface = null)
+        string? upstreamInterface = null,
+        IReadOnlyList<string>? customBypassDomains = null,
+        IReadOnlyList<string>? customBypassProcesses = null)
     {
         JsonObject root;
         try
@@ -104,8 +106,14 @@ internal static class TunnelProfileBuilder
         tun.Remove("dns_mode");
         // A subscription's generic name can collide with other sing-box clients.
         tun["interface_name"] = "deytt-connect";
+        if (tun["address"] is JsonArray addresses &&
+            !addresses.Any(node => node is JsonValue val && val.TryGetValue<string>(out var text) && text.Contains(':')))
+        {
+            addresses.Add("fdfe:dcba:9876::1/126");
+        }
         tun["auto_route"] = true;
-        tun["strict_route"] = upstreamInterface is null;
+        tun["strict_route"] = true;
+        tun["stack"] = "mixed";
         root["inbounds"] = new JsonArray(tun);
 
         var outboundArray = root["outbounds"] as JsonArray
@@ -191,7 +199,7 @@ internal static class TunnelProfileBuilder
             }
         }
 
-        ApplyDomainBypass(root, route);
+        ApplyDomainBypass(root, route, customBypassDomains, customBypassProcesses);
         if (awgConfig is not null)
         {
             var rules = route["rules"] as JsonArray ?? new JsonArray();
@@ -447,7 +455,9 @@ internal static class TunnelProfileBuilder
         return "deytt-awg-" + digest[..16];
     }
 
-    private static void ApplyDomainBypass(JsonObject root, JsonObject route)
+    private static void ApplyDomainBypass(JsonObject root, JsonObject route,
+        IReadOnlyList<string>? customBypassDomains,
+        IReadOnlyList<string>? customBypassProcesses)
     {
         var routeRules = route["rules"] as JsonArray
                          ?? throw new InvalidDataException("Subscription route rules are invalid.");
@@ -465,18 +475,69 @@ internal static class TunnelProfileBuilder
             AddDomains(rule["domain"] as JsonArray, exact, removeLeadingDot: false);
         }
 
-        var bypassRules = new JsonArray
+        if (customBypassDomains is not null)
         {
-            new JsonObject { ["domain_suffix"] = ToJsonArray(suffixes), ["outbound"] = "direct" },
-            new JsonObject { ["domain"] = ToJsonArray(exact), ["outbound"] = "direct" },
+            foreach (var domain in customBypassDomains)
+            {
+                var trimmed = domain.Trim().ToLowerInvariant();
+                if (string.IsNullOrWhiteSpace(trimmed)) continue;
+                if (trimmed.StartsWith("*."))
+                {
+                    suffixes.Add(trimmed[2..]);
+                }
+                else if (trimmed.StartsWith('.'))
+                {
+                    suffixes.Add(trimmed[1..]);
+                }
+                else
+                {
+                    exact.Add(trimmed);
+                    suffixes.Add(trimmed);
+                }
+            }
+        }
+
+        var processRules = new List<JsonObject>();
+        if (customBypassProcesses is not null)
+        {
+            var validProcesses = customBypassProcesses
+                .Select(p => p.Trim())
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (validProcesses.Count > 0)
+            {
+                var procArr = new JsonArray();
+                foreach (var p in validProcesses)
+                    procArr.Add(p);
+                processRules.Add(new JsonObject
+                {
+                    ["process_name"] = procArr,
+                    ["outbound"] = "direct",
+                });
+            }
+        }
+
+        var ipv6Reject = new JsonObject
+        {
+            ["ip_version"] = 6,
+            ["action"] = "reject",
         };
+        var bypassRules = new JsonArray();
+        foreach (var pr in processRules)
+            bypassRules.Add(pr);
+        bypassRules.Add(new JsonObject { ["domain_suffix"] = ToJsonArray(suffixes), ["outbound"] = "direct" });
+        bypassRules.Add(new JsonObject { ["domain"] = ToJsonArray(exact), ["outbound"] = "direct" });
         var merged = new JsonArray();
         var inserted = false;
+        var hasIpv6Rule = routeRules.OfType<JsonObject>().Any(r => r["ip_version"]?.GetValue<int>() == 6);
         foreach (var rule in routeRules)
         {
             if (!inserted && rule is JsonObject obj &&
                 ReadString(obj, "action") is not ("sniff" or "hijack-dns"))
             {
+                if (!hasIpv6Rule)
+                    merged.Add(ipv6Reject.DeepClone());
                 foreach (var bypass in bypassRules)
                     merged.Add(bypass?.DeepClone());
                 inserted = true;
@@ -484,12 +545,17 @@ internal static class TunnelProfileBuilder
             merged.Add(rule?.DeepClone());
         }
         if (!inserted)
+        {
+            if (!hasIpv6Rule)
+                merged.Add(ipv6Reject.DeepClone());
             foreach (var bypass in bypassRules)
                 merged.Add(bypass?.DeepClone());
+        }
         route["rules"] = merged;
 
         var dns = root["dns"] as JsonObject
                   ?? throw new InvalidDataException("Subscription has no DNS policy.");
+        dns["strategy"] = "ipv4_only";
         var dnsRules = new JsonArray
         {
             new JsonObject

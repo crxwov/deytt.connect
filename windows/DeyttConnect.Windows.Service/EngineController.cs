@@ -58,7 +58,9 @@ internal sealed class EngineController
     }
 
     public async Task<ServiceSnapshot> ConnectAsync(string profile, string routeTag, string? awgConfig,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<string>? customBypassDomains = null,
+        IReadOnlyList<string>? customBypassProcesses = null)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
@@ -74,7 +76,7 @@ internal sealed class EngineController
 
             var upstreamInterface = FindActiveHappTunnel();
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
-                upstreamInterface);
+                upstreamInterface, customBypassDomains, customBypassProcesses);
             if (awgConfig is not null)
             {
                 var resolved = await ResolveAwgPeerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync,
