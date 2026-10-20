@@ -922,6 +922,10 @@
       }
     }
 
+    if (new URLSearchParams(window.location.search).get("theme") === "light") {
+      setAppTheme("light");
+    }
+
     if (themeBtn) {
       themeBtn.addEventListener("click", () => {
         const currentTheme = document.documentElement.dataset.theme || "dark";
