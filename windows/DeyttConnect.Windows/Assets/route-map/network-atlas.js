@@ -369,8 +369,7 @@
       return this;
     }
 
-    bind() {
-      this.canvas.addEventListener("pointerdown", (event) => {
+    bind() {      this.canvas.addEventListener("pointerdown", (event) => {
         if (event.button !== 0) return;
         this.canvas.focus({ preventScroll: true });
         this.setInteractionQuality(true);
@@ -380,6 +379,8 @@
         this.dragging = true;
         this.dragDistance = 0;
         this.velocityLon = 0;
+        this.velocityLat = 0;
+        this.pointerHistory = [{ x: event.clientX, y: event.clientY, time: performance.now() }];
         this.lastPointer = { x: event.clientX, y: event.clientY };
         this.canvas.setPointerCapture(event.pointerId);
         this.root.classList.add("is-dragging");
@@ -387,8 +388,6 @@
           const points = Array.from(this.activePointers.values());
           this.pinchDistance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
         }
-        // Changing resolution clears every canvas. Repaint even when the
-        // pointer stays still, rather than waiting for the first move event.
         this.start();
       });
       this.canvas.addEventListener("pointermove", (event) => {
@@ -410,12 +409,17 @@
           const dx = event.clientX - this.lastPointer.x;
           const dy = event.clientY - this.lastPointer.y;
           this.dragDistance += Math.hypot(dx, dy);
-          // Use the intended zoom level so drag speed stays consistent while a
-          // wheel animation is still settling.
           const dragScale = 1 / Math.max(1, this.targetZoom);
           this.targetLon -= dx * 0.28 * dragScale;
           this.targetLat = clamp(this.targetLat + dy * 0.2 * dragScale, -62, 72);
-          this.velocityLon = -dx * 0.018 * dragScale;
+          
+          const now = performance.now();
+          if (!this.pointerHistory) this.pointerHistory = [];
+          this.pointerHistory.push({ x: event.clientX, y: event.clientY, time: now });
+          if (this.pointerHistory.length > 10) this.pointerHistory.shift();
+          while (this.pointerHistory.length > 2 && now - this.pointerHistory[0].time > 130) {
+            this.pointerHistory.shift();
+          }
           this.lastPointer = { x: event.clientX, y: event.clientY };
         } else if (event.pointerType !== "touch") {
           this.updateHover(pointer);
@@ -428,7 +432,6 @@
         this.setInteractionQuality(true);
         const delta = event.deltaMode === 1 ? event.deltaY * 40
           : event.deltaMode === 2 ? event.deltaY * this.height : event.deltaY;
-        // A 120px wheel detent is the same 18% step at every zoom level.
         const detents = clamp(delta / 120, -2, 2);
         this.targetZoom = clamp(this.targetZoom * Math.pow(1.18, -detents), .82, MAX_ZOOM);
         this.markMapDirty();
@@ -444,10 +447,26 @@
         else {
           this.root.classList.remove("is-dragging");
           this.canvas.style.cursor = "grab";
+          if (event.type === "pointerup" && this.pointerHistory && this.pointerHistory.length >= 2) {
+            const first = this.pointerHistory[0];
+            const last = this.pointerHistory[this.pointerHistory.length - 1];
+            const dt = Math.max(16, last.time - first.time);
+            if (dt < 150) {
+              const dx = last.x - first.x;
+              const dy = last.y - first.y;
+              const dragScale = 1 / Math.max(1, this.targetZoom);
+              const vx = -(dx / dt) * 16 * 0.28 * dragScale;
+              const vy = (dy / dt) * 16 * 0.20 * dragScale;
+              this.velocityLon = clamp(vx * 1.25, -8.0, 8.0);
+              this.velocityLat = clamp(vy * 0.75, -3.5, 3.5);
+            }
+          }
+          this.pointerHistory = [];
         }
         if (event.pointerType === "touch") this.setHovered(null);
         if (event.type !== "pointerup") {
           this.velocityLon = 0;
+          this.velocityLat = 0;
           this.dragDistance = 6;
         }
         this.start();
@@ -707,14 +726,27 @@
 
       /* Outer atmosphere: a wide luminous halo that breathes slightly while
        * the camera moves, drawn behind the sphere so land and routes stay
-       * untouched. */
+       * untouched. */      const dark = document.documentElement.dataset.theme !== "light";
+      if (!dark) {
+        context.save();
+        context.shadowColor = "rgba(18, 54, 98, 0.18)";
+        context.shadowBlur = radius * 0.18;
+        context.shadowOffsetX = 0;
+        context.shadowOffsetY = radius * 0.04;
+        context.fillStyle = colors.sphereLight || "#E8F2FC";
+        context.beginPath();
+        context.arc(x, y, radius, 0, TAU);
+        context.fill();
+        context.restore();
+      }
+
       const haloScale = this.cameraMoving ? 1.5 : 1.34;
       const halo = context.createRadialGradient(x, y, radius * .96, x, y, radius * haloScale);
       halo.addColorStop(0, colors.atmosphere);
       halo.addColorStop(.4, colors.atmosphereSoft);
       halo.addColorStop(1, "rgba(0,0,0,0)");
       context.save();
-      context.globalCompositeOperation = "lighter";
+      context.globalCompositeOperation = dark ? "lighter" : "source-over";
       context.fillStyle = halo;
       context.beginPath();
       context.arc(x, y, radius * haloScale, 0, TAU);
@@ -771,8 +803,6 @@
     drawBorders(colors) {
       const context = this.context;
       this.drawLand(colors);
-      // Keep the same topology while the camera moves. Decimating every second
-      // point during pan/zoom made country outlines visibly change shape.
       const pointStep = 1;
       const trace = (points, lift) => {
         let drawing = false;
@@ -807,18 +837,26 @@
         context.stroke();
         context.restore();
       };
-      const borderAlpha = colors.borderAlpha ?? (this.variant === "observatory" ? .38 : .28);
-      const borderWidth = colors.borderWidth ?? (this.width < 520 ? .48 : .62);
-      strokeLines(this.boundaryLines, colors.border, borderWidth, borderAlpha);
-      if (this.variant !== "observatory") return;
+      const dark = document.documentElement.dataset.theme !== "light";
+      const borderAlpha = colors.borderAlpha ?? (dark ? .75 : .55);
+      const borderWidth = colors.borderWidth ?? (this.width < 520 ? .65 : .85);
+      
+      if (dark) {
+        const glowColor = colors.borderGlow || "rgba(99, 178, 255, 0.55)";
+        strokeLines(this.boundaryLines, glowColor, borderWidth * 2.4, 0.36, glowColor, 6);
+        strokeLines(this.boundaryLines, colors.border, borderWidth, borderAlpha);
+      } else {
+        strokeLines(this.boundaryLines, colors.border, borderWidth, borderAlpha);
+      }
+      
       const route = ROUTES[this.route] || ROUTES.auto;
       const activeKeys = this.annotationFilter ? Array.from(this.annotationFilter) : route.nodes;
       const activeCountryIds = new Set(activeKeys.map((key) => LOCATIONS[key] && LOCATIONS[key].countryId).filter(Boolean));
       const activeLines = this.targetBoundaryLines.filter((line) => activeCountryIds.has(line.countryId));
-      // A diffused pass gives the active countries a little depth; the crisp
-      // pass keeps borders legible at the close-up measurement zoom.
-      strokeLines(activeLines, colors.borderGlow, this.width < 520 ? 2.6 : 3.4, .24, colors.borderGlow, this.cameraMoving ? 0 : 9);
-      strokeLines(activeLines, colors.borderHot, this.width < 520 ? .82 : 1.05, .72);
+      if (activeLines.length) {
+        strokeLines(activeLines, colors.borderGlow || colors.borderHot, this.width < 520 ? 3.0 : 3.8, .42, colors.borderGlow || colors.borderHot, this.cameraMoving ? 0 : 9);
+        strokeLines(activeLines, colors.borderHot, this.width < 520 ? .95 : 1.2, .88);
+      }
     }
 
     drawLand(colors) {
@@ -1632,12 +1670,20 @@
       if (Math.abs(this.targetCenterY - this.centerY) < .1) this.centerY = this.targetCenterY;
       if (!this.dragging) {
         this.targetLon += this.velocityLon;
-        this.velocityLon *= .86;
-        if (Math.abs(this.velocityLon) < .004) this.velocityLon = 0;
+        if (this.velocityLat) {
+          this.targetLat = clamp(this.targetLat + this.velocityLat, -62, 72);
+        }
+        const friction = Math.pow(0.976, Math.max(1, delta) / 16);
+        this.velocityLon *= friction;
+        if (this.velocityLat) {
+          this.velocityLat *= friction;
+          if (Math.abs(this.velocityLat) < .003) this.velocityLat = 0;
+        }
+        if (Math.abs(this.velocityLon) < .003) this.velocityLon = 0;
       }
-      // Pointer events already arrive as the user's input stream. Interpolating
-      // targetLon a second time made the globe visibly trail and then catch up.
-      const panBlend = this.reducedMotion.matches || this.dragging ? 1 : 1 - Math.exp(-Math.max(1, delta) / PAN_EASE_MS);
+      const panBlend = this.reducedMotion.matches ? 1
+        : this.dragging ? (1 - Math.exp(-Math.max(1, delta) / 48))
+        : (1 - Math.exp(-Math.max(1, delta) / 130));
       this.centerLon = mix(this.centerLon, this.targetLon, panBlend);
       this.centerLat = mix(this.centerLat, this.targetLat, panBlend);
       const zoomBlend = this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS);
@@ -1699,7 +1745,13 @@
       this.renderCount += 1;
       // Complete one final frame after easing snaps to its target. This also
       // clears the moving state when reduced motion completes in a single step.
-      if ((cameraMoving && !this.dragging) || Math.abs(this.targetCenterY - this.centerY) > .1 || Math.abs(this.targetCenterX - this.centerX) > .1 || Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || ((this.trafficActive && this.trafficPausedAt == null || this.autoSelecting) && !this.reducedMotion.matches)) this.start();
+      if ((cameraMoving && !this.dragging) || Math.abs(this.targetCenterY - this.centerY) > .1 || Math.abs(this.targetCenterX - this.centerX) > .1 || Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || Math.abs(this.velocityLat || 0) > .001 || ((this.trafficActive && this.trafficPausedAt == null || this.autoSelecting) && !this.reducedMotion.matches)) this.start();
+    }
+
+    spinImpulse(speed = 4.5, latSpeed = 0) {
+      this.velocityLon = speed;
+      this.velocityLat = latSpeed;
+      this.start();
     }
 
     start() {
