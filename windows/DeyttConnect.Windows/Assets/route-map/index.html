@@ -3,95 +3,1005 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; connect-src 'self';">
-  <title>deytt. · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css">
-  <script defer src="network-atlas.js"></script>
-  <script defer src="atlas-init.js"></script>
+  <title>deytt. · Windows Client Redesign</title>
+  <link rel="stylesheet" href="network-atlas.css?v=7">
+  <style>
+    /* ==========================================================================
+       MODERN LIQUID GLASS & DESKTOP SHELL (Deytt Connect Windows)
+       ========================================================================== */
+
+    :root {
+      --bg: #070B14;
+      --surface: rgba(16, 25, 44, 0.45);
+      --surface-hover: rgba(24, 36, 60, 0.55);
+      --surface-active: rgba(30, 44, 74, 0.65);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --glass-border-light: rgba(255, 255, 255, 0.22);
+      --text: #F8FAFC;
+      --text-muted: #94A3B8;
+      --brand-blue: #3B82F6;
+      --brand-blue-hover: #60A5FA;
+      --brand-teal: #39E8BD;
+      --glass-blur: blur(28px) saturate(190%);
+    }
+
+    html[data-theme="light"] {
+      --bg: #F4F7FB;
+      --surface: rgba(255, 255, 255, 0.72);
+      --surface-hover: rgba(255, 255, 255, 0.85);
+      --surface-active: rgba(255, 255, 255, 0.95);
+      --glass-border: rgba(255, 255, 255, 0.9);
+      --glass-border-light: rgba(255, 255, 255, 1);
+      --text: #0F172A;
+      --text-muted: #64748B;
+      --brand-blue: #2563EB;
+      --brand-blue-hover: #3B82F6;
+      --brand-teal: #10A889;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      transition: background-color 300ms ease, color 300ms ease;
+    }
+
+    /* --------------------------------------------------------------------------
+       STARRY NIGHT SKY BACKGROUND (Звёздное небо)
+       -------------------------------------------------------------------------- */
+    #stars-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+      transition: opacity 350ms ease;
+    }
+
+    html[data-theme="light"] #stars-canvas {
+      opacity: 0;
+    }
+
+    .space-vignette {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
+      background: radial-gradient(ellipse 70% 65% at 35% 52%, rgba(22, 38, 70, 0.35) 0%, rgba(7, 11, 20, 0.8) 65%, #05080F 100%);
+      transition: opacity 350ms ease;
+    }
+
+    html[data-theme="light"] .space-vignette {
+      background: radial-gradient(ellipse 70% 70% at 35% 52%, #FFFFFF 0%, #EBF1F8 60%, #DEE8F4 100%);
+    }
+
+    /* --------------------------------------------------------------------------
+       TOP DESKTOP HEADER (Liquid Glass Bar)
+       -------------------------------------------------------------------------- */
+    .desktop-header {
+      height: 68px;
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: relative;
+      z-index: 100;
+      flex-shrink: 0;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 36px;
+    }
+
+    .workspace-brand {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      cursor: default;
+    }
+
+    .brand-dot {
+      color: var(--brand-blue);
+      margin-left: 1px;
+    }
+
+    /* Liquid Glass Navigation Container */
+    .nav-container {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-radius: 18px;
+      padding: 4px;
+      box-shadow: 0 10px 30px -8px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.18);
+      transition: background-color 250ms ease, border-color 250ms ease;
+    }
+
+    /* The sliding jelly pill indicator */
+    .nav-jelly-pill {
+      position: absolute;
+      top: 4px;
+      left: 0;
+      height: calc(100% - 8px);
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      pointer-events: none;
+      z-index: 1;
+      transform-origin: center center;
+      transition: left 240ms cubic-bezier(0.2, 0.9, 0.3, 1),
+                  width 240ms cubic-bezier(0.2, 0.9, 0.3, 1);
+    }
+
+    html[data-theme="light"] .nav-jelly-pill {
+      background: #FFFFFF;
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      box-shadow: 0 2px 10px rgba(79, 99, 232, 0.12), 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .nav-item {
+      position: relative;
+      z-index: 2;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13.5px;
+      font-weight: 500;
+      padding: 7px 18px;
+      cursor: pointer;
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      outline: none;
+      transition: color 180ms ease;
+    }
+
+    .nav-item:hover {
+      color: var(--text);
+    }
+
+    .nav-item.is-active {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .nav-item svg {
+      width: 17px;
+      height: 17px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      transition: stroke 180ms ease;
+    }
+
+    .nav-item.is-active svg {
+      stroke: var(--brand-blue);
+    }
+
+    /* Subtle Horizontal Micro-Spring Haptic Wobble */
+    @keyframes jelly-micro-spring {
+      0% { transform: translateX(0); }
+      25% { transform: translateX(1.2px); }
+      50% { transform: translateX(-0.8px); }
+      75% { transform: translateX(0.3px); }
+      100% { transform: translateX(0); }
+    }
+
+    .nav-item.has-shaken .nav-label-wrap {
+      animation: jelly-micro-spring 240ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transform-origin: center center;
+    }
+
+    /* Right Window Controls */
+    .window-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+      background: var(--surface);
+      border: 1px solid var(--glass-border);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      outline: none;
+      transition: all 160ms ease;
+    }
+
+    .icon-btn:hover {
+      background: var(--surface-hover);
+      transform: translateY(-1px);
+    }
+
+    .icon-btn:active {
+      transform: scale(0.95);
+    }
+
+    .icon-btn svg {
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .window-divider {
+      width: 1px;
+      height: 20px;
+      background: var(--glass-border);
+      margin: 0 4px;
+    }
+
+    /* --------------------------------------------------------------------------
+       MAIN VIEWPORT & SCENE
+       -------------------------------------------------------------------------- */
+    .app-viewport {
+      flex: 1 1 0;
+      min-height: 0;
+      width: 100%;
+      position: relative;
+      overflow: hidden;
+      z-index: 2;
+    }
+
+    .network-atlas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    .home-scene {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      perspective: 1400px;
+    }
+
+    .network-atlas__canvas-wrap {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    /* --------------------------------------------------------------------------
+       LIQUID GLASS CONNECTION PANEL
+       -------------------------------------------------------------------------- */
+    .home-panel-shell {
+      position: absolute;
+      top: 50%;
+      right: 72px;
+      z-index: 10;
+      width: clamp(360px, 28vw, 440px);
+      transform: translateY(-50%);
+      pointer-events: auto;
+    }
+
+    .home-panel {
+      background: var(--surface);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-radius: 26px;
+      padding: 30px 26px;
+      box-shadow: 
+        0 30px 60px -14px rgba(0, 0, 0, 0.55),
+        0 1px 1.5px 0 rgba(255, 255, 255, 0.28) inset,
+        0 -1px 1px 0 rgba(0, 0, 0, 0.35) inset,
+        0 0 36px -4px rgba(59, 130, 246, 0.12);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 22px;
+      transition: background 250ms ease, border-color 250ms ease, box-shadow 250ms ease;
+    }
+
+    /* Top Curved Specular Rim Highlight */
+    .home-panel::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 42%;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 40%, transparent 100%);
+      border-radius: 26px 26px 0 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      pointer-events: none;
+    }
+
+    html[data-theme="light"] .home-panel {
+      box-shadow: 
+        0 24px 50px -12px rgba(40, 70, 140, 0.15),
+        0 1.5px 0 0 rgba(255, 255, 255, 0.98) inset,
+        0 0 28px rgba(79, 99, 232, 0.08);
+    }
+
+    html[data-theme="light"] .home-panel::before {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.08) 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.35);
+    }
+
+    /* Route Selection & Heading in Card */
+    .route-heading {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      cursor: pointer;
+    }
+
+    .route-flag-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 13px;
+      background: rgba(59, 130, 246, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--brand-blue);
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+      transition: transform 160ms ease, background 160ms ease;
+    }
+
+    .route-flag-badge svg {
+      width: 22px;
+      height: 22px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .route-heading:hover .route-flag-badge {
+      transform: scale(1.05);
+      background: rgba(59, 130, 246, 0.22);
+    }
+
+    .route-labels {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .home-country {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #38BDF8;
+    }
+
+    html[data-theme="light"] .home-country {
+      color: #0284C7;
+    }
+
+    .home-city {
+      font-size: 18.5px;
+      font-weight: 700;
+      line-height: 1.25;
+      color: var(--text);
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    /* --------------------------------------------------------------------------
+       PRIMARY ACTION BUTTON ("Подключиться")
+       -------------------------------------------------------------------------- */
+    .home-action {
+      min-height: 56px;
+      width: 100%;
+      padding: 14px 24px;
+      border: 1px solid rgba(255, 255, 255, 0.24);
+      border-radius: 16px;
+      color: #ffffff;
+      background: linear-gradient(135deg, #3B82F6 0%, #2563EB 55%, #1D4ED8 100%);
+      font-size: 16.5px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 
+        0 10px 24px -4px rgba(37, 99, 235, 0.48),
+        0 1px 1px 0 rgba(255, 255, 255, 0.35) inset;
+      transition: all 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      outline: none;
+    }
+
+    .home-action:hover {
+      transform: translateY(-1.5px);
+      background: linear-gradient(135deg, #60A5FA 0%, #3B82F6 55%, #2563EB 100%);
+      box-shadow: 
+        0 14px 30px -4px rgba(37, 99, 235, 0.62),
+        0 1px 1.5px 0 rgba(255, 255, 255, 0.5) inset;
+    }
+
+    .home-action:active {
+      transform: scale(0.98);
+      box-shadow: 0 6px 16px -2px rgba(37, 99, 235, 0.4);
+    }
+
+    /* Specular Light Sweep Animation on Hover */
+    .home-action::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -60%;
+      width: 40%;
+      height: 200%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+      transform: rotate(25deg);
+      pointer-events: none;
+      transition: none;
+    }
+
+    .home-action:hover::before {
+      left: 120%;
+      transition: left 700ms ease-in-out;
+    }
+
+    .home-action.connected {
+      background: linear-gradient(135deg, #10B981 0%, #059669 60%, #047857 100%);
+      box-shadow: 0 10px 24px -4px rgba(16, 185, 129, 0.48), 0 1px 1px 0 rgba(255, 255, 255, 0.35) inset;
+    }
+
+    /* --------------------------------------------------------------------------
+       METRICS CARDS (Ping & Speed)
+       -------------------------------------------------------------------------- */
+    .home-metrics {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr;
+      padding: 14px 0;
+      border-top: 1px solid var(--glass-border);
+      border-bottom: 1px solid var(--glass-border);
+      min-height: auto !important;
+    }
+
+    .metric {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 3px;
+    }
+
+    .metric + .metric {
+      padding-left: 20px !important;
+      border-left: 1px solid var(--glass-border) !important;
+      border-top: none !important;
+    }
+
+    .metric-label {
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.07em !important;
+      color: var(--text-muted) !important;
+    }
+
+    .metric-value {
+      display: flex;
+      align-items: baseline;
+      gap: 3px;
+    }
+
+    .metric strong {
+      font-size: 26px !important;
+      font-weight: 700 !important;
+      color: var(--text) !important;
+      line-height: 1.1 !important;
+    }
+
+    .metric small {
+      font-size: 13px !important;
+      color: var(--text-muted) !important;
+      padding-bottom: 1px;
+    }
+
+    .home-measure-btn {
+      background: transparent;
+      border: none;
+      color: var(--brand-blue);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      align-self: center;
+      padding: 4px 10px;
+      border-radius: 8px;
+      transition: opacity 160ms ease, background 160ms ease;
+    }
+
+    .home-measure-btn:hover {
+      opacity: 0.85;
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .home-measure-btn svg {
+      width: 13px;
+      height: 13px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 2;
+    }
+
+    /* --------------------------------------------------------------------------
+       CLEAN TOAST NOTIFICATION
+       -------------------------------------------------------------------------- */
+    .motion-toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      color: #FFFFFF;
+      padding: 10px 22px;
+      border-radius: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      font-size: 13px;
+      font-weight: 500;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      z-index: 2000;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    .motion-toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    html[data-theme="light"] .motion-toast {
+      background: rgba(255, 255, 255, 0.92);
+      color: #0F172A;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+    }
+  </style>
+
+  <!-- Canonical Client Scripts -->
+  <script defer src="network-atlas.js?v=7"></script>
+  <script defer src="atlas-init.js?v=7"></script>
 </head>
 <body>
-  <main class="network-atlas" data-atlas-status="loading" data-atlas-variant="home">
-    <div class="home-scene">
-      <div class="network-atlas__canvas-wrap">
-        <canvas data-atlas-interactive tabindex="0" role="img" aria-label="интерактивный глобус маршрута deytt."></canvas>
-        <span class="network-atlas__loader" data-atlas-status role="status" aria-live="polite">загружаю глобус</span>
-        <span class="network-atlas__tooltip" data-atlas-tooltip role="status" aria-live="polite" hidden></span>
-        <div class="traffic-hint" data-traffic-hint role="status" aria-live="polite" hidden></div>
-        <div class="traffic-legend sr-only" data-traffic-legend aria-label="traffic colors">
-          <button type="button" class="legend-upload" data-legend-upload data-flow="upload">исходящие данные</button>
-          <button type="button" class="legend-download" data-legend-download data-flow="download">ответный трафик</button>
-          <button type="button" class="legend-control" data-legend-control data-flow="control">служебный трафик</button>
-        </div>
-        <section class="traffic-inspector" data-traffic-inspector data-traffic-inspector-card role="region" aria-label="описание выбранного потока" hidden>
-          <span class="traffic-inspector__eyebrow" data-inspector-kind></span>
-          <h2 data-inspector-title></h2>
-          <p class="traffic-inspector__path" data-inspector-path></p>
-          <p data-inspector-body></p>
-          <span class="traffic-inspector__item" data-inspector-item></span>
-          <p class="traffic-inspector__note" data-inspector-note></p>
-          <button type="button" data-inspector-resume>Показать все линии</button>
-        </section>
+
+  <!-- Starry Night Sky Canvas (Звёздное небо) -->
+  <canvas id="stars-canvas"></canvas>
+  <div class="space-vignette"></div>
+
+  <!-- Top Desktop Navigation Header -->
+  <header class="desktop-header">
+    <div class="brand-section">
+      <div class="workspace-brand">
+        deytt<span class="brand-dot">.</span>
       </div>
 
-      <section class="home-panel-shell" aria-label="управление подключением">
-        <div class="home-panel">
-          <div class="panel-copy status-copy">
-            <h1 id="home-status" class="sr-only" aria-live="polite">не подключено</h1>
-            <p id="home-error" class="home-error" hidden></p>
-          </div>
-          <div class="panel-copy route-copy">
-            <div class="route-heading">
-              <span id="home-flag" class="route-flag" aria-hidden="true">🌐</span>
-              <div class="route-labels">
-                <span id="home-country" class="home-country">автоподбор</span>
-                <strong id="home-city" class="home-city">выход выберется автоматически</strong>
-                <span id="home-protocol" class="home-protocol" hidden></span>
-              </div>
-            </div>
-          </div>
-          <button id="home-action" class="home-action panel-copy" type="button" data-action="home-connect">
-            <span data-action-label>Подключиться</span>
-            <span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span>
-          </button>
-          <div class="home-metrics panel-copy" aria-label="последний замер маршрута">
-            <div class="metric">
-              <span class="metric-label" id="latency-label">отклик</span>
-              <strong id="home-latency">—</strong><small id="home-latency-unit">мс</small>
-            </div>
-            <div class="metric">
-              <span class="metric-label" id="speed-label">скорость</span>
-              <strong id="home-speed">—</strong><small id="home-speed-unit">Мбит/с</small>
-            </div>
-          </div>
-          <p id="home-measurement-note" class="measurement-note panel-copy" hidden></p>
-          <button id="home-measure" class="home-measure" type="button" data-action="home-measure">обновить замер</button>
-          <p id="home-route-description" class="sr-only" aria-live="polite"></p>
-        </div>
-      </section>
+      <!-- Navigation with Liquid Glass & Horizontal Micro-Spring -->
+      <nav class="nav-container" id="main-nav" role="tablist">
+        <div class="nav-jelly-pill" id="nav-pill"></div>
 
-      <section class="home-compact" aria-label="текущее подключение" aria-hidden="true" inert>
-        <div class="home-compact-content">
-          <div class="compact-summary">
-            <div class="compact-status-line sr-only">
-              <span class="compact-status-dot" aria-hidden="true"></span>
-              <span id="compact-status" class="compact-status" data-tone="normal">не подключено</span>
+        <button class="nav-item is-active" id="tab-home" data-tab="home" role="tab" aria-selected="true">
+          <span class="nav-label-wrap">
+            <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z"/></svg>
+            <span>Главная</span>
+          </span>
+        </button>
+
+        <button class="nav-item" id="tab-routes" data-tab="routes" role="tab" aria-selected="false">
+          <span class="nav-label-wrap">
+            <svg viewBox="0 0 24 24"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            <span>Маршруты</span>
+          </span>
+        </button>
+
+        <button class="nav-item" id="tab-profile" data-tab="profile" role="tab" aria-selected="false">
+          <span class="nav-label-wrap">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
+            <span>Профиль</span>
+          </span>
+        </button>
+
+        <button class="nav-item" id="tab-settings" data-tab="settings" role="tab" aria-selected="false">
+          <span class="nav-label-wrap">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span>Настройки</span>
+          </span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- Window Controls & Theme Switcher -->
+    <div class="window-controls">
+      <button class="icon-btn" id="theme-toggle" title="Переключить тему (Тёмная / Светлая)" aria-label="Сменить тему">
+        <svg id="theme-icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg id="theme-icon-sun" viewBox="0 0 24 24" style="display:none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+
+      <div class="window-divider"></div>
+
+      <button class="icon-btn" title="Свернуть">
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="icon-btn" title="Развернуть">
+        <svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+      </button>
+      <button class="icon-btn" title="Закрыть">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Viewport with Interactive Globe & Overlay -->
+  <main class="app-viewport">
+    <div class="network-atlas" data-atlas-status="loading" data-atlas-variant="home">
+      <div class="home-scene">
+        <div class="network-atlas__canvas-wrap">
+          <canvas data-atlas-interactive tabindex="0" role="img" aria-label="Интерактивный глобус маршрута deytt."></canvas>
+          <span class="network-atlas__loader" data-atlas-status role="status" aria-live="polite">загружаю глобус</span>
+          <span class="network-atlas__tooltip" data-atlas-tooltip role="status" aria-live="polite" hidden></span>
+          <div class="traffic-hint" data-traffic-hint role="status" aria-live="polite" hidden></div>
+        </div>
+
+        <!-- Connection Panel with Liquid Glass -->
+        <section class="home-panel-shell" aria-label="Управление подключением">
+          <div class="home-panel">
+            <div class="panel-copy status-copy">
+              <h1 id="home-status" class="sr-only" aria-live="polite">не подключено</h1>
+              <p id="home-error" class="home-error" hidden></p>
             </div>
-            <div class="compact-route">
-              <span id="compact-flag" class="route-flag" aria-hidden="true">🌐</span>
-              <div class="route-labels">
-                <span id="compact-country" class="home-country">автоподбор</span>
-                <strong id="compact-city" class="home-city">выход выберется автоматически</strong>
-                <span id="compact-protocol" class="home-protocol" hidden></span>
+            
+            <div class="panel-copy route-copy">
+              <div class="route-heading">
+                <div id="home-flag" class="route-flag-badge">
+                  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                </div>
+                <div class="route-labels">
+                  <span id="home-country" class="home-country">Автоподбор</span>
+                  <strong id="home-city" class="home-city">Выход выберется автоматически</strong>
+                  <span id="home-protocol" class="home-protocol" hidden></span>
+                </div>
               </div>
             </div>
+
+            <!-- Primary Action Button -->
+            <button id="home-action" class="home-action panel-copy" type="button" data-action="home-connect" onclick="toggleConnect()">
+              <span data-action-label>Подключиться</span>
+              <span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            </button>
+
+            <!-- Metrics Cards -->
+            <div class="home-metrics panel-copy" aria-label="Параметры сети">
+              <div class="metric">
+                <span class="metric-label" id="latency-label">Отклик</span>
+                <div class="metric-value">
+                  <strong id="home-latency">24</strong><small id="home-latency-unit">мс</small>
+                </div>
+              </div>
+
+              <div class="metric">
+                <span class="metric-label" id="speed-label">Скорость</span>
+                <div class="metric-value">
+                  <strong id="home-speed">185</strong><small id="home-speed-unit">Мбит/с</small>
+                </div>
+              </div>
+            </div>
+
+            <p id="home-measurement-note" class="measurement-note panel-copy" hidden></p>
+            
+            <button id="home-measure" class="home-measure-btn" type="button" data-action="home-measure" onclick="simulateMeasurement()">
+              <svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>Обновить замер</span>
+            </button>
+            <p id="home-route-description" class="sr-only" aria-live="polite"></p>
           </div>
-          <button id="compact-action" class="compact-action" type="button" data-action="home-connect"><span data-action-label>Подключиться</span><span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span></button>
-          <button id="immersive-exit" class="compact-exit" type="button" aria-label="вернуться к окну" title="вернуться к окну · esc" hidden>↙</button>
-          <p id="compact-error" class="compact-error" role="status" hidden></p>
-          <div class="compact-metrics"><span id="compact-latency">— мс</span><span id="compact-speed">— Мбит/с</span></div>
-        </div>
-      </section>
+        </section>
+
+        <!-- Compact view fallback for small views / requirements -->
+        <section class="home-compact" aria-label="Текущее подключение" aria-hidden="true" inert style="display:none;">
+          <div class="home-compact-content">
+            <div class="compact-summary">
+              <div class="compact-status-line sr-only">
+                <span class="compact-status-dot" aria-hidden="true"></span>
+                <span id="compact-status" class="compact-status" data-tone="normal">не подключено</span>
+              </div>
+              <div class="compact-route">
+                <span id="compact-flag" class="route-flag" aria-hidden="true">🌐</span>
+                <div class="route-labels">
+                  <span id="compact-country" class="home-country">автоподбор</span>
+                  <strong id="compact-city" class="home-city">выход выберется автоматически</strong>
+                  <span id="compact-protocol" class="home-protocol" hidden></span>
+                </div>
+              </div>
+            </div>
+            <button id="compact-action" class="compact-action" type="button" data-action="home-connect">
+              <span data-action-label>Подключиться</span>
+              <span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            </button>
+            <button id="immersive-exit" class="compact-exit" type="button" aria-label="вернуться к окну" title="вернуться к окну · esc" hidden>↙</button>
+            <p id="compact-error" class="compact-error" role="status" hidden></p>
+            <div class="compact-metrics">
+              <span id="compact-latency">— мс</span>
+              <span id="compact-speed">— Мбит/с</span>
+            </div>
+          </div>
+        </section>
+      </div>
     </div>
   </main>
+
+  <!-- Notification Toast -->
+  <div class="motion-toast" id="toast"></div>
+
+  <script>
+    // --------------------------------------------------------------------------
+    // NATURAL STARRY SKY BACKGROUND (Реалистичное звёздное небо)
+    // --------------------------------------------------------------------------
+    (function initStars() {
+      const canvas = document.getElementById("stars-canvas");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      let width, height, dpr;
+      let stars = [];
+
+      function createStars() {
+        stars = [];
+        const count = Math.floor((width * height) / 3200); // density: ~300 stars on 1080p
+        const colors = [
+          "rgba(255, 255, 255, ",
+          "rgba(224, 242, 254, ",
+          "rgba(238, 242, 255, ",
+          "rgba(254, 243, 199, "
+        ];
+
+        for (let i = 0; i < count; i++) {
+          stars.push({
+            x: Math.random() * width,
+            y: Math.random() * height,
+            radius: Math.random() < 0.8 ? Math.random() * 0.8 + 0.3 : Math.random() * 1.2 + 0.9,
+            baseAlpha: Math.random() * 0.65 + 0.25,
+            twinkleSpeed: Math.random() * 0.02 + 0.006,
+            twinklePhase: Math.random() * Math.PI * 2,
+            color: colors[Math.floor(Math.random() * colors.length)]
+          });
+        }
+      }
+
+      function resize() {
+        dpr = window.devicePixelRatio || 1;
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        ctx.scale(dpr, dpr);
+        createStars();
+      }
+
+      let animationFrame;
+      function render(time) {
+        ctx.clearRect(0, 0, width, height);
+
+        for (let i = 0; i < stars.length; i++) {
+          const star = stars[i];
+          const alpha = star.baseAlpha + Math.sin(time * star.twinkleSpeed + star.twinklePhase) * 0.25;
+          const clampedAlpha = Math.max(0.1, Math.min(1, alpha));
+
+          ctx.fillStyle = star.color + clampedAlpha + ")";
+          ctx.beginPath();
+          ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // Subtle faint glow for larger stars
+          if (star.radius > 1.2) {
+            ctx.fillStyle = star.color + (clampedAlpha * 0.2) + ")";
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.radius * 2.4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        animationFrame = requestAnimationFrame(render);
+      }
+
+      window.addEventListener("resize", resize, { passive: true });
+      resize();
+      animationFrame = requestAnimationFrame(render);
+    })();
+
+    // --------------------------------------------------------------------------
+    // NAVIGATION CONTROLLER WITH MICRO-SPRING
+    // --------------------------------------------------------------------------
+    const navContainer = document.getElementById("main-nav");
+    const navPill = document.getElementById("nav-pill");
+    const navItems = document.querySelectorAll(".nav-item");
+
+    function updatePillPosition(targetItem, animateJelly = true) {
+      if (!navContainer || !navPill || !targetItem) return;
+      const containerRect = navContainer.getBoundingClientRect();
+      const targetRect = targetItem.getBoundingClientRect();
+
+      const left = targetRect.left - containerRect.left;
+      const width = targetRect.width;
+
+      navPill.style.left = left + "px";
+      navPill.style.width = width + "px";
+
+      if (animateJelly) {
+        targetItem.classList.remove("has-shaken");
+        void targetItem.offsetWidth;
+        targetItem.classList.add("has-shaken");
+      }
+    }
+
+    navItems.forEach(item => {
+      item.addEventListener("click", () => {
+        navItems.forEach(btn => {
+          btn.classList.remove("is-active");
+          btn.setAttribute("aria-selected", "false");
+        });
+        item.classList.add("is-active");
+        item.setAttribute("aria-selected", "true");
+        updatePillPosition(item, true);
+      });
+    });
+
+    // Theme Switcher Controller
+    const themeBtn = document.getElementById("theme-toggle");
+    const moonIcon = document.getElementById("theme-icon-moon");
+    const sunIcon = document.getElementById("theme-icon-sun");
+
+    function setAppTheme(theme) {
+      document.documentElement.dataset.theme = theme;
+      if (theme === "light") {
+        moonIcon.style.display = "none";
+        sunIcon.style.display = "block";
+      } else {
+        moonIcon.style.display = "block";
+        sunIcon.style.display = "none";
+      }
+
+      // Re-render atlas colors
+      if (window.atlasInstance) {
+        window.atlasInstance.render();
+      }
+    }
+
+    if (themeBtn) {
+      themeBtn.addEventListener("click", () => {
+        const currentTheme = document.documentElement.dataset.theme || "dark";
+        const newTheme = currentTheme === "dark" ? "light" : "dark";
+        setAppTheme(newTheme);
+        showToast(newTheme === "dark" ? "Включена тёмная тема" : "Включена светлая тема");
+      });
+    }
+
+    // Connect Button Simulation
+    let isConnected = false;
+    function toggleConnect() {
+      const btn = document.getElementById("home-action");
+      const label = btn.querySelector("[data-action-label]");
+      const latency = document.getElementById("home-latency");
+      const speed = document.getElementById("home-speed");
+
+      if (!isConnected) {
+        isConnected = true;
+        label.textContent = "Отключиться";
+        btn.classList.add("connected");
+        latency.textContent = "22";
+        speed.textContent = "210";
+        if (window.deyttMapAtlas) {
+          window.deyttMapAtlas.setTrafficActive(true);
+          window.deyttMapAtlas.start();
+        }
+        showToast("Подключено к защищённому каналу");
+      } else {
+        isConnected = false;
+        label.textContent = "Подключиться";
+        btn.classList.remove("connected");
+        latency.textContent = "24";
+        speed.textContent = "185";
+        if (window.deyttMapAtlas) {
+          window.deyttMapAtlas.setTrafficActive(false);
+          window.deyttMapAtlas.start();
+        }
+        showToast("Отключено");
+      }
+    }
+
+    function simulateMeasurement() {
+      const latency = document.getElementById("home-latency");
+      const speed = document.getElementById("home-speed");
+      latency.textContent = "…";
+      speed.textContent = "…";
+      setTimeout(() => {
+        latency.textContent = (Math.floor(Math.random() * 8) + 20).toString();
+        speed.textContent = (Math.floor(Math.random() * 30) + 180).toString();
+        showToast("Замер обновлен");
+      }, 400);
+    }
+
+    // Toast notification helper
+    let toastTimer;
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        toast.classList.remove("show");
+      }, 2000);
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const activeTab = document.querySelector(".nav-item.is-active");
+      if (activeTab) {
+        updatePillPosition(activeTab, false);
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      const activeTab = document.querySelector(".nav-item.is-active");
+      if (activeTab) {
+        updatePillPosition(activeTab, false);
+      }
+    });
+  </script>
 </body>
 </html>
