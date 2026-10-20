@@ -678,8 +678,8 @@
           sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
           sphereEdge: "rgba(141,161,185,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
           grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
-          landHighlight: "rgba(118,140,164,.93)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
-          border: "rgba(85, 108, 136, 0.45)", borderAlpha: .30, borderWidth: .65, borderHot: "#39E8BD", borderGlow: "transparent", route: "#FFBD32", routeHot: "#FFC857",
+          landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
+          border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
           download: "#FFBD32", downloadHot: "#FFE08A", upload: "#39E8BD", uploadHot: "#90F4DA",
           node: "#F2F5FC", nodeCore: "#39E8BD", label: "#F2F5FC", labelMuted: "#98A6BF", labelBg: "rgba(17,26,41,.94)"
         } : {
@@ -837,21 +837,18 @@
         context.stroke();
         context.restore();
       };
-      const dark = document.documentElement.dataset.theme !== "light";
-      const borderAlpha = colors.borderAlpha ?? (dark ? .75 : .55);
-      const borderWidth = colors.borderWidth ?? (this.width < 520 ? .65 : .85);
-      
-      // Clean, crisp country boundary lines without glow/blur on dark theme
+      const borderAlpha = colors.borderAlpha ?? (this.variant === "observatory" ? .38 : .28);
+      const borderWidth = colors.borderWidth ?? (this.width < 520 ? .48 : .62);
       strokeLines(this.boundaryLines, colors.border, borderWidth, borderAlpha);
-      
+      if (this.variant !== "observatory") return;
       const route = ROUTES[this.route] || ROUTES.auto;
       const activeKeys = this.annotationFilter ? Array.from(this.annotationFilter) : route.nodes;
       const activeCountryIds = new Set(activeKeys.map((key) => LOCATIONS[key] && LOCATIONS[key].countryId).filter(Boolean));
       const activeLines = this.targetBoundaryLines.filter((line) => activeCountryIds.has(line.countryId));
-      if (activeLines.length) {
-        // Clean crisp stroke without any blurry glow or halo shadow
-        strokeLines(activeLines, colors.borderHot, this.width < 520 ? .95 : 1.15, .88, "transparent", 0);
-      }
+      // A diffused pass gives the active countries a little depth; the crisp
+      // pass keeps borders legible at the close-up measurement zoom.
+      strokeLines(activeLines, colors.borderGlow, this.width < 520 ? 2.6 : 3.4, .24, colors.borderGlow, this.cameraMoving ? 0 : 9);
+      strokeLines(activeLines, colors.borderHot, this.width < 520 ? .82 : 1.05, .72);
     }
 
     drawLand(colors) {
