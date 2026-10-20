@@ -16,7 +16,9 @@ internal sealed record ServiceSnapshot(string State, string Detail,
     string? RouteTag = null, DateTimeOffset? ConnectedAt = null,
     IReadOnlyList<ServiceProbeResult>? ProbeResults = null,
     DateTimeOffset? HealthCheckedAt = null,
-    string? ActiveRouteTag = null);
+    string? ActiveRouteTag = null,
+    long? TunnelLatencyMilliseconds = null,
+    string? TunnelLatencyError = null);
 
 internal sealed class EngineController
 {
@@ -38,6 +40,8 @@ internal sealed class EngineController
     private ActiveRouteTelemetry? _activeRouteTelemetry;
     private string? _profilePath;
     private string? _routeTag;
+    private IReadOnlyList<string>? _tunAddresses;
+    private IReadOnlyDictionary<string, IPAddress[]>? _canaryAddresses;
     private ServiceSnapshot _snapshot = new("disconnected", "VPN выключен");
     private readonly object _probeProgressLock = new();
     private readonly Dictionary<string, ServiceProbeResult> _probeProgress = new(StringComparer.Ordinal);
@@ -57,6 +61,68 @@ internal sealed class EngineController
                 ProbeResults: _probeProgress.Values.Take(32).ToArray());
     }
 
+    public async Task<ServiceSnapshot> MeasureTunnelLatencyAsync(CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Process? process;
+        IReadOnlyList<string>? tunAddresses;
+        IReadOnlyDictionary<string, IPAddress[]>? canaryAddresses;
+        try
+        {
+            process = _engine;
+            tunAddresses = _tunAddresses;
+            canaryAddresses = _canaryAddresses;
+            if (Snapshot.State != "connected" || process is null || process.HasExited || tunAddresses is null)
+                return Snapshot with
+                {
+                    TunnelLatencyMilliseconds = null,
+                    TunnelLatencyError = Snapshot.State == "connected" ? "Проверка VPN недоступна." : null,
+                };
+        }
+        finally { _gate.Release(); }
+
+        long latency;
+        try
+        {
+            var tunnelInterface = FindTunInterface(tunAddresses)
+                ?? throw new InvalidOperationException("The configured TUN address is unavailable.");
+            latency = await VerifyHttpsThroughTunAsync(tunnelInterface, TimeSpan.FromSeconds(5),
+                cancellationToken, canaryAddresses).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception error)
+        {
+            await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                if (ReferenceEquals(_engine, process) && !process.HasExited && Snapshot.State == "connected")
+                    SetSnapshot(Snapshot with
+                    {
+                        TunnelLatencyMilliseconds = null,
+                        TunnelLatencyError = SummarizeTunnelFailure("HTTPS", error),
+                    });
+                return Snapshot;
+            }
+            finally { _gate.Release(); }
+        }
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (ReferenceEquals(_engine, process) && !process.HasExited && Snapshot.State == "connected")
+            {
+                SetSnapshot(Snapshot with
+                {
+                    TunnelLatencyMilliseconds = latency,
+                    TunnelLatencyError = null,
+                    HealthCheckedAt = DateTimeOffset.UtcNow,
+                });
+            }
+            return Snapshot;
+        }
+        finally { _gate.Release(); }
+    }
+
     public async Task<ServiceSnapshot> ConnectAsync(string profile, string routeTag, string? awgConfig,
         CancellationToken cancellationToken,
         IReadOnlyList<string>? customBypassDomains = null,
@@ -64,6 +130,9 @@ internal sealed class EngineController
         string? splitTunnelMode = null)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        CancellationTokenSource? preflight = null;
+        Task<IReadOnlyDictionary<string, IPAddress[]>>? canaryTask = null;
+        var canaryResultRead = false;
         try
         {
             StopCore();
@@ -78,10 +147,13 @@ internal sealed class EngineController
             var upstreamInterface = FindActiveHappTunnel();
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
                 upstreamInterface, customBypassDomains, customBypassProcesses, splitTunnelMode);
+            preflight = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            // Start independent DNS bootstrap while AWG hosts and the profile are prepared.
+            canaryTask = ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync, preflight.Token);
             if (awgConfig is not null)
             {
                 var resolved = await ResolveAwgPeerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync,
-                    cancellationToken).ConfigureAwait(false);
+                    preflight.Token).ConfigureAwait(false);
                 runtimeProfile = resolved.Profile;
                 if (resolved.FailedEndpointTags.Count != 0)
                 {
@@ -90,13 +162,6 @@ internal sealed class EngineController
                 }
             }
             var tunAddresses = TunnelProfileBuilder.GetTunAddresses(runtimeProfile);
-            // Windows strict routing blocks DNS on physical interfaces as soon as
-            // TUN starts. Resolve the public health-check hosts before that change;
-            // HTTPS still uses their hostnames for SNI and certificate validation.
-            var canaryAddresses = await ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync,
-                cancellationToken).ConfigureAwait(false);
-            if (canaryAddresses.Count == 0)
-                return SetError("Не удалось разрешить адреса проверки VPN до запуска TUN. Проверьте DNS сети.");
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return SetError("Не найдено ядро VPN. Переустановите приложение.");
@@ -131,9 +196,17 @@ internal sealed class EngineController
                 }
             }
 
+            // Resolve before TUN changes routing; this lookup overlaps profile validation.
+            var canaryAddresses = await canaryTask.ConfigureAwait(false);
+            canaryResultRead = true;
+            if (canaryAddresses.Count == 0)
+                return SetError("Не удалось разрешить адреса проверки VPN до запуска TUN. Проверьте DNS сети.");
+
             var runtimeDiagnostic = new EngineRuntimeDiagnostic();
             var process = StartOwnedEngine(enginePath, _profilePath, runtimeDiagnostic);
             _routeTag = routeTag;
+            _tunAddresses = tunAddresses;
+            _canaryAddresses = canaryAddresses;
             _ = MonitorEngineAsync(process, runtimeDiagnostic);
 
             _verification?.Cancel();
@@ -162,6 +235,14 @@ internal sealed class EngineController
         }
         finally
         {
+            if (!canaryResultRead && preflight is not null)
+                preflight.Cancel();
+            if (!canaryResultRead && canaryTask is not null)
+            {
+                try { await canaryTask.ConfigureAwait(false); }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+            }
+            preflight?.Dispose();
             _gate.Release();
         }
     }
@@ -413,6 +494,7 @@ internal sealed class EngineController
             var tunnelInterface = await WaitForTunInterfaceAsync(process, tunAddresses,
                 cancellationToken).ConfigureAwait(false);
             var passed = false;
+            long? tunnelLatency = null;
             Exception? lastError = null;
             for (var attempt = 0; attempt < 3; attempt++)
             {
@@ -423,7 +505,7 @@ internal sealed class EngineController
                         throw new InvalidOperationException("VPN engine exited before traffic verification.");
 
                     failureStage = "HTTPS";
-                    await VerifyHttpsThroughTunAsync(tunnelInterface, TimeSpan.FromSeconds(5),
+                    tunnelLatency = await VerifyHttpsThroughTunAsync(tunnelInterface, TimeSpan.FromSeconds(5),
                         cancellationToken, canaryAddresses).ConfigureAwait(false);
                     passed = true;
                     break;
@@ -448,14 +530,16 @@ internal sealed class EngineController
                         tunnelRouteProven: true);
                     _consecutiveHealthFailures = transition.ConsecutiveFailures;
                     SetSnapshot(new ServiceSnapshot(transition.State, "VPN подключён; HTTPS проверен через TUN.",
-                        routeTag, checkedAt, HealthCheckedAt: checkedAt));
+                        routeTag, checkedAt, HealthCheckedAt: checkedAt,
+                        TunnelLatencyMilliseconds: tunnelLatency));
                 }
                 if (ReferenceEquals(_engine, process) && !process.HasExited)
                 {
                     _healthMonitor?.Stop();
                     _healthMonitor?.Dispose();
                     _healthMonitor = new TunnelHealthMonitorLifetime();
-                    _ = MonitorTunnelHealthAsync(process, routeTag, tunAddresses, _healthMonitor.Token);
+                    _ = MonitorTunnelHealthAsync(process, routeTag, tunAddresses, canaryAddresses,
+                        _healthMonitor.Token);
                     if (_activeRouteTelemetry is { } telemetry)
                         _ = MonitorActiveRouteAsync(process, telemetry, _healthMonitor.Token);
                 }
@@ -501,7 +585,7 @@ internal sealed class EngineController
     }
 
     private async Task MonitorTunnelHealthAsync(Process process, string routeTag,
-        IReadOnlyList<string> tunAddresses,
+        IReadOnlyList<string> tunAddresses, IReadOnlyDictionary<string, IPAddress[]> canaryAddresses,
         CancellationToken cancellationToken)
     {
         const int intervalSeconds = 60;
@@ -533,17 +617,19 @@ internal sealed class EngineController
                         return;
                     SetSnapshot(new ServiceSnapshot("health_checking", "Повторно проверяем VPN-трафик…",
                         routeTag, Snapshot.ConnectedAt, HealthCheckedAt: Snapshot.HealthCheckedAt,
-                        ActiveRouteTag: Snapshot.ActiveRouteTag));
+                        ActiveRouteTag: Snapshot.ActiveRouteTag,
+                        TunnelLatencyMilliseconds: null, TunnelLatencyError: null));
                 }
                 finally { _gate.Release(); }
 
                 var passed = false;
+                long? tunnelLatency = null;
                 try
                 {
                     var tunnelInterface = FindTunInterface(tunAddresses)
                         ?? throw new InvalidOperationException("The configured TUN address is unavailable.");
-                    await VerifyHttpsThroughTunAsync(tunnelInterface,
-                        TimeSpan.FromSeconds(canaryTimeoutSeconds), cancellationToken).ConfigureAwait(false);
+                    tunnelLatency = await VerifyHttpsThroughTunAsync(tunnelInterface,
+                        TimeSpan.FromSeconds(canaryTimeoutSeconds), cancellationToken, canaryAddresses).ConfigureAwait(false);
                     passed = !process.HasExited;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
@@ -567,7 +653,9 @@ internal sealed class EngineController
                     };
                     SetSnapshot(new ServiceSnapshot(transition.State, detail, routeTag,
                         Snapshot.ConnectedAt, HealthCheckedAt: transition.State == "unknown" ? null : checkedAt,
-                        ActiveRouteTag: transition.State == "unknown" ? null : Snapshot.ActiveRouteTag));
+                        ActiveRouteTag: transition.State == "unknown" ? null : Snapshot.ActiveRouteTag,
+                        TunnelLatencyMilliseconds: passed ? tunnelLatency : null,
+                        TunnelLatencyError: passed ? null : detail));
                 }
                 finally { _gate.Release(); }
             }
@@ -630,34 +718,66 @@ internal sealed class EngineController
         throw new InvalidOperationException("The configured TUN address is not assigned to an active interface.");
     }
 
-    private static async Task VerifyHttpsThroughTunAsync(WindowsTunnelCanaryInterface tunnelInterface,
+    private static async Task<long> VerifyHttpsThroughTunAsync(WindowsTunnelCanaryInterface tunnelInterface,
         TimeSpan timeout, CancellationToken cancellationToken,
         IReadOnlyDictionary<string, IPAddress[]>? resolvedAddresses = null)
     {
-        // A single successful HTTPS response through a socket pinned to TUN proves
-        // traffic reached the tunnel. Public canaries can fail independently.
-        Exception? lastError = null;
-        foreach (var canary in TunnelCanaries)
-        {
-            try
+        // Canaries are independent; one unreachable host must not delay a working route.
+        var probes = TunnelCanaries.Select<(string Url, HttpStatusCode? ExpectedStatus), Func<CancellationToken, Task<long?>>>(canary =>
+            async token =>
             {
                 using var http = CreateTunnelHttpClient(tunnelInterface, timeout, resolvedAddresses);
-                using var response = await http.GetAsync(canary.Url, cancellationToken).ConfigureAwait(false);
-                if (canary.ExpectedStatus is { } expected
+                var started = Stopwatch.GetTimestamp();
+                using var request = new HttpRequestMessage(HttpMethod.Get, canary.Url);
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token)
+                    .ConfigureAwait(false);
+                var accepted = canary.ExpectedStatus is { } expected
                     ? response.StatusCode == expected
-                    : response.IsSuccessStatusCode)
-                    return;
-                lastError = new HttpRequestException("HTTPS canary returned an unexpected status.");
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
+                    : response.IsSuccessStatusCode;
+                return accepted
+                    ? (long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds)
+                    : null;
+            }).ToArray();
+        return await FirstSuccessfulCanaryAsync(probes, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<long> FirstSuccessfulCanaryAsync(
+        IReadOnlyList<Func<CancellationToken, Task<long?>>> probes, CancellationToken cancellationToken)
+    {
+        if (probes.Count == 0)
+            throw new ArgumentException("At least one HTTPS canary is required.", nameof(probes));
+
+        using var attemptsCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var pending = probes.Select(async probe =>
+        {
+            try { return (Latency: await probe(attemptsCancellation.Token).ConfigureAwait(false), Error: (Exception?)null); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception error) when (error is HttpRequestException or OperationCanceledException or IOException)
             {
-                lastError = error;
+                return (Latency: (long?)null, Error: error);
+            }
+        }).ToList();
+        Exception? lastError = null;
+        try
+        {
+            while (pending.Count != 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var completed = await Task.WhenAny(pending).ConfigureAwait(false);
+                pending.Remove(completed);
+                var result = await completed.ConfigureAwait(false);
+                if (result.Latency is { } latency)
+                    return latency;
+                lastError = result.Error ?? lastError;
             }
         }
+        finally
+        {
+            attemptsCancellation.Cancel();
+            try { await Task.WhenAll(pending).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+        }
+
         throw new HttpRequestException("No HTTPS canary passed through TUN.", lastError);
     }
 
@@ -1728,7 +1848,12 @@ internal sealed class EngineController
         _healthMonitor = null;
         _activeRouteTelemetry?.Dispose();
         _activeRouteTelemetry = null;
-        SetSnapshot(Snapshot with { ActiveRouteTag = null });
+        SetSnapshot(Snapshot with
+        {
+            ActiveRouteTag = null,
+            TunnelLatencyMilliseconds = null,
+            TunnelLatencyError = null,
+        });
         _verification?.Cancel();
         _verification?.Dispose();
         _verification = null;
@@ -1742,6 +1867,8 @@ internal sealed class EngineController
             _profilePath = null;
         }
         _routeTag = null;
+        _tunAddresses = null;
+        _canaryAddresses = null;
         _tunStartupCollisionRetries = 0;
     }
 

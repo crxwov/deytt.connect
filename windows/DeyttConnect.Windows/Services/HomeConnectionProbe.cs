@@ -6,22 +6,21 @@ using DeyttConnect.Windows.Service;
 
 namespace DeyttConnect.Windows.Services;
 
-/// <summary>Measures the existing system VPN connection without starting or switching a tunnel.</summary>
+/// <summary>Measures optional download speed without starting or switching a tunnel.</summary>
 internal static class HomeConnectionProbe
 {
-    internal static async Task<WindowsRouteProbeResult> MeasureAsync(string routeTag, string? token,
+    internal static async Task<WindowsRouteProbeResult> MeasureSpeedAsync(string routeTag, string? token,
         bool measureSpeed, Action<WindowsRouteProbeResult> report, CancellationToken cancellationToken)
     {
+        var result = new WindowsRouteProbeResult(routeTag, null, null, null, "complete");
+        if (!measureSpeed || string.IsNullOrWhiteSpace(token))
+        {
+            report(result);
+            return result;
+        }
+
         using var handler = new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false };
         using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(6) };
-        var latency = await RouteLatencyProbe.MeasureAsync(client, cancellationToken,
-            sample => report(new(routeTag, sample.LatencyMilliseconds, null, null, "latency")))
-            .ConfigureAwait(false);
-        var result = new WindowsRouteProbeResult(routeTag, latency.LatencyMilliseconds, null,
-            latency.Failure, "complete");
-        report(result);
-        if (!measureSpeed || latency.LatencyMilliseconds is null || string.IsNullOrWhiteSpace(token))
-            return result;
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://deytt.space/api/tg/mobile/probe/download");
         request.Headers.TryAddWithoutValidation("X-TG-App-Token", token);

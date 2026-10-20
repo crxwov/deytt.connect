@@ -22,7 +22,7 @@ public partial class MainWindow
     private bool _homeSpeedSampled;
     private string? _homeMeasurementSession;
 
-    private void RefreshHomeConnectionMeasurement(bool forceSpeed = false)
+    private void RefreshHomeConnectionMeasurement(bool forceRefresh = false)
     {
         if (_qaFixture) return;
         var routeTag = _vpnSnapshot.RouteTag;
@@ -42,29 +42,76 @@ public partial class MainWindow
             _homeSpeedSampled = false;
             _homeMeasurementSession = session;
         }
-        if (_homeProbeCancellation is not null || !forceSpeed && _homeLiveProbe?.RouteTag == routeTag && DateTimeOffset.UtcNow - _homeProbeUpdatedAt < TimeSpan.FromSeconds(30)) return;
-        _ = MeasureHomeConnectionAsync(routeTag, forceSpeed || !_homeSpeedSampled);
+        if (_homeLiveProbe?.RouteTag == routeTag && _homeProbeCancellation is null)
+        {
+            _homeLiveProbe = _homeLiveProbe with
+            {
+                LatencyMilliseconds = _vpnSnapshot.TunnelLatencyMilliseconds,
+                Error = _homeLiveProbe.Stage == "latency" ? null : _vpnSnapshot.TunnelLatencyError is null
+                    ? _homeLiveProbe.Error
+                    : Copy("Не удалось проверить HTTPS через VPN.", "Could not verify HTTPS through the VPN."),
+            };
+        }
+        else if (_homeLiveProbe is null)
+        {
+            _homeLiveProbe = new(routeTag, _vpnSnapshot.TunnelLatencyMilliseconds, null,
+                _vpnSnapshot.TunnelLatencyError is null ? null : Copy("Не удалось проверить HTTPS через VPN.",
+                    "Could not verify HTTPS through the VPN."), "complete");
+        }
+        if (_homeProbeCancellation is not null || !forceRefresh && _homeLiveProbe?.RouteTag == routeTag && DateTimeOffset.UtcNow - _homeProbeUpdatedAt < TimeSpan.FromSeconds(30)) return;
+        _ = MeasureHomeConnectionAsync(routeTag, forceRefresh || !_homeSpeedSampled, forceRefresh);
     }
 
-    private async Task MeasureHomeConnectionAsync(string routeTag, bool speed)
+    private async Task MeasureHomeConnectionAsync(string routeTag, bool speed, bool tunnelLatency)
     {
         using var cancellation = new CancellationTokenSource();
         _homeProbeCancellation = cancellation;
         var previousSpeed = _homeLiveProbe?.RouteTag == routeTag ? _homeLiveProbe.BytesPerSecond : null;
-        _homeLiveProbe = new(routeTag, null, previousSpeed, null, "latency");
+        long? latency = tunnelLatency ? null : _vpnSnapshot.TunnelLatencyMilliseconds;
+        string? latencyError = null;
+        _homeLiveProbe = new(routeTag, latency, previousSpeed, null, tunnelLatency ? "latency" : "complete");
         UpdateHomeGlobePresentation();
         void Apply(WindowsRouteProbeResult sample) => Dispatcher.UIThread.Post(() =>
         {
             if (!ReferenceEquals(_homeProbeCancellation, cancellation) || cancellation.IsCancellationRequested || _vpnSnapshot.RouteTag != routeTag || !IsVpnDisplayConnected()) return;
-            _homeLiveProbe = sample with { BytesPerSecond = sample.BytesPerSecond ?? previousSpeed };
+            _homeLiveProbe = sample with
+            {
+                LatencyMilliseconds = latency,
+                Error = latencyError ?? sample.Error,
+                Stage = tunnelLatency && latency is null ? "latency" : sample.Stage,
+                BytesPerSecond = sample.BytesPerSecond ?? previousSpeed,
+            };
             UpdateHomeGlobePresentation();
         });
         try
         {
-            var result = await HomeConnectionProbe.MeasureAsync(routeTag, _sessionToken, speed, Apply, cancellation.Token);
+            if (tunnelLatency)
+            {
+                var measuredTunnel = await _tunnelClient.MeasureTunnelLatencyAsync(cancellation.Token);
+                if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
+                {
+                    _vpnSnapshot = _vpnSnapshot with
+                    {
+                        TunnelLatencyMilliseconds = measuredTunnel.TunnelLatencyMilliseconds,
+                        TunnelLatencyError = measuredTunnel.TunnelLatencyError,
+                        HealthCheckedAt = measuredTunnel.HealthCheckedAt,
+                    };
+                    latency = measuredTunnel.TunnelLatencyMilliseconds;
+                    latencyError = measuredTunnel.TunnelLatencyError is null ? null :
+                        Copy("Не удалось проверить HTTPS через VPN.", "Could not verify HTTPS through the VPN.");
+                    UpdateHomeGlobePresentation();
+                }
+            }
+            var result = await HomeConnectionProbe.MeasureSpeedAsync(
+                routeTag, _sessionToken, speed && latency is not null, Apply, cancellation.Token);
             if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
             {
-                _homeLiveProbe = result with { BytesPerSecond = result.BytesPerSecond ?? previousSpeed };
+                _homeLiveProbe = result with
+                {
+                    LatencyMilliseconds = latency,
+                    Error = latencyError ?? result.Error,
+                    BytesPerSecond = result.BytesPerSecond ?? previousSpeed,
+                };
                 _homeSpeedSampled |= speed && result.BytesPerSecond is > 0;
             }
         }
@@ -577,7 +624,14 @@ public partial class MainWindow
 
         var probe = displayedRoute is null ? null : _routeProbeResults.GetValueOrDefault(displayedRoute.Tag);
         var liveMeasurement = connected && _homeLiveProbe?.RouteTag == _vpnSnapshot.RouteTag;
-        if (liveMeasurement) probe = _homeLiveProbe;
+        if (liveMeasurement)
+            probe = _homeLiveProbe! with
+            {
+                LatencyMilliseconds = _homeLiveProbe.Stage == "latency"
+                    ? _homeLiveProbe.LatencyMilliseconds : _vpnSnapshot.TunnelLatencyMilliseconds,
+                Error = _vpnSnapshot.TunnelLatencyError is null ? _homeLiveProbe.Error :
+                    Copy("Не удалось проверить HTTPS через VPN.", "Could not verify HTTPS through the VPN."),
+            };
         var probeQuality = displayedRoute is null ? RouteQualityGrade.Unrated : CountryRouteQuality(
             _routes.Where(route => string.Equals(route.CountryCode, displayedRoute.CountryCode,
                 StringComparison.OrdinalIgnoreCase)).ToArray()).Grades.GetValueOrDefault(displayedRoute.Tag);
@@ -602,8 +656,8 @@ public partial class MainWindow
             latencyText, tone, speedText, tone,
             probe?.Error ?? (liveMeasurement
                 ? probe?.Stage is "waiting_speed" or "download" ? Copy("измеряем скорость подключения…", "measuring connection speed…")
-                    : probe?.Stage is "latency" ? Copy("обновляем отклик…", "updating response…")
-                    : Copy("последний замер подключения", "last connection measurement")
+                    : probe?.Stage is "latency" ? Copy("проверяем HTTPS через VPN…", "checking HTTPS through the VPN…")
+                    : Copy("HTTPS-отклик через VPN", "HTTPS response through VPN")
                 : measured ? Copy("последний замер маршрута", "last route measurement") : Copy("запустите замер подключения", "measure the connection")),
             _homeProbeCancellation is null && !_routeProbeInProgress && !_vpnActionInProgress && (!tunnelActive || connected),
             Copy("обновить замер", "refresh measurement"));

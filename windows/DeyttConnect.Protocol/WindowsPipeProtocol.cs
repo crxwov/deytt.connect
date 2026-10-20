@@ -14,6 +14,7 @@ public enum WindowsPipeCommand
     Probe,
     CancelProbe,
     ProbeProgress,
+    MeasureTunnelLatency,
 }
 
 public sealed record WindowsPipeRequest
@@ -60,7 +61,9 @@ public sealed record WindowsTunnelSnapshot(
     DateTimeOffset? ConnectedAt = null,
     IReadOnlyList<WindowsRouteProbeResult>? ProbeResults = null,
     DateTimeOffset? HealthCheckedAt = null,
-    string? ActiveRouteTag = null);
+    string? ActiveRouteTag = null,
+    long? TunnelLatencyMilliseconds = null,
+    string? TunnelLatencyError = null);
 
 public sealed record WindowsRouteProbeResult(
     string RouteTag,
@@ -115,6 +118,8 @@ public static class WindowsPipeProtocol
                 MaximumRequestBytes),
             WindowsPipeCommand.ProbeProgress => Serialize(new { command = "probe-progress" }, RequestOptions,
                 MaximumRequestBytes),
+            WindowsPipeCommand.MeasureTunnelLatency => Serialize(new { command = "measure-tunnel-latency" },
+                RequestOptions, MaximumRequestBytes),
             _ => throw new JsonException("Unsupported pipe command."),
         };
 
@@ -255,6 +260,7 @@ public sealed class WindowsPipeCommandJsonConverter : JsonConverter<WindowsPipeC
             "probe" => WindowsPipeCommand.Probe,
             "cancel-probe" => WindowsPipeCommand.CancelProbe,
             "probe-progress" => WindowsPipeCommand.ProbeProgress,
+            "measure-tunnel-latency" => WindowsPipeCommand.MeasureTunnelLatency,
             _ => throw new JsonException("Unsupported pipe command."),
         };
     }
@@ -268,6 +274,7 @@ public sealed class WindowsPipeCommandJsonConverter : JsonConverter<WindowsPipeC
             WindowsPipeCommand.Probe => "probe",
             WindowsPipeCommand.CancelProbe => "cancel-probe",
             WindowsPipeCommand.ProbeProgress => "probe-progress",
+            WindowsPipeCommand.MeasureTunnelLatency => "measure-tunnel-latency",
             _ => throw new JsonException("Unsupported pipe command."),
         });
 }

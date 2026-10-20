@@ -9,6 +9,39 @@ namespace DeyttConnect.Protocol.Tests;
 public sealed class CanaryBootstrapTests
 {
     [Fact]
+    public async Task FirstSuccessfulTunnelCanaryDoesNotWaitForSlowPeer()
+    {
+        var slowStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var slowCancelled = false;
+
+        async Task<long?> Slow(CancellationToken token)
+        {
+            slowStarted.TrySetResult(true);
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                return null;
+            }
+            catch (OperationCanceledException)
+            {
+                slowCancelled = true;
+                throw;
+            }
+        }
+
+        async Task<long?> Fast(CancellationToken token)
+        {
+            await slowStarted.Task.WaitAsync(token);
+            return 45;
+        }
+
+        var latency = await EngineController.FirstSuccessfulCanaryAsync([Slow, Fast], CancellationToken.None);
+
+        Assert.Equal(45L, latency);
+        Assert.True(slowCancelled);
+    }
+
+    [Fact]
     public async Task ColdDnsFailureRetriesUntilOneCanaryRetainsBothAddressFamilies()
     {
         var attempts = new ConcurrentDictionary<string, int>();

@@ -1582,8 +1582,8 @@ public partial class MainWindow : Window
 
         var average = (long)Math.Round(measured.Average(sample => (double)sample.LatencyMilliseconds!.Value),
             MidpointRounding.AwayFromZero);
-        var summary = Copy($"Пинг · лучший {fastest} · средний {average} · худший {slowest} мс",
-            $"Ping · best {fastest} · avg {average} · worst {slowest} ms");
+        var summary = Copy($"HTTPS · лучший отклик {fastest} · средний {average} · худший {slowest} мс",
+            $"HTTPS · fastest {fastest} · avg {average} · slowest {slowest} ms");
         return new RouteCountryQuality(summary, grades, bestTag);
     }
 
@@ -3118,10 +3118,12 @@ public partial class MainWindow : Window
     {
         for (var attempt = 0; attempt < 75; attempt++)
         {
-            await Task.Delay(TimeSpan.FromSeconds(1));
             if (_vpnSnapshot.State is not ("starting" or "checking"))
                 return;
             await RefreshVpnStatusAsync();
+            if (_vpnSnapshot.State is not ("starting" or "checking"))
+                return;
+            await Task.Delay(TimeSpan.FromSeconds(1));
         }
     }
 
@@ -3138,9 +3140,9 @@ public partial class MainWindow : Window
         {
             RouteCountryProbeState.Queued => Copy("Диагностика в очереди…", "Route checks queued…"),
             RouteCountryProbeState.Running => HasProbeSpeedToken()
-                ? Copy("Пинг проверяется · скорость в очереди", "Checking latency · speed queued")
-                : Copy("Проверяем пинг · скорость после входа в Telegram",
-                    "Checking latency · sign in to measure speed"),
+                ? Copy("HTTPS-отклик проверяется · скорость в очереди", "Checking HTTPS response · speed queued")
+                : Copy("Проверяем HTTPS-отклик · скорость после входа в Telegram",
+                    "Checking HTTPS response · sign in to measure speed"),
             RouteCountryProbeState.Cancelled => Copy("Замеры остановлены · можно повторить",
                 "Measurements stopped · retry when ready"),
             RouteCountryProbeState.NeedsDisconnect => Copy("Отключите VPN для проверки маршрутов",
