@@ -4,35 +4,35 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>deytt. · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261020_07">
-  <script defer src="network-atlas.js?v=20261020_07"></script>
-  <script defer src="atlas-init.js?v=20261020_07"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261020_08">
+  <script defer src="network-atlas.js?v=20261020_08"></script>
+  <script defer src="atlas-init.js?v=20261020_08"></script>
 
   <style>
     :root {
-      --header-bg: rgba(11, 17, 27, 0.80);
-      --header-border: rgba(255, 255, 255, 0.07);
-      --nav-bg: rgba(255, 255, 255, 0.04);
+      --header-bg: transparent;
+      --header-border: transparent;
+      --nav-bg: rgba(255, 255, 255, 0.025);
       --nav-border: rgba(255, 255, 255, 0.08);
-      --nav-border-top: rgba(255, 255, 255, 0.15);
+      --nav-border-top: rgba(255, 255, 255, 0.20);
       --nav-border-bottom: rgba(0, 0, 0, 0.35);
-      --nav-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.08), 0 8px 32px -4px rgba(0, 0, 0, 0.50);
-      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.08) 100%);
+      --nav-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.10);
+      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.025) 100%);
       --nav-pill-border: rgba(255, 255, 255, 0.16);
-      --nav-pill-border-top: rgba(255, 255, 255, 0.40);
+      --nav-pill-border-top: rgba(255, 255, 255, 0.45);
       --nav-pill-border-bottom: rgba(0, 0, 0, 0.25);
-      --nav-pill-shadow: 0 4px 18px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.35);
+      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.25);
       --text: #F8FAFC;
       --text-muted: #8E9EAF;
     }
 
     html[data-theme="light"] {
-      --header-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.90) 0%, rgba(245, 248, 252, 0.82) 100%);
-      --header-border: rgba(0, 0, 0, 0.07);
-      --nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(238, 243, 250, 0.78) 100%);
-      --nav-border: rgba(0, 0, 0, 0.09);
+      --header-bg: transparent;
+      --header-border: transparent;
+      --nav-bg: rgba(255, 255, 255, 0.85);
+      --nav-border: rgba(0, 0, 0, 0.08);
       --nav-border-top: rgba(255, 255, 255, 1);
-      --nav-border-bottom: rgba(0, 0, 0, 0.12);
+      --nav-border-bottom: rgba(0, 0, 0, 0.10);
       --nav-shadow: inset 0 1px 2px 0 #FFFFFF, 0 6px 20px -2px rgba(0, 0, 0, 0.06);
       --nav-pill-bg: linear-gradient(180deg, #FFFFFF 0%, rgba(246, 249, 255, 0.96) 100%);
       --nav-pill-border: rgba(0, 0, 0, 0.10);
@@ -57,8 +57,7 @@
       overflow: hidden;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
       user-select: none;
-      display: flex;
-      flex-direction: column;
+      position: relative;
     }
 
     html[data-theme="dark"] body {
@@ -71,8 +70,12 @@
       color: #0F172A;
     }
 
-    /* Top Desktop Header with Liquid Glass */
+    /* Floating Transparent Header on Stars */
     .desktop-header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
       height: 68px;
       min-height: 68px;
       width: 100%;
@@ -80,13 +83,19 @@
       align-items: center;
       justify-content: space-between;
       padding: 0 28px;
-      background: var(--header-bg);
-      backdrop-filter: blur(20px) saturate(180%);
-      -webkit-backdrop-filter: blur(20px) saturate(180%);
-      border-bottom: 1px solid var(--header-border);
-      box-shadow: inset 0 -1px 0 0 rgba(0, 0, 0, 0.35), 0 4px 20px rgba(0, 0, 0, 0.2);
+      background: transparent;
+      border-bottom: none;
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
       z-index: 100;
-      flex-shrink: 0;
+      pointer-events: none;
+    }
+
+    .brand-area,
+    .nav-container,
+    .window-controls {
+      pointer-events: auto;
     }
 
     .brand-area {
@@ -171,6 +180,11 @@
       background: rgba(255, 255, 255, 0.05);
     }
 
+    html[data-theme="light"] .nav-item:hover {
+      background: rgba(0, 0, 0, 0.04);
+      color: #0F172A;
+    }
+
     .nav-item.is-active {
       color: #FFFFFF;
       font-weight: 600;
@@ -194,14 +208,13 @@
 
     @keyframes jelly-micro-spring {
       0% { transform: translateX(0); }
-      25% { transform: translateX(1.2px); }
-      50% { transform: translateX(-0.8px); }
-      75% { transform: translateX(0.3px); }
+      40% { transform: translateX(0.35px); }
+      75% { transform: translateX(-0.15px); }
       100% { transform: translateX(0); }
     }
 
     .nav-item.has-shaken .nav-label-wrap {
-      animation: jelly-micro-spring 240ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+      animation: jelly-micro-spring 160ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
       display: inline-flex;
       align-items: center;
       gap: 9px;
@@ -246,13 +259,6 @@
       box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
     }
 
-    html[data-theme="light"] .icon-btn:hover {
-      background: linear-gradient(180deg, #FFFFFF 0%, rgba(245, 248, 255, 0.95) 100%);
-      border-color: rgba(0, 0, 0, 0.1);
-      border-top-color: #FFFFFF;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-    }
-
     .icon-btn svg {
       width: 16px;
       height: 16px;
@@ -266,8 +272,12 @@
     .window-divider {
       width: 1px;
       height: 18px;
-      background: var(--header-border);
+      background: rgba(255, 255, 255, 0.12);
       margin: 0 4px;
+    }
+
+    html[data-theme="light"] .window-divider {
+      background: rgba(0, 0, 0, 0.10);
     }
 
     #stars-canvas {
@@ -286,11 +296,12 @@
 
     /* Viewport filling main container */
     .app-viewport {
-      flex: 1;
-      position: relative;
-      overflow: hidden;
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
+      overflow: hidden;
+      z-index: 1;
     }
 
     .network-atlas {
@@ -619,6 +630,11 @@
     }
 
     window.addEventListener("DOMContentLoaded", () => {
+      const activeTab = document.querySelector(".nav-item.is-active");
+      if (activeTab) updatePillPosition(activeTab, false);
+    });
+
+    window.addEventListener("load", () => {
       const activeTab = document.querySelector(".nav-item.is-active");
       if (activeTab) updatePillPosition(activeTab, false);
     });
