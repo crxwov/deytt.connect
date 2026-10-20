@@ -338,6 +338,11 @@
       this.trafficPausedAt = null;
       this.lastTrafficSelection = null;
       this.dragDistance = 0;
+      this.pendingDragDx = 0;
+      this.pendingDragDy = 0;
+      this.pointerHistory = [];
+      this.occupiedObstacles = null;
+      this.projectedRingScratch = [];
       this.bind();
     }
 
@@ -382,12 +387,14 @@
         this.dragDistance = 0;
         this.velocityLon = 0;
         this.velocityLat = 0;
-        this.dragVelocityLon = 0;
-        this.dragVelocityLat = 0;
+        this.pendingDragDx = 0;
+        this.pendingDragDy = 0;
+        const now = performance.now();
+        this.pointerHistory = [{ time: now, x: event.clientX, y: event.clientY }];
         this.targetLon = this.centerLon;
         this.targetLat = this.centerLat;
         this.lastFrame = 0;
-        this.lastPointer = { x: event.clientX, y: event.clientY, time: performance.now() };
+        this.lastPointer = { x: event.clientX, y: event.clientY, time: now };
         this.canvas.setPointerCapture(event.pointerId);
         this.root.classList.add("is-dragging");
         if (this.activePointers.size === 2) {
@@ -397,8 +404,6 @@
         this.start();
       });
       this.canvas.addEventListener("pointermove", (event) => {
-        const box = this.canvasRect || (this.canvasRect = this.canvas.getBoundingClientRect());
-        const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
         if (this.activePointers.has(event.pointerId)) this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (this.activePointers.size >= 2) {
           const points = Array.from(this.activePointers.values()).slice(0, 2);
@@ -415,25 +420,19 @@
           const now = performance.now();
           const dx = event.clientX - this.lastPointer.x;
           const dy = event.clientY - this.lastPointer.y;
-          const dt = Math.max(1, now - (this.lastPointer.time || now));
+          this.pendingDragDx += dx;
+          this.pendingDragDy += dy;
           this.dragDistance += Math.hypot(dx, dy);
-          const dragScale = 1 / Math.max(1, this.targetZoom);
-          
-          this.targetLon -= dx * 0.28 * dragScale;
-          this.targetLat = clamp(this.targetLat + dy * 0.2 * dragScale, -62, 72);
-          this.centerLon = this.targetLon;
-          this.centerLat = this.targetLat;
 
-          // Normalized velocity per standard 16.67ms frame
-          const instantVx = -(dx / dt) * 16.667 * 0.28 * dragScale;
-          const instantVy = (dy / dt) * 16.667 * 0.20 * dragScale;
-          // Smooth EMA filter so micro-jitters don't ruin release glide
-          this.dragVelocityLon = (this.dragVelocityLon || 0) * 0.5 + instantVx * 0.5;
-          this.dragVelocityLat = (this.dragVelocityLat || 0) * 0.5 + instantVy * 0.5;
+          this.pointerHistory.push({ time: now, x: event.clientX, y: event.clientY });
+          while (this.pointerHistory.length > 2 && now - this.pointerHistory[0].time > 100) {
+            this.pointerHistory.shift();
+          }
 
           this.lastPointer = { x: event.clientX, y: event.clientY, time: now };
-          this.markMapDirty();
         } else if (event.pointerType !== "touch") {
+          const box = this.canvasRect || (this.canvasRect = this.canvas.getBoundingClientRect());
+          const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
           this.updateHover(pointer);
         }
         this.start();
@@ -460,20 +459,32 @@
         } else {
           this.root.classList.remove("is-dragging");
           this.canvas.style.cursor = "grab";
-          if (event.type === "pointerup") {
+          if (event.type === "pointerup" && this.pointerHistory && this.pointerHistory.length >= 2) {
             const now = performance.now();
-            const timeSinceMove = now - (this.lastPointer?.time || now);
-            // If user held still before releasing (> 65ms), treat as stop, not flick
-            if (timeSinceMove < 70 && Math.abs(this.dragVelocityLon || 0) > 0.04) {
-              this.velocityLon = clamp(this.dragVelocityLon, -9.0, 9.0);
-              this.velocityLat = clamp(this.dragVelocityLat, -4.5, 4.5);
+            const newest = this.pointerHistory[this.pointerHistory.length - 1];
+            const timeSinceMove = now - newest.time;
+            // If user held still before releasing (> 80ms), stop without flick
+            if (timeSinceMove < 80) {
+              const oldest = this.pointerHistory[0];
+              const dt = Math.max(16, newest.time - oldest.time);
+              const dx = newest.x - oldest.x;
+              const dy = newest.y - oldest.y;
+              const dragScale = 1 / Math.max(1, this.targetZoom);
+              // Normalized velocity per standard 16.67ms frame
+              const vx = -(dx / dt) * 16.667 * 0.28 * dragScale;
+              const vy = (dy / dt) * 16.667 * 0.20 * dragScale;
+              if (Math.abs(vx) > 0.05) this.velocityLon = clamp(vx, -8.0, 8.0);
+              else this.velocityLon = 0;
+              if (Math.abs(vy) > 0.05) this.velocityLat = clamp(vy, -4.0, 4.0);
+              else this.velocityLat = 0;
             } else {
               this.velocityLon = 0;
               this.velocityLat = 0;
             }
           }
-          this.dragVelocityLon = 0;
-          this.dragVelocityLat = 0;
+          this.pendingDragDx = 0;
+          this.pendingDragDy = 0;
+          this.pointerHistory = [];
         }
         if (event.pointerType === "touch") this.setHovered(null);
         if (event.type !== "pointerup") {
@@ -569,9 +580,30 @@
       });
     }
 
+    updateOccupiedObstacles() {
+      const rectangle = this.canvas.getBoundingClientRect();
+      this.canvasRect = rectangle;
+      const occupied = [];
+      this.root.querySelectorAll(".home-panel-shell, .home-compact, [data-traffic-inspector]").forEach(control => {
+        if (control.hidden || control.getAttribute("aria-hidden") === "true" || getComputedStyle(control).display === "none" || getComputedStyle(control).visibility === "hidden") return;
+        const rect = control.getBoundingClientRect();
+        if (rect.width && rect.height) {
+          occupied.push({
+            left: rect.left - rectangle.left - 10,
+            top: rect.top - rectangle.top - 10,
+            width: rect.width + 20,
+            height: rect.height + 20
+          });
+        }
+      });
+      this.occupiedObstacles = occupied;
+      return occupied;
+    }
+
     resize() {
       const rectangle = this.canvas.getBoundingClientRect();
       this.canvasRect = rectangle;
+      this.updateOccupiedObstacles();
       // Retained native pages briefly report a zero-sized surface when hidden.
       // Keep their geography bitmap instead of rebuilding a 1px globe and back.
       if (rectangle.width < 1 || rectangle.height < 1 || !this.hostActive) return;
@@ -817,6 +849,8 @@
       const cy = this.centerY;
       const maxJump = this.radius * this.zoom * .24;
       const maxJumpSq = maxJump * maxJump;
+      const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
+      const pointStep = isMoving ? 2 : 1;
 
       const strokeLines = (lines, style, width, alpha) => {
         const len = lines.length;
@@ -836,8 +870,9 @@
           let drawing = false;
           let prevX = 0, prevY = 0;
 
-          for (let i = 0; i < pLen; i++) {
-            const v = points[i].vector;
+          for (let i = 0; i < pLen; i += pointStep) {
+            const ptIndex = (i >= pLen - pointStep && i !== pLen - 1) ? pLen - 1 : i;
+            const v = points[ptIndex].vector;
             const z = v.x * fwd.x + v.y * fwd.y + v.z * fwd.z;
             if (z <= 0.012) {
               drawing = false;
@@ -879,30 +914,58 @@
       const context = this.context;
       if (!this.landPolygons.length) return;
       const horizon = 0.012;
+      const basis = this.currentBasis;
+      const east = basis.east;
+      const north = basis.north;
+      const fwd = basis.forward;
+      const scale = this.radius * this.zoom * 1.001;
+      const cx = this.centerX;
+      const cy = this.centerY;
+      const globeX = cx, globeY = cy;
+      const globeRadius = this.radius * this.zoom;
+
       const findHorizon = (from, to) => {
-        const forward = this.currentBasis.forward;
-        const zFrom = from.x * forward.x + from.y * forward.y + from.z * forward.z;
-        const zTo = to.x * forward.x + to.y * forward.y + to.z * forward.z;
+        const zFrom = from.x * fwd.x + from.y * fwd.y + from.z * fwd.z;
+        const zTo = to.x * fwd.x + to.y * fwd.y + to.z * fwd.z;
         const denom = zTo - zFrom;
         const t = Math.abs(denom) > 1e-6 ? clamp((horizon - zFrom) / denom, 0, 1) : 0.5;
         const px = from.x + t * (to.x - from.x);
         const py = from.y + t * (to.y - from.y);
         const pz = from.z + t * (to.z - from.z);
         const len = Math.hypot(px, py, pz) || 1;
-        return this.projectVector({ x: px / len, y: py / len, z: pz / len }, 1.001);
+        const nx = px / len, ny = py / len, nz = pz / len;
+        return {
+          x: cx + (nx * east.x + ny * east.y + nz * east.z) * scale,
+          y: cy - (nx * north.x + ny * north.y + nz * north.z) * scale,
+          z: horizon
+        };
       };
+
+      if (!this.projectedRingScratch) this.projectedRingScratch = [];
+      const scratch = this.projectedRingScratch;
+
       const pathForRing = (ring) => {
-        if (ring.length < 3) return [];
-        const projected = ring.map((point) => this.projectVector(point, 1.001));
-        const firstHidden = projected.findIndex((point) => point.z <= horizon);
-        if (firstHidden < 0) return [projected];
+        const len = ring.length;
+        if (len < 3) return [];
+        while (scratch.length < len) scratch.push({ x: 0, y: 0, z: 0 });
+        let firstHidden = -1;
+        for (let i = 0; i < len; i++) {
+          const pt = ring[i];
+          const z = pt.x * fwd.x + pt.y * fwd.y + pt.z * fwd.z;
+          const s = scratch[i];
+          s.z = z;
+          s.x = cx + (pt.x * east.x + pt.y * east.y + pt.z * east.z) * scale;
+          s.y = cy - (pt.x * north.x + pt.y * north.y + pt.z * north.z) * scale;
+          if (z <= horizon && firstHidden < 0) firstHidden = i;
+        }
+        if (firstHidden < 0) return [scratch.slice(0, len)];
         const segments = [];
         let segment = [];
-        for (let step = 0; step < projected.length; step += 1) {
-          const index = (firstHidden + step) % projected.length;
-          const nextIndex = (index + 1) % projected.length;
-          const current = projected[index];
-          const next = projected[nextIndex];
+        for (let step = 0; step < len; step += 1) {
+          const index = (firstHidden + step) % len;
+          const nextIndex = (index + 1) % len;
+          const current = scratch[index];
+          const next = scratch[nextIndex];
           const currentVisible = current.z > horizon;
           const nextVisible = next.z > horizon;
           if (currentVisible && nextVisible) {
@@ -950,9 +1013,6 @@
         landPath.closePath();
       };
 
-      const globeX = this.centerX;
-      const globeY = this.centerY;
-      const globeRadius = this.radius * this.zoom;
       const landLight = context.createLinearGradient(
         globeX - globeRadius * .62, globeY - globeRadius * .68,
         globeX + globeRadius * .58, globeY + globeRadius * .72);
@@ -1508,26 +1568,43 @@
           const clearCluster = candidate.cluster && !overlap && !coversPin && !crossesLabel && !coversLeader && !crossesLeader;
           return { left, top, overlap, coversPin, coversArc, crossesLeader, crossesLabel, coversLeader, score: overlap * 10000000 + (coversPin || crossesLabel || coversLeader ? 1000000000 : 0) + (crossesLeader ? 10000000 : 0) + (coversArc ? 250000 : 0) + clipped * 3000 + dx * dx + dy * dy + (candidate.ring || 0) - (clearCluster ? 100000000 : 0) };
       };
+      const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
       const cachedIndex = this.labelPlacements.get(key);
-      const cached = cachedIndex != null && alternatives[cachedIndex] ? scorePlacement(alternatives[cachedIndex]) : null;
-      const reuse = cached && cached.overlap === 0 && !cached.coversPin && !cached.coversArc && !cached.crossesLeader && !cached.crossesLabel && !cached.coversLeader;
-      const scored = reuse ? [] : alternatives.map(scorePlacement);
       let placementIndex = 0;
-      let bestScore = Infinity;
-      for (let index = 0; index < scored.length; index += 1) {
-        if (scored[index].score < bestScore) {
-          bestScore = scored[index].score;
-          placementIndex = index;
+      let chosen = null;
+
+      if (isMoving && cachedIndex != null && alternatives[cachedIndex]) {
+        placementIndex = cachedIndex;
+        const cand = alternatives[cachedIndex];
+        const rawLeft = point.x + cand.x - (cand.align === "right" ? width : 0);
+        const rawTop = point.y + cand.y - height / 2;
+        chosen = {
+          left: clamp(rawLeft, 8, Math.max(8, this.width - width - 8)),
+          top: clamp(rawTop, 8, Math.max(8, this.height - height - 8))
+        };
+      } else {
+        const cached = cachedIndex != null && alternatives[cachedIndex] ? scorePlacement(alternatives[cachedIndex]) : null;
+        const reuse = cached && cached.overlap === 0 && !cached.coversPin && !cached.coversArc && !cached.crossesLeader && !cached.crossesLabel && !cached.coversLeader;
+        if (reuse) {
+          placementIndex = cachedIndex;
+          chosen = cached;
+        } else {
+          const searchAlternatives = isMoving ? alternatives.slice(0, 4) : alternatives;
+          const scored = searchAlternatives.map(scorePlacement);
+          let bestScore = Infinity;
+          for (let index = 0; index < scored.length; index += 1) {
+            if (scored[index].score < bestScore) {
+              bestScore = scored[index].score;
+              placementIndex = index;
+            }
+          }
+          chosen = scored[placementIndex];
         }
-      }
-      if (reuse) placementIndex = cachedIndex;
-      this.labelPlacements.set(key, placementIndex);
-        // A smaller scene may have no room for a secondary callout. Never put
-        // it on top of another label or an action; keep its map marker visible.
-        const chosen = reuse ? cached : scored[placementIndex];
+        this.labelPlacements.set(key, placementIndex);
         if (chosen.overlap > 0 || chosen.coversPin || chosen.crossesLabel || chosen.coversLeader || chosen.crossesLeader) { context.restore(); return; }
-      const left = (reuse ? cached : scored[placementIndex]).left;
-      const top = (reuse ? cached : scored[placementIndex]).top;
+      }
+      const left = chosen.left;
+      const top = chosen.top;
       const endX = clamp(point.x, left + 5, left + width - 5);
       const endY = clamp(point.y, top + 5, top + height - 5);
       context.beginPath();
@@ -1573,13 +1650,7 @@
       });
       if (this.userLocation) this.drawNode("user", this.userLocation, colors, "user");
       this.labelBoxes = [];
-      const canvasRect = this.canvas.getBoundingClientRect();
-      const occupied = [];
-      this.root.querySelectorAll(".home-panel-shell, .home-compact, [data-traffic-inspector]").forEach(control => {
-        if (control.hidden || control.getAttribute("aria-hidden") === "true" || getComputedStyle(control).display === "none" || getComputedStyle(control).visibility === "hidden") return;
-        const rect = control.getBoundingClientRect();
-        if (rect.width && rect.height) occupied.push({ left: rect.left - canvasRect.left - 10, top: rect.top - canvasRect.top - 10, width: rect.width + 20, height: rect.height + 20 });
-      });
+      const occupied = (this.occupiedObstacles || this.updateOccupiedObstacles()).slice();
       const labelOrder = [];
       this.overviewLabelPlacements = new Map();
       const overview = (this.route === "auto" ? ROUTES.auto.nodes : LOCATION_ORDER).filter(key => this.availableLocationKeys.has(key) &&
@@ -1682,7 +1753,17 @@
       this.centerY = mix(this.centerY, this.targetCenterY, this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS));
       if (Math.abs(this.targetCenterX - this.centerX) < .1) this.centerX = this.targetCenterX;
       if (Math.abs(this.targetCenterY - this.centerY) < .1) this.centerY = this.targetCenterY;
-      if (!this.dragging) {
+      if (this.dragging) {
+        if (this.pendingDragDx !== 0 || this.pendingDragDy !== 0) {
+          const dragScale = 1 / Math.max(1, this.targetZoom);
+          this.targetLon -= this.pendingDragDx * 0.28 * dragScale;
+          this.targetLat = clamp(this.targetLat + this.pendingDragDy * 0.20 * dragScale, -62, 72);
+          this.centerLon = this.targetLon;
+          this.centerLat = this.targetLat;
+          this.pendingDragDx = 0;
+          this.pendingDragDy = 0;
+        }
+      } else {
         if (Math.abs(this.velocityLon) > 0.001 || Math.abs(this.velocityLat || 0) > 0.001) {
           // Direct Newtonian glide in zero-gravity: frameScale accounts for variable display refresh (60Hz, 120Hz, 144Hz)
           const frameScale = Math.min(3, Math.max(0.1, delta / 16.667));
@@ -1693,14 +1774,14 @@
           this.targetLon = this.centerLon;
           this.targetLat = this.centerLat;
 
-          // Float like in zero-gravity: low friction 0.984 gives ~3 seconds of smooth gliding
-          const friction = Math.pow(0.984, frameScale);
+          // Float like in zero-gravity: low friction 0.985 gives ~3.5 seconds of smooth gliding
+          const friction = Math.pow(0.985, frameScale);
           this.velocityLon *= friction;
           if (this.velocityLat) {
             this.velocityLat *= friction;
-            if (Math.abs(this.velocityLat) < 0.003) this.velocityLat = 0;
+            if (Math.abs(this.velocityLat) < 0.002) this.velocityLat = 0;
           }
-          if (Math.abs(this.velocityLon) < 0.003) this.velocityLon = 0;
+          if (Math.abs(this.velocityLon) < 0.002) this.velocityLon = 0;
         } else {
           // Target easing (when clicking a route/node, smooth camera glide to destination)
           const panBlend = this.reducedMotion.matches ? 1 : (1 - Math.exp(-Math.max(1, delta) / PAN_EASE_MS));

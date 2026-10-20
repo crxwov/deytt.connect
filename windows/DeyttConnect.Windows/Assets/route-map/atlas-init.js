@@ -511,10 +511,14 @@
     window.deyttMapAtlas = atlas;
     atlas.variant = "windows-home";
     const originalStart = atlas.start.bind(atlas);
+    let lastZoomPres = -1;
     atlas.start = function () {
       this.targetZoom = Math.max(.85, Math.min(4.8, this.targetZoom));
       originalStart();
-      updateZoomPresentation();
+      if (Math.abs((this.zoom || 1) - lastZoomPres) > 0.005) {
+        lastZoomPres = this.zoom || 1;
+        updateZoomPresentation();
+      }
     };
     atlas.colors = function () {
       const dark = document.documentElement.dataset.theme !== "light";
