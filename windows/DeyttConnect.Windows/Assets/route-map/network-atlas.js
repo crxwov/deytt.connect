@@ -841,13 +841,8 @@
       const borderAlpha = colors.borderAlpha ?? (dark ? .75 : .55);
       const borderWidth = colors.borderWidth ?? (this.width < 520 ? .65 : .85);
       
-      if (dark) {
-        const glowColor = colors.borderGlow || "rgba(99, 178, 255, 0.55)";
-        strokeLines(this.boundaryLines, glowColor, borderWidth * 2.4, 0.36, glowColor, 6);
-        strokeLines(this.boundaryLines, colors.border, borderWidth, borderAlpha);
-      } else {
-        strokeLines(this.boundaryLines, colors.border, borderWidth, borderAlpha);
-      }
+      // Clean, crisp country boundary lines without glow/blur on dark theme
+      strokeLines(this.boundaryLines, colors.border, borderWidth, borderAlpha);
       
       const route = ROUTES[this.route] || ROUTES.auto;
       const activeKeys = this.annotationFilter ? Array.from(this.annotationFilter) : route.nodes;
