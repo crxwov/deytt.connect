@@ -369,7 +369,8 @@
       return this;
     }
 
-    bind() {      this.canvas.addEventListener("pointerdown", (event) => {
+    bind() {
+      this.canvas.addEventListener("pointerdown", (event) => {
         if (event.button !== 0) return;
         this.canvas.focus({ preventScroll: true });
         this.setInteractionQuality(true);
@@ -380,8 +381,11 @@
         this.dragDistance = 0;
         this.velocityLon = 0;
         this.velocityLat = 0;
-        this.pointerHistory = [{ x: event.clientX, y: event.clientY, time: performance.now() }];
-        this.lastPointer = { x: event.clientX, y: event.clientY };
+        this.dragVelocityLon = 0;
+        this.dragVelocityLat = 0;
+        this.targetLon = this.centerLon;
+        this.targetLat = this.centerLat;
+        this.lastPointer = { x: event.clientX, y: event.clientY, time: performance.now() };
         this.canvas.setPointerCapture(event.pointerId);
         this.root.classList.add("is-dragging");
         if (this.activePointers.size === 2) {
@@ -406,21 +410,27 @@
           return;
         }
         if (this.dragging) {
+          const now = performance.now();
           const dx = event.clientX - this.lastPointer.x;
           const dy = event.clientY - this.lastPointer.y;
+          const dt = Math.max(1, now - (this.lastPointer.time || now));
           this.dragDistance += Math.hypot(dx, dy);
           const dragScale = 1 / Math.max(1, this.targetZoom);
+          
           this.targetLon -= dx * 0.28 * dragScale;
           this.targetLat = clamp(this.targetLat + dy * 0.2 * dragScale, -62, 72);
-          
-          const now = performance.now();
-          if (!this.pointerHistory) this.pointerHistory = [];
-          this.pointerHistory.push({ x: event.clientX, y: event.clientY, time: now });
-          if (this.pointerHistory.length > 10) this.pointerHistory.shift();
-          while (this.pointerHistory.length > 2 && now - this.pointerHistory[0].time > 130) {
-            this.pointerHistory.shift();
-          }
-          this.lastPointer = { x: event.clientX, y: event.clientY };
+          this.centerLon = this.targetLon;
+          this.centerLat = this.targetLat;
+
+          // Normalized velocity per standard 16.67ms frame
+          const instantVx = -(dx / dt) * 16.667 * 0.28 * dragScale;
+          const instantVy = (dy / dt) * 16.667 * 0.20 * dragScale;
+          // Smooth EMA filter so micro-jitters don't ruin release glide
+          this.dragVelocityLon = (this.dragVelocityLon || 0) * 0.5 + instantVx * 0.5;
+          this.dragVelocityLat = (this.dragVelocityLat || 0) * 0.5 + instantVy * 0.5;
+
+          this.lastPointer = { x: event.clientX, y: event.clientY, time: now };
+          this.markMapDirty();
         } else if (event.pointerType !== "touch") {
           this.updateHover(pointer);
         }
@@ -443,25 +453,25 @@
         this.pinchDistance = 0;
         this.dragging = this.activePointers.size > 0;
         const remaining = this.activePointers.values().next().value;
-        if (remaining) this.lastPointer = remaining;
-        else {
+        if (remaining) {
+          this.lastPointer = remaining;
+        } else {
           this.root.classList.remove("is-dragging");
           this.canvas.style.cursor = "grab";
-          if (event.type === "pointerup" && this.pointerHistory && this.pointerHistory.length >= 2) {
-            const first = this.pointerHistory[0];
-            const last = this.pointerHistory[this.pointerHistory.length - 1];
-            const dt = Math.max(16, last.time - first.time);
-            if (dt < 150) {
-              const dx = last.x - first.x;
-              const dy = last.y - first.y;
-              const dragScale = 1 / Math.max(1, this.targetZoom);
-              const vx = -(dx / dt) * 16 * 0.28 * dragScale;
-              const vy = (dy / dt) * 16 * 0.20 * dragScale;
-              this.velocityLon = clamp(vx * 1.25, -8.0, 8.0);
-              this.velocityLat = clamp(vy * 0.75, -3.5, 3.5);
+          if (event.type === "pointerup") {
+            const now = performance.now();
+            const timeSinceMove = now - (this.lastPointer?.time || now);
+            // If user held still before releasing (> 65ms), treat as stop, not flick
+            if (timeSinceMove < 70 && Math.abs(this.dragVelocityLon || 0) > 0.04) {
+              this.velocityLon = clamp(this.dragVelocityLon, -9.0, 9.0);
+              this.velocityLat = clamp(this.dragVelocityLat, -4.5, 4.5);
+            } else {
+              this.velocityLon = 0;
+              this.velocityLat = 0;
             }
           }
-          this.pointerHistory = [];
+          this.dragVelocityLon = 0;
+          this.dragVelocityLat = 0;
         }
         if (event.pointerType === "touch") this.setHovered(null);
         if (event.type !== "pointerup") {
@@ -1635,7 +1645,7 @@
       this.frame = 0;
       if (!this.hostActive || !this.visible || document.hidden || !this.width) return;
       const wasCameraMoving = this.cameraMoving;
-      const cameraMoving = this.dragging || Math.abs(this.targetCenterY - this.centerY) > .5 || Math.abs(this.targetCenterX - this.centerX) > .5 || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
+      const cameraMoving = this.dragging || Math.abs(this.velocityLon) > .001 || Math.abs(this.velocityLat || 0) > .001 || Math.abs(this.targetCenterY - this.centerY) > .5 || Math.abs(this.targetCenterX - this.centerX) > .5 || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
       if (cameraMoving !== this.interactionQuality) this.setInteractionQuality(cameraMoving);
       // Let requestAnimationFrame follow the display refresh rate so the traffic
@@ -1653,29 +1663,38 @@
       if (Math.abs(this.targetCenterX - this.centerX) < .1) this.centerX = this.targetCenterX;
       if (Math.abs(this.targetCenterY - this.centerY) < .1) this.centerY = this.targetCenterY;
       if (!this.dragging) {
-        this.targetLon += this.velocityLon;
-        if (this.velocityLat) {
-          this.targetLat = clamp(this.targetLat + this.velocityLat, -62, 72);
+        if (Math.abs(this.velocityLon) > 0.001 || Math.abs(this.velocityLat || 0) > 0.001) {
+          // Direct Newtonian glide in zero-gravity: frameScale accounts for variable display refresh (60Hz, 120Hz, 144Hz)
+          const frameScale = Math.min(3, Math.max(0.1, delta / 16.667));
+          this.centerLon += this.velocityLon * frameScale;
+          if (this.velocityLat) {
+            this.centerLat = clamp(this.centerLat + this.velocityLat * frameScale, -62, 72);
+          }
+          this.targetLon = this.centerLon;
+          this.targetLat = this.centerLat;
+
+          // Float like in zero-gravity: low friction 0.984 gives ~3 seconds of smooth gliding
+          const friction = Math.pow(0.984, frameScale);
+          this.velocityLon *= friction;
+          if (this.velocityLat) {
+            this.velocityLat *= friction;
+            if (Math.abs(this.velocityLat) < 0.003) this.velocityLat = 0;
+          }
+          if (Math.abs(this.velocityLon) < 0.003) this.velocityLon = 0;
+        } else {
+          // Target easing (when clicking a route/node, smooth camera glide to destination)
+          const panBlend = this.reducedMotion.matches ? 1 : (1 - Math.exp(-Math.max(1, delta) / PAN_EASE_MS));
+          this.centerLon = mix(this.centerLon, this.targetLon, panBlend);
+          this.centerLat = mix(this.centerLat, this.targetLat, panBlend);
+          if (Math.abs(this.targetLon - this.centerLon) < 0.01) this.centerLon = this.targetLon;
+          if (Math.abs(this.targetLat - this.centerLat) < 0.01) this.centerLat = this.targetLat;
         }
-        const friction = Math.pow(0.976, Math.max(1, delta) / 16);
-        this.velocityLon *= friction;
-        if (this.velocityLat) {
-          this.velocityLat *= friction;
-          if (Math.abs(this.velocityLat) < .003) this.velocityLat = 0;
-        }
-        if (Math.abs(this.velocityLon) < .003) this.velocityLon = 0;
       }
-      const panBlend = this.reducedMotion.matches || this.dragging ? 1
-        : (1 - Math.exp(-Math.max(1, delta) / 130));
-      this.centerLon = mix(this.centerLon, this.targetLon, panBlend);
-      this.centerLat = mix(this.centerLat, this.targetLat, panBlend);
       const zoomBlend = this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS);
       this.zoom = mix(this.zoom, this.targetZoom, zoomBlend);
       // The animation loop intentionally stops at these same visual
       // tolerances. Snap the final sub-pixel remainder now so the next hover
       // cannot wake the camera and force a needless geography redraw.
-      if (Math.abs(this.targetLon - this.centerLon) < .01) this.centerLon = this.targetLon;
-      if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
       if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
       if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001) {
         this.markMapDirty();
@@ -1728,12 +1747,14 @@
       this.renderCount += 1;
       // Complete one final frame after easing snaps to its target. This also
       // clears the moving state when reduced motion completes in a single step.
-      if ((cameraMoving && !this.dragging) || Math.abs(this.targetCenterY - this.centerY) > .1 || Math.abs(this.targetCenterX - this.centerX) > .1 || Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || Math.abs(this.velocityLat || 0) > .001 || ((this.trafficActive && this.trafficPausedAt == null || this.autoSelecting) && !this.reducedMotion.matches)) this.start();
+      if (this.dragging || cameraMoving || Math.abs(this.targetCenterY - this.centerY) > .1 || Math.abs(this.targetCenterX - this.centerX) > .1 || Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || Math.abs(this.velocityLat || 0) > .001 || ((this.trafficActive && this.trafficPausedAt == null || this.autoSelecting) && !this.reducedMotion.matches)) this.start();
     }
 
     spinImpulse(speed = 4.5, latSpeed = 0) {
       this.velocityLon = speed;
       this.velocityLat = latSpeed;
+      this.targetLon = this.centerLon;
+      this.targetLat = this.centerLat;
       this.start();
     }
 
