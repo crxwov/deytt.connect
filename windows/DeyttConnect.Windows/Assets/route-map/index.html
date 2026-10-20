@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>deytt. · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_01">
-  <script defer src="network-atlas.js?v=20261021_01"></script>
-  <script defer src="atlas-init.js?v=20261021_01"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261021_02">
+  <script defer src="network-atlas.js?v=20261021_02"></script>
+  <script defer src="atlas-init.js?v=20261021_02"></script>
 
   <style>
     :root {
@@ -290,9 +290,6 @@
       transform: translateZ(0);
       will-change: transform;
     }
-    html[data-theme="light"] #stars-canvas {
-      display: none;
-    }
 
     /* Viewport filling main container */
     .app-viewport {
@@ -482,12 +479,13 @@
   <div class="motion-toast" id="toast"></div>
 
   <script>
-    // Zero-overhead static starry sky (draws once, 0% CPU overhead while spinning globe)
-    (function initStaticStars() {
+    // Zero-overhead static background canvas (renders once, 0% CPU overhead while spinning globe)
+    (function initBackgroundCanvas() {
       const canvas = document.getElementById("stars-canvas");
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
-      function renderStars() {
+
+      function renderBackground() {
         const dpr = Math.min(2, window.devicePixelRatio || 1);
         const width = window.innerWidth;
         const height = window.innerHeight;
@@ -496,20 +494,91 @@
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, width, height);
 
-        const count = Math.floor((width * height) / 3200);
-        for (let i = 0; i < count; i++) {
-          const x = Math.random() * width;
-          const y = Math.random() * height;
-          const radius = Math.random() < 0.85 ? (Math.random() * 0.7 + 0.3) : (Math.random() * 1.1 + 0.8);
-          const alpha = Math.random() * 0.65 + 0.25;
-          ctx.fillStyle = `rgba(235, 245, 255, ${alpha})`;
-          ctx.beginPath();
-          ctx.arc(x, y, radius, 0, Math.PI * 2);
-          ctx.fill();
+        const isLight = document.documentElement.dataset.theme === "light";
+
+        if (!isLight) {
+          // Dark Theme: Deep Space Starry Sky
+          const count = Math.floor((width * height) / 3200);
+          for (let i = 0; i < count; i++) {
+            const x = Math.random() * width;
+            const y = Math.random() * height;
+            const radius = Math.random() < 0.85 ? (Math.random() * 0.7 + 0.3) : (Math.random() * 1.1 + 0.8);
+            const alpha = Math.random() * 0.65 + 0.25;
+            ctx.fillStyle = `rgba(235, 245, 255, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        } else {
+          // Light Theme: Aerospace Navigational Sky & Chart
+          // 1. Soft sunlight ambient bloom from top-left
+          const skyBloom = ctx.createRadialGradient(width * 0.22, height * 0.18, 10, width * 0.35, height * 0.35, Math.max(width, height) * 0.75);
+          skyBloom.addColorStop(0, "rgba(200, 230, 255, 0.45)");
+          skyBloom.addColorStop(0.45, "rgba(220, 238, 255, 0.20)");
+          skyBloom.addColorStop(1, "rgba(244, 247, 251, 0)");
+          ctx.fillStyle = skyBloom;
+          ctx.fillRect(0, 0, width, height);
+
+          // 2. Faint concentric aerospace range rings behind globe
+          const cx = width * 0.5;
+          const cy = height * 0.5;
+          ctx.save();
+          ctx.strokeStyle = "rgba(56, 120, 185, 0.08)";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 10]);
+          [320, 460, 620].forEach(r => {
+            ctx.beginPath();
+            ctx.arc(cx, cy, r, 0, Math.PI * 2);
+            ctx.stroke();
+          });
+          ctx.setLineDash([]);
+          ctx.restore();
+
+          // 3. Precision Cartographic Crosshairs (+) & Grid Nodes
+          const gridSize = 64;
+          ctx.strokeStyle = "rgba(70, 125, 185, 0.18)";
+          ctx.lineWidth = 0.85;
+          const crossSize = 3;
+
+          for (let gx = gridSize; gx < width; gx += gridSize) {
+            for (let gy = gridSize; gy < height; gy += gridSize) {
+              // Draw tiny crosshair
+              ctx.beginPath();
+              ctx.moveTo(gx - crossSize, gy);
+              ctx.lineTo(gx + crossSize, gy);
+              ctx.moveTo(gx, gy - crossSize);
+              ctx.lineTo(gx, gy + crossSize);
+              ctx.stroke();
+
+              // In center of cells, draw micro coordinate dot
+              if (gx + gridSize / 2 < width && gy + gridSize / 2 < height) {
+                ctx.fillStyle = "rgba(90, 145, 205, 0.14)";
+                ctx.fillRect(gx + gridSize / 2 - 0.75, gy + gridSize / 2 - 0.75, 1.5, 1.5);
+              }
+            }
+          }
+
+          // 4. Floating atmospheric daylight motes / sunlit particles
+          const moteCount = Math.floor((width * height) / 9000);
+          for (let i = 0; i < moteCount; i++) {
+            const mx = Math.random() * width;
+            const my = Math.random() * height;
+            const mRadius = Math.random() * 1.4 + 0.6;
+            const isGold = Math.random() < 0.22;
+            const alpha = Math.random() * 0.35 + 0.15;
+            ctx.fillStyle = isGold
+              ? `rgba(235, 155, 35, ${alpha * 0.85})`
+              : `rgba(40, 145, 235, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(mx, my, mRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
       }
-      window.addEventListener("resize", renderStars, { passive: true });
-      renderStars();
+
+      window.addEventListener("resize", renderBackground, { passive: true });
+      window.renderAtlasBackground = renderBackground;
+      renderBackground();
     })();
     // Navigation Controller with Horizontal Micro-Spring
     const navContainer = document.getElementById("main-nav");
@@ -564,6 +633,10 @@
       if (window.deyttMapAtlas) {
         window.deyttMapAtlas.markMapDirty();
         window.deyttMapAtlas.start();
+      }
+
+      if (window.renderAtlasBackground) {
+        window.renderAtlasBackground();
       }
     }
 

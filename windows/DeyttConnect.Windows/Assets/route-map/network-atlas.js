@@ -728,11 +728,11 @@
           download: "#FFBD32", downloadHot: "#FFE08A", upload: "#39E8BD", uploadHot: "#90F4DA",
           node: "#F2F5FC", nodeCore: "#39E8BD", label: "#F2F5FC", labelMuted: "#98A6BF", labelBg: "rgba(17,26,41,.94)"
         } : {
-          sphereLight: "#D2E5F8", sphereMid: "#BFDBF4", sphereShade: "#A9CFEF",
-          sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
-          grid: null, land: "#0EA5E9", landDim: "#0284C7", landHot: "#38BDF8", landAlpha: 1,
-          landHighlight: "#38BDF8", landRelief: "rgba(12,45,80,.48)", landLow: "#0369A1",
-          border: "#BAE6FD", borderAlpha: .70, borderWidth: .85, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
+          sphereLight: "#D4E8FA", sphereMid: "#B8DCF8", sphereShade: "#94C4F0",
+          sphereEdge: "rgba(70,118,170,.65)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+          grid: null, land: "#0284C7", landDim: "#0369A1", landHot: "#38BDF8", landAlpha: 1,
+          landHighlight: "#67E8F9", landRelief: "rgba(8,36,68,.52)", landLow: "#075985",
+          border: "#E0F2FE", borderAlpha: .85, borderWidth: 1.0, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
           download: "#D99000", downloadHot: "#FFC857", upload: "#10A889", uploadHot: "#79D6C1",
           node: "#FFFFFF", nodeCore: "#123A67", label: "#111823", labelMuted: "#5C6B82", labelBg: "rgba(246,247,251,.96)"
         };
@@ -1034,12 +1034,16 @@
       traceLand();
       context.save();
       const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
-      const relief = this.options.landDepth === false ? 0 : clamp(globeRadius * .015, 2.5, 5.5);
+      const isLight = document.documentElement.dataset.theme === "light";
+      const baseRelief = clamp(globeRadius * (isLight ? .028 : .016), isLight ? 5 : 2.5, isLight ? 9 : 5.5);
+      const relief = (this.options.landDepth === false && !isLight) ? 0 : baseRelief;
       if (relief) {
         context.save();
-        context.translate(relief * .24, relief * .56);
-        context.fillStyle = colors.landRelief || "rgba(12,22,34,.64)";
-        context.globalAlpha = .68;
+        const shadowOffsetX = relief * (isLight ? .38 : .24);
+        const shadowOffsetY = relief * (isLight ? .82 : .56);
+        context.translate(shadowOffsetX, shadowOffsetY);
+        context.fillStyle = isLight ? "rgba(6, 30, 58, 0.58)" : (colors.landRelief || "rgba(12,22,34,.64)");
+        context.globalAlpha = isLight ? .88 : .68;
         context.fill(landPath, "evenodd");
         context.restore();
       }
@@ -1053,10 +1057,10 @@
       context.shadowBlur = 0;
       context.shadowOffsetX = 0;
       context.shadowOffsetY = 0;
-      context.globalAlpha = relief ? .48 : .20;
-      context.lineWidth = clamp(globeRadius * .0032, .8, 1.3);
+      context.globalAlpha = isLight ? .80 : (relief ? .48 : .20);
+      context.lineWidth = clamp(globeRadius * (isLight ? .004 : .0032), 1.0, 1.6);
       context.strokeStyle = landEdge;
-      if (!isMoving) context.stroke(landPath);
+      context.stroke(landPath);
       context.restore();
     }
 

@@ -495,7 +495,7 @@
     interactionPixelRatio: 1.25,
     stableGeography: true,
     labelScale: 1.2,
-    landDepth: false,
+    landDepth: true,
     // Keep Windows coastlines flat and crisp without the artificial offset
     // shadow beneath each country; sphere lighting supplies the depth.
     softLandShadow: false,
@@ -532,11 +532,11 @@
         control: "#B897FF", controlHot: "#D9C9FF",
         node: "#F2F5FC", nodeCore: "#39E8BD", label: "#E6ECF5", labelMuted: "#A3B0C2", labelBg: "rgba(15,23,35,.88)", labelLeader: "#A3B0C2", labelBorder: "rgba(163,176,194,.16)"
       } : {
-        sphereLight: "#D2E5F8", sphereMid: "#BFDBF4", sphereShade: "#A9CFEF",
-        sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
-        grid: null, land: "#0EA5E9", landDim: "#0284C7", landHot: "#38BDF8", landAlpha: 1,
-        landHighlight: "#38BDF8", landRelief: "rgba(12,45,80,.48)", landLow: "#0369A1",
-        border: "#BAE6FD", borderAlpha: .70, borderWidth: .85, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
+        sphereLight: "#D4E8FA", sphereMid: "#B8DCF8", sphereShade: "#94C4F0",
+        sphereEdge: "rgba(70,118,170,.65)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+        grid: null, land: "#0284C7", landDim: "#0369A1", landHot: "#38BDF8", landAlpha: 1,
+        landHighlight: "#67E8F9", landRelief: "rgba(8,36,68,.52)", landLow: "#075985",
+        border: "#E0F2FE", borderAlpha: .85, borderWidth: 1.0, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
         download: "#B77700", downloadHot: "#FFC857", upload: "#098F78", uploadHot: "#79D6C1",
         control: "#8057C8", controlHot: "#B49BEA",
         node: "#FFFFFF", nodeCore: "#123A67", label: "#1B2938", labelMuted: "#4D6175", labelBg: "rgba(242,246,249,.96)", labelLeader: "#354B60", labelBorder: "rgba(53,75,96,.22)"
