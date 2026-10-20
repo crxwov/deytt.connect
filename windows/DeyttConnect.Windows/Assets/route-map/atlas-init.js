@@ -534,9 +534,9 @@
       } : {
         sphereLight: "#D2E5F8", sphereMid: "#BFDBF4", sphereShade: "#A9CFEF",
         sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
-        grid: null, land: "#1299DC", landDim: "#1299DC", landHot: "#1299DC", landAlpha: 1,
-        landHighlight: "#1299DC", landRelief: "rgba(22,64,98,.32)", landLow: "#1299DC",
-        border: "#AFE0F5", borderAlpha: .62, borderWidth: .8, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
+        grid: null, land: "#0EA5E9", landDim: "#0284C7", landHot: "#38BDF8", landAlpha: 1,
+        landHighlight: "#38BDF8", landRelief: "rgba(12,45,80,.48)", landLow: "#0369A1",
+        border: "#BAE6FD", borderAlpha: .70, borderWidth: .85, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
         download: "#B77700", downloadHot: "#FFC857", upload: "#098F78", uploadHot: "#79D6C1",
         control: "#8057C8", controlHot: "#B49BEA",
         node: "#FFFFFF", nodeCore: "#123A67", label: "#1B2938", labelMuted: "#4D6175", labelBg: "rgba(242,246,249,.96)", labelLeader: "#354B60", labelBorder: "rgba(53,75,96,.22)"

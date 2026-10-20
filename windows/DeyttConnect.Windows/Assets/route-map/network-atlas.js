@@ -730,9 +730,9 @@
         } : {
           sphereLight: "#D2E5F8", sphereMid: "#BFDBF4", sphereShade: "#A9CFEF",
           sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
-          grid: null, land: "#1299DC", landDim: "#1299DC", landHot: "#1299DC", landAlpha: 1,
-          landHighlight: "#1299DC", landRelief: "rgba(22,64,98,.18)", landLow: "#1299DC",
-          border: "#AFE0F5", borderAlpha: .62, borderWidth: .8, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
+          grid: null, land: "#0EA5E9", landDim: "#0284C7", landHot: "#38BDF8", landAlpha: 1,
+          landHighlight: "#38BDF8", landRelief: "rgba(12,45,80,.48)", landLow: "#0369A1",
+          border: "#BAE6FD", borderAlpha: .70, borderWidth: .85, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
           download: "#D99000", downloadHot: "#FFC857", upload: "#10A889", uploadHot: "#79D6C1",
           node: "#FFFFFF", nodeCore: "#123A67", label: "#111823", labelMuted: "#5C6B82", labelBg: "rgba(246,247,251,.96)"
         };
@@ -1034,12 +1034,12 @@
       traceLand();
       context.save();
       const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
-      const relief = this.options.landDepth === false ? 0 : clamp(globeRadius * .014, 2, 5);
-      if (relief && !isMoving) {
+      const relief = this.options.landDepth === false ? 0 : clamp(globeRadius * .015, 2.5, 5.5);
+      if (relief) {
         context.save();
-        context.translate(relief * .2, relief * .52);
+        context.translate(relief * .24, relief * .56);
         context.fillStyle = colors.landRelief || "rgba(12,22,34,.64)";
-        context.globalAlpha = .64;
+        context.globalAlpha = .68;
         context.fill(landPath, "evenodd");
         context.restore();
       }
