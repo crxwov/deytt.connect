@@ -48,6 +48,43 @@ namespace DeyttConnect.Setup
                 return process != null;
         }
 
+        internal static bool IsInstalledConnectProcess(string processPath, string installedExecutable)
+        {
+            if (string.IsNullOrWhiteSpace(processPath) || string.IsNullOrWhiteSpace(installedExecutable)) return false;
+            try
+            {
+                return string.Equals(Path.GetFullPath(processPath), Path.GetFullPath(installedExecutable), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (ArgumentException) { return false; }
+        }
+
+        private static bool StopInstalledConnect(string executable)
+        {
+            using (var current = Process.GetCurrentProcess())
+            {
+                foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(executable)))
+                {
+                    using (process)
+                    {
+                        try
+                        {
+                            if (process.Id == current.Id || process.SessionId != current.SessionId) continue;
+                            if (!IsInstalledConnectProcess(process.MainModule.FileName, executable)) continue;
+                            process.CloseMainWindow();
+                            // A normal close hides this client to the tray, so stop only this matching process after a grace period.
+                            if (!process.WaitForExit(3000))
+                            {
+                                process.Kill();
+                                if (!process.WaitForExit(5000)) return false;
+                            }
+                        }
+                        catch (InvalidOperationException) { }
+                    }
+                }
+            }
+            return true;
+        }
+
         // Parse the executable, never an occurrence of its name in an argument.
         public static bool IsConnectService(string command)
         {
@@ -282,10 +319,18 @@ namespace DeyttConnect.Setup
                 if (session["CREATE_DESKTOP_SHORTCUT"] == "1")
                     CreateDesktopShortcut(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), executable);
                 if (ShouldLaunchConnect(session["LAUNCH_CONNECT"], session["CAN_LAUNCH_CONNECT"],
-                    session["REBOOTNEEDED"]) && !LaunchConnect(executable))
+                    session["REBOOTNEEDED"]))
                 {
-                    session["FINISH_ERROR"] = "приложение установлено. не удалось открыть deytt./connect. откройте его из меню «пуск» после завершения установки.";
-                    return ActionResult.Success;
+                    if (!StopInstalledConnect(executable))
+                    {
+                        session["FINISH_ERROR"] = "приложение установлено. не удалось перезапустить deytt./connect. закройте приложение и нажмите «Готово» ещё раз.";
+                        return ActionResult.Success;
+                    }
+                    if (!LaunchConnect(executable))
+                    {
+                        session["FINISH_ERROR"] = "приложение установлено. не удалось открыть deytt./connect. откройте его из меню «пуск» после завершения установки.";
+                        return ActionResult.Success;
+                    }
                 }
                 session["FINISH_ACTIONS_OK"] = "1";
             }

@@ -242,4 +242,14 @@ $launchCases=@(@('','1','',$false),@('1','1','',$true),@('1','','',$false),@('1'
 foreach($case in $launchCases) {
  Check ($launchClassifier.Invoke($null,@($case[0],$case[1],$case[2])) -eq $case[3]) 'Unchecked launch or unavailable shell/reboot must not launch the client'
 }
+$installedProcessClassifier=$actionsAssembly.GetType('DeyttConnect.Setup.SetupActions').GetMethod('IsInstalledConnectProcess',[Reflection.BindingFlags]'Static,NonPublic')
+$installedProcessCases=@(
+ @('C:\Program Files\DEYTT\DeyttConnect.Windows.exe','C:\Program Files\DEYTT\DeyttConnect.Windows.exe',$true),
+ @('c:\program files\deytt\deyttconnect.windows.exe','C:\Program Files\DEYTT\DeyttConnect.Windows.exe',$true),
+ @('C:\Users\Test\Downloads\DeyttConnect.Windows.exe','C:\Program Files\DEYTT\DeyttConnect.Windows.exe',$false),
+ @('','C:\Program Files\DEYTT\DeyttConnect.Windows.exe',$false)
+)
+foreach($case in $installedProcessCases) {
+ Check ($installedProcessClassifier.Invoke($null,@($case[0],$case[1])) -eq $case[2]) 'Restart must match only the executable from the installed directory'
+}
 Write-Host 'MSI identity, visible uninstall entry, shortcuts, upgrade-safe cleanup fixtures, version modes, downgrade, progress layout, brand, launch, SID, service and wizard checks passed; no installation performed. Real install/update/removal remains manual acceptance.'
