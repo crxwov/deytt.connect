@@ -33,8 +33,7 @@ internal static class RouteLatencyProbe
         {
             return new RouteLatencyProbeResult(
                 LatencyMilliseconds: null,
-                Failure: "Не удалось выполнить HTTPS-проверку маршрута.",
-                UsedColdFallback: false);
+                Failure: "Не удалось выполнить HTTPS-проверку маршрута.");
         }
 
         using var overallCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -82,11 +81,9 @@ internal static class RouteLatencyProbe
         {
             return new RouteLatencyProbeResult(
                 LatencyMilliseconds: null,
-                Failure: DescribeFailure(coldOutcomes),
-                UsedColdFallback: false);
+                Failure: DescribeFailure(coldOutcomes));
         }
 
-        var coldLatency = selectedCold.LatencyMilliseconds!.Value;
         var warmLatencies = new List<long>(capacity: 3);
 
         for (var sample = 1; sample <= 3 && !overallCancellation.IsCancellationRequested; sample++)
@@ -112,9 +109,8 @@ internal static class RouteLatencyProbe
         if (warmLatencies.Count == 0)
         {
             return new RouteLatencyProbeResult(
-                LatencyMilliseconds: coldLatency,
-                Failure: null,
-                UsedColdFallback: true);
+                LatencyMilliseconds: null,
+                Failure: "Не удалось получить повторный HTTPS-отклик через маршрут.");
         }
 
         warmLatencies.Sort();
@@ -124,8 +120,7 @@ internal static class RouteLatencyProbe
             : (long)Math.Round((warmLatencies[middle - 1] + warmLatencies[middle]) / 2d, MidpointRounding.AwayFromZero);
         return new RouteLatencyProbeResult(
             LatencyMilliseconds: median,
-            Failure: null,
-            UsedColdFallback: false);
+            Failure: null);
     }
 
     private static async Task<RouteLatencyProbeAttempt> MeasureRequestAsync(
@@ -286,8 +281,7 @@ internal sealed record RouteLatencyProbeObservation(
 
 internal sealed record RouteLatencyProbeResult(
     long? LatencyMilliseconds,
-    string? Failure,
-    bool UsedColdFallback);
+    string? Failure);
 
 internal readonly record struct RouteLatencyProbeTimeouts(TimeSpan Overall, TimeSpan Individual)
 {
