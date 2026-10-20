@@ -97,7 +97,7 @@ sealed class Program
             try
             {
                 using var client = new NamedPipeClientStream(".", ActivationPipeName,
-                    PipeDirection.Out, PipeOptions.Asynchronous);
+                    PipeDirection.Out, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 client.Connect(timeout: 150);
                 using var writer = new StreamWriter(client, new UTF8Encoding(false), leaveOpen: true);
                 writer.WriteLine(string.IsNullOrWhiteSpace(importUrl)
