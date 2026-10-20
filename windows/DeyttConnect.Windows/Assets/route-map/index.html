@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>deytt. · подключение</title>
   <link rel="stylesheet" href="network-atlas.css">
-  <script defer src="network-atlas.js"></script>
-  <script defer src="atlas-init.js"></script>
+  <script defer src="network-atlas.js?v=20261020_02"></script>
+  <script defer src="atlas-init.js?v=20261020_02"></script>
 
   <style>
     :root {
@@ -221,6 +221,18 @@
       margin: 0 4px;
     }
 
+    #stars-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    html[data-theme="light"] #stars-canvas {
+      display: none;
+    }
+
     /* Viewport filling main container */
     .app-viewport {
       flex: 1;
@@ -312,6 +324,9 @@
       <button class="icon-btn" title="Закрыть"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
   </header>
+
+  <!-- Zero-overhead static starry sky -->
+  <canvas id="stars-canvas"></canvas>
 
   <!-- Main Viewport with Interactive Globe & Original Right Panel -->
   <main class="app-viewport">
@@ -405,6 +420,35 @@
   <div class="motion-toast" id="toast"></div>
 
   <script>
+    // Zero-overhead static starry sky (draws once, 0% CPU overhead while spinning globe)
+    (function initStaticStars() {
+      const canvas = document.getElementById("stars-canvas");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      function renderStars() {
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        ctx.scale(dpr, dpr);
+        ctx.clearRect(0, 0, width, height);
+
+        const count = Math.floor((width * height) / 3200);
+        for (let i = 0; i < count; i++) {
+          const x = Math.random() * width;
+          const y = Math.random() * height;
+          const radius = Math.random() < 0.85 ? (Math.random() * 0.7 + 0.3) : (Math.random() * 1.1 + 0.8);
+          const alpha = Math.random() * 0.65 + 0.25;
+          ctx.fillStyle = `rgba(235, 245, 255, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      window.addEventListener("resize", renderStars, { passive: true });
+      renderStars();
+    })();
     // Navigation Controller with Horizontal Micro-Spring
     const navContainer = document.getElementById("main-nav");
     const navPill = document.getElementById("nav-pill");

@@ -1665,8 +1665,7 @@
         }
         if (Math.abs(this.velocityLon) < .003) this.velocityLon = 0;
       }
-      const panBlend = this.reducedMotion.matches ? 1
-        : this.dragging ? (1 - Math.exp(-Math.max(1, delta) / 48))
+      const panBlend = this.reducedMotion.matches || this.dragging ? 1
         : (1 - Math.exp(-Math.max(1, delta) / 130));
       this.centerLon = mix(this.centerLon, this.targetLon, panBlend);
       this.centerLat = mix(this.centerLat, this.targetLat, panBlend);
