@@ -25,15 +25,16 @@ OpenFlux engine (`libopenflux_jni.so`) are packaged. The unused privileged `wg` 
 
 ## Signing identity and migration
 
-`release/signing-policy.json` records the current standard family's certificate
-fingerprints. Standard APKs carry the previous standard signer on API 24–27 and
-its successor on API 28+, with `release/signing-lineage.bin` proving rotation.
-Historical legacy APKs used a different signer on API 24–27 and the same
-successor on API 28+, with `release/signing-lineage-legacy.bin`. Keep this lineage
-for recovery, but do not publish a parallel legacy build. Older API 24–27
-installations from that family need their matching historical migration path.
-Do not require an uninstall for an update that can retain
-the existing identity and data. Verify a signed update on the connected phone.
+`release/signing-policy.json` records the v0.11.30 signing family: historical
+signer `25e335…` on API 24–27 and successor `bb39…` on API 28+, with
+`release/signing-lineage.bin` proving rotation. The public v0.11.10 APK used
+signer `305741…` on API 24–27 and the same `bb39…` successor on API 28+.
+Therefore Android 7–8 installs from that public family cannot update in place
+to v0.11.30; they need a migration or reinstall and may lose local app data.
+The prior standard lineage is retained as
+`release/signing-lineage-standard.bin`. Do not publish a parallel ABI or
+duplicate legacy build. Verify a signed update on the connected phone when one
+is available.
 
 Future updates are compatible only while the new private key is preserved and
 used for every APK. Private keystores and password files must stay outside the
@@ -55,10 +56,10 @@ python3 scripts/release.py sign \
   --output output/release/app-universal-release.apk \
   --keystore /secure/signing/release.p12 \
   --password-file /secure/signing/release.password \
-  --legacy-keystore /secure/signing/previous-standard.p12 \
-  --legacy-key-alias deytt-connect \
+  --legacy-keystore /secure/signing/historical.keystore \
+  --legacy-key-alias androiddebugkey \
   --legacy-password-env DEYTT_LEGACY_PASSWORD \
-  --expected-version 0.11.0 --expected-version-code 60
+  --expected-version 0.11.30 --expected-version-code 77
 
 python3 scripts/release.py verify output/release/app-universal-release.apk
 ```
@@ -68,7 +69,7 @@ debuggable APKs, unexpected package identities, SDK levels, permissions, legacy
 root tools, missing AWG/OpenFlux engines, bad alignment, and mismatching certificates.
 It verifies both API 24–27 and API 28+ signatures and writes a SHA-256 sidecar.
 `--qa` only permits the isolated `.qa` package; it is not a distribution APK.
-The default policy is the standard signing family. Do not publish separate ABI
+The default policy is the v0.11.30 historical signing family. Do not publish separate ABI
 packages or duplicate updater/branded filenames. Retain old files locally until
 the new single APK has passed signature, size, device-update and download checks.
 Windows builds can use `scripts/prepare-awg-windows.py` to prepare the pinned,
