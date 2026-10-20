@@ -4,27 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>deytt. · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261020_06">
-  <script defer src="network-atlas.js?v=20261020_06"></script>
-  <script defer src="atlas-init.js?v=20261020_06"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261020_07">
+  <script defer src="network-atlas.js?v=20261020_07"></script>
+  <script defer src="atlas-init.js?v=20261020_07"></script>
 
   <style>
     :root {
-      --header-bg: linear-gradient(180deg, rgba(14, 22, 35, 0.85) 0%, rgba(9, 15, 25, 0.72) 100%);
-      --header-border: rgba(255, 255, 255, 0.08);
-      --nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 50%, rgba(255, 255, 255, 0.02) 100%);
-      --nav-border: rgba(255, 255, 255, 0.16);
-      --nav-border-top: rgba(255, 255, 255, 0.38);
-      --nav-border-bottom: rgba(0, 0, 0, 0.45);
-      --nav-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.3), inset 0 -1px 2px 0 rgba(0, 0, 0, 0.35), 0 12px 36px -4px rgba(0, 0, 0, 0.55);
-      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.13) 38%, rgba(255, 255, 255, 0.05) 52%, rgba(255, 255, 255, 0.18) 100%);
-      --nav-pill-border: rgba(255, 255, 255, 0.42);
-      --nav-pill-border-top: rgba(255, 255, 255, 0.90);
-      --nav-pill-border-bottom: rgba(255, 255, 255, 0.22);
-      --nav-pill-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1.5px 2px 0 rgba(0, 0, 0, 0.45), inset 0 0 16px rgba(255, 255, 255, 0.16), 0 4px 18px -1px rgba(0, 0, 0, 0.5), 0 0 16px rgba(255, 255, 255, 0.14);
-      --nav-pill-lens: linear-gradient(180deg, rgba(255, 255, 255, 0.65) 0%, rgba(255, 255, 255, 0.15) 65%, transparent 100%);
-      --text: #F1F5F9;
-      --text-muted: #94A3B8;
+      --header-bg: rgba(11, 17, 27, 0.80);
+      --header-border: rgba(255, 255, 255, 0.07);
+      --nav-bg: rgba(255, 255, 255, 0.04);
+      --nav-border: rgba(255, 255, 255, 0.08);
+      --nav-border-top: rgba(255, 255, 255, 0.15);
+      --nav-border-bottom: rgba(0, 0, 0, 0.35);
+      --nav-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.08), 0 8px 32px -4px rgba(0, 0, 0, 0.50);
+      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.08) 100%);
+      --nav-pill-border: rgba(255, 255, 255, 0.16);
+      --nav-pill-border-top: rgba(255, 255, 255, 0.40);
+      --nav-pill-border-bottom: rgba(0, 0, 0, 0.25);
+      --nav-pill-shadow: 0 4px 18px -2px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.35);
+      --text: #F8FAFC;
+      --text-muted: #8E9EAF;
     }
 
     html[data-theme="light"] {
@@ -40,7 +39,6 @@
       --nav-pill-border-top: #FFFFFF;
       --nav-pill-border-bottom: rgba(0, 0, 0, 0.12);
       --nav-pill-shadow: 0 4px 14px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 1px 1px #FFFFFF;
-      --nav-pill-lens: linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0) 100%);
       --text: #0F172A;
       --text-muted: #5C6E82;
     }
@@ -75,13 +73,13 @@
 
     /* Top Desktop Header with Liquid Glass */
     .desktop-header {
-      height: 60px;
-      min-height: 60px;
+      height: 68px;
+      min-height: 68px;
       width: 100%;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 24px;
+      padding: 0 28px;
       background: var(--header-bg);
       backdrop-filter: blur(20px) saturate(180%);
       -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -99,7 +97,7 @@
     }
 
     .brand-logo {
-      font-size: 20px;
+      font-size: 21px;
       font-weight: 800;
       letter-spacing: -0.04em;
       color: var(--text);
@@ -109,11 +107,11 @@
 
     .brand-dot {
       color: #38BDF8;
-      font-size: 22px;
+      font-size: 24px;
       line-height: 0;
     }
 
-    /* Liquid Glass Navigation Capsule Dock */
+    /* Modern Glass Navigation Capsule Dock */
     .nav-container {
       position: relative;
       display: inline-flex;
@@ -122,75 +120,32 @@
       border: 1px solid var(--nav-border);
       border-top-color: var(--nav-border-top);
       border-bottom-color: var(--nav-border-bottom);
-      border-radius: 16px;
-      padding: 4px;
+      border-radius: 20px;
+      padding: 6px;
       box-shadow: var(--nav-shadow);
       backdrop-filter: blur(24px) saturate(190%);
       -webkit-backdrop-filter: blur(24px) saturate(190%);
     }
 
-    /* Modern Fluid Liquid Glass Pill */
+    /* Clean Elevated Glass Pill */
     .nav-jelly-pill {
       position: absolute;
-      top: 4px;
+      top: 6px;
       left: 0;
-      height: calc(100% - 8px);
-      background: linear-gradient(
-        180deg,
-        rgba(255, 255, 255, 0.22) 0%,
-        rgba(255, 255, 255, 0.08) 42%,
-        rgba(255, 255, 255, 0.03) 54%,
-        rgba(255, 255, 255, 0.12) 100%
-      );
-      border: 1px solid rgba(255, 255, 255, 0.28);
-      border-top: 1px solid rgba(255, 255, 255, 0.65);
-      border-bottom: 1px solid rgba(0, 0, 0, 0.35);
-      border-radius: 12px;
-      box-shadow: 
-        inset 0 1px 1px 0 rgba(255, 255, 255, 0.75),
-        inset 0 -1px 2px 0 rgba(0, 0, 0, 0.4),
-        inset 0 0 16px rgba(120, 180, 255, 0.08),
-        0 4px 16px -1px rgba(0, 0, 0, 0.45),
-        0 1px 3px rgba(0, 0, 0, 0.3);
+      height: calc(100% - 12px);
+      background: var(--nav-pill-bg);
+      border: 1px solid var(--nav-pill-border);
+      border-top-color: var(--nav-pill-border-top);
+      border-bottom-color: var(--nav-pill-border-bottom);
+      border-radius: 14px;
+      box-shadow: var(--nav-pill-shadow);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       pointer-events: none;
       z-index: 1;
-      overflow: hidden;
       transform-origin: center center;
       transition: left 240ms cubic-bezier(0.2, 0.9, 0.3, 1),
                   width 240ms cubic-bezier(0.2, 0.9, 0.3, 1);
-    }
-
-    /* Soft organic specular curved sheen across top half */
-    .nav-jelly-pill::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 52%;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.06) 80%, transparent 100%);
-      border-radius: 12px 12px 100% 100% / 12px 12px 24px 24px;
-      pointer-events: none;
-      opacity: 0.85;
-    }
-
-    /* Ambient bottom refraction */
-    .nav-jelly-pill::after {
-      content: "";
-      position: absolute;
-      bottom: 0;
-      left: 6px;
-      right: 6px;
-      height: 40%;
-      background: radial-gradient(ellipse at 50% 120%, rgba(255, 255, 255, 0.22) 0%, transparent 75%);
-      pointer-events: none;
-      opacity: 0.7;
-    }
-
-    html[data-theme="light"] .nav-jelly-pill::after {
-      background: radial-gradient(ellipse at 50% 100%, rgba(255, 255, 255, 0.6) 0%, transparent 80%);
     }
 
     .nav-item {
@@ -199,15 +154,15 @@
       background: transparent;
       border: none;
       color: var(--text-muted);
-      font-size: 13.5px;
+      font-size: 14.5px;
       font-weight: 500;
-      padding: 7px 18px;
-      border-radius: 12px;
+      padding: 9px 24px;
+      border-radius: 14px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 7px;
+      gap: 9px;
       transition: color 150ms ease, background 150ms ease;
     }
 
@@ -219,7 +174,7 @@
     .nav-item.is-active {
       color: #FFFFFF;
       font-weight: 600;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     }
 
     html[data-theme="light"] .nav-item.is-active {
@@ -228,8 +183,8 @@
     }
 
     .nav-item svg {
-      width: 15px;
-      height: 15px;
+      width: 17px;
+      height: 17px;
       stroke: currentColor;
       fill: none;
       stroke-width: 2;
@@ -249,7 +204,7 @@
       animation: jelly-micro-spring 240ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
       display: inline-flex;
       align-items: center;
-      gap: 7px;
+      gap: 9px;
     }
 
     .window-controls {
@@ -261,9 +216,9 @@
     }
 
     .icon-btn {
-      width: 34px;
-      height: 34px;
-      border-radius: 10px;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
       border: 1px solid transparent;
       background: transparent;
       color: var(--text-muted);
@@ -282,6 +237,13 @@
       box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
       backdrop-filter: blur(12px);
       -webkit-backdrop-filter: blur(12px);
+    }
+
+    html[data-theme="light"] .icon-btn:hover {
+      background: linear-gradient(180deg, #FFFFFF 0%, rgba(245, 248, 255, 0.95) 100%);
+      border-color: rgba(0, 0, 0, 0.1);
+      border-top-color: #FFFFFF;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
     }
 
     html[data-theme="light"] .icon-btn:hover {
