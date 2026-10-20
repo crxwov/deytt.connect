@@ -94,6 +94,12 @@ internal static class TunnelProfileBuilder
             ["level"] = "error",
         };
 
+        // Privileged service security boundaries: user profiles must never control
+        // engine cache file paths, certificates, experimental features, or local services.
+        root.Remove("experimental");
+        root.Remove("certificate");
+        root.Remove("services");
+
         var inboundArray = root["inbounds"] as JsonArray
                            ?? throw new InvalidDataException("Subscription has no inbounds.");
         var tunInbound = inboundArray.OfType<JsonObject>()

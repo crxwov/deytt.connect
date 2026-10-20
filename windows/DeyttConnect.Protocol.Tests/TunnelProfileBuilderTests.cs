@@ -62,6 +62,33 @@ public sealed class TunnelProfileBuilderTests
         Assert.False(runtime["log"]!.AsObject().ContainsKey("output"));
     }
 
+    [Fact]
+    public void WindowsRuntimeStripsPrivilegedExperimentalCertificateAndServicesSections()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        profile["experimental"] = new JsonObject
+        {
+            ["cache_file"] = new JsonObject
+            {
+                ["path"] = @"C:\Windows\System32\drivers\etc\hosts",
+            },
+        };
+        profile["certificate"] = new JsonObject { ["store"] = "system" };
+        profile["services"] = new JsonArray(new JsonObject { ["type"] = "test" });
+
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), "route:NL:VLESS"))!.AsObject();
+        Assert.False(runtime.ContainsKey("experimental"));
+        Assert.False(runtime.ContainsKey("certificate"));
+        Assert.False(runtime.ContainsKey("services"));
+
+        var (telemetryProfile, _) = ActiveRouteTelemetry.Create(runtime.ToJsonString(), "route:NL:VLESS");
+        var telemetryJson = JsonNode.Parse(telemetryProfile)!.AsObject();
+        Assert.True(telemetryJson.ContainsKey("experimental"));
+        var experimental = telemetryJson["experimental"]!.AsObject();
+        Assert.True(experimental.ContainsKey("clash_api"));
+        Assert.False(experimental.ContainsKey("cache_file"));
+    }
+
     private const string LegacyAwgProfile = """
         [Interface]
         PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=

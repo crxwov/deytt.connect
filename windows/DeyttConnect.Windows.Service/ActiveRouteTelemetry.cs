@@ -52,17 +52,18 @@ internal sealed class ActiveRouteTelemetry : IDisposable
         var secret = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         var root = JsonNode.Parse(runtimeProfile) as JsonObject
             ?? throw new InvalidDataException("The runtime profile must be an object.");
-        var experimental = root["experimental"] as JsonObject ?? new JsonObject();
-        if (root["experimental"] is not JsonObject)
-            root["experimental"] = experimental;
-        // Replace any subscription controller/UI configuration: privileged runtime API
+        // Replace any subscription controller/UI/file configuration: privileged runtime API
         // credentials belong only in the existing SYSTEM/Admin protected temporary profile.
-        experimental["clash_api"] = new JsonObject
+        // Preexisting experimental properties (such as cache_file) must never be retained.
+        root["experimental"] = new JsonObject
         {
-            ["external_controller"] = $"127.0.0.1:{port}",
-            ["secret"] = secret,
-            ["access_control_allow_origin"] = new JsonArray("http://127.0.0.1"),
-            ["access_control_allow_private_network"] = false,
+            ["clash_api"] = new JsonObject
+            {
+                ["external_controller"] = $"127.0.0.1:{port}",
+                ["secret"] = secret,
+                ["access_control_allow_origin"] = new JsonArray("http://127.0.0.1"),
+                ["access_control_allow_private_network"] = false,
+            },
         };
         var profile = root.ToJsonString();
         return (profile, new ActiveRouteTelemetry(profile, selectedTag, port, secret));
