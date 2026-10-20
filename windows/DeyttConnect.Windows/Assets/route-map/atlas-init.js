@@ -427,16 +427,16 @@
     updateZoomPresentation();
   };
 
-  root.querySelector("#home-action").addEventListener("click", function () {
+  root.querySelector("#home-action")?.addEventListener("click", function () {
     if (!this.disabled) notifyHost(this.dataset.action);
   });
-  root.querySelector("#home-measure").addEventListener("click", function () {
+  root.querySelector("#home-measure")?.addEventListener("click", function () {
     if (!this.disabled) notifyHost("home-measure");
   });
-  root.querySelector("#compact-action").addEventListener("click", function () {
+  root.querySelector("#compact-action")?.addEventListener("click", function () {
     if (!this.disabled) notifyHost(this.dataset.action);
   });
-  root.querySelector("#immersive-exit").addEventListener("click", function () {
+  root.querySelector("#immersive-exit")?.addEventListener("click", function () {
     requestImmersive(false);
   });
   document.addEventListener("keydown", function (event) {
