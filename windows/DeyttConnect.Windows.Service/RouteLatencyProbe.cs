@@ -59,7 +59,7 @@ internal static class RouteLatencyProbe
                 coldOutcomes.Add(outcome);
                 roundOutcomes.Add(outcome);
                 reportProgress?.Invoke(new RouteLatencyProbeObservation(round,
-                    RouteLatencyProbePhase.ColdConnect, outcome.LatencyMilliseconds));
+                    RouteLatencyProbePhase.ColdConnect, null));
                 if (outcome.LatencyMilliseconds is not null)
                 {
                     selectedCold = outcome;

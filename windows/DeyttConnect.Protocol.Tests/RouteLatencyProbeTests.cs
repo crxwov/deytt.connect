@@ -61,7 +61,7 @@ public sealed class RouteLatencyProbeTests
             observations.Where(observation => observation.Phase == RouteLatencyProbePhase.WarmSample)
                 .Select(observation => observation.Attempt));
         Assert.Equal(warmTimes[1], result.LatencyMilliseconds);
-        Assert.Equal(4, observations.Count(observation => observation.LatencyMilliseconds is not null));
+        Assert.Equal(3, observations.Count(observation => observation.LatencyMilliseconds is not null));
 
         Assert.Equal(
             new[] { "connectivitycheck.gstatic.com", "cp.cloudflare.com" },
@@ -227,7 +227,10 @@ public sealed class RouteLatencyProbeTests
         var result = await RouteLatencyProbe.MeasureAsync(client, CancellationToken.None, observations.Add);
         Assert.NotNull(result.LatencyMilliseconds);
         Assert.Null(result.Failure);
-        Assert.Contains(observations, observation => observation.Phase == RouteLatencyProbePhase.ColdConnect && observation.Attempt == 2 && observation.LatencyMilliseconds is not null);
+        Assert.Contains(observations, observation => observation.Phase == RouteLatencyProbePhase.ColdConnect && observation.Attempt == 2);
+        Assert.All(observations.Where(observation => observation.Phase == RouteLatencyProbePhase.ColdConnect),
+            observation => Assert.Null(observation.LatencyMilliseconds));
+        Assert.Contains(observations, observation => observation.Phase == RouteLatencyProbePhase.WarmSample && observation.LatencyMilliseconds is not null);
         Assert.All(observations, observation => Assert.InRange(observation.Attempt, 1, 3));
     }
 
