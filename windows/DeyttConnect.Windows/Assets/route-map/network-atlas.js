@@ -678,8 +678,8 @@
           sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
           sphereEdge: "rgba(141,161,185,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
           grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
-          landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
-          border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
+          landHighlight: "rgba(118,140,164,.93)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
+          border: "rgba(85, 108, 136, 0.45)", borderAlpha: .30, borderWidth: .65, borderHot: "#39E8BD", borderGlow: "transparent", route: "#FFBD32", routeHot: "#FFC857",
           download: "#FFBD32", downloadHot: "#FFE08A", upload: "#39E8BD", uploadHot: "#90F4DA",
           node: "#F2F5FC", nodeCore: "#39E8BD", label: "#F2F5FC", labelMuted: "#98A6BF", labelBg: "rgba(17,26,41,.94)"
         } : {
@@ -849,8 +849,8 @@
       const activeCountryIds = new Set(activeKeys.map((key) => LOCATIONS[key] && LOCATIONS[key].countryId).filter(Boolean));
       const activeLines = this.targetBoundaryLines.filter((line) => activeCountryIds.has(line.countryId));
       if (activeLines.length) {
-        strokeLines(activeLines, colors.borderGlow || colors.borderHot, this.width < 520 ? 3.0 : 3.8, .42, colors.borderGlow || colors.borderHot, this.cameraMoving ? 0 : 9);
-        strokeLines(activeLines, colors.borderHot, this.width < 520 ? .95 : 1.2, .88);
+        // Clean crisp stroke without any blurry glow or halo shadow
+        strokeLines(activeLines, colors.borderHot, this.width < 520 ? .95 : 1.15, .88, "transparent", 0);
       }
     }
 
