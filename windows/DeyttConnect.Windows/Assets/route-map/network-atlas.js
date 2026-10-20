@@ -701,7 +701,7 @@
       };
       const dark = document.documentElement.dataset.theme === "dark";
       return dark ? {
-        sphereLight: "#101827", sphereMid: "#0b121d", sphereShade: "#070c13", sphereEdge: "rgba(140,163,255,.38)", atmosphere: "rgba(104,130,255,.16)", atmosphereSoft: "rgba(104,130,255,.07)", rimLight: "rgba(160,180,255,.26)",
+        sphereLight: "#101827", sphereMid: "#0b121d", sphereShade: "#070c13", sphereEdge: "rgba(140,163,255,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
         grid: "rgba(143,166,220,.08)", land: "rgba(178,199,250,.48)", landDim: "rgba(131,155,212,.25)", landHot: "rgba(122,232,255,1)",
         border: "rgba(168,191,242,.26)", borderHot: "rgba(133,234,255,.88)", borderGlow: "rgba(133,234,255,.58)", route: "#397f94", routeHot: "#8de8e4",
         download: "#f04d9e", downloadHot: "#ffc857", upload: "#73e0b5", uploadHot: "#c2f7df",
@@ -726,32 +726,22 @@
 
       /* Outer atmosphere: a wide luminous halo that breathes slightly while
        * the camera moves, drawn behind the sphere so land and routes stay
-       * untouched. */      const dark = document.documentElement.dataset.theme !== "light";
-      if (!dark) {
+       * untouched. */
+
+      if (colors.atmosphere && colors.atmosphere !== "rgba(0,0,0,0)") {
+        const haloScale = this.cameraMoving ? 1.5 : 1.34;
+        const halo = context.createRadialGradient(x, y, radius * .96, x, y, radius * haloScale);
+        halo.addColorStop(0, colors.atmosphere);
+        halo.addColorStop(.4, colors.atmosphereSoft);
+        halo.addColorStop(1, "rgba(0,0,0,0)");
         context.save();
-        context.shadowColor = "rgba(18, 54, 98, 0.18)";
-        context.shadowBlur = radius * 0.18;
-        context.shadowOffsetX = 0;
-        context.shadowOffsetY = radius * 0.04;
-        context.fillStyle = colors.sphereLight || "#E8F2FC";
+        context.globalCompositeOperation = "lighter";
+        context.fillStyle = halo;
         context.beginPath();
-        context.arc(x, y, radius, 0, TAU);
+        context.arc(x, y, radius * haloScale, 0, TAU);
         context.fill();
         context.restore();
       }
-
-      const haloScale = this.cameraMoving ? 1.5 : 1.34;
-      const halo = context.createRadialGradient(x, y, radius * .96, x, y, radius * haloScale);
-      halo.addColorStop(0, colors.atmosphere);
-      halo.addColorStop(.4, colors.atmosphereSoft);
-      halo.addColorStop(1, "rgba(0,0,0,0)");
-      context.save();
-      context.globalCompositeOperation = dark ? "lighter" : "source-over";
-      context.fillStyle = halo;
-      context.beginPath();
-      context.arc(x, y, radius * haloScale, 0, TAU);
-      context.fill();
-      context.restore();
 
       const gradient = context.createRadialGradient(x - radius * .36, y - radius * .42, radius * .03, x + radius * .12, y + radius * .16, radius * 1.14);
       gradient.addColorStop(0, colors.sphereLight);
@@ -766,23 +756,25 @@
       context.fill();
       /* Lit limb: two short bright arcs on the light side only — left-top
        * and right-bottom of the light source — instead of a full outline. */
-      context.save();
-      context.lineWidth = Math.max(1.5, radius * 0.012);
-      context.lineCap = "round";
-      context.strokeStyle = colors.rimLight;
-      context.shadowColor = colors.rimLight;
-      context.shadowBlur = this.cameraMoving ? 0 : radius * 0.035;
-      const rimArc = (startAngle, endAngle, alpha) => {
+      if (colors.rimLight && colors.rimLight !== "rgba(0,0,0,0)") {
         context.save();
-        context.globalAlpha = alpha;
-        context.beginPath();
-        context.arc(x, y, radius - context.lineWidth * 0.6 + 0.5, startAngle, endAngle);
-        context.stroke();
+        context.lineWidth = Math.max(1.5, radius * 0.012);
+        context.lineCap = "round";
+        context.strokeStyle = colors.rimLight;
+        context.shadowColor = colors.rimLight;
+        context.shadowBlur = this.cameraMoving ? 0 : radius * 0.035;
+        const rimArc = (startAngle, endAngle, alpha) => {
+          context.save();
+          context.globalAlpha = alpha;
+          context.beginPath();
+          context.arc(x, y, radius - context.lineWidth * 0.6 + 0.5, startAngle, endAngle);
+          context.stroke();
+          context.restore();
+        };
+        rimArc(Math.PI * 0.98, Math.PI * 1.52, 0.5);
+        rimArc(Math.PI * 0.06, Math.PI * 0.4, 0.28);
         context.restore();
-      };
-      rimArc(Math.PI * 0.98, Math.PI * 1.52, 0.5);
-      rimArc(Math.PI * 0.06, Math.PI * 0.4, 0.28);
-      context.restore();
+      }
       context.restore();
 
       context.strokeStyle = colors.sphereEdge;
