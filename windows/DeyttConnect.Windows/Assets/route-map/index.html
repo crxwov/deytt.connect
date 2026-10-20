@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>deytt. · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css">
-  <script defer src="network-atlas.js?v=20261020_03"></script>
-  <script defer src="atlas-init.js?v=20261020_03"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261020_04">
+  <script defer src="network-atlas.js?v=20261020_04"></script>
+  <script defer src="atlas-init.js?v=20261020_04"></script>
 
   <style>
     :root {
@@ -228,6 +228,8 @@
       height: 100%;
       pointer-events: none;
       z-index: 0;
+      transform: translateZ(0);
+      will-change: transform;
     }
     html[data-theme="light"] #stars-canvas {
       display: none;

@@ -373,6 +373,7 @@
       this.canvas.addEventListener("pointerdown", (event) => {
         if (event.button !== 0) return;
         this.canvas.focus({ preventScroll: true });
+        this.canvasRect = this.canvas.getBoundingClientRect();
         this.setInteractionQuality(true);
         this.canvas.style.cursor = "grabbing";
         if (this.tooltip) this.tooltip.hidden = true;
@@ -385,6 +386,7 @@
         this.dragVelocityLat = 0;
         this.targetLon = this.centerLon;
         this.targetLat = this.centerLat;
+        this.lastFrame = 0;
         this.lastPointer = { x: event.clientX, y: event.clientY, time: performance.now() };
         this.canvas.setPointerCapture(event.pointerId);
         this.root.classList.add("is-dragging");
@@ -395,7 +397,7 @@
         this.start();
       });
       this.canvas.addEventListener("pointermove", (event) => {
-        const box = this.canvas.getBoundingClientRect();
+        const box = this.canvasRect || (this.canvasRect = this.canvas.getBoundingClientRect());
         const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
         if (this.activePointers.has(event.pointerId)) this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (this.activePointers.size >= 2) {
@@ -569,6 +571,7 @@
 
     resize() {
       const rectangle = this.canvas.getBoundingClientRect();
+      this.canvasRect = rectangle;
       // Retained native pages briefly report a zero-sized surface when hidden.
       // Keep their geography bitmap instead of rebuilding a 1px globe and back.
       if (rectangle.width < 1 || rectangle.height < 1 || !this.hostActive) return;
@@ -805,37 +808,58 @@
     drawBorders(colors) {
       const context = this.context;
       this.drawLand(colors);
-      const pointStep = 1;
-      const trace = (points, lift) => {
-        let drawing = false;
-        let previous = null;
-        points.forEach((border, index) => {
-          if (pointStep > 1 && index % pointStep) return;
-          const projected = this.projectVector(border.vector, lift);
-          const jump = previous && Math.hypot(projected.x - previous.x, projected.y - previous.y) > this.radius * this.zoom * .24;
-          if (projected.z <= .012 || jump) {
-            drawing = false;
-            previous = projected;
-            return;
-          }
-          if (!drawing) context.moveTo(projected.x, projected.y);
-          else context.lineTo(projected.x, projected.y);
-          drawing = true;
-          previous = projected;
-        });
-      };
-      const strokeLines = (lines, style, width, alpha, shadowColor, shadowBlur) => {
-        if (!lines.length) return;
+      const basis = this.currentBasis;
+      const east = basis.east;
+      const north = basis.north;
+      const fwd = basis.forward;
+      const scale = this.radius * this.zoom * 1.002;
+      const cx = this.centerX;
+      const cy = this.centerY;
+      const maxJump = this.radius * this.zoom * .24;
+      const maxJumpSq = maxJump * maxJump;
+
+      const strokeLines = (lines, style, width, alpha) => {
+        const len = lines.length;
+        if (!len) return;
         context.save();
         context.lineCap = "round";
         context.lineJoin = "round";
         context.strokeStyle = style;
         context.lineWidth = width;
         context.globalAlpha = alpha;
-        context.shadowColor = shadowColor || "transparent";
-        context.shadowBlur = shadowBlur || 0;
         context.beginPath();
-        lines.forEach((line) => trace(line.points || line, 1.002));
+
+        for (let l = 0; l < len; l++) {
+          const line = lines[l];
+          const points = line.points || line;
+          const pLen = points.length;
+          let drawing = false;
+          let prevX = 0, prevY = 0;
+
+          for (let i = 0; i < pLen; i++) {
+            const v = points[i].vector;
+            const z = v.x * fwd.x + v.y * fwd.y + v.z * fwd.z;
+            if (z <= 0.012) {
+              drawing = false;
+              continue;
+            }
+            const x = cx + (v.x * east.x + v.y * east.y + v.z * east.z) * scale;
+            const y = cy - (v.x * north.x + v.y * north.y + v.z * north.z) * scale;
+            if (drawing) {
+              const dx = x - prevX, dy = y - prevY;
+              if (dx * dx + dy * dy > maxJumpSq) {
+                context.moveTo(x, y);
+              } else {
+                context.lineTo(x, y);
+              }
+            } else {
+              context.moveTo(x, y);
+              drawing = true;
+            }
+            prevX = x;
+            prevY = y;
+          }
+        }
         context.stroke();
         context.restore();
       };
@@ -847,9 +871,7 @@
       const activeKeys = this.annotationFilter ? Array.from(this.annotationFilter) : route.nodes;
       const activeCountryIds = new Set(activeKeys.map((key) => LOCATIONS[key] && LOCATIONS[key].countryId).filter(Boolean));
       const activeLines = this.targetBoundaryLines.filter((line) => activeCountryIds.has(line.countryId));
-      // A diffused pass gives the active countries a little depth; the crisp
-      // pass keeps borders legible at the close-up measurement zoom.
-      strokeLines(activeLines, colors.borderGlow, this.width < 520 ? 2.6 : 3.4, .24, colors.borderGlow, this.cameraMoving ? 0 : 9);
+      strokeLines(activeLines, colors.borderGlow, this.width < 520 ? 2.6 : 3.4, .24);
       strokeLines(activeLines, colors.borderHot, this.width < 520 ? .82 : 1.05, .72);
     }
 
@@ -858,15 +880,16 @@
       if (!this.landPolygons.length) return;
       const horizon = 0.012;
       const findHorizon = (from, to) => {
-        let low = 0;
-        let high = 1;
-        const visibleAtStart = dot(from, this.currentBasis.forward) > horizon;
-        for (let step = 0; step < 12; step += 1) {
-          const middle = (low + high) / 2;
-          if ((dot(slerp(from, to, middle), this.currentBasis.forward) > horizon) === visibleAtStart) low = middle;
-          else high = middle;
-        }
-        return this.projectVector(slerp(from, to, (low + high) / 2), 1.001);
+        const forward = this.currentBasis.forward;
+        const zFrom = from.x * forward.x + from.y * forward.y + from.z * forward.z;
+        const zTo = to.x * forward.x + to.y * forward.y + to.z * forward.z;
+        const denom = zTo - zFrom;
+        const t = Math.abs(denom) > 1e-6 ? clamp((horizon - zFrom) / denom, 0, 1) : 0.5;
+        const px = from.x + t * (to.x - from.x);
+        const py = from.y + t * (to.y - from.y);
+        const pz = from.z + t * (to.z - from.z);
+        const len = Math.hypot(px, py, pz) || 1;
+        return this.projectVector({ x: px / len, y: py / len, z: pz / len }, 1.001);
       };
       const pathForRing = (ring) => {
         if (ring.length < 3) return [];
@@ -919,7 +942,7 @@
         const startAngle = Math.atan2(first.y - globeY, first.x - globeX);
         const endAngle = Math.atan2(last.y - globeY, last.x - globeX);
         const arc = Math.atan2(Math.sin(startAngle - endAngle), Math.cos(startAngle - endAngle));
-        const steps = Math.max(1, Math.ceil(Math.abs(arc) * globeRadius / 3));
+        const steps = Math.max(1, Math.ceil(Math.abs(arc) * globeRadius / 8));
         for (let step = 1; step <= steps; step += 1) {
           const angle = endAngle + arc * step / steps;
           landPath.lineTo(globeX + Math.cos(angle) * globeRadius, globeY + Math.sin(angle) * globeRadius);
@@ -950,24 +973,21 @@
       };
       traceLand();
       context.save();
-      // The coastline atlas has no elevation tiles. Draw a short offset
-      // silhouette beneath the land, then light the upper surface separately.
-      // This produces a readable embossed edge at normal map size without
-      // inventing topographic texture.
+      const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
       const relief = this.options.landDepth === false ? 0 : clamp(globeRadius * .014, 2, 5);
-      context.save();
-      context.translate(relief * .2, relief * .52);
-      context.fillStyle = colors.landRelief || "rgba(12,22,34,.64)";
-      context.globalAlpha = .64;
-      if (relief) context.fill(landPath, "evenodd");
-      context.restore();
+      if (relief && !isMoving) {
+        context.save();
+        context.translate(relief * .2, relief * .52);
+        context.fillStyle = colors.landRelief || "rgba(12,22,34,.64)";
+        context.globalAlpha = .64;
+        context.fill(landPath, "evenodd");
+        context.restore();
+      }
 
       context.fillStyle = landLight;
       context.globalAlpha = colors.landAlpha ?? .98;
-      context.shadowColor = (this.cameraMoving && !this.options.stableGeography) || !relief || this.options.softLandShadow === false ? "transparent" : colors.landRelief || "rgba(12,22,34,.52)";
-      context.shadowBlur = this.options.softLandShadow === false || this.cameraMoving && !this.options.stableGeography ? 0 : relief * .92;
-      context.shadowOffsetX = relief * .12;
-      context.shadowOffsetY = relief * .36;
+      context.shadowColor = "transparent";
+      context.shadowBlur = 0;
       context.fill(landPath, "evenodd");
       context.shadowColor = "transparent";
       context.shadowBlur = 0;
@@ -976,7 +996,7 @@
       context.globalAlpha = relief ? .48 : .20;
       context.lineWidth = clamp(globeRadius * .0032, .8, 1.3);
       context.strokeStyle = landEdge;
-      if (!this.cameraMoving || this.options.stableGeography) context.stroke(landPath);
+      if (!isMoving) context.stroke(landPath);
       context.restore();
     }
 
