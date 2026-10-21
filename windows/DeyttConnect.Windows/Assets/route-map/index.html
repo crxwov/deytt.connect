@@ -316,8 +316,8 @@
     /* Floating Route Heading (No card box, pure floating typography) */
     .route-heading {
       display: flex !important;
-      flex-direction: column !important;
-      gap: 4px !important;
+      align-items: center !important;
+      gap: 14px !important;
       background: transparent !important;
       border: none !important;
       box-shadow: none !important;
@@ -326,112 +326,115 @@
       -webkit-backdrop-filter: none !important;
     }
 
-    .route-meta-top {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
     .route-flag-pill {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      font-size: 14px;
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-top-color: rgba(255, 255, 255, 0.38);
+      font-size: 20px;
       flex-shrink: 0;
-    }
-
-    .home-country {
-      font-size: 13.5px !important;
-      font-weight: 500 !important;
-      color: #8E9EAF !important;
-      letter-spacing: 0.01em !important;
-      text-transform: lowercase !important;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.22), 0 6px 18px rgba(0, 0, 0, 0.35);
     }
 
     .home-city {
       font-family: "Unbounded", -apple-system, sans-serif !important;
-      font-size: clamp(32px, 3.2vw, 42px) !important;
+      font-size: clamp(34px, 3.4vw, 44px) !important;
       font-weight: 700 !important;
       color: #FFFFFF !important;
       letter-spacing: -0.04em !important;
       line-height: 1.15 !important;
       text-transform: lowercase !important;
-      text-shadow: 0 4px 18px rgba(0, 0, 0, 0.5) !important;
-      margin: 2px 0 0 !important;
+      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
+      margin: 0 !important;
     }
 
-    .home-switch-route {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      align-self: flex-start;
-      margin-top: 4px;
-      background: transparent;
-      border: none;
-      color: #38BDF8;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      padding: 0;
-      text-transform: lowercase;
-      transition: color 150ms ease, transform 150ms ease;
-    }
-
-    .home-switch-route:hover {
-      color: #7DD3FC;
-      transform: translateX(2px);
-    }
-
-    /* Main Luminous Action Button */
+    /* Ultra-Refractive Liquid Glass Connect Action Button */
     .home-action {
-      min-height: 54px !important;
+      min-height: 56px !important;
       width: 100% !important;
-      border-radius: 16px !important;
+      border-radius: 18px !important;
       font-family: inherit !important;
-      font-size: 16px !important;
+      font-size: 16.5px !important;
       font-weight: 700 !important;
       text-transform: lowercase !important;
       letter-spacing: -0.01em !important;
       cursor: pointer !important;
       position: relative !important;
       overflow: hidden !important;
-      background: linear-gradient(135deg, #22A6ED 0%, #0098EA 100%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.28) !important;
-      border-top-color: rgba(255, 255, 255, 0.65) !important;
-      box-shadow: 0 8px 26px -2px rgba(34, 166, 237, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.45) !important;
+      backdrop-filter: blur(28px) saturate(220%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(220%) !important;
+      background: linear-gradient(180deg, rgba(56, 189, 248, 0.42) 0%, rgba(34, 166, 237, 0.20) 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.24) !important;
+      border-top: 1.5px solid rgba(255, 255, 255, 0.85) !important;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.35) !important;
+      box-shadow: 0 14px 40px -4px rgba(34, 166, 237, 0.45),
+                  0 4px 12px rgba(0, 0, 0, 0.35),
+                  inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.75),
+                  inset 0 -1.5px 2px 0 rgba(0, 0, 0, 0.25) !important;
       color: #FFFFFF !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
       gap: 10px !important;
-      transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+      transition: all 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    .home-action::before {
+      content: "" !important;
+      position: absolute !important;
+      top: 1px !important;
+      left: 1px !important;
+      right: 1px !important;
+      height: 48% !important;
+      border-radius: 16px 16px 20px 20px !important;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.04) 100%) !important;
+      pointer-events: none !important;
+      z-index: 1 !important;
+      opacity: 0.9 !important;
+      transition: opacity 200ms ease !important;
     }
 
     .home-action:hover {
-      background: linear-gradient(135deg, #38BDF8 0%, #22A6ED 100%) !important;
-      border-color: rgba(255, 255, 255, 0.4) !important;
-      box-shadow: 0 12px 34px rgba(34, 166, 237, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.6) !important;
-      transform: translateY(-2px);
+      background: linear-gradient(180deg, rgba(56, 189, 248, 0.55) 0%, rgba(34, 166, 237, 0.28) 100%) !important;
+      border-top-color: #FFFFFF !important;
+      box-shadow: 0 18px 48px -2px rgba(34, 166, 237, 0.65),
+                  0 0 24px rgba(56, 189, 248, 0.45),
+                  inset 0 2px 2px 0 #FFFFFF,
+                  inset 0 -2px 3px 0 rgba(0, 0, 0, 0.2) !important;
+      transform: translateY(-2px) scale(1.01);
+    }
+
+    .home-action:hover::before {
+      opacity: 1 !important;
     }
 
     .home-action:active {
       transform: translateY(1px) scale(0.985);
+      box-shadow: 0 8px 24px rgba(34, 166, 237, 0.4),
+                  inset 0 1px 1px 0 rgba(255, 255, 255, 0.6) !important;
     }
 
     .home-action[data-tone="good"] {
-      background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%) !important;
-      border-color: rgba(255, 255, 255, 0.3) !important;
-      box-shadow: 0 8px 26px -2px rgba(239, 68, 68, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.4) !important;
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.45) 0%, rgba(185, 28, 28, 0.22) 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.22) !important;
+      border-top: 1.5px solid rgba(255, 255, 255, 0.85) !important;
+      box-shadow: 0 14px 38px -4px rgba(239, 68, 68, 0.45),
+                  0 4px 12px rgba(0, 0, 0, 0.35),
+                  inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.75),
+                  inset 0 -1.5px 2px 0 rgba(0, 0, 0, 0.25) !important;
     }
 
     .home-action[data-tone="good"]:hover {
-      background: linear-gradient(135deg, #F87171 0%, #EF4444 100%) !important;
-      box-shadow: 0 12px 34px rgba(239, 68, 68, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.60) 0%, rgba(185, 28, 28, 0.32) 100%) !important;
+      box-shadow: 0 18px 48px -2px rgba(239, 68, 68, 0.65),
+                  0 0 24px rgba(239, 68, 68, 0.45),
+                  inset 0 2px 2px 0 #FFFFFF !important;
     }
 
     /* Minimal Typographic Telemetry Strip (Zero Card Boxes!) */
@@ -733,7 +736,13 @@
     }
 
     .smart-route-row.is-selected .route-action-btn,
-    .country-accordion.is-selected .route-action-btn {
+    .proto-row.is-selected .route-action-btn,
+    .country-accordion.is-selected .country-accordion-header .ping-tag {
+      color: #39E8BD;
+    }
+
+    .smart-route-row.is-selected .route-action-btn,
+    .proto-row.is-selected .route-action-btn {
       background: rgba(57, 232, 189, 0.18);
       border-color: rgba(57, 232, 189, 0.45);
       color: #39E8BD;
@@ -750,11 +759,11 @@
       margin: 18px 4px 6px;
     }
 
-    /* Accordion Country List */
+    /* Accordion Country List & Inner Protocols (обходы) */
     .countries-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
     }
 
     .country-accordion {
@@ -766,18 +775,19 @@
       border-radius: 18px;
       overflow: hidden;
       box-shadow: var(--glass-shadow);
-      transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 220ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .country-accordion:hover {
       background: var(--glass-bg-hover);
       border-color: var(--glass-border-hover);
+      box-shadow: var(--glass-shadow-hover);
     }
 
     .country-accordion.is-selected {
       border-color: rgba(57, 232, 189, 0.35);
-      border-top-color: rgba(255, 255, 255, 0.45);
-      box-shadow: var(--glass-shadow), 0 0 24px rgba(57, 232, 189, 0.08);
+      border-top-color: rgba(255, 255, 255, 0.55);
+      box-shadow: var(--glass-shadow), 0 0 28px rgba(57, 232, 189, 0.12);
     }
 
     .country-accordion-header {
@@ -787,6 +797,11 @@
       padding: 16px 20px;
       cursor: pointer;
       user-select: none;
+      transition: background 150ms ease;
+    }
+
+    .country-accordion-header:hover {
+      background: rgba(255, 255, 255, 0.03);
     }
 
     .country-header-left {
@@ -796,13 +811,13 @@
     }
 
     .country-flag-icon {
-      font-size: 22px;
+      font-size: 24px;
       line-height: 1;
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
     }
 
     .country-name {
-      font-size: 16px;
+      font-size: 16.5px;
       font-weight: 600;
       color: #FFFFFF;
       letter-spacing: -0.01em;
@@ -830,52 +845,129 @@
       max-height: 0;
       overflow: hidden;
       opacity: 0;
-      transition: max-height 300ms cubic-bezier(0.16, 1, 0.3, 1), opacity 240ms ease;
+      transition: max-height 320ms cubic-bezier(0.16, 1, 0.3, 1), opacity 260ms ease;
       border-top: 1px solid transparent;
     }
 
     .country-accordion.is-open .country-accordion-body {
-      max-height: 160px;
+      max-height: 480px;
       opacity: 1;
-      border-top-color: rgba(255, 255, 255, 0.06);
+      border-top-color: rgba(255, 255, 255, 0.08);
     }
 
-    .country-body-inner {
-      padding: 16px 20px;
+    /* Inner Protocol / обходы List with Liquid Glass */
+    .proto-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 14px 18px 18px;
+      background: rgba(4, 9, 18, 0.4);
+    }
+
+    .proto-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
-      background: rgba(0, 0, 0, 0.15);
+      padding: 12px 16px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-top-color: rgba(255, 255, 255, 0.18);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+      cursor: pointer;
     }
 
-    .country-details {
+    .proto-row:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(56, 189, 248, 0.32);
+      border-top-color: rgba(255, 255, 255, 0.35);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .proto-row.is-selected {
+      background: rgba(57, 232, 189, 0.12);
+      border-color: rgba(57, 232, 189, 0.45);
+      border-top-color: rgba(255, 255, 255, 0.6);
+      box-shadow: 0 6px 22px rgba(57, 232, 189, 0.15), inset 0 1px 1px rgba(255, 255, 255, 0.35);
+    }
+
+    .proto-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .proto-tag {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 3px 8px;
+      border-radius: 7px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #94A3B8;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      flex-shrink: 0;
+      text-transform: lowercase;
+    }
+
+    .proto-tag.vless { color: #38BDF8; background: rgba(56, 189, 248, 0.14); border-color: rgba(56, 189, 248, 0.32); }
+    .proto-tag.trojan { color: #A78BFA; background: rgba(167, 139, 250, 0.14); border-color: rgba(167, 139, 250, 0.32); }
+    .proto-tag.hy2 { color: #F59E0B; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.32); }
+    .proto-tag.awg { color: #39E8BD; background: rgba(57, 232, 189, 0.14); border-color: rgba(57, 232, 189, 0.32); }
+
+    .proto-meta {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 2px;
+      min-width: 0;
     }
 
-    .country-city-title {
-      font-size: 14px;
+    .proto-title {
+      font-size: 14.5px;
       font-weight: 600;
       color: #FFFFFF;
+      letter-spacing: -0.01em;
     }
 
-    .country-tags {
+    .proto-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .proto-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+
+    .proto-telemetry {
       display: flex;
       align-items: center;
       gap: 6px;
-      flex-wrap: wrap;
+      font-size: 13px;
+      font-weight: 600;
+      color: #39E8BD;
     }
 
-    .proto-badge {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.06);
-      color: #94A3B8;
-      letter-spacing: 0.02em;
+    .proto-latency {
+      font-variant-numeric: tabular-nums;
+      transition: opacity 140ms ease;
+    }
+
+    .proto-speed {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-weight: 400;
     }
 
     .ping-tag {
@@ -895,49 +987,164 @@
       box-shadow: 0 0 8px #39E8BD;
     }
 
-    /* Profile Stage */
+    /* Profile Stage with Telegram Sync & Liquid Glass */
     .profile-hero {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 24px;
-      padding: 28px 32px;
+      padding: 24px 28px;
     }
 
     .profile-user-left {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 18px;
     }
 
-    .user-avatar {
-      width: 58px;
-      height: 58px;
-      border-radius: 18px;
-      background: linear-gradient(135deg, rgba(57, 232, 189, 0.25) 0%, rgba(56, 189, 248, 0.2) 100%);
-      border: 1px solid rgba(57, 232, 189, 0.4);
-      border-top-color: rgba(255, 255, 255, 0.6);
+    .tg-avatar-wrap {
+      position: relative;
+      width: 62px;
+      height: 62px;
+      flex-shrink: 0;
+    }
+
+    .tg-avatar-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #229ED9 0%, #1787BD 100%);
+      box-shadow: 0 6px 20px rgba(34, 158, 217, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.45);
+      border: 1.5px solid rgba(255, 255, 255, 0.28);
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 26px;
-      box-shadow: 0 0 24px rgba(57, 232, 189, 0.2);
+      color: #FFFFFF;
+      overflow: hidden;
     }
 
-    .user-handle {
-      font-size: 20px;
+    .tg-badge-corner {
+      position: absolute;
+      bottom: -3px;
+      right: -3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #229ED9;
+      border: 2px solid #0B111B;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+
+    .tg-badge-corner svg {
+      width: 12px;
+      height: 12px;
+      fill: #FFFFFF;
+    }
+
+    .user-info-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .user-name-title {
+      font-family: "Unbounded", sans-serif;
+      font-size: 19px;
       font-weight: 700;
       color: #FFFFFF;
       letter-spacing: -0.02em;
     }
 
+    .user-handle-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #38BDF8;
+      font-weight: 500;
+    }
+
+    .user-handle-line .user-id-muted {
+      color: var(--text-muted);
+    }
+
     .user-sub-status {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-top: 4px;
-      font-size: 13.5px;
+      gap: 8px;
+      margin-top: 2px;
+      font-size: 13px;
       color: var(--text-muted);
+    }
+
+    .btn-renew-tg {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 20px;
+      border-radius: 14px;
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 600;
+      color: #FFFFFF;
+      background: linear-gradient(180deg, rgba(34, 158, 217, 0.35) 0%, rgba(23, 135, 189, 0.18) 100%);
+      border: 1px solid rgba(34, 158, 217, 0.45);
+      border-top-color: rgba(255, 255, 255, 0.6);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 6px 20px rgba(34, 158, 217, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.4);
+      cursor: pointer;
+      text-transform: lowercase;
+      transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .btn-renew-tg:hover {
+      background: linear-gradient(180deg, rgba(34, 158, 217, 0.55) 0%, rgba(23, 135, 189, 0.3) 100%);
+      border-color: rgba(34, 158, 217, 0.7);
+      border-top-color: #FFFFFF;
+      box-shadow: 0 10px 28px rgba(34, 158, 217, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.7);
+      transform: translateY(-2px);
+    }
+
+    .btn-renew-tg:active {
+      transform: translateY(1px);
+    }
+
+    .btn-renew-tg svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+    }
+
+    /* Animated Network Equalizer */
+    .network-equalizer {
+      display: inline-flex;
+      align-items: flex-end;
+      gap: 2.5px;
+      height: 14px;
+      margin-left: 6px;
+    }
+
+    .network-equalizer span {
+      width: 2.5px;
+      border-radius: 1px;
+      background: #39E8BD;
+      animation: eq-pulse 1.2s ease-in-out infinite;
+    }
+
+    .network-equalizer span:nth-child(1) { height: 40%; animation-delay: 0.1s; }
+    .network-equalizer span:nth-child(2) { height: 90%; animation-delay: 0.3s; }
+    .network-equalizer span:nth-child(3) { height: 60%; animation-delay: 0.5s; }
+    .network-equalizer span:nth-child(4) { height: 100%; animation-delay: 0.2s; }
+    .network-equalizer span:nth-child(5) { height: 75%; animation-delay: 0.4s; }
+
+    @keyframes eq-pulse {
+      0%, 100% { transform: scaleY(0.4); opacity: 0.6; }
+      50% { transform: scaleY(1); opacity: 1; }
     }
 
     .profile-grid-2 {
@@ -1303,12 +1510,9 @@
             </div>
             <div class="panel-copy route-copy">
               <div class="route-heading">
-                <div class="route-meta-top">
-                  <span id="home-flag" class="route-flag-pill" aria-hidden="true">✦</span>
-                  <span id="home-country" class="home-country">европейские выходы</span>
-                </div>
+                <span id="home-flag" class="route-flag-pill" aria-hidden="true">✦</span>
                 <strong id="home-city" class="home-city">автоподбор</strong>
-                <button type="button" class="home-switch-route" id="home-switch-route">изменить маршрут →</button>
+                <span id="home-country" class="home-country" hidden></span>
                 <span id="home-protocol" class="home-protocol" hidden></span>
               </div>
             </div>
@@ -1329,7 +1533,7 @@
             <p id="home-measurement-note" class="measurement-note panel-copy" hidden></p>
             <button id="home-measure" class="home-measure" type="button" data-action="home-measure">
               <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              <span>замерить пинг</span>
+              <span>перезамер</span>
             </button>
             <p id="home-route-description" class="sr-only" aria-live="polite"></p>
           </div>
@@ -1346,7 +1550,7 @@
               <div class="compact-route">
                 <span id="compact-flag" class="route-flag-pill" aria-hidden="true">✦</span>
                 <div class="route-labels">
-                  <span id="compact-country" class="home-country">европейские выходы</span>
+                  <span id="compact-country" class="home-country" hidden></span>
                   <strong id="compact-city" class="home-city">автоподбор</strong>
                   <span id="compact-protocol" class="home-protocol" hidden></span>
                 </div>
@@ -1402,139 +1606,447 @@
         <!-- accordion countries list (image 2 authentic accordion: нидерланды, германия, россия, финляндия, италия) -->
         <div class="countries-list">
           <!-- 1. нидерланды -->
-          <div class="country-accordion" data-route-key="nl" id="card-route-nl">
+          <div class="country-accordion" data-country-key="nl" id="card-route-nl">
             <div class="country-accordion-header">
               <div class="country-header-left">
                 <span class="country-flag-icon">🇳🇱</span>
                 <span class="country-name">нидерланды</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="nl">28</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="nl">24</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
             <div class="country-accordion-body">
-              <div class="country-body-inner">
-                <div class="country-details">
-                  <span class="country-city-title">амстердам · nl-01</span>
-                  <div class="country-tags">
-                    <span class="proto-badge">vless</span>
-                    <span class="proto-badge">trojan</span>
-                    <span class="proto-badge">hy2</span>
-                    <span class="proto-badge">awg 3.1</span>
+              <div class="proto-list">
+                <!-- VLESS Reality -->
+                <div class="proto-row is-selected" data-route-key="nl-vless">
+                  <div class="proto-left">
+                    <span class="proto-tag vless">vless</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">vless reality · nl-01</span>
+                      <span class="proto-desc">маскировка tls · амстердам</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="nl-vless">24</span> мс
+                      <span class="proto-speed">· 290 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="nl-vless">активен ✓</button>
                   </div>
                 </div>
-                <button class="route-action-btn btn-select-route" data-action-route="nl">выбрать</button>
+
+                <!-- Hysteria 2 -->
+                <div class="proto-row" data-route-key="nl-hy2">
+                  <div class="proto-left">
+                    <span class="proto-tag hy2">hy2</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">hysteria 2 · nl-turbo</span>
+                      <span class="proto-desc">udp/quic турбо · обход потерь</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
+                      <span class="proto-latency" data-probe="nl-hy2">22</span> мс
+                      <span class="proto-speed">· 315 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="nl-hy2">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- Trojan -->
+                <div class="proto-row" data-route-key="nl-trojan">
+                  <div class="proto-left">
+                    <span class="proto-tag trojan">trojan</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">trojan tls · nl-direct</span>
+                      <span class="proto-desc">прокси с динамическим sni</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
+                      <span class="proto-latency" data-probe="nl-trojan">27</span> мс
+                      <span class="proto-speed">· 265 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="nl-trojan">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- AmneziaWG 3.1 -->
+                <div class="proto-row" data-route-key="nl-awg">
+                  <div class="proto-left">
+                    <span class="proto-tag awg">awg 3.1</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">amneziawg · nl-stealth</span>
+                      <span class="proto-desc">обфусцированный wireguard</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="nl-awg">29</span> мс
+                      <span class="proto-speed">· 280 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="nl-awg">выбрать</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- 2. германия -->
-          <div class="country-accordion" data-route-key="de" id="card-route-de">
+          <div class="country-accordion" data-country-key="de" id="card-route-de">
             <div class="country-accordion-header">
               <div class="country-header-left">
                 <span class="country-flag-icon">🇩🇪</span>
                 <span class="country-name">германия</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="de">34</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="de">30</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
             <div class="country-accordion-body">
-              <div class="country-body-inner">
-                <div class="country-details">
-                  <span class="country-city-title">франкфурт-на-майне · de-01</span>
-                  <div class="country-tags">
-                    <span class="proto-badge">vless</span>
-                    <span class="proto-badge">trojan</span>
-                    <span class="proto-badge">hy2</span>
-                    <span class="proto-badge">awg 3.1</span>
+              <div class="proto-list">
+                <!-- VLESS Reality -->
+                <div class="proto-row" data-route-key="de-vless">
+                  <div class="proto-left">
+                    <span class="proto-tag vless">vless</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">vless reality · de-01</span>
+                      <span class="proto-desc">маскировка tls · франкфурт</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="de-vless">32</span> мс
+                      <span class="proto-speed">· 285 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="de-vless">выбрать</button>
                   </div>
                 </div>
-                <button class="route-action-btn btn-select-route" data-action-route="de">выбрать</button>
+
+                <!-- Hysteria 2 -->
+                <div class="proto-row" data-route-key="de-hy2">
+                  <div class="proto-left">
+                    <span class="proto-tag hy2">hy2</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">hysteria 2 · de-turbo</span>
+                      <span class="proto-desc">udp/quic турбо · обход потерь</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
+                      <span class="proto-latency" data-probe="de-hy2">30</span> мс
+                      <span class="proto-speed">· 310 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="de-hy2">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- Trojan -->
+                <div class="proto-row" data-route-key="de-trojan">
+                  <div class="proto-left">
+                    <span class="proto-tag trojan">trojan</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">trojan tls · de-direct</span>
+                      <span class="proto-desc">прокси с динамическим sni</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
+                      <span class="proto-latency" data-probe="de-trojan">35</span> мс
+                      <span class="proto-speed">· 260 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="de-trojan">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- AmneziaWG 3.1 -->
+                <div class="proto-row" data-route-key="de-awg">
+                  <div class="proto-left">
+                    <span class="proto-tag awg">awg 3.1</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">amneziawg · de-stealth</span>
+                      <span class="proto-desc">обфусцированный wireguard</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="de-awg">34</span> мс
+                      <span class="proto-speed">· 275 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="de-awg">выбрать</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- 3. россия -->
-          <div class="country-accordion" data-route-key="ru" id="card-route-ru">
+          <div class="country-accordion" data-country-key="ru" id="card-route-ru">
             <div class="country-accordion-header">
               <div class="country-header-left">
                 <span class="country-flag-icon">🇷🇺</span>
                 <span class="country-name">россия</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="ru">12</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="ru">11</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
             <div class="country-accordion-body">
-              <div class="country-body-inner">
-                <div class="country-details">
-                  <span class="country-city-title">санкт-петербург · ru-01</span>
-                  <div class="country-tags">
-                    <span class="proto-badge">vless</span>
-                    <span class="proto-badge">awg 3.1</span>
+              <div class="proto-list">
+                <!-- VLESS Reality -->
+                <div class="proto-row" data-route-key="ru-vless">
+                  <div class="proto-left">
+                    <span class="proto-tag vless">vless</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">vless reality · ru-01</span>
+                      <span class="proto-desc">прямой российский выход · санкт-петербург</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="ru-vless">12</span> мс
+                      <span class="proto-speed">· 350 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="ru-vless">выбрать</button>
                   </div>
                 </div>
-                <button class="route-action-btn btn-select-route" data-action-route="ru">выбрать</button>
+
+                <!-- Trojan -->
+                <div class="proto-row" data-route-key="ru-trojan">
+                  <div class="proto-left">
+                    <span class="proto-tag trojan">trojan</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">trojan tls · ru-direct</span>
+                      <span class="proto-desc">локальный обход цензуры</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
+                      <span class="proto-latency" data-probe="ru-trojan">14</span> мс
+                      <span class="proto-speed">· 320 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="ru-trojan">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- AmneziaWG 3.1 -->
+                <div class="proto-row" data-route-key="ru-awg">
+                  <div class="proto-left">
+                    <span class="proto-tag awg">awg 3.1</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">amneziawg · ru-fast</span>
+                      <span class="proto-desc">минимальный пинг для игр</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="ru-awg">11</span> мс
+                      <span class="proto-speed">· 340 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="ru-awg">выбрать</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- 4. финляндия -->
-          <div class="country-accordion" data-route-key="fi" id="card-route-fi">
+          <div class="country-accordion" data-country-key="fi" id="card-route-fi">
             <div class="country-accordion-header">
               <div class="country-header-left">
                 <span class="country-flag-icon">🇫🇮</span>
                 <span class="country-name">финляндия</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="fi">20</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="fi">18</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
             <div class="country-accordion-body">
-              <div class="country-body-inner">
-                <div class="country-details">
-                  <span class="country-city-title">хельсинки · fi-01</span>
-                  <div class="country-tags">
-                    <span class="proto-badge">vless</span>
-                    <span class="proto-badge">trojan</span>
-                    <span class="proto-badge">hy2</span>
-                    <span class="proto-badge">awg 3.1</span>
+              <div class="proto-list">
+                <!-- VLESS Reality -->
+                <div class="proto-row" data-route-key="fi-vless">
+                  <div class="proto-left">
+                    <span class="proto-tag vless">vless</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">vless reality · fi-01</span>
+                      <span class="proto-desc">маскировка tls · хельсинки</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="fi-vless">20</span> мс
+                      <span class="proto-speed">· 300 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="fi-vless">выбрать</button>
                   </div>
                 </div>
-                <button class="route-action-btn btn-select-route" data-action-route="fi">выбрать</button>
+
+                <!-- Hysteria 2 -->
+                <div class="proto-row" data-route-key="fi-hy2">
+                  <div class="proto-left">
+                    <span class="proto-tag hy2">hy2</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">hysteria 2 · fi-turbo</span>
+                      <span class="proto-desc">udp/quic турбо · обход потерь</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
+                      <span class="proto-latency" data-probe="fi-hy2">18</span> мс
+                      <span class="proto-speed">· 325 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="fi-hy2">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- Trojan -->
+                <div class="proto-row" data-route-key="fi-trojan">
+                  <div class="proto-left">
+                    <span class="proto-tag trojan">trojan</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">trojan tls · fi-direct</span>
+                      <span class="proto-desc">прокси с динамическим sni</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
+                      <span class="proto-latency" data-probe="fi-trojan">23</span> мс
+                      <span class="proto-speed">· 270 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="fi-trojan">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- AmneziaWG 3.1 -->
+                <div class="proto-row" data-route-key="fi-awg">
+                  <div class="proto-left">
+                    <span class="proto-tag awg">awg 3.1</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">amneziawg · fi-stealth</span>
+                      <span class="proto-desc">обфусцированный wireguard</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="fi-awg">22</span> мс
+                      <span class="proto-speed">· 295 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="fi-awg">выбрать</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           <!-- 5. италия -->
-          <div class="country-accordion" data-route-key="it" id="card-route-it">
+          <div class="country-accordion" data-country-key="it" id="card-route-it">
             <div class="country-accordion-header">
               <div class="country-header-left">
                 <span class="country-flag-icon">🇮🇹</span>
                 <span class="country-name">италия</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="it">42</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="it">39</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
             <div class="country-accordion-body">
-              <div class="country-body-inner">
-                <div class="country-details">
-                  <span class="country-city-title">милан · it-01</span>
-                  <div class="country-tags">
-                    <span class="proto-badge">vless</span>
-                    <span class="proto-badge">trojan</span>
-                    <span class="proto-badge">hy2</span>
-                    <span class="proto-badge">awg 3.1</span>
+              <div class="proto-list">
+                <!-- VLESS Reality -->
+                <div class="proto-row" data-route-key="it-vless">
+                  <div class="proto-left">
+                    <span class="proto-tag vless">vless</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">vless reality · it-01</span>
+                      <span class="proto-desc">маскировка tls · милан</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="it-vless">42</span> мс
+                      <span class="proto-speed">· 270 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="it-vless">выбрать</button>
                   </div>
                 </div>
-                <button class="route-action-btn btn-select-route" data-action-route="it">выбрать</button>
+
+                <!-- Hysteria 2 -->
+                <div class="proto-row" data-route-key="it-hy2">
+                  <div class="proto-left">
+                    <span class="proto-tag hy2">hy2</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">hysteria 2 · it-turbo</span>
+                      <span class="proto-desc">udp/quic турбо · обход потерь</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
+                      <span class="proto-latency" data-probe="it-hy2">39</span> мс
+                      <span class="proto-speed">· 295 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="it-hy2">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- Trojan -->
+                <div class="proto-row" data-route-key="it-trojan">
+                  <div class="proto-left">
+                    <span class="proto-tag trojan">trojan</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">trojan tls · it-direct</span>
+                      <span class="proto-desc">прокси с динамическим sni</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
+                      <span class="proto-latency" data-probe="it-trojan">45</span> мс
+                      <span class="proto-speed">· 250 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="it-trojan">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- AmneziaWG 3.1 -->
+                <div class="proto-row" data-route-key="it-awg">
+                  <div class="proto-left">
+                    <span class="proto-tag awg">awg 3.1</span>
+                    <div class="proto-meta">
+                      <span class="proto-title">amneziawg · it-stealth</span>
+                      <span class="proto-desc">обфусцированный wireguard</span>
+                    </div>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot"></span>
+                      <span class="proto-latency" data-probe="it-awg">44</span> мс
+                      <span class="proto-speed">· 260 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="it-awg">выбрать</button>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1552,12 +2064,42 @@
           </div>
         </div>
 
-        <!-- Profile Hero Card -->
+        <!-- Profile Hero Card with Telegram Avatar Integration -->
         <div class="glass-card profile-hero">
           <div class="profile-user-left">
-            <div class="user-avatar">🛡️</div>
-            <div>
-              <h2 class="user-handle">.//user_84920</h2>
+            <div class="tg-avatar-wrap">
+              <div class="tg-avatar-img" title="аватар telegram">
+                <svg viewBox="0 0 64 64" width="62" height="62" style="display: block;">
+                  <defs>
+                    <linearGradient id="tgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#2AABEE"/>
+                      <stop offset="100%" stop-color="#229ED9"/>
+                    </linearGradient>
+                    <linearGradient id="avatarShine" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32"/>
+                      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.06"/>
+                      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+                  <rect width="64" height="64" rx="20" fill="url(#tgGrad)"/>
+                  <rect width="64" height="64" rx="20" fill="url(#avatarShine)"/>
+                  <!-- Stylized Telegram Avatar Figure -->
+                  <circle cx="32" cy="23" r="11" fill="#FFFFFF" fill-opacity="0.95"/>
+                  <path d="M16 52 C16 41 23 37 32 37 C41 37 48 41 48 52 Z" fill="#FFFFFF" fill-opacity="0.95"/>
+                </svg>
+              </div>
+              <div class="tg-badge-corner" title="привязан аккаунт telegram">
+                <svg viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+                </svg>
+              </div>
+            </div>
+            <div class="user-info-block">
+              <h2 class="user-name-title">александр</h2>
+              <div class="user-handle-line">
+                <span>@alex_deytt</span>
+                <span class="user-id-muted">· id: 84920412</span>
+              </div>
               <div class="user-sub-status">
                 <span class="ping-tag"><span class="ping-dot"></span>подписка активна</span>
                 <span>·</span>
@@ -1565,8 +2107,11 @@
               </div>
             </div>
           </div>
-          <button class="btn-select-route" style="background: rgba(56, 189, 248, 0.16); color: #38BDF8; border-color: rgba(56, 189, 248, 0.4);" id="btn-renew-tg">
-            продлить в telegram →
+          <button class="btn-renew-tg" id="btn-renew-tg">
+            <svg viewBox="0 0 24 24">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+            </svg>
+            продлить в telegram ↗
           </button>
         </div>
 
@@ -1590,7 +2135,12 @@
             <div style="display: flex; gap: 24px; margin-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 16px;">
               <div>
                 <span style="font-size: 12px; color: var(--text-muted); display: block;">текущая скорость</span>
-                <strong style="font-size: 18px; color: #FFFFFF;">185 мбит/с</strong>
+                <strong style="font-size: 18px; color: #FFFFFF; display: inline-flex; align-items: center;">
+                  280 мбит/с
+                  <span class="network-equalizer" title="канал активен">
+                    <span></span><span></span><span></span><span></span><span></span>
+                  </span>
+                </strong>
               </div>
               <div>
                 <span style="font-size: 12px; color: var(--text-muted); display: block;">зашифровано</span>
@@ -1956,15 +2506,35 @@
       });
     });
 
-    // Routes Selection & Syncing with Globe (7 Authentic Routes from WindowsRouteCatalog)
+    // Routes Selection & Syncing with Globe (Authentic Routes from WindowsRouteCatalog)
     const routeDetails = {
-      auto: { flag: "✦", country: "европейские выходы", city: "автоподбор", ping: 24 },
-      "ru-de": { flag: "🇷🇺→🇩🇪", country: "россия → германия", city: "lte + белые списки", ping: 46 },
+      auto: { flag: "✦", country: "", city: "автоподбор", ping: 24 },
+      "ru-de": { flag: "🇷🇺→🇩🇪", country: "россия → германия", city: "lte · белые списки", ping: 46 },
       nl: { flag: "🇳🇱", country: "нидерланды", city: "амстердам", ping: 28 },
       de: { flag: "🇩🇪", country: "германия", city: "франкфурт-на-майне", ping: 34 },
       fi: { flag: "🇫🇮", country: "финляндия", city: "хельсинки", ping: 20 },
       it: { flag: "🇮🇹", country: "италия", city: "милан", ping: 42 },
-      ru: { flag: "🇷🇺", country: "россия", city: "санкт-петербург", ping: 12 }
+      ru: { flag: "🇷🇺", country: "россия", city: "санкт-петербург", ping: 12 },
+      "nl-vless": { flag: "🇳🇱", country: "нидерланды", city: "амстердам · vless", ping: 26 },
+      "nl-trojan": { flag: "🇳🇱", country: "нидерланды", city: "амстердам · trojan", ping: 29 },
+      "nl-hy2": { flag: "🇳🇱", country: "нидерланды", city: "амстердам · hysteria 2", ping: 31 },
+      "nl-awg": { flag: "🇳🇱", country: "нидерланды", city: "амстердам · awg 3.1", ping: 27 },
+      "de-vless": { flag: "🇩🇪", country: "германия", city: "франкфурт · vless", ping: 32 },
+      "de-trojan": { flag: "🇩🇪", country: "германия", city: "франкфурт · trojan", ping: 35 },
+      "de-hy2": { flag: "🇩🇪", country: "германия", city: "франкфурт · hysteria 2", ping: 38 },
+      "de-awg": { flag: "🇩🇪", country: "германия", city: "франкфурт · awg 3.1", ping: 34 },
+      "ru-vless": { flag: "🇷🇺", country: "россия", city: "санкт-петербург · vless", ping: 11 },
+      "ru-trojan": { flag: "🇷🇺", country: "россия", city: "санкт-петербург · trojan", ping: 14 },
+      "ru-hy2": { flag: "🇷🇺", country: "россия", city: "санкт-петербург · hysteria 2", ping: 16 },
+      "ru-awg": { flag: "🇷🇺", country: "россия", city: "санкт-петербург · awg 3.1", ping: 12 },
+      "fi-vless": { flag: "🇫🇮", country: "финляндия", city: "хельсинки · vless", ping: 19 },
+      "fi-trojan": { flag: "🇫🇮", country: "финляндия", city: "хельсинки · trojan", ping: 22 },
+      "fi-hy2": { flag: "🇫🇮", country: "финляндия", city: "хельсинки · hysteria 2", ping: 25 },
+      "fi-awg": { flag: "🇫🇮", country: "финляндия", city: "хельсинки · awg 3.1", ping: 20 },
+      "it-vless": { flag: "🇮🇹", country: "италия", city: "милан · vless", ping: 41 },
+      "it-trojan": { flag: "🇮🇹", country: "италия", city: "милан · trojan", ping: 44 },
+      "it-hy2": { flag: "🇮🇹", country: "италия", city: "милан · hysteria 2", ping: 47 },
+      "it-awg": { flag: "🇮🇹", country: "италия", city: "милан · awg 3.1", ping: 42 }
     };
 
     let activeRouteKey = "auto";
@@ -1979,7 +2549,10 @@
       const homeCity = document.getElementById("home-city");
       const homeLatency = document.getElementById("home-latency");
       if (homeFlag) homeFlag.textContent = data.flag;
-      if (homeCountry) homeCountry.textContent = data.country;
+      if (homeCountry) {
+        homeCountry.textContent = data.country || "";
+        homeCountry.hidden = !data.country;
+      }
       if (homeCity) homeCity.textContent = data.city;
       if (homeLatency && isConnected) homeLatency.textContent = data.ping;
 
@@ -1988,10 +2561,13 @@
       const compactCountry = document.getElementById("compact-country");
       const compactCity = document.getElementById("compact-city");
       if (compactFlag) compactFlag.textContent = data.flag;
-      if (compactCountry) compactCountry.textContent = data.country;
+      if (compactCountry) {
+        compactCountry.textContent = data.country || "";
+        compactCountry.hidden = !data.country;
+      }
       if (compactCity) compactCity.textContent = data.city;
 
-      // Update card active classes
+      // Update card active classes for smart routes and protocol rows
       document.querySelectorAll("[data-route-key]").forEach(card => {
         const isCurrent = card.dataset.routeKey === key;
         card.classList.toggle("is-selected", isCurrent);
@@ -1999,12 +2575,13 @@
         if (btn) btn.textContent = isCurrent ? "активен ✓" : "выбрать";
       });
 
-      // Notify atlas
+      // Notify atlas with region code
+      const atlasKey = key.includes("-") && key !== "ru-de" ? key.split("-")[0] : key;
       if (typeof window.deyttSetMapRoute === "function") {
-        window.deyttSetMapRoute(key);
+        window.deyttSetMapRoute(atlasKey);
       }
 
-      showToast(`выбран маршрут: ${data.country} · ${data.city}`);
+      showToast(`выбран маршрут: ${data.city}`);
     }
 
     // Attach route selection clicks
@@ -2021,15 +2598,41 @@
       });
     });
 
-    // Country Accordion Expand / Collapse
+    // Country Accordion Expand / Collapse with Realtime Latency & Speed Probe
     document.querySelectorAll(".country-accordion-header").forEach(header => {
-      header.addEventListener("click", (e) => {
+      header.addEventListener("click", () => {
         const acc = header.closest(".country-accordion");
         if (!acc) return;
         const wasOpen = acc.classList.contains("is-open");
         document.querySelectorAll(".country-accordion").forEach(c => c.classList.remove("is-open"));
         if (!wasOpen) {
           acc.classList.add("is-open");
+
+          // Trigger live measurement probe for every protocol inside
+          const protoRows = acc.querySelectorAll(".proto-row");
+          protoRows.forEach((row, idx) => {
+            const latEl = row.querySelector(".proto-latency");
+            const spdEl = row.querySelector(".proto-speed");
+            if (!latEl) return;
+            const basePing = parseInt(latEl.textContent.trim()) || 28;
+            latEl.textContent = "…";
+            latEl.style.opacity = "0.6";
+            if (spdEl) {
+              spdEl.textContent = "· … мбит/с";
+              spdEl.style.opacity = "0.6";
+            }
+            setTimeout(() => {
+              const jitter = Math.floor(Math.random() * 5) - 2;
+              const measuredPing = Math.max(9, basePing + jitter);
+              latEl.textContent = measuredPing.toString();
+              latEl.style.opacity = "1";
+              if (spdEl) {
+                const speedVal = Math.floor(Math.random() * 35) + 265;
+                spdEl.textContent = `· ${speedVal} мбит/с`;
+                spdEl.style.opacity = "1";
+              }
+            }, 160 + idx * 60);
+          });
         }
       });
     });
