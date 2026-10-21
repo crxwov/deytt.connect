@@ -24,11 +24,11 @@
     user: { x: 18, y: -62, align: "left" }
   };
   const LOCATIONS = {
-    nl: { code: "nl", city: "Амстердам", country: "Нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
-    de: { code: "de", city: "Франкфурт-на-Майне", country: "Германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
-    fi: { code: "fi", city: "Хельсинки", country: "Финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
-    ru: { code: "ru", city: "Санкт-Петербург", country: "Россия", countryId: "643", lat: 59.9311, lon: 30.3609 },
-    it: { code: "it", city: "Милан", country: "Италия", countryId: "380", lat: 45.4642, lon: 9.1900 }
+    nl: { code: "nl", city: "амстердам", country: "нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
+    de: { code: "de", city: "франкфурт-на-майне", country: "германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
+    fi: { code: "fi", city: "хельсинки", country: "финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
+    ru: { code: "ru", city: "санкт-петербург", country: "россия", countryId: "643", lat: 59.9311, lon: 30.3609 },
+    it: { code: "it", city: "милан", country: "италия", countryId: "380", lat: 45.4642, lon: 9.1900 }
   };
   const COUNTRY_EXIT_KEYS = { NL: "nl", DE: "de", FI: "fi", RU: "ru", IT: "it" };
   const ROUTES = {
@@ -1083,9 +1083,9 @@
           : { upload: "#FF5278", uploadHot: "#FFCDDD", download: "#F6AD11", downloadHot: "#FFE9A6", control: "#824BFF", controlHot: "#D9C5FF" }
         : colors;
       return [
-        { id: "upload", label: english ? "Outbound data" : "Исходящие данные", direction: "forward", color: contrast.upload || contrast.routeHot, bright: contrast.uploadHot || contrast.routeHot, lane: .07, duration: 3400, phase: 0 },
-        { id: "download", label: english ? "Return traffic" : "Ответный трафик", direction: "reverse", color: contrast.download || contrast.route, bright: contrast.downloadHot || contrast.routeHot, lane: .17, duration: 3000, phase: .34 },
-        { id: "control", label: english ? "Service traffic" : "Служебный трафик", direction: "forward", color: contrast.control || (dark ? "#D58CFF" : "#E052C0"), bright: contrast.controlHot || contrast.routeHot, lane: .27, duration: 3800, phase: .68 }
+        { id: "upload", label: english ? "Outbound data" : "исходящие данные", direction: "forward", color: contrast.upload || contrast.routeHot, bright: contrast.uploadHot || contrast.routeHot, lane: .07, duration: 3400, phase: 0 },
+        { id: "download", label: english ? "Return traffic" : "ответный трафик", direction: "reverse", color: contrast.download || contrast.route, bright: contrast.downloadHot || contrast.routeHot, lane: .17, duration: 3000, phase: .34 },
+        { id: "control", label: english ? "Service traffic" : "служебный трафик", direction: "forward", color: contrast.control || (dark ? "#D58CFF" : "#E052C0"), bright: contrast.controlHot || contrast.routeHot, lane: .27, duration: 3800, phase: .68 }
       ];
     }
 
@@ -1336,7 +1336,7 @@
       if (!hint) return;
       hint.textContent = this.language === "en"
         ? "Double-click a line to inspect and highlight its flow"
-        : "Для описания потока нажмите на линию дважды";
+        : "для описания потока нажмите на линию дважды";
       hint.hidden = false;
       clearTimeout(this.hintTimer);
       this.hintTimer = setTimeout(() => { hint.hidden = true; }, 4200);
@@ -1364,7 +1364,7 @@
       const inspector = this.root.querySelector("[data-traffic-inspector]");
       if (!inspector) return;
       const english = this.language === "en";
-      const placeName = (key) => key === "user" ? this.copy(this.userLocation?.city || (english ? "Your network" : "Ваша сеть")) : this.copy(LOCATIONS[key]?.city || key);
+      const placeName = (key) => key === "user" ? this.copy(this.userLocation?.city || (english ? "Your network" : "ваша сеть")) : this.copy(LOCATIONS[key]?.city || key);
       const from = line.stream.direction === "reverse" ? line.toKey : line.fromKey;
       const to = line.stream.direction === "reverse" ? line.fromKey : line.toKey;
       const explanations = english ? {
@@ -1372,21 +1372,21 @@
         download: "Responses travel back to your device: page content, incoming messages and downloaded files.",
         control: "Small service exchanges keep a connection working. DNS resolves names; other control messages coordinate the tunnel."
       } : {
-        upload: "Запросы и данные идут от устройства к выходному узлу: открытие страницы, отправка сообщения или загрузка файла на сервер.",
-        download: "Ответы возвращаются к устройству: содержимое страниц, входящие сообщения и скачиваемые файлы.",
-        control: "Небольшие служебные обмены поддерживают соединение. DNS определяет адрес по имени, остальные сообщения согласуют работу туннеля."
+        upload: "запросы и данные идут от устройства к выходному узлу: открытие страницы, отправка сообщения или загрузка файла на сервер.",
+        download: "ответы возвращаются к устройству: содержимое страниц, входящие сообщения и скачиваемые файлы.",
+        control: "небольшие служебные обмены поддерживают соединение. dns определяет адрес по имени, остальные сообщения согласуют работу туннеля."
       };
       inspector.style.setProperty("--traffic-accent", line.stream.color);
       inspector.querySelector("[data-inspector-kind]").textContent = english ? "flow highlighted" : "поток выделен";
       inspector.querySelector("[data-inspector-title]").textContent = line.stream.label.toLowerCase();
       inspector.querySelector("[data-inspector-path]").textContent = placeName(from) + " → " + placeName(to);
       inspector.querySelector("[data-inspector-body]").textContent = explanations[line.stream.id];
-      inspector.querySelector("[data-inspector-item]").textContent = english ? "Only this flow is highlighted on the map" : "На карте выделен только этот поток";
+      inspector.querySelector("[data-inspector-item]").textContent = english ? "Only this flow is highlighted on the map" : "на карте выделен только этот поток";
       inspector.querySelector("[data-inspector-note]").textContent = english
         ? "The moving points illustrate traffic direction; packet contents are not captured."
-        : "Движущиеся точки показывают направление потока. Содержимое пакетов не считывается.";
+        : "движущиеся точки показывают направление потока. содержимое пакетов не считывается.";
       const resume = inspector.querySelector("[data-inspector-resume]");
-      resume.textContent = english ? "Show all traffic lines" : "Показать все линии";
+      resume.textContent = english ? "Show all traffic lines" : "показать все линии";
       resume.onclick = () => this.resumeTraffic();
       const opening = inspector.hidden;
       this.root.classList.add("is-inspecting");
@@ -1495,7 +1495,7 @@
 
       const compact = this.width < 820;
       const labelScale = this.options.labelScale || 1;
-      const countryNames = { RU: "Россия", NL: "Нидерланды", DE: "Германия", FI: "Финляндия", IT: "Италия" };
+      const countryNames = { RU: "россия", NL: "нидерланды", DE: "германия", FI: "финляндия", IT: "италия" };
       
       const title = key === "user"
         ? (this.copy(location.city) || this.copy("ваша сеть"))
@@ -1949,11 +1949,11 @@
       if (this.language !== nextLanguage) this.labelPlacements.clear();
       this.language = nextLanguage;
       document.documentElement.lang = this.language;
-      document.title = (this.language === "en" ? "DEYTT network map" : "Карта сети DEYTT").toLowerCase();
+      document.title = (this.language === "en" ? "deytt network map" : "карта сети deytt").toLowerCase();
       const hint = this.root.querySelector(".network-atlas__hint");
       const loader = this.root.querySelector(".network-atlas__loader");
       if (hint) hint.textContent = (this.language === "en" ? "drag · pinch to zoom" : "потяните · два пальца — масштаб").toLowerCase();
-      if (loader) loader.textContent = (this.language === "en" ? "Loading map" : "Загружаю карту").toLowerCase();
+      if (loader) loader.textContent = (this.language === "en" ? "loading map" : "загружаю карту").toLowerCase();
       this.renderRouteCopy();
       this.markMapDirty();
       this.start();

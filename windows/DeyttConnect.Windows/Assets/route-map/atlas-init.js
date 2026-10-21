@@ -152,9 +152,9 @@
     button.disabled = !enabled;
     button.dataset.tone = tone || "normal";
     const accessibleLabel = action === "home-disconnect"
-      ? (label === "Connected" ? "Disconnect VPN" : "Отключить VPN")
+      ? (label === "Connected" ? "disconnect vpn" : "отключить vpn")
       : action === "home-cancel"
-        ? (label === "Connecting" ? "Cancel connection" : "Отменить подключение")
+        ? (label === "Connecting" ? "cancel connection" : "отменить подключение")
         : label || "";
     button.setAttribute("aria-label", accessibleLabel);
     button.title = accessibleLabel;
@@ -245,7 +245,7 @@
     if (latency) latency.textContent = state.latency == null ? "—" : state.latency;
     if (speed) speed.textContent = state.speed == null ? "—" : state.speed;
     root.querySelector("#compact-latency").textContent = (state.latency == null ? "—" : state.latency) + " " + (language === "en" ? "ms" : "мс");
-    root.querySelector("#compact-speed").textContent = (state.speed == null ? "—" : state.speed) + " " + (language === "en" ? "Mbit/s" : "Мбит/с");
+    root.querySelector("#compact-speed").textContent = (state.speed == null ? "—" : state.speed) + " " + (language === "en" ? "mbit/s" : "мбит/с");
     latencyMetric.dataset.tone = state.latencyTone || "normal";
     speedMetric.dataset.tone = state.speedTone || "normal";
     note.textContent = state.measurementLabel || "";
@@ -280,7 +280,7 @@
     root.querySelector("#latency-label").textContent = strings[language].latency;
     root.querySelector("#speed-label").textContent = strings[language].speed;
     root.querySelector("#home-latency-unit").textContent = language === "en" ? "ms" : "мс";
-    root.querySelector("#home-speed-unit").textContent = language === "en" ? "Mbit/s" : "Мбит/с";
+    root.querySelector("#home-speed-unit").textContent = language === "en" ? "mbit/s" : "мбит/с";
     ["upload", "download", "control"].forEach((id, index) => {
       root.querySelector("[data-legend-" + id + "]").textContent = language === "en"
         ? ["outbound data", "return traffic", "service traffic"][index]

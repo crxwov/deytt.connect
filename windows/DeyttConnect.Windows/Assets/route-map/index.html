@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>deytt. · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_08">
-  <script defer src="network-atlas.js?v=20261021_08"></script>
-  <script defer src="atlas-init.js?v=20261021_08"></script>
+  <title>deytt./connect · подключение</title>
+  <link rel="stylesheet" href="network-atlas.css?v=20261021_09">
+  <script defer src="network-atlas.js?v=20261021_09"></script>
+  <script defer src="atlas-init.js?v=20261021_09"></script>
 
   <style>
     :root {
@@ -60,6 +60,7 @@
       position: relative;
       background: #0B111B;
       color: #F8FAFC;
+      text-transform: lowercase;
     }
 
     /* Floating Transparent Header on Stars */
@@ -276,89 +277,242 @@
       pointer-events: none;
     }
 
-    /* Liquid Glass Overrides for Home Panel */
+    /* Floating Liquid Glass HUD for Home Panel (Zero Podlozhka) */
     .home-panel-shell {
+      position: absolute;
+      top: 50%;
+      right: 56px;
+      z-index: 4;
+      width: clamp(340px, 28vw, 440px);
+      transform: translateY(-50%);
       background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      pointer-events: none;
+    }
+
+    .home-panel-shell::before {
+      content: none !important;
+      display: none !important;
     }
 
     .home-panel {
-      background: var(--glass-bg);
-      backdrop-filter: var(--glass-blur);
-      -webkit-backdrop-filter: var(--glass-blur);
-      border: 1px solid var(--glass-border);
-      border-top-color: var(--glass-border-top);
-      border-radius: 22px;
-      padding: 28px;
-      box-shadow: var(--glass-shadow);
-      transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 16px !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      pointer-events: none;
     }
 
+    .home-panel > * {
+      pointer-events: auto;
+    }
+
+    /* Floating Route Heading Pill */
     .route-heading {
-      background: rgba(255, 255, 255, 0.035);
-      border: 1px solid rgba(255, 255, 255, 0.07);
-      border-top-color: rgba(255, 255, 255, 0.18);
-      border-radius: 16px;
-      padding: 16px 20px;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      background: rgba(14, 22, 36, 0.65) !important;
+      backdrop-filter: blur(28px) saturate(190%) !important;
+      -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-top-color: rgba(255, 255, 255, 0.22) !important;
+      border-radius: 20px !important;
+      padding: 16px 20px !important;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.12) !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 16px !important;
+      transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease, box-shadow 200ms ease !important;
     }
 
-    .home-action {
-      border-radius: 16px !important;
-      background: linear-gradient(135deg, rgba(57, 232, 189, 0.18) 0%, rgba(34, 166, 237, 0.12) 100%) !important;
-      border: 1px solid rgba(57, 232, 189, 0.38) !important;
-      border-top-color: rgba(255, 255, 255, 0.5) !important;
-      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.4), 0 6px 24px rgba(57, 232, 189, 0.22) !important;
+    .route-heading:hover {
+      transform: translateY(-2px);
+      border-color: rgba(57, 232, 189, 0.35) !important;
+      border-top-color: rgba(255, 255, 255, 0.35) !important;
+      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.18) !important;
+    }
+
+    .route-flag {
+      width: 44px !important;
+      height: 44px !important;
+      flex-shrink: 0 !important;
+      border-radius: 14px !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-size: 24px !important;
+      background: rgba(255, 255, 255, 0.06) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.16) !important;
+    }
+
+    .route-labels {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 2px !important;
+      min-width: 0 !important;
+    }
+
+    .home-country {
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      color: var(--text-muted) !important;
+      letter-spacing: 0.01em !important;
+      text-transform: lowercase !important;
+    }
+
+    .home-city {
+      font-size: 21px !important;
+      font-weight: 700 !important;
       color: #FFFFFF !important;
+      letter-spacing: -0.02em !important;
+      line-height: 1.2 !important;
+      text-transform: lowercase !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+    }
+
+    /* Floating Tactical Liquid Glass Action Button */
+    .home-action {
+      min-height: 56px !important;
+      width: 100% !important;
+      border-radius: 18px !important;
+      font-family: inherit !important;
+      font-size: 16px !important;
       font-weight: 600 !important;
-      letter-spacing: -0.01em;
-      transition: all 180ms ease !important;
+      text-transform: lowercase !important;
+      letter-spacing: -0.01em !important;
+      cursor: pointer !important;
+      position: relative !important;
+      overflow: hidden !important;
+      backdrop-filter: blur(24px) saturate(200%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(200%) !important;
+      background: linear-gradient(135deg, rgba(57, 232, 189, 0.22) 0%, rgba(34, 166, 237, 0.14) 100%) !important;
+      border: 1px solid rgba(57, 232, 189, 0.42) !important;
+      border-top-color: rgba(255, 255, 255, 0.6) !important;
+      box-shadow: 0 10px 32px rgba(57, 232, 189, 0.24), inset 0 1px 2px rgba(255, 255, 255, 0.45) !important;
+      color: #FFFFFF !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 10px !important;
+      transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
 
     .home-action:hover {
-      background: linear-gradient(135deg, rgba(57, 232, 189, 0.28) 0%, rgba(34, 166, 237, 0.20) 100%) !important;
-      border-color: rgba(57, 232, 189, 0.6) !important;
-      border-top-color: rgba(255, 255, 255, 0.7) !important;
-      box-shadow: inset 0 1px 2px 0 rgba(255, 255, 255, 0.5), 0 8px 30px rgba(57, 232, 189, 0.35) !important;
-      transform: translateY(-1px);
+      background: linear-gradient(135deg, rgba(57, 232, 189, 0.32) 0%, rgba(34, 166, 237, 0.22) 100%) !important;
+      border-color: rgba(57, 232, 189, 0.65) !important;
+      border-top-color: rgba(255, 255, 255, 0.8) !important;
+      box-shadow: 0 14px 42px rgba(57, 232, 189, 0.38), inset 0 1px 2px rgba(255, 255, 255, 0.6) !important;
+      transform: translateY(-2px) scale(1.008);
+    }
+
+    .home-action:active {
+      transform: translateY(1px) scale(0.985);
     }
 
     .home-action[data-tone="good"] {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.20) 0%, rgba(220, 38, 38, 0.12) 100%) !important;
-      border-color: rgba(239, 68, 68, 0.45) !important;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.24) 0%, rgba(220, 38, 38, 0.16) 100%) !important;
+      border-color: rgba(239, 68, 68, 0.5) !important;
       border-top-color: rgba(255, 255, 255, 0.55) !important;
-      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.35), 0 6px 24px rgba(239, 68, 68, 0.22) !important;
+      box-shadow: 0 10px 32px rgba(239, 68, 68, 0.26), inset 0 1px 2px rgba(255, 255, 255, 0.4) !important;
+      color: #FFFFFF !important;
     }
 
+    .home-action[data-tone="good"]:hover {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.34) 0%, rgba(220, 38, 38, 0.24) 100%) !important;
+      border-color: rgba(239, 68, 68, 0.7) !important;
+      box-shadow: 0 14px 42px rgba(239, 68, 68, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.55) !important;
+    }
+
+    /* Floating Metrics Grid */
     .home-metrics {
       display: grid !important;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      grid-template-columns: 1fr 1fr !important;
+      gap: 12px !important;
+      border: none !important;
+      padding: 0 !important;
     }
 
     .home-metrics .metric {
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-top-color: rgba(255, 255, 255, 0.16);
-      border-radius: 14px;
-      padding: 12px 16px;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      background: rgba(14, 22, 36, 0.60) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.07) !important;
+      border-top-color: rgba(255, 255, 255, 0.18) !important;
+      border-radius: 16px !important;
+      padding: 13px 16px !important;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 4px !important;
+      align-items: flex-start !important;
+      transition: transform 180ms ease, border-color 180ms ease !important;
     }
 
-    .home-measure {
-      background: rgba(255, 255, 255, 0.04) !important;
-      border: 1px solid rgba(255, 255, 255, 0.08) !important;
-      border-top-color: rgba(255, 255, 255, 0.18) !important;
-      border-radius: 12px !important;
-      backdrop-filter: blur(12px) !important;
+    .home-metrics .metric:hover {
+      transform: translateY(-1.5px);
+      border-color: rgba(255, 255, 255, 0.14) !important;
+    }
+
+    .home-metrics .metric-label {
+      font-size: 11.5px !important;
+      text-transform: lowercase !important;
       color: var(--text-muted) !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+    }
+
+    .home-metrics .metric strong {
+      font-size: 23px !important;
+      font-weight: 700 !important;
+      color: #FFFFFF !important;
+      line-height: 1.1 !important;
+    }
+
+    .home-metrics .metric small {
+      font-size: 12px !important;
+      color: var(--text-muted) !important;
+      text-transform: lowercase !important;
+      margin-left: 3px !important;
+      font-weight: 400 !important;
+    }
+
+    /* Floating Understated Measurement Button */
+    .home-measure {
+      width: 100% !important;
+      padding: 10px 16px !important;
+      border-radius: 14px !important;
+      background: rgba(14, 22, 36, 0.45) !important;
+      backdrop-filter: blur(16px) !important;
+      -webkit-backdrop-filter: blur(16px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.06) !important;
+      border-top-color: rgba(255, 255, 255, 0.14) !important;
+      color: var(--text-muted) !important;
+      font-size: 12.5px !important;
+      font-weight: 500 !important;
+      text-transform: lowercase !important;
+      letter-spacing: 0.01em !important;
+      cursor: pointer !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
       transition: all 160ms ease !important;
     }
 
     .home-measure:hover {
       background: rgba(255, 255, 255, 0.08) !important;
-      color: var(--text) !important;
-      border-color: rgba(255, 255, 255, 0.18) !important;
-      border-top-color: rgba(255, 255, 255, 0.35) !important;
+      color: #FFFFFF !important;
+      border-color: rgba(255, 255, 255, 0.15) !important;
+      transform: translateY(-1px);
     }
 
     /* Universal Stage Container with Liquid Glass */
@@ -979,7 +1133,7 @@
   <!-- Header Bar -->
   <header class="desktop-header">
     <div class="brand-area">
-      <div class="brand-logo">deytt<span class="brand-dot">.</span></div>
+      <div class="brand-logo">deytt<span class="brand-dot">./connect</span></div>
     </div>
 
     <!-- Capsule Navigation Dock -->
@@ -989,37 +1143,37 @@
       <button class="nav-item is-active" id="tab-home" data-tab="home" role="tab" aria-selected="true">
         <span class="nav-label-wrap">
           <svg viewBox="0 0 24 24"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1V9.5z"/></svg>
-          <span>Главная</span>
+          <span>главная</span>
         </span>
       </button>
 
       <button class="nav-item" id="tab-routes" data-tab="routes" role="tab" aria-selected="false">
         <span class="nav-label-wrap">
           <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-          <span>Маршруты</span>
+          <span>маршруты</span>
         </span>
       </button>
 
       <button class="nav-item" id="tab-profile" data-tab="profile" role="tab" aria-selected="false">
         <span class="nav-label-wrap">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 1 0-16 0"/></svg>
-          <span>Профиль</span>
+          <span>профиль</span>
         </span>
       </button>
 
       <button class="nav-item" id="tab-settings" data-tab="settings" role="tab" aria-selected="false">
         <span class="nav-label-wrap">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-          <span>Настройки</span>
+          <span>настройки</span>
         </span>
       </button>
     </nav>
 
     <!-- Controls -->
     <div class="window-controls">
-      <button class="icon-btn" title="Свернуть"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-      <button class="icon-btn" title="Развернуть"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
-      <button class="icon-btn" title="Закрыть"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button class="icon-btn" title="свернуть"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      <button class="icon-btn" title="развернуть"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
+      <button class="icon-btn" title="закрыть"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
   </header>
 
@@ -1048,11 +1202,11 @@
             <p data-inspector-body></p>
             <span class="traffic-inspector__item" data-inspector-item></span>
             <p class="traffic-inspector__note" data-inspector-note></p>
-            <button type="button" data-inspector-resume>Показать все линии</button>
+            <button type="button" data-inspector-resume>показать все линии</button>
           </section>
         </div>
 
-        <!-- Right Panel with Liquid Glass -->
+        <!-- Right Panel with Liquid Glass (Zero Podlozhka) -->
         <section class="home-panel-shell" aria-label="управление подключением">
           <div class="home-panel">
             <div class="panel-copy status-copy">
@@ -1061,30 +1215,30 @@
             </div>
             <div class="panel-copy route-copy">
               <div class="route-heading">
-                <span id="home-flag" class="route-flag" aria-hidden="true">🌐</span>
+                <span id="home-flag" class="route-flag" aria-hidden="true">✦</span>
                 <div class="route-labels">
-                  <span id="home-country" class="home-country">автоподбор</span>
-                  <strong id="home-city" class="home-city">выход выберется автоматически</strong>
+                  <span id="home-country" class="home-country">европейские выходы</span>
+                  <strong id="home-city" class="home-city">автоподбор</strong>
                   <span id="home-protocol" class="home-protocol" hidden></span>
                 </div>
               </div>
             </div>
             <button id="home-action" class="home-action panel-copy" type="button" data-action="home-connect">
-              <span data-action-label>Подключиться</span>
+              <span data-action-label>подключиться</span>
               <span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span>
             </button>
             <div class="home-metrics panel-copy" aria-label="последний замер маршрута">
               <div class="metric">
-                <span class="metric-label" id="latency-label">отклик</span>
-                <strong id="home-latency">—</strong><small id="home-latency-unit">мс</small>
+                <span class="metric-label" id="latency-label"><span class="ping-dot"></span>отклик</span>
+                <div><strong id="home-latency">—</strong><small id="home-latency-unit">мс</small></div>
               </div>
               <div class="metric">
-                <span class="metric-label" id="speed-label">скорость</span>
-                <strong id="home-speed">—</strong><small id="home-speed-unit">Мбит/с</small>
+                <span class="metric-label" id="speed-label"><span class="ping-dot" style="background:#38BDF8;box-shadow:0 0 8px #38BDF8;"></span>скорость</span>
+                <div><strong id="home-speed">—</strong><small id="home-speed-unit">мбит/с</small></div>
               </div>
             </div>
             <p id="home-measurement-note" class="measurement-note panel-copy" hidden></p>
-            <button id="home-measure" class="home-measure" type="button" data-action="home-measure">обновить замер</button>
+            <button id="home-measure" class="home-measure" type="button" data-action="home-measure">замерить пинг</button>
             <p id="home-route-description" class="sr-only" aria-live="polite"></p>
           </div>
         </section>
@@ -1098,162 +1252,193 @@
                 <span id="compact-status" class="compact-status" data-tone="normal">не подключено</span>
               </div>
               <div class="compact-route">
-                <span id="compact-flag" class="route-flag" aria-hidden="true">🌐</span>
+                <span id="compact-flag" class="route-flag" aria-hidden="true">✦</span>
                 <div class="route-labels">
-                  <span id="compact-country" class="home-country">автоподбор</span>
-                  <strong id="compact-city" class="home-city">выход выберется автоматически</strong>
+                  <span id="compact-country" class="home-country">европейские выходы</span>
+                  <strong id="compact-city" class="home-city">автоподбор</strong>
                   <span id="compact-protocol" class="home-protocol" hidden></span>
                 </div>
               </div>
             </div>
-            <button id="compact-action" class="compact-action" type="button" data-action="home-connect"><span data-action-label>Подключиться</span><span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span></button>
+            <button id="compact-action" class="compact-action" type="button" data-action="home-connect"><span data-action-label>подключиться</span><span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span></button>
             <button id="immersive-exit" class="compact-exit" type="button" aria-label="вернуться к окну" title="вернуться к окну · esc" hidden>↙</button>
             <p id="compact-error" class="compact-error" role="status" hidden></p>
-            <div class="compact-metrics"><span id="compact-latency">— мс</span><span id="compact-speed">— Мбит/с</span></div>
+            <div class="compact-metrics"><span id="compact-latency">— мс</span><span id="compact-speed">— мбит/с</span></div>
           </div>
         </section>
       </div>
     </div>
 
-    <!-- Stage 2: Маршруты (Routes Stage) -->
-    <section class="stage-view" id="stage-routes" aria-label="Маршруты подключения">
+    <!-- Stage 2: маршруты (Routes Stage) -->
+    <section class="stage-view" id="stage-routes" aria-label="маршруты подключения">
       <div class="stage-content-wrap">
         <div class="stage-header">
           <div>
-            <h1 class="stage-title">Маршруты сети</h1>
-            <p class="stage-subtitle">Выберите доступную точку выхода трафика или включите интеллектуальный автоподбор</p>
+            <h1 class="stage-title">маршруты сети</h1>
+            <p class="stage-subtitle">выберите доступную точку выхода трафика или включите интеллектуальный автоподбор</p>
           </div>
           <div class="routes-filters">
-            <button class="filter-chip is-active" data-filter="all">Все (5)</button>
-            <button class="filter-chip" data-filter="awg">AmneziaWG</button>
-            <button class="filter-chip" data-filter="openflux">OpenFlux</button>
+            <button class="filter-chip is-active" data-filter="all">все (7)</button>
+            <button class="filter-chip" data-filter="europe">европа (4)</button>
+            <button class="filter-chip" data-filter="cascade">каскады (1)</button>
+            <button class="filter-chip" data-filter="awg">amneziawg (5)</button>
           </div>
         </div>
 
         <!-- Featured Smart Route -->
-        <div class="glass-card route-featured-card" data-route-key="auto" id="card-route-auto">
+        <div class="glass-card route-featured-card is-selected" data-route-key="auto" id="card-route-auto" data-filter-type="europe awg all">
           <div class="route-info-left">
-            <div class="route-globe-icon">🌐</div>
+            <div class="route-globe-icon">✦</div>
             <div>
               <div class="route-name">
-                Автоподбор
-                <span class="badge-mint">Рекомендуется</span>
+                автоподбор
+                <span class="badge-mint">рекомендуется</span>
               </div>
-              <p class="route-desc">Автоматический выбор наименьшего отклика между Амстердамом, Франкфуртом и Хельсинки</p>
+              <p class="route-desc">автоматический выбор наименьшего отклика между амстердамом, франкфуртом и хельсинки</p>
             </div>
           </div>
           <div class="route-meta">
+            <span class="protocol-chip">vless</span>
+            <span class="protocol-chip">trojan</span>
+            <span class="protocol-chip">hy2</span>
+            <span class="protocol-chip">awg 3.1</span>
             <span class="ping-tag"><span class="ping-dot"></span><span data-ping="auto">24</span> мс</span>
-            <button class="btn-select-route" data-action-route="auto">Выбрать</button>
+            <button class="btn-select-route" data-action-route="auto">активен ✓</button>
+          </div>
+        </div>
+
+        <!-- Cascade First-Class Route -->
+        <div class="glass-card route-featured-card" data-route-key="ru-de" id="card-route-ru-de" data-filter-type="cascade awg all" style="border-color: rgba(56, 189, 248, 0.35); box-shadow: var(--glass-shadow), 0 0 28px rgba(56, 189, 248, 0.1);">
+          <div class="route-info-left">
+            <div class="route-globe-icon" style="background: rgba(56, 189, 248, 0.14); border-color: rgba(56, 189, 248, 0.35); font-size: 18px;">🇷🇺→🇩🇪</div>
+            <div>
+              <div class="route-name">
+                lte + белые списки
+                <span class="badge-mint" style="background: rgba(56, 189, 248, 0.18); color: #38BDF8; border-color: rgba(56, 189, 248, 0.4);">каскад</span>
+              </div>
+              <p class="route-desc">двухзвенная цепочка (россия → германия) для стабильного обхода тспу-блокировок на мобильных сетях</p>
+            </div>
+          </div>
+          <div class="route-meta">
+            <span class="protocol-chip">каскад</span>
+            <span class="protocol-chip">ru → de</span>
+            <span class="ping-tag"><span class="ping-dot" style="background:#38BDF8;box-shadow:0 0 8px #38BDF8;"></span><span data-ping="ru-de">46</span> мс</span>
+            <button class="btn-select-route" data-action-route="ru-de">выбрать</button>
           </div>
         </div>
 
         <!-- Available Countries Grid -->
         <div class="route-card-grid">
           <!-- Netherlands -->
-          <div class="glass-card route-card" data-route-key="nl" data-protocol="awg openflux">
+          <div class="glass-card route-card" data-route-key="nl" data-filter-type="europe awg all" id="card-route-nl">
             <div class="route-card-top">
               <div>
-                <h3 class="route-city">Амстердам</h3>
-                <p class="route-country">Нидерланды</p>
+                <h3 class="route-city">амстердам</h3>
+                <p class="route-country">нидерланды</p>
               </div>
               <span class="route-flag-emoji">🇳🇱</span>
             </div>
             <div class="route-card-bottom">
               <div class="route-meta">
                 <span class="ping-tag"><span class="ping-dot"></span><span data-ping="nl">28</span> мс</span>
-                <span class="protocol-chip">AWG</span>
-                <span class="protocol-chip">OF</span>
+                <span class="protocol-chip">vless</span>
+                <span class="protocol-chip">hy2</span>
+                <span class="protocol-chip">awg 3.1</span>
               </div>
-              <button class="btn-select-route" data-action-route="nl">Выбрать</button>
+              <button class="btn-select-route" data-action-route="nl">выбрать</button>
             </div>
           </div>
 
           <!-- Germany -->
-          <div class="glass-card route-card" data-route-key="de" data-protocol="awg openflux">
+          <div class="glass-card route-card" data-route-key="de" data-filter-type="europe awg all" id="card-route-de">
             <div class="route-card-top">
               <div>
-                <h3 class="route-city">Франкфурт-на-Майне</h3>
-                <p class="route-country">Германия</p>
+                <h3 class="route-city">франкфурт-на-майне</h3>
+                <p class="route-country">германия</p>
               </div>
               <span class="route-flag-emoji">🇩🇪</span>
             </div>
             <div class="route-card-bottom">
               <div class="route-meta">
                 <span class="ping-tag"><span class="ping-dot"></span><span data-ping="de">34</span> мс</span>
-                <span class="protocol-chip">AWG</span>
-                <span class="protocol-chip">OF</span>
+                <span class="protocol-chip">vless</span>
+                <span class="protocol-chip">hy2</span>
+                <span class="protocol-chip">awg 3.1</span>
               </div>
-              <button class="btn-select-route" data-action-route="de">Выбрать</button>
+              <button class="btn-select-route" data-action-route="de">выбрать</button>
             </div>
           </div>
 
           <!-- Finland -->
-          <div class="glass-card route-card" data-route-key="fi" data-protocol="awg openflux">
+          <div class="glass-card route-card" data-route-key="fi" data-filter-type="europe awg all" id="card-route-fi">
             <div class="route-card-top">
               <div>
-                <h3 class="route-city">Хельсинки</h3>
-                <p class="route-country">Финляндия</p>
+                <h3 class="route-city">хельсинки</h3>
+                <p class="route-country">финляндия</p>
               </div>
               <span class="route-flag-emoji">🇫🇮</span>
             </div>
             <div class="route-card-bottom">
               <div class="route-meta">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="fi">22</span> мс</span>
-                <span class="protocol-chip">AWG</span>
-                <span class="protocol-chip">OF</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="fi">20</span> мс</span>
+                <span class="protocol-chip">vless</span>
+                <span class="protocol-chip">hy2</span>
+                <span class="protocol-chip">awg 3.1</span>
               </div>
-              <button class="btn-select-route" data-action-route="fi">Выбрать</button>
-            </div>
-          </div>
-
-          <!-- Russia -->
-          <div class="glass-card route-card" data-route-key="ru" data-protocol="awg">
-            <div class="route-card-top">
-              <div>
-                <h3 class="route-city">Санкт-Петербург</h3>
-                <p class="route-country">Россия</p>
-              </div>
-              <span class="route-flag-emoji">🇷🇺</span>
-            </div>
-            <div class="route-card-bottom">
-              <div class="route-meta">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="ru">12</span> мс</span>
-                <span class="protocol-chip">AWG</span>
-              </div>
-              <button class="btn-select-route" data-action-route="ru">Выбрать</button>
+              <button class="btn-select-route" data-action-route="fi">выбрать</button>
             </div>
           </div>
 
           <!-- Italy -->
-          <div class="glass-card route-card" data-route-key="it" data-protocol="openflux">
+          <div class="glass-card route-card" data-route-key="it" data-filter-type="europe all" id="card-route-it">
             <div class="route-card-top">
               <div>
-                <h3 class="route-city">Милан</h3>
-                <p class="route-country">Италия</p>
+                <h3 class="route-city">милан</h3>
+                <p class="route-country">италия</p>
               </div>
               <span class="route-flag-emoji">🇮🇹</span>
             </div>
             <div class="route-card-bottom">
               <div class="route-meta">
                 <span class="ping-tag"><span class="ping-dot"></span><span data-ping="it">42</span> мс</span>
-                <span class="protocol-chip">OF</span>
-                <span class="protocol-chip">VLESS</span>
+                <span class="protocol-chip">vless</span>
+                <span class="protocol-chip">trojan</span>
+                <span class="protocol-chip">hy2</span>
               </div>
-              <button class="btn-select-route" data-action-route="it">Выбрать</button>
+              <button class="btn-select-route" data-action-route="it">выбрать</button>
+            </div>
+          </div>
+
+          <!-- Russia -->
+          <div class="glass-card route-card" data-route-key="ru" data-filter-type="awg all" id="card-route-ru">
+            <div class="route-card-top">
+              <div>
+                <h3 class="route-city">санкт-петербург</h3>
+                <p class="route-country">россия</p>
+              </div>
+              <span class="route-flag-emoji">🇷🇺</span>
+            </div>
+            <div class="route-card-bottom">
+              <div class="route-meta">
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="ru">12</span> мс</span>
+                <span class="protocol-chip">vless</span>
+                <span class="protocol-chip">trojan</span>
+                <span class="protocol-chip">awg 3.1</span>
+              </div>
+              <button class="btn-select-route" data-action-route="ru">выбрать</button>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Stage 3: Профиль (Profile Stage) -->
-    <section class="stage-view" id="stage-profile" aria-label="Профиль пользователя">
+    <!-- Stage 3: профиль (Profile Stage) -->
+    <section class="stage-view" id="stage-profile" aria-label="профиль пользователя">
       <div class="stage-content-wrap">
         <div class="stage-header">
           <div>
-            <h1 class="stage-title">Профиль и подписка</h1>
-            <p class="stage-subtitle">Управление учетной записью, активными устройствами и ключом доступа</p>
+            <h1 class="stage-title">профиль и подписка</h1>
+            <p class="stage-subtitle">управление учетной записью, активными устройствами и ключом доступа</p>
           </div>
         </div>
 
@@ -1264,14 +1449,14 @@
             <div>
               <h2 class="user-handle">deytt.//user_84920</h2>
               <div class="user-sub-status">
-                <span class="ping-tag"><span class="ping-dot"></span>Подписка активна</span>
+                <span class="ping-tag"><span class="ping-dot"></span>подписка активна</span>
                 <span>·</span>
                 <span>до 14 ноября 2026 г. (осталось 388 дней)</span>
               </div>
             </div>
           </div>
           <button class="btn-select-route" style="background: rgba(56, 189, 248, 0.16); color: #38BDF8; border-color: rgba(56, 189, 248, 0.4);" id="btn-renew-tg">
-            Продлить в Telegram →
+            продлить в telegram →
           </button>
         </div>
 
@@ -1279,13 +1464,13 @@
         <div class="profile-grid-2">
           <!-- Traffic & Speed -->
           <div class="glass-card">
-            <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">Трафик и канал</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Безлимитный скоростной тариф</p>
+            <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">трафик и канал</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">безлимитный скоростной тариф</p>
 
             <div class="stat-gauge-wrap">
               <div class="stat-gauge-header">
-                <span style="color: var(--text);">Израсходовано в этом месяце</span>
-                <strong style="color: #39E8BD;">38.4 ГБ / ∞</strong>
+                <span style="color: var(--text);">израсходовано в этом месяце</span>
+                <strong style="color: #39E8BD;">38.4 гб / ∞</strong>
               </div>
               <div class="gauge-track">
                 <div class="gauge-fill"></div>
@@ -1294,11 +1479,11 @@
 
             <div style="display: flex; gap: 24px; margin-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 16px;">
               <div>
-                <span style="font-size: 12px; color: var(--text-muted); display: block;">Текущая скорость</span>
-                <strong style="font-size: 18px; color: #FFFFFF;">185 Мбит/с</strong>
+                <span style="font-size: 12px; color: var(--text-muted); display: block;">текущая скорость</span>
+                <strong style="font-size: 18px; color: #FFFFFF;">185 мбит/с</strong>
               </div>
               <div>
-                <span style="font-size: 12px; color: var(--text-muted); display: block;">Зашифровано</span>
+                <span style="font-size: 12px; color: var(--text-muted); display: block;">зашифровано</span>
                 <strong style="font-size: 18px; color: #39E8BD;">100% данных</strong>
               </div>
             </div>
@@ -1308,10 +1493,10 @@
           <div class="glass-card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">Подключенные устройства</h3>
+                <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">подключенные устройства</h3>
                 <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">3 из 5 доступных слотов</p>
               </div>
-              <button class="btn-select-route" style="font-size: 11.5px; padding: 4px 10px;" id="btn-add-device">+ Слот</button>
+              <button class="btn-select-route" style="font-size: 11.5px; padding: 4px 10px;" id="btn-add-device">+ слот</button>
             </div>
 
             <div class="device-list">
@@ -1319,33 +1504,33 @@
                 <div class="device-info">
                   <span>💻</span>
                   <div>
-                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">Windows Desktop</strong>
-                    <span style="font-size: 11.5px; color: var(--text-muted);">Это устройство · v0.11.8</span>
+                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">windows desktop</strong>
+                    <span style="font-size: 11.5px; color: var(--text-muted);">это устройство · v0.11.8</span>
                   </div>
                 </div>
-                <span class="device-status">Активно</span>
+                <span class="device-status">активно</span>
               </div>
 
               <div class="device-row">
                 <div class="device-info">
                   <span>📱</span>
                   <div>
-                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">Pixel 8 Pro</strong>
-                    <span style="font-size: 11.5px; color: var(--text-muted);">Android Client</span>
+                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">pixel 8 pro</strong>
+                    <span style="font-size: 11.5px; color: var(--text-muted);">android client</span>
                   </div>
                 </div>
-                <span class="device-status">Активно</span>
+                <span class="device-status">активно</span>
               </div>
 
               <div class="device-row">
                 <div class="device-info">
                   <span>💻</span>
                   <div>
-                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">MacBook Air M2</strong>
-                    <span style="font-size: 11.5px; color: var(--text-muted);">macOS Sequoia</span>
+                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">macbook air m2</strong>
+                    <span style="font-size: 11.5px; color: var(--text-muted);">macos sequoia</span>
                   </div>
                 </div>
-                <span style="font-size: 12px; color: var(--text-muted);">В сети 2 ч назад</span>
+                <span style="font-size: 12px; color: var(--text-muted);">в сети 2 ч назад</span>
               </div>
             </div>
           </div>
@@ -1353,52 +1538,52 @@
 
         <!-- Connection Key Box -->
         <div class="glass-card">
-          <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">Ключ конфигурации туннеля</h3>
-          <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Персональный криптографический ключ для подключения устройств</p>
+          <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">ключ конфигурации туннеля</h3>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">персональный криптографический ключ для подключения устройств</p>
 
           <div class="key-box">
             <span id="masked-key">awg://user_84920:••••••••••••••••••••••••••••••••••••••••</span>
             <div class="key-actions">
-              <button class="btn-select-route" id="btn-copy-key">Копировать</button>
-              <button class="btn-select-route" id="btn-show-qr">QR-код</button>
+              <button class="btn-select-route" id="btn-copy-key">скопировать</button>
+              <button class="btn-select-route" id="btn-show-qr">qr-код</button>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Stage 4: Настройки (Settings Stage) -->
-    <section class="stage-view" id="stage-settings" aria-label="Параметры и настройки">
+    <!-- Stage 4: настройки (Settings Stage) -->
+    <section class="stage-view" id="stage-settings" aria-label="параметры и настройки">
       <div class="stage-content-wrap">
         <div class="stage-header">
           <div>
-            <h1 class="stage-title">Настройки клиента</h1>
-            <p class="stage-subtitle">Тонкая настройка сетевых протоколов, безопасности и автозапуска в системе</p>
+            <h1 class="stage-title">настройки клиента</h1>
+            <p class="stage-subtitle">тонкая настройка сетевых протоколов, безопасности и автозапуска в системе</p>
           </div>
         </div>
 
         <!-- Group 1: System -->
         <div class="settings-group">
-          <span class="settings-group-title">Система и запуск</span>
+          <span class="settings-group-title">система и запуск</span>
           <div class="glass-card" style="padding: 6px 10px;">
             <div class="setting-item">
               <div class="setting-text-wrap">
-                <span class="setting-label">Запуск при старте Windows</span>
-                <span class="setting-desc">Автоматически запускать Deytt Connect при входе пользователя в систему</span>
+                <span class="setting-label">запуск при старте windows</span>
+                <span class="setting-desc">автоматически запускать deytt connect при входе пользователя в систему</span>
               </div>
               <div class="glass-switch is-checked" data-setting="autostart"></div>
             </div>
             <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
               <div class="setting-text-wrap">
-                <span class="setting-label">Автоподключение при старте</span>
-                <span class="setting-desc">Устанавливать защищенное соединение сразу после запуска программы</span>
+                <span class="setting-label">автоподключение при старте</span>
+                <span class="setting-desc">устанавливать защищенное соединение сразу после запуска программы</span>
               </div>
               <div class="glass-switch is-checked" data-setting="autoconnect"></div>
             </div>
             <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
               <div class="setting-text-wrap">
-                <span class="setting-label">Сворачивать в системный трей</span>
-                <span class="setting-desc">При закрытии окна прятать приложение в трей рядом с часами</span>
+                <span class="setting-label">сворачивать в системный трей</span>
+                <span class="setting-desc">при закрытии окна прятать приложение в трей рядом с часами</span>
               </div>
               <div class="glass-switch is-checked" data-setting="tray"></div>
             </div>
@@ -1407,31 +1592,31 @@
 
         <!-- Group 2: Network & Security -->
         <div class="settings-group">
-          <span class="settings-group-title">Безопасность и маршрутизация</span>
+          <span class="settings-group-title">безопасность и маршрутизация</span>
           <div class="glass-card" style="padding: 6px 10px;">
             <div class="setting-item">
               <div class="setting-text-wrap">
-                <span class="setting-label">Аварийная блокировка (Kill Switch)</span>
-                <span class="setting-desc">Блокирует весь сетевой трафик компьютера в случае неожиданного разрыва VPN</span>
+                <span class="setting-label">аварийная блокировка (kill switch)</span>
+                <span class="setting-desc">блокирует весь сетевой трафик компьютера в случае неожиданного разрыва vpn</span>
               </div>
               <div class="glass-switch is-checked" data-setting="killswitch"></div>
             </div>
             <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
               <div class="setting-text-wrap">
-                <span class="setting-label">Раздельное туннелирование (Bypass)</span>
-                <span class="setting-desc">Российские банки, сервисы и Госуслуги работают напрямую через локального провайдера</span>
+                <span class="setting-label">раздельное туннелирование (bypass)</span>
+                <span class="setting-desc">российские банки, сервисы и госуслуги работают напрямую через локального провайдера</span>
               </div>
               <div class="glass-switch is-checked" data-setting="bypass"></div>
             </div>
             <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
               <div class="setting-text-wrap">
-                <span class="setting-label">Безопасный DNS</span>
-                <span class="setting-desc">Защита от подмены адресов и провайдерской фильтрации DNS</span>
+                <span class="setting-label">безопасный dns</span>
+                <span class="setting-desc">защита от подмены адресов и провайдерской фильтрации dns</span>
               </div>
               <div class="segmented-control">
-                <button class="segmented-btn is-active" data-dns="deytt">Deytt DNS</button>
-                <button class="segmented-btn" data-dns="cf">Cloudflare</button>
-                <button class="segmented-btn" data-dns="adguard">AdGuard</button>
+                <button class="segmented-btn is-active" data-dns="deytt">deytt dns</button>
+                <button class="segmented-btn" data-dns="cf">cloudflare</button>
+                <button class="segmented-btn" data-dns="adguard">adguard</button>
               </div>
             </div>
           </div>
@@ -1439,17 +1624,18 @@
 
         <!-- Group 3: Protocol -->
         <div class="settings-group">
-          <span class="settings-group-title">Протокол туннелирования</span>
+          <span class="settings-group-title">протокол туннелирования</span>
           <div class="glass-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
               <div>
-                <span class="setting-label">Основной протокол</span>
-                <p class="setting-desc" id="protocol-desc">Интеллектуальный выбор наилучшего протокола (AmneziaWG или OpenFlux) по состоянию сети</p>
+                <span class="setting-label">основной протокол</span>
+                <p class="setting-desc" id="protocol-desc">интеллектуальный выбор наилучшего протокола (amneziawg, hysteria 2 или vless) по состоянию сети</p>
               </div>
               <div class="segmented-control">
-                <button class="segmented-btn is-active" data-protocol-opt="auto">Авто</button>
-                <button class="segmented-btn" data-protocol-opt="awg">AmneziaWG</button>
-                <button class="segmented-btn" data-protocol-opt="openflux">OpenFlux</button>
+                <button class="segmented-btn is-active" data-protocol-opt="auto">авто</button>
+                <button class="segmented-btn" data-protocol-opt="hy2">hysteria 2</button>
+                <button class="segmented-btn" data-protocol-opt="vless">vless</button>
+                <button class="segmented-btn" data-protocol-opt="awg">amneziawg</button>
               </div>
             </div>
           </div>
@@ -1457,13 +1643,13 @@
 
         <!-- Group 4: About -->
         <div class="settings-group">
-          <span class="settings-group-title">О приложении</span>
+          <span class="settings-group-title">о приложении</span>
           <div class="glass-card" style="display: flex; align-items: center; justify-content: space-between;">
             <div>
               <strong style="color: #FFFFFF; font-size: 15px; display: block;">deytt./connect</strong>
-              <span style="font-size: 13px; color: var(--text-muted);">Версия 0.11.8 (Windows x64) · Канал: deytt./beta</span>
+              <span style="font-size: 13px; color: var(--text-muted);">версия 0.11.8 (windows x64) · канал: deytt./beta</span>
             </div>
-            <button class="btn-select-route" id="btn-check-updates">Проверить обновления</button>
+            <button class="btn-select-route" id="btn-check-updates">проверить обновления</button>
           </div>
         </div>
       </div>
@@ -1473,8 +1659,8 @@
   <!-- Liquid Glass Modal for QR Code -->
   <div class="glass-modal-backdrop" id="qr-modal">
     <div class="glass-modal-card">
-      <h3 style="font-size: 20px; font-weight: 700; color: #FFFFFF;">QR-код для подключения</h3>
-      <p style="font-size: 13.5px; color: var(--text-muted); margin-top: 4px;">Отсканируйте камерой в приложении Deytt Connect на телефоне</p>
+      <h3 style="font-size: 20px; font-weight: 700; color: #FFFFFF;">qr-код для подключения</h3>
+      <p style="font-size: 13.5px; color: var(--text-muted); margin-top: 4px;">отсканируйте камерой в приложении deytt connect на телефоне</p>
 
       <div class="qr-preview-box">
         <svg viewBox="0 0 200 200" width="176" height="176">
@@ -1548,7 +1734,7 @@
         </svg>
       </div>
 
-      <button class="btn-select-route" style="width: 100%; padding: 10px; font-size: 14px;" id="btn-close-qr">Закрыть</button>
+      <button class="btn-select-route" style="width: 100%; padding: 10px; font-size: 14px;" id="btn-close-qr">закрыть</button>
     </div>
   </div>
 
@@ -1660,14 +1846,15 @@
       });
     });
 
-    // Routes Selection & Syncing with Globe
+    // Routes Selection & Syncing with Globe (7 Authentic Routes from WindowsRouteCatalog)
     const routeDetails = {
-      auto: { flag: "🌐", country: "автоподбор", city: "выход выберется автоматически", ping: 24 },
-      nl: { flag: "🇳🇱", country: "Нидерланды", city: "Амстердам", ping: 28 },
-      de: { flag: "🇩🇪", country: "Германия", city: "Франкфурт-на-Майне", ping: 34 },
-      fi: { flag: "🇫🇮", country: "Финляндия", city: "Хельсинки", ping: 22 },
-      ru: { flag: "🇷🇺", country: "Россия", city: "Санкт-Петербург", ping: 12 },
-      it: { flag: "🇮🇹", country: "Италия", city: "Милан", ping: 42 }
+      auto: { flag: "✦", country: "европейские выходы", city: "автоподбор", ping: 24 },
+      "ru-de": { flag: "🇷🇺→🇩🇪", country: "россия → германия", city: "lte + белые списки", ping: 46 },
+      nl: { flag: "🇳🇱", country: "нидерланды", city: "амстердам", ping: 28 },
+      de: { flag: "🇩🇪", country: "германия", city: "франкфурт-на-майне", ping: 34 },
+      fi: { flag: "🇫🇮", country: "финляндия", city: "хельсинки", ping: 20 },
+      it: { flag: "🇮🇹", country: "италия", city: "милан", ping: 42 },
+      ru: { flag: "🇷🇺", country: "россия", city: "санкт-петербург", ping: 12 }
     };
 
     let activeRouteKey = "auto";
@@ -1680,9 +1867,11 @@
       const homeFlag = document.getElementById("home-flag");
       const homeCountry = document.getElementById("home-country");
       const homeCity = document.getElementById("home-city");
+      const homeLatency = document.getElementById("home-latency");
       if (homeFlag) homeFlag.textContent = data.flag;
       if (homeCountry) homeCountry.textContent = data.country;
       if (homeCity) homeCity.textContent = data.city;
+      if (homeLatency && isConnected) homeLatency.textContent = data.ping;
 
       // Update compact panel if present
       const compactFlag = document.getElementById("compact-flag");
@@ -1697,7 +1886,7 @@
         const isCurrent = card.dataset.routeKey === key;
         card.classList.toggle("is-selected", isCurrent);
         const btn = card.querySelector(".btn-select-route");
-        if (btn) btn.textContent = isCurrent ? "Активен ✓" : "Выбрать";
+        if (btn) btn.textContent = isCurrent ? "активен ✓" : "выбрать";
       });
 
       // Notify atlas
@@ -1705,7 +1894,7 @@
         window.deyttSetMapRoute(key);
       }
 
-      showToast(`Выбран маршрут: ${data.country} · ${data.city}`);
+      showToast(`выбран маршрут: ${data.country} · ${data.city}`);
     }
 
     // Attach route selection clicks
@@ -1729,12 +1918,12 @@
         chip.classList.add("is-active");
         const filter = chip.dataset.filter;
 
-        document.querySelectorAll(".route-card").forEach(card => {
+        document.querySelectorAll(".route-card, .route-featured-card").forEach(card => {
           if (filter === "all") {
             card.style.display = "";
           } else {
-            const proto = card.dataset.protocol || "";
-            card.style.display = proto.includes(filter) ? "" : "none";
+            const filterType = card.dataset.filterType || "";
+            card.style.display = filterType.includes(filter) ? "" : "none";
           }
         });
       });
@@ -1746,12 +1935,12 @@
       btnCopyKey.addEventListener("click", () => {
         const dummyKey = "awg://user_84920:xV92jKaP98qLs01mZpQr882jKlAOP0192kLsP==";
         navigator.clipboard?.writeText(dummyKey).catch(() => {});
-        btnCopyKey.textContent = "Скопировано!";
+        btnCopyKey.textContent = "скопировано!";
         btnCopyKey.style.background = "#39E8BD";
         btnCopyKey.style.color = "#0B111B";
-        showToast("Ключ доступа скопирован в буфер обмена!");
+        showToast("ключ доступа скопирован в буфер обмена");
         setTimeout(() => {
-          btnCopyKey.textContent = "Копировать";
+          btnCopyKey.textContent = "скопировать";
           btnCopyKey.style.background = "";
           btnCopyKey.style.color = "";
         }, 1800);
@@ -1777,14 +1966,14 @@
     const btnRenewTg = document.getElementById("btn-renew-tg");
     if (btnRenewTg) {
       btnRenewTg.addEventListener("click", () => {
-        showToast("Открываю бот deytt.//vpn в Telegram...");
+        showToast("открываю бот deytt.//vpn в telegram...");
       });
     }
 
     const btnAddDevice = document.getElementById("btn-add-device");
     if (btnAddDevice) {
       btnAddDevice.addEventListener("click", () => {
-        showToast("Добавление устройства: отсканируйте QR-код в приложении");
+        showToast("добавление устройства: отсканируйте qr-код в приложении");
         qrModal?.classList.add("is-open");
       });
     }
@@ -1795,7 +1984,7 @@
         sw.classList.toggle("is-checked");
         const setting = sw.dataset.setting;
         const state = sw.classList.contains("is-checked") ? "включено" : "выключено";
-        showToast(`Параметр обновлен: ${state}`);
+        showToast(`параметр обновлен: ${state}`);
       });
     });
 
@@ -1803,15 +1992,16 @@
       btn.addEventListener("click", () => {
         document.querySelectorAll(".segmented-btn[data-dns]").forEach(b => b.classList.remove("is-active"));
         btn.classList.add("is-active");
-        showToast(`DNS переключен на: ${btn.textContent}`);
+        showToast(`dns переключен на: ${btn.textContent.trim()}`);
       });
     });
 
     const protocolDesc = document.getElementById("protocol-desc");
     const protocolDescs = {
-      auto: "Интеллектуальный выбор наилучшего протокола (AmneziaWG или OpenFlux) по состоянию сети",
-      awg: "AmneziaWG: максимальная скорость и пропускная способность с маскировкой заголовков",
-      openflux: "OpenFlux (Cups): глубокая маскировка трафика под обычный HTTPS для обхода жестких ТСПУ-блокировок"
+      auto: "интеллектуальный выбор наилучшего протокола (amneziawg, hysteria 2 или vless) по состоянию сети",
+      hy2: "hysteria 2: сверхскоростной протокол на базе udp с собственным контролем перегрузок для обхода тспу",
+      vless: "vless-reality: маскировка туннеля под tls-рукопожатие с популярными зарубежными сайтами",
+      awg: "amneziawg 3.1: обфусцированный wireguard с защитой от глубокого анализа пакетов dpi"
     };
 
     document.querySelectorAll(".segmented-btn[data-protocol-opt]").forEach(btn => {
@@ -1822,20 +2012,20 @@
         if (protocolDesc && protocolDescs[opt]) {
           protocolDesc.textContent = protocolDescs[opt];
         }
-        showToast(`Протокол: ${btn.textContent}`);
+        showToast(`протокол: ${btn.textContent.trim()}`);
       });
     });
 
     const btnCheckUpdates = document.getElementById("btn-check-updates");
     if (btnCheckUpdates) {
       btnCheckUpdates.addEventListener("click", () => {
-        btnCheckUpdates.textContent = "Проверяю...";
+        btnCheckUpdates.textContent = "проверяю...";
         btnCheckUpdates.style.pointerEvents = "none";
         setTimeout(() => {
-          btnCheckUpdates.textContent = "Актуальная версия ✓";
-          showToast("У вас установлена последняя стабильная версия v0.11.8");
+          btnCheckUpdates.textContent = "актуальная версия ✓";
+          showToast("у вас установлена последняя стабильная версия v0.11.8");
           setTimeout(() => {
-            btnCheckUpdates.textContent = "Проверить обновления";
+            btnCheckUpdates.textContent = "проверить обновления";
             btnCheckUpdates.style.pointerEvents = "";
           }, 2400);
         }, 650);
@@ -1854,19 +2044,19 @@
 
         if (!isConnected) {
           isConnected = true;
-          if (label) label.textContent = "Отключиться";
+          if (label) label.textContent = "отключиться";
           actionBtn.dataset.tone = "good";
-          if (latency) latency.textContent = "24";
+          if (latency) latency.textContent = (routeDetails[activeRouteKey]?.ping || 24).toString();
           if (speed) speed.textContent = "185";
           if (status) status.textContent = "подключено";
           if (window.deyttMapAtlas) {
             window.deyttMapAtlas.setTrafficActive(true);
             window.deyttMapAtlas.start();
           }
-          showToast("Защищенное соединение установлено");
+          showToast("защищенное соединение установлено");
         } else {
           isConnected = false;
-          if (label) label.textContent = "Подключиться";
+          if (label) label.textContent = "подключиться";
           actionBtn.dataset.tone = "idle";
           if (latency) latency.textContent = "—";
           if (speed) speed.textContent = "—";
@@ -1875,7 +2065,7 @@
             window.deyttMapAtlas.setTrafficActive(false);
             window.deyttMapAtlas.start();
           }
-          showToast("Соединение отключено");
+          showToast("соединение отключено");
         }
       });
     }
@@ -1888,9 +2078,10 @@
         if (latency) latency.textContent = "…";
         if (speed) speed.textContent = "…";
         setTimeout(() => {
-          if (latency) latency.textContent = (Math.floor(Math.random() * 8) + 20).toString();
-          if (speed) speed.textContent = (Math.floor(Math.random() * 30) + 180).toString();
-          showToast("Замер скорости и задержки обновлен");
+          const currentPing = routeDetails[activeRouteKey]?.ping || 24;
+          if (latency) latency.textContent = (currentPing + Math.floor(Math.random() * 4) - 2).toString();
+          if (speed) speed.textContent = (Math.floor(Math.random() * 25) + 180).toString();
+          showToast("замер скорости и задержки обновлен");
         }, 350);
       });
     }
