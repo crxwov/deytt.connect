@@ -1,3 +1,32 @@
+
+/* Custom Sleek Scrollbar - Eliminates Browser Gutter and Arrows */
+* {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent !important;
+}
+::-webkit-scrollbar {
+  width: 6px !important;
+  height: 6px !important;
+}
+::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16) !important;
+  border-radius: 999px !important;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.32) !important;
+}
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
 @font-face {
   font-family: "Inter Tight";
   src: url("fonts/InterTight-Regular.ttf") format("truetype");

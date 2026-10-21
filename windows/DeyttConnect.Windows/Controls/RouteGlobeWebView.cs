@@ -152,6 +152,7 @@ public sealed class RouteGlobeWebView : ContentControl
     public event Action<string>? RouteSelected;
 
     /// <summary>Raised when the user requests a route probe for a country.</summary>
+        /// <summary>Raised when the user requests a route probe for a country.</summary>
     public event Action<string>? CountryProbeRequested;
 
     /// <summary>Raised when the user toggles a client setting in the web presentation.</summary>
@@ -159,6 +160,15 @@ public sealed class RouteGlobeWebView : ContentControl
 
     /// <summary>Raised when the user clicks check for updates in the web presentation.</summary>
     public event Action? CheckUpdatesRequested;
+
+    public event Action? SignInRequested;
+    public event Action? RenewRequested;
+    public event Action? ImportRequested;
+    public event Action? LanguagePickerRequested;
+    public event Action? SplitTunnelRequested;
+    public event Action? ProbeMethodRequested;
+    public event Action? ServiceCheckRequested;
+    public event Action? BotRequested;
 
     internal bool IsNativeInitializationDisabled => _disableNativeInitialization;
 
@@ -194,6 +204,63 @@ public sealed class RouteGlobeWebView : ContentControl
         });
         var script = $"window.deyttSetRoutesData && window.deyttSetRoutesData({JsonSerializer.Serialize(items)});";
         _ = ExecuteScriptAsync(script);
+    }
+
+        private string? _profileDataJson;
+    private string? _settingsDataJson;
+
+    public void UpdateProfileData(
+        bool isSignedIn,
+        string? username,
+        string? displayName,
+        long? telegramId,
+        bool subscriptionActive,
+        string? tariffName,
+        string? expiresFormatted,
+        int? daysRemaining,
+        string? subscriptionKey,
+        IReadOnlyList<object>? devices)
+    {
+        var payload = new
+        {
+            isSignedIn,
+            username,
+            displayName,
+            telegramId,
+            subscriptionActive,
+            tariffName,
+            expiresFormatted,
+            daysRemaining,
+            subscriptionKey,
+            devices
+        };
+        _profileDataJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        _ = ExecuteScriptAsync($"window.deyttSetProfileData && window.deyttSetProfileData({_profileDataJson});");
+    }
+
+    public void UpdateSettingsData(
+        string language,
+        string? accountUsername,
+        string splitTunnelSummary,
+        string probeMethod,
+        bool vpnServiceAvailable,
+        bool mapRegionEnabled,
+        bool reduceMotion,
+        string appVersion)
+    {
+        var payload = new
+        {
+            language,
+            accountUsername,
+            splitTunnelSummary,
+            probeMethod,
+            vpnServiceAvailable,
+            mapRegionEnabled,
+            reduceMotion,
+            appVersion
+        };
+        _settingsDataJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        _ = ExecuteScriptAsync($"window.deyttSetSettingsData && window.deyttSetSettingsData({_settingsDataJson});");
     }
 
     public void PushRouteProbeProgress(WindowsRouteProbeResult probe)
@@ -909,6 +976,46 @@ public sealed class RouteGlobeWebView : ContentControl
             });
             return;
         }
+                if (node == "profile:signin" || node == "settings:signin")
+        {
+            Dispatcher.UIThread.Post(() => SignInRequested?.Invoke());
+            return;
+        }
+        if (node == "profile:renew")
+        {
+            Dispatcher.UIThread.Post(() => RenewRequested?.Invoke());
+            return;
+        }
+        if (node == "profile:import" || node == "settings:import")
+        {
+            Dispatcher.UIThread.Post(() => ImportRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:language")
+        {
+            Dispatcher.UIThread.Post(() => LanguagePickerRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:splittunnel")
+        {
+            Dispatcher.UIThread.Post(() => SplitTunnelRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:probemethod")
+        {
+            Dispatcher.UIThread.Post(() => ProbeMethodRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:service")
+        {
+            Dispatcher.UIThread.Post(() => ServiceCheckRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:bot")
+        {
+            Dispatcher.UIThread.Post(() => BotRequested?.Invoke());
+            return;
+        }
         if (node == "settings:check_updates")
         {
             Dispatcher.UIThread.Post(() =>
@@ -1176,6 +1283,10 @@ public sealed class RouteGlobeWebView : ContentControl
             script.Append("window.deyttSetRoutesData && window.deyttSetRoutesData(")
                 .Append(JsonSerializer.Serialize(items)).AppendLine(");");
         }
+                if (!string.IsNullOrEmpty(_profileDataJson))
+            script.AppendLine($"window.deyttSetProfileData && window.deyttSetProfileData({_profileDataJson});");
+        if (!string.IsNullOrEmpty(_settingsDataJson))
+            script.AppendLine($"window.deyttSetSettingsData && window.deyttSetSettingsData({_settingsDataJson});");
         script.AppendLine("window.deyttSetMapHostActive && window.deyttSetMapHostActive(true);");
         if (_homeResumeRevision != _appliedHomeResumeRevision)
             script.AppendLine("window.deyttResumeMap && window.deyttResumeMap();");

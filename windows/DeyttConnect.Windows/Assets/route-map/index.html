@@ -1825,6 +1825,35 @@
       transform: translateX(-50%) translateY(0);
       opacity: 1;
     }
+  
+    /* Modern sleek custom scrollbar (removes Windows Chromium gray gutter and arrows) */
+    html, body, * {
+      scrollbar-width: thin !important;
+      scrollbar-color: rgba(255, 255, 255, 0.16) transparent !important;
+    }
+    ::-webkit-scrollbar {
+      width: 6px !important;
+      height: 6px !important;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent !important;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.16) !important;
+      border-radius: 999px !important;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.32) !important;
+    }
+    ::-webkit-scrollbar-button {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    ::-webkit-scrollbar-corner {
+      background: transparent !important;
+    }
+
   </style>
 </head>
 <body>
@@ -2022,7 +2051,7 @@
                 <span class="country-name">нидерланды</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="nl">24</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
@@ -2032,18 +2061,25 @@
                 <div class="proto-row is-selected" data-route-key="nl-vless" data-route-tag="route:NL:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
+  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
+  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+</svg>
+</div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="nl-vless">24</span> мс
-                      <span class="proto-speed">· 290 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="nl-vless">активен ✓</button>
                   </div>
@@ -2053,17 +2089,25 @@
                 <div class="proto-row" data-route-key="nl-hy2" data-route-tag="route:NL:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
+  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
+  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
+</svg>
+</div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency" data-probe="nl-hy2">22</span> мс
-                      <span class="proto-speed">· 315 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="nl-hy2">выбрать</button>
                   </div>
@@ -2073,19 +2117,26 @@
                 <div class="proto-row" data-route-key="nl-trojan" data-route-tag="route:NL:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
-                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+  </defs>
+  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
+  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
+  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
+  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency" data-probe="nl-trojan">27</span> мс
-                      <span class="proto-speed">· 265 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="nl-trojan">выбрать</button>
                   </div>
@@ -2095,20 +2146,24 @@
                 <div class="proto-row" data-route-key="nl-awg" data-route-tag="awg31:nl">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
-                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
-                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#39E8BD"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+  </defs>
+  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="nl-awg">29</span> мс
-                      <span class="proto-speed">· 280 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="nl-awg">выбрать</button>
                   </div>
@@ -2125,7 +2180,7 @@
                 <span class="country-name">германия</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="de">30</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
@@ -2135,18 +2190,25 @@
                 <div class="proto-row" data-route-key="de-vless" data-route-tag="route:DE:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
+  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
+  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+</svg>
+</div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="de-vless">32</span> мс
-                      <span class="proto-speed">· 285 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="de-vless">выбрать</button>
                   </div>
@@ -2156,17 +2218,25 @@
                 <div class="proto-row" data-route-key="de-hy2" data-route-tag="route:DE:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
+  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
+  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
+</svg>
+</div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency" data-probe="de-hy2">30</span> мс
-                      <span class="proto-speed">· 310 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="de-hy2">выбрать</button>
                   </div>
@@ -2176,19 +2246,26 @@
                 <div class="proto-row" data-route-key="de-trojan" data-route-tag="route:DE:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
-                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+  </defs>
+  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
+  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
+  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
+  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency" data-probe="de-trojan">35</span> мс
-                      <span class="proto-speed">· 260 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="de-trojan">выбрать</button>
                   </div>
@@ -2198,20 +2275,24 @@
                 <div class="proto-row" data-route-key="de-awg" data-route-tag="awg31:de">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
-                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
-                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#39E8BD"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+  </defs>
+  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="de-awg">34</span> мс
-                      <span class="proto-speed">· 275 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="de-awg">выбрать</button>
                   </div>
@@ -2228,7 +2309,7 @@
                 <span class="country-name">россия</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="ru">11</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
@@ -2238,18 +2319,25 @@
                 <div class="proto-row" data-route-key="ru-vless" data-route-tag="route:RU:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
+  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
+  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+</svg>
+</div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="ru-vless">12</span> мс
-                      <span class="proto-speed">· 350 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="ru-vless">выбрать</button>
                   </div>
@@ -2259,17 +2347,25 @@
                 <div class="proto-row" data-route-key="ru-hy2" data-route-tag="route:RU:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
+  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
+  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
+</svg>
+</div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency" data-probe="ru-hy2">16</span> мс
-                      <span class="proto-speed">· 335 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="ru-hy2">выбрать</button>
                   </div>
@@ -2279,19 +2375,26 @@
                 <div class="proto-row" data-route-key="ru-trojan" data-route-tag="route:RU:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
-                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+  </defs>
+  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
+  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
+  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
+  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency" data-probe="ru-trojan">14</span> мс
-                      <span class="proto-speed">· 320 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="ru-trojan">выбрать</button>
                   </div>
@@ -2301,20 +2404,24 @@
                 <div class="proto-row" data-route-key="ru-awg" data-route-tag="awg31:ru">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
-                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
-                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#39E8BD"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+  </defs>
+  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="ru-awg">11</span> мс
-                      <span class="proto-speed">· 340 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="ru-awg">выбрать</button>
                   </div>
@@ -2331,7 +2438,7 @@
                 <span class="country-name">финляндия</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="fi">18</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
@@ -2341,18 +2448,25 @@
                 <div class="proto-row" data-route-key="fi-vless" data-route-tag="route:FI:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
+  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
+  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+</svg>
+</div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="fi-vless">20</span> мс
-                      <span class="proto-speed">· 300 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="fi-vless">выбрать</button>
                   </div>
@@ -2362,17 +2476,25 @@
                 <div class="proto-row" data-route-key="fi-hy2" data-route-tag="route:FI:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
+  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
+  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
+</svg>
+</div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency" data-probe="fi-hy2">18</span> мс
-                      <span class="proto-speed">· 325 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="fi-hy2">выбрать</button>
                   </div>
@@ -2382,19 +2504,26 @@
                 <div class="proto-row" data-route-key="fi-trojan" data-route-tag="route:FI:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
-                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+  </defs>
+  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
+  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
+  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
+  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency" data-probe="fi-trojan">23</span> мс
-                      <span class="proto-speed">· 270 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="fi-trojan">выбрать</button>
                   </div>
@@ -2404,20 +2533,24 @@
                 <div class="proto-row" data-route-key="fi-awg" data-route-tag="awg31:fi">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
-                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
-                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#39E8BD"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+  </defs>
+  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="fi-awg">22</span> мс
-                      <span class="proto-speed">· 295 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="fi-awg">выбрать</button>
                   </div>
@@ -2434,7 +2567,7 @@
                 <span class="country-name">италия</span>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="it">39</span> мс</span>
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
                 <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
             </div>
@@ -2444,18 +2577,25 @@
                 <div class="proto-row" data-route-key="it-vless" data-route-tag="route:IT:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38BDF8"/>
+      <stop offset="100%" stop-color="#0284C7"/>
+    </linearGradient>
+  </defs>
+  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
+  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
+  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+</svg>
+</div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="it-vless">42</span> мс
-                      <span class="proto-speed">· 270 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="it-vless">выбрать</button>
                   </div>
@@ -2465,17 +2605,25 @@
                 <div class="proto-row" data-route-key="it-hy2" data-route-tag="route:IT:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
+  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
+  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
+</svg>
+</div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency" data-probe="it-hy2">39</span> мс
-                      <span class="proto-speed">· 295 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="it-hy2">выбрать</button>
                   </div>
@@ -2485,19 +2633,26 @@
                 <div class="proto-row" data-route-key="it-trojan" data-route-tag="route:IT:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
-                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C084FC"/>
+      <stop offset="100%" stop-color="#A855F7"/>
+    </linearGradient>
+  </defs>
+  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
+  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
+  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
+  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency" data-probe="it-trojan">45</span> мс
-                      <span class="proto-speed">· 250 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="it-trojan">выбрать</button>
                   </div>
@@ -2507,20 +2662,24 @@
                 <div class="proto-row" data-route-key="it-awg" data-route-tag="awg31:it">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
-                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
-                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
-                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
-                      </svg>
-                    </div>
+<svg viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#39E8BD"/>
+      <stop offset="100%" stop-color="#10B981"/>
+    </linearGradient>
+  </defs>
+  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
+</svg>
+</div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
                       <span class="ping-dot"></span>
-                      <span class="proto-latency" data-probe="it-awg">44</span> мс
-                      <span class="proto-speed">· 260 мбит/с</span>
+                      <span class="proto-latency">—</span> мс
+                      <span class="proto-speed"></span>
                     </div>
                     <button class="route-action-btn btn-select-route" data-action-route="it-awg">выбрать</button>
                   </div>
@@ -2533,6 +2692,7 @@
     </section>
 
     <!-- Stage 3: профиль (Profile Stage) -->
+        <!-- Stage 3: профиль (Profile Stage) -->
     <section class="stage-view" id="stage-profile" aria-label="профиль пользователя">
       <div class="stage-content-wrap">
         <div class="stage-header">
@@ -2546,7 +2706,7 @@
         <div class="glass-card profile-hero">
           <div class="profile-user-left">
             <div class="tg-avatar-wrap">
-              <div class="tg-avatar-img" title="аватар telegram">
+              <div class="tg-avatar-img" id="profile-avatar" title="аватар telegram">
                 <svg viewBox="0 0 64 64" width="62" height="62" style="display: block;">
                   <defs>
                     <linearGradient id="tgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -2561,79 +2721,66 @@
                   </defs>
                   <rect width="64" height="64" rx="20" fill="url(#tgGrad)"/>
                   <rect width="64" height="64" rx="20" fill="url(#avatarShine)"/>
-                  <!-- Stylized Telegram Avatar Figure -->
                   <circle cx="32" cy="23" r="11" fill="#FFFFFF" fill-opacity="0.95"/>
                   <path d="M16 52 C16 41 23 37 32 37 C41 37 48 41 48 52 Z" fill="#FFFFFF" fill-opacity="0.95"/>
                 </svg>
               </div>
-              <div class="tg-badge-corner" title="привязан аккаунт telegram">
+              <div class="tg-badge-corner" id="profile-tg-badge" title="привязан аккаунт telegram">
                 <svg viewBox="0 0 24 24">
                   <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
                 </svg>
               </div>
             </div>
             <div class="user-info-block">
-              <h2 class="user-name-title">александр</h2>
+              <h2 class="user-name-title" id="profile-display-name">не подключено</h2>
               <div class="user-handle-line">
-                <span>@alex_deytt</span>
-                <span class="user-id-muted">· id: 84920412</span>
+                <span id="profile-username">войдите через telegram</span>
+                <span class="user-id-muted" id="profile-id"></span>
               </div>
               <div class="user-sub-status">
-                <span class="ping-tag"><span class="ping-dot"></span>подписка активна</span>
-                <span>·</span>
-                <span>до 14 ноября 2026 г. (осталось 24 дня)</span>
+                <span class="ping-tag" id="profile-sub-tag"><span class="ping-dot" id="profile-sub-dot"></span><span id="profile-sub-status">нет активной подписки</span></span>
+                <span id="profile-sub-sep" style="display:none;">·</span>
+                <span id="profile-sub-expiry" style="display:none;"></span>
               </div>
             </div>
           </div>
-          <button class="btn-renew-tg" id="btn-renew-tg">
-            <svg viewBox="0 0 24 24">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
-            </svg>
-            продлить в telegram ↗
-          </button>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn-renew-tg" id="btn-renew-tg" style="display:none;">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
+              </svg>
+              продлить в telegram ↗
+            </button>
+            <button class="btn-select-route" id="btn-login-tg">войти через telegram</button>
+          </div>
         </div>
 
         <!-- 2 Column Split -->
         <div class="profile-grid-2">
-          <!-- Traffic & Telemetry -->
+          <!-- Subscription Details Card -->
           <div class="glass-card">
-            <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">трафик и соединение</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">безлимитный скоростной тариф</p>
+            <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">подписка и тариф</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="profile-sub-tariff-desc">данные тарифа и доступные шлюзы</p>
 
             <div class="stat-gauge-wrap" style="margin-top: 14px;">
               <div class="stat-gauge-header">
-                <span style="color: var(--text-muted); font-size: 13px;">израсходовано в этом месяце</span>
-                <strong style="color: #39E8BD; font-size: 22px; font-family: 'Unbounded', sans-serif;">38.4 гб</strong>
+                <span style="color: var(--text-muted); font-size: 13px;">текущий тариф</span>
+                <strong style="color: #39E8BD; font-size: 18px; font-family: 'Unbounded', sans-serif;" id="profile-tariff-title">без подписки</strong>
               </div>
-              <p style="font-size: 12px; color: #64748B; margin-top: 4px;">тариф без ограничений по объёму и скорости</p>
+              <p style="font-size: 12px; color: #64748B; margin-top: 4px;" id="profile-tariff-detail">подключите telegram для активации доступа</p>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 14px;">
               <div>
-                <span style="font-size: 11.5px; color: var(--text-muted); display: block;">текущий протокол</span>
-                <strong style="font-size: 14px; color: #38BDF8; display: inline-flex; align-items: center; gap: 6px;">
-                  vless+ws · tls 1.3
+                <span style="font-size: 11.5px; color: var(--text-muted); display: block;">активный выход</span>
+                <strong style="font-size: 13.5px; color: #FFFFFF; display: inline-flex; align-items: center; gap: 6px;" id="profile-active-route">
+                  автоподбор
                 </strong>
               </div>
               <div>
-                <span style="font-size: 11.5px; color: var(--text-muted); display: block;">шлюз выхода</span>
-                <strong style="font-size: 14px; color: #FFFFFF; display: block;">
-                  <svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-nl"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-nl)"><rect width="24" height="5.33" fill="#C93D4B"/><rect y="5.33" width="24" height="5.34" fill="#F7F7F4"/><rect y="10.67" width="24" height="5.33" fill="#31579A"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg> нидерланды · амстердам
-                </strong>
-              </div>
-              <div>
-                <span style="font-size: 11.5px; color: var(--text-muted); display: block;">активное шифрование</span>
-                <strong style="font-size: 13.5px; color: #CBD5E1; display: block;">
-                  chacha20-poly1305
-                </strong>
-              </div>
-              <div>
-                <span style="font-size: 11.5px; color: var(--text-muted); display: block;">текущая скорость</span>
-                <strong style="font-size: 14px; color: #FFFFFF; display: inline-flex; align-items: center;">
-                  280 мбит/с
-                  <span class="network-equalizer" title="канал активен">
-                    <span></span><span></span><span></span><span></span><span></span>
-                  </span>
+                <span style="font-size: 11.5px; color: var(--text-muted); display: block;">статус подключения</span>
+                <strong style="font-size: 13.5px; color: #CBD5E1; display: block;" id="profile-tunnel-status">
+                  отключено
                 </strong>
               </div>
             </div>
@@ -2643,44 +2790,22 @@
           <div class="glass-card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">подключенные устройства</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">3 из 5 доступных слотов</p>
+                <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">устройства и сессии</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="profile-devices-count">подключения и слоты доступа</p>
               </div>
-              <button class="btn-select-route" style="font-size: 11.5px; padding: 5px 12px;" id="btn-add-device">+ слот</button>
+              <button class="btn-select-route" style="font-size: 11.5px; padding: 5px 12px;" id="btn-import-sub">импорт подписки</button>
             </div>
 
-            <div class="device-list">
+            <div class="device-list" id="profile-devices-list">
               <div class="device-row">
                 <div class="device-info">
                   <span>💻</span>
                   <div>
-                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">windows desktop</strong>
-                    <span style="font-size: 11.5px; color: var(--text-muted);">это устройство · v0.11.8</span>
+                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">это устройство</strong>
+                    <span style="font-size: 11.5px; color: var(--text-muted);">windows desktop · v0.11.37</span>
                   </div>
                 </div>
                 <span class="device-status">активно</span>
-              </div>
-
-              <div class="device-row">
-                <div class="device-info">
-                  <span>📱</span>
-                  <div>
-                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">pixel 8 pro</strong>
-                    <span style="font-size: 11.5px; color: var(--text-muted);">android client</span>
-                  </div>
-                </div>
-                <button class="btn-disconnect-device" data-device="pixel 8 pro">отключить</button>
-              </div>
-
-              <div class="device-row">
-                <div class="device-info">
-                  <span>💻</span>
-                  <div>
-                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">macbook air m2</strong>
-                    <span style="font-size: 11.5px; color: var(--text-muted);">macos sequoia · в сети 2 ч назад</span>
-                  </div>
-                </div>
-                <button class="btn-disconnect-device" data-device="macbook air m2">отключить</button>
               </div>
             </div>
           </div>
@@ -2688,11 +2813,11 @@
 
         <!-- Connection Key Box -->
         <div class="glass-card">
-          <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">ключ конфигурации туннеля</h3>
-          <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">персональный криптографический ключ для подключения устройств</p>
+          <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">ключ подписки</h3>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">персональная ссылка для подключения других устройств</p>
 
           <div class="key-box">
-            <span id="masked-key">awg://user_84920:••••••••••••••••••••••••••••••••••••••••</span>
+            <span id="masked-key">ссылка подписки станет доступна после входа в аккаунт</span>
             <div class="key-actions">
               <button class="btn-select-route" id="btn-copy-key">скопировать</button>
               <button class="btn-select-route" id="btn-show-qr">qr-код</button>
@@ -2703,78 +2828,107 @@
     </section>
 
     <!-- Stage 4: настройки (Settings Stage) -->
+        <!-- Stage 4: настройки (Settings Stage matching v0.11.30) -->
     <section class="stage-view" id="stage-settings" aria-label="параметры и настройки">
       <div class="stage-content-wrap">
         <div class="stage-header">
           <div>
-            <h1 class="stage-title">настройки клиента</h1>
-            <p class="stage-subtitle">параметры автозапуска, kill switch и системные настройки клиента</p>
+            <h1 class="stage-title">настройки</h1>
+            <p class="stage-subtitle">параметры подключения, язык, приватность и служба vpn</p>
           </div>
         </div>
 
-        <!-- Group 1: System -->
+        <!-- Group 1: Language & Account -->
         <div class="settings-group">
-          <span class="settings-group-title">система и запуск</span>
+          <span class="settings-group-title">язык и аккаунт</span>
+          <div class="glass-card" style="padding: 6px 10px;">
+            <div class="setting-item" id="row-setting-lang" style="cursor: pointer;">
+              <div class="setting-text-wrap">
+                <span class="setting-label">язык приложения</span>
+                <span class="setting-desc" id="setting-lang-desc">русский</span>
+              </div>
+              <button class="btn-select-route" id="btn-setting-lang" style="font-size: 11.5px; padding: 4px 10px;">изменить</button>
+            </div>
+            <div class="setting-item" id="row-setting-account" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+              <div class="setting-text-wrap">
+                <span class="setting-label">аккаунт telegram</span>
+                <span class="setting-desc" id="setting-account-desc">войти для управления подпиской</span>
+              </div>
+              <button class="btn-select-route" id="btn-setting-account" style="font-size: 11.5px; padding: 4px 10px;">войти</button>
+            </div>
+            <div class="setting-item" id="row-setting-import" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+              <div class="setting-text-wrap">
+                <span class="setting-label">импорт подписки</span>
+                <span class="setting-desc">вставить ссылку или подключить профиль</span>
+              </div>
+              <button class="btn-select-route" id="btn-setting-import" style="font-size: 11.5px; padding: 4px 10px;">открыть</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group 2: Connection & Service -->
+        <div class="settings-group">
+          <span class="settings-group-title">подключение</span>
+          <div class="glass-card" style="padding: 6px 10px;">
+            <div class="setting-item" id="row-setting-split" style="cursor: pointer;">
+              <div class="setting-text-wrap">
+                <span class="setting-label">раздельное туннелирование</span>
+                <span class="setting-desc" id="setting-split-desc">сайты из подписки · все протоколы</span>
+              </div>
+              <button class="btn-select-route" id="btn-setting-split" style="font-size: 11.5px; padding: 4px 10px;">настроить</button>
+            </div>
+            <div class="setting-item" id="row-setting-probe" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+              <div class="setting-text-wrap">
+                <span class="setting-label">проверка маршрута</span>
+                <span class="setting-desc" id="setting-probe-desc">HTTP HEAD · быстрая проверка, загрузка 1 с</span>
+              </div>
+              <button class="btn-select-route" id="btn-setting-probe" style="font-size: 11.5px; padding: 4px 10px;">выбрать</button>
+            </div>
+            <div class="setting-item" id="row-setting-service" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+              <div class="setting-text-wrap">
+                <span class="setting-label">служба vpn</span>
+                <span class="setting-desc" id="setting-service-desc">служба установлена · нажмите для проверки</span>
+              </div>
+              <button class="btn-select-route" id="btn-setting-service" style="font-size: 11.5px; padding: 4px 10px;">проверить</button>
+            </div>
+            <div class="setting-item" id="row-setting-bot" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+              <div class="setting-text-wrap">
+                <span class="setting-label">бот deytt</span>
+                <span class="setting-desc">управление подпиской и оплата в telegram</span>
+              </div>
+              <button class="btn-select-route" id="btn-setting-bot" style="font-size: 11.5px; padding: 4px 10px;">открыть ↗</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group 3: Appearance & Privacy -->
+        <div class="settings-group">
+          <span class="settings-group-title">вид и приватность</span>
           <div class="glass-card" style="padding: 6px 10px;">
             <div class="setting-item">
               <div class="setting-text-wrap">
-                <span class="setting-label">запуск при старте windows</span>
-                <span class="setting-desc">автоматически запускать ./connect при входе пользователя в систему</span>
+                <span class="setting-label">показывать мой регион</span>
+                <span class="setting-desc">IP · ipinfo.io · не GPS · только в памяти</span>
               </div>
-              <div class="glass-switch is-checked" data-setting="autostart"></div>
+              <div class="glass-switch is-checked" id="switch-setting-region" data-setting="region"></div>
             </div>
             <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
               <div class="setting-text-wrap">
-                <span class="setting-label">автоподключение при старте</span>
-                <span class="setting-desc">устанавливать защищенное соединение сразу после запуска программы</span>
+                <span class="setting-label">уменьшить движение</span>
+                <span class="setting-desc">скрыть звездный фон и анимации</span>
               </div>
-              <div class="glass-switch is-checked" data-setting="autoconnect"></div>
-            </div>
-            <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
-              <div class="setting-text-wrap">
-                <span class="setting-label">сворачивать в системный трей</span>
-                <span class="setting-desc">при закрытии окна прятать приложение в трей рядом с часами</span>
-              </div>
-              <div class="glass-switch is-checked" data-setting="tray"></div>
+              <div class="glass-switch" id="switch-setting-motion" data-setting="reduce_motion"></div>
             </div>
           </div>
         </div>
 
-        <!-- Group 2: Network & Security -->
+        <!-- Group 4: About & Updates -->
         <div class="settings-group">
-          <span class="settings-group-title">безопасность и маршрутизация</span>
-          <div class="glass-card" style="padding: 6px 10px;">
-            <div class="setting-item">
-              <div class="setting-text-wrap">
-                <span class="setting-label">аварийная блокировка (kill switch)</span>
-                <span class="setting-desc">блокирует весь сетевой трафик компьютера в случае неожиданного разрыва vpn</span>
-              </div>
-              <div class="glass-switch is-checked" data-setting="killswitch"></div>
-            </div>
-            <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
-              <div class="setting-text-wrap">
-                <span class="setting-label">раздельное туннелирование (bypass)</span>
-                <span class="setting-desc">российские банки, сервисы и госуслуги работают напрямую через локального провайдера</span>
-              </div>
-              <div class="glass-switch is-checked" data-setting="bypass"></div>
-            </div>
-            <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
-              <div class="setting-text-wrap">
-                <span class="setting-label">безопасный dns</span>
-                <span class="setting-desc">защита от подмены адресов и провайдерской фильтрации через ./dns</span>
-              </div>
-              <div class="glass-switch is-checked" data-setting="dns"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Group 3: About -->
-        <div class="settings-group">
-          <span class="settings-group-title">о приложении</span>
+          <span class="settings-group-title">обновления</span>
           <div class="glass-card" style="display: flex; align-items: center; justify-content: space-between;">
             <div>
               <strong style="color: #FFFFFF; font-size: 15px; display: block;">./connect</strong>
-              <span style="font-size: 13px; color: var(--text-muted);">версия 0.11.37 (windows x64) · канал: ./beta</span>
+              <span style="font-size: 13px; color: var(--text-muted);" id="settings-app-version">версия 0.11.37 (windows x64) · канал: ./beta</span>
             </div>
             <button class="btn-select-route" id="btn-check-updates">проверить обновления</button>
           </div>
@@ -3076,6 +3230,108 @@
       }
     };
 
+    
+    // Real Profile and Settings data bridge from C# host
+    window.deyttSetProfileData = function(data) {
+      if (!data) return;
+      const dName = document.getElementById("profile-display-name");
+      const uName = document.getElementById("profile-username");
+      const pId = document.getElementById("profile-id");
+      const sTag = document.getElementById("profile-sub-tag");
+      const sDot = document.getElementById("profile-sub-dot");
+      const sStatus = document.getElementById("profile-sub-status");
+      const sSep = document.getElementById("profile-sub-sep");
+      const sExp = document.getElementById("profile-sub-expiry");
+      const btnRenew = document.getElementById("btn-renew-tg");
+      const btnLogin = document.getElementById("btn-login-tg");
+      const tTitle = document.getElementById("profile-tariff-title");
+      const tDetail = document.getElementById("profile-tariff-detail");
+      const mKey = document.getElementById("masked-key");
+      const dList = document.getElementById("profile-devices-list");
+      const dCount = document.getElementById("profile-devices-count");
+
+      if (data.isSignedIn) {
+        if (dName) dName.textContent = data.displayName || data.username || "пользователь";
+        if (uName) uName.textContent = data.username ? "@" + data.username.replace(/^@/, "") : "telegram подключен";
+        if (pId) pId.textContent = data.telegramId ? "· id: " + data.telegramId : "";
+        if (btnLogin) btnLogin.style.display = "none";
+        if (btnRenew) btnRenew.style.display = "";
+      } else {
+        if (dName) dName.textContent = "не подключено";
+        if (uName) uName.textContent = "войдите через telegram";
+        if (pId) pId.textContent = "";
+        if (btnLogin) btnLogin.style.display = "";
+        if (btnRenew) btnRenew.style.display = "none";
+      }
+
+      if (data.subscriptionActive) {
+        if (sStatus) sStatus.textContent = "подписка активна";
+        if (sDot) { sDot.style.background = "#39E8BD"; sDot.style.boxShadow = "0 0 8px #39E8BD"; }
+        if (sSep) sSep.style.display = "";
+        if (sExp) {
+          sExp.style.display = "";
+          sExp.textContent = (data.expiresFormatted ? "до " + data.expiresFormatted : "") +
+                             (data.daysRemaining !== undefined ? " (осталось " + data.daysRemaining + " дн.)" : "");
+        }
+        if (tTitle) tTitle.textContent = data.tariffName || "активный тариф";
+        if (tDetail) tDetail.textContent = "доступ ко всем локациям и протоколам";
+      } else {
+        if (sStatus) sStatus.textContent = data.isSignedIn ? "нет активной подписки" : "подписка не проверена";
+        if (sDot) { sDot.style.background = "#94A3B8"; sDot.style.boxShadow = "none"; }
+        if (sSep) sSep.style.display = "none";
+        if (sExp) sExp.style.display = "none";
+        if (tTitle) tTitle.textContent = "без подписки";
+        if (tDetail) tDetail.textContent = "оформите подписку в telegram боте";
+      }
+
+      if (data.subscriptionKey && mKey) {
+        mKey.textContent = data.subscriptionKey;
+      }
+
+      if (Array.isArray(data.devices) && dList) {
+        let html = "";
+        data.devices.forEach(dev => {
+          html += `<div class="device-row">
+            <div class="device-info">
+              <span>${dev.icon || "💻"}</span>
+              <div>
+                <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">${dev.name || "устройство"}</strong>
+                <span style="font-size: 11.5px; color: var(--text-muted);">${dev.detail || dev.platform || ""}</span>
+              </div>
+            </div>
+            <span class="device-status">${dev.isActive ? "активно" : "в сети"}</span>
+          </div>`;
+        });
+        dList.innerHTML = html;
+        if (dCount) dCount.textContent = `${data.devices.length} подключенных устройств`;
+      }
+    };
+
+    window.deyttSetSettingsData = function(data) {
+      if (!data) return;
+      const sLang = document.getElementById("setting-lang-desc");
+      const sAcc = document.getElementById("setting-account-desc");
+      const btnAcc = document.getElementById("btn-setting-account");
+      const sSplit = document.getElementById("setting-split-desc");
+      const sProbe = document.getElementById("setting-probe-desc");
+      const sServ = document.getElementById("setting-service-desc");
+      const swRegion = document.getElementById("switch-setting-region");
+      const swMotion = document.getElementById("switch-setting-motion");
+      const sVer = document.getElementById("settings-app-version");
+
+      if (sLang && data.language) sLang.textContent = data.language === "ru" ? "русский" : "english";
+      if (sAcc) {
+        sAcc.textContent = data.accountUsername ? "@" + data.accountUsername : "войти для управления подпиской";
+        if (btnAcc) btnAcc.textContent = data.accountUsername ? "профиль" : "войти";
+      }
+      if (sSplit && data.splitTunnelSummary) sSplit.textContent = data.splitTunnelSummary;
+      if (sProbe && data.probeMethod) sProbe.textContent = "HTTP " + data.probeMethod + " · быстрая проверка, загрузка 1 с";
+      if (sServ) sServ.textContent = data.vpnServiceAvailable ? "служба установлена · готова к работе" : "требуются права администратора";
+      if (swRegion) swRegion.classList.toggle("is-checked", !!data.mapRegionEnabled);
+      if (swMotion) swMotion.classList.toggle("is-checked", !!data.reduceMotion);
+      if (sVer && data.appVersion) sVer.textContent = `версия ${data.appVersion} (windows x64) · канал: ./beta`;
+    };
+
     window.deyttSetRoutesData = function(routes) {
       if (!Array.isArray(routes)) return;
       routes.forEach(route => {
@@ -3221,7 +3477,7 @@
       });
     });
 
-    // Country Accordion Expand / Collapse with Realtime Latency & Speed Probe
+    // Country Accordion Expand / Collapse with Realtime Backend Probing
     document.querySelectorAll(".country-accordion-header").forEach(header => {
       header.addEventListener("click", () => {
         const acc = header.closest(".country-accordion");
@@ -3230,37 +3486,28 @@
         document.querySelectorAll(".country-accordion").forEach(c => c.classList.remove("is-open"));
         if (!wasOpen) {
           acc.classList.add("is-open");
+          const countryKey = (acc.dataset.countryKey || "").toUpperCase();
 
-          // Trigger live measurement probe for every protocol inside
+          // Enter probing UI state for all rows inside
           const protoRows = acc.querySelectorAll(".proto-row");
-          protoRows.forEach((row, idx) => {
+          protoRows.forEach(row => {
             const latEl = row.querySelector(".proto-latency");
             const spdEl = row.querySelector(".proto-speed");
-            if (!latEl) return;
-            const basePing = parseInt(latEl.textContent.trim()) || 28;
-            latEl.textContent = "…";
-            latEl.style.opacity = "0.6";
-            if (spdEl) {
-              spdEl.textContent = "· … мбит/с";
-              spdEl.style.opacity = "0.6";
-            }
-            setTimeout(() => {
-              const jitter = Math.floor(Math.random() * 5) - 2;
-              const measuredPing = Math.max(9, basePing + jitter);
-              latEl.textContent = measuredPing.toString();
-              latEl.style.opacity = "1";
-              if (spdEl) {
-                const speedVal = Math.floor(Math.random() * 35) + 265;
-                spdEl.textContent = `· ${speedVal} мбит/с`;
-                spdEl.style.opacity = "1";
-              }
-            }, 160 + idx * 60);
+            const dot = row.querySelector(".ping-dot");
+            if (latEl) latEl.textContent = "…";
+            if (spdEl) spdEl.textContent = "· …";
+            if (dot) dot.classList.add("is-probing");
           });
+
+          // Dispatch real parallel probe to C# host!
+          if (countryKey) {
+            postHost("route:probe:country:" + countryKey);
+          }
         }
       });
     });
 
-    // Switch route button on home panel jumps to routes tab
+    // Switch route button
     const switchRouteBtn = document.getElementById("home-switch-route");
     if (switchRouteBtn) {
       switchRouteBtn.addEventListener("click", () => {
@@ -3435,30 +3682,40 @@
         const speedUnit = document.getElementById("home-speed-unit");
         if (latency) {
           latency.classList.add("is-empty");
-          latency.textContent = "замер…";
+          latency.textContent = "…";
           if (latencyUnit) latencyUnit.hidden = true;
         }
         if (speed) {
           speed.classList.add("is-empty");
-          speed.textContent = "замер…";
+          speed.textContent = "…";
           if (speedUnit) speedUnit.hidden = true;
         }
-        setTimeout(() => {
-          const currentPing = routeDetails[activeRouteKey]?.ping || 24;
-          if (latency) {
-            latency.classList.remove("is-empty");
-            latency.textContent = (currentPing + Math.floor(Math.random() * 4) - 2).toString();
-            if (latencyUnit) latencyUnit.hidden = false;
-          }
-          if (speed) {
-            speed.classList.remove("is-empty");
-            speed.textContent = (Math.floor(Math.random() * 25) + 180).toString();
-            if (speedUnit) speedUnit.hidden = false;
-          }
-          showToast("замер скорости и задержки обновлен");
-        }, 350);
+        postHost("home-measure");
       });
     }
+
+    
+    // Profile & Settings IPC actions
+    document.getElementById("btn-login-tg")?.addEventListener("click", () => postHost("profile:signin"));
+    document.getElementById("btn-renew-tg")?.addEventListener("click", () => postHost("profile:renew"));
+    document.getElementById("btn-import-sub")?.addEventListener("click", () => postHost("profile:import"));
+    document.getElementById("btn-setting-lang")?.addEventListener("click", () => postHost("settings:language"));
+    document.getElementById("btn-setting-account")?.addEventListener("click", () => postHost("settings:signin"));
+    document.getElementById("btn-setting-import")?.addEventListener("click", () => postHost("settings:import"));
+    document.getElementById("btn-setting-split")?.addEventListener("click", () => postHost("settings:splittunnel"));
+    document.getElementById("btn-setting-probe")?.addEventListener("click", () => postHost("settings:probemethod"));
+    document.getElementById("btn-setting-service")?.addEventListener("click", () => postHost("settings:service"));
+    document.getElementById("btn-setting-bot")?.addEventListener("click", () => postHost("settings:bot"));
+    document.getElementById("switch-setting-region")?.addEventListener("click", (e) => {
+      const sw = e.currentTarget;
+      sw.classList.toggle("is-checked");
+      postHost("settings:set:region:" + sw.classList.contains("is-checked"));
+    });
+    document.getElementById("switch-setting-motion")?.addEventListener("click", (e) => {
+      const sw = e.currentTarget;
+      sw.classList.toggle("is-checked");
+      postHost("settings:set:motion:" + sw.classList.contains("is-checked"));
+    });
 
     // Initialize pill position
     window.addEventListener("DOMContentLoaded", () => {
