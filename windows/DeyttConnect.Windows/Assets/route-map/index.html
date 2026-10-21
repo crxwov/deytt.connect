@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>./connect · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_20">
-  <script defer src="network-atlas.js?v=20261021_20"></script>
-  <script defer src="atlas-init.js?v=20261021_20"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261021_21">
+  <script defer src="network-atlas.js?v=20261021_21"></script>
+  <script defer src="atlas-init.js?v=20261021_21"></script>
 
   <style>
     :root {
@@ -323,11 +323,11 @@
       pointer-events: auto;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 11px 4px 8px;
-      height: 26px;
+      gap: 8px;
+      padding: 5px 12px 5px 9px;
+      height: 34px;
       box-sizing: border-box;
-      border-radius: 9999px;
+      border-radius: 12px;
       
       /* Crystal Clear Ultra-Transparent Liquid Glass (~88% transparent) */
       background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(11, 18, 32, 0.12);
@@ -354,36 +354,37 @@
     }
 
     .atlas-glass-label__pip {
-      width: 5.5px;
-      height: 5.5px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background: rgba(255, 255, 255, 0.7);
       box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
       flex-shrink: 0;
     }
 
-    .atlas-glass-label__title {
-      font-family: inherit;
-      font-size: 10.5px;
-      font-weight: 600;
-      letter-spacing: -0.01em;
-      color: #F8FAFC;
+    .atlas-glass-label__col {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 1.5px;
       line-height: 1;
     }
 
-    .atlas-glass-label__sep {
-      font-size: 8.5px;
-      color: rgba(255, 255, 255, 0.35);
-      line-height: 1;
-      margin: 0 -1px;
+    .atlas-glass-label__title {
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #F8FAFC;
+      line-height: 1.15;
     }
 
     .atlas-glass-label__country {
       font-family: inherit;
-      font-size: 9px;
+      font-size: 9.5px;
       font-weight: 500;
       color: rgba(255, 255, 255, 0.65);
-      line-height: 1;
+      line-height: 1.1;
     }
 
     .atlas-glass-label.is-user {

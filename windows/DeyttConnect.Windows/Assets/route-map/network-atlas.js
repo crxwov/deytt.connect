@@ -8,20 +8,20 @@
   const PAN_EASE_MS = 120;
   const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
   const LABEL_OFFSETS = {
-    nl: { x: -26, y: -26, align: "right" },
-    de: { x: -26, y: 24, align: "right" },
-    fi: { x: -20, y: -38, align: "right" },
-    it: { x: 22, y: 30, align: "left" },
-    ru: { x: 24, y: -34, align: "left" },
-    user: { x: 24, y: -48, align: "left" }
+    nl: { x: -28, y: -26, align: "right" },
+    de: { x: -28, y: 30, align: "right" },
+    fi: { x: -24, y: -42, align: "right" },
+    it: { x: 26, y: 32, align: "left" },
+    ru: { x: 26, y: -38, align: "left" },
+    user: { x: 26, y: -54, align: "left" }
   };
   const COMPACT_LABEL_OFFSETS = {
     nl: { x: -24, y: -26, align: "right" },
-    de: { x: -24, y: 24, align: "right" },
-    fi: { x: -18, y: -42, align: "right" },
-    it: { x: 20, y: 32, align: "left" },
-    ru: { x: 22, y: -34, align: "left" },
-    user: { x: 22, y: -52, align: "left" }
+    de: { x: -24, y: 30, align: "right" },
+    fi: { x: -20, y: -44, align: "right" },
+    it: { x: 22, y: 32, align: "left" },
+    ru: { x: 22, y: -38, align: "left" },
+    user: { x: 22, y: -54, align: "left" }
   };
   const LOCATIONS = {
     nl: { code: "nl", city: "амстердам", country: "нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
@@ -773,7 +773,7 @@
        * untouched. */
 
       if (colors.atmosphere && colors.atmosphere !== "rgba(0,0,0,0)") {
-        const haloScale = this.cameraMoving ? 1.5 : 1.34;
+        const haloScale = 1.38;
         const halo = context.createRadialGradient(x, y, radius * .96, x, y, radius * haloScale);
         halo.addColorStop(0, colors.atmosphere);
         halo.addColorStop(.4, colors.atmosphereSoft);
@@ -806,7 +806,7 @@
         context.lineCap = "round";
         context.strokeStyle = colors.rimLight;
         context.shadowColor = colors.rimLight;
-        context.shadowBlur = this.cameraMoving ? 0 : radius * 0.035;
+        context.shadowBlur = 0;
         const rimArc = (startAngle, endAngle, alpha) => {
           context.save();
           context.globalAlpha = alpha;
@@ -848,8 +848,7 @@
       const cy = this.centerY;
       const maxJump = this.radius * this.zoom * .24;
       const maxJumpSq = maxJump * maxJump;
-      const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
-      const pointStep = isMoving ? 2 : 1;
+      const pointStep = 1;
 
       const strokeLines = (lines, style, width, alpha) => {
         const len = lines.length;
@@ -1551,17 +1550,18 @@
         ? this.copy(countryNames[location.country?.toUpperCase()] || location.country || "вход в сеть")
         : this.copy(location.country);
 
-      const height = 26;
+      const height = 34;
       const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
 
       context.save();
-      context.font = "600 10.5px " + fontFamily;
+      context.font = "600 11.5px " + fontFamily;
       const titleWidth = context.measureText(title).width;
-      context.font = "500 9px " + fontFamily;
+      context.font = "500 9.5px " + fontFamily;
       const metaWidth = meta ? context.measureText(meta).width : 0;
       context.restore();
 
-      const width = Math.round(titleWidth + (meta ? metaWidth + 16 : 0) + 26);
+      const textWidth = Math.max(titleWidth, metaWidth);
+      const width = Math.round(textWidth + 35);
 
       // Smooth horizon dissolve as node approaches the curved edge of the globe
       const horizonFade = clamp((point.z - 0.05) / 0.17, 0, 1);
@@ -1629,16 +1629,19 @@
           el.className = newClass;
         }
 
-        const expectedHtml = `<span class="atlas-glass-label__pip"></span><span class="atlas-glass-label__title">${title}</span>${meta ? `<span class="atlas-glass-label__sep">·</span><span class="atlas-glass-label__country">${meta}</span>` : ""}`;
+        const expectedHtml = `<span class="atlas-glass-label__pip"></span><div class="atlas-glass-label__col"><span class="atlas-glass-label__title">${title}</span>${meta ? `<span class="atlas-glass-label__country">${meta}</span>` : ""}</div>`;
         if (el._currentHtml !== expectedHtml) {
           el.innerHTML = expectedHtml;
           el._currentHtml = expectedHtml;
         }
 
-        // Direct 1:1 GPU translation without CSS transition lag
-        el.style.transform = `translate3d(${left}px, ${top}px, 0)`;
-        el.style.opacity = (isHovered ? 1 : horizonFade).toFixed(2);
-        el.style.display = "inline-flex";
+        if (horizonFade <= 0.02) {
+          el.style.display = "none";
+        } else {
+          el.style.display = "inline-flex";
+          el.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+          el.style.opacity = (isHovered ? 1 : horizonFade).toFixed(2);
+        }
       }
     }
 
@@ -1679,15 +1682,6 @@
       const context = this.staticContext;
       const liveZoom = this.zoom;
       const liveX = this.centerX, liveY = this.centerY;
-      // Zoom is an affine change of the orthographic projection. Keep its
-      // geography bitmap and let the compositor scale it during the wheel
-      // animation. Coverage is checked before reuse, then the final camera
-      // is rasterized again so no clipped edge or enlarged pixels remain.
-      this.zoom = this.cameraMoving ? Math.min(this.zoom, this.targetZoom) : this.zoom;
-      if (this.cameraMoving && this.targetZoom < liveZoom) {
-        this.centerX = this.targetCenterX;
-        this.centerY = this.targetCenterY;
-      }
       this.staticCamera = { zoom: this.zoom, x: this.centerX, y: this.centerY };
       this.context = context;
       try {
@@ -1752,15 +1746,13 @@
       if (this.dragging) {
         if (this.pendingDragDx !== 0 || this.pendingDragDy !== 0) {
           const dragScale = 1 / Math.max(1, this.targetZoom);
-          this.targetLon -= this.pendingDragDx * 0.22 * dragScale;
-          this.targetLat = clamp(this.targetLat + this.pendingDragDy * 0.16 * dragScale, -62, 72);
+          this.centerLon -= this.pendingDragDx * 0.22 * dragScale;
+          this.centerLat = clamp(this.centerLat + this.pendingDragDy * 0.16 * dragScale, -62, 72);
+          this.targetLon = this.centerLon;
+          this.targetLat = this.centerLat;
           this.pendingDragDx = 0;
           this.pendingDragDy = 0;
         }
-        // Sub-frame smooth responsive follow (absorbs mouse packet burst jitter)
-        const dragEase = 1 - Math.exp(-Math.max(1, delta) / 18);
-        this.centerLon = mix(this.centerLon, this.targetLon, dragEase);
-        this.centerLat = mix(this.centerLat, this.targetLat, dragEase);
       } else {
         if (Math.abs(this.velocityLon) > 0.001 || Math.abs(this.velocityLat || 0) > 0.001) {
           // Direct Newtonian glide in zero-gravity: frameScale accounts for variable display refresh (60Hz, 120Hz, 144Hz)
@@ -1773,7 +1765,7 @@
           this.targetLat = this.centerLat;
 
           // Float like in zero-gravity: continuous exponential decay ensures 60-144+ FPS smoothness
-          const friction = Math.exp(-1.15 * delta / 1000);
+          const friction = Math.exp(-2.2 * delta / 1000);
           this.velocityLon *= friction;
           if (this.velocityLat) {
             this.velocityLat *= friction;
