@@ -931,7 +931,7 @@ public partial class MainWindow
             _vpnServiceAvailable,
             _mapRegionEnabled,
             _reduceMotion,
-            "0.11.37"
+            "0.11.38"
         );
     }
 
