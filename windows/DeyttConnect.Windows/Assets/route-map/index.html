@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>deytt. · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_04">
-  <script defer src="network-atlas.js?v=20261021_04"></script>
-  <script defer src="atlas-init.js?v=20261021_04"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261021_05">
+  <script defer src="network-atlas.js?v=20261021_05"></script>
+  <script defer src="atlas-init.js?v=20261021_05"></script>
 
   <style>
     :root {
@@ -329,6 +329,76 @@
       transform: translateX(-50%) translateY(0);
       opacity: 1;
     }
+
+    /* Ambient Background Style Switcher */
+    .bg-variant-bar {
+      position: fixed;
+      bottom: 20px;
+      left: 24px;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 8px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      transition: all 160ms ease;
+    }
+
+    html[data-theme="dark"] .bg-variant-bar {
+      background: rgba(15, 23, 35, 0.72);
+      border-color: rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    }
+
+    .bg-bar-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-right: 3px;
+      padding-left: 4px;
+    }
+
+    .bg-pill-btn {
+      border: none;
+      background: transparent;
+      padding: 4px 9px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 120ms ease;
+      white-space: nowrap;
+    }
+
+    .bg-pill-btn:hover {
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    html[data-theme="dark"] .bg-pill-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .bg-pill-btn.is-active {
+      background: #FFFFFF;
+      color: #0284C7;
+      font-weight: 600;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    }
+
+    html[data-theme="dark"] .bg-pill-btn.is-active {
+      background: rgba(255, 255, 255, 0.16);
+      color: #38BDF8;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    }
   </style>
 </head>
 <body>
@@ -476,6 +546,15 @@
     </div>
   </main>
 
+  <!-- Light Theme Ambient Background Variant Switcher -->
+  <nav class="bg-variant-bar" id="bg-variant-bar" aria-label="Варианты фона">
+    <span class="bg-bar-title">Фон:</span>
+    <button type="button" class="bg-pill-btn is-active" data-bg="studio" title="Мягкий студийный свет (Apple / Fluent ambient)">1. Студия</button>
+    <button type="button" class="bg-pill-btn" data-bg="stardust" title="Дневные звезды и спутниковые маяки">2. Звезды дня</button>
+    <button type="button" class="bg-pill-btn" data-bg="strato" title="Высотный горизонт / Стратосфера">3. Горизонт</button>
+    <button type="button" class="bg-pill-btn" data-bg="minimal" title="Чистый фарфоровый минимализм">4. Минимал</button>
+  </nav>
+
   <div class="motion-toast" id="toast"></div>
 
   <script>
@@ -484,6 +563,19 @@
       const canvas = document.getElementById("stars-canvas");
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
+
+      // Active background variant for light theme (persisted in localStorage or query param)
+      const urlBg = new URLSearchParams(window.location.search).get("bg");
+      window.currentBgVariant = urlBg || localStorage.getItem("deytt_light_bg") || "studio";
+
+      function updateBgPickerUI() {
+        const btns = document.querySelectorAll(".bg-pill-btn");
+        btns.forEach(b => {
+          const match = b.dataset.bg === window.currentBgVariant;
+          b.classList.toggle("is-active", match);
+          b.setAttribute("aria-pressed", match ? "true" : "false");
+        });
+      }
 
       function renderBackground() {
         const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -509,160 +601,161 @@
             ctx.arc(x, y, radius, 0, Math.PI * 2);
             ctx.fill();
           }
-        } else {
-          // Light Theme: Vivid Daylight Sky with Volumetric Clouds, Sunbeams & Orbital Arcs
-          // 1. Rich daylight sky with real atmospheric contrast
-          const skyGrad = ctx.createLinearGradient(0, 0, width * 0.4, height);
-          skyGrad.addColorStop(0, "#C4E0F6");
-          skyGrad.addColorStop(0.35, "#D5EAF8");
-          skyGrad.addColorStop(0.75, "#E8F3FA");
-          skyGrad.addColorStop(1, "#F2F7FB");
-          ctx.fillStyle = skyGrad;
+          return;
+        }
+
+        // ==========================================
+        // Light Theme: 4 Premium, Professional Variants
+        // ==========================================
+        const activeVariant = window.currentBgVariant || "studio";
+        const globeCx = width * 0.44;
+        const globeCy = height * 0.50;
+        const globeR = Math.min(width, height) * 0.48;
+
+        if (activeVariant === "studio") {
+          // ------------------------------------------
+          // ВАРИАНТ 1: Мягкий студийный свет (Apple / Fluent ambient) [DEFAULT]
+          // ------------------------------------------
+          // 1. Serene porcelain-sky gradient
+          const baseGrad = ctx.createLinearGradient(0, 0, width, height);
+          baseGrad.addColorStop(0, "#EBF3FA");
+          baseGrad.addColorStop(0.45, "#F3F7FA");
+          baseGrad.addColorStop(1, "#F7FAFC");
+          ctx.fillStyle = baseGrad;
           ctx.fillRect(0, 0, width, height);
 
-          // 2. Visible diagonal Sunbeams (God Rays) streaming from top-left
-          const sunX = width * 0.12;
-          const sunY = height * 0.08;
-          ctx.save();
-          const rays = [
-            { angle: 0.42, spread: 0.16, opacity: 0.32 },
-            { angle: 0.65, spread: 0.22, opacity: 0.28 },
-            { angle: 0.92, spread: 0.18, opacity: 0.25 },
-            { angle: 1.18, spread: 0.24, opacity: 0.22 }
-          ];
-          const rayLen = Math.max(width, height) * 1.3;
-          rays.forEach(ray => {
-            const grad = ctx.createRadialGradient(sunX, sunY, 20, sunX, sunY, rayLen);
-            grad.addColorStop(0, `rgba(255, 255, 255, ${ray.opacity})`);
-            grad.addColorStop(0.4, `rgba(240, 250, 255, ${ray.opacity * 0.6})`);
-            grad.addColorStop(0.85, "rgba(230, 245, 255, 0)");
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.moveTo(sunX, sunY);
-            ctx.lineTo(sunX + Math.cos(ray.angle - ray.spread / 2) * rayLen, sunY + Math.sin(ray.angle - ray.spread / 2) * rayLen);
-            ctx.lineTo(sunX + Math.cos(ray.angle + ray.spread / 2) * rayLen, sunY + Math.sin(ray.angle + ray.spread / 2) * rayLen);
-            ctx.closePath();
-            ctx.fill();
-          });
-          ctx.restore();
-
-          // 3. Volumetric Clouds with shaded underbelly and bright sunlit crests
-          const clouds = [
-            { x: width * 0.15, y: height * 0.20, rx: 260, ry: 90, baseA: 0.35, topA: 0.85 },
-            { x: width * 0.28, y: height * 0.15, rx: 220, ry: 80, baseA: 0.30, topA: 0.80 },
-            { x: width * 0.80, y: height * 0.18, rx: 320, ry: 110, baseA: 0.42, topA: 0.90 },
-            { x: width * 0.92, y: height * 0.26, rx: 240, ry: 95, baseA: 0.35, topA: 0.82 },
-            { x: width * 0.75, y: height * 0.38, rx: 200, ry: 80, baseA: 0.38, topA: 0.85 },
-            { x: width * 0.12, y: height * 0.78, rx: 280, ry: 100, baseA: 0.40, topA: 0.88 },
-            { x: width * 0.88, y: height * 0.76, rx: 340, ry: 120, baseA: 0.45, topA: 0.92 },
-            { x: width * 0.48, y: height * 0.86, rx: 380, ry: 115, baseA: 0.38, topA: 0.80 }
-          ];
-
-          clouds.forEach(c => {
-            ctx.save();
-            // Shaded underbelly (soft sky-blue shadow)
-            ctx.save();
-            ctx.translate(c.x + 8, c.y + 14);
-            ctx.scale(1, c.ry / c.rx);
-            const baseGrad = ctx.createRadialGradient(0, 0, c.rx * 0.1, 0, 0, c.rx);
-            baseGrad.addColorStop(0, `rgba(135, 175, 208, ${c.baseA})`);
-            baseGrad.addColorStop(0.65, `rgba(160, 195, 222, ${c.baseA * 0.4})`);
-            baseGrad.addColorStop(1, "rgba(180, 210, 230, 0)");
-            ctx.fillStyle = baseGrad;
-            ctx.beginPath();
-            ctx.arc(0, 0, c.rx, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-
-            // Sunlit cloud crest (pure white illuminated volume)
-            ctx.save();
-            ctx.translate(c.x - 4, c.y - 6);
-            ctx.scale(1, c.ry / c.rx);
-            const topGrad = ctx.createRadialGradient(0, -c.ry * 0.2, c.rx * 0.05, 0, 0, c.rx);
-            topGrad.addColorStop(0, `rgba(255, 255, 255, ${c.topA})`);
-            topGrad.addColorStop(0.55, `rgba(250, 253, 255, ${c.topA * 0.65})`);
-            topGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
-            ctx.fillStyle = topGrad;
-            ctx.beginPath();
-            ctx.arc(0, 0, c.rx, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
-            ctx.restore();
-          });
-
-          // 4. Prominent Orbital Navigation Arcs behind globe
-          const cx = width * 0.5;
-          const cy = height * 0.5;
-          ctx.save();
-          ctx.strokeStyle = "rgba(18, 105, 175, 0.22)";
-          ctx.lineWidth = 1.4;
-          ctx.setLineDash([8, 12]);
-          // Outer tilted orbital ellipse
-          ctx.save();
-          ctx.translate(cx, cy);
-          ctx.rotate(-0.25);
+          // 2. Soft, luminous solar aura directly behind the globe
+          const haloGrad = ctx.createRadialGradient(globeCx, globeCy, globeR * 0.2, globeCx, globeCy, globeR * 1.45);
+          haloGrad.addColorStop(0, "rgba(185, 218, 248, 0.42)");
+          haloGrad.addColorStop(0.35, "rgba(210, 232, 252, 0.22)");
+          haloGrad.addColorStop(0.70, "rgba(235, 245, 255, 0.08)");
+          haloGrad.addColorStop(1, "rgba(247, 250, 252, 0)");
+          ctx.fillStyle = haloGrad;
           ctx.beginPath();
-          ctx.ellipse(0, 0, Math.min(width, height) * 0.46, Math.min(width, height) * 0.38, 0, 0, Math.PI * 2);
-          ctx.stroke();
-          // Satellite beacon nodes on orbit
-          [0.6, 2.4, 4.1].forEach(angle => {
-            const sx = Math.cos(angle) * Math.min(width, height) * 0.46;
-            const sy = Math.sin(angle) * Math.min(width, height) * 0.38;
-            ctx.fillStyle = "#0284C7";
-            ctx.beginPath();
-            ctx.arc(sx, sy, 3, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.strokeStyle = "rgba(255, 255, 255, 0.9)";
-            ctx.lineWidth = 1;
-            ctx.stroke();
-          });
-          ctx.restore();
+          ctx.arc(globeCx, globeCy, globeR * 1.45, 0, Math.PI * 2);
+          ctx.fill();
 
-          // Second counter-tilted orbit
-          ctx.save();
-          ctx.translate(cx, cy);
-          ctx.rotate(0.38);
-          ctx.strokeStyle = "rgba(14, 135, 205, 0.16)";
-          ctx.setLineDash([5, 15]);
-          ctx.beginPath();
-          ctx.ellipse(0, 0, Math.min(width, height) * 0.52, Math.min(width, height) * 0.32, 0, 0, Math.PI * 2);
-          ctx.stroke();
-          ctx.restore();
-          ctx.restore();
+          // 3. Gentle morning sun warmth in top-left
+          const sunWarmth = ctx.createRadialGradient(width * 0.12, height * 0.08, 10, width * 0.12, height * 0.08, width * 0.65);
+          sunWarmth.addColorStop(0, "rgba(255, 246, 230, 0.45)");
+          sunWarmth.addColorStop(0.45, "rgba(255, 250, 242, 0.18)");
+          sunWarmth.addColorStop(1, "rgba(255, 255, 255, 0)");
+          ctx.fillStyle = sunWarmth;
+          ctx.fillRect(0, 0, width, height);
 
-          // 5. Prominent daylight motes / sparks (clearly visible, just like stars!)
-          const moteCount = Math.floor((width * height) / 3800);
+          // 4. Subtle daylight dust particles floating peacefully in the light
+          const moteCount = 38;
           for (let i = 0; i < moteCount; i++) {
             const mx = Math.random() * width;
             const my = Math.random() * height;
-            const isLarge = Math.random() < 0.25;
-            const mRadius = isLarge ? (Math.random() * 1.5 + 1.8) : (Math.random() * 0.8 + 1.0);
-            const isWarm = Math.random() < 0.28;
-            const alpha = Math.random() * 0.40 + 0.40;
-            ctx.fillStyle = isWarm
-              ? `rgba(240, 150, 20, ${alpha})`
-              : `rgba(14, 140, 230, ${alpha})`;
+            const mr = Math.random() * 0.6 + 0.6; // 0.6px - 1.2px
+            const alpha = Math.random() * 0.15 + 0.12;
+            ctx.fillStyle = `rgba(18, 85, 145, ${alpha})`;
             ctx.beginPath();
-            ctx.arc(mx, my, mRadius, 0, Math.PI * 2);
+            ctx.arc(mx, my, mr, 0, Math.PI * 2);
             ctx.fill();
-
-            // Top 10% brightest particles have a crisp micro-flare cross
-            if (isLarge && Math.random() < 0.45) {
-              ctx.strokeStyle = `rgba(255, 255, 255, ${alpha * 0.85})`;
-              ctx.lineWidth = 0.8;
-              ctx.beginPath();
-              ctx.moveTo(mx - 4, my);
-              ctx.lineTo(mx + 4, my);
-              ctx.moveTo(mx, my - 4);
-              ctx.lineTo(mx, my + 4);
-              ctx.stroke();
-            }
           }
+
+        } else if (activeVariant === "stardust") {
+          // ------------------------------------------
+          // ВАРИАНТ 2: Дневные звезды / Спутниковые маяки (Daylight Star-Dust)
+          // ------------------------------------------
+          // 1. Clear sky gradient
+          const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
+          skyGrad.addColorStop(0, "#E2EEF8");
+          skyGrad.addColorStop(0.5, "#EEF5FB");
+          skyGrad.addColorStop(1, "#F6F9FC");
+          ctx.fillStyle = skyGrad;
+          ctx.fillRect(0, 0, width, height);
+
+          // 2. Halo behind globe
+          const halo = ctx.createRadialGradient(globeCx, globeCy, 40, globeCx, globeCy, globeR * 1.35);
+          halo.addColorStop(0, "rgba(195, 225, 250, 0.45)");
+          halo.addColorStop(0.6, "rgba(225, 240, 255, 0.15)");
+          halo.addColorStop(1, "rgba(246, 249, 252, 0)");
+          ctx.fillStyle = halo;
+          ctx.fillRect(0, 0, width, height);
+
+          // 3. Crisp daytime micro-stars (exact conceptual twin of dark theme stars!)
+          const count = Math.floor((width * height) / 3600);
+          for (let i = 0; i < count; i++) {
+            const x = Math.random() * width;
+            const y = Math.random() * height;
+            const isLarge = Math.random() < 0.20;
+            const radius = isLarge ? (Math.random() * 0.4 + 1.0) : (Math.random() * 0.4 + 0.5);
+            const isGold = Math.random() < 0.22;
+            const alpha = Math.random() * 0.32 + 0.18;
+            ctx.fillStyle = isGold
+              ? `rgba(217, 119, 6, ${alpha})`
+              : `rgba(2, 132, 199, ${alpha})`;
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+        } else if (activeVariant === "strato") {
+          // ------------------------------------------
+          // ВАРИАНТ 3: Высотный горизонт / Стратосфера
+          // ------------------------------------------
+          const stratoGrad = ctx.createLinearGradient(0, 0, 0, height);
+          stratoGrad.addColorStop(0, "#CDE4F7");
+          stratoGrad.addColorStop(0.38, "#E2F0FA");
+          stratoGrad.addColorStop(0.70, "#EFF6FB");
+          stratoGrad.addColorStop(1, "#F7FAFC");
+          ctx.fillStyle = stratoGrad;
+          ctx.fillRect(0, 0, width, height);
+
+          // Soft diffuse horizontal horizon haze
+          const hazeGrad = ctx.createLinearGradient(0, height * 0.45, 0, height * 0.65);
+          hazeGrad.addColorStop(0, "rgba(255, 255, 255, 0)");
+          hazeGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.45)");
+          hazeGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
+          ctx.fillStyle = hazeGrad;
+          ctx.fillRect(0, height * 0.45, width, height * 0.20);
+
+          // Solar glow
+          const sun = ctx.createRadialGradient(width * 0.15, height * 0.10, 20, width * 0.15, height * 0.10, width * 0.5);
+          sun.addColorStop(0, "rgba(255, 250, 240, 0.55)");
+          sun.addColorStop(0.5, "rgba(240, 248, 255, 0.2)");
+          sun.addColorStop(1, "rgba(255, 255, 255, 0)");
+          ctx.fillStyle = sun;
+          ctx.fillRect(0, 0, width, height);
+
+        } else if (activeVariant === "minimal") {
+          // ------------------------------------------
+          // ВАРИАНТ 4: Чистый фарфоровый минимализм
+          // ------------------------------------------
+          ctx.fillStyle = "#F4F8FC";
+          ctx.fillRect(0, 0, width, height);
+
+          // Ultra-subtle vignette
+          const vign = ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.4, width * 0.5, height * 0.5, Math.max(width, height) * 0.8);
+          vign.addColorStop(0, "rgba(244, 248, 252, 0)");
+          vign.addColorStop(1, "rgba(215, 228, 240, 0.25)");
+          ctx.fillStyle = vign;
+          ctx.fillRect(0, 0, width, height);
         }
+      }
+
+      // Hook switcher click handlers
+      const bgBar = document.getElementById("bg-variant-bar");
+      if (bgBar) {
+        bgBar.addEventListener("click", (e) => {
+          const btn = e.target.closest(".bg-pill-btn");
+          if (!btn) return;
+          const bgKey = btn.dataset.bg;
+          if (!bgKey) return;
+          window.currentBgVariant = bgKey;
+          localStorage.setItem("deytt_light_bg", bgKey);
+          updateBgPickerUI();
+          renderBackground();
+        });
       }
 
       window.addEventListener("resize", renderBackground, { passive: true });
       window.renderAtlasBackground = renderBackground;
+      window.updateBgPickerUI = updateBgPickerUI;
+      updateBgPickerUI();
       renderBackground();
     })();
     // Navigation Controller with Horizontal Micro-Spring
@@ -722,6 +815,9 @@
 
       if (window.renderAtlasBackground) {
         window.renderAtlasBackground();
+      }
+      if (window.updateBgPickerUI) {
+        window.updateBgPickerUI();
       }
     }
 
