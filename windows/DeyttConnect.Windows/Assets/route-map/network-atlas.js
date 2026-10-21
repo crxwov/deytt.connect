@@ -516,15 +516,7 @@
           return;
         }
         if (this.tooltip) this.tooltip.hidden = true;
-        // Touch clears hover during pointerup, so resolve the tap from its
-        // coordinates instead of relying on the last mouse-hovered node.
-        this.updateHover(pointer);
-        if (this.hovered && typeof window.deyttMapNodeTapped === "function") {
-          window.deyttMapNodeTapped(this.hovered);
-          return;
-        }
-        if (!this.selectOnTap || !this.hovered || this.hovered === "user") return;
-        this.setRoute(this.hovered === "ru" && this.route === "de" ? "ru-de" : this.hovered);
+        // Clicking on the globe canvas should NOT select nodes or change routes/borders.
       });
       this.canvas.addEventListener("dblclick", (event) => {
         if (this.dragDistance > 5) return;
@@ -680,10 +672,7 @@
 
     setInteractionQuality(active) {
       this.interactionQuality = Boolean(active);
-      const ratio = this.interactionQuality
-        ? this.options.stableGeography ? this.preferredPixelRatio : Math.min(this.preferredPixelRatio, this.options.interactionPixelRatio || .85)
-        : this.preferredPixelRatio;
-      this.setCanvasResolution(ratio);
+      // Stable canvas resolution: keep resolution rock-solid at preferredPixelRatio to prevent GPU buffer reallocation hitches.
     }
 
     markMapDirty() {
@@ -949,14 +938,22 @@
         if (len < 3) return [];
         while (scratch.length < len) scratch.push({ x: 0, y: 0, z: 0 });
         let firstHidden = -1;
+        let visibleCount = 0;
         for (let i = 0; i < len; i++) {
           const pt = ring[i];
           const z = pt.x * fwd.x + pt.y * fwd.y + pt.z * fwd.z;
-          const s = scratch[i];
-          s.z = z;
-          s.x = cx + (pt.x * east.x + pt.y * east.y + pt.z * east.z) * scale;
-          s.y = cy - (pt.x * north.x + pt.y * north.y + pt.z * north.z) * scale;
-          if (z <= horizon && firstHidden < 0) firstHidden = i;
+          scratch[i].z = z;
+          if (z <= horizon) {
+            if (firstHidden < 0) firstHidden = i;
+          } else {
+            visibleCount++;
+          }
+        }
+        if (visibleCount === 0) return [];
+        for (let i = 0; i < len; i++) {
+          const pt = ring[i];
+          scratch[i].x = cx + (pt.x * east.x + pt.y * east.y + pt.z * east.z) * scale;
+          scratch[i].y = cy - (pt.x * north.x + pt.y * north.y + pt.z * north.z) * scale;
         }
         if (firstHidden < 0) return [scratch.slice(0, len)];
         const segments = [];
@@ -1486,194 +1483,144 @@
 
     drawLabel(key, colors, occupied) {
       const point = this.projectedNodes[key];
-      if (!point || point.z <= .03) return;
+      if (!point || point.z <= 0.03) return;
       if (point.x < 0 || point.x > this.width || point.y < 0 || point.y > this.height) return;
       if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
+
       const active = key === "user" || this.activeRouteNodeKeys().includes(key);
-      const autoCandidate = this.route === "auto" && !this.autoExitRouteKey && ROUTES.auto.nodes.includes(key);
-      if (!active && !autoCandidate && this.hovered !== key) return;
+      const isHovered = this.hovered === key;
       const context = this.context;
       const location = key === "user" ? this.userLocation : LOCATIONS[key];
+      if (!location) return;
+
       const compact = this.width < 820;
       const labelScale = this.options.labelScale || 1;
-      const offset = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
-      const detailed = key === "user" || active || autoCandidate || this.hovered === key;
-      const title = key === "user" ? (this.copy(location.city) || this.copy("ваша сеть")) : this.copy(detailed ? location.city : location.country);
       const countryNames = { RU: "Россия", NL: "Нидерланды", DE: "Германия", FI: "Финляндия", IT: "Италия" };
-      // Country annotations keep the same city/country format in manual and automatic modes.
-      const meta = key === "user" ? this.copy(countryNames[location.country?.toUpperCase()] || location.country || "вход в сеть") : detailed ? this.copy(location.country) : null;
-      const titleFontSize = Math.round(10 * labelScale);
-      const metaFontSize = Math.round(8 * labelScale);
-      const inset = Math.round(6 * labelScale);
-      const height = Math.round((meta ? 29 : 20) * labelScale);
+      
+      const title = key === "user"
+        ? (this.copy(location.city) || this.copy("ваша сеть"))
+        : this.copy(location.city || location.country);
+      const meta = key === "user"
+        ? this.copy(countryNames[location.country?.toUpperCase()] || location.country || "вход в сеть")
+        : this.copy(location.country);
+
+      const titleFontSize = Math.round(10.5 * labelScale);
+      const metaFontSize = Math.round(8.5 * labelScale);
+      const inset = Math.round(7 * labelScale);
+      const height = Math.round((meta ? 28 : 18) * labelScale);
       const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
       const titleFont = (active ? "600 " : "500 ") + titleFontSize + "px " + fontFamily;
       const metaFont = "500 " + metaFontSize + "px " + fontFamily;
+
       context.save();
       context.font = titleFont;
       const titleWidth = context.measureText(title).width;
       context.font = metaFont;
-      const width = Math.max(titleWidth, meta ? context.measureText(meta).width : 0) + inset * 2;
-      // Prefer nearby labels; score all alternatives instead of falling back
-      // to (8,8), which detached crowded user labels from their actual pin.
-      const alternatives = [];
-      const cluster = this.overviewLabelPlacements?.get(key);
-      if (cluster) alternatives.push({ x: cluster.right - width - point.x, y: cluster.top + height / 2 - point.y, align: "left", cluster: true, ring: 0 });
-      if (offset) alternatives.push({ ...offset, preferred: true, ring: 0 });
-      const gap = Math.max(10, Math.round(9 * labelScale));
-      const rowStep = height + gap;
-      const columnStep = width * .62 + gap;
-      for (let ring = 0; ring < 6; ring += 1) {
-        const extra = Math.round(ring * Math.max(18, 22 * labelScale));
-        for (let row = -5; row <= 5; row += 1) {
-          alternatives.push({ x: gap + extra, y: row * rowStep, align: "left", ring: ring + 1 });
-          alternatives.push({ x: -gap - extra, y: row * rowStep, align: "right", ring: ring + 1 });
-        }
-        for (let column = -3; column <= 3; column += 1) {
-          const x = -width / 2 + column * columnStep;
-          alternatives.push({ x, y: -height / 2 - gap - extra, align: "left", ring: ring + 1 });
-          alternatives.push({ x, y: height / 2 + gap + extra, align: "left", ring: ring + 1 });
-        }
-      }
-      const scorePlacement = (candidate) => {
-        const rawLeft = point.x + candidate.x - (candidate.align === "right" ? width : 0);
-        const rawTop = point.y + candidate.y - height / 2;
-        const left = clamp(rawLeft, 8, Math.max(8, this.width - width - 8));
-        const top = clamp(rawTop, 8, Math.max(8, this.height - height - 8));
-        const overlap = occupied.reduce((sum, label) => sum +
-          Math.max(0, Math.min(left + width + 4, label.left + label.width + 4) - Math.max(left - 4, label.left - 4)) *
-          Math.max(0, Math.min(top + height + 4, label.top + label.height + 4) - Math.max(top - 4, label.top - 4)), 0);
-        const dx = point.x - clamp(point.x, left, left + width);
-        const dy = point.y - clamp(point.y, top, top + height);
-        const coversPin = Object.entries(this.projectedNodes).some(([otherKey, node]) => otherKey !== key && node.z > .03 &&
-          node.x > left - 7 && node.x < left + width + 7 && node.y > top - 7 && node.y < top + height + 7);
-        const clipped = Math.abs(rawLeft - left) + Math.abs(rawTop - top);
-        // Collisions dominate distance so a nearby-but-overlapping label can
-        // never beat a clear placement farther around the pin.
-        const coversArc = this.routeHitSegments.some(({ a, b }) => [a, b].some(p => p.x > left - 8 && p.x < left + width + 8 && p.y > top - 8 && p.y < top + height + 8));
-          const end = { x: clamp(point.x, left + 5, left + width - 5), y: clamp(point.y, top + 5, top + height - 5) };
-          const intersects = (a, b, c, d) => {
-            const side = (p, q, r) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
-            const within = (p, q, r) => r.x >= Math.min(p.x, q.x) - .01 && r.x <= Math.max(p.x, q.x) + .01 && r.y >= Math.min(p.y, q.y) - .01 && r.y <= Math.max(p.y, q.y) + .01;
-            const s1 = side(a, b, c), s2 = side(a, b, d), s3 = side(c, d, a), s4 = side(c, d, b);
-            return s1 * s2 < 0 && s3 * s4 < 0 || Math.abs(s1) < .01 && within(a, b, c) || Math.abs(s2) < .01 && within(a, b, d) || Math.abs(s3) < .01 && within(c, d, a) || Math.abs(s4) < .01 && within(c, d, b);
-          };
-          const crossesLeader = occupied.some(label => label.leader && intersects(point, end, label.leader[0], label.leader[1]));
-          const crossesLabel = occupied.some(label => {
-            const l = label.left - 6, r = label.left + label.width + 6, t = label.top - 6, b = label.top + label.height + 6;
-            return intersects(point, end, { x: l, y: t }, { x: r, y: t }) || intersects(point, end, { x: r, y: t }, { x: r, y: b }) || intersects(point, end, { x: r, y: b }, { x: l, y: b }) || intersects(point, end, { x: l, y: b }, { x: l, y: t });
-          });
-          const coversLeader = occupied.some(label => {
-            if (!label.leader) return false;
-            const [a, b] = label.leader, l = left - 6, r = left + width + 6, t = top - 6, bottom = top + height + 6;
-            return intersects(a, b, { x: l, y: t }, { x: r, y: t }) || intersects(a, b, { x: r, y: t }, { x: r, y: bottom }) || intersects(a, b, { x: r, y: bottom }, { x: l, y: bottom }) || intersects(a, b, { x: l, y: bottom }, { x: l, y: t });
-          });
-          const clearCluster = candidate.cluster && !overlap && !coversPin && !crossesLabel && !coversLeader && !crossesLeader;
-          return { left, top, overlap, coversPin, coversArc, crossesLeader, crossesLabel, coversLeader, score: overlap * 10000000 + (coversPin || crossesLabel || coversLeader ? 1000000000 : 0) + (crossesLeader ? 10000000 : 0) + (coversArc ? 250000 : 0) + clipped * 3000 + dx * dx + dy * dy + (candidate.ring || 0) - (clearCluster ? 100000000 : 0) };
-      };
-      const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
-      const cachedIndex = this.labelPlacements.get(key);
-      let placementIndex = 0;
-      let chosen = null;
+      const metaWidth = meta ? context.measureText(meta).width : 0;
+      const width = Math.max(titleWidth, metaWidth) + inset * 2;
 
-      if (isMoving && cachedIndex != null && alternatives[cachedIndex]) {
-        placementIndex = cachedIndex;
-        const cand = alternatives[cachedIndex];
+      const pref = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
+      const candidates = [];
+      if (pref) candidates.push(pref);
+      candidates.push(
+        { x: 18, y: -24, align: "left" },
+        { x: -18, y: -24, align: "right" },
+        { x: 18, y: 24, align: "left" },
+        { x: -18, y: 24, align: "right" },
+        { x: 20, y: 0, align: "left" },
+        { x: -20, y: 0, align: "right" },
+        { x: 26, y: -38, align: "left" },
+        { x: -26, y: -38, align: "right" },
+        { x: 26, y: 38, align: "left" },
+        { x: -26, y: 38, align: "right" }
+      );
+
+      let bestCandidate = null;
+      let minScore = Infinity;
+
+      for (let i = 0; i < candidates.length; i++) {
+        const cand = candidates[i];
         const rawLeft = point.x + cand.x - (cand.align === "right" ? width : 0);
         const rawTop = point.y + cand.y - height / 2;
-        chosen = {
-          left: clamp(rawLeft, 8, Math.max(8, this.width - width - 8)),
-          top: clamp(rawTop, 8, Math.max(8, this.height - height - 8))
-        };
-      } else {
-        const cached = cachedIndex != null && alternatives[cachedIndex] ? scorePlacement(alternatives[cachedIndex]) : null;
-        const reuse = cached && cached.overlap === 0 && !cached.coversPin && !cached.coversArc && !cached.crossesLeader && !cached.crossesLabel && !cached.coversLeader;
-        if (reuse) {
-          placementIndex = cachedIndex;
-          chosen = cached;
-        } else {
-          const searchAlternatives = isMoving ? alternatives.slice(0, 4) : alternatives;
-          const scored = searchAlternatives.map(scorePlacement);
-          let bestScore = Infinity;
-          for (let index = 0; index < scored.length; index += 1) {
-            if (scored[index].score < bestScore) {
-              bestScore = scored[index].score;
-              placementIndex = index;
-            }
+        const left = clamp(rawLeft, 8, Math.max(8, this.width - width - 8));
+        const top = clamp(rawTop, 8, Math.max(8, this.height - height - 8));
+        const right = left + width;
+        const bottom = top + height;
+
+        let overlapArea = 0;
+        for (let j = 0; j < occupied.length; j++) {
+          const occ = occupied[j];
+          const ox = Math.max(0, Math.min(right + 3, occ.left + occ.width + 3) - Math.max(left - 3, occ.left - 3));
+          const oy = Math.max(0, Math.min(bottom + 3, occ.top + occ.height + 3) - Math.max(top - 3, occ.top - 3));
+          if (ox > 0 && oy > 0) {
+            overlapArea += ox * oy;
           }
-          chosen = scored[placementIndex];
         }
-        this.labelPlacements.set(key, placementIndex);
-        if (chosen.overlap > 0 || chosen.coversPin || chosen.crossesLabel || chosen.coversLeader || chosen.crossesLeader) { context.restore(); return; }
+
+        const clampPenalty = Math.abs(rawLeft - left) + Math.abs(rawTop - top);
+        const prefBonus = (i === 0) ? -50 : (i * 10);
+        const score = overlapArea * 1000 + clampPenalty * 50 + prefBonus;
+
+        if (score < minScore) {
+          minScore = score;
+          bestCandidate = { left, top, width, height };
+          if (overlapArea === 0 && clampPenalty === 0) break;
+        }
       }
-      const left = chosen.left;
-      const top = chosen.top;
+
+      const left = bestCandidate.left;
+      const top = bestCandidate.top;
       const endX = clamp(point.x, left + 5, left + width - 5);
       const endY = clamp(point.y, top + 5, top + height - 5);
+
       context.beginPath();
       const distance = Math.max(1, Math.hypot(endX - point.x, endY - point.y));
-      context.moveTo(point.x + (endX - point.x) * 7 / distance, point.y + (endY - point.y) * 7 / distance);
+      context.moveTo(point.x + (endX - point.x) * 6 / distance, point.y + (endY - point.y) * 6 / distance);
       context.lineTo(endX, endY);
-      context.strokeStyle = colors.labelLeader || (key === "user" ? colors.node : active ? colors.nodeCore : colors.node);
-      context.lineWidth = 1;
-      context.globalAlpha = .72;
+      context.strokeStyle = isHovered ? colors.borderHot : active ? colors.nodeCore : (colors.labelLeader || colors.node);
+      context.lineWidth = active || isHovered ? 1.2 : 0.8;
+      context.globalAlpha = active || isHovered ? 0.85 : 0.55;
       context.stroke();
+
       const labelBox = { key, left, top, width, height, leader: [point, { x: endX, y: endY }] };
       occupied.push(labelBox);
       this.labelBoxes.push(labelBox);
+
       context.beginPath();
-      context.roundRect(left, top, width, height, Math.round(3 * labelScale));
+      context.roundRect(left, top, width, height, Math.round(3.5 * labelScale));
       context.fillStyle = colors.labelBg;
-      context.globalAlpha = 1;
-      context.shadowBlur = 0;
+      context.globalAlpha = 0.94;
       context.fill();
-      context.shadowBlur = 0;
-      context.strokeStyle = this.hovered === key ? colors.borderHot : colors.labelBorder || colors.border;
-      context.globalAlpha = this.hovered === key ? .8 : .55;
-      context.lineWidth = .8;
+
+      context.strokeStyle = isHovered ? colors.borderHot : active ? colors.nodeCore : (colors.labelBorder || colors.border);
+      context.globalAlpha = isHovered ? 0.95 : active ? 0.9 : 0.45;
+      context.lineWidth = active || isHovered ? 1.0 : 0.8;
       context.stroke();
+
       context.textBaseline = "middle";
       context.textAlign = "left";
-      context.fillStyle = colors.label;
       context.globalAlpha = 1;
       context.font = titleFont;
+      context.fillStyle = active ? colors.nodeCore : colors.label;
       context.fillText(title, left + inset, top + (meta ? Math.round(10 * labelScale) : height / 2));
+
       if (meta) {
         context.fillStyle = colors.labelMuted;
         context.font = metaFont;
-        context.fillText(meta, left + inset, top + Math.round(22 * labelScale));
+        context.fillText(meta, left + inset, top + Math.round(21 * labelScale));
       }
       context.restore();
     }
 
     drawNodes(colors) {
       this.projectedNodes = {};
-      (this.route === "auto" ? ROUTES.auto.nodes : LOCATION_ORDER).forEach((key) => {
+      LOCATION_ORDER.forEach((key) => {
         if (this.availableLocationKeys.has(key)) this.drawNode(key, LOCATIONS[key], colors, "server");
       });
       if (this.userLocation) this.drawNode("user", this.userLocation, colors, "user");
       this.labelBoxes = [];
       const occupied = (this.occupiedObstacles || this.updateOccupiedObstacles()).slice();
       const labelOrder = [];
-      this.overviewLabelPlacements = new Map();
-      const overview = (this.route === "auto" ? ROUTES.auto.nodes : LOCATION_ORDER).filter(key => this.availableLocationKeys.has(key) &&
-        this.projectedNodes[key]?.z > .03 && this.projectedNodes[key].x >= 0 && this.projectedNodes[key].x <= this.width &&
-        this.projectedNodes[key].y >= 0 && this.projectedNodes[key].y <= this.height)
-        .sort((a, b) => this.projectedNodes[a].y - this.projectedNodes[b].y);
-      // Lay out a close country cluster together. A shared column preserves
-      // pin order, so later countries cannot be squeezed behind earlier cards.
-      if (this.route === "auto" && !this.autoExitRouteKey && overview.length >= 3 &&
-          Math.max(...overview.map(key => this.projectedNodes[key].x)) - Math.min(...overview.map(key => this.projectedNodes[key].x)) < this.radius * this.zoom * .65) {
-        const scale = this.options.labelScale || 1;
-        const heights = overview.map(() => Math.round(29 * scale));
-        const totalHeight = heights.reduce((sum, height) => sum + height, 0) + (overview.length - 1) * 10;
-        let top = clamp(overview.reduce((sum, key) => sum + this.projectedNodes[key].y, 0) / overview.length - totalHeight / 2, 8, Math.max(8, this.height - totalHeight - 8));
-        const right = Math.min(...overview.map(key => this.projectedNodes[key].x)) - 18;
-        overview.forEach((key, index) => {
-          this.overviewLabelPlacements.set(key, { right, top });
-          top += heights[index] + 10;
-        });
-      }
       const addLabel = (key) => { if (key && !labelOrder.includes(key)) labelOrder.push(key); };
       if (this.userLocation) addLabel("user");
       this.activeRouteNodeKeys().forEach(addLabel);
@@ -1777,8 +1724,8 @@
           this.targetLon = this.centerLon;
           this.targetLat = this.centerLat;
 
-          // Float like in zero-gravity: low friction 0.985 gives ~3.5 seconds of smooth gliding
-          const friction = Math.pow(0.985, frameScale);
+          // Float like in zero-gravity: continuous exponential decay ensures 60-144+ FPS smoothness
+          const friction = Math.exp(-1.1 * delta / 1000);
           this.velocityLon *= friction;
           if (this.velocityLat) {
             this.velocityLat *= friction;

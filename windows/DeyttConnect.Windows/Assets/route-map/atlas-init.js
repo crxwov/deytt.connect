@@ -293,7 +293,7 @@
     if (atlas) atlas.setLanguage(language);
   }
 
-  window.deyttMapNodeTapped = function (key) { notifyHost(String(key || "")); };
+  window.deyttMapNodeTapped = function () { /* Disabled: globe clicks do not change borders/routes */ };
   window.deyttSetMapRoute = function (route) {
     window.deyttMapRoute = route;
     const atlas = window.deyttMapAtlas;
