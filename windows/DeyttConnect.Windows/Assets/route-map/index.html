@@ -64,8 +64,9 @@
       text-transform: lowercase;
     }
 
-    /* Floating Transparent Header on Stars */
+    /* Floating Transparent Header on Stars (Hidden in desktop client to eliminate double header) */
     .desktop-header {
+      display: none !important;
       position: absolute;
       top: 0;
       left: 0;
@@ -73,7 +74,6 @@
       height: 68px;
       min-height: 68px;
       width: 100%;
-      display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 clamp(32px, 3.5vw, 48px);
@@ -521,45 +521,114 @@
     }
 
     .route-heading-text {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 3px !important;
+      min-width: 0 !important;
+      flex: 1 1 auto !important;
+      overflow: hidden !important;
+    }
+
+    .route-meta-row {
+      display: flex !important;
+      align-items: center !important;
+      gap: 6px !important;
+      min-width: 0 !important;
+      flex-wrap: nowrap !important;
     }
 
     .home-route-subtitle {
-      font-size: 12.5px;
-      color: #8E9EAF;
-      margin: 0;
-      line-height: 1.3;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-      max-width: 100% !important;
-      min-width: 0 !important;
+      font-size: 12.5px !important;
+      color: #8E9EAF !important;
+      margin: 0 !important;
+      line-height: 1.3 !important;
+      white-space: nowrap !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
     }
 
-    .route-heading > * {
-      min-width: 0;
+    .home-country {
+      font-size: 13px !important;
+      font-weight: 500 !important;
+      color: #8E9EAF !important;
+      margin: 0 !important;
+      white-space: nowrap !important;
+      line-height: 1.3 !important;
+    }
+
+    .home-protocol {
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      color: #38BDF8 !important;
+      background: rgba(56, 189, 248, 0.12) !important;
+      border: 1px solid rgba(56, 189, 248, 0.28) !important;
+      padding: 1px 7px !important;
+      border-radius: 6px !important;
+      margin: 0 !important;
+      white-space: nowrap !important;
+      letter-spacing: 0.02em !important;
+      line-height: 1.3 !important;
     }
 
     .route-flag-pill {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 44px;
-      height: 44px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(12, 19, 32, 0.4);
-      backdrop-filter: blur(16px) saturate(190%);
-      -webkit-backdrop-filter: blur(16px) saturate(190%);
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      border-top-color: rgba(255, 255, 255, 0.48);
-      border-bottom-color: rgba(0, 0, 0, 0.3);
-      font-size: 20px;
-      flex-shrink: 0;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), 0 6px 18px rgba(0, 0, 0, 0.35);
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 44px !important;
+      height: 44px !important;
+      border-radius: 14px !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(12, 19, 32, 0.4) !important;
+      backdrop-filter: blur(16px) saturate(190%) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(190%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      border-top-color: rgba(255, 255, 255, 0.48) !important;
+      border-bottom-color: rgba(0, 0, 0, 0.3) !important;
+      font-size: 20px !important;
+      flex-shrink: 0 !important;
+      position: relative !important;
+      overflow: hidden !important;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), 0 6px 18px rgba(0, 0, 0, 0.35) !important;
+    }
+
+    .route-flag-pill[data-country="DE"],
+    .route-flag[data-country="DE"] {
+      background: linear-gradient(to bottom, #111111 0% 33.33%, #D12D3A 33.33% 66.66%, #F2C230 66.66%) !important;
+      border-color: rgba(255, 255, 255, 0.25) !important;
+    }
+    .route-flag-pill[data-country="NL"],
+    .route-flag[data-country="NL"] {
+      background: linear-gradient(to bottom, #AE1C28 0% 33.33%, #FFFFFF 33.33% 66.66%, #21468B 66.66%) !important;
+      border-color: rgba(255, 255, 255, 0.25) !important;
+    }
+    .route-flag-pill[data-country="RU"],
+    .route-flag[data-country="RU"] {
+      background: linear-gradient(to bottom, #FFFFFF 0% 33.33%, #3159A5 33.33% 66.66%, #D43844 66.66%) !important;
+      border-color: rgba(255, 255, 255, 0.25) !important;
+    }
+    .route-flag-pill[data-country="FI"],
+    .route-flag[data-country="FI"] {
+      background: #FFFFFF !important;
+      position: relative !important;
+      border-color: rgba(255, 255, 255, 0.25) !important;
+    }
+    .route-flag-pill[data-country="FI"]::before,
+    .route-flag[data-country="FI"]::before {
+      content: "";
+      position: absolute;
+      top: 0; bottom: 0; left: 33%; width: 20%;
+      background: #003580;
+    }
+    .route-flag-pill[data-country="FI"]::after,
+    .route-flag[data-country="FI"]::after {
+      content: "";
+      position: absolute;
+      left: 0; right: 0; top: 40%; height: 20%;
+      background: #003580;
+    }
+    .route-flag-pill[data-country="IT"],
+    .route-flag[data-country="IT"] {
+      background: linear-gradient(to right, #15965A 0% 33.33%, #FFFFFF 33.33% 66.66%, #D7414B 66.66%) !important;
+      border-color: rgba(255, 255, 255, 0.25) !important;
     }
 
     .home-city {
@@ -1811,13 +1880,15 @@
             </div>
             <div class="panel-copy route-copy">
               <div class="route-heading">
-                <span id="home-flag" class="route-flag-pill" aria-hidden="true">✦</span>
+                <span id="home-flag" class="route-flag route-flag-pill" aria-hidden="true">✦</span>
                 <div class="route-heading-text">
                   <strong id="home-city" class="home-city">автоподбор</strong>
-                  <p id="home-route-subtitle" class="home-route-subtitle">выбирает самый быстрый европейский выход</p>
+                  <div class="route-meta-row">
+                    <p id="home-route-subtitle" class="home-route-subtitle">выбирает самый быстрый европейский выход</p>
+                    <span id="home-country" class="home-country" hidden></span>
+                    <span id="home-protocol" class="home-protocol" hidden></span>
+                  </div>
                 </div>
-                <span id="home-country" class="home-country" hidden></span>
-                <span id="home-protocol" class="home-protocol" hidden></span>
               </div>
             </div>
             <button id="home-action" class="home-action panel-copy" type="button" data-action="home-connect">

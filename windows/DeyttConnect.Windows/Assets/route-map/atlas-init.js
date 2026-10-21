@@ -170,18 +170,25 @@
     const country = root.querySelector("#" + prefix + "country");
     const city = root.querySelector("#" + prefix + "city");
     const protocol = root.querySelector("#" + prefix + "protocol");
+    const subtitle = root.querySelector("#" + prefix + "route-subtitle");
     if (flag) {
       const code = routeFlag(state.countryCode);
       flag.dataset.country = code;
       flag.classList.toggle("is-generic", !code);
-      flag.textContent = code ? "" : "🌐";
+      flag.textContent = code ? "" : "✦";
       flag.setAttribute("aria-label", code || "");
     }
-    if (country) country.textContent = state.country || "";
+    if (country) {
+      country.textContent = state.country || "";
+      country.hidden = !state.country;
+    }
     if (city) city.textContent = state.city || "";
     if (protocol) {
       protocol.textContent = state.protocol || "";
       protocol.hidden = !state.protocol;
+    }
+    if (subtitle) {
+      subtitle.hidden = Boolean(state.country || state.protocol);
     }
   }
 
