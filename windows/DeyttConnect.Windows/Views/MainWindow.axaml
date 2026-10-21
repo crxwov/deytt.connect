@@ -86,12 +86,6 @@
                     </Grid>
                 </Grid>
             </Border>
-
-            <ScrollViewer x:Name="PageScroll" Grid.Row="1" BringIntoViewOnFocusChange="True"
-                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                <Grid x:Name="PageHost" MaxWidth="1360" HorizontalAlignment="Center"
-                      Margin="64,40,64,32" />
-            </ScrollViewer>
         </Grid>
 
         <!-- The old navigation controls remain hidden so existing modal focus and automation paths stay valid. -->
