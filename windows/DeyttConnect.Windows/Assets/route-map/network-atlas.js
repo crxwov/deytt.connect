@@ -1519,8 +1519,18 @@
 
     drawLabel(key, colors, occupied) {
       const point = this.projectedNodes[key];
-      if (!point || point.z <= 0.03) return;
-      if (point.x < 0 || point.x > this.width || point.y < 0 || point.y > this.height) return;
+      if (!point || point.z <= 0.05) {
+        if (this.domLabels && this.domLabels.has(key)) {
+          this.domLabels.get(key).style.display = "none";
+        }
+        return;
+      }
+      if (point.x < -120 || point.x > this.width + 120 || point.y < -120 || point.y > this.height + 120) {
+        if (this.domLabels && this.domLabels.has(key)) {
+          this.domLabels.get(key).style.display = "none";
+        }
+        return;
+      }
       if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
 
       const isUser = key === "user";
@@ -1553,58 +1563,18 @@
 
       const width = Math.round(titleWidth + (meta ? metaWidth + 14 : 0) + 24);
 
-      const pref = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
-      const candidates = [];
-      if (pref) candidates.push(pref);
-      candidates.push(
-        { x: -26, y: -22, align: "right" },
-        { x: -26, y: 20, align: "right" },
-        { x: 22, y: -22, align: "left" },
-        { x: 22, y: 20, align: "left" },
-        { x: -28, y: 0, align: "right" },
-        { x: 28, y: 0, align: "left" },
-        { x: -18, y: -30, align: "right" },
-        { x: 20, y: 28, align: "left" }
-      );
+      // Smooth horizon dissolve as node approaches the curved edge of the globe
+      const horizonFade = clamp((point.z - 0.05) / 0.17, 0, 1);
+      const totalAlpha = (active || isHovered ? 0.95 : 0.75) * horizonFade;
 
-      let bestCandidate = null;
-      let minScore = Infinity;
+      // Stable 1:1 anchored offset vector for perfectly synchronous rotation
+      const offset = (compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key]) || { x: 22, y: -22, align: "left" };
+      const left = Math.round(point.x + offset.x - (offset.align === "right" ? width : 0));
+      const top = Math.round(point.y + offset.y - height / 2);
+      const endX = offset.align === "right" ? left + width : left;
+      const endY = top + height / 2;
 
-      for (let i = 0; i < candidates.length; i++) {
-        const cand = candidates[i];
-        const rawLeft = point.x + cand.x - (cand.align === "right" ? width : 0);
-        const rawTop = point.y + cand.y - height / 2;
-        const left = clamp(rawLeft, 8, Math.max(8, this.width - width - 8));
-        const top = clamp(rawTop, 8, Math.max(8, this.height - height - 8));
-        const right = left + width;
-        const bottom = top + height;
-
-        let overlapArea = 0;
-        for (let j = 0; j < occupied.length; j++) {
-          const occ = occupied[j];
-          const ox = Math.max(0, Math.min(right + 8, occ.left + occ.width + 8) - Math.max(left - 8, occ.left - 8));
-          const oy = Math.max(0, Math.min(bottom + 6, occ.top + occ.height + 6) - Math.max(top - 6, occ.top - 6));
-          if (ox > 0 && oy > 0) {
-            overlapArea += ox * oy;
-          }
-        }
-
-        const clampPenalty = Math.abs(rawLeft - left) + Math.abs(rawTop - top);
-        const prefBonus = (i === 0) ? -60 : (i * 12);
-        const score = overlapArea * 1000 + clampPenalty * 50 + prefBonus;
-
-        if (score < minScore) {
-          minScore = score;
-          bestCandidate = { left, top, width, height };
-          if (overlapArea === 0 && clampPenalty === 0) break;
-        }
-      }
-
-      const left = Math.round(bestCandidate.left);
-      const top = Math.round(bestCandidate.top);
-      const endX = clamp(point.x, left + 4, left + width - 4);
-      const endY = clamp(point.y, top + 4, top + height - 4);
-
+      // Draw rigid, perfectly locked leader line on canvas
       const leaderColor = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#34D399" : "#60A5FA";
       context.save();
       context.beginPath();
@@ -1612,13 +1582,13 @@
       context.lineTo(endX, endY);
       context.strokeStyle = leaderColor;
       context.lineWidth = active || isHovered ? 1.1 : 0.85;
-      context.globalAlpha = active || isHovered ? 0.9 : 0.6;
+      context.globalAlpha = totalAlpha;
       context.stroke();
 
       context.beginPath();
       context.arc(point.x, point.y, 1.8, 0, TAU);
       context.fillStyle = leaderColor;
-      context.globalAlpha = 0.9;
+      context.globalAlpha = totalAlpha;
       context.fill();
       context.restore();
 
@@ -1626,7 +1596,7 @@
       occupied.push(labelBox);
       this.labelBoxes.push(labelBox);
 
-      // Hardware-accelerated True Liquid Glass DOM Annotation
+      // 1:1 Synchronous hardware-accelerated True Liquid Glass DOM Annotation
       if (this.labelContainer) {
         let el = this.domLabels.get(key);
         if (!el) {
@@ -1665,7 +1635,9 @@
           el._currentHtml = expectedHtml;
         }
 
+        // Direct 1:1 GPU translation without CSS transition lag
         el.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+        el.style.opacity = (isHovered ? 1 : horizonFade).toFixed(2);
         el.style.display = "inline-flex";
       }
     }

@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>./connect · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_18">
-  <script defer src="network-atlas.js?v=20261021_18"></script>
-  <script defer src="atlas-init.js?v=20261021_18"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261021_19">
+  <script defer src="network-atlas.js?v=20261021_19"></script>
+  <script defer src="atlas-init.js?v=20261021_19"></script>
 
   <style>
     :root {
@@ -329,24 +329,28 @@
       box-sizing: border-box;
       border-radius: 9999px;
       
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 100%), rgba(11, 18, 32, 0.38);
-      backdrop-filter: blur(16px) saturate(220%) brightness(112%);
-      -webkit-backdrop-filter: blur(16px) saturate(220%) brightness(112%);
+      /* Crystal Clear Ultra-Transparent Liquid Glass (~88% transparent) */
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(11, 18, 32, 0.12);
+      backdrop-filter: blur(12px) saturate(220%) brightness(115%);
+      -webkit-backdrop-filter: blur(12px) saturate(220%) brightness(115%);
       
-      border: 1px solid rgba(255, 255, 255, 0.16);
-      border-top: 1px solid rgba(255, 255, 255, 0.55);
-      border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+      /* Razor-sharp specular highlight rim */
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-top: 1px solid rgba(255, 255, 255, 0.65);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.25);
       
-      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.5),
-                  inset 0 -1px 1px 0 rgba(0, 0, 0, 0.2),
-                  0 6px 18px rgba(0, 0, 0, 0.38);
+      /* Crystal refraction inner gleam */
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.6),
+                  inset 0 -1px 1px 0 rgba(0, 0, 0, 0.15),
+                  0 4px 16px rgba(0, 0, 0, 0.25);
                   
       cursor: pointer;
       user-select: none;
       white-space: nowrap;
       text-transform: lowercase;
-      will-change: transform;
-      transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 100ms ease;
+      will-change: transform, opacity;
+      /* CRITICAL: NO transform transition! Direct 60-144fps GPU compositor tracking! */
+      transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
     }
 
     .atlas-glass-label__pip {
@@ -383,10 +387,10 @@
     }
 
     .atlas-glass-label.is-user {
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.22) 0%, rgba(255, 255, 255, 0.04) 100%), rgba(8, 20, 38, 0.45);
-      border-color: rgba(56, 189, 248, 0.28);
-      border-top-color: rgba(125, 211, 252, 0.75);
-      box-shadow: inset 0 1px 1px 0 rgba(186, 230, 253, 0.65), 0 6px 20px rgba(0, 0, 0, 0.4);
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.16) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(8, 20, 38, 0.14);
+      border-color: rgba(56, 189, 248, 0.32);
+      border-top-color: rgba(125, 211, 252, 0.85);
+      box-shadow: inset 0 1px 1px 0 rgba(186, 230, 253, 0.7), 0 4px 16px rgba(0, 0, 0, 0.25);
     }
     .atlas-glass-label.is-user .atlas-glass-label__pip {
       background: #38BDF8;
@@ -400,10 +404,10 @@
     }
 
     .atlas-glass-label.is-exit {
-      background: linear-gradient(135deg, rgba(52, 211, 153, 0.22) 0%, rgba(255, 255, 255, 0.04) 100%), rgba(6, 24, 20, 0.45);
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.16) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(6, 24, 20, 0.14);
       border-color: rgba(16, 185, 129, 0.32);
-      border-top-color: rgba(110, 231, 183, 0.8);
-      box-shadow: inset 0 1px 1px 0 rgba(167, 243, 208, 0.65), 0 6px 20px rgba(0, 0, 0, 0.4);
+      border-top-color: rgba(110, 231, 183, 0.85);
+      box-shadow: inset 0 1px 1px 0 rgba(167, 243, 208, 0.7), 0 4px 16px rgba(0, 0, 0, 0.25);
     }
     .atlas-glass-label.is-exit .atlas-glass-label__pip {
       background: #34D399;
@@ -418,10 +422,10 @@
 
     .atlas-glass-label:hover,
     .atlas-glass-label.is-hovered {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.07) 100%), rgba(20, 32, 56, 0.52);
-      border-color: rgba(255, 255, 255, 0.32);
-      border-top-color: rgba(255, 255, 255, 0.88);
-      box-shadow: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.8), 0 8px 24px rgba(0, 0, 0, 0.45);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.05) 100%), rgba(16, 26, 44, 0.22);
+      border-color: rgba(255, 255, 255, 0.4);
+      border-top-color: #FFFFFF;
+      box-shadow: inset 0 1px 1.5px 0 #FFFFFF, 0 6px 20px rgba(0, 0, 0, 0.35);
     }
 
     /* Floating Liquid Glass HUD for Home Panel (Pure Floating Typography, Zero Podlozhka) */
