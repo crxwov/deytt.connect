@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>deytt. · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_05">
-  <script defer src="network-atlas.js?v=20261021_05"></script>
-  <script defer src="atlas-init.js?v=20261021_05"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261021_06">
+  <script defer src="network-atlas.js?v=20261021_06"></script>
+  <script defer src="atlas-init.js?v=20261021_06"></script>
 
   <style>
     :root {
@@ -26,22 +26,6 @@
       --text-muted: #8E9EAF;
     }
 
-    html[data-theme="light"] {
-      --header-bg: transparent;
-      --header-border: transparent;
-      --nav-bg: rgba(255, 255, 255, 0.85);
-      --nav-border: rgba(0, 0, 0, 0.08);
-      --nav-border-top: rgba(255, 255, 255, 1);
-      --nav-border-bottom: rgba(0, 0, 0, 0.10);
-      --nav-shadow: inset 0 1px 2px 0 #FFFFFF, 0 6px 20px -2px rgba(0, 0, 0, 0.06);
-      --nav-pill-bg: linear-gradient(180deg, #FFFFFF 0%, rgba(246, 249, 255, 0.96) 100%);
-      --nav-pill-border: rgba(0, 0, 0, 0.10);
-      --nav-pill-border-top: #FFFFFF;
-      --nav-pill-border-bottom: rgba(0, 0, 0, 0.12);
-      --nav-pill-shadow: 0 4px 14px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 1px 1px #FFFFFF;
-      --text: #0F172A;
-      --text-muted: #5C6E82;
-    }
 
     * {
       box-sizing: border-box;
@@ -58,16 +42,8 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
       user-select: none;
       position: relative;
-    }
-
-    html[data-theme="dark"] body {
       background: #0B111B;
       color: #F8FAFC;
-    }
-
-    html[data-theme="light"] body {
-      background: #F4F7FB;
-      color: #0F172A;
     }
 
     /* Floating Transparent Header on Stars */
@@ -180,20 +156,10 @@
       background: rgba(255, 255, 255, 0.05);
     }
 
-    html[data-theme="light"] .nav-item:hover {
-      background: rgba(0, 0, 0, 0.04);
-      color: #0F172A;
-    }
-
     .nav-item.is-active {
       color: #FFFFFF;
       font-weight: 600;
       text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    }
-
-    html[data-theme="light"] .nav-item.is-active {
-      color: #0F172A;
-      text-shadow: none;
     }
 
     .nav-item svg {
@@ -252,13 +218,6 @@
       -webkit-backdrop-filter: blur(12px);
     }
 
-    html[data-theme="light"] .icon-btn:hover {
-      background: linear-gradient(180deg, #FFFFFF 0%, rgba(245, 248, 255, 0.95) 100%);
-      border-color: rgba(0, 0, 0, 0.1);
-      border-top-color: #FFFFFF;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
-    }
-
     .icon-btn svg {
       width: 16px;
       height: 16px;
@@ -267,17 +226,6 @@
       stroke-width: 2;
       stroke-linecap: round;
       stroke-linejoin: round;
-    }
-
-    .window-divider {
-      width: 1px;
-      height: 18px;
-      background: rgba(255, 255, 255, 0.12);
-      margin: 0 4px;
-    }
-
-    html[data-theme="light"] .window-divider {
-      background: rgba(0, 0, 0, 0.10);
     }
 
     #stars-canvas {
@@ -329,76 +277,6 @@
       transform: translateX(-50%) translateY(0);
       opacity: 1;
     }
-
-    /* Ambient Background Style Switcher */
-    .bg-variant-bar {
-      position: fixed;
-      bottom: 20px;
-      left: 24px;
-      z-index: 100;
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      padding: 5px 8px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.72);
-      border: 1px solid rgba(0, 0, 0, 0.08);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-      transition: all 160ms ease;
-    }
-
-    html[data-theme="dark"] .bg-variant-bar {
-      background: rgba(15, 23, 35, 0.72);
-      border-color: rgba(255, 255, 255, 0.1);
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-    }
-
-    .bg-bar-title {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: var(--text-muted);
-      margin-right: 3px;
-      padding-left: 4px;
-    }
-
-    .bg-pill-btn {
-      border: none;
-      background: transparent;
-      padding: 4px 9px;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--text-muted);
-      cursor: pointer;
-      transition: all 120ms ease;
-      white-space: nowrap;
-    }
-
-    .bg-pill-btn:hover {
-      color: var(--text);
-      background: rgba(0, 0, 0, 0.05);
-    }
-
-    html[data-theme="dark"] .bg-pill-btn:hover {
-      background: rgba(255, 255, 255, 0.08);
-    }
-
-    .bg-pill-btn.is-active {
-      background: #FFFFFF;
-      color: #0284C7;
-      font-weight: 600;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-    }
-
-    html[data-theme="dark"] .bg-pill-btn.is-active {
-      background: rgba(255, 255, 255, 0.16);
-      color: #38BDF8;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-    }
   </style>
 </head>
 <body>
@@ -443,11 +321,6 @@
 
     <!-- Controls -->
     <div class="window-controls">
-      <button class="icon-btn" id="theme-toggle" title="Переключить тему (Тёмная / Светлая)" aria-label="Сменить тему">
-        <svg id="theme-icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        <svg id="theme-icon-sun" viewBox="0 0 24 24" style="display:none;"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-      </button>
-      <div class="window-divider"></div>
       <button class="icon-btn" title="Свернуть"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       <button class="icon-btn" title="Развернуть"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
       <button class="icon-btn" title="Закрыть"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -546,38 +419,16 @@
     </div>
   </main>
 
-  <!-- Light Theme Ambient Background Variant Switcher -->
-  <nav class="bg-variant-bar" id="bg-variant-bar" aria-label="Варианты фона">
-    <span class="bg-bar-title">Фон:</span>
-    <button type="button" class="bg-pill-btn is-active" data-bg="studio" title="Мягкий студийный свет (Apple / Fluent ambient)">1. Студия</button>
-    <button type="button" class="bg-pill-btn" data-bg="stardust" title="Дневные звезды и спутниковые маяки">2. Звезды дня</button>
-    <button type="button" class="bg-pill-btn" data-bg="strato" title="Высотный горизонт / Стратосфера">3. Горизонт</button>
-    <button type="button" class="bg-pill-btn" data-bg="minimal" title="Чистый фарфоровый минимализм">4. Минимал</button>
-  </nav>
-
   <div class="motion-toast" id="toast"></div>
 
   <script>
-    // Zero-overhead static background canvas (renders once, 0% CPU overhead while spinning globe)
+    // Zero-overhead static starry sky (renders once, 0% CPU overhead while spinning globe)
     (function initBackgroundCanvas() {
       const canvas = document.getElementById("stars-canvas");
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
 
-      // Active background variant for light theme (persisted in localStorage or query param)
-      const urlBg = new URLSearchParams(window.location.search).get("bg");
-      window.currentBgVariant = urlBg || localStorage.getItem("deytt_light_bg") || "studio";
-
-      function updateBgPickerUI() {
-        const btns = document.querySelectorAll(".bg-pill-btn");
-        btns.forEach(b => {
-          const match = b.dataset.bg === window.currentBgVariant;
-          b.classList.toggle("is-active", match);
-          b.setAttribute("aria-pressed", match ? "true" : "false");
-        });
-      }
-
-      function renderBackground() {
+      function renderStars() {
         const dpr = Math.min(2, window.devicePixelRatio || 1);
         const width = window.innerWidth;
         const height = window.innerHeight;
@@ -586,177 +437,23 @@
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, width, height);
 
-        const isLight = document.documentElement.dataset.theme === "light";
-
-        if (!isLight) {
-          // Dark Theme: Deep Space Starry Sky
-          const count = Math.floor((width * height) / 3200);
-          for (let i = 0; i < count; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            const radius = Math.random() < 0.85 ? (Math.random() * 0.7 + 0.3) : (Math.random() * 1.1 + 0.8);
-            const alpha = Math.random() * 0.65 + 0.25;
-            ctx.fillStyle = `rgba(235, 245, 255, ${alpha})`;
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          return;
-        }
-
-        // ==========================================
-        // Light Theme: 4 Premium, Professional Variants
-        // ==========================================
-        const activeVariant = window.currentBgVariant || "studio";
-        const globeCx = width * 0.44;
-        const globeCy = height * 0.50;
-        const globeR = Math.min(width, height) * 0.48;
-
-        if (activeVariant === "studio") {
-          // ------------------------------------------
-          // ВАРИАНТ 1: Мягкий студийный свет (Apple / Fluent ambient) [DEFAULT]
-          // ------------------------------------------
-          // 1. Serene porcelain-sky gradient
-          const baseGrad = ctx.createLinearGradient(0, 0, width, height);
-          baseGrad.addColorStop(0, "#EBF3FA");
-          baseGrad.addColorStop(0.45, "#F3F7FA");
-          baseGrad.addColorStop(1, "#F7FAFC");
-          ctx.fillStyle = baseGrad;
-          ctx.fillRect(0, 0, width, height);
-
-          // 2. Soft, luminous solar aura directly behind the globe
-          const haloGrad = ctx.createRadialGradient(globeCx, globeCy, globeR * 0.2, globeCx, globeCy, globeR * 1.45);
-          haloGrad.addColorStop(0, "rgba(185, 218, 248, 0.42)");
-          haloGrad.addColorStop(0.35, "rgba(210, 232, 252, 0.22)");
-          haloGrad.addColorStop(0.70, "rgba(235, 245, 255, 0.08)");
-          haloGrad.addColorStop(1, "rgba(247, 250, 252, 0)");
-          ctx.fillStyle = haloGrad;
+        // Deep Space Starry Sky
+        const count = Math.floor((width * height) / 3200);
+        for (let i = 0; i < count; i++) {
+          const x = Math.random() * width;
+          const y = Math.random() * height;
+          const radius = Math.random() < 0.85 ? (Math.random() * 0.7 + 0.3) : (Math.random() * 1.1 + 0.8);
+          const alpha = Math.random() * 0.65 + 0.25;
+          ctx.fillStyle = `rgba(235, 245, 255, ${alpha})`;
           ctx.beginPath();
-          ctx.arc(globeCx, globeCy, globeR * 1.45, 0, Math.PI * 2);
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
           ctx.fill();
-
-          // 3. Gentle morning sun warmth in top-left
-          const sunWarmth = ctx.createRadialGradient(width * 0.12, height * 0.08, 10, width * 0.12, height * 0.08, width * 0.65);
-          sunWarmth.addColorStop(0, "rgba(255, 246, 230, 0.45)");
-          sunWarmth.addColorStop(0.45, "rgba(255, 250, 242, 0.18)");
-          sunWarmth.addColorStop(1, "rgba(255, 255, 255, 0)");
-          ctx.fillStyle = sunWarmth;
-          ctx.fillRect(0, 0, width, height);
-
-          // 4. Subtle daylight dust particles floating peacefully in the light
-          const moteCount = 38;
-          for (let i = 0; i < moteCount; i++) {
-            const mx = Math.random() * width;
-            const my = Math.random() * height;
-            const mr = Math.random() * 0.6 + 0.6; // 0.6px - 1.2px
-            const alpha = Math.random() * 0.15 + 0.12;
-            ctx.fillStyle = `rgba(18, 85, 145, ${alpha})`;
-            ctx.beginPath();
-            ctx.arc(mx, my, mr, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-        } else if (activeVariant === "stardust") {
-          // ------------------------------------------
-          // ВАРИАНТ 2: Дневные звезды / Спутниковые маяки (Daylight Star-Dust)
-          // ------------------------------------------
-          // 1. Clear sky gradient
-          const skyGrad = ctx.createLinearGradient(0, 0, 0, height);
-          skyGrad.addColorStop(0, "#E2EEF8");
-          skyGrad.addColorStop(0.5, "#EEF5FB");
-          skyGrad.addColorStop(1, "#F6F9FC");
-          ctx.fillStyle = skyGrad;
-          ctx.fillRect(0, 0, width, height);
-
-          // 2. Halo behind globe
-          const halo = ctx.createRadialGradient(globeCx, globeCy, 40, globeCx, globeCy, globeR * 1.35);
-          halo.addColorStop(0, "rgba(195, 225, 250, 0.45)");
-          halo.addColorStop(0.6, "rgba(225, 240, 255, 0.15)");
-          halo.addColorStop(1, "rgba(246, 249, 252, 0)");
-          ctx.fillStyle = halo;
-          ctx.fillRect(0, 0, width, height);
-
-          // 3. Crisp daytime micro-stars (exact conceptual twin of dark theme stars!)
-          const count = Math.floor((width * height) / 3600);
-          for (let i = 0; i < count; i++) {
-            const x = Math.random() * width;
-            const y = Math.random() * height;
-            const isLarge = Math.random() < 0.20;
-            const radius = isLarge ? (Math.random() * 0.4 + 1.0) : (Math.random() * 0.4 + 0.5);
-            const isGold = Math.random() < 0.22;
-            const alpha = Math.random() * 0.32 + 0.18;
-            ctx.fillStyle = isGold
-              ? `rgba(217, 119, 6, ${alpha})`
-              : `rgba(2, 132, 199, ${alpha})`;
-            ctx.beginPath();
-            ctx.arc(x, y, radius, 0, Math.PI * 2);
-            ctx.fill();
-          }
-
-        } else if (activeVariant === "strato") {
-          // ------------------------------------------
-          // ВАРИАНТ 3: Высотный горизонт / Стратосфера
-          // ------------------------------------------
-          const stratoGrad = ctx.createLinearGradient(0, 0, 0, height);
-          stratoGrad.addColorStop(0, "#CDE4F7");
-          stratoGrad.addColorStop(0.38, "#E2F0FA");
-          stratoGrad.addColorStop(0.70, "#EFF6FB");
-          stratoGrad.addColorStop(1, "#F7FAFC");
-          ctx.fillStyle = stratoGrad;
-          ctx.fillRect(0, 0, width, height);
-
-          // Soft diffuse horizontal horizon haze
-          const hazeGrad = ctx.createLinearGradient(0, height * 0.45, 0, height * 0.65);
-          hazeGrad.addColorStop(0, "rgba(255, 255, 255, 0)");
-          hazeGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.45)");
-          hazeGrad.addColorStop(1, "rgba(255, 255, 255, 0)");
-          ctx.fillStyle = hazeGrad;
-          ctx.fillRect(0, height * 0.45, width, height * 0.20);
-
-          // Solar glow
-          const sun = ctx.createRadialGradient(width * 0.15, height * 0.10, 20, width * 0.15, height * 0.10, width * 0.5);
-          sun.addColorStop(0, "rgba(255, 250, 240, 0.55)");
-          sun.addColorStop(0.5, "rgba(240, 248, 255, 0.2)");
-          sun.addColorStop(1, "rgba(255, 255, 255, 0)");
-          ctx.fillStyle = sun;
-          ctx.fillRect(0, 0, width, height);
-
-        } else if (activeVariant === "minimal") {
-          // ------------------------------------------
-          // ВАРИАНТ 4: Чистый фарфоровый минимализм
-          // ------------------------------------------
-          ctx.fillStyle = "#F4F8FC";
-          ctx.fillRect(0, 0, width, height);
-
-          // Ultra-subtle vignette
-          const vign = ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.4, width * 0.5, height * 0.5, Math.max(width, height) * 0.8);
-          vign.addColorStop(0, "rgba(244, 248, 252, 0)");
-          vign.addColorStop(1, "rgba(215, 228, 240, 0.25)");
-          ctx.fillStyle = vign;
-          ctx.fillRect(0, 0, width, height);
         }
       }
 
-      // Hook switcher click handlers
-      const bgBar = document.getElementById("bg-variant-bar");
-      if (bgBar) {
-        bgBar.addEventListener("click", (e) => {
-          const btn = e.target.closest(".bg-pill-btn");
-          if (!btn) return;
-          const bgKey = btn.dataset.bg;
-          if (!bgKey) return;
-          window.currentBgVariant = bgKey;
-          localStorage.setItem("deytt_light_bg", bgKey);
-          updateBgPickerUI();
-          renderBackground();
-        });
-      }
-
-      window.addEventListener("resize", renderBackground, { passive: true });
-      window.renderAtlasBackground = renderBackground;
-      window.updateBgPickerUI = updateBgPickerUI;
-      updateBgPickerUI();
-      renderBackground();
+      window.addEventListener("resize", renderStars, { passive: true });
+      window.renderAtlasBackground = renderStars;
+      renderStars();
     })();
     // Navigation Controller with Horizontal Micro-Spring
     const navContainer = document.getElementById("main-nav");
@@ -792,46 +489,6 @@
         updatePillPosition(item, true);
       });
     });
-
-    // Theme Switcher Controller
-    const themeBtn = document.getElementById("theme-toggle");
-    const moonIcon = document.getElementById("theme-icon-moon");
-    const sunIcon = document.getElementById("theme-icon-sun");
-
-    function setAppTheme(theme) {
-      document.documentElement.dataset.theme = theme;
-      if (theme === "light") {
-        moonIcon.style.display = "none";
-        sunIcon.style.display = "block";
-      } else {
-        moonIcon.style.display = "block";
-        sunIcon.style.display = "none";
-      }
-
-      if (window.deyttMapAtlas) {
-        window.deyttMapAtlas.markMapDirty();
-        window.deyttMapAtlas.start();
-      }
-
-      if (window.renderAtlasBackground) {
-        window.renderAtlasBackground();
-      }
-      if (window.updateBgPickerUI) {
-        window.updateBgPickerUI();
-      }
-    }
-
-    if (new URLSearchParams(window.location.search).get("theme") === "light") {
-      setAppTheme("light");
-    }
-
-    if (themeBtn) {
-      themeBtn.addEventListener("click", () => {
-        const currentTheme = document.documentElement.dataset.theme || "dark";
-        const newTheme = currentTheme === "dark" ? "light" : "dark";
-        setAppTheme(newTheme);
-      });
-    }
 
     // Connect & Measure Button Simulation for preview
     let isConnected = false;
