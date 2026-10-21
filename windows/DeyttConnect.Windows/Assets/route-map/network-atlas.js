@@ -325,6 +325,16 @@
         this.canvas.parentElement.insertBefore(layer, this.canvas);
       });
       this.packetSprites = new Map();
+      this.labelContainer = this.root.querySelector("[data-atlas-annotations]");
+      if (!this.labelContainer && this.canvas && this.canvas.parentElement) {
+        this.labelContainer = document.createElement("div");
+        this.labelContainer.className = "atlas-html-annotations";
+        this.labelContainer.setAttribute("data-atlas-annotations", "");
+        this.labelContainer.setAttribute("aria-hidden", "true");
+        this.canvas.parentElement.appendChild(this.labelContainer);
+      }
+      this.domLabels = new Map();
+      this.activeLabelsThisFrame = new Set();
       this.staticDirty = true;
       this.overlayDirty = true;
       this.renderCount = 0;
@@ -1522,7 +1532,6 @@
       if (!location) return;
 
       const compact = this.width < 820;
-      const labelScale = this.options.labelScale || 1;
       const countryNames = { RU: "россия", NL: "нидерланды", DE: "германия", FI: "финляндия", IT: "италия" };
       
       const title = isUser
@@ -1532,34 +1541,30 @@
         ? this.copy(countryNames[location.country?.toUpperCase()] || location.country || "вход в сеть")
         : this.copy(location.country);
 
-      const titleFontSize = Math.round(9.5 * labelScale);
-      const metaFontSize = Math.round(8.2 * labelScale);
-      const inset = Math.round(6.5 * labelScale);
-      const height = Math.round((meta ? 24 : 16) * labelScale);
-      const radius = Math.round(5 * labelScale);
+      const height = 22;
       const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
-      const titleFont = (active ? "600 " : "500 ") + titleFontSize + "px " + fontFamily;
-      const metaFont = "500 " + metaFontSize + "px " + fontFamily;
 
       context.save();
-      context.font = titleFont;
+      context.font = "600 10px " + fontFamily;
       const titleWidth = context.measureText(title).width;
-      context.font = metaFont;
+      context.font = "500 8.5px " + fontFamily;
       const metaWidth = meta ? context.measureText(meta).width : 0;
-      const width = Math.max(titleWidth, metaWidth) + inset * 2;
+      context.restore();
+
+      const width = Math.round(titleWidth + (meta ? metaWidth + 14 : 0) + 24);
 
       const pref = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
       const candidates = [];
       if (pref) candidates.push(pref);
       candidates.push(
-        { x: -24, y: -24, align: "right" },
-        { x: -24, y: 22, align: "right" },
-        { x: 22, y: -24, align: "left" },
-        { x: 22, y: 22, align: "left" },
+        { x: -26, y: -22, align: "right" },
+        { x: -26, y: 20, align: "right" },
+        { x: 22, y: -22, align: "left" },
+        { x: 22, y: 20, align: "left" },
         { x: -28, y: 0, align: "right" },
         { x: 28, y: 0, align: "left" },
-        { x: -18, y: -36, align: "right" },
-        { x: 20, y: 34, align: "left" }
+        { x: -18, y: -30, align: "right" },
+        { x: 20, y: 28, align: "left" }
       );
 
       let bestCandidate = null;
@@ -1595,18 +1600,19 @@
         }
       }
 
-      const left = bestCandidate.left;
-      const top = bestCandidate.top;
+      const left = Math.round(bestCandidate.left);
+      const top = Math.round(bestCandidate.top);
       const endX = clamp(point.x, left + 4, left + width - 4);
       const endY = clamp(point.y, top + 4, top + height - 4);
 
-      const leaderColor = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#10B981" : "#60A5FA";
+      const leaderColor = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#34D399" : "#60A5FA";
+      context.save();
       context.beginPath();
       context.moveTo(point.x, point.y);
       context.lineTo(endX, endY);
       context.strokeStyle = leaderColor;
-      context.lineWidth = active || isHovered ? 1.2 : 0.9;
-      context.globalAlpha = active || isHovered ? 0.9 : 0.65;
+      context.lineWidth = active || isHovered ? 1.1 : 0.85;
+      context.globalAlpha = active || isHovered ? 0.9 : 0.6;
       context.stroke();
 
       context.beginPath();
@@ -1614,93 +1620,59 @@
       context.fillStyle = leaderColor;
       context.globalAlpha = 0.9;
       context.fill();
+      context.restore();
 
       const labelBox = { key, left, top, width, height, leader: [point, { x: endX, y: endY }] };
       occupied.push(labelBox);
       this.labelBoxes.push(labelBox);
 
-      // Liquid Glass Pill Body (Translucent refractive gradient)
-      const glassGrad = context.createLinearGradient(left, top, left, top + height);
-      if (isHovered) {
-        glassGrad.addColorStop(0, "rgba(255, 255, 255, 0.24)");
-        glassGrad.addColorStop(0.35, "rgba(24, 38, 64, 0.58)");
-        glassGrad.addColorStop(1, "rgba(12, 20, 36, 0.76)");
-      } else if (isUser) {
-        glassGrad.addColorStop(0, "rgba(56, 189, 248, 0.22)");
-        glassGrad.addColorStop(0.35, "rgba(14, 28, 48, 0.55)");
-        glassGrad.addColorStop(1, "rgba(8, 16, 30, 0.72)");
-      } else if (isExit) {
-        glassGrad.addColorStop(0, "rgba(16, 185, 129, 0.22)");
-        glassGrad.addColorStop(0.35, "rgba(12, 32, 34, 0.55)");
-        glassGrad.addColorStop(1, "rgba(6, 18, 24, 0.72)");
-      } else {
-        glassGrad.addColorStop(0, "rgba(255, 255, 255, 0.14)");
-        glassGrad.addColorStop(0.35, "rgba(18, 26, 44, 0.50)");
-        glassGrad.addColorStop(1, "rgba(10, 16, 28, 0.68)");
+      // Hardware-accelerated True Liquid Glass DOM Annotation
+      if (this.labelContainer) {
+        let el = this.domLabels.get(key);
+        if (!el) {
+          el = document.createElement("div");
+          el.className = "atlas-glass-label";
+          el.setAttribute("data-label-key", key);
+          el.onclick = (e) => {
+            e.stopPropagation();
+            if (typeof window.deyttSelectRouteFromAtlas === "function") {
+              window.deyttSelectRouteFromAtlas(key);
+            }
+          };
+          el.onpointerenter = () => {
+            this.setHovered(key);
+          };
+          el.onpointerleave = () => {
+            if (this.hovered === key) this.setHovered(null);
+          };
+          this.labelContainer.appendChild(el);
+          this.domLabels.set(key, el);
+        }
+
+        this.activeLabelsThisFrame.add(key);
+
+        const newClass = "atlas-glass-label" +
+          (isUser ? " is-user" : "") +
+          (isExit ? " is-exit" : "") +
+          (isHovered ? " is-hovered" : "");
+        if (el.className !== newClass) {
+          el.className = newClass;
+        }
+
+        const expectedHtml = `<span class="atlas-glass-label__pip"></span><span class="atlas-glass-label__title">${title}</span>${meta ? `<span class="atlas-glass-label__sep">·</span><span class="atlas-glass-label__country">${meta}</span>` : ""}`;
+        if (el._currentHtml !== expectedHtml) {
+          el.innerHTML = expectedHtml;
+          el._currentHtml = expectedHtml;
+        }
+
+        el.style.transform = `translate3d(${left}px, ${top}px, 0)`;
+        el.style.display = "inline-flex";
       }
-
-      context.beginPath();
-      context.roundRect(left, top, width, height, radius);
-      context.fillStyle = glassGrad;
-      context.shadowColor = "rgba(0, 0, 0, 0.4)";
-      context.shadowBlur = 8;
-      context.shadowOffsetY = 2;
-      context.fill();
-      context.shadowBlur = 0;
-      context.shadowOffsetY = 0;
-
-      // Inner Top Specular Highlight Arc (Liquid glass reflection gleam)
-      context.beginPath();
-      context.roundRect(left + 1, top + 1, width - 2, Math.max(2, height * 0.45), [Math.max(1, radius - 1), Math.max(1, radius - 1), 0, 0]);
-      const shineGrad = context.createLinearGradient(left, top + 1, left, top + height * 0.45);
-      shineGrad.addColorStop(0, isHovered ? "rgba(255, 255, 255, 0.35)" : isUser ? "rgba(186, 230, 253, 0.30)" : isExit ? "rgba(167, 243, 208, 0.30)" : "rgba(255, 255, 255, 0.22)");
-      shineGrad.addColorStop(1, "rgba(255, 255, 255, 0.0)");
-      context.fillStyle = shineGrad;
-      context.fill();
-
-      // Liquid Glass Perimeter Specular Stroke
-      const strokeGrad = context.createLinearGradient(left, top, left, top + height);
-      if (isHovered) {
-        strokeGrad.addColorStop(0, "rgba(255, 255, 255, 0.95)");
-        strokeGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.45)");
-        strokeGrad.addColorStop(1, "rgba(255, 255, 255, 0.20)");
-      } else if (isUser) {
-        strokeGrad.addColorStop(0, "rgba(125, 211, 252, 0.90)");
-        strokeGrad.addColorStop(0.5, "rgba(56, 189, 248, 0.45)");
-        strokeGrad.addColorStop(1, "rgba(56, 189, 248, 0.15)");
-      } else if (isExit) {
-        strokeGrad.addColorStop(0, "rgba(110, 231, 183, 0.90)");
-        strokeGrad.addColorStop(0.5, "rgba(16, 185, 129, 0.45)");
-        strokeGrad.addColorStop(1, "rgba(16, 185, 129, 0.15)");
-      } else {
-        strokeGrad.addColorStop(0, "rgba(255, 255, 255, 0.55)");
-        strokeGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.20)");
-        strokeGrad.addColorStop(1, "rgba(255, 255, 255, 0.08)");
-      }
-
-      context.beginPath();
-      context.roundRect(left, top, width, height, radius);
-      context.strokeStyle = strokeGrad;
-      context.lineWidth = active || isHovered ? 1.0 : 0.8;
-      context.stroke();
-
-      context.textBaseline = "middle";
-      context.textAlign = "left";
-      context.globalAlpha = 1;
-      context.font = titleFont;
-      context.fillStyle = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#34D399" : "#F8FAFC";
-      context.fillText(title, left + inset, top + (meta ? Math.round(8.5 * labelScale) : height / 2));
-
-      if (meta) {
-        context.fillStyle = isHovered ? "rgba(255, 255, 255, 0.88)" : isUser ? "#BAE6FD" : isExit ? "#A7F3D0" : "#94A3B8";
-        context.font = metaFont;
-        context.fillText(meta, left + inset, top + Math.round(17.5 * labelScale));
-      }
-      context.restore();
     }
 
     drawNodes(colors) {
       this.projectedNodes = {};
+      this.activeLabelsThisFrame = new Set();
       LOCATION_ORDER.forEach((key) => {
         if (this.availableLocationKeys.has(key)) this.drawNode(key, LOCATIONS[key], colors, "server");
       });
@@ -1719,6 +1691,15 @@
         if (key === "user" ? this.userLocation : this.availableLocationKeys.has(key))
           this.drawLabel(key, colors, occupied);
       });
+
+      // Hide any DOM label not active on this frame
+      if (this.domLabels) {
+        this.domLabels.forEach((el, key) => {
+          if (!this.activeLabelsThisFrame.has(key)) {
+            el.style.display = "none";
+          }
+        });
+      }
     }
 
     renderStatic(colors) {

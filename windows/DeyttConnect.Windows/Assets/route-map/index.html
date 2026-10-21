@@ -4,38 +4,39 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>./connect · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_17">
-  <script defer src="network-atlas.js?v=20261021_17"></script>
-  <script defer src="atlas-init.js?v=20261021_17"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261021_18">
+  <script defer src="network-atlas.js?v=20261021_18"></script>
+  <script defer src="atlas-init.js?v=20261021_18"></script>
 
   <style>
     :root {
       --header-bg: transparent;
       --header-border: transparent;
-      --nav-bg: rgba(255, 255, 255, 0.025);
-      --nav-border: rgba(255, 255, 255, 0.08);
-      --nav-border-top: rgba(255, 255, 255, 0.22);
+      --nav-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(10, 16, 28, 0.45);
+      --nav-border: rgba(255, 255, 255, 0.12);
+      --nav-border-top: rgba(255, 255, 255, 0.42);
       --nav-border-bottom: rgba(0, 0, 0, 0.35);
-      --nav-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 100%);
-      --nav-pill-border: rgba(255, 255, 255, 0.18);
-      --nav-pill-border-top: rgba(255, 255, 255, 0.48);
+      --nav-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.04) 100%);
+      --nav-pill-border: rgba(255, 255, 255, 0.22);
+      --nav-pill-border-top: rgba(255, 255, 255, 0.62);
       --nav-pill-border-bottom: rgba(0, 0, 0, 0.25);
-      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
+      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 1px 0 rgba(255, 255, 255, 0.45);
       --text: #F8FAFC;
       --text-muted: #8E9EAF;
 
       /* Liquid Glass Tokens */
-      --glass-bg: rgba(14, 22, 36, 0.62);
-      --glass-bg-hover: rgba(20, 31, 50, 0.72);
-      --glass-bg-active: rgba(26, 40, 64, 0.82);
-      --glass-border: rgba(255, 255, 255, 0.08);
-      --glass-border-top: rgba(255, 255, 255, 0.24);
-      --glass-border-hover: rgba(255, 255, 255, 0.15);
-      --glass-border-top-hover: rgba(255, 255, 255, 0.42);
-      --glass-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 0 rgba(0, 0, 0, 0.35), 0 14px 40px 0 rgba(0, 0, 0, 0.48);
-      --glass-shadow-hover: inset 0 1px 2px 0 rgba(255, 255, 255, 0.35), 0 18px 48px 0 rgba(0, 0, 0, 0.58);
-      --glass-blur: blur(24px) saturate(175%);
+      --glass-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.015) 100%), rgba(12, 19, 32, 0.48);
+      --glass-bg-hover: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.025) 100%), rgba(16, 26, 44, 0.55);
+      --glass-bg-active: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 100%), rgba(22, 34, 58, 0.65);
+      --glass-border: rgba(255, 255, 255, 0.12);
+      --glass-border-top: rgba(255, 255, 255, 0.38);
+      --glass-border-bottom: rgba(0, 0, 0, 0.35);
+      --glass-border-hover: rgba(255, 255, 255, 0.18);
+      --glass-border-top-hover: rgba(255, 255, 255, 0.55);
+      --glass-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.25), 0 16px 44px 0 rgba(0, 0, 0, 0.45);
+      --glass-shadow-hover: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.42), 0 20px 52px 0 rgba(0, 0, 0, 0.55);
+      --glass-blur: blur(28px) saturate(210%) brightness(108%);
 
       /* Accent & System Colors */
       --accent-mint: #39E8BD;
@@ -296,12 +297,131 @@
       pointer-events: none;
     }
 
-    /* Completely hide Home HUD when blurred/inactive to eliminate blue button blur streak */
-    .network-atlas.is-blurred .home-panel-shell {
+    /* Completely hide Home HUD and HTML annotations when blurred/inactive to eliminate blue button blur streak */
+    .network-atlas.is-blurred .home-panel-shell,
+    .network-atlas.is-blurred .atlas-html-annotations {
       opacity: 0 !important;
       visibility: hidden !important;
       pointer-events: none !important;
       transform: translateY(-50%) scale(0.96) !important;
+    }
+
+    /* DOM Hardware-Accelerated Liquid Glass Annotations */
+    .atlas-html-annotations {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 10;
+      overflow: hidden;
+      contain: layout paint;
+    }
+
+    .atlas-glass-label {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px 3px 7px;
+      height: 22px;
+      box-sizing: border-box;
+      border-radius: 9999px;
+      
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 100%), rgba(11, 18, 32, 0.38);
+      backdrop-filter: blur(16px) saturate(220%) brightness(112%);
+      -webkit-backdrop-filter: blur(16px) saturate(220%) brightness(112%);
+      
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-top: 1px solid rgba(255, 255, 255, 0.55);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+      
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.5),
+                  inset 0 -1px 1px 0 rgba(0, 0, 0, 0.2),
+                  0 6px 18px rgba(0, 0, 0, 0.38);
+                  
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+      text-transform: lowercase;
+      will-change: transform;
+      transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease, transform 100ms ease;
+    }
+
+    .atlas-glass-label__pip {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.7);
+      box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+      flex-shrink: 0;
+    }
+
+    .atlas-glass-label__title {
+      font-family: inherit;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: #F8FAFC;
+      line-height: 1;
+    }
+
+    .atlas-glass-label__sep {
+      font-size: 8px;
+      color: rgba(255, 255, 255, 0.35);
+      line-height: 1;
+      margin: 0 -1px;
+    }
+
+    .atlas-glass-label__country {
+      font-family: inherit;
+      font-size: 8.5px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.65);
+      line-height: 1;
+    }
+
+    .atlas-glass-label.is-user {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.22) 0%, rgba(255, 255, 255, 0.04) 100%), rgba(8, 20, 38, 0.45);
+      border-color: rgba(56, 189, 248, 0.28);
+      border-top-color: rgba(125, 211, 252, 0.75);
+      box-shadow: inset 0 1px 1px 0 rgba(186, 230, 253, 0.65), 0 6px 20px rgba(0, 0, 0, 0.4);
+    }
+    .atlas-glass-label.is-user .atlas-glass-label__pip {
+      background: #38BDF8;
+      box-shadow: 0 0 8px #38BDF8, 0 0 14px rgba(56, 189, 248, 0.6);
+    }
+    .atlas-glass-label.is-user .atlas-glass-label__title {
+      color: #E0F2FE;
+    }
+    .atlas-glass-label.is-user .atlas-glass-label__country {
+      color: #BAE6FD;
+    }
+
+    .atlas-glass-label.is-exit {
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.22) 0%, rgba(255, 255, 255, 0.04) 100%), rgba(6, 24, 20, 0.45);
+      border-color: rgba(16, 185, 129, 0.32);
+      border-top-color: rgba(110, 231, 183, 0.8);
+      box-shadow: inset 0 1px 1px 0 rgba(167, 243, 208, 0.65), 0 6px 20px rgba(0, 0, 0, 0.4);
+    }
+    .atlas-glass-label.is-exit .atlas-glass-label__pip {
+      background: #34D399;
+      box-shadow: 0 0 8px #34D399, 0 0 14px rgba(52, 211, 153, 0.6);
+    }
+    .atlas-glass-label.is-exit .atlas-glass-label__title {
+      color: #ECFDF5;
+    }
+    .atlas-glass-label.is-exit .atlas-glass-label__country {
+      color: #A7F3D0;
+    }
+
+    .atlas-glass-label:hover,
+    .atlas-glass-label.is-hovered {
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.07) 100%), rgba(20, 32, 56, 0.52);
+      border-color: rgba(255, 255, 255, 0.32);
+      border-top-color: rgba(255, 255, 255, 0.88);
+      box-shadow: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.8), 0 8px 24px rgba(0, 0, 0, 0.45);
     }
 
     /* Floating Liquid Glass HUD for Home Panel (Pure Floating Typography, Zero Podlozhka) */
@@ -345,15 +465,19 @@
       display: inline-flex;
       align-items: center;
       gap: 7px;
-      padding: 4px 12px;
-      border-radius: 20px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+      padding: 4px 13px;
+      border-radius: 9999px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(12, 19, 32, 0.38);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-top-color: rgba(255, 255, 255, 0.42);
+      border-bottom-color: rgba(0, 0, 0, 0.3);
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.35), 0 4px 14px rgba(0, 0, 0, 0.25);
       width: fit-content;
       font-size: 12px;
       font-weight: 500;
       color: #94A3B8;
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
     }
 
     .home-status-badge .status-dot {
@@ -366,8 +490,10 @@
 
     .home-status-badge.is-connected {
       color: #34D399;
-      background: rgba(16, 185, 129, 0.1);
-      border-color: rgba(16, 185, 129, 0.25);
+      background: linear-gradient(135deg, rgba(52, 211, 153, 0.18) 0%, rgba(255, 255, 255, 0.03) 100%), rgba(6, 24, 20, 0.45);
+      border-color: rgba(16, 185, 129, 0.32);
+      border-top-color: rgba(110, 231, 183, 0.7);
+      box-shadow: inset 0 1px 1px 0 rgba(167, 243, 208, 0.5), 0 4px 16px rgba(16, 185, 129, 0.2);
     }
 
     .home-status-badge.is-connected .status-dot {
@@ -421,12 +547,15 @@
       width: 44px;
       height: 44px;
       border-radius: 14px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      border-top-color: rgba(255, 255, 255, 0.38);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(12, 19, 32, 0.4);
+      backdrop-filter: blur(16px) saturate(190%);
+      -webkit-backdrop-filter: blur(16px) saturate(190%);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-top-color: rgba(255, 255, 255, 0.48);
+      border-bottom-color: rgba(0, 0, 0, 0.3);
       font-size: 20px;
       flex-shrink: 0;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.22), 0 6px 18px rgba(0, 0, 0, 0.35);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), 0 6px 18px rgba(0, 0, 0, 0.35);
     }
 
     .home-city {
@@ -576,11 +705,12 @@
 
     /* Elevated Interactive Measure Button Pill */
     .home-measure {
-      background: rgba(255, 255, 255, 0.06) !important;
-      backdrop-filter: blur(12px) !important;
-      -webkit-backdrop-filter: blur(12px) !important;
-      border: 1px solid rgba(255, 255, 255, 0.12) !important;
-      border-top-color: rgba(255, 255, 255, 0.22) !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%), rgba(15, 23, 40, 0.4) !important;
+      backdrop-filter: blur(16px) saturate(190%) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(190%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.15) !important;
+      border-top-color: rgba(255, 255, 255, 0.48) !important;
+      border-bottom-color: rgba(0, 0, 0, 0.3) !important;
       border-radius: 12px !important;
       color: #E2E8F0 !important;
       font-size: 13px !important;
@@ -590,18 +720,18 @@
       display: inline-flex !important;
       align-items: center !important;
       gap: 8px !important;
-      padding: 8px 16px !important;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+      padding: 8px 18px !important;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), inset 0 1px 1px 0 rgba(255, 255, 255, 0.35) !important;
       transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
       width: fit-content !important;
     }
 
     .home-measure:hover {
       color: #FFFFFF !important;
-      background: rgba(255, 255, 255, 0.12) !important;
-      border-color: rgba(255, 255, 255, 0.24) !important;
-      border-top-color: rgba(255, 255, 255, 0.45) !important;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 100%), rgba(22, 34, 58, 0.5) !important;
+      border-color: rgba(255, 255, 255, 0.25) !important;
+      border-top-color: rgba(255, 255, 255, 0.75) !important;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.55) !important;
       transform: translateY(-1px) !important;
     }
 
@@ -683,6 +813,7 @@
       -webkit-backdrop-filter: var(--glass-blur);
       border: 1px solid var(--glass-border);
       border-top-color: var(--glass-border-top);
+      border-bottom-color: var(--glass-border-bottom);
       border-radius: 20px;
       padding: 24px;
       box-shadow: var(--glass-shadow);
@@ -1360,12 +1491,13 @@
       font-size: 13px;
       font-weight: 600;
       color: #E2E8F0;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-top-color: rgba(255, 255, 255, 0.28);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 100%), rgba(15, 23, 40, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-top-color: rgba(255, 255, 255, 0.45);
+      border-bottom-color: rgba(0, 0, 0, 0.3);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.32);
+      backdrop-filter: blur(16px) saturate(190%);
+      -webkit-backdrop-filter: blur(16px) saturate(190%);
       cursor: pointer;
       text-transform: lowercase;
       transition: all 150ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -1373,11 +1505,11 @@
 
     .btn-select-route:hover,
     .btn-action-glass:hover {
-      background: rgba(255, 255, 255, 0.12);
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 100%), rgba(22, 34, 58, 0.5);
       color: #FFFFFF;
-      border-color: rgba(255, 255, 255, 0.22);
-      border-top-color: rgba(255, 255, 255, 0.45);
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      border-color: rgba(255, 255, 255, 0.24);
+      border-top-color: rgba(255, 255, 255, 0.75);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.38), inset 0 1px 1.5px rgba(255, 255, 255, 0.55);
       transform: translateY(-1px);
     }
 
@@ -1646,6 +1778,7 @@
       <div class="home-scene">
         <div class="network-atlas__canvas-wrap">
           <canvas data-atlas-interactive tabindex="0" role="img" aria-label="интерактивный глобус маршрута ./connect"></canvas>
+          <div class="atlas-html-annotations" data-atlas-annotations aria-hidden="true"></div>
           <span class="network-atlas__loader" data-atlas-status role="status" aria-live="polite">загружаю глобус</span>
           <span class="network-atlas__tooltip" data-atlas-tooltip role="status" aria-live="polite" hidden></span>
           <div class="traffic-hint" data-traffic-hint role="status" aria-live="polite" hidden></div>
@@ -2819,6 +2952,10 @@
 
       showToast(`выбран маршрут: ${data.city}`);
     }
+
+    window.deyttSelectRouteFromAtlas = function(key) {
+      selectRoute(key);
+    };
 
     // Attach route selection clicks
     document.querySelectorAll("[data-action-route]").forEach(btn => {
