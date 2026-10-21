@@ -191,6 +191,8 @@ public partial class MainWindow : Window
         _vpnServiceAvailable = true;
         _homeMapInitializationAllowed = true;
         _disableNativeMapInitialization = fixture.DisableNativeMapInitialization;
+        if (_disableNativeMapInitialization)
+            PageScroll.VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
         _routeProbeInProgress = fixture.RouteProbeInProgress;
         _routeProbeCancelRequested = fixture.RouteProbeCancelRequested;
         if (!string.IsNullOrWhiteSpace(fixture.ExpandedRouteCountry))
@@ -832,6 +834,11 @@ public partial class MainWindow : Window
             ? new Thickness(20, 24)
             : medium ? new Thickness(32, 28) : new Thickness(64, 32);
         WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !_mapImmersive;
+
+        PageScroll.VerticalScrollBarVisibility = _disableNativeMapInitialization
+            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+            : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        PageScroll.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
 
         UpdateTopNavigation();
         UpdateWindowControlState();

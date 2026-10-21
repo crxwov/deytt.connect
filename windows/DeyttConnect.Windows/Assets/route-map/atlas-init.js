@@ -237,6 +237,8 @@
     const compactStatusLine = root.querySelector(".compact-status-line");
     const latencyMetric = latency.parentElement;
     const speedMetric = speed.parentElement;
+    const statusBadge = root.querySelector("#home-status-badge");
+    if (statusBadge) statusBadge.classList.toggle("is-connected", state.statusTone === "good");
     if (status) {
       status.textContent = state.status || "";
       status.dataset.tone = state.statusTone || "normal";
@@ -269,8 +271,35 @@
       el.hidden = state.statusTone !== "good";
       el.textContent = language === "en" ? "connected" : "подключено";
     });
-    if (latency) latency.textContent = state.latency == null ? "—" : state.latency;
-    if (speed) speed.textContent = state.speed == null ? "—" : state.speed;
+    const latencyUnit = root.querySelector("#home-latency-unit");
+    if (latency) {
+      if (state.latency != null && state.latency !== "" && state.latency !== "—") {
+        latency.classList.remove("is-empty");
+        latency.textContent = state.latency;
+        if (latencyUnit) latencyUnit.hidden = false;
+      } else {
+        latency.classList.add("is-empty");
+        latency.textContent = state.latency === "…" ? "…" : (language === "en" ? "not measured" : "не измерено");
+        if (latencyUnit) latencyUnit.hidden = true;
+      }
+    }
+    const speedUnit = root.querySelector("#home-speed-unit");
+    if (speed) {
+      if (state.speed != null && state.speed !== "" && state.speed !== "—") {
+        speed.classList.remove("is-empty");
+        speed.textContent = state.speed;
+        if (speedUnit) speedUnit.hidden = false;
+      } else {
+        speed.classList.add("is-empty");
+        speed.textContent = state.speed === "…" ? "…" : (language === "en" ? "not measured" : "не измерено");
+        if (speedUnit) speedUnit.hidden = true;
+      }
+    }
+    const homeRouteSubtitle = root.querySelector("#home-route-subtitle");
+    if (homeRouteSubtitle) {
+      if (state.message) homeRouteSubtitle.textContent = state.message;
+      else if (state.statusTone === "good") homeRouteSubtitle.textContent = language === "en" ? "secure tunnel active" : "защищенный туннель активен";
+    }
     root.querySelector("#compact-latency").textContent = (state.latency == null ? "—" : state.latency) + " " + (language === "en" ? "ms" : "мс");
     root.querySelector("#compact-speed").textContent = (state.speed == null ? "—" : state.speed) + " " + (language === "en" ? "mbit/s" : "мбит/с");
     latencyMetric.dataset.tone = state.latencyTone || "normal";
@@ -341,6 +370,7 @@
       window.deyttMapAtlas.start();
     }
   };
+  window.applyAtlasHomePresentation = applyHomePresentation;
   window.deyttSetHomePresentation = applyHomePresentation;
   window.deyttReplayHomeEntrance = function () {
     entranceAnimations.forEach(animation => animation.cancel());

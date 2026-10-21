@@ -2802,7 +2802,7 @@
                   <span>💻</span>
                   <div>
                     <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">это устройство</strong>
-                    <span style="font-size: 11.5px; color: var(--text-muted);">windows desktop · v0.11.38</span>
+                    <span style="font-size: 11.5px; color: var(--text-muted);">windows desktop · v0.11.39</span>
                   </div>
                 </div>
                 <span class="device-status">активно</span>
@@ -2928,7 +2928,7 @@
           <div class="glass-card" style="display: flex; align-items: center; justify-content: space-between;">
             <div>
               <strong style="color: #FFFFFF; font-size: 15px; display: block;">./connect</strong>
-              <span style="font-size: 13px; color: var(--text-muted);" id="settings-app-version">версия 0.11.38 (windows x64) · канал: ./beta</span>
+              <span style="font-size: 13px; color: var(--text-muted);" id="settings-app-version">версия 0.11.39 (windows x64) · канал: ./beta</span>
             </div>
             <button class="btn-select-route" id="btn-check-updates">проверить обновления</button>
           </div>
@@ -3197,7 +3197,18 @@
       if (!row) {
         document.querySelectorAll(".proto-row").forEach(r => {
           const t = (r.dataset.routeTag || r.dataset.routeKey || "").toLowerCase();
-          if (t && (normalizedTag.includes(t) || t.includes(normalizedTag))) row = r;
+          if (t === normalizedTag) {
+            row = r;
+          } else if (normalizedTag.startsWith("awg") && (t.includes("awg") || r.querySelector(".proto-logo.awg"))) {
+            const acc = r.closest(".country-accordion");
+            if (acc && acc.classList.contains("is-open")) {
+              row = r;
+            } else if (!row) {
+              row = r;
+            }
+          } else if (t && (normalizedTag.includes(t) || t.includes(normalizedTag))) {
+            if (!row) row = r;
+          }
         });
       }
       if (row) {
@@ -3231,9 +3242,15 @@
     };
 
     
+    let currentSubscriptionKey = "";
+
     // Real Profile and Settings data bridge from C# host
     window.deyttSetProfileData = function(data) {
       if (!data) return;
+      window.currentProfileData = data;
+      if (data.subscriptionKey) {
+        currentSubscriptionKey = data.subscriptionKey;
+      }
       const dName = document.getElementById("profile-display-name");
       const uName = document.getElementById("profile-username");
       const pId = document.getElementById("profile-id");
@@ -3520,8 +3537,8 @@
     const btnCopyKey = document.getElementById("btn-copy-key");
     if (btnCopyKey) {
       btnCopyKey.addEventListener("click", () => {
-        const dummyKey = "awg://user_84920:xV92jKaP98qLs01mZpQr882jKlAOP0192kLsP==";
-        navigator.clipboard?.writeText(dummyKey).catch(() => {});
+        const keyToCopy = currentSubscriptionKey || "awg://deytt-connect-key";
+        navigator.clipboard?.writeText(keyToCopy).catch(() => {});
         btnCopyKey.textContent = "скопировано!";
         btnCopyKey.style.background = "#39E8BD";
         btnCopyKey.style.color = "#0B111B";
@@ -3554,6 +3571,7 @@
     if (btnRenewTg) {
       btnRenewTg.addEventListener("click", () => {
         showToast("открываю бот ./vpn в telegram...");
+        postHost("profile:renew");
       });
     }
 
@@ -3586,7 +3604,7 @@
         postHost("settings:check_updates");
         setTimeout(() => {
           btnCheckUpdates.textContent = "актуальная версия ✓";
-          showToast("у вас установлена последняя стабильная версия v0.11.38");
+          showToast("у вас установлена последняя стабильная версия v0.11.39");
           setTimeout(() => {
             btnCheckUpdates.textContent = "проверить обновления";
             btnCheckUpdates.style.pointerEvents = "";
@@ -3595,69 +3613,88 @@
       });
     }
 
-    // Connect & Measure Button Simulation for preview
-    let isConnected = false;
+    // Home Primary Action Handlers (Real VPN Connect / Disconnect / Cancel to C# Host)
+    const handleHomePrimaryAction = (e) => {
+      const btn = e.currentTarget;
+      if (btn.disabled) return;
+      const action = btn.dataset.action || "home-connect";
+      postHost(action);
+    };
     const actionBtn = document.getElementById("home-action");
-    if (actionBtn) {
-      actionBtn.addEventListener("click", () => {
-        const label = actionBtn.querySelector("[data-action-label]");
-        const latency = document.getElementById("home-latency");
-        const speed = document.getElementById("home-speed");
-        const status = document.getElementById("home-status");
-        const statusBadge = document.getElementById("home-status-badge");
-        const homeRouteSubtitle = document.getElementById("home-route-subtitle");
-        const latencyUnit = document.getElementById("home-latency-unit");
-        const speedUnit = document.getElementById("home-speed-unit");
+    if (actionBtn) actionBtn.addEventListener("click", handleHomePrimaryAction);
+    const compactActionBtn = document.getElementById("compact-action");
+    if (compactActionBtn) compactActionBtn.addEventListener("click", handleHomePrimaryAction);
 
-        if (!isConnected) {
-          isConnected = true;
-          if (label) label.textContent = "отключиться";
-          actionBtn.dataset.tone = "good";
-          if (latency) {
-            latency.classList.remove("is-empty");
-            latency.textContent = (routeDetails[activeRouteKey]?.ping || 24).toString();
-          }
-          if (speed) {
-            speed.classList.remove("is-empty");
-            speed.textContent = "185";
-          }
+    // Synchronize full Home Presentation state across UI
+    window.deyttSetHomePresentation = function(state) {
+      if (!state || typeof state !== "object") return;
+      if (typeof window.applyAtlasHomePresentation === "function") {
+        window.applyAtlasHomePresentation(state);
+      }
+      const isGood = state.statusTone === "good";
+
+      const statusBadge = document.getElementById("home-status-badge");
+      if (statusBadge) statusBadge.classList.toggle("is-connected", isGood);
+
+      const statusEl = document.getElementById("home-status");
+      if (statusEl && state.status) statusEl.textContent = state.status;
+
+      const actionBtn = document.getElementById("home-action");
+      if (actionBtn) {
+        const label = actionBtn.querySelector("[data-action-label]");
+        if (label && state.actionLabel) label.textContent = state.actionLabel;
+        actionBtn.dataset.action = state.action || (isGood ? "home-disconnect" : "home-connect");
+        actionBtn.dataset.tone = state.actionTone || (isGood ? "good" : "idle");
+        actionBtn.disabled = state.actionEnabled === false;
+      }
+      const compactAction = document.getElementById("compact-action");
+      if (compactAction) {
+        const label = compactAction.querySelector("[data-action-label]");
+        if (label && state.actionLabel) label.textContent = state.actionLabel;
+        compactAction.dataset.action = state.action || (isGood ? "home-disconnect" : "home-connect");
+        compactAction.dataset.tone = state.actionTone || (isGood ? "good" : "idle");
+        compactAction.disabled = state.actionEnabled === false;
+      }
+
+      const latencyEl = document.getElementById("home-latency");
+      const latencyUnit = document.getElementById("home-latency-unit");
+      if (latencyEl) {
+        if (state.latency != null && state.latency !== "" && state.latency !== "—") {
+          latencyEl.classList.remove("is-empty");
+          latencyEl.textContent = state.latency;
           if (latencyUnit) latencyUnit.hidden = false;
-          if (speedUnit) speedUnit.hidden = false;
-          if (status) status.textContent = "подключено";
-          if (statusBadge) statusBadge.classList.add("is-connected");
-          if (homeRouteSubtitle) homeRouteSubtitle.textContent = "защищенный туннель активен";
-          if (window.deyttMapAtlas) {
-            window.deyttMapAtlas.setTrafficActive(true);
-            window.deyttMapAtlas.start();
-          }
-          showToast("защищенное соединение установлено");
         } else {
-          isConnected = false;
-          if (label) label.textContent = "подключиться";
-          actionBtn.dataset.tone = "idle";
-          if (latency) {
-            latency.classList.add("is-empty");
-            latency.textContent = "не измерено";
-          }
-          if (speed) {
-            speed.classList.add("is-empty");
-            speed.textContent = "не измерено";
-          }
+          latencyEl.classList.add("is-empty");
+          latencyEl.textContent = state.latency === "…" ? "…" : "не измерено";
           if (latencyUnit) latencyUnit.hidden = true;
-          if (speedUnit) speedUnit.hidden = true;
-          if (status) status.textContent = "не подключено";
-          if (statusBadge) statusBadge.classList.remove("is-connected");
-          if (homeRouteSubtitle) {
-            homeRouteSubtitle.textContent = activeRouteKey === "auto" ? "выбирает самый быстрый европейский выход" : "шлюз готов к подключению";
-          }
-          if (window.deyttMapAtlas) {
-            window.deyttMapAtlas.setTrafficActive(false);
-            window.deyttMapAtlas.start();
-          }
-          showToast("соединение отключено");
         }
-      });
-    }
+      }
+
+      const speedEl = document.getElementById("home-speed");
+      const speedUnit = document.getElementById("home-speed-unit");
+      if (speedEl) {
+        if (state.speed != null && state.speed !== "" && state.speed !== "—") {
+          speedEl.classList.remove("is-empty");
+          speedEl.textContent = state.speed;
+          if (speedUnit) speedUnit.hidden = false;
+        } else {
+          speedEl.classList.add("is-empty");
+          speedEl.textContent = state.speed === "…" ? "…" : "не измерено";
+          if (speedUnit) speedUnit.hidden = true;
+        }
+      }
+
+      const homeRouteSubtitle = document.getElementById("home-route-subtitle");
+      if (homeRouteSubtitle) {
+        if (state.message) homeRouteSubtitle.textContent = state.message;
+        else if (isGood) homeRouteSubtitle.textContent = "защищенный туннель активен";
+      }
+
+      if (window.deyttMapAtlas) {
+        window.deyttMapAtlas.setTrafficActive(isGood);
+        window.deyttMapAtlas.start();
+      }
+    };
 
     // Disconnect Device Session Handler
     document.querySelectorAll(".btn-disconnect-device").forEach(btn => {
