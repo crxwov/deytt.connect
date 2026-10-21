@@ -353,86 +353,70 @@
       margin: 0 !important;
     }
 
-    /* Ultra-Refractive Liquid Glass Connect Action Button */
+    /* Modern Precision Connect Action Button (Zero 2010 Gloss Blister) */
     .home-action {
-      min-height: 56px !important;
+      min-height: 52px !important;
       width: 100% !important;
-      border-radius: 18px !important;
+      border-radius: 14px !important;
       font-family: inherit !important;
-      font-size: 16.5px !important;
+      font-size: 15.5px !important;
       font-weight: 700 !important;
       text-transform: lowercase !important;
-      letter-spacing: -0.01em !important;
+      letter-spacing: -0.015em !important;
       cursor: pointer !important;
       position: relative !important;
-      overflow: hidden !important;
-      backdrop-filter: blur(28px) saturate(220%) !important;
-      -webkit-backdrop-filter: blur(28px) saturate(220%) !important;
-      background: linear-gradient(180deg, rgba(56, 189, 248, 0.42) 0%, rgba(34, 166, 237, 0.20) 100%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.24) !important;
-      border-top: 1.5px solid rgba(255, 255, 255, 0.85) !important;
-      border-bottom: 1px solid rgba(0, 0, 0, 0.35) !important;
-      box-shadow: 0 14px 40px -4px rgba(34, 166, 237, 0.45),
-                  0 4px 12px rgba(0, 0, 0, 0.35),
-                  inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.75),
-                  inset 0 -1.5px 2px 0 rgba(0, 0, 0, 0.25) !important;
+      background: linear-gradient(180deg, #1D8CF8 0%, #1170DC 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.16) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.38) !important;
+      box-shadow: 0 8px 24px -4px rgba(29, 140, 248, 0.45),
+                  0 2px 6px rgba(0, 0, 0, 0.35),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
       color: #FFFFFF !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
       gap: 10px !important;
-      transition: all 220ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-      text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+      transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+      text-shadow: none !important;
     }
 
     .home-action::before {
-      content: "" !important;
-      position: absolute !important;
-      top: 1px !important;
-      left: 1px !important;
-      right: 1px !important;
-      height: 48% !important;
-      border-radius: 16px 16px 20px 20px !important;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.04) 100%) !important;
-      pointer-events: none !important;
-      z-index: 1 !important;
-      opacity: 0.9 !important;
-      transition: opacity 200ms ease !important;
+      content: none !important;
+      display: none !important;
     }
 
     .home-action:hover {
-      background: linear-gradient(180deg, rgba(56, 189, 248, 0.55) 0%, rgba(34, 166, 237, 0.28) 100%) !important;
-      border-top-color: #FFFFFF !important;
-      box-shadow: 0 18px 48px -2px rgba(34, 166, 237, 0.65),
-                  0 0 24px rgba(56, 189, 248, 0.45),
-                  inset 0 2px 2px 0 #FFFFFF,
-                  inset 0 -2px 3px 0 rgba(0, 0, 0, 0.2) !important;
-      transform: translateY(-2px) scale(1.01);
+      background: linear-gradient(180deg, #2B97FB 0%, #177DE8 100%) !important;
+      border-top-color: rgba(255, 255, 255, 0.55) !important;
+      box-shadow: 0 12px 32px -2px rgba(29, 140, 248, 0.65),
+                  0 2px 8px rgba(0, 0, 0, 0.35),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+      transform: translateY(-1.5px) !important;
     }
 
     .home-action:hover::before {
-      opacity: 1 !important;
+      display: none !important;
     }
 
     .home-action:active {
-      transform: translateY(1px) scale(0.985);
-      box-shadow: 0 8px 24px rgba(34, 166, 237, 0.4),
-                  inset 0 1px 1px 0 rgba(255, 255, 255, 0.6) !important;
+      transform: translateY(1px) scale(0.985) !important;
+      box-shadow: 0 3px 10px rgba(17, 112, 220, 0.4), inset 0 1px 2px rgba(0, 0, 0, 0.25) !important;
     }
 
     .home-action[data-tone="good"] {
-      background: linear-gradient(180deg, rgba(239, 68, 68, 0.45) 0%, rgba(185, 28, 28, 0.22) 100%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.22) !important;
-      border-top: 1.5px solid rgba(255, 255, 255, 0.85) !important;
-      box-shadow: 0 14px 38px -4px rgba(239, 68, 68, 0.45),
-                  0 4px 12px rgba(0, 0, 0, 0.35),
-                  inset 0 1.5px 1.5px 0 rgba(255, 255, 255, 0.75),
-                  inset 0 -1.5px 2px 0 rgba(0, 0, 0, 0.25) !important;
+      background: linear-gradient(180deg, #E11D48 0%, #BE123C 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.16) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.38) !important;
+      box-shadow: 0 8px 24px -4px rgba(190, 18, 60, 0.45),
+                  0 2px 6px rgba(0, 0, 0, 0.35),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.28) !important;
     }
 
     .home-action[data-tone="good"]:hover {
-      background: linear-gradient(180deg, rgba(239, 68, 68, 0.60) 0%, rgba(185, 28, 28, 0.32) 100%) !important;
-      box-shadow: 0 18px 48px -2px rgba(239, 68, 68, 0.65),
+      background: linear-gradient(180deg, #F43F5E 0%, #E11D48 100%) !important;
+      box-shadow: 0 12px 32px -2px rgba(225, 29, 72, 0.65),
+                  inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
+    }
                   0 0 24px rgba(239, 68, 68, 0.45),
                   inset 0 2px 2px 0 #FFFFFF !important;
     }
@@ -903,44 +887,49 @@
       min-width: 0;
     }
 
-    .proto-tag {
-      font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      padding: 3px 8px;
-      border-radius: 7px;
-      background: rgba(255, 255, 255, 0.06);
-      color: #94A3B8;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      flex-shrink: 0;
-      text-transform: lowercase;
-    }
-
-    .proto-tag.vless { color: #38BDF8; background: rgba(56, 189, 248, 0.14); border-color: rgba(56, 189, 248, 0.32); }
-    .proto-tag.trojan { color: #A78BFA; background: rgba(167, 139, 250, 0.14); border-color: rgba(167, 139, 250, 0.32); }
-    .proto-tag.hy2 { color: #F59E0B; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.32); }
-    .proto-tag.awg { color: #39E8BD; background: rgba(57, 232, 189, 0.14); border-color: rgba(57, 232, 189, 0.32); }
-
-    .proto-meta {
+    .proto-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 9px;
       display: flex;
-      flex-direction: column;
-      gap: 2px;
-      min-width: 0;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      transition: all 180ms ease;
     }
 
-    .proto-title {
+    .proto-logo svg {
+      width: 18px;
+      height: 18px;
+      display: block;
+    }
+
+    .proto-logo.vless {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.28);
+    }
+    .proto-logo.hy2 {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.28);
+    }
+    .proto-logo.trojan {
+      background: rgba(167, 139, 250, 0.12);
+      border-color: rgba(167, 139, 250, 0.28);
+    }
+    .proto-logo.awg {
+      background: rgba(57, 232, 189, 0.12);
+      border-color: rgba(57, 232, 189, 0.28);
+    }
+
+    .proto-name {
       font-size: 14.5px;
       font-weight: 600;
       color: #FFFFFF;
       letter-spacing: -0.01em;
-    }
-
-    .proto-desc {
-      font-size: 12px;
-      color: var(--text-muted);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      text-transform: lowercase;
     }
 
     .proto-right {
@@ -1619,14 +1608,16 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- VLESS Reality -->
+                <!-- vless+ws -->
                 <div class="proto-row is-selected" data-route-key="nl-vless">
                   <div class="proto-left">
-                    <span class="proto-tag vless">vless</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">vless reality · nl-01</span>
-                      <span class="proto-desc">маскировка tls · амстердам</span>
+                    <div class="proto-logo vless" title="vless+ws">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1638,14 +1629,15 @@
                   </div>
                 </div>
 
-                <!-- Hysteria 2 -->
+                <!-- hysteriav2 -->
                 <div class="proto-row" data-route-key="nl-hy2">
                   <div class="proto-left">
-                    <span class="proto-tag hy2">hy2</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">hysteria 2 · nl-turbo</span>
-                      <span class="proto-desc">udp/quic турбо · обход потерь</span>
+                    <div class="proto-logo hy2" title="hysteriav2">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1657,14 +1649,17 @@
                   </div>
                 </div>
 
-                <!-- Trojan -->
+                <!-- trojan -->
                 <div class="proto-row" data-route-key="nl-trojan">
                   <div class="proto-left">
-                    <span class="proto-tag trojan">trojan</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">trojan tls · nl-direct</span>
-                      <span class="proto-desc">прокси с динамическим sni</span>
+                    <div class="proto-logo trojan" title="trojan">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
+                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1676,14 +1671,16 @@
                   </div>
                 </div>
 
-                <!-- AmneziaWG 3.1 -->
+                <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="nl-awg">
                   <div class="proto-left">
-                    <span class="proto-tag awg">awg 3.1</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">amneziawg · nl-stealth</span>
-                      <span class="proto-desc">обфусцированный wireguard</span>
+                    <div class="proto-logo awg" title="amneziawg3.1">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
+                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1712,14 +1709,16 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- VLESS Reality -->
+                <!-- vless+ws -->
                 <div class="proto-row" data-route-key="de-vless">
                   <div class="proto-left">
-                    <span class="proto-tag vless">vless</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">vless reality · de-01</span>
-                      <span class="proto-desc">маскировка tls · франкфурт</span>
+                    <div class="proto-logo vless" title="vless+ws">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1731,14 +1730,15 @@
                   </div>
                 </div>
 
-                <!-- Hysteria 2 -->
+                <!-- hysteriav2 -->
                 <div class="proto-row" data-route-key="de-hy2">
                   <div class="proto-left">
-                    <span class="proto-tag hy2">hy2</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">hysteria 2 · de-turbo</span>
-                      <span class="proto-desc">udp/quic турбо · обход потерь</span>
+                    <div class="proto-logo hy2" title="hysteriav2">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1750,14 +1750,17 @@
                   </div>
                 </div>
 
-                <!-- Trojan -->
+                <!-- trojan -->
                 <div class="proto-row" data-route-key="de-trojan">
                   <div class="proto-left">
-                    <span class="proto-tag trojan">trojan</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">trojan tls · de-direct</span>
-                      <span class="proto-desc">прокси с динамическим sni</span>
+                    <div class="proto-logo trojan" title="trojan">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
+                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1769,14 +1772,16 @@
                   </div>
                 </div>
 
-                <!-- AmneziaWG 3.1 -->
+                <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="de-awg">
                   <div class="proto-left">
-                    <span class="proto-tag awg">awg 3.1</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">amneziawg · de-stealth</span>
-                      <span class="proto-desc">обфусцированный wireguard</span>
+                    <div class="proto-logo awg" title="amneziawg3.1">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
+                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1805,14 +1810,16 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- VLESS Reality -->
+                <!-- vless+ws -->
                 <div class="proto-row" data-route-key="ru-vless">
                   <div class="proto-left">
-                    <span class="proto-tag vless">vless</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">vless reality · ru-01</span>
-                      <span class="proto-desc">прямой российский выход · санкт-петербург</span>
+                    <div class="proto-logo vless" title="vless+ws">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1824,14 +1831,37 @@
                   </div>
                 </div>
 
-                <!-- Trojan -->
+                <!-- hysteriav2 -->
+                <div class="proto-row" data-route-key="ru-hy2">
+                  <div class="proto-left">
+                    <div class="proto-logo hy2" title="hysteriav2">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <span class="proto-name">hysteriav2</span>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry">
+                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
+                      <span class="proto-latency" data-probe="ru-hy2">16</span> мс
+                      <span class="proto-speed">· 335 мбит/с</span>
+                    </div>
+                    <button class="route-action-btn btn-select-route" data-action-route="ru-hy2">выбрать</button>
+                  </div>
+                </div>
+
+                <!-- trojan -->
                 <div class="proto-row" data-route-key="ru-trojan">
                   <div class="proto-left">
-                    <span class="proto-tag trojan">trojan</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">trojan tls · ru-direct</span>
-                      <span class="proto-desc">локальный обход цензуры</span>
+                    <div class="proto-logo trojan" title="trojan">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
+                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1843,14 +1873,16 @@
                   </div>
                 </div>
 
-                <!-- AmneziaWG 3.1 -->
+                <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="ru-awg">
                   <div class="proto-left">
-                    <span class="proto-tag awg">awg 3.1</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">amneziawg · ru-fast</span>
-                      <span class="proto-desc">минимальный пинг для игр</span>
+                    <div class="proto-logo awg" title="amneziawg3.1">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
+                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1879,14 +1911,16 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- VLESS Reality -->
+                <!-- vless+ws -->
                 <div class="proto-row" data-route-key="fi-vless">
                   <div class="proto-left">
-                    <span class="proto-tag vless">vless</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">vless reality · fi-01</span>
-                      <span class="proto-desc">маскировка tls · хельсинки</span>
+                    <div class="proto-logo vless" title="vless+ws">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1898,14 +1932,15 @@
                   </div>
                 </div>
 
-                <!-- Hysteria 2 -->
+                <!-- hysteriav2 -->
                 <div class="proto-row" data-route-key="fi-hy2">
                   <div class="proto-left">
-                    <span class="proto-tag hy2">hy2</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">hysteria 2 · fi-turbo</span>
-                      <span class="proto-desc">udp/quic турбо · обход потерь</span>
+                    <div class="proto-logo hy2" title="hysteriav2">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1917,14 +1952,17 @@
                   </div>
                 </div>
 
-                <!-- Trojan -->
+                <!-- trojan -->
                 <div class="proto-row" data-route-key="fi-trojan">
                   <div class="proto-left">
-                    <span class="proto-tag trojan">trojan</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">trojan tls · fi-direct</span>
-                      <span class="proto-desc">прокси с динамическим sni</span>
+                    <div class="proto-logo trojan" title="trojan">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
+                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1936,14 +1974,16 @@
                   </div>
                 </div>
 
-                <!-- AmneziaWG 3.1 -->
+                <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="fi-awg">
                   <div class="proto-left">
-                    <span class="proto-tag awg">awg 3.1</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">amneziawg · fi-stealth</span>
-                      <span class="proto-desc">обфусцированный wireguard</span>
+                    <div class="proto-logo awg" title="amneziawg3.1">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
+                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1972,14 +2012,16 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- VLESS Reality -->
+                <!-- vless+ws -->
                 <div class="proto-row" data-route-key="it-vless">
                   <div class="proto-left">
-                    <span class="proto-tag vless">vless</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">vless reality · it-01</span>
-                      <span class="proto-desc">маскировка tls · милан</span>
+                    <div class="proto-logo vless" title="vless+ws">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -1991,14 +2033,15 @@
                   </div>
                 </div>
 
-                <!-- Hysteria 2 -->
+                <!-- hysteriav2 -->
                 <div class="proto-row" data-route-key="it-hy2">
                   <div class="proto-left">
-                    <span class="proto-tag hy2">hy2</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">hysteria 2 · it-turbo</span>
-                      <span class="proto-desc">udp/quic турбо · обход потерь</span>
+                    <div class="proto-logo hy2" title="hysteriav2">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -2010,14 +2053,17 @@
                   </div>
                 </div>
 
-                <!-- Trojan -->
+                <!-- trojan -->
                 <div class="proto-row" data-route-key="it-trojan">
                   <div class="proto-left">
-                    <span class="proto-tag trojan">trojan</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">trojan tls · it-direct</span>
-                      <span class="proto-desc">прокси с динамическим sni</span>
+                    <div class="proto-logo trojan" title="trojan">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
+                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -2029,14 +2075,16 @@
                   </div>
                 </div>
 
-                <!-- AmneziaWG 3.1 -->
+                <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="it-awg">
                   <div class="proto-left">
-                    <span class="proto-tag awg">awg 3.1</span>
-                    <div class="proto-meta">
-                      <span class="proto-title">amneziawg · it-stealth</span>
-                      <span class="proto-desc">обфусцированный wireguard</span>
+                    <div class="proto-logo awg" title="amneziawg3.1">
+                      <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
+                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                      </svg>
                     </div>
+                    <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
                     <div class="proto-telemetry">
@@ -2515,26 +2563,26 @@
       fi: { flag: "🇫🇮", country: "финляндия", city: "хельсинки", ping: 20 },
       it: { flag: "🇮🇹", country: "италия", city: "милан", ping: 42 },
       ru: { flag: "🇷🇺", country: "россия", city: "санкт-петербург", ping: 12 },
-      "nl-vless": { flag: "🇳🇱", country: "нидерланды", city: "амстердам · vless", ping: 26 },
-      "nl-trojan": { flag: "🇳🇱", country: "нидерланды", city: "амстердам · trojan", ping: 29 },
-      "nl-hy2": { flag: "🇳🇱", country: "нидерланды", city: "амстердам · hysteria 2", ping: 31 },
-      "nl-awg": { flag: "🇳🇱", country: "нидерланды", city: "амстердам · awg 3.1", ping: 27 },
-      "de-vless": { flag: "🇩🇪", country: "германия", city: "франкфурт · vless", ping: 32 },
-      "de-trojan": { flag: "🇩🇪", country: "германия", city: "франкфурт · trojan", ping: 35 },
-      "de-hy2": { flag: "🇩🇪", country: "германия", city: "франкфурт · hysteria 2", ping: 38 },
-      "de-awg": { flag: "🇩🇪", country: "германия", city: "франкфурт · awg 3.1", ping: 34 },
-      "ru-vless": { flag: "🇷🇺", country: "россия", city: "санкт-петербург · vless", ping: 11 },
-      "ru-trojan": { flag: "🇷🇺", country: "россия", city: "санкт-петербург · trojan", ping: 14 },
-      "ru-hy2": { flag: "🇷🇺", country: "россия", city: "санкт-петербург · hysteria 2", ping: 16 },
-      "ru-awg": { flag: "🇷🇺", country: "россия", city: "санкт-петербург · awg 3.1", ping: 12 },
-      "fi-vless": { flag: "🇫🇮", country: "финляндия", city: "хельсинки · vless", ping: 19 },
-      "fi-trojan": { flag: "🇫🇮", country: "финляндия", city: "хельсинки · trojan", ping: 22 },
-      "fi-hy2": { flag: "🇫🇮", country: "финляндия", city: "хельсинки · hysteria 2", ping: 25 },
-      "fi-awg": { flag: "🇫🇮", country: "финляндия", city: "хельсинки · awg 3.1", ping: 20 },
-      "it-vless": { flag: "🇮🇹", country: "италия", city: "милан · vless", ping: 41 },
-      "it-trojan": { flag: "🇮🇹", country: "италия", city: "милан · trojan", ping: 44 },
-      "it-hy2": { flag: "🇮🇹", country: "италия", city: "милан · hysteria 2", ping: 47 },
-      "it-awg": { flag: "🇮🇹", country: "италия", city: "милан · awg 3.1", ping: 42 }
+      "nl-vless": { flag: "🇳🇱", country: "нидерланды", city: "vless+ws", ping: 24 },
+      "nl-hy2": { flag: "🇳🇱", country: "нидерланды", city: "hysteriav2", ping: 22 },
+      "nl-trojan": { flag: "🇳🇱", country: "нидерланды", city: "trojan", ping: 27 },
+      "nl-awg": { flag: "🇳🇱", country: "нидерланды", city: "amneziawg3.1", ping: 29 },
+      "de-vless": { flag: "🇩🇪", country: "германия", city: "vless+ws", ping: 32 },
+      "de-hy2": { flag: "🇩🇪", country: "германия", city: "hysteriav2", ping: 30 },
+      "de-trojan": { flag: "🇩🇪", country: "германия", city: "trojan", ping: 35 },
+      "de-awg": { flag: "🇩🇪", country: "германия", city: "amneziawg3.1", ping: 34 },
+      "ru-vless": { flag: "🇷🇺", country: "россия", city: "vless+ws", ping: 12 },
+      "ru-hy2": { flag: "🇷🇺", country: "россия", city: "hysteriav2", ping: 16 },
+      "ru-trojan": { flag: "🇷🇺", country: "россия", city: "trojan", ping: 14 },
+      "ru-awg": { flag: "🇷🇺", country: "россия", city: "amneziawg3.1", ping: 11 },
+      "fi-vless": { flag: "🇫🇮", country: "финляндия", city: "vless+ws", ping: 20 },
+      "fi-hy2": { flag: "🇫🇮", country: "финляндия", city: "hysteriav2", ping: 18 },
+      "fi-trojan": { flag: "🇫🇮", country: "финляндия", city: "trojan", ping: 23 },
+      "fi-awg": { flag: "🇫🇮", country: "финляндия", city: "amneziawg3.1", ping: 22 },
+      "it-vless": { flag: "🇮🇹", country: "италия", city: "vless+ws", ping: 42 },
+      "it-hy2": { flag: "🇮🇹", country: "италия", city: "hysteriav2", ping: 39 },
+      "it-trojan": { flag: "🇮🇹", country: "италия", city: "trojan", ping: 45 },
+      "it-awg": { flag: "🇮🇹", country: "италия", city: "amneziawg3.1", ping: 44 }
     };
 
     let activeRouteKey = "auto";
