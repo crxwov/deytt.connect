@@ -3409,6 +3409,7 @@ public partial class MainWindow : Window
                             Copy("Служба не вернула результат. Повторите замер.",
                                 "The service returned no result. Retry the measurement."), "error");
                 _routeProbeResults = updatedResults;
+                _routeGlobe?.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
             }
             else if (result.State == "probe_cancelled")
             {
@@ -3497,6 +3498,7 @@ public partial class MainWindow : Window
                 continue;
             updated[item.RouteTag] = item;
             changed = true;
+            _routeGlobe?.PushRouteProbeProgress(item);
         }
 
         if (!changed)

@@ -176,7 +176,13 @@
       const code = routeFlag(state.countryCode);
       flag.dataset.country = code;
       flag.classList.toggle("is-generic", !code);
-      flag.textContent = code ? "" : "✦";
+      if (code && typeof window.getFlagSvg === "function") {
+        flag.innerHTML = window.getFlagSvg(code, 22, 15);
+      } else if (code) {
+        flag.textContent = code;
+      } else {
+        flag.textContent = "✦";
+      }
       flag.setAttribute("aria-label", code || "");
     }
     const countryCode = (state.countryCode || "").toLowerCase();

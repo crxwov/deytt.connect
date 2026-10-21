@@ -508,7 +508,49 @@ public partial class MainWindow
         map.ImmersiveModeRequested += SetMapImmersive;
         map.TabChanged += OnMapTabChanged;
         map.RouteSelected += OnMapRouteSelected;
+        map.CountryProbeRequested += countryCode =>
+        {
+            var tags = _routes.Where(r => string.Equals(r.CountryCode, countryCode, StringComparison.OrdinalIgnoreCase))
+                              .Select(r => r.Tag).ToArray();
+            if (tags.Length > 0)
+            {
+                QueueRouteCountryProbe(countryCode.ToUpperInvariant(), tags);
+            }
+        };
+        map.CheckUpdatesRequested += () =>
+        {
+            _ = ShowUpdateDialogAsync();
+        };
+        map.SettingToggled += (key, enabled) =>
+        {
+            HandleSettingToggledFromWeb(key, enabled);
+        };
         return map;
+    }
+
+    private void HandleSettingToggledFromWeb(string key, bool enabled)
+    {
+        switch (key.ToLowerInvariant())
+        {
+            case "reduce_motion":
+                _reduceMotion = enabled;
+                DeyttTheme.ReduceMotion = enabled;
+                SavePreferences();
+                break;
+            case "bypass":
+                try
+                {
+                    var splitStore = WindowsSplitTunnelStore.Load();
+                    splitStore = splitStore with { Mode = enabled ? WindowsSplitTunnelConfig.ModeBypass : WindowsSplitTunnelConfig.ModeVpnOnly };
+                    WindowsSplitTunnelStore.Save(splitStore);
+                }
+                catch { }
+                SavePreferences();
+                break;
+            default:
+                SavePreferences();
+                break;
+        }
     }
 
     private void OnMapTabChanged(string tabName)
@@ -531,11 +573,26 @@ public partial class MainWindow
         var route = _routes.FirstOrDefault(r => string.Equals(r.Id, routeKey, StringComparison.OrdinalIgnoreCase))
                  ?? _routes.FirstOrDefault(r => string.Equals(r.CountryCode, routeKey, StringComparison.OrdinalIgnoreCase))
                  ?? _routes.FirstOrDefault(r => string.Equals(r.Tag, routeKey, StringComparison.OrdinalIgnoreCase));
+        if (route is null && routeKey.Contains('-'))
+        {
+            var parts = routeKey.Split('-');
+            var cc = parts[0].ToUpperInvariant();
+            var proto = parts[1].ToUpperInvariant();
+            if (proto == "HY2") proto = "HYSTERIA2";
+            if (proto == "AWG") proto = "AWG31";
+            route = _routes.FirstOrDefault(r => string.Equals(r.CountryCode, cc, StringComparison.OrdinalIgnoreCase) &&
+                                                (r.Protocol.Contains(proto, StringComparison.OrdinalIgnoreCase) ||
+                                                 r.ProtocolName.Contains(proto, StringComparison.OrdinalIgnoreCase)));
+        }
         if (route is not null)
         {
             _selectedRoute = route.Id;
             SavePreferences();
-            if (_routeGlobe is not null) _routeGlobe.SelectedRoute = RouteGlobeWebView.RouteKeyFor(route.CountryCode);
+            if (_routeGlobe is not null)
+            {
+                _routeGlobe.SelectedRoute = RouteGlobeWebView.RouteKeyFor(route.CountryCode);
+                _routeGlobe.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
+            }
             RefreshHomePageInPlace();
         }
     }
@@ -734,6 +791,7 @@ public partial class MainWindow
             ? ConfirmedHomeAutoRouteKey()
             : null;
         map.HomePresentation = BuildHomePresentation();
+        map.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
     }
 
     private string? ConfirmedHomeAutoRouteKey()

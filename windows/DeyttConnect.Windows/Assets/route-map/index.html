@@ -1230,6 +1230,32 @@
       display: block;
     }
 
+    .svg-flag {
+      width: 22px;
+      height: 15px;
+      border-radius: 3px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      vertical-align: middle;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .dual-flag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      vertical-align: middle;
+    }
+    .ping-dot.is-probing {
+      animation: probePulse 800ms infinite alternate ease-in-out;
+      background: #38BDF8 !important;
+      box-shadow: 0 0 8px #38BDF8 !important;
+    }
+    @keyframes probePulse {
+      0% { opacity: 0.3; transform: scale(0.85); }
+      100% { opacity: 1; transform: scale(1.15); }
+    }
     .proto-logo.vless {
       background: rgba(56, 189, 248, 0.12);
       border-color: rgba(56, 189, 248, 0.28);
@@ -1973,7 +1999,7 @@
           <!-- Row 2: LTE / White Lists -->
           <div class="smart-route-row" data-route-key="ru-de" id="card-route-ru-de">
             <div class="smart-route-left">
-              <div class="smart-route-icon" style="color: #38BDF8; font-size: 15px;">⚯</div>
+              <div class="smart-route-icon" style="display:inline-flex;align-items:center;"><span class="dual-flag"><svg class="svg-flag" viewBox="0 0 24 16" width="18" height="12"><clipPath id="f-ru2"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-ru2)"><rect width="24" height="5.33" fill="#F7F7F4"/><rect y="5.33" width="24" height="5.34" fill="#477CC0"/><rect y="10.67" width="24" height="5.33" fill="#C83C4A"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg><span style="opacity:0.5;font-size:10px;margin:0 1px;">→</span><svg class="svg-flag" viewBox="0 0 24 16" width="18" height="12"><clipPath id="f-de2"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-de2)"><rect width="24" height="5.33" fill="#17191E"/><rect y="5.33" width="24" height="5.34" fill="#C83C4A"/><rect y="10.67" width="24" height="5.33" fill="#F0C66B"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span></div>
               <div class="smart-route-info">
                 <span class="smart-route-name">lte · белые списки</span>
                 <span class="smart-route-desc">россия → германия</span>
@@ -1992,7 +2018,7 @@
           <div class="country-accordion" data-country-key="nl" id="card-route-nl">
             <div class="country-accordion-header">
               <div class="country-header-left">
-                <span class="country-flag-icon">🇳🇱</span>
+                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-nl"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-nl)"><rect width="24" height="5.33" fill="#C93D4B"/><rect y="5.33" width="24" height="5.34" fill="#F7F7F4"/><rect y="10.67" width="24" height="5.33" fill="#31579A"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
                 <span class="country-name">нидерланды</span>
               </div>
               <div class="country-header-right">
@@ -2003,12 +2029,12 @@
             <div class="country-accordion-body">
               <div class="proto-list">
                 <!-- vless+ws -->
-                <div class="proto-row is-selected" data-route-key="nl-vless">
+                <div class="proto-row is-selected" data-route-key="nl-vless" data-route-tag="route:NL:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
                       </svg>
                     </div>
                     <span class="proto-name">vless+ws</span>
@@ -2024,11 +2050,11 @@
                 </div>
 
                 <!-- hysteriav2 -->
-                <div class="proto-row" data-route-key="nl-hy2">
+                <div class="proto-row" data-route-key="nl-hy2" data-route-tag="route:NL:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
                       </svg>
                     </div>
                     <span class="proto-name">hysteriav2</span>
@@ -2044,13 +2070,13 @@
                 </div>
 
                 <!-- trojan -->
-                <div class="proto-row" data-route-key="nl-trojan">
+                <div class="proto-row" data-route-key="nl-trojan" data-route-tag="route:NL:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
-                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
+                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
                       </svg>
                     </div>
                     <span class="proto-name">trojan</span>
@@ -2066,12 +2092,14 @@
                 </div>
 
                 <!-- amneziawg3.1 -->
-                <div class="proto-row" data-route-key="nl-awg">
+                <div class="proto-row" data-route-key="nl-awg" data-route-tag="awg31:nl">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
-                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
+                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
+                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
                       </svg>
                     </div>
                     <span class="proto-name">amneziawg3.1</span>
@@ -2093,7 +2121,7 @@
           <div class="country-accordion" data-country-key="de" id="card-route-de">
             <div class="country-accordion-header">
               <div class="country-header-left">
-                <span class="country-flag-icon">🇩🇪</span>
+                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-de"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-de)"><rect width="24" height="5.33" fill="#17191E"/><rect y="5.33" width="24" height="5.34" fill="#C83C4A"/><rect y="10.67" width="24" height="5.33" fill="#F0C66B"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
                 <span class="country-name">германия</span>
               </div>
               <div class="country-header-right">
@@ -2104,12 +2132,12 @@
             <div class="country-accordion-body">
               <div class="proto-list">
                 <!-- vless+ws -->
-                <div class="proto-row" data-route-key="de-vless">
+                <div class="proto-row" data-route-key="de-vless" data-route-tag="route:DE:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
                       </svg>
                     </div>
                     <span class="proto-name">vless+ws</span>
@@ -2125,11 +2153,11 @@
                 </div>
 
                 <!-- hysteriav2 -->
-                <div class="proto-row" data-route-key="de-hy2">
+                <div class="proto-row" data-route-key="de-hy2" data-route-tag="route:DE:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
                       </svg>
                     </div>
                     <span class="proto-name">hysteriav2</span>
@@ -2145,13 +2173,13 @@
                 </div>
 
                 <!-- trojan -->
-                <div class="proto-row" data-route-key="de-trojan">
+                <div class="proto-row" data-route-key="de-trojan" data-route-tag="route:DE:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
-                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
+                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
                       </svg>
                     </div>
                     <span class="proto-name">trojan</span>
@@ -2167,12 +2195,14 @@
                 </div>
 
                 <!-- amneziawg3.1 -->
-                <div class="proto-row" data-route-key="de-awg">
+                <div class="proto-row" data-route-key="de-awg" data-route-tag="awg31:de">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
-                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
+                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
+                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
                       </svg>
                     </div>
                     <span class="proto-name">amneziawg3.1</span>
@@ -2194,7 +2224,7 @@
           <div class="country-accordion" data-country-key="ru" id="card-route-ru">
             <div class="country-accordion-header">
               <div class="country-header-left">
-                <span class="country-flag-icon">🇷🇺</span>
+                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-ru"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-ru)"><rect width="24" height="5.33" fill="#F7F7F4"/><rect y="5.33" width="24" height="5.34" fill="#477CC0"/><rect y="10.67" width="24" height="5.33" fill="#C83C4A"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
                 <span class="country-name">россия</span>
               </div>
               <div class="country-header-right">
@@ -2205,12 +2235,12 @@
             <div class="country-accordion-body">
               <div class="proto-list">
                 <!-- vless+ws -->
-                <div class="proto-row" data-route-key="ru-vless">
+                <div class="proto-row" data-route-key="ru-vless" data-route-tag="route:RU:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
                       </svg>
                     </div>
                     <span class="proto-name">vless+ws</span>
@@ -2226,11 +2256,11 @@
                 </div>
 
                 <!-- hysteriav2 -->
-                <div class="proto-row" data-route-key="ru-hy2">
+                <div class="proto-row" data-route-key="ru-hy2" data-route-tag="route:RU:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
                       </svg>
                     </div>
                     <span class="proto-name">hysteriav2</span>
@@ -2246,13 +2276,13 @@
                 </div>
 
                 <!-- trojan -->
-                <div class="proto-row" data-route-key="ru-trojan">
+                <div class="proto-row" data-route-key="ru-trojan" data-route-tag="route:RU:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
-                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
+                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
                       </svg>
                     </div>
                     <span class="proto-name">trojan</span>
@@ -2268,12 +2298,14 @@
                 </div>
 
                 <!-- amneziawg3.1 -->
-                <div class="proto-row" data-route-key="ru-awg">
+                <div class="proto-row" data-route-key="ru-awg" data-route-tag="awg31:ru">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
-                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
+                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
+                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
                       </svg>
                     </div>
                     <span class="proto-name">amneziawg3.1</span>
@@ -2295,7 +2327,7 @@
           <div class="country-accordion" data-country-key="fi" id="card-route-fi">
             <div class="country-accordion-header">
               <div class="country-header-left">
-                <span class="country-flag-icon">🇫🇮</span>
+                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-fi"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-fi)"><rect width="24" height="16" fill="#F7F7F4"/><rect x="6.5" width="4.5" height="16" fill="#3973B4"/><rect y="6" width="24" height="4" fill="#3973B4"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
                 <span class="country-name">финляндия</span>
               </div>
               <div class="country-header-right">
@@ -2306,12 +2338,12 @@
             <div class="country-accordion-body">
               <div class="proto-list">
                 <!-- vless+ws -->
-                <div class="proto-row" data-route-key="fi-vless">
+                <div class="proto-row" data-route-key="fi-vless" data-route-tag="route:FI:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
                       </svg>
                     </div>
                     <span class="proto-name">vless+ws</span>
@@ -2327,11 +2359,11 @@
                 </div>
 
                 <!-- hysteriav2 -->
-                <div class="proto-row" data-route-key="fi-hy2">
+                <div class="proto-row" data-route-key="fi-hy2" data-route-tag="route:FI:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
                       </svg>
                     </div>
                     <span class="proto-name">hysteriav2</span>
@@ -2347,13 +2379,13 @@
                 </div>
 
                 <!-- trojan -->
-                <div class="proto-row" data-route-key="fi-trojan">
+                <div class="proto-row" data-route-key="fi-trojan" data-route-tag="route:FI:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
-                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
+                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
                       </svg>
                     </div>
                     <span class="proto-name">trojan</span>
@@ -2369,12 +2401,14 @@
                 </div>
 
                 <!-- amneziawg3.1 -->
-                <div class="proto-row" data-route-key="fi-awg">
+                <div class="proto-row" data-route-key="fi-awg" data-route-tag="awg31:fi">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
-                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
+                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
+                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
                       </svg>
                     </div>
                     <span class="proto-name">amneziawg3.1</span>
@@ -2396,7 +2430,7 @@
           <div class="country-accordion" data-country-key="it" id="card-route-it">
             <div class="country-accordion-header">
               <div class="country-header-left">
-                <span class="country-flag-icon">🇮🇹</span>
+                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-it"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-it)"><rect width="8" height="16" fill="#168B4B"/><rect x="8" width="8" height="16" fill="#F7F7F4"/><rect x="16" width="8" height="16" fill="#D0474D"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
                 <span class="country-name">италия</span>
               </div>
               <div class="country-header-right">
@@ -2407,12 +2441,12 @@
             <div class="country-accordion-body">
               <div class="proto-list">
                 <!-- vless+ws -->
-                <div class="proto-row" data-route-key="it-vless">
+                <div class="proto-row" data-route-key="it-vless" data-route-tag="route:IT:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M4 5L12 20L20 5H15.5L12 13L8.5 5H4Z" fill="#38BDF8"/>
-                        <path d="M12 2L14.5 7H9.5L12 2Z" fill="#38BDF8" opacity="0.6"/>
+                        <path d="M4.5 4.5L12 19.5L19.5 4.5H15.5L12 12.5L8.5 4.5H4.5Z" fill="#38BDF8"/>
+                        <path d="M12 2L14.2 6.2H9.8L12 2Z" fill="#38BDF8" fill-opacity="0.65"/>
                       </svg>
                     </div>
                     <span class="proto-name">vless+ws</span>
@@ -2428,11 +2462,11 @@
                 </div>
 
                 <!-- hysteriav2 -->
-                <div class="proto-row" data-route-key="it-hy2">
+                <div class="proto-row" data-route-key="it-hy2" data-route-tag="route:IT:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M13 2L4 13.5H11L9.5 22L19.5 10.5H12.5L14.5 2H13Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.5" stroke-linejoin="round"/>
+                        <path d="M13.5 2.5L4.5 13H11L9.5 21.5L19.5 10.5H13L15 2.5H13.5Z" fill="#F59E0B" stroke="#F59E0B" stroke-width="0.8" stroke-linejoin="round"/>
                       </svg>
                     </div>
                     <span class="proto-name">hysteriav2</span>
@@ -2448,13 +2482,13 @@
                 </div>
 
                 <!-- trojan -->
-                <div class="proto-row" data-route-key="it-trojan">
+                <div class="proto-row" data-route-key="it-trojan" data-route-tag="route:IT:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 2C7.5 2 4 5.5 4 9.5C4 14.5 8 19 12 21C16 19 20 14.5 20 9.5C20 5.5 16.5 2 12 2Z" fill="rgba(167, 139, 250, 0.18)" stroke="#A78BFA" stroke-width="1.8"/>
-                        <path d="M12 6V13M9 9.5H15" stroke="#A78BFA" stroke-width="2" stroke-linecap="round"/>
-                        <path d="M8.5 16C10 17.5 14 17.5 15.5 16" stroke="#A78BFA" stroke-width="1.6" stroke-linecap="round"/>
+                        <path d="M12 2.5L4.5 6V11.5C4.5 16.2 7.7 20.5 12 21.8C16.3 20.5 19.5 16.2 19.5 11.5V6L12 2.5Z" fill="rgba(167, 139, 250, 0.16)" stroke="#A78BFA" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M12 7V12M9.5 9.5H14.5" stroke="#A78BFA" stroke-width="1.8" stroke-linecap="round"/>
+                        <circle cx="12" cy="15" r="1.5" fill="#A78BFA"/>
                       </svg>
                     </div>
                     <span class="proto-name">trojan</span>
@@ -2470,12 +2504,14 @@
                 </div>
 
                 <!-- amneziawg3.1 -->
-                <div class="proto-row" data-route-key="it-awg">
+                <div class="proto-row" data-route-key="it-awg" data-route-tag="awg31:it">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
                       <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M12 3L4 6.8V12.5C4 17.2 7.4 21.6 12 22.8C16.6 21.6 20 17.2 20 12.5V6.8L12 3Z" fill="rgba(57, 232, 189, 0.18)" stroke="#39E8BD" stroke-width="1.8" stroke-linejoin="round"/>
-                        <path d="M12 7.5L8.5 15H10.4L11.1 13.4H12.9L13.6 15H15.5L12 7.5ZM12 10.6L12.5 12H11.5L12 10.6Z" fill="#39E8BD"/>
+                        <path d="M12 2.5L4 6V12C4 16.8 7.5 21.2 12 22.4C16.5 21.2 20 16.8 20 12V6L12 2.5Z" fill="rgba(57, 232, 189, 0.16)" stroke="#39E8BD" stroke-width="1.6" stroke-linejoin="round"/>
+                        <path d="M9.5 11C9.5 9.6 10.6 8.5 12 8.5C13.4 8.5 14.5 9.6 14.5 11V12H9.5V11Z" fill="#39E8BD" fill-opacity="0.3" stroke="#39E8BD" stroke-width="1.3"/>
+                        <rect x="8.5" y="12" width="7" height="5" rx="1.2" fill="#39E8BD"/>
+                        <circle cx="12" cy="14.5" r="0.9" fill="#0B111B"/>
                       </svg>
                     </div>
                     <span class="proto-name">amneziawg3.1</span>
@@ -2582,7 +2618,7 @@
               <div>
                 <span style="font-size: 11.5px; color: var(--text-muted); display: block;">шлюз выхода</span>
                 <strong style="font-size: 14px; color: #FFFFFF; display: block;">
-                  🇳🇱 нидерланды · амстердам
+                  <svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-nl"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-nl)"><rect width="24" height="5.33" fill="#C93D4B"/><rect y="5.33" width="24" height="5.34" fill="#F7F7F4"/><rect y="10.67" width="24" height="5.33" fill="#31579A"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg> нидерланды · амстердам
                 </strong>
               </div>
               <div>
@@ -2738,7 +2774,7 @@
           <div class="glass-card" style="display: flex; align-items: center; justify-content: space-between;">
             <div>
               <strong style="color: #FFFFFF; font-size: 15px; display: block;">./connect</strong>
-              <span style="font-size: 13px; color: var(--text-muted);">версия 0.11.8 (windows x64) · канал: ./beta</span>
+              <span style="font-size: 13px; color: var(--text-muted);">версия 0.11.37 (windows x64) · канал: ./beta</span>
             </div>
             <button class="btn-select-route" id="btn-check-updates">проверить обновления</button>
           </div>
@@ -2960,6 +2996,106 @@
       switchStage(stageId);
     };
 
+        function getFlagSvg(code, w = 22, h = 15) {
+      const c = String(code || "").toUpperCase();
+      const rx = 3;
+      if (c === "NL") {
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-nl"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-nl)"><rect width="24" height="5.33" fill="#C93D4B"/><rect y="5.33" width="24" height="5.34" fill="#F7F7F4"/><rect y="10.67" width="24" height="5.33" fill="#31579A"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+      }
+      if (c === "DE") {
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-de"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-de)"><rect width="24" height="5.33" fill="#17191E"/><rect y="5.33" width="24" height="5.34" fill="#C83C4A"/><rect y="10.67" width="24" height="5.33" fill="#F0C66B"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+      }
+      if (c === "RU") {
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-ru"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-ru)"><rect width="24" height="5.33" fill="#F7F7F4"/><rect y="5.33" width="24" height="5.34" fill="#477CC0"/><rect y="10.67" width="24" height="5.33" fill="#C83C4A"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+      }
+      if (c === "FI") {
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-fi"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-fi)"><rect width="24" height="16" fill="#F7F7F4"/><rect x="6.5" width="4.5" height="16" fill="#3973B4"/><rect y="6" width="24" height="4" fill="#3973B4"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+      }
+      if (c === "IT") {
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-it"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-it)"><rect width="8" height="16" fill="#168B4B"/><rect x="8" width="8" height="16" fill="#F7F7F4"/><rect x="16" width="8" height="16" fill="#D0474D"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+      }
+      if (c === "RU-DE") {
+        return `<span class="dual-flag">${getFlagSvg("RU", 18, 12)}<span style="opacity:0.5;font-size:10px;margin:0 1px;">→</span>${getFlagSvg("DE", 18, 12)}</span>`;
+      }
+      return `<span class="flag-fallback">${c}</span>`;
+    }
+    window.getFlagSvg = getFlagSvg;
+
+    function updateCountryHeaderPing(acc) {
+      if (!acc) return;
+      const latEls = acc.querySelectorAll(".proto-latency");
+      let minPing = Infinity;
+      latEls.forEach(el => {
+        const val = parseInt(el.textContent.trim(), 10);
+        if (!isNaN(val) && val > 0 && val < minPing) minPing = val;
+      });
+      const headerPing = acc.querySelector("[data-ping]");
+      if (headerPing && minPing < Infinity) {
+        headerPing.textContent = minPing.toString();
+      }
+    }
+
+    window.deyttUpdateRouteProbe = function(tag, latency, speedMbps, stage, error) {
+      if (!tag) return;
+      const normalizedTag = String(tag).toLowerCase();
+      let row = document.querySelector(`[data-route-tag="${tag}"]`) ||
+                document.querySelector(`[data-route-key="${tag}"]`);
+      if (!row) {
+        document.querySelectorAll(".proto-row").forEach(r => {
+          const t = (r.dataset.routeTag || r.dataset.routeKey || "").toLowerCase();
+          if (t && (normalizedTag.includes(t) || t.includes(normalizedTag))) row = r;
+        });
+      }
+      if (row) {
+        const latEl = row.querySelector(".proto-latency");
+        const spdEl = row.querySelector(".proto-speed");
+        const dot = row.querySelector(".ping-dot");
+        if (stage === "latency" || stage === "waiting_speed") {
+          if (latEl) latEl.textContent = "…";
+          if (spdEl) spdEl.textContent = "· …";
+          if (dot) dot.classList.add("is-probing");
+        } else if (stage === "download") {
+          if (latEl && latency) latEl.textContent = latency.toString();
+          if (spdEl) spdEl.textContent = speedMbps ? `· ${speedMbps} мбит/с` : "· замер…";
+        } else if (stage === "complete") {
+          if (dot) {
+            dot.classList.remove("is-probing");
+            if (latency) {
+              dot.style.background = latency < 35 ? "#39E8BD" : latency < 75 ? "#F59E0B" : "#F87171";
+              dot.style.boxShadow = `0 0 8px ${dot.style.background}`;
+            }
+          }
+          if (latEl) latEl.textContent = latency ? latency.toString() : "—";
+          if (spdEl) spdEl.textContent = speedMbps ? `· ${speedMbps} мбит/с` : "";
+          updateCountryHeaderPing(row.closest(".country-accordion"));
+        } else if (stage === "error") {
+          if (dot) dot.classList.remove("is-probing");
+          if (latEl) latEl.textContent = "—";
+          if (spdEl) spdEl.textContent = "· недоступен";
+        }
+      }
+    };
+
+    window.deyttSetRoutesData = function(routes) {
+      if (!Array.isArray(routes)) return;
+      routes.forEach(route => {
+        if (!route.tag && !route.id) return;
+        const tag = route.tag || route.id;
+        if (route.latency || route.speed || route.stage) {
+          window.deyttUpdateRouteProbe(tag, route.latency, route.speed, route.stage || "complete", null);
+        }
+        if (route.isSelected) {
+          const key = route.id || route.tag;
+          document.querySelectorAll("[data-route-key]").forEach(card => {
+            const isMatch = card.dataset.routeKey === key || card.dataset.routeTag === tag;
+            card.classList.toggle("is-selected", isMatch);
+            const btn = card.querySelector(".btn-select-route");
+            if (btn) btn.textContent = isMatch ? "активен ✓" : "выбрать";
+          });
+        }
+      });
+    };
+
     // Routes Selection & Syncing with Globe (Authentic Routes from WindowsRouteCatalog)
     const routeDetails = {
       auto: { flag: "✦", country: "", city: "автоподбор", ping: 24 },
@@ -3004,7 +3140,14 @@
       const homeCity = document.getElementById("home-city");
       const homeLatency = document.getElementById("home-latency");
       const latencyUnit = document.getElementById("home-latency-unit");
-      if (homeFlag) homeFlag.textContent = data.flag;
+      if (homeFlag) {
+        if (key === "auto") {
+          homeFlag.textContent = "✦";
+        } else {
+          const code = (key.includes("-") && key !== "ru-de" ? key.split("-")[0] : key).toUpperCase();
+          homeFlag.innerHTML = getFlagSvg(code, 22, 15);
+        }
+      }
       if (homeCountry) {
         homeCountry.textContent = "";
         homeCountry.hidden = true;
@@ -3180,8 +3323,11 @@
       sw.addEventListener("click", () => {
         sw.classList.toggle("is-checked");
         const setting = sw.dataset.setting;
-        const state = sw.classList.contains("is-checked") ? "включено" : "выключено";
-        showToast(`параметр обновлен: ${state}`);
+        const isChecked = sw.classList.contains("is-checked");
+        try { localStorage.setItem("setting_" + setting, isChecked ? "1" : "0"); } catch (_) {}
+        postHost("settings:set:" + setting + ":" + (isChecked ? "true" : "false"));
+        const state = isChecked ? "включено" : "выключено";
+        showToast(`параметр ${setting}: ${state}`);
       });
     });
 
@@ -3190,14 +3336,15 @@
       btnCheckUpdates.addEventListener("click", () => {
         btnCheckUpdates.textContent = "проверяю...";
         btnCheckUpdates.style.pointerEvents = "none";
+        postHost("settings:check_updates");
         setTimeout(() => {
           btnCheckUpdates.textContent = "актуальная версия ✓";
-          showToast("у вас установлена последняя стабильная версия v0.11.8");
+          showToast("у вас установлена последняя стабильная версия v0.11.37");
           setTimeout(() => {
             btnCheckUpdates.textContent = "проверить обновления";
             btnCheckUpdates.style.pointerEvents = "";
-          }, 2400);
-        }, 650);
+          }, 2500);
+        }, 700);
       });
     }
 

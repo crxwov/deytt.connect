@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using DeyttConnect.Protocol;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
 using Microsoft.Web.WebView2.Core;
@@ -75,6 +76,8 @@ public sealed class RouteGlobeWebView : ContentControl
     private bool _immersiveMode;
     private bool _darkTheme = true;
     private HomePresentationSnapshot? _homePresentation;
+    private IReadOnlyList<WindowsRoute>? _routesCatalog;
+    private IReadOnlyDictionary<string, WindowsRouteProbeResult>? _probesCatalog;
     private bool _atlasFailed;
     private string? _atlasErrorReason;
     private bool _attachedToVisualTree;
@@ -148,6 +151,15 @@ public sealed class RouteGlobeWebView : ContentControl
     /// <summary>Raised when the user selects a route inside the web presentation.</summary>
     public event Action<string>? RouteSelected;
 
+    /// <summary>Raised when the user requests a route probe for a country.</summary>
+    public event Action<string>? CountryProbeRequested;
+
+    /// <summary>Raised when the user toggles a client setting in the web presentation.</summary>
+    public event Action<string, bool>? SettingToggled;
+
+    /// <summary>Raised when the user clicks check for updates in the web presentation.</summary>
+    public event Action? CheckUpdatesRequested;
+
     internal bool IsNativeInitializationDisabled => _disableNativeInitialization;
 
     private string _activeTabName = "home";
@@ -157,6 +169,39 @@ public sealed class RouteGlobeWebView : ContentControl
         if (string.IsNullOrWhiteSpace(tab)) return;
         _activeTabName = tab.ToLowerInvariant();
         _ = ExecuteScriptAsync($"window.deyttSwitchStage && window.deyttSwitchStage('{_activeTabName}');");
+    }
+
+    public void UpdateRoutesAndProbes(IReadOnlyList<WindowsRoute>? routes, IReadOnlyDictionary<string, WindowsRouteProbeResult>? probes, string? selectedRouteId)
+    {
+        _routesCatalog = routes;
+        _probesCatalog = probes;
+        if (!string.IsNullOrEmpty(selectedRouteId))
+            _selectedRoute = RouteKeyFor(selectedRouteId);
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null || routes is null) return;
+        var items = routes.Select(r => new
+        {
+            id = r.Id,
+            tag = r.Tag,
+            countryCode = r.CountryCode,
+            countryName = r.CountryName,
+            protocol = r.Protocol,
+            protocolName = r.ProtocolName,
+            latency = probes != null && probes.TryGetValue(r.Tag, out var p) ? p.LatencyMilliseconds : null,
+            speed = probes != null && probes.TryGetValue(r.Tag, out var p2) && p2.BytesPerSecond > 0 ? (long?)(p2.BytesPerSecond.Value * 8 / 1_000_000.0) : null,
+            stage = probes != null && probes.TryGetValue(r.Tag, out var p3) ? p3.Stage : null,
+            isSelected = string.Equals(r.Id, selectedRouteId, StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(r.Tag, selectedRouteId, StringComparison.OrdinalIgnoreCase)
+        });
+        var script = $"window.deyttSetRoutesData && window.deyttSetRoutesData({JsonSerializer.Serialize(items)});";
+        _ = ExecuteScriptAsync(script);
+    }
+
+    public void PushRouteProbeProgress(WindowsRouteProbeResult probe)
+    {
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null) return;
+        var speedMbps = probe.BytesPerSecond is > 0 ? (long?)(probe.BytesPerSecond.Value * 8 / 1_000_000.0) : null;
+        var script = $"window.deyttUpdateRouteProbe && window.deyttUpdateRouteProbe({JsonSerializer.Serialize(probe.RouteTag)}, {JsonSerializer.Serialize(probe.LatencyMilliseconds)}, {JsonSerializer.Serialize(speedMbps)}, {JsonSerializer.Serialize(probe.Stage)}, {JsonSerializer.Serialize(probe.Error)});";
+        _ = ExecuteScriptAsync(script);
     }
 
     public async Task ExecuteScriptAsync(string script)
@@ -854,6 +899,41 @@ public sealed class RouteGlobeWebView : ContentControl
             });
             return;
         }
+        if (node.StartsWith("route:probe:country:", StringComparison.Ordinal))
+        {
+            var countryCode = node["route:probe:country:".Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    CountryProbeRequested?.Invoke(countryCode);
+            });
+            return;
+        }
+        if (node == "settings:check_updates")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    CheckUpdatesRequested?.Invoke();
+            });
+            return;
+        }
+        if (node.StartsWith("settings:set:", StringComparison.Ordinal))
+        {
+            var payload = node["settings:set:".Length..];
+            var colon = payload.IndexOf(':');
+            if (colon > 0)
+            {
+                var key = payload[..colon];
+                var val = bool.TryParse(payload[(colon + 1)..], out var b) && b;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                        SettingToggled?.Invoke(key, val);
+                });
+            }
+            return;
+        }
         if (!TapKeys.Contains(node))
             return;
 
@@ -1077,6 +1157,25 @@ public sealed class RouteGlobeWebView : ContentControl
         script.Append("window.deyttSetHomePresentation && window.deyttSetHomePresentation(")
             .Append(JsonSerializer.Serialize(_homePresentation, new JsonSerializerOptions(JsonSerializerDefaults.Web)))
             .AppendLine(");");
+        if (_routesCatalog is { Count: > 0 } catalog)
+        {
+            var items = catalog.Select(r => new
+            {
+                id = r.Id,
+                tag = r.Tag,
+                countryCode = r.CountryCode,
+                countryName = r.CountryName,
+                protocol = r.Protocol,
+                protocolName = r.ProtocolName,
+                latency = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p) ? p.LatencyMilliseconds : null,
+                speed = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p2) && p2.BytesPerSecond > 0 ? (long?)(p2.BytesPerSecond.Value * 8 / 1_000_000.0) : null,
+                stage = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p3) ? p3.Stage : null,
+                isSelected = string.Equals(r.Id, _selectedRoute, StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(r.Tag, _selectedRoute, StringComparison.OrdinalIgnoreCase)
+            });
+            script.Append("window.deyttSetRoutesData && window.deyttSetRoutesData(")
+                .Append(JsonSerializer.Serialize(items)).AppendLine(");");
+        }
         script.AppendLine("window.deyttSetMapHostActive && window.deyttSetMapHostActive(true);");
         if (_homeResumeRevision != _appliedHomeResumeRevision)
             script.AppendLine("window.deyttResumeMap && window.deyttResumeMap();");

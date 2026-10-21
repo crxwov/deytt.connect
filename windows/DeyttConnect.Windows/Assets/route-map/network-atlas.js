@@ -850,8 +850,7 @@
       const cy = this.centerY;
       const maxJump = this.radius * this.zoom * .24;
       const maxJumpSq = maxJump * maxJump;
-      const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
-      const pointStep = isMoving ? 2 : 1;
+      const pointStep = 1;
 
       const strokeLines = (lines, style, width, alpha) => {
         const len = lines.length;
@@ -1048,10 +1047,9 @@
       };
       traceLand();
       context.save();
-      const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
       const isLight = document.documentElement.dataset.theme === "light";
       const relief = this.options.landDepth === false && !isLight ? 0 : (isLight ? 1.5 : clamp(globeRadius * .014, 2, 5));
-      if (relief && !isMoving) {
+      if (relief) {
         context.save();
         const shadowOffsetX = isLight ? 0.6 : (relief * .24);
         const shadowOffsetY = isLight ? 1.4 : (relief * .56);
