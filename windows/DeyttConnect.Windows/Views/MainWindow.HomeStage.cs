@@ -541,12 +541,12 @@ public partial class MainWindow
         displayedRoute ??= _routes.FirstOrDefault(route => route.Id == _selectedRoute);
         var destination = GetHomeDestinationParts(displayedRoute);
         var automatic = _selectedRoute == "auto";
-        var country = automatic ? Copy("автоподбор", "auto-select") : displayedRoute?.CountryCode switch
-        {
-            "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
-            "AUTO" or null => Copy("автоподбор", "auto-select"),
-            _ => RouteCountryName(displayedRoute).ToLowerInvariant(),
-        };
+        var exitCode = destination.Code is "NL" or "DE" or "RU" or "FI" or "IT" ? destination.Code.ToLowerInvariant() : "";
+        var protoRaw = displayedRoute?.CountryCode is null or "AUTO" ? "" : ProtocolDescriptor(displayedRoute).ToLowerInvariant().Replace("./", "");
+        var protocol = string.IsNullOrEmpty(exitCode)
+            ? (displayedRoute?.CountryCode is null or "AUTO" ? "" : ProtocolDescriptor(displayedRoute).ToLowerInvariant())
+            : $"{exitCode}./{protoRaw}";
+        var country = automatic ? Copy("автоподбор", "auto-select") : "";
         var city = displayedRoute?.CountryCode is null or "AUTO"
             ? connected ? Copy("уточняем выбранный выход…", "confirming the selected exit…")
                 : connecting || routeProbeActive ? Copy("выбираем выход…", "selecting an exit…")
@@ -555,7 +555,6 @@ public partial class MainWindow
                 ? destination.Name
                 : automatic ? Copy($"{destination.Name} · {RouteCountryName(displayedRoute!)}", $"{destination.Name} · {RouteCountryName(displayedRoute!)}").ToLowerInvariant()
                 : destination.Name.ToLowerInvariant();
-        var protocol = displayedRoute?.CountryCode is null or "AUTO" ? "" : ProtocolDescriptor(displayedRoute).ToLowerInvariant();
         var status = restoring
             ? Copy("подключаемся…", "preparing connection…")
             : connected

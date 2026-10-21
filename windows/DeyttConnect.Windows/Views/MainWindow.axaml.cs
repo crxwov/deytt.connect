@@ -627,29 +627,33 @@ public partial class MainWindow : Window
         glyph.HorizontalAlignment = _compactLayout
             ? Avalonia.Layout.HorizontalAlignment.Center
             : Avalonia.Layout.HorizontalAlignment.Left;
-        glyph.Margin = new Thickness(0, 0, _compactLayout ? 0 : _mediumLayout ? 8 : 10, 0);
+        glyph.Margin = new Thickness(0, 0, _compactLayout ? 0 : 8, 0);
         content.Children.Add(glyph);
         if (!_compactLayout)
         {
-            var title = DeyttTheme.TextBlock(label, _mediumLayout ? 14 : 16,
-                selected ? DeyttTheme.Text : DeyttTheme.Muted,
+            var title = DeyttTheme.TextBlock(label.ToLowerInvariant(), 13.5,
+                selected ? Colors.White : Color.Parse("#94A3B8"),
                 selected ? FontWeight.SemiBold : FontWeight.Medium, wrap: false);
             title.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-        Grid.SetColumn(title, 1);
+            Grid.SetColumn(title, 1);
             content.Children.Add(title);
         }
 
-        button.MinWidth = _compactLayout ? 48 : 0;
-        button.MinHeight = 48;
+        button.MinWidth = _compactLayout ? 40 : 0;
+        button.MinHeight = 36;
         button.CornerRadius = new CornerRadius(14);
         var navigationSurface = new Border
         {
-            Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : Colors.Transparent),
-            BorderBrush = DeyttTheme.Brush(selected ? DeyttTheme.SelectedLine : Colors.Transparent),
+            Background = selected
+                ? new SolidColorBrush(Color.FromArgb(38, 255, 255, 255))
+                : Brushes.Transparent,
+            BorderBrush = selected
+                ? new SolidColorBrush(Color.FromArgb(64, 255, 255, 255))
+                : Brushes.Transparent,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(14),
-            Padding = _compactLayout ? new Thickness(0, 8) : _mediumLayout
-                ? new Thickness(9, 8) : new Thickness(13, 11),
+            Padding = _compactLayout ? new Thickness(8, 6) : new Thickness(16, 7),
+            BoxShadow = selected ? new BoxShadows(new BoxShadow { OffsetX = 0, OffsetY = 2, Blur = 8, Color = Color.FromArgb(40, 0, 0, 0) }) : default,
             Child = content,
         };
         navigationSurface.Classes.Add("nav-surface");
@@ -755,7 +759,7 @@ public partial class MainWindow : Window
             _shortCompactLayout == shortCompact)
         {
             WorkspaceHeader.IsVisible = !_mapImmersive;
-            WorkspaceColumn.RowDefinitions[0].Height = new GridLength(_mapImmersive ? 0 : WorkspaceHeader.Height);
+            if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = new GridLength(0);
             UpdatePageHostWidth();
             UpdateHomeColumns();
             return;
@@ -778,21 +782,21 @@ public partial class MainWindow : Window
         SidebarNavPanel.Spacing = compact ? 7 : 5;
         SidebarStatusCard.IsVisible = !compact;
         WorkspaceHeader.Padding = compact ? new Thickness(16, 0) : medium
-            ? new Thickness(24, 0) : new Thickness(40, 0, 32, 0);
-        var headerHeight = compact ? 72 : medium ? 80 : 88;
-        WorkspaceHeader.Height = headerHeight;
-        WorkspaceColumn.RowDefinitions[0].Height = new GridLength(_mapImmersive ? 0 : headerHeight);
-        HeaderContentGrid.ColumnSpacing = compact ? 8 : medium ? 20 : 36;
-        WindowChromeActions.Spacing = compact ? 4 : 12;
-        HeaderNavigation.Spacing = compact ? 4 : medium ? 6 : 8;
-        WorkspaceBrand.FontSize = compact ? 20 : medium ? 28 : 36;
+            ? new Thickness(24, 0) : new Thickness(36, 0);
+        WorkspaceHeader.Height = 68;
+        if (WorkspaceColumn.RowDefinitions.Count > 0)
+            WorkspaceColumn.RowDefinitions[0].Height = new GridLength(0);
+        HeaderContentGrid.ColumnSpacing = compact ? 8 : medium ? 16 : 24;
+        WindowChromeActions.Spacing = 8;
+        HeaderNavigation.Spacing = 4;
+        WorkspaceBrand.FontSize = 23;
         WorkspaceEyebrow.IsVisible = false;
         MinimizeWindowButton.IsVisible = !_useSystemWindowChrome;
         MaximizeWindowButton.IsVisible = !_useSystemWindowChrome;
         CloseWindowButton.IsVisible = !_useSystemWindowChrome;
-        PageHost.Margin = _mapImmersive ? new Thickness(0) : compact
-            ? new Thickness(20, 28, 20, 24)
-            : medium ? new Thickness(32, 32, 32, 28) : new Thickness(64, 40, 64, 32);
+        PageHost.Margin = _mapImmersive || _activeTab == MainTab.Home ? new Thickness(0) : compact
+            ? new Thickness(20, 76, 20, 24)
+            : medium ? new Thickness(32, 84, 32, 28) : new Thickness(64, 92, 64, 32);
         WorkspaceHeader.IsVisible = !_mapImmersive;
 
         UpdateTopNavigation();
@@ -829,7 +833,7 @@ public partial class MainWindow : Window
             WindowState = _windowStateBeforeMapImmersive;
 
         WorkspaceHeader.IsVisible = !enabled;
-        WorkspaceColumn.RowDefinitions[0].Height = enabled ? new GridLength(0) : new GridLength(WorkspaceHeader.Height);
+        if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = new GridLength(0);
         UpdateResponsiveLayout();
         UpdatePageHostWidth();
         UpdateHomeColumns();
@@ -850,12 +854,12 @@ public partial class MainWindow : Window
 
         PageHost.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         PageHost.MaxWidth = _activeTab == MainTab.Home ? 1920 : 1360;
-        if (_activeTab == MainTab.Home && Bounds.Width >= 1180)
+        if (_activeTab == MainTab.Home)
             PageHost.Margin = new Thickness(0);
-        else if (_activeTab != MainTab.Home)
+        else
             PageHost.Margin = _compactLayout
-                ? new Thickness(20, 28, 20, 24)
-                : _mediumLayout ? new Thickness(32, 32, 32, 28) : new Thickness(64, 40, 64, 32);
+                ? new Thickness(20, 76, 20, 24)
+                : _mediumLayout ? new Thickness(32, 84, 32, 28) : new Thickness(64, 92, 64, 32);
         var availableWidth = PageScroll.Bounds.Width - PageHost.Margin.Left - PageHost.Margin.Right;
         if (!double.IsFinite(availableWidth) || availableWidth <= 0)
             return;
@@ -908,20 +912,16 @@ public partial class MainWindow : Window
             dark ? NavigationIconKind.ThemeLight : NavigationIconKind.ThemeDark, selected: false);
         MinimizeWindowButton.Content = new NavigationIcon(NavigationIconKind.WindowMinimize, selected: false);
         CloseWindowButton.Content = new NavigationIcon(NavigationIconKind.WindowClose, selected: false);
-        ThemeToggleButton.Background = DeyttTheme.Brush(DeyttTheme.Surface2);
-        ThemeToggleButton.BorderBrush = DeyttTheme.Brush(DeyttTheme.Line);
-        ThemeToggleButton.BorderThickness = new Thickness(1);
-        ThemeToggleButton.CornerRadius = new CornerRadius(10);
-        ToolTip.SetTip(ThemeToggleButton, Copy("сменить тему", "change theme"));
+        ThemeToggleButton.IsVisible = false;
         foreach (var control in new[] { MinimizeWindowButton, MaximizeWindowButton, CloseWindowButton })
         {
-            control.Background = DeyttTheme.Brush(DeyttTheme.Surface2);
-            control.BorderBrush = DeyttTheme.Brush(DeyttTheme.Line);
+            control.Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
+            control.BorderBrush = new SolidColorBrush(Color.FromArgb(36, 255, 255, 255));
             control.BorderThickness = new Thickness(1);
-            control.CornerRadius = new CornerRadius(10);
-            control.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
+            control.CornerRadius = new CornerRadius(12);
+            control.Foreground = DeyttTheme.Brush(Color.Parse("#E2E8F0"));
         }
-        CloseWindowButton.Foreground = DeyttTheme.Brush(DeyttTheme.Muted);
+        CloseWindowButton.Foreground = DeyttTheme.Brush(Color.Parse("#94A3B8"));
         TopHomeNav.InvalidateVisual();
         TopRoutesNav.InvalidateVisual();
         TopProfileNav.InvalidateVisual();
@@ -989,10 +989,10 @@ public partial class MainWindow : Window
 
     private void UpdateTopNavigation()
     {
-        SetNavigation(TopHomeNav, NavigationIconKind.Home, Copy("Главная", "Home"), _activeTab == MainTab.Home);
-        SetNavigation(TopRoutesNav, NavigationIconKind.Routes, Copy("Маршруты", "Routes"), _activeTab == MainTab.Routes);
-        SetNavigation(TopProfileNav, NavigationIconKind.Profile, Copy("Профиль", "Profile"), _activeTab is MainTab.Profile or MainTab.Support);
-        SetNavigation(TopSettingsNav, NavigationIconKind.Settings, Copy("Настройки", "Settings"), _activeTab == MainTab.Settings);
+        SetNavigation(TopHomeNav, NavigationIconKind.Home, Copy("главная", "home"), _activeTab == MainTab.Home);
+        SetNavigation(TopRoutesNav, NavigationIconKind.Routes, Copy("маршруты", "routes"), _activeTab == MainTab.Routes);
+        SetNavigation(TopProfileNav, NavigationIconKind.Profile, Copy("профиль", "profile"), _activeTab is MainTab.Profile or MainTab.Support);
+        SetNavigation(TopSettingsNav, NavigationIconKind.Settings, Copy("настройки", "settings"), _activeTab == MainTab.Settings);
     }
 
     private string GetMapOriginLabel()

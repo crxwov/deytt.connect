@@ -58,13 +58,19 @@
         <Style Selector="Button.nav-pill:focus Border.nav-surface">
             <Setter Property="BorderBrush" Value="{DynamicResource AppFocusBrush}" />
         </Style>
+        <Style Selector="Button.nav-pill:pointerover Border.nav-surface">
+            <Setter Property="Background" Value="#1FFFFFFF" />
+        </Style>
         <Style Selector="Button.chrome-button:pointerover">
-            <Setter Property="Background" Value="#27364B" />
+            <Setter Property="Background" Value="#2EFFFFFF" />
+            <Setter Property="BorderBrush" Value="#4DFFFFFF" />
             <Setter Property="Opacity" Value="1" />
         </Style>
         <Style Selector="Button.close-button:pointerover">
-            <Setter Property="Background" Value="#B4233B" />
+            <Setter Property="Background" Value="#D9EF4444" />
+            <Setter Property="BorderBrush" Value="#EF4444" />
             <Setter Property="Foreground" Value="#FFFFFF" />
+            <Setter Property="Opacity" Value="1" />
         </Style>
         <Style Selector="Button.deytt-button:disabled">
             <Setter Property="Opacity" Value="0.56" />

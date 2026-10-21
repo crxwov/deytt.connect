@@ -178,17 +178,30 @@
       flag.textContent = code ? "" : "✦";
       flag.setAttribute("aria-label", code || "");
     }
-    if (country) {
-      country.textContent = state.country || "";
-      country.hidden = !state.country;
+    const countryCode = (state.countryCode || "").toLowerCase();
+    let rawProto = (state.protocol || "").toLowerCase().replace(/^\.\//, "");
+    if (countryCode && rawProto) {
+      if (country) {
+        country.textContent = "";
+        country.hidden = true;
+      }
+      if (protocol) {
+        protocol.textContent = `${countryCode}./${rawProto}`;
+        protocol.hidden = false;
+      }
+    } else {
+      if (country) {
+        country.textContent = state.country || "";
+        country.hidden = !state.country;
+      }
+      if (protocol) {
+        protocol.textContent = state.protocol || "";
+        protocol.hidden = !state.protocol;
+      }
     }
     if (city) city.textContent = state.city || "";
-    if (protocol) {
-      protocol.textContent = state.protocol || "";
-      protocol.hidden = !state.protocol;
-    }
     if (subtitle) {
-      subtitle.hidden = Boolean(state.country || state.protocol);
+      subtitle.hidden = Boolean(state.country || state.protocol || (countryCode && rawProto));
     }
   }
 

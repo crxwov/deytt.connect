@@ -18,49 +18,62 @@
         Background="#080D17">
 
     <Grid x:Name="ShellGrid" ColumnDefinitions="*,0" RowDefinitions="Auto,*,0" Background="#080D17">
-        <Grid x:Name="WorkspaceColumn" Grid.Column="0" Grid.RowSpan="2" RowDefinitions="Auto,*">
-            <Border x:Name="WorkspaceHeader" Grid.Row="0" Height="88" Padding="40,0,32,0"
-                    Background="#0B1220" BorderBrush="#27364B" BorderThickness="0,0,0,1"
+        <Grid x:Name="WorkspaceColumn" Grid.Column="0" Grid.RowSpan="2" RowDefinitions="0,*">
+            <ScrollViewer x:Name="PageScroll" Grid.Row="0" Grid.RowSpan="2" BringIntoViewOnFocusChange="True"
+                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <Grid x:Name="PageHost" MaxWidth="1920" HorizontalAlignment="Center"
+                      Margin="0" />
+            </ScrollViewer>
+
+            <Border x:Name="WorkspaceHeader" Grid.Row="0" Grid.RowSpan="2" Height="68" Padding="36,0,36,0"
+                    VerticalAlignment="Top" Background="Transparent" BorderThickness="0"
                     chrome:WindowDecorationProperties.ElementRole="TitleBar">
-                <Grid x:Name="HeaderContentGrid" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="36">
+                <Grid x:Name="HeaderContentGrid" ColumnDefinitions="Auto,*,Auto">
                     <TextBlock x:Name="WorkspaceBrand" FontFamily="fonts:DEYTT#Unbounded"
-                               FontSize="32" FontWeight="Bold" Foreground="#F2F5FC"
+                               FontSize="23" FontWeight="ExtraBold" Foreground="#FFFFFF"
                                VerticalAlignment="Center" chrome:WindowDecorationProperties.ElementRole="TitleBar">
                         <Run Text="./" Foreground="#38BDF8" /><Run Text="connect" />
                     </TextBlock>
 
-                    <Border x:Name="HeaderDragRegion" Grid.Column="1" Background="Transparent"
-                            HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                            chrome:WindowDecorationProperties.ElementRole="TitleBar" />
+                    <Grid Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                        <Border x:Name="HeaderDragRegion" Background="Transparent"
+                                HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                chrome:WindowDecorationProperties.ElementRole="TitleBar" />
 
-                    <StackPanel x:Name="HeaderNavigation" Grid.Column="1" Orientation="Horizontal"
-                                Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Left">
-                        <Button x:Name="TopHomeNav" Classes="deytt-button nav-pill" MinHeight="48"
-                                chrome:WindowDecorationProperties.ElementRole="User" />
-                        <Button x:Name="TopRoutesNav" Classes="deytt-button nav-pill" MinHeight="48"
-                                chrome:WindowDecorationProperties.ElementRole="User" />
-                        <Button x:Name="TopProfileNav" Classes="deytt-button nav-pill" MinHeight="48"
-                                chrome:WindowDecorationProperties.ElementRole="User" />
-                        <Button x:Name="TopSettingsNav" Classes="deytt-button nav-pill" MinHeight="48"
-                                chrome:WindowDecorationProperties.ElementRole="User" />
-                    </StackPanel>
+                        <Border x:Name="NavDockBorder" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                CornerRadius="20" Background="#B20B1220" BorderBrush="#26FFFFFF"
+                                BorderThickness="1" Padding="4"
+                                BoxShadow="0 4 20 0 #40000000"
+                                chrome:WindowDecorationProperties.ElementRole="User">
+                            <StackPanel x:Name="HeaderNavigation" Orientation="Horizontal"
+                                        Spacing="4" VerticalAlignment="Center">
+                                <Button x:Name="TopHomeNav" Classes="deytt-button nav-pill" MinHeight="36"
+                                        chrome:WindowDecorationProperties.ElementRole="User" />
+                                <Button x:Name="TopRoutesNav" Classes="deytt-button nav-pill" MinHeight="36"
+                                        chrome:WindowDecorationProperties.ElementRole="User" />
+                                <Button x:Name="TopProfileNav" Classes="deytt-button nav-pill" MinHeight="36"
+                                        chrome:WindowDecorationProperties.ElementRole="User" />
+                                <Button x:Name="TopSettingsNav" Classes="deytt-button nav-pill" MinHeight="36"
+                                        chrome:WindowDecorationProperties.ElementRole="User" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
 
-                    <StackPanel x:Name="WindowChromeActions" Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                    <StackPanel x:Name="WindowChromeActions" Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <Button x:Name="ThemeToggleButton" Classes="deytt-button chrome-button"
-                                Width="36" Height="36" ToolTip.Tip="сменить тему"
-                                AutomationProperties.Name="сменить тему"
+                                Width="38" Height="38" CornerRadius="12" IsVisible="False"
+                                ToolTip.Tip="сменить тему" AutomationProperties.Name="сменить тему"
                                 chrome:WindowDecorationProperties.ElementRole="User" />
-                        <Border Width="1" Height="24" Background="#27364B" VerticalAlignment="Center" />
                         <Button x:Name="MinimizeWindowButton" Classes="deytt-button chrome-button"
-                                Width="36" Height="36"
+                                Width="38" Height="38" CornerRadius="12"
                                 ToolTip.Tip="свернуть" AutomationProperties.Name="свернуть"
                                 chrome:WindowDecorationProperties.ElementRole="User" />
                         <Button x:Name="MaximizeWindowButton" Classes="deytt-button chrome-button"
-                                Width="36" Height="36"
+                                Width="38" Height="38" CornerRadius="12"
                                 ToolTip.Tip="развернуть" AutomationProperties.Name="развернуть"
                                 chrome:WindowDecorationProperties.ElementRole="User" />
                         <Button x:Name="CloseWindowButton" Classes="deytt-button chrome-button close-button"
-                                Width="36" Height="36"
+                                Width="38" Height="38" CornerRadius="12"
                                 ToolTip.Tip="закрыть" AutomationProperties.Name="закрыть"
                                 chrome:WindowDecorationProperties.ElementRole="User" />
                     </StackPanel>

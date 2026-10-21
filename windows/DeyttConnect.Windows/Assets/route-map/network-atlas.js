@@ -1640,7 +1640,8 @@
         const newClass = "atlas-glass-label" +
           (isUser ? " is-user" : "") +
           (isExit ? " is-exit" : "") +
-          (isHovered ? " is-hovered" : "");
+          (isHovered ? " is-hovered" : "") +
+          (offset.align === "right" ? " is-align-right" : "");
         if (el.className !== newClass) {
           el.className = newClass;
         }
