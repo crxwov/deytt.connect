@@ -14,18 +14,34 @@
       --header-border: transparent;
       --nav-bg: rgba(255, 255, 255, 0.025);
       --nav-border: rgba(255, 255, 255, 0.08);
-      --nav-border-top: rgba(255, 255, 255, 0.20);
+      --nav-border-top: rgba(255, 255, 255, 0.22);
       --nav-border-bottom: rgba(0, 0, 0, 0.35);
-      --nav-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.10);
-      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.025) 100%);
-      --nav-pill-border: rgba(255, 255, 255, 0.16);
-      --nav-pill-border-top: rgba(255, 255, 255, 0.45);
+      --nav-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.03) 100%);
+      --nav-pill-border: rgba(255, 255, 255, 0.18);
+      --nav-pill-border-top: rgba(255, 255, 255, 0.48);
       --nav-pill-border-bottom: rgba(0, 0, 0, 0.25);
-      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.25);
+      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 0 0 rgba(255, 255, 255, 0.3);
       --text: #F8FAFC;
       --text-muted: #8E9EAF;
-    }
 
+      /* Liquid Glass Tokens */
+      --glass-bg: rgba(14, 22, 36, 0.62);
+      --glass-bg-hover: rgba(20, 31, 50, 0.72);
+      --glass-bg-active: rgba(26, 40, 64, 0.82);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-border-top: rgba(255, 255, 255, 0.24);
+      --glass-border-hover: rgba(255, 255, 255, 0.15);
+      --glass-border-top-hover: rgba(255, 255, 255, 0.42);
+      --glass-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 0 rgba(0, 0, 0, 0.35), 0 14px 40px 0 rgba(0, 0, 0, 0.48);
+      --glass-shadow-hover: inset 0 1px 2px 0 rgba(255, 255, 255, 0.35), 0 18px 48px 0 rgba(0, 0, 0, 0.58);
+      --glass-blur: blur(24px) saturate(175%);
+
+      /* Accent & System Colors */
+      --accent-mint: #39E8BD;
+      --accent-azure: #38BDF8;
+      --accent-glow: rgba(57, 232, 189, 0.25);
+    }
 
     * {
       box-sizing: border-box;
@@ -108,8 +124,8 @@
       border-radius: 20px;
       padding: 6px;
       box-shadow: var(--nav-shadow);
-      backdrop-filter: blur(24px) saturate(190%);
-      -webkit-backdrop-filter: blur(24px) saturate(190%);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
     }
 
     /* Clean Elevated Glass Pill */
@@ -252,41 +268,721 @@
     .network-atlas {
       width: 100%;
       height: 100%;
+      transition: filter 350ms cubic-bezier(0.16, 1, 0.3, 1), opacity 350ms ease;
     }
 
+    .network-atlas.is-blurred {
+      filter: blur(16px) brightness(0.4);
+      pointer-events: none;
+    }
+
+    /* Liquid Glass Overrides for Home Panel */
+    .home-panel-shell {
+      background: transparent !important;
+    }
+
+    .home-panel {
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-top-color: var(--glass-border-top);
+      border-radius: 22px;
+      padding: 28px;
+      box-shadow: var(--glass-shadow);
+      transition: all 240ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .route-heading {
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-top-color: rgba(255, 255, 255, 0.18);
+      border-radius: 16px;
+      padding: 16px 20px;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.1);
+    }
+
+    .home-action {
+      border-radius: 16px !important;
+      background: linear-gradient(135deg, rgba(57, 232, 189, 0.18) 0%, rgba(34, 166, 237, 0.12) 100%) !important;
+      border: 1px solid rgba(57, 232, 189, 0.38) !important;
+      border-top-color: rgba(255, 255, 255, 0.5) !important;
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.4), 0 6px 24px rgba(57, 232, 189, 0.22) !important;
+      color: #FFFFFF !important;
+      font-weight: 600 !important;
+      letter-spacing: -0.01em;
+      transition: all 180ms ease !important;
+    }
+
+    .home-action:hover {
+      background: linear-gradient(135deg, rgba(57, 232, 189, 0.28) 0%, rgba(34, 166, 237, 0.20) 100%) !important;
+      border-color: rgba(57, 232, 189, 0.6) !important;
+      border-top-color: rgba(255, 255, 255, 0.7) !important;
+      box-shadow: inset 0 1px 2px 0 rgba(255, 255, 255, 0.5), 0 8px 30px rgba(57, 232, 189, 0.35) !important;
+      transform: translateY(-1px);
+    }
+
+    .home-action[data-tone="good"] {
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.20) 0%, rgba(220, 38, 38, 0.12) 100%) !important;
+      border-color: rgba(239, 68, 68, 0.45) !important;
+      border-top-color: rgba(255, 255, 255, 0.55) !important;
+      box-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.35), 0 6px 24px rgba(239, 68, 68, 0.22) !important;
+    }
+
+    .home-metrics {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .home-metrics .metric {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-top-color: rgba(255, 255, 255, 0.16);
+      border-radius: 14px;
+      padding: 12px 16px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+
+    .home-measure {
+      background: rgba(255, 255, 255, 0.04) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-top-color: rgba(255, 255, 255, 0.18) !important;
+      border-radius: 12px !important;
+      backdrop-filter: blur(12px) !important;
+      color: var(--text-muted) !important;
+      transition: all 160ms ease !important;
+    }
+
+    .home-measure:hover {
+      background: rgba(255, 255, 255, 0.08) !important;
+      color: var(--text) !important;
+      border-color: rgba(255, 255, 255, 0.18) !important;
+      border-top-color: rgba(255, 255, 255, 0.35) !important;
+    }
+
+    /* Universal Stage Container with Liquid Glass */
+    .stage-view {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      padding: 88px 36px 36px;
+      overflow-y: auto;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(18px) scale(0.985);
+      transition: opacity 280ms cubic-bezier(0.16, 1, 0.3, 1),
+                  transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+                  visibility 280ms;
+      visibility: hidden;
+      z-index: 10;
+      display: flex;
+      justify-content: center;
+    }
+
+    .stage-view.is-active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0) scale(1);
+      visibility: visible;
+    }
+
+    .stage-content-wrap {
+      width: 100%;
+      max-width: 960px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      padding-bottom: 40px;
+    }
+
+    .stage-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 6px 4px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .stage-title {
+      font-size: 26px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: #FFFFFF;
+      margin-bottom: 4px;
+    }
+
+    .stage-subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Liquid Glass Cards */
+    .glass-card {
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-top-color: var(--glass-border-top);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: var(--glass-shadow);
+      transition: all 220ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .glass-card:hover {
+      background: var(--glass-bg-hover);
+      border-color: var(--glass-border-hover);
+      border-top-color: var(--glass-border-top-hover);
+      box-shadow: var(--glass-shadow-hover);
+    }
+
+    /* Routes Stage */
+    .routes-filters {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .filter-chip {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      color: var(--text-muted);
+      padding: 7px 16px;
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 160ms ease;
+    }
+
+    .filter-chip:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .filter-chip.is-active {
+      background: rgba(57, 232, 189, 0.16);
+      border-color: rgba(57, 232, 189, 0.38);
+      border-top-color: rgba(255, 255, 255, 0.45);
+      color: #FFFFFF;
+      font-weight: 600;
+    }
+
+    .route-featured-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 26px 30px;
+      border: 1px solid rgba(57, 232, 189, 0.3);
+      border-top-color: rgba(255, 255, 255, 0.4);
+      box-shadow: var(--glass-shadow), 0 0 32px rgba(57, 232, 189, 0.08);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .route-featured-card::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      left: -20%;
+      width: 50%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(57, 232, 189, 0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .route-info-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .route-globe-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      background: rgba(57, 232, 189, 0.14);
+      border: 1px solid rgba(57, 232, 189, 0.3);
+      border-top-color: rgba(255, 255, 255, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+    }
+
+    .route-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .badge-mint {
+      font-size: 11.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding: 3px 9px;
+      border-radius: 20px;
+      background: rgba(57, 232, 189, 0.2);
+      color: #39E8BD;
+      border: 1px solid rgba(57, 232, 189, 0.4);
+    }
+
+    .route-desc {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    .route-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+      gap: 16px;
+    }
+
+    .route-card {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 20px;
+      cursor: pointer;
+    }
+
+    .route-card.is-selected {
+      border-color: rgba(57, 232, 189, 0.45);
+      border-top-color: rgba(255, 255, 255, 0.55);
+      box-shadow: var(--glass-shadow), 0 0 24px rgba(57, 232, 189, 0.14);
+      background: rgba(18, 30, 48, 0.78);
+    }
+
+    .route-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .route-city {
+      font-size: 16.5px;
+      font-weight: 600;
+      color: #FFFFFF;
+    }
+
+    .route-country {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .route-flag-emoji {
+      font-size: 26px;
+      line-height: 1;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    }
+
+    .route-card-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 14px;
+    }
+
+    .route-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .ping-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #39E8BD;
+    }
+
+    .ping-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #39E8BD;
+      box-shadow: 0 0 8px #39E8BD;
+    }
+
+    .protocol-chip {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #94A3B8;
+    }
+
+    .btn-select-route {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: all 160ms ease;
+    }
+
+    .btn-select-route:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    .route-card.is-selected .btn-select-route {
+      background: #39E8BD;
+      color: #0B111B;
+      border-color: #39E8BD;
+      box-shadow: 0 0 14px rgba(57, 232, 189, 0.35);
+    }
+
+    /* Profile Stage */
+    .profile-hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 28px 32px;
+    }
+
+    .profile-user-left {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .user-avatar {
+      width: 58px;
+      height: 58px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, rgba(57, 232, 189, 0.25) 0%, rgba(56, 189, 248, 0.2) 100%);
+      border: 1px solid rgba(57, 232, 189, 0.4);
+      border-top-color: rgba(255, 255, 255, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      box-shadow: 0 0 24px rgba(57, 232, 189, 0.2);
+    }
+
+    .user-handle {
+      font-size: 20px;
+      font-weight: 700;
+      color: #FFFFFF;
+      letter-spacing: -0.02em;
+    }
+
+    .user-sub-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+
+    .profile-grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .stat-gauge-wrap {
+      margin-top: 16px;
+    }
+
+    .stat-gauge-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      margin-bottom: 8px;
+    }
+
+    .gauge-track {
+      height: 8px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .gauge-fill {
+      height: 100%;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #39E8BD 0%, #38BDF8 100%);
+      box-shadow: 0 0 12px rgba(57, 232, 189, 0.4);
+      width: 32%;
+    }
+
+    .device-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .device-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .device-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13.5px;
+    }
+
+    .device-status {
+      font-size: 12px;
+      color: #39E8BD;
+      font-weight: 500;
+    }
+
+    .key-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 18px;
+      border-radius: 14px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      margin-top: 14px;
+      font-family: monospace;
+      font-size: 13.5px;
+      color: #94A3B8;
+    }
+
+    .key-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Settings Stage */
+    .settings-group {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .settings-group-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748B;
+      padding-left: 4px;
+    }
+
+    .setting-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 22px;
+    }
+
+    .setting-text-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      max-width: 75%;
+    }
+
+    .setting-label {
+      font-size: 15px;
+      font-weight: 600;
+      color: #FFFFFF;
+    }
+
+    .setting-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Liquid Glass Switch */
+    .glass-switch {
+      width: 46px;
+      height: 26px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-top-color: rgba(255, 255, 255, 0.25);
+      position: relative;
+      cursor: pointer;
+      transition: all 200ms ease;
+    }
+
+    .glass-switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+      transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .glass-switch.is-checked {
+      background: linear-gradient(135deg, rgba(57, 232, 189, 0.85) 0%, rgba(34, 166, 237, 0.85) 100%);
+      border-color: rgba(57, 232, 189, 0.6);
+      border-top-color: rgba(255, 255, 255, 0.6);
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), 0 0 14px rgba(57, 232, 189, 0.4);
+    }
+
+    .glass-switch.is-checked::after {
+      transform: translateX(20px);
+    }
+
+    /* Segmented Protocol Controller */
+    .segmented-control {
+      display: inline-flex;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 4px;
+      gap: 4px;
+    }
+
+    .segmented-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 160ms ease;
+    }
+
+    .segmented-btn.is-active {
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-top-color: rgba(255, 255, 255, 0.3);
+      color: #FFFFFF;
+      font-weight: 600;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+
+    /* Liquid Glass Modal */
+    .glass-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(3, 6, 12, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 240ms ease;
+    }
+
+    .glass-modal-backdrop.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .glass-modal-card {
+      width: 90%;
+      max-width: 420px;
+      background: rgba(14, 22, 38, 0.85);
+      backdrop-filter: blur(32px) saturate(180%);
+      -webkit-backdrop-filter: blur(32px) saturate(180%);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-top-color: rgba(255, 255, 255, 0.38);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+      text-align: center;
+      transform: scale(0.95);
+      transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .glass-modal-backdrop.is-open .glass-modal-card {
+      transform: scale(1);
+    }
+
+    .qr-preview-box {
+      width: 200px;
+      height: 200px;
+      margin: 20px auto;
+      background: #FFFFFF;
+      border-radius: 16px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    /* Motion Toast */
     .motion-toast {
       position: fixed;
-      bottom: 24px;
+      bottom: 28px;
       left: 50%;
       transform: translateX(-50%) translateY(30px);
       opacity: 0;
       pointer-events: none;
-      background: rgba(15, 23, 42, 0.92);
-      backdrop-filter: blur(8px);
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       color: #FFFFFF;
-      padding: 10px 20px;
-      border-radius: 12px;
+      padding: 11px 22px;
+      border-radius: 14px;
       font-size: 13.5px;
       font-weight: 500;
-      transition: all 220ms cubic-bezier(0.16, 1, 0.3, 1);
-      z-index: 2000;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-top-color: rgba(255, 255, 255, 0.35);
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      z-index: 300;
+      transition: all 260ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    .motion-toast.show {
+    .motion-toast.is-visible {
       transform: translateX(-50%) translateY(0);
       opacity: 1;
     }
   </style>
 </head>
 <body>
-  <!-- Desktop Header -->
+  <!-- Header Bar -->
   <header class="desktop-header">
     <div class="brand-area">
-      <span class="brand-logo">deytt<span class="brand-dot">.</span></span>
+      <div class="brand-logo">deytt<span class="brand-dot">.</span></div>
     </div>
 
-    <!-- Navigation with Horizontal Micro-Spring -->
+    <!-- Capsule Navigation Dock -->
     <nav class="nav-container" id="main-nav" role="tablist">
       <div class="nav-jelly-pill" id="nav-pill"></div>
 
@@ -330,9 +1026,10 @@
   <!-- Zero-overhead static starry sky -->
   <canvas id="stars-canvas"></canvas>
 
-  <!-- Main Viewport with Interactive Globe & Original Right Panel -->
+  <!-- Main Viewport with Stages -->
   <main class="app-viewport">
-    <div class="network-atlas" data-atlas-status="loading" data-atlas-variant="home">
+    <!-- Stage 1: Home (Globe + Connection Panel) -->
+    <div class="network-atlas" id="stage-home" data-atlas-status="loading" data-atlas-variant="home">
       <div class="home-scene">
         <div class="network-atlas__canvas-wrap">
           <canvas data-atlas-interactive tabindex="0" role="img" aria-label="интерактивный глобус маршрута deytt."></canvas>
@@ -355,7 +1052,7 @@
           </section>
         </div>
 
-        <!-- Original Right Panel Shell from b41de7b -->
+        <!-- Right Panel with Liquid Glass -->
         <section class="home-panel-shell" aria-label="управление подключением">
           <div class="home-panel">
             <div class="panel-copy status-copy">
@@ -392,7 +1089,7 @@
           </div>
         </section>
 
-        <!-- Original Compact view fallback -->
+        <!-- Compact view fallback -->
         <section class="home-compact" aria-label="текущее подключение" aria-hidden="true" inert>
           <div class="home-compact-content">
             <div class="compact-summary">
@@ -417,12 +1114,448 @@
         </section>
       </div>
     </div>
+
+    <!-- Stage 2: Маршруты (Routes Stage) -->
+    <section class="stage-view" id="stage-routes" aria-label="Маршруты подключения">
+      <div class="stage-content-wrap">
+        <div class="stage-header">
+          <div>
+            <h1 class="stage-title">Маршруты сети</h1>
+            <p class="stage-subtitle">Выберите доступную точку выхода трафика или включите интеллектуальный автоподбор</p>
+          </div>
+          <div class="routes-filters">
+            <button class="filter-chip is-active" data-filter="all">Все (5)</button>
+            <button class="filter-chip" data-filter="awg">AmneziaWG</button>
+            <button class="filter-chip" data-filter="openflux">OpenFlux</button>
+          </div>
+        </div>
+
+        <!-- Featured Smart Route -->
+        <div class="glass-card route-featured-card" data-route-key="auto" id="card-route-auto">
+          <div class="route-info-left">
+            <div class="route-globe-icon">🌐</div>
+            <div>
+              <div class="route-name">
+                Автоподбор
+                <span class="badge-mint">Рекомендуется</span>
+              </div>
+              <p class="route-desc">Автоматический выбор наименьшего отклика между Амстердамом, Франкфуртом и Хельсинки</p>
+            </div>
+          </div>
+          <div class="route-meta">
+            <span class="ping-tag"><span class="ping-dot"></span><span data-ping="auto">24</span> мс</span>
+            <button class="btn-select-route" data-action-route="auto">Выбрать</button>
+          </div>
+        </div>
+
+        <!-- Available Countries Grid -->
+        <div class="route-card-grid">
+          <!-- Netherlands -->
+          <div class="glass-card route-card" data-route-key="nl" data-protocol="awg openflux">
+            <div class="route-card-top">
+              <div>
+                <h3 class="route-city">Амстердам</h3>
+                <p class="route-country">Нидерланды</p>
+              </div>
+              <span class="route-flag-emoji">🇳🇱</span>
+            </div>
+            <div class="route-card-bottom">
+              <div class="route-meta">
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="nl">28</span> мс</span>
+                <span class="protocol-chip">AWG</span>
+                <span class="protocol-chip">OF</span>
+              </div>
+              <button class="btn-select-route" data-action-route="nl">Выбрать</button>
+            </div>
+          </div>
+
+          <!-- Germany -->
+          <div class="glass-card route-card" data-route-key="de" data-protocol="awg openflux">
+            <div class="route-card-top">
+              <div>
+                <h3 class="route-city">Франкфурт-на-Майне</h3>
+                <p class="route-country">Германия</p>
+              </div>
+              <span class="route-flag-emoji">🇩🇪</span>
+            </div>
+            <div class="route-card-bottom">
+              <div class="route-meta">
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="de">34</span> мс</span>
+                <span class="protocol-chip">AWG</span>
+                <span class="protocol-chip">OF</span>
+              </div>
+              <button class="btn-select-route" data-action-route="de">Выбрать</button>
+            </div>
+          </div>
+
+          <!-- Finland -->
+          <div class="glass-card route-card" data-route-key="fi" data-protocol="awg openflux">
+            <div class="route-card-top">
+              <div>
+                <h3 class="route-city">Хельсинки</h3>
+                <p class="route-country">Финляндия</p>
+              </div>
+              <span class="route-flag-emoji">🇫🇮</span>
+            </div>
+            <div class="route-card-bottom">
+              <div class="route-meta">
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="fi">22</span> мс</span>
+                <span class="protocol-chip">AWG</span>
+                <span class="protocol-chip">OF</span>
+              </div>
+              <button class="btn-select-route" data-action-route="fi">Выбрать</button>
+            </div>
+          </div>
+
+          <!-- Russia -->
+          <div class="glass-card route-card" data-route-key="ru" data-protocol="awg">
+            <div class="route-card-top">
+              <div>
+                <h3 class="route-city">Санкт-Петербург</h3>
+                <p class="route-country">Россия</p>
+              </div>
+              <span class="route-flag-emoji">🇷🇺</span>
+            </div>
+            <div class="route-card-bottom">
+              <div class="route-meta">
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="ru">12</span> мс</span>
+                <span class="protocol-chip">AWG</span>
+              </div>
+              <button class="btn-select-route" data-action-route="ru">Выбрать</button>
+            </div>
+          </div>
+
+          <!-- Italy -->
+          <div class="glass-card route-card" data-route-key="it" data-protocol="openflux">
+            <div class="route-card-top">
+              <div>
+                <h3 class="route-city">Милан</h3>
+                <p class="route-country">Италия</p>
+              </div>
+              <span class="route-flag-emoji">🇮🇹</span>
+            </div>
+            <div class="route-card-bottom">
+              <div class="route-meta">
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="it">42</span> мс</span>
+                <span class="protocol-chip">OF</span>
+                <span class="protocol-chip">VLESS</span>
+              </div>
+              <button class="btn-select-route" data-action-route="it">Выбрать</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stage 3: Профиль (Profile Stage) -->
+    <section class="stage-view" id="stage-profile" aria-label="Профиль пользователя">
+      <div class="stage-content-wrap">
+        <div class="stage-header">
+          <div>
+            <h1 class="stage-title">Профиль и подписка</h1>
+            <p class="stage-subtitle">Управление учетной записью, активными устройствами и ключом доступа</p>
+          </div>
+        </div>
+
+        <!-- Profile Hero Card -->
+        <div class="glass-card profile-hero">
+          <div class="profile-user-left">
+            <div class="user-avatar">🛡️</div>
+            <div>
+              <h2 class="user-handle">deytt.//user_84920</h2>
+              <div class="user-sub-status">
+                <span class="ping-tag"><span class="ping-dot"></span>Подписка активна</span>
+                <span>·</span>
+                <span>до 14 ноября 2026 г. (осталось 388 дней)</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn-select-route" style="background: rgba(56, 189, 248, 0.16); color: #38BDF8; border-color: rgba(56, 189, 248, 0.4);" id="btn-renew-tg">
+            Продлить в Telegram →
+          </button>
+        </div>
+
+        <!-- 2 Column Split -->
+        <div class="profile-grid-2">
+          <!-- Traffic & Speed -->
+          <div class="glass-card">
+            <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">Трафик и канал</h3>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Безлимитный скоростной тариф</p>
+
+            <div class="stat-gauge-wrap">
+              <div class="stat-gauge-header">
+                <span style="color: var(--text);">Израсходовано в этом месяце</span>
+                <strong style="color: #39E8BD;">38.4 ГБ / ∞</strong>
+              </div>
+              <div class="gauge-track">
+                <div class="gauge-fill"></div>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 24px; margin-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 16px;">
+              <div>
+                <span style="font-size: 12px; color: var(--text-muted); display: block;">Текущая скорость</span>
+                <strong style="font-size: 18px; color: #FFFFFF;">185 Мбит/с</strong>
+              </div>
+              <div>
+                <span style="font-size: 12px; color: var(--text-muted); display: block;">Зашифровано</span>
+                <strong style="font-size: 18px; color: #39E8BD;">100% данных</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Connected Devices -->
+          <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">Подключенные устройства</h3>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">3 из 5 доступных слотов</p>
+              </div>
+              <button class="btn-select-route" style="font-size: 11.5px; padding: 4px 10px;" id="btn-add-device">+ Слот</button>
+            </div>
+
+            <div class="device-list">
+              <div class="device-row">
+                <div class="device-info">
+                  <span>💻</span>
+                  <div>
+                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">Windows Desktop</strong>
+                    <span style="font-size: 11.5px; color: var(--text-muted);">Это устройство · v0.11.8</span>
+                  </div>
+                </div>
+                <span class="device-status">Активно</span>
+              </div>
+
+              <div class="device-row">
+                <div class="device-info">
+                  <span>📱</span>
+                  <div>
+                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">Pixel 8 Pro</strong>
+                    <span style="font-size: 11.5px; color: var(--text-muted);">Android Client</span>
+                  </div>
+                </div>
+                <span class="device-status">Активно</span>
+              </div>
+
+              <div class="device-row">
+                <div class="device-info">
+                  <span>💻</span>
+                  <div>
+                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">MacBook Air M2</strong>
+                    <span style="font-size: 11.5px; color: var(--text-muted);">macOS Sequoia</span>
+                  </div>
+                </div>
+                <span style="font-size: 12px; color: var(--text-muted);">В сети 2 ч назад</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Connection Key Box -->
+        <div class="glass-card">
+          <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">Ключ конфигурации туннеля</h3>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">Персональный криптографический ключ для подключения устройств</p>
+
+          <div class="key-box">
+            <span id="masked-key">awg://user_84920:••••••••••••••••••••••••••••••••••••••••</span>
+            <div class="key-actions">
+              <button class="btn-select-route" id="btn-copy-key">Копировать</button>
+              <button class="btn-select-route" id="btn-show-qr">QR-код</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Stage 4: Настройки (Settings Stage) -->
+    <section class="stage-view" id="stage-settings" aria-label="Параметры и настройки">
+      <div class="stage-content-wrap">
+        <div class="stage-header">
+          <div>
+            <h1 class="stage-title">Настройки клиента</h1>
+            <p class="stage-subtitle">Тонкая настройка сетевых протоколов, безопасности и автозапуска в системе</p>
+          </div>
+        </div>
+
+        <!-- Group 1: System -->
+        <div class="settings-group">
+          <span class="settings-group-title">Система и запуск</span>
+          <div class="glass-card" style="padding: 6px 10px;">
+            <div class="setting-item">
+              <div class="setting-text-wrap">
+                <span class="setting-label">Запуск при старте Windows</span>
+                <span class="setting-desc">Автоматически запускать Deytt Connect при входе пользователя в систему</span>
+              </div>
+              <div class="glass-switch is-checked" data-setting="autostart"></div>
+            </div>
+            <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
+              <div class="setting-text-wrap">
+                <span class="setting-label">Автоподключение при старте</span>
+                <span class="setting-desc">Устанавливать защищенное соединение сразу после запуска программы</span>
+              </div>
+              <div class="glass-switch is-checked" data-setting="autoconnect"></div>
+            </div>
+            <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
+              <div class="setting-text-wrap">
+                <span class="setting-label">Сворачивать в системный трей</span>
+                <span class="setting-desc">При закрытии окна прятать приложение в трей рядом с часами</span>
+              </div>
+              <div class="glass-switch is-checked" data-setting="tray"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group 2: Network & Security -->
+        <div class="settings-group">
+          <span class="settings-group-title">Безопасность и маршрутизация</span>
+          <div class="glass-card" style="padding: 6px 10px;">
+            <div class="setting-item">
+              <div class="setting-text-wrap">
+                <span class="setting-label">Аварийная блокировка (Kill Switch)</span>
+                <span class="setting-desc">Блокирует весь сетевой трафик компьютера в случае неожиданного разрыва VPN</span>
+              </div>
+              <div class="glass-switch is-checked" data-setting="killswitch"></div>
+            </div>
+            <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
+              <div class="setting-text-wrap">
+                <span class="setting-label">Раздельное туннелирование (Bypass)</span>
+                <span class="setting-desc">Российские банки, сервисы и Госуслуги работают напрямую через локального провайдера</span>
+              </div>
+              <div class="glass-switch is-checked" data-setting="bypass"></div>
+            </div>
+            <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
+              <div class="setting-text-wrap">
+                <span class="setting-label">Безопасный DNS</span>
+                <span class="setting-desc">Защита от подмены адресов и провайдерской фильтрации DNS</span>
+              </div>
+              <div class="segmented-control">
+                <button class="segmented-btn is-active" data-dns="deytt">Deytt DNS</button>
+                <button class="segmented-btn" data-dns="cf">Cloudflare</button>
+                <button class="segmented-btn" data-dns="adguard">AdGuard</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group 3: Protocol -->
+        <div class="settings-group">
+          <span class="settings-group-title">Протокол туннелирования</span>
+          <div class="glass-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+              <div>
+                <span class="setting-label">Основной протокол</span>
+                <p class="setting-desc" id="protocol-desc">Интеллектуальный выбор наилучшего протокола (AmneziaWG или OpenFlux) по состоянию сети</p>
+              </div>
+              <div class="segmented-control">
+                <button class="segmented-btn is-active" data-protocol-opt="auto">Авто</button>
+                <button class="segmented-btn" data-protocol-opt="awg">AmneziaWG</button>
+                <button class="segmented-btn" data-protocol-opt="openflux">OpenFlux</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Group 4: About -->
+        <div class="settings-group">
+          <span class="settings-group-title">О приложении</span>
+          <div class="glass-card" style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <strong style="color: #FFFFFF; font-size: 15px; display: block;">deytt./connect</strong>
+              <span style="font-size: 13px; color: var(--text-muted);">Версия 0.11.8 (Windows x64) · Канал: deytt./beta</span>
+            </div>
+            <button class="btn-select-route" id="btn-check-updates">Проверить обновления</button>
+          </div>
+        </div>
+      </div>
+    </section>
   </main>
+
+  <!-- Liquid Glass Modal for QR Code -->
+  <div class="glass-modal-backdrop" id="qr-modal">
+    <div class="glass-modal-card">
+      <h3 style="font-size: 20px; font-weight: 700; color: #FFFFFF;">QR-код для подключения</h3>
+      <p style="font-size: 13.5px; color: var(--text-muted); margin-top: 4px;">Отсканируйте камерой в приложении Deytt Connect на телефоне</p>
+
+      <div class="qr-preview-box">
+        <svg viewBox="0 0 200 200" width="176" height="176">
+          <rect width="200" height="200" fill="#FFFFFF"/>
+          <!-- Position Marks -->
+          <rect x="20" y="20" width="40" height="40" fill="#0B111B" rx="8"/>
+          <rect x="28" y="28" width="24" height="24" fill="#FFFFFF" rx="4"/>
+          <rect x="34" y="34" width="12" height="12" fill="#0B111B" rx="2"/>
+
+          <rect x="140" y="20" width="40" height="40" fill="#0B111B" rx="8"/>
+          <rect x="148" y="28" width="24" height="24" fill="#FFFFFF" rx="4"/>
+          <rect x="154" y="34" width="12" height="12" fill="#0B111B" rx="2"/>
+
+          <rect x="20" y="140" width="40" height="40" fill="#0B111B" rx="8"/>
+          <rect x="28" y="148" width="24" height="24" fill="#FFFFFF" rx="4"/>
+          <rect x="34" y="154" width="12" height="12" fill="#0B111B" rx="2"/>
+
+          <!-- Stylized Data Matrix -->
+          <g fill="#0B111B">
+            <rect x="70" y="24" width="8" height="8" rx="2"/>
+            <rect x="86" y="24" width="8" height="8" rx="2"/>
+            <rect x="102" y="24" width="8" height="8" rx="2"/>
+            <rect x="118" y="24" width="8" height="8" rx="2"/>
+            <rect x="78" y="36" width="8" height="8" rx="2"/>
+            <rect x="110" y="36" width="8" height="8" rx="2"/>
+
+            <rect x="24" y="70" width="8" height="8" rx="2"/>
+            <rect x="36" y="86" width="8" height="8" rx="2"/>
+            <rect x="24" y="102" width="8" height="8" rx="2"/>
+            <rect x="52" y="118" width="8" height="8" rx="2"/>
+
+            <rect x="70" y="70" width="12" height="12" rx="3" fill="#39E8BD"/>
+            <rect x="90" y="70" width="8" height="8" rx="2"/>
+            <rect x="106" y="70" width="14" height="8" rx="2"/>
+            <rect x="128" y="70" width="8" height="8" rx="2"/>
+            <rect x="144" y="70" width="8" height="14" rx="2"/>
+            <rect x="160" y="70" width="8" height="8" rx="2"/>
+
+            <rect x="70" y="90" width="8" height="14" rx="2"/>
+            <rect x="86" y="86" width="12" height="12" rx="3" fill="#38BDF8"/>
+            <rect x="106" y="90" width="8" height="8" rx="2"/>
+            <rect x="122" y="86" width="14" height="14" rx="3" fill="#0B111B"/>
+            <rect x="144" y="90" width="8" height="8" rx="2"/>
+            <rect x="160" y="90" width="8" height="8" rx="2"/>
+
+            <rect x="70" y="112" width="14" height="8" rx="2"/>
+            <rect x="92" y="106" width="8" height="8" rx="2"/>
+            <rect x="108" y="112" width="12" height="12" rx="3" fill="#39E8BD"/>
+            <rect x="128" y="112" width="8" height="8" rx="2"/>
+            <rect x="144" y="106" width="8" height="14" rx="2"/>
+            <rect x="160" y="112" width="8" height="8" rx="2"/>
+
+            <rect x="70" y="140" width="8" height="8" rx="2"/>
+            <rect x="86" y="140" width="8" height="8" rx="2"/>
+            <rect x="110" y="140" width="14" height="8" rx="2"/>
+            <rect x="132" y="140" width="8" height="8" rx="2"/>
+            <rect x="148" y="140" width="8" height="8" rx="2"/>
+            <rect x="164" y="140" width="8" height="8" rx="2"/>
+
+            <rect x="78" y="156" width="8" height="8" rx="2"/>
+            <rect x="102" y="156" width="8" height="8" rx="2"/>
+            <rect x="126" y="156" width="8" height="8" rx="2"/>
+            <rect x="150" y="156" width="14" height="8" rx="2"/>
+
+            <rect x="70" y="172" width="8" height="8" rx="2"/>
+            <rect x="94" y="172" width="14" height="8" rx="2"/>
+            <rect x="118" y="172" width="8" height="8" rx="2"/>
+            <rect x="142" y="172" width="8" height="8" rx="2"/>
+            <rect x="160" y="172" width="8" height="8" rx="2"/>
+          </g>
+        </svg>
+      </div>
+
+      <button class="btn-select-route" style="width: 100%; padding: 10px; font-size: 14px;" id="btn-close-qr">Закрыть</button>
+    </div>
+  </div>
 
   <div class="motion-toast" id="toast"></div>
 
   <script>
-    // Zero-overhead static starry sky (renders once, 0% CPU overhead while spinning globe)
+    // Zero-overhead static starry sky
     (function initBackgroundCanvas() {
       const canvas = document.getElementById("stars-canvas");
       if (!canvas) return;
@@ -437,7 +1570,6 @@
         ctx.scale(dpr, dpr);
         ctx.clearRect(0, 0, width, height);
 
-        // Deep Space Starry Sky
         const count = Math.floor((width * height) / 3200);
         for (let i = 0; i < count; i++) {
           const x = Math.random() * width;
@@ -455,10 +1587,28 @@
       window.renderAtlasBackground = renderStars;
       renderStars();
     })();
-    // Navigation Controller with Horizontal Micro-Spring
+
+    // Toast Notification Helper
+    function showToast(message, duration = 2400) {
+      const toast = document.getElementById("toast");
+      if (!toast) return;
+      toast.textContent = message;
+      toast.classList.add("is-visible");
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.classList.remove("is-visible");
+      }, duration);
+    }
+
+    // Navigation & Stage Controller
     const navContainer = document.getElementById("main-nav");
     const navPill = document.getElementById("nav-pill");
     const navItems = document.querySelectorAll(".nav-item");
+    const stageHome = document.getElementById("stage-home");
+    const stageRoutes = document.getElementById("stage-routes");
+    const stageProfile = document.getElementById("stage-profile");
+    const stageSettings = document.getElementById("stage-settings");
+    const allStages = [stageHome, stageRoutes, stageProfile, stageSettings];
 
     function updatePillPosition(targetItem, animateJelly = true) {
       if (!navContainer || !navPill || !targetItem) return;
@@ -478,6 +1628,23 @@
       }
     }
 
+    function switchStage(stageId) {
+      const isHome = stageId === "home";
+      if (stageHome) {
+        stageHome.classList.toggle("is-blurred", !isHome);
+      }
+
+      [stageRoutes, stageProfile, stageSettings].forEach(stage => {
+        if (!stage) return;
+        const targetId = "stage-" + stageId;
+        stage.classList.toggle("is-active", stage.id === targetId);
+      });
+
+      if (isHome && window.deyttMapAtlas) {
+        window.deyttMapAtlas.start();
+      }
+    }
+
     navItems.forEach(item => {
       item.addEventListener("click", () => {
         navItems.forEach(btn => {
@@ -487,8 +1654,193 @@
         item.classList.add("is-active");
         item.setAttribute("aria-selected", "true");
         updatePillPosition(item, true);
+
+        const tab = item.dataset.tab;
+        switchStage(tab);
       });
     });
+
+    // Routes Selection & Syncing with Globe
+    const routeDetails = {
+      auto: { flag: "🌐", country: "автоподбор", city: "выход выберется автоматически", ping: 24 },
+      nl: { flag: "🇳🇱", country: "Нидерланды", city: "Амстердам", ping: 28 },
+      de: { flag: "🇩🇪", country: "Германия", city: "Франкфурт-на-Майне", ping: 34 },
+      fi: { flag: "🇫🇮", country: "Финляндия", city: "Хельсинки", ping: 22 },
+      ru: { flag: "🇷🇺", country: "Россия", city: "Санкт-Петербург", ping: 12 },
+      it: { flag: "🇮🇹", country: "Италия", city: "Милан", ping: 42 }
+    };
+
+    let activeRouteKey = "auto";
+
+    function selectRoute(key) {
+      activeRouteKey = key;
+      const data = routeDetails[key] || routeDetails.auto;
+
+      // Update right connection panel
+      const homeFlag = document.getElementById("home-flag");
+      const homeCountry = document.getElementById("home-country");
+      const homeCity = document.getElementById("home-city");
+      if (homeFlag) homeFlag.textContent = data.flag;
+      if (homeCountry) homeCountry.textContent = data.country;
+      if (homeCity) homeCity.textContent = data.city;
+
+      // Update compact panel if present
+      const compactFlag = document.getElementById("compact-flag");
+      const compactCountry = document.getElementById("compact-country");
+      const compactCity = document.getElementById("compact-city");
+      if (compactFlag) compactFlag.textContent = data.flag;
+      if (compactCountry) compactCountry.textContent = data.country;
+      if (compactCity) compactCity.textContent = data.city;
+
+      // Update card active classes
+      document.querySelectorAll("[data-route-key]").forEach(card => {
+        const isCurrent = card.dataset.routeKey === key;
+        card.classList.toggle("is-selected", isCurrent);
+        const btn = card.querySelector(".btn-select-route");
+        if (btn) btn.textContent = isCurrent ? "Активен ✓" : "Выбрать";
+      });
+
+      // Notify atlas
+      if (typeof window.deyttSetMapRoute === "function") {
+        window.deyttSetMapRoute(key);
+      }
+
+      showToast(`Выбран маршрут: ${data.country} · ${data.city}`);
+    }
+
+    // Attach route selection clicks
+    document.querySelectorAll("[data-action-route]").forEach(btn => {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        selectRoute(btn.dataset.actionRoute);
+      });
+    });
+
+    document.querySelectorAll(".route-card, .route-featured-card").forEach(card => {
+      card.addEventListener("click", () => {
+        if (card.dataset.routeKey) selectRoute(card.dataset.routeKey);
+      });
+    });
+
+    // Protocol filter chips in Routes stage
+    document.querySelectorAll(".filter-chip").forEach(chip => {
+      chip.addEventListener("click", () => {
+        document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("is-active"));
+        chip.classList.add("is-active");
+        const filter = chip.dataset.filter;
+
+        document.querySelectorAll(".route-card").forEach(card => {
+          if (filter === "all") {
+            card.style.display = "";
+          } else {
+            const proto = card.dataset.protocol || "";
+            card.style.display = proto.includes(filter) ? "" : "none";
+          }
+        });
+      });
+    });
+
+    // Profile actions (Copy key, Show QR, Renew in TG)
+    const btnCopyKey = document.getElementById("btn-copy-key");
+    if (btnCopyKey) {
+      btnCopyKey.addEventListener("click", () => {
+        const dummyKey = "awg://user_84920:xV92jKaP98qLs01mZpQr882jKlAOP0192kLsP==";
+        navigator.clipboard?.writeText(dummyKey).catch(() => {});
+        btnCopyKey.textContent = "Скопировано!";
+        btnCopyKey.style.background = "#39E8BD";
+        btnCopyKey.style.color = "#0B111B";
+        showToast("Ключ доступа скопирован в буфер обмена!");
+        setTimeout(() => {
+          btnCopyKey.textContent = "Копировать";
+          btnCopyKey.style.background = "";
+          btnCopyKey.style.color = "";
+        }, 1800);
+      });
+    }
+
+    const qrModal = document.getElementById("qr-modal");
+    const btnShowQr = document.getElementById("btn-show-qr");
+    const btnCloseQr = document.getElementById("btn-close-qr");
+
+    if (btnShowQr && qrModal) {
+      btnShowQr.addEventListener("click", () => qrModal.classList.add("is-open"));
+    }
+    if (btnCloseQr && qrModal) {
+      btnCloseQr.addEventListener("click", () => qrModal.classList.remove("is-open"));
+    }
+    if (qrModal) {
+      qrModal.addEventListener("click", (e) => {
+        if (e.target === qrModal) qrModal.classList.remove("is-open");
+      });
+    }
+
+    const btnRenewTg = document.getElementById("btn-renew-tg");
+    if (btnRenewTg) {
+      btnRenewTg.addEventListener("click", () => {
+        showToast("Открываю бот deytt.//vpn в Telegram...");
+      });
+    }
+
+    const btnAddDevice = document.getElementById("btn-add-device");
+    if (btnAddDevice) {
+      btnAddDevice.addEventListener("click", () => {
+        showToast("Добавление устройства: отсканируйте QR-код в приложении");
+        qrModal?.classList.add("is-open");
+      });
+    }
+
+    // Settings Stage (Switches, DNS, Protocol selection, Update check)
+    document.querySelectorAll(".glass-switch").forEach(sw => {
+      sw.addEventListener("click", () => {
+        sw.classList.toggle("is-checked");
+        const setting = sw.dataset.setting;
+        const state = sw.classList.contains("is-checked") ? "включено" : "выключено";
+        showToast(`Параметр обновлен: ${state}`);
+      });
+    });
+
+    document.querySelectorAll(".segmented-btn[data-dns]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".segmented-btn[data-dns]").forEach(b => b.classList.remove("is-active"));
+        btn.classList.add("is-active");
+        showToast(`DNS переключен на: ${btn.textContent}`);
+      });
+    });
+
+    const protocolDesc = document.getElementById("protocol-desc");
+    const protocolDescs = {
+      auto: "Интеллектуальный выбор наилучшего протокола (AmneziaWG или OpenFlux) по состоянию сети",
+      awg: "AmneziaWG: максимальная скорость и пропускная способность с маскировкой заголовков",
+      openflux: "OpenFlux (Cups): глубокая маскировка трафика под обычный HTTPS для обхода жестких ТСПУ-блокировок"
+    };
+
+    document.querySelectorAll(".segmented-btn[data-protocol-opt]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".segmented-btn[data-protocol-opt]").forEach(b => b.classList.remove("is-active"));
+        btn.classList.add("is-active");
+        const opt = btn.dataset.protocolOpt;
+        if (protocolDesc && protocolDescs[opt]) {
+          protocolDesc.textContent = protocolDescs[opt];
+        }
+        showToast(`Протокол: ${btn.textContent}`);
+      });
+    });
+
+    const btnCheckUpdates = document.getElementById("btn-check-updates");
+    if (btnCheckUpdates) {
+      btnCheckUpdates.addEventListener("click", () => {
+        btnCheckUpdates.textContent = "Проверяю...";
+        btnCheckUpdates.style.pointerEvents = "none";
+        setTimeout(() => {
+          btnCheckUpdates.textContent = "Актуальная версия ✓";
+          showToast("У вас установлена последняя стабильная версия v0.11.8");
+          setTimeout(() => {
+            btnCheckUpdates.textContent = "Проверить обновления";
+            btnCheckUpdates.style.pointerEvents = "";
+          }, 2400);
+        }, 650);
+      });
+    }
 
     // Connect & Measure Button Simulation for preview
     let isConnected = false;
@@ -511,6 +1863,7 @@
             window.deyttMapAtlas.setTrafficActive(true);
             window.deyttMapAtlas.start();
           }
+          showToast("Защищенное соединение установлено");
         } else {
           isConnected = false;
           if (label) label.textContent = "Подключиться";
@@ -522,6 +1875,7 @@
             window.deyttMapAtlas.setTrafficActive(false);
             window.deyttMapAtlas.start();
           }
+          showToast("Соединение отключено");
         }
       });
     }
@@ -536,13 +1890,16 @@
         setTimeout(() => {
           if (latency) latency.textContent = (Math.floor(Math.random() * 8) + 20).toString();
           if (speed) speed.textContent = (Math.floor(Math.random() * 30) + 180).toString();
+          showToast("Замер скорости и задержки обновлен");
         }, 350);
       });
     }
 
+    // Initialize pill position
     window.addEventListener("DOMContentLoaded", () => {
       const activeTab = document.querySelector(".nav-item.is-active");
       if (activeTab) updatePillPosition(activeTab, false);
+      selectRoute("auto");
     });
 
     window.addEventListener("load", () => {

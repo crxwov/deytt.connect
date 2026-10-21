@@ -463,19 +463,19 @@
             const now = performance.now();
             const newest = this.pointerHistory[this.pointerHistory.length - 1];
             const timeSinceMove = now - newest.time;
-            // If user held still before releasing (> 80ms), stop without flick
-            if (timeSinceMove < 80) {
+            // If user held still before releasing (> 70ms), stop smoothly without flick
+            if (timeSinceMove < 70) {
               const oldest = this.pointerHistory[0];
               const dt = Math.max(16, newest.time - oldest.time);
               const dx = newest.x - oldest.x;
               const dy = newest.y - oldest.y;
               const dragScale = 1 / Math.max(1, this.targetZoom);
               // Normalized velocity per standard 16.67ms frame
-              const vx = -(dx / dt) * 16.667 * 0.28 * dragScale;
-              const vy = (dy / dt) * 16.667 * 0.20 * dragScale;
-              if (Math.abs(vx) > 0.05) this.velocityLon = clamp(vx, -8.0, 8.0);
+              const vx = -(dx / dt) * 16.667 * 0.22 * dragScale;
+              const vy = (dy / dt) * 16.667 * 0.16 * dragScale;
+              if (Math.abs(vx) > 0.02) this.velocityLon = clamp(vx, -6.0, 6.0);
               else this.velocityLon = 0;
-              if (Math.abs(vy) > 0.05) this.velocityLat = clamp(vy, -4.0, 4.0);
+              if (Math.abs(vy) > 0.02) this.velocityLat = clamp(vy, -3.0, 3.0);
               else this.velocityLat = 0;
             } else {
               this.velocityLon = 0;
@@ -1678,6 +1678,12 @@
       const scale = this.zoom / this.staticCamera.zoom;
       const x = this.centerX - this.staticCamera.x * scale;
       const y = this.centerY - this.staticCamera.y * scale;
+      if (Math.abs(scale - 1) < 0.001 && Math.abs(x) < 0.1 && Math.abs(y) < 0.1) {
+        if (this.staticCanvas.style.transform !== "") {
+          this.staticCanvas.style.transform = "";
+        }
+        return;
+      }
       this.staticCanvas.style.transformOrigin = `${this.staticPadding || 0}px ${this.staticPadding || 0}px`;
       this.staticCanvas.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
     }
@@ -1706,13 +1712,15 @@
       if (this.dragging) {
         if (this.pendingDragDx !== 0 || this.pendingDragDy !== 0) {
           const dragScale = 1 / Math.max(1, this.targetZoom);
-          this.targetLon -= this.pendingDragDx * 0.28 * dragScale;
-          this.targetLat = clamp(this.targetLat + this.pendingDragDy * 0.20 * dragScale, -62, 72);
-          this.centerLon = this.targetLon;
-          this.centerLat = this.targetLat;
+          this.targetLon -= this.pendingDragDx * 0.22 * dragScale;
+          this.targetLat = clamp(this.targetLat + this.pendingDragDy * 0.16 * dragScale, -62, 72);
           this.pendingDragDx = 0;
           this.pendingDragDy = 0;
         }
+        // Sub-frame smooth responsive follow (absorbs mouse packet burst jitter)
+        const dragEase = 1 - Math.exp(-Math.max(1, delta) / 18);
+        this.centerLon = mix(this.centerLon, this.targetLon, dragEase);
+        this.centerLat = mix(this.centerLat, this.targetLat, dragEase);
       } else {
         if (Math.abs(this.velocityLon) > 0.001 || Math.abs(this.velocityLat || 0) > 0.001) {
           // Direct Newtonian glide in zero-gravity: frameScale accounts for variable display refresh (60Hz, 120Hz, 144Hz)
@@ -1725,7 +1733,7 @@
           this.targetLat = this.centerLat;
 
           // Float like in zero-gravity: continuous exponential decay ensures 60-144+ FPS smoothness
-          const friction = Math.exp(-1.1 * delta / 1000);
+          const friction = Math.exp(-1.15 * delta / 1000);
           this.velocityLon *= friction;
           if (this.velocityLat) {
             this.velocityLat *= friction;
@@ -1737,8 +1745,8 @@
           const panBlend = this.reducedMotion.matches ? 1 : (1 - Math.exp(-Math.max(1, delta) / PAN_EASE_MS));
           this.centerLon = mix(this.centerLon, this.targetLon, panBlend);
           this.centerLat = mix(this.centerLat, this.targetLat, panBlend);
-          if (Math.abs(this.targetLon - this.centerLon) < 0.01) this.centerLon = this.targetLon;
-          if (Math.abs(this.targetLat - this.centerLat) < 0.01) this.centerLat = this.targetLat;
+          if (Math.abs(this.targetLon - this.centerLon) < 0.005) this.centerLon = this.targetLon;
+          if (Math.abs(this.targetLat - this.centerLat) < 0.005) this.centerLat = this.targetLat;
         }
       }
       const zoomBlend = this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS);
