@@ -892,10 +892,16 @@
       const borderWidth = colors.borderWidth ?? (this.width < 520 ? .48 : .62);
       strokeLines(this.boundaryLines, colors.border, borderWidth, borderAlpha);
       if (this.variant !== "observatory") return;
-      const route = ROUTES[this.route] || ROUTES.auto;
-      const activeKeys = this.annotationFilter ? Array.from(this.annotationFilter) : route.nodes;
-      const activeCountryIds = new Set(activeKeys.map((key) => LOCATIONS[key] && LOCATIONS[key].countryId).filter(Boolean));
-      const activeLines = this.targetBoundaryLines.filter((line) => activeCountryIds.has(line.countryId));
+      const filterKey = this.annotationFilter ? Array.from(this.annotationFilter).sort().join(",") : "";
+      const currentCacheKey = `${this.route}|${filterKey}`;
+      if (this._cachedActiveLinesKey !== currentCacheKey || !this._cachedActiveLines) {
+        const route = ROUTES[this.route] || ROUTES.auto;
+        const activeKeys = this.annotationFilter ? Array.from(this.annotationFilter) : route.nodes;
+        const activeCountryIds = new Set(activeKeys.map((key) => LOCATIONS[key] && LOCATIONS[key].countryId).filter(Boolean));
+        this._cachedActiveLines = this.targetBoundaryLines.filter((line) => activeCountryIds.has(line.countryId));
+        this._cachedActiveLinesKey = currentCacheKey;
+      }
+      const activeLines = this._cachedActiveLines;
       strokeLines(activeLines, colors.borderGlow, this.width < 520 ? 2.6 : 3.4, .24);
       strokeLines(activeLines, colors.borderHot, this.width < 520 ? .82 : 1.05, .72);
     }
@@ -1545,19 +1551,26 @@
       const height = 34;
       const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
 
-      context.save();
-      context.font = "600 11.5px " + fontFamily;
-      const titleWidth = context.measureText(title).width;
-      context.font = "500 9.5px " + fontFamily;
-      const metaWidth = meta ? context.measureText(meta).width : 0;
-      context.restore();
-
-      const textWidth = Math.max(titleWidth, metaWidth);
-      const width = Math.round(textWidth + 35);
+      this._labelWidthCache = this._labelWidthCache || new Map();
+      const cacheKey = `${key}_${compact ? 1 : 0}_${title}_${meta}`;
+      let width = this._labelWidthCache.get(cacheKey);
+      if (!width) {
+        context.save();
+        context.font = "600 11.5px " + fontFamily;
+        const titleWidth = context.measureText(title).width;
+        context.font = "500 9.5px " + fontFamily;
+        const metaWidth = meta ? context.measureText(meta).width : 0;
+        context.restore();
+        const textWidth = Math.max(titleWidth, metaWidth);
+        width = Math.round(textWidth + 35);
+        this._labelWidthCache.set(cacheKey, width);
+      }
 
       // Smooth horizon dissolve as node approaches the curved edge of the globe
       const horizonFade = clamp((point.z - 0.05) / 0.17, 0, 1);
       const totalAlpha = (active || isHovered ? 0.95 : 0.75) * horizonFade;
+
+      const offset = (compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key]) || { x: 22, y: -22, align: "left" };
 
       // Sub-pixel precision: DO NOT round left, top, endX, endY!
       // This eliminates accordion stretching of the leader line and sub-pixel snapping jitter.
@@ -1628,11 +1641,25 @@
         }
 
         if (horizonFade <= 0.02) {
-          el.style.display = "none";
+          if (el._currentDisplay !== "none") {
+            el.style.display = "none";
+            el._currentDisplay = "none";
+          }
         } else {
-          el.style.display = "inline-flex";
-          el.style.transform = `translate3d(${left.toFixed(2)}px, ${top.toFixed(2)}px, 0)`;
-          el.style.opacity = (isHovered ? 1 : horizonFade).toFixed(2);
+          if (el._currentDisplay !== "inline-flex") {
+            el.style.display = "inline-flex";
+            el._currentDisplay = "inline-flex";
+          }
+          const transformVal = `translate3d(${left.toFixed(2)}px, ${top.toFixed(2)}px, 0)`;
+          if (el._currentTransform !== transformVal) {
+            el.style.transform = transformVal;
+            el._currentTransform = transformVal;
+          }
+          const opacityVal = (isHovered ? 1 : horizonFade).toFixed(2);
+          if (el._currentOpacity !== opacityVal) {
+            el.style.opacity = opacityVal;
+            el._currentOpacity = opacityVal;
+          }
         }
       }
     }
@@ -1663,7 +1690,10 @@
       if (this.domLabels) {
         this.domLabels.forEach((el, key) => {
           if (!this.activeLabelsThisFrame.has(key)) {
-            el.style.display = "none";
+            if (el._currentDisplay !== "none") {
+              el.style.display = "none";
+              el._currentDisplay = "none";
+            }
           }
         });
       }
