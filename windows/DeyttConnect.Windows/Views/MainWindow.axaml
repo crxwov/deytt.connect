@@ -18,15 +18,9 @@
         Background="#080D17">
 
     <Grid x:Name="ShellGrid" ColumnDefinitions="*,0" RowDefinitions="Auto,*,0" Background="#080D17">
-        <Grid x:Name="WorkspaceColumn" Grid.Column="0" Grid.RowSpan="2" RowDefinitions="0,*">
-            <ScrollViewer x:Name="PageScroll" Grid.Row="0" Grid.RowSpan="2" BringIntoViewOnFocusChange="True"
-                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                <Grid x:Name="PageHost" MaxWidth="1920" HorizontalAlignment="Center"
-                      Margin="0" />
-            </ScrollViewer>
-
-            <Border x:Name="WorkspaceHeader" Grid.Row="0" Grid.RowSpan="2" Height="68" Padding="36,0,36,0"
-                    VerticalAlignment="Top" Background="Transparent" BorderThickness="0"
+        <Grid x:Name="WorkspaceColumn" Grid.Column="0" Grid.RowSpan="2" RowDefinitions="Auto,*">
+            <Border x:Name="WorkspaceHeader" Grid.Row="0" Height="68" Padding="36,0,36,0"
+                    Background="#080D17" BorderThickness="0"
                     chrome:WindowDecorationProperties.ElementRole="TitleBar">
                 <Grid x:Name="HeaderContentGrid" ColumnDefinitions="Auto,*,Auto">
                     <TextBlock x:Name="WorkspaceBrand" FontFamily="fonts:DEYTT#Unbounded"
@@ -86,6 +80,12 @@
                     </Grid>
                 </Grid>
             </Border>
+
+            <ScrollViewer x:Name="PageScroll" Grid.Row="1" BringIntoViewOnFocusChange="True"
+                          HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <Grid x:Name="PageHost" MaxWidth="1920" HorizontalAlignment="Center"
+                      Margin="0" />
+            </ScrollViewer>
         </Grid>
 
         <!-- The old navigation controls remain hidden so existing modal focus and automation paths stay valid. -->

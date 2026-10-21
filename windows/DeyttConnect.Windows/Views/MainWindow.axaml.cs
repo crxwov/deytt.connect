@@ -759,7 +759,7 @@ public partial class MainWindow : Window
             _shortCompactLayout == shortCompact)
         {
             WorkspaceHeader.IsVisible = !_mapImmersive;
-            if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = new GridLength(0);
+            if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = _mapImmersive ? new GridLength(0) : GridLength.Auto;
             UpdatePageHostWidth();
             UpdateHomeColumns();
             return;
@@ -785,7 +785,7 @@ public partial class MainWindow : Window
             ? new Thickness(24, 0) : new Thickness(36, 0);
         WorkspaceHeader.Height = 68;
         if (WorkspaceColumn.RowDefinitions.Count > 0)
-            WorkspaceColumn.RowDefinitions[0].Height = new GridLength(0);
+            WorkspaceColumn.RowDefinitions[0].Height = _mapImmersive ? new GridLength(0) : GridLength.Auto;
         HeaderContentGrid.ColumnSpacing = compact ? 8 : medium ? 16 : 24;
         WindowChromeActions.Spacing = 8;
         HeaderNavigation.Spacing = 4;
@@ -795,8 +795,8 @@ public partial class MainWindow : Window
         MaximizeWindowButton.IsVisible = !_useSystemWindowChrome;
         CloseWindowButton.IsVisible = !_useSystemWindowChrome;
         PageHost.Margin = _mapImmersive || _activeTab == MainTab.Home ? new Thickness(0) : compact
-            ? new Thickness(20, 76, 20, 24)
-            : medium ? new Thickness(32, 84, 32, 28) : new Thickness(64, 92, 64, 32);
+            ? new Thickness(20, 24)
+            : medium ? new Thickness(32, 28) : new Thickness(64, 32);
         WorkspaceHeader.IsVisible = !_mapImmersive;
 
         UpdateTopNavigation();
@@ -833,7 +833,7 @@ public partial class MainWindow : Window
             WindowState = _windowStateBeforeMapImmersive;
 
         WorkspaceHeader.IsVisible = !enabled;
-        if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = new GridLength(0);
+        if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = enabled ? new GridLength(0) : GridLength.Auto;
         UpdateResponsiveLayout();
         UpdatePageHostWidth();
         UpdateHomeColumns();
@@ -858,8 +858,8 @@ public partial class MainWindow : Window
             PageHost.Margin = new Thickness(0);
         else
             PageHost.Margin = _compactLayout
-                ? new Thickness(20, 76, 20, 24)
-                : _mediumLayout ? new Thickness(32, 84, 32, 28) : new Thickness(64, 92, 64, 32);
+                ? new Thickness(20, 24)
+                : _mediumLayout ? new Thickness(32, 28) : new Thickness(64, 32);
         var availableWidth = PageScroll.Bounds.Width - PageHost.Margin.Left - PageHost.Margin.Right;
         if (!double.IsFinite(availableWidth) || availableWidth <= 0)
             return;
@@ -904,8 +904,9 @@ public partial class MainWindow : Window
         }
         Background = DeyttTheme.Brush(DeyttTheme.Background);
         ShellGrid.Background = DeyttTheme.Brush(DeyttTheme.Background);
-        WorkspaceHeader.Background = DeyttTheme.Brush(DeyttTheme.Header);
-        WorkspaceHeader.BorderBrush = DeyttTheme.Brush(DeyttTheme.Line);
+        WorkspaceHeader.Background = new SolidColorBrush(Color.Parse("#080D17"));
+        WorkspaceHeader.BorderBrush = Brushes.Transparent;
+        WorkspaceHeader.BorderThickness = new Thickness(0);
         WorkspaceBrand.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
 
         ThemeToggleButton.Content = new NavigationIcon(
