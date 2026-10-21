@@ -8,20 +8,20 @@
   const PAN_EASE_MS = 120;
   const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
   const LABEL_OFFSETS = {
-    nl: { x: -32, y: -48, align: "right" },
-    de: { x: 28, y: 34, align: "left" },
-    fi: { x: -24, y: -64, align: "right" },
-    it: { x: -28, y: 56, align: "right" },
-    ru: { x: 30, y: -38, align: "left" },
-    user: { x: 26, y: -52, align: "left" }
+    nl: { x: -26, y: -26, align: "right" },
+    de: { x: -26, y: 24, align: "right" },
+    fi: { x: -20, y: -38, align: "right" },
+    it: { x: 22, y: 30, align: "left" },
+    ru: { x: 24, y: -34, align: "left" },
+    user: { x: 24, y: -48, align: "left" }
   };
   const COMPACT_LABEL_OFFSETS = {
-    nl: { x: -28, y: -48, align: "right" },
-    de: { x: 24, y: 38, align: "left" },
-    fi: { x: -20, y: -84, align: "right" },
-    it: { x: -24, y: 64, align: "right" },
-    ru: { x: 24, y: -42, align: "left" },
-    user: { x: 24, y: -66, align: "left" }
+    nl: { x: -24, y: -26, align: "right" },
+    de: { x: -24, y: 24, align: "right" },
+    fi: { x: -18, y: -42, align: "right" },
+    it: { x: 20, y: 32, align: "left" },
+    ru: { x: 22, y: -34, align: "left" },
+    user: { x: 22, y: -52, align: "left" }
   };
   const LOCATIONS = {
     nl: { code: "nl", city: "амстердам", country: "нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
@@ -1551,16 +1551,14 @@
       const candidates = [];
       if (pref) candidates.push(pref);
       candidates.push(
-        { x: -36, y: -48, align: "right" },
-        { x: 34, y: 36, align: "left" },
-        { x: -36, y: 52, align: "right" },
-        { x: 34, y: -48, align: "left" },
-        { x: -44, y: -24, align: "right" },
-        { x: 44, y: 24, align: "left" },
-        { x: -30, y: -72, align: "right" },
-        { x: 32, y: 64, align: "left" },
-        { x: 48, y: -36, align: "left" },
-        { x: -48, y: 44, align: "right" }
+        { x: -28, y: -28, align: "right" },
+        { x: -28, y: 26, align: "right" },
+        { x: 26, y: -28, align: "left" },
+        { x: 26, y: 28, align: "left" },
+        { x: -32, y: 0, align: "right" },
+        { x: 32, y: 0, align: "left" },
+        { x: -22, y: -44, align: "right" },
+        { x: 24, y: 40, align: "left" }
       );
 
       let bestCandidate = null;
@@ -1603,13 +1601,18 @@
 
       const leaderColor = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#10B981" : "#60A5FA";
       context.beginPath();
-      const distance = Math.max(1, Math.hypot(endX - point.x, endY - point.y));
-      context.moveTo(point.x + (endX - point.x) * 6 / distance, point.y + (endY - point.y) * 6 / distance);
+      context.moveTo(point.x, point.y);
       context.lineTo(endX, endY);
       context.strokeStyle = leaderColor;
-      context.lineWidth = active || isHovered ? 1.2 : 0.8;
-      context.globalAlpha = isHovered ? 0.95 : active ? 0.85 : 0.45;
+      context.lineWidth = active || isHovered ? 1.5 : 1.1;
+      context.globalAlpha = active || isHovered ? 0.95 : 0.75;
       context.stroke();
+
+      context.beginPath();
+      context.arc(point.x, point.y, 2, 0, TAU);
+      context.fillStyle = leaderColor;
+      context.globalAlpha = 0.9;
+      context.fill();
 
       const labelBox = { key, left, top, width, height, leader: [point, { x: endX, y: endY }] };
       occupied.push(labelBox);
