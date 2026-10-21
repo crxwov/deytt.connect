@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>deytt./connect · подключение</title>
+  <title>./connect · подключение</title>
   <link rel="stylesheet" href="network-atlas.css?v=20261021_09">
   <script defer src="network-atlas.js?v=20261021_09"></script>
   <script defer src="atlas-init.js?v=20261021_09"></script>
@@ -107,10 +107,10 @@
       align-items: baseline;
     }
 
-    .brand-dot {
+    .brand-accent {
       color: #38BDF8;
-      font-size: 24px;
-      line-height: 0;
+      font-weight: 800;
+      margin-right: 1px;
     }
 
     /* Modern Glass Navigation Capsule Dock */
@@ -277,13 +277,13 @@
       pointer-events: none;
     }
 
-    /* Floating Liquid Glass HUD for Home Panel (Zero Podlozhka) */
+    /* Floating Liquid Glass HUD for Home Panel (Pure Floating Typography, Zero Podlozhka) */
     .home-panel-shell {
       position: absolute;
       top: 50%;
-      right: 56px;
+      right: 64px;
       z-index: 4;
-      width: clamp(340px, 28vw, 440px);
+      width: clamp(340px, 28vw, 420px);
       transform: translateY(-50%);
       background: transparent !important;
       border: none !important;
@@ -299,7 +299,7 @@
     .home-panel {
       display: flex !important;
       flex-direction: column !important;
-      gap: 16px !important;
+      gap: 18px !important;
       background: transparent !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
@@ -313,103 +313,110 @@
       pointer-events: auto;
     }
 
-    /* Floating Route Heading Pill */
+    /* Floating Route Heading (No card box, pure floating typography) */
     .route-heading {
-      background: rgba(14, 22, 36, 0.65) !important;
-      backdrop-filter: blur(28px) saturate(190%) !important;
-      -webkit-backdrop-filter: blur(28px) saturate(190%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.08) !important;
-      border-top-color: rgba(255, 255, 255, 0.22) !important;
-      border-radius: 20px !important;
-      padding: 16px 20px !important;
-      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.12) !important;
-      display: flex !important;
-      align-items: center !important;
-      gap: 16px !important;
-      transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease, box-shadow 200ms ease !important;
-    }
-
-    .route-heading:hover {
-      transform: translateY(-2px);
-      border-color: rgba(57, 232, 189, 0.35) !important;
-      border-top-color: rgba(255, 255, 255, 0.35) !important;
-      box-shadow: 0 16px 44px rgba(0, 0, 0, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.18) !important;
-    }
-
-    .route-flag {
-      width: 44px !important;
-      height: 44px !important;
-      flex-shrink: 0 !important;
-      border-radius: 14px !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      font-size: 24px !important;
-      background: rgba(255, 255, 255, 0.06) !important;
-      border: 1px solid rgba(255, 255, 255, 0.12) !important;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.16) !important;
-    }
-
-    .route-labels {
       display: flex !important;
       flex-direction: column !important;
-      gap: 2px !important;
-      min-width: 0 !important;
+      gap: 4px !important;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+
+    .route-meta-top {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .route-flag-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      font-size: 14px;
+      flex-shrink: 0;
     }
 
     .home-country {
-      font-size: 13px !important;
+      font-size: 13.5px !important;
       font-weight: 500 !important;
-      color: var(--text-muted) !important;
+      color: #8E9EAF !important;
       letter-spacing: 0.01em !important;
       text-transform: lowercase !important;
     }
 
     .home-city {
-      font-size: 21px !important;
+      font-family: "Unbounded", -apple-system, sans-serif !important;
+      font-size: clamp(32px, 3.2vw, 42px) !important;
       font-weight: 700 !important;
       color: #FFFFFF !important;
-      letter-spacing: -0.02em !important;
-      line-height: 1.2 !important;
+      letter-spacing: -0.04em !important;
+      line-height: 1.15 !important;
       text-transform: lowercase !important;
-      white-space: nowrap !important;
-      overflow: hidden !important;
-      text-overflow: ellipsis !important;
+      text-shadow: 0 4px 18px rgba(0, 0, 0, 0.5) !important;
+      margin: 2px 0 0 !important;
     }
 
-    /* Floating Tactical Liquid Glass Action Button */
+    .home-switch-route {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      align-self: flex-start;
+      margin-top: 4px;
+      background: transparent;
+      border: none;
+      color: #38BDF8;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 0;
+      text-transform: lowercase;
+      transition: color 150ms ease, transform 150ms ease;
+    }
+
+    .home-switch-route:hover {
+      color: #7DD3FC;
+      transform: translateX(2px);
+    }
+
+    /* Main Luminous Action Button */
     .home-action {
-      min-height: 56px !important;
+      min-height: 54px !important;
       width: 100% !important;
-      border-radius: 18px !important;
+      border-radius: 16px !important;
       font-family: inherit !important;
       font-size: 16px !important;
-      font-weight: 600 !important;
+      font-weight: 700 !important;
       text-transform: lowercase !important;
       letter-spacing: -0.01em !important;
       cursor: pointer !important;
       position: relative !important;
       overflow: hidden !important;
-      backdrop-filter: blur(24px) saturate(200%) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(200%) !important;
-      background: linear-gradient(135deg, rgba(57, 232, 189, 0.22) 0%, rgba(34, 166, 237, 0.14) 100%) !important;
-      border: 1px solid rgba(57, 232, 189, 0.42) !important;
-      border-top-color: rgba(255, 255, 255, 0.6) !important;
-      box-shadow: 0 10px 32px rgba(57, 232, 189, 0.24), inset 0 1px 2px rgba(255, 255, 255, 0.45) !important;
+      background: linear-gradient(135deg, #22A6ED 0%, #0098EA 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.28) !important;
+      border-top-color: rgba(255, 255, 255, 0.65) !important;
+      box-shadow: 0 8px 26px -2px rgba(34, 166, 237, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.45) !important;
       color: #FFFFFF !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
       gap: 10px !important;
-      transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+      transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
     }
 
     .home-action:hover {
-      background: linear-gradient(135deg, rgba(57, 232, 189, 0.32) 0%, rgba(34, 166, 237, 0.22) 100%) !important;
-      border-color: rgba(57, 232, 189, 0.65) !important;
-      border-top-color: rgba(255, 255, 255, 0.8) !important;
-      box-shadow: 0 14px 42px rgba(57, 232, 189, 0.38), inset 0 1px 2px rgba(255, 255, 255, 0.6) !important;
-      transform: translateY(-2px) scale(1.008);
+      background: linear-gradient(135deg, #38BDF8 0%, #22A6ED 100%) !important;
+      border-color: rgba(255, 255, 255, 0.4) !important;
+      box-shadow: 0 12px 34px rgba(34, 166, 237, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.6) !important;
+      transform: translateY(-2px);
     }
 
     .home-action:active {
@@ -417,102 +424,99 @@
     }
 
     .home-action[data-tone="good"] {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.24) 0%, rgba(220, 38, 38, 0.16) 100%) !important;
-      border-color: rgba(239, 68, 68, 0.5) !important;
-      border-top-color: rgba(255, 255, 255, 0.55) !important;
-      box-shadow: 0 10px 32px rgba(239, 68, 68, 0.26), inset 0 1px 2px rgba(255, 255, 255, 0.4) !important;
-      color: #FFFFFF !important;
+      background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%) !important;
+      border-color: rgba(255, 255, 255, 0.3) !important;
+      box-shadow: 0 8px 26px -2px rgba(239, 68, 68, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.4) !important;
     }
 
     .home-action[data-tone="good"]:hover {
-      background: linear-gradient(135deg, rgba(239, 68, 68, 0.34) 0%, rgba(220, 38, 38, 0.24) 100%) !important;
-      border-color: rgba(239, 68, 68, 0.7) !important;
-      box-shadow: 0 14px 42px rgba(239, 68, 68, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.55) !important;
+      background: linear-gradient(135deg, #F87171 0%, #EF4444 100%) !important;
+      box-shadow: 0 12px 34px rgba(239, 68, 68, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.5) !important;
     }
 
-    /* Floating Metrics Grid */
+    /* Minimal Typographic Telemetry Strip (Zero Card Boxes!) */
     .home-metrics {
       display: grid !important;
       grid-template-columns: 1fr 1fr !important;
-      gap: 12px !important;
+      gap: 20px !important;
       border: none !important;
-      padding: 0 !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+      padding: 14px 4px !important;
+      background: transparent !important;
     }
 
     .home-metrics .metric {
-      background: rgba(14, 22, 36, 0.60) !important;
-      backdrop-filter: blur(24px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.07) !important;
-      border-top-color: rgba(255, 255, 255, 0.18) !important;
-      border-radius: 16px !important;
-      padding: 13px 16px !important;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.08) !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      border: none !important;
+      box-shadow: none !important;
+      padding: 0 !important;
       display: flex !important;
       flex-direction: column !important;
       gap: 4px !important;
       align-items: flex-start !important;
-      transition: transform 180ms ease, border-color 180ms ease !important;
-    }
-
-    .home-metrics .metric:hover {
-      transform: translateY(-1.5px);
-      border-color: rgba(255, 255, 255, 0.14) !important;
     }
 
     .home-metrics .metric-label {
       font-size: 11.5px !important;
       text-transform: lowercase !important;
-      color: var(--text-muted) !important;
+      color: #8E9EAF !important;
       display: flex !important;
       align-items: center !important;
       gap: 6px !important;
+      font-weight: 500 !important;
     }
 
     .home-metrics .metric strong {
-      font-size: 23px !important;
+      font-family: "Unbounded", -apple-system, sans-serif !important;
+      font-size: 24px !important;
       font-weight: 700 !important;
       color: #FFFFFF !important;
       line-height: 1.1 !important;
     }
 
     .home-metrics .metric small {
+      font-family: -apple-system, sans-serif !important;
       font-size: 12px !important;
-      color: var(--text-muted) !important;
+      color: #8E9EAF !important;
       text-transform: lowercase !important;
-      margin-left: 3px !important;
+      margin-left: 4px !important;
       font-weight: 400 !important;
     }
 
-    /* Floating Understated Measurement Button */
+    /* Clean Ghost Measure Link */
     .home-measure {
-      width: 100% !important;
-      padding: 10px 16px !important;
-      border-radius: 14px !important;
-      background: rgba(14, 22, 36, 0.45) !important;
-      backdrop-filter: blur(16px) !important;
-      -webkit-backdrop-filter: blur(16px) !important;
-      border: 1px solid rgba(255, 255, 255, 0.06) !important;
-      border-top-color: rgba(255, 255, 255, 0.14) !important;
-      color: var(--text-muted) !important;
-      font-size: 12.5px !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      border: none !important;
+      color: #8E9EAF !important;
+      font-size: 13px !important;
       font-weight: 500 !important;
       text-transform: lowercase !important;
-      letter-spacing: 0.01em !important;
       cursor: pointer !important;
-      display: flex !important;
+      display: inline-flex !important;
       align-items: center !important;
-      justify-content: center !important;
       gap: 8px !important;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25) !important;
-      transition: all 160ms ease !important;
+      padding: 4px 0 !important;
+      transition: color 150ms ease !important;
+      box-shadow: none !important;
     }
 
     .home-measure:hover {
-      background: rgba(255, 255, 255, 0.08) !important;
       color: #FFFFFF !important;
-      border-color: rgba(255, 255, 255, 0.15) !important;
-      transform: translateY(-1px);
+      background: transparent !important;
+      transform: none !important;
+    }
+
+    .home-measure svg {
+      transition: transform 300ms ease;
+    }
+
+    .home-measure:hover svg {
+      transform: rotate(90deg);
     }
 
     /* Universal Stage Container with Liquid Glass */
@@ -561,6 +565,7 @@
     }
 
     .stage-title {
+      font-family: "Unbounded", sans-serif;
       font-size: 26px;
       font-weight: 700;
       letter-spacing: -0.03em;
@@ -593,168 +598,284 @@
       box-shadow: var(--glass-shadow-hover);
     }
 
-    /* Routes Stage */
-    .routes-filters {
+    /* Routes View (Image 2 Authentic Layout) */
+    .routes-view-wrap {
+      width: 100%;
+      max-width: 680px;
       display: flex;
-      align-items: center;
-      gap: 8px;
+      flex-direction: column;
+      gap: 16px;
+      margin: 0 auto;
+      padding-bottom: 40px;
     }
 
-    .filter-chip {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      border-radius: 12px;
-      color: var(--text-muted);
-      padding: 7px 16px;
-      font-size: 13.5px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 160ms ease;
+    .routes-header {
+      margin-bottom: 6px;
     }
 
-    .filter-chip:hover {
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.08);
-      border-color: rgba(255, 255, 255, 0.16);
-    }
-
-    .filter-chip.is-active {
-      background: rgba(57, 232, 189, 0.16);
-      border-color: rgba(57, 232, 189, 0.38);
-      border-top-color: rgba(255, 255, 255, 0.45);
+    .routes-title {
+      font-family: "Unbounded", sans-serif;
+      font-size: clamp(28px, 3vw, 36px);
+      font-weight: 700;
       color: #FFFFFF;
-      font-weight: 600;
+      letter-spacing: -0.04em;
+      margin: 0 0 6px;
     }
 
-    .route-featured-card {
+    .routes-subtitle {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    /* Smart Routes Block (Top Section from Image 2) */
+    .smart-routes-box {
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-top-color: var(--glass-border-top);
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: var(--glass-shadow);
+    }
+
+    .smart-route-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 24px;
-      padding: 26px 30px;
-      border: 1px solid rgba(57, 232, 189, 0.3);
-      border-top-color: rgba(255, 255, 255, 0.4);
-      box-shadow: var(--glass-shadow), 0 0 32px rgba(57, 232, 189, 0.08);
+      gap: 16px;
+      padding: 18px 22px;
+      cursor: pointer;
+      transition: background 180ms ease;
       position: relative;
-      overflow: hidden;
     }
 
-    .route-featured-card::before {
-      content: "";
-      position: absolute;
-      top: -50%;
-      left: -20%;
-      width: 50%;
-      height: 200%;
-      background: radial-gradient(circle, rgba(57, 232, 189, 0.12) 0%, transparent 70%);
-      pointer-events: none;
+    .smart-route-row:not(:last-child) {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
     }
 
-    .route-info-left {
+    .smart-route-row:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .smart-route-row.is-selected {
+      background: rgba(34, 166, 237, 0.08);
+    }
+
+    .smart-route-left {
       display: flex;
       align-items: center;
-      gap: 20px;
+      gap: 16px;
+      min-width: 0;
     }
 
-    .route-globe-icon {
-      width: 48px;
-      height: 48px;
-      border-radius: 16px;
-      background: rgba(57, 232, 189, 0.14);
-      border: 1px solid rgba(57, 232, 189, 0.3);
-      border-top-color: rgba(255, 255, 255, 0.45);
+    .smart-route-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 24px;
+      font-size: 18px;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      color: #38BDF8;
     }
 
-    .route-name {
-      font-size: 18px;
+    .smart-route-row.is-selected .smart-route-icon {
+      background: rgba(57, 232, 189, 0.15);
+      border-color: rgba(57, 232, 189, 0.35);
+      color: #39E8BD;
+    }
+
+    .smart-route-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .smart-route-name {
+      font-size: 16px;
       font-weight: 700;
       color: #FFFFFF;
+      letter-spacing: -0.01em;
+    }
+
+    .smart-route-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .route-action-btn {
+      padding: 7px 18px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.05);
+      color: #FFFFFF;
+      transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1);
+      flex-shrink: 0;
+    }
+
+    .route-action-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .smart-route-row.is-selected .route-action-btn,
+    .country-accordion.is-selected .route-action-btn {
+      background: rgba(57, 232, 189, 0.18);
+      border-color: rgba(57, 232, 189, 0.45);
+      color: #39E8BD;
+      box-shadow: 0 0 16px rgba(57, 232, 189, 0.2);
+    }
+
+    /* Countries Category Label */
+    .routes-section-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #64748B;
+      letter-spacing: 0.06em;
+      text-transform: lowercase;
+      margin: 18px 4px 6px;
+    }
+
+    /* Accordion Country List */
+    .countries-list {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       gap: 10px;
     }
 
-    .badge-mint {
-      font-size: 11.5px;
+    .country-accordion {
+      background: var(--glass-bg);
+      backdrop-filter: var(--glass-blur);
+      -webkit-backdrop-filter: var(--glass-blur);
+      border: 1px solid var(--glass-border);
+      border-top-color: var(--glass-border-top);
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: var(--glass-shadow);
+      transition: all 200ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .country-accordion:hover {
+      background: var(--glass-bg-hover);
+      border-color: var(--glass-border-hover);
+    }
+
+    .country-accordion.is-selected {
+      border-color: rgba(57, 232, 189, 0.35);
+      border-top-color: rgba(255, 255, 255, 0.45);
+      box-shadow: var(--glass-shadow), 0 0 24px rgba(57, 232, 189, 0.08);
+    }
+
+    .country-accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .country-header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .country-flag-icon {
+      font-size: 22px;
+      line-height: 1;
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.25));
+    }
+
+    .country-name {
+      font-size: 16px;
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      padding: 3px 9px;
-      border-radius: 20px;
-      background: rgba(57, 232, 189, 0.2);
-      color: #39E8BD;
-      border: 1px solid rgba(57, 232, 189, 0.4);
+      color: #FFFFFF;
+      letter-spacing: -0.01em;
     }
 
-    .route-desc {
-      font-size: 13.5px;
-      color: var(--text-muted);
-      margin-top: 3px;
+    .country-header-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
     }
 
-    .route-card-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    .chevron-icon {
+      width: 18px;
+      height: 18px;
+      color: #8E9EAF;
+      transition: transform 250ms cubic-bezier(0.16, 1, 0.3, 1), color 180ms ease;
+    }
+
+    .country-accordion.is-open .chevron-icon {
+      transform: rotate(180deg);
+      color: #FFFFFF;
+    }
+
+    .country-accordion-body {
+      max-height: 0;
+      overflow: hidden;
+      opacity: 0;
+      transition: max-height 300ms cubic-bezier(0.16, 1, 0.3, 1), opacity 240ms ease;
+      border-top: 1px solid transparent;
+    }
+
+    .country-accordion.is-open .country-accordion-body {
+      max-height: 160px;
+      opacity: 1;
+      border-top-color: rgba(255, 255, 255, 0.06);
+    }
+
+    .country-body-inner {
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       gap: 16px;
+      background: rgba(0, 0, 0, 0.15);
     }
 
-    .route-card {
+    .country-details {
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
-      gap: 18px;
-      padding: 20px;
-      cursor: pointer;
+      gap: 6px;
     }
 
-    .route-card.is-selected {
-      border-color: rgba(57, 232, 189, 0.45);
-      border-top-color: rgba(255, 255, 255, 0.55);
-      box-shadow: var(--glass-shadow), 0 0 24px rgba(57, 232, 189, 0.14);
-      background: rgba(18, 30, 48, 0.78);
-    }
-
-    .route-card-top {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .route-city {
-      font-size: 16.5px;
+    .country-city-title {
+      font-size: 14px;
       font-weight: 600;
       color: #FFFFFF;
     }
 
-    .route-country {
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-top: 2px;
-    }
-
-    .route-flag-emoji {
-      font-size: 26px;
-      line-height: 1;
-      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-    }
-
-    .route-card-bottom {
+    .country-tags {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      border-top: 1px solid rgba(255, 255, 255, 0.06);
-      padding-top: 14px;
+      gap: 6px;
+      flex-wrap: wrap;
     }
 
-    .route-meta {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+    .proto-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #94A3B8;
+      letter-spacing: 0.02em;
     }
 
     .ping-tag {
@@ -772,39 +893,6 @@
       border-radius: 50%;
       background: #39E8BD;
       box-shadow: 0 0 8px #39E8BD;
-    }
-
-    .protocol-chip {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 7px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.06);
-      color: #94A3B8;
-    }
-
-    .btn-select-route {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 10px;
-      color: var(--text);
-      font-size: 12.5px;
-      font-weight: 600;
-      padding: 6px 14px;
-      cursor: pointer;
-      transition: all 160ms ease;
-    }
-
-    .btn-select-route:hover {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.22);
-    }
-
-    .route-card.is-selected .btn-select-route {
-      background: #39E8BD;
-      color: #0B111B;
-      border-color: #39E8BD;
-      box-shadow: 0 0 14px rgba(57, 232, 189, 0.35);
     }
 
     /* Profile Stage */
@@ -1133,7 +1221,7 @@
   <!-- Header Bar -->
   <header class="desktop-header">
     <div class="brand-area">
-      <div class="brand-logo">deytt<span class="brand-dot">./connect</span></div>
+      <div class="brand-logo"><span class="brand-accent">./</span>connect</div>
     </div>
 
     <!-- Capsule Navigation Dock -->
@@ -1186,7 +1274,7 @@
     <div class="network-atlas" id="stage-home" data-atlas-status="loading" data-atlas-variant="home">
       <div class="home-scene">
         <div class="network-atlas__canvas-wrap">
-          <canvas data-atlas-interactive tabindex="0" role="img" aria-label="интерактивный глобус маршрута deytt."></canvas>
+          <canvas data-atlas-interactive tabindex="0" role="img" aria-label="интерактивный глобус маршрута ./connect"></canvas>
           <span class="network-atlas__loader" data-atlas-status role="status" aria-live="polite">загружаю глобус</span>
           <span class="network-atlas__tooltip" data-atlas-tooltip role="status" aria-live="polite" hidden></span>
           <div class="traffic-hint" data-traffic-hint role="status" aria-live="polite" hidden></div>
@@ -1206,7 +1294,7 @@
           </section>
         </div>
 
-        <!-- Right Panel with Liquid Glass (Zero Podlozhka) -->
+        <!-- Right Panel with Pure Floating Typography (Zero Podlozhka) -->
         <section class="home-panel-shell" aria-label="управление подключением">
           <div class="home-panel">
             <div class="panel-copy status-copy">
@@ -1215,12 +1303,13 @@
             </div>
             <div class="panel-copy route-copy">
               <div class="route-heading">
-                <span id="home-flag" class="route-flag" aria-hidden="true">✦</span>
-                <div class="route-labels">
+                <div class="route-meta-top">
+                  <span id="home-flag" class="route-flag-pill" aria-hidden="true">✦</span>
                   <span id="home-country" class="home-country">европейские выходы</span>
-                  <strong id="home-city" class="home-city">автоподбор</strong>
-                  <span id="home-protocol" class="home-protocol" hidden></span>
                 </div>
+                <strong id="home-city" class="home-city">автоподбор</strong>
+                <button type="button" class="home-switch-route" id="home-switch-route">изменить маршрут →</button>
+                <span id="home-protocol" class="home-protocol" hidden></span>
               </div>
             </div>
             <button id="home-action" class="home-action panel-copy" type="button" data-action="home-connect">
@@ -1238,7 +1327,10 @@
               </div>
             </div>
             <p id="home-measurement-note" class="measurement-note panel-copy" hidden></p>
-            <button id="home-measure" class="home-measure" type="button" data-action="home-measure">замерить пинг</button>
+            <button id="home-measure" class="home-measure" type="button" data-action="home-measure">
+              <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              <span>замерить пинг</span>
+            </button>
             <p id="home-route-description" class="sr-only" aria-live="polite"></p>
           </div>
         </section>
@@ -1252,7 +1344,7 @@
                 <span id="compact-status" class="compact-status" data-tone="normal">не подключено</span>
               </div>
               <div class="compact-route">
-                <span id="compact-flag" class="route-flag" aria-hidden="true">✦</span>
+                <span id="compact-flag" class="route-flag-pill" aria-hidden="true">✦</span>
                 <div class="route-labels">
                   <span id="compact-country" class="home-country">европейские выходы</span>
                   <strong id="compact-city" class="home-city">автоподбор</strong>
@@ -1269,163 +1361,181 @@
       </div>
     </div>
 
-    <!-- Stage 2: маршруты (Routes Stage) -->
+    <!-- Stage 2: маршруты (Routes Stage, Exact Authentic Layout from Image 2) -->
     <section class="stage-view" id="stage-routes" aria-label="маршруты подключения">
-      <div class="stage-content-wrap">
-        <div class="stage-header">
-          <div>
-            <h1 class="stage-title">маршруты сети</h1>
-            <p class="stage-subtitle">выберите доступную точку выхода трафика или включите интеллектуальный автоподбор</p>
+      <div class="routes-view-wrap">
+        <div class="routes-header">
+          <h1 class="routes-title">маршруты</h1>
+          <p class="routes-subtitle">выберите точку выхода или используйте интеллектуальный выбор</p>
+        </div>
+
+        <!-- Smart Routes Box (Image 2 Authentic Smart Routes) -->
+        <div class="smart-routes-box">
+          <!-- row 1: автоподбор -->
+          <div class="smart-route-row is-selected" data-route-key="auto" id="card-route-auto">
+            <div class="smart-route-left">
+              <div class="smart-route-icon">✦</div>
+              <div class="smart-route-info">
+                <span class="smart-route-name">автоподбор</span>
+                <span class="smart-route-desc">автоматический выбор маршрута</span>
+              </div>
+            </div>
+            <button class="route-action-btn btn-select-route" data-action-route="auto">активен ✓</button>
           </div>
-          <div class="routes-filters">
-            <button class="filter-chip is-active" data-filter="all">все (7)</button>
-            <button class="filter-chip" data-filter="europe">европа (4)</button>
-            <button class="filter-chip" data-filter="cascade">каскады (1)</button>
-            <button class="filter-chip" data-filter="awg">amneziawg (5)</button>
+
+          <!-- Row 2: LTE / White Lists -->
+          <div class="smart-route-row" data-route-key="ru-de" id="card-route-ru-de">
+            <div class="smart-route-left">
+              <div class="smart-route-icon" style="color: #38BDF8; font-size: 15px;">⚯</div>
+              <div class="smart-route-info">
+                <span class="smart-route-name">lte · белые списки</span>
+                <span class="smart-route-desc">россия → германия</span>
+              </div>
+            </div>
+            <button class="route-action-btn btn-select-route" data-action-route="ru-de">выбрать</button>
           </div>
         </div>
 
-        <!-- Featured Smart Route -->
-        <div class="glass-card route-featured-card is-selected" data-route-key="auto" id="card-route-auto" data-filter-type="europe awg all">
-          <div class="route-info-left">
-            <div class="route-globe-icon">✦</div>
-            <div>
-              <div class="route-name">
-                автоподбор
-                <span class="badge-mint">рекомендуется</span>
-              </div>
-              <p class="route-desc">автоматический выбор наименьшего отклика между амстердамом, франкфуртом и хельсинки</p>
-            </div>
-          </div>
-          <div class="route-meta">
-            <span class="protocol-chip">vless</span>
-            <span class="protocol-chip">trojan</span>
-            <span class="protocol-chip">hy2</span>
-            <span class="protocol-chip">awg 3.1</span>
-            <span class="ping-tag"><span class="ping-dot"></span><span data-ping="auto">24</span> мс</span>
-            <button class="btn-select-route" data-action-route="auto">активен ✓</button>
-          </div>
-        </div>
+        <!-- Category Label -->
+        <div class="routes-section-label">страны</div>
 
-        <!-- Cascade First-Class Route -->
-        <div class="glass-card route-featured-card" data-route-key="ru-de" id="card-route-ru-de" data-filter-type="cascade awg all" style="border-color: rgba(56, 189, 248, 0.35); box-shadow: var(--glass-shadow), 0 0 28px rgba(56, 189, 248, 0.1);">
-          <div class="route-info-left">
-            <div class="route-globe-icon" style="background: rgba(56, 189, 248, 0.14); border-color: rgba(56, 189, 248, 0.35); font-size: 18px;">🇷🇺→🇩🇪</div>
-            <div>
-              <div class="route-name">
-                lte + белые списки
-                <span class="badge-mint" style="background: rgba(56, 189, 248, 0.18); color: #38BDF8; border-color: rgba(56, 189, 248, 0.4);">каскад</span>
+        <!-- accordion countries list (image 2 authentic accordion: нидерланды, германия, россия, финляндия, италия) -->
+        <div class="countries-list">
+          <!-- 1. нидерланды -->
+          <div class="country-accordion" data-route-key="nl" id="card-route-nl">
+            <div class="country-accordion-header">
+              <div class="country-header-left">
+                <span class="country-flag-icon">🇳🇱</span>
+                <span class="country-name">нидерланды</span>
               </div>
-              <p class="route-desc">двухзвенная цепочка (россия → германия) для стабильного обхода тспу-блокировок на мобильных сетях</p>
-            </div>
-          </div>
-          <div class="route-meta">
-            <span class="protocol-chip">каскад</span>
-            <span class="protocol-chip">ru → de</span>
-            <span class="ping-tag"><span class="ping-dot" style="background:#38BDF8;box-shadow:0 0 8px #38BDF8;"></span><span data-ping="ru-de">46</span> мс</span>
-            <button class="btn-select-route" data-action-route="ru-de">выбрать</button>
-          </div>
-        </div>
-
-        <!-- Available Countries Grid -->
-        <div class="route-card-grid">
-          <!-- Netherlands -->
-          <div class="glass-card route-card" data-route-key="nl" data-filter-type="europe awg all" id="card-route-nl">
-            <div class="route-card-top">
-              <div>
-                <h3 class="route-city">амстердам</h3>
-                <p class="route-country">нидерланды</p>
-              </div>
-              <span class="route-flag-emoji">🇳🇱</span>
-            </div>
-            <div class="route-card-bottom">
-              <div class="route-meta">
+              <div class="country-header-right">
                 <span class="ping-tag"><span class="ping-dot"></span><span data-ping="nl">28</span> мс</span>
-                <span class="protocol-chip">vless</span>
-                <span class="protocol-chip">hy2</span>
-                <span class="protocol-chip">awg 3.1</span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
-              <button class="btn-select-route" data-action-route="nl">выбрать</button>
+            </div>
+            <div class="country-accordion-body">
+              <div class="country-body-inner">
+                <div class="country-details">
+                  <span class="country-city-title">амстердам · nl-01</span>
+                  <div class="country-tags">
+                    <span class="proto-badge">vless</span>
+                    <span class="proto-badge">trojan</span>
+                    <span class="proto-badge">hy2</span>
+                    <span class="proto-badge">awg 3.1</span>
+                  </div>
+                </div>
+                <button class="route-action-btn btn-select-route" data-action-route="nl">выбрать</button>
+              </div>
             </div>
           </div>
 
-          <!-- Germany -->
-          <div class="glass-card route-card" data-route-key="de" data-filter-type="europe awg all" id="card-route-de">
-            <div class="route-card-top">
-              <div>
-                <h3 class="route-city">франкфурт-на-майне</h3>
-                <p class="route-country">германия</p>
+          <!-- 2. германия -->
+          <div class="country-accordion" data-route-key="de" id="card-route-de">
+            <div class="country-accordion-header">
+              <div class="country-header-left">
+                <span class="country-flag-icon">🇩🇪</span>
+                <span class="country-name">германия</span>
               </div>
-              <span class="route-flag-emoji">🇩🇪</span>
-            </div>
-            <div class="route-card-bottom">
-              <div class="route-meta">
+              <div class="country-header-right">
                 <span class="ping-tag"><span class="ping-dot"></span><span data-ping="de">34</span> мс</span>
-                <span class="protocol-chip">vless</span>
-                <span class="protocol-chip">hy2</span>
-                <span class="protocol-chip">awg 3.1</span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
-              <button class="btn-select-route" data-action-route="de">выбрать</button>
+            </div>
+            <div class="country-accordion-body">
+              <div class="country-body-inner">
+                <div class="country-details">
+                  <span class="country-city-title">франкфурт-на-майне · de-01</span>
+                  <div class="country-tags">
+                    <span class="proto-badge">vless</span>
+                    <span class="proto-badge">trojan</span>
+                    <span class="proto-badge">hy2</span>
+                    <span class="proto-badge">awg 3.1</span>
+                  </div>
+                </div>
+                <button class="route-action-btn btn-select-route" data-action-route="de">выбрать</button>
+              </div>
             </div>
           </div>
 
-          <!-- Finland -->
-          <div class="glass-card route-card" data-route-key="fi" data-filter-type="europe awg all" id="card-route-fi">
-            <div class="route-card-top">
-              <div>
-                <h3 class="route-city">хельсинки</h3>
-                <p class="route-country">финляндия</p>
+          <!-- 3. россия -->
+          <div class="country-accordion" data-route-key="ru" id="card-route-ru">
+            <div class="country-accordion-header">
+              <div class="country-header-left">
+                <span class="country-flag-icon">🇷🇺</span>
+                <span class="country-name">россия</span>
               </div>
-              <span class="route-flag-emoji">🇫🇮</span>
-            </div>
-            <div class="route-card-bottom">
-              <div class="route-meta">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="fi">20</span> мс</span>
-                <span class="protocol-chip">vless</span>
-                <span class="protocol-chip">hy2</span>
-                <span class="protocol-chip">awg 3.1</span>
-              </div>
-              <button class="btn-select-route" data-action-route="fi">выбрать</button>
-            </div>
-          </div>
-
-          <!-- Italy -->
-          <div class="glass-card route-card" data-route-key="it" data-filter-type="europe all" id="card-route-it">
-            <div class="route-card-top">
-              <div>
-                <h3 class="route-city">милан</h3>
-                <p class="route-country">италия</p>
-              </div>
-              <span class="route-flag-emoji">🇮🇹</span>
-            </div>
-            <div class="route-card-bottom">
-              <div class="route-meta">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="it">42</span> мс</span>
-                <span class="protocol-chip">vless</span>
-                <span class="protocol-chip">trojan</span>
-                <span class="protocol-chip">hy2</span>
-              </div>
-              <button class="btn-select-route" data-action-route="it">выбрать</button>
-            </div>
-          </div>
-
-          <!-- Russia -->
-          <div class="glass-card route-card" data-route-key="ru" data-filter-type="awg all" id="card-route-ru">
-            <div class="route-card-top">
-              <div>
-                <h3 class="route-city">санкт-петербург</h3>
-                <p class="route-country">россия</p>
-              </div>
-              <span class="route-flag-emoji">🇷🇺</span>
-            </div>
-            <div class="route-card-bottom">
-              <div class="route-meta">
+              <div class="country-header-right">
                 <span class="ping-tag"><span class="ping-dot"></span><span data-ping="ru">12</span> мс</span>
-                <span class="protocol-chip">vless</span>
-                <span class="protocol-chip">trojan</span>
-                <span class="protocol-chip">awg 3.1</span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
               </div>
-              <button class="btn-select-route" data-action-route="ru">выбрать</button>
+            </div>
+            <div class="country-accordion-body">
+              <div class="country-body-inner">
+                <div class="country-details">
+                  <span class="country-city-title">санкт-петербург · ru-01</span>
+                  <div class="country-tags">
+                    <span class="proto-badge">vless</span>
+                    <span class="proto-badge">awg 3.1</span>
+                  </div>
+                </div>
+                <button class="route-action-btn btn-select-route" data-action-route="ru">выбрать</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 4. финляндия -->
+          <div class="country-accordion" data-route-key="fi" id="card-route-fi">
+            <div class="country-accordion-header">
+              <div class="country-header-left">
+                <span class="country-flag-icon">🇫🇮</span>
+                <span class="country-name">финляндия</span>
+              </div>
+              <div class="country-header-right">
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="fi">20</span> мс</span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+            </div>
+            <div class="country-accordion-body">
+              <div class="country-body-inner">
+                <div class="country-details">
+                  <span class="country-city-title">хельсинки · fi-01</span>
+                  <div class="country-tags">
+                    <span class="proto-badge">vless</span>
+                    <span class="proto-badge">trojan</span>
+                    <span class="proto-badge">hy2</span>
+                    <span class="proto-badge">awg 3.1</span>
+                  </div>
+                </div>
+                <button class="route-action-btn btn-select-route" data-action-route="fi">выбрать</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 5. италия -->
+          <div class="country-accordion" data-route-key="it" id="card-route-it">
+            <div class="country-accordion-header">
+              <div class="country-header-left">
+                <span class="country-flag-icon">🇮🇹</span>
+                <span class="country-name">италия</span>
+              </div>
+              <div class="country-header-right">
+                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="it">42</span> мс</span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </div>
+            </div>
+            <div class="country-accordion-body">
+              <div class="country-body-inner">
+                <div class="country-details">
+                  <span class="country-city-title">милан · it-01</span>
+                  <div class="country-tags">
+                    <span class="proto-badge">vless</span>
+                    <span class="proto-badge">trojan</span>
+                    <span class="proto-badge">hy2</span>
+                    <span class="proto-badge">awg 3.1</span>
+                  </div>
+                </div>
+                <button class="route-action-btn btn-select-route" data-action-route="it">выбрать</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1447,7 +1557,7 @@
           <div class="profile-user-left">
             <div class="user-avatar">🛡️</div>
             <div>
-              <h2 class="user-handle">deytt.//user_84920</h2>
+              <h2 class="user-handle">.//user_84920</h2>
               <div class="user-sub-status">
                 <span class="ping-tag"><span class="ping-dot"></span>подписка активна</span>
                 <span>·</span>
@@ -1569,7 +1679,7 @@
             <div class="setting-item">
               <div class="setting-text-wrap">
                 <span class="setting-label">запуск при старте windows</span>
-                <span class="setting-desc">автоматически запускать deytt connect при входе пользователя в систему</span>
+                <span class="setting-desc">автоматически запускать ./connect при входе пользователя в систему</span>
               </div>
               <div class="glass-switch is-checked" data-setting="autostart"></div>
             </div>
@@ -1614,7 +1724,7 @@
                 <span class="setting-desc">защита от подмены адресов и провайдерской фильтрации dns</span>
               </div>
               <div class="segmented-control">
-                <button class="segmented-btn is-active" data-dns="deytt">deytt dns</button>
+                <button class="segmented-btn is-active" data-dns="deytt">./dns</button>
                 <button class="segmented-btn" data-dns="cf">cloudflare</button>
                 <button class="segmented-btn" data-dns="adguard">adguard</button>
               </div>
@@ -1646,8 +1756,8 @@
           <span class="settings-group-title">о приложении</span>
           <div class="glass-card" style="display: flex; align-items: center; justify-content: space-between;">
             <div>
-              <strong style="color: #FFFFFF; font-size: 15px; display: block;">deytt./connect</strong>
-              <span style="font-size: 13px; color: var(--text-muted);">версия 0.11.8 (windows x64) · канал: deytt./beta</span>
+              <strong style="color: #FFFFFF; font-size: 15px; display: block;">./connect</strong>
+              <span style="font-size: 13px; color: var(--text-muted);">версия 0.11.8 (windows x64) · канал: ./beta</span>
             </div>
             <button class="btn-select-route" id="btn-check-updates">проверить обновления</button>
           </div>
@@ -1660,7 +1770,7 @@
   <div class="glass-modal-backdrop" id="qr-modal">
     <div class="glass-modal-card">
       <h3 style="font-size: 20px; font-weight: 700; color: #FFFFFF;">qr-код для подключения</h3>
-      <p style="font-size: 13.5px; color: var(--text-muted); margin-top: 4px;">отсканируйте камерой в приложении deytt connect на телефоне</p>
+      <p style="font-size: 13.5px; color: var(--text-muted); margin-top: 4px;">отсканируйте камерой в приложении ./connect на телефоне</p>
 
       <div class="qr-preview-box">
         <svg viewBox="0 0 200 200" width="176" height="176">
@@ -1905,29 +2015,33 @@
       });
     });
 
-    document.querySelectorAll(".route-card, .route-featured-card").forEach(card => {
-      card.addEventListener("click", () => {
-        if (card.dataset.routeKey) selectRoute(card.dataset.routeKey);
+    document.querySelectorAll(".smart-route-row").forEach(row => {
+      row.addEventListener("click", () => {
+        if (row.dataset.routeKey) selectRoute(row.dataset.routeKey);
       });
     });
 
-    // Protocol filter chips in Routes stage
-    document.querySelectorAll(".filter-chip").forEach(chip => {
-      chip.addEventListener("click", () => {
-        document.querySelectorAll(".filter-chip").forEach(c => c.classList.remove("is-active"));
-        chip.classList.add("is-active");
-        const filter = chip.dataset.filter;
-
-        document.querySelectorAll(".route-card, .route-featured-card").forEach(card => {
-          if (filter === "all") {
-            card.style.display = "";
-          } else {
-            const filterType = card.dataset.filterType || "";
-            card.style.display = filterType.includes(filter) ? "" : "none";
-          }
-        });
+    // Country Accordion Expand / Collapse
+    document.querySelectorAll(".country-accordion-header").forEach(header => {
+      header.addEventListener("click", (e) => {
+        const acc = header.closest(".country-accordion");
+        if (!acc) return;
+        const wasOpen = acc.classList.contains("is-open");
+        document.querySelectorAll(".country-accordion").forEach(c => c.classList.remove("is-open"));
+        if (!wasOpen) {
+          acc.classList.add("is-open");
+        }
       });
     });
+
+    // Switch route button on home panel jumps to routes tab
+    const switchRouteBtn = document.getElementById("home-switch-route");
+    if (switchRouteBtn) {
+      switchRouteBtn.addEventListener("click", () => {
+        const routesTab = document.getElementById("tab-routes");
+        if (routesTab) routesTab.click();
+      });
+    }
 
     // Profile actions (Copy key, Show QR, Renew in TG)
     const btnCopyKey = document.getElementById("btn-copy-key");
@@ -1966,7 +2080,7 @@
     const btnRenewTg = document.getElementById("btn-renew-tg");
     if (btnRenewTg) {
       btnRenewTg.addEventListener("click", () => {
-        showToast("открываю бот deytt.//vpn в telegram...");
+        showToast("открываю бот ./vpn в telegram...");
       });
     }
 
