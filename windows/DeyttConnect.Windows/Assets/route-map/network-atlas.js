@@ -1551,17 +1551,17 @@
         ? this.copy(countryNames[location.country?.toUpperCase()] || location.country || "вход в сеть")
         : this.copy(location.country);
 
-      const height = 22;
+      const height = 26;
       const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
 
       context.save();
-      context.font = "600 10px " + fontFamily;
+      context.font = "600 10.5px " + fontFamily;
       const titleWidth = context.measureText(title).width;
-      context.font = "500 8.5px " + fontFamily;
+      context.font = "500 9px " + fontFamily;
       const metaWidth = meta ? context.measureText(meta).width : 0;
       context.restore();
 
-      const width = Math.round(titleWidth + (meta ? metaWidth + 14 : 0) + 24);
+      const width = Math.round(titleWidth + (meta ? metaWidth + 16 : 0) + 26);
 
       // Smooth horizon dissolve as node approaches the curved edge of the globe
       const horizonFade = clamp((point.z - 0.05) / 0.17, 0, 1);
