@@ -44,6 +44,7 @@
   window.deyttMapHostActive = true;
   window.deyttMapReducedMotion = false;
   window.deyttHomePresentation = null;
+  window.notifyHost = notifyHost;
 
   function notifyHost(message) {
     if (typeof window.invokeCSharpAction === "function") {

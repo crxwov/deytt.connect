@@ -142,6 +142,39 @@ public sealed class RouteGlobeWebView : ContentControl
     /// <summary>Raised when the atlas asks the host to enter or leave immersive map mode.</summary>
     public event Action<bool>? ImmersiveModeRequested;
 
+    /// <summary>Raised when the user switches tabs inside the web presentation.</summary>
+    public event Action<string>? TabChanged;
+
+    /// <summary>Raised when the user selects a route inside the web presentation.</summary>
+    public event Action<string>? RouteSelected;
+
+    internal bool IsNativeInitializationDisabled => _disableNativeInitialization;
+
+    private string _activeTabName = "home";
+
+    public void SetActiveTab(string tab)
+    {
+        if (string.IsNullOrWhiteSpace(tab)) return;
+        _activeTabName = tab.ToLowerInvariant();
+        _ = ExecuteScriptAsync($"window.deyttSwitchStage && window.deyttSwitchStage('{_activeTabName}');");
+    }
+
+    public async Task ExecuteScriptAsync(string script)
+    {
+        if (_webView is null) return;
+        try
+        {
+            if (_coreWebView2 is not null)
+                await _coreWebView2.ExecuteScriptAsync(script);
+            else
+                await _webView.InvokeScript(script);
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+
     public async Task<Bitmap?> CapturePreviewAsync()
     {
         if (!OperatingSystem.IsWindows() || !_pageReady || _coreWebView2 is null)
@@ -774,6 +807,53 @@ public sealed class RouteGlobeWebView : ContentControl
             });
             return;
         }
+        if (node == "window:minimize")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (VisualRoot is Window window)
+                    window.WindowState = WindowState.Minimized;
+            });
+            return;
+        }
+        if (node == "window:maximize")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (VisualRoot is Window window)
+                    window.WindowState = window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+            });
+            return;
+        }
+        if (node == "window:close")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (VisualRoot is Window window)
+                    window.Close();
+            });
+            return;
+        }
+        if (node.StartsWith("tab:", StringComparison.Ordinal))
+        {
+            var tabName = node["tab:".Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    TabChanged?.Invoke(tabName);
+            });
+            return;
+        }
+        if (node.StartsWith("route:select:", StringComparison.Ordinal))
+        {
+            var routeKey = node["route:select:".Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    RouteSelected?.Invoke(routeKey);
+            });
+            return;
+        }
         if (!TapKeys.Contains(node))
             return;
 
@@ -1000,6 +1080,8 @@ public sealed class RouteGlobeWebView : ContentControl
         script.AppendLine("window.deyttSetMapHostActive && window.deyttSetMapHostActive(true);");
         if (_homeResumeRevision != _appliedHomeResumeRevision)
             script.AppendLine("window.deyttResumeMap && window.deyttResumeMap();");
+        script.Append("window.deyttSwitchStage && window.deyttSwitchStage(")
+            .Append(JsonSerializer.Serialize(_activeTabName)).AppendLine(");");
         return script.ToString();
     }
 

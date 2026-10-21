@@ -64,9 +64,8 @@
       text-transform: lowercase;
     }
 
-    /* Floating Transparent Header on Stars (Hidden in desktop client to eliminate double header) */
+    /* Floating Transparent Header on Stars */
     .desktop-header {
-      display: none !important;
       position: absolute;
       top: 0;
       left: 0;
@@ -74,6 +73,7 @@
       height: 68px;
       min-height: 68px;
       width: 100%;
+      display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 clamp(32px, 3.5vw, 48px);
@@ -83,13 +83,17 @@
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
       z-index: 100;
-      pointer-events: none;
+      pointer-events: auto;
+      -webkit-app-region: drag;
     }
 
     .brand-area,
     .nav-container,
-    .window-controls {
+    .window-controls,
+    .icon-btn,
+    .nav-item {
       pointer-events: auto;
+      -webkit-app-region: no-drag;
     }
 
     .brand-area {
@@ -1839,9 +1843,9 @@
 
     <!-- Controls -->
     <div class="window-controls">
-      <button class="icon-btn" title="свернуть"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
-      <button class="icon-btn" title="развернуть"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
-      <button class="icon-btn" title="закрыть"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <button class="icon-btn" id="win-minimize" title="свернуть"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+      <button class="icon-btn" id="win-maximize" title="развернуть"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
+      <button class="icon-btn" id="win-close" title="закрыть"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
   </header>
 
@@ -2918,6 +2922,14 @@
       }
     }
 
+    const postHost = (msg) => {
+      if (typeof window.notifyHost === 'function') window.notifyHost(msg);
+      else if (typeof window.invokeCSharpAction === 'function') window.invokeCSharpAction(msg);
+      else if (window.chrome && window.chrome.webview && typeof window.chrome.webview.postMessage === 'function') {
+        window.chrome.webview.postMessage(msg);
+      }
+    };
+
     navItems.forEach(item => {
       item.addEventListener("click", () => {
         navItems.forEach(btn => {
@@ -2930,8 +2942,23 @@
 
         const tab = item.dataset.tab;
         switchStage(tab);
+        postHost('tab:' + tab);
       });
     });
+
+    window.deyttSwitchStage = function(stageId) {
+      const item = document.querySelector(`.nav-item[data-tab="${stageId}"]`);
+      if (item) {
+        navItems.forEach(btn => {
+          btn.classList.remove("is-active");
+          btn.setAttribute("aria-selected", "false");
+        });
+        item.classList.add("is-active");
+        item.setAttribute("aria-selected", "true");
+        updatePillPosition(item, false);
+      }
+      switchStage(stageId);
+    };
 
     // Routes Selection & Syncing with Globe (Authentic Routes from WindowsRouteCatalog)
     const routeDetails = {
@@ -2968,6 +2995,7 @@
 
     function selectRoute(key) {
       activeRouteKey = key;
+      postHost('route:select:' + key);
       const data = routeDetails[key] || routeDetails.auto;
 
       // Update right connection panel
@@ -3300,6 +3328,22 @@
     window.addEventListener("resize", () => {
       const activeTab = document.querySelector(".nav-item.is-active");
       if (activeTab) updatePillPosition(activeTab, false);
+    });
+    document.getElementById("win-minimize")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      postHost("window:minimize");
+    });
+    document.getElementById("win-maximize")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      postHost("window:maximize");
+    });
+    document.getElementById("win-close")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      postHost("window:close");
+    });
+    document.querySelector(".desktop-header")?.addEventListener("dblclick", (e) => {
+      if (e.target.closest(".brand-area, .nav-container, .window-controls")) return;
+      postHost("window:maximize");
     });
   </script>
 </body>

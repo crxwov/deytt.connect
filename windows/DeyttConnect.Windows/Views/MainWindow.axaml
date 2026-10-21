@@ -20,7 +20,7 @@
     <Grid x:Name="ShellGrid" ColumnDefinitions="*,0" RowDefinitions="Auto,*,0" Background="#080D17">
         <Grid x:Name="WorkspaceColumn" Grid.Column="0" Grid.RowSpan="2" RowDefinitions="Auto,*">
             <Border x:Name="WorkspaceHeader" Grid.Row="0" Height="68" Padding="36,0,36,0"
-                    Background="#080D17" BorderThickness="0"
+                    Background="Transparent" BorderThickness="0"
                     chrome:WindowDecorationProperties.ElementRole="TitleBar">
                 <Grid x:Name="HeaderContentGrid" ColumnDefinitions="Auto,*,Auto">
                     <TextBlock x:Name="WorkspaceBrand" FontFamily="fonts:DEYTT#Unbounded"
@@ -83,7 +83,7 @@
 
             <ScrollViewer x:Name="PageScroll" Grid.Row="1" BringIntoViewOnFocusChange="True"
                           HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                <Grid x:Name="PageHost" MaxWidth="1920" HorizontalAlignment="Center"
+                <Grid x:Name="PageHost" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                       Margin="0" />
             </ScrollViewer>
         </Grid>

@@ -445,6 +445,40 @@ public partial class MainWindow : Window
 
     private void ShowPageInHost(MainTab tab, Control page)
     {
+        if (!_disableNativeMapInitialization && _routeGlobe is not null)
+        {
+            if (tab is MainTab.Home or MainTab.Routes or MainTab.Profile or MainTab.Settings)
+            {
+                _routeGlobe.HostActive = true;
+                var stageName = tab switch
+                {
+                    MainTab.Routes => "routes",
+                    MainTab.Profile => "profile",
+                    MainTab.Settings => "settings",
+                    _ => "home"
+                };
+                _routeGlobe.SetActiveTab(stageName);
+
+                var homeView = _pageViews.TryGetValue(MainTab.Home, out var cachedH) ? cachedH.View : null;
+                if (homeView is not null)
+                {
+                    if (homeView.Parent is Panel oldP && !ReferenceEquals(oldP, PageHost))
+                        oldP.Children.Remove(homeView);
+                    if (!PageHost.Children.Contains(homeView))
+                        PageHost.Children.Add(homeView);
+                    homeView.IsVisible = true;
+                    homeView.IsHitTestVisible = true;
+                }
+
+                foreach (var child in PageHost.Children.OfType<Control>().ToArray())
+                {
+                    if (!ReferenceEquals(child, homeView))
+                        PageHost.Children.Remove(child);
+                }
+                return;
+            }
+        }
+
         if (tab != MainTab.Home && _routeGlobe is not null)
             _routeGlobe.HostActive = false;
         var homePage = _pageViews.TryGetValue(MainTab.Home, out var cachedHome)
@@ -739,7 +773,7 @@ public partial class MainWindow : Window
             MainTab.Setup => Copy("Настройка подключения", "Connection setup"),
             _ => Copy("Ваше подключение", "Your connection"),
         };
-        WorkspaceHeader.IsVisible = !_mapImmersive;
+        WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !_mapImmersive;
         NavSectionTitle.Text = Copy("РАЗДЕЛЫ", "WORKSPACE");
         UpdateHomeGlobePresentation();
     }
@@ -758,8 +792,8 @@ public partial class MainWindow : Window
         if (_responsiveLayoutInitialized && _compactLayout == compact && _mediumLayout == medium &&
             _shortCompactLayout == shortCompact)
         {
-            WorkspaceHeader.IsVisible = !_mapImmersive;
-            if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = _mapImmersive ? new GridLength(0) : GridLength.Auto;
+            WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !_mapImmersive;
+            if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = _disableNativeMapInitialization ? (_mapImmersive ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
             UpdatePageHostWidth();
             UpdateHomeColumns();
             return;
@@ -783,9 +817,9 @@ public partial class MainWindow : Window
         SidebarStatusCard.IsVisible = !compact;
         WorkspaceHeader.Padding = compact ? new Thickness(16, 0) : medium
             ? new Thickness(24, 0) : new Thickness(36, 0);
-        WorkspaceHeader.Height = 68;
+        WorkspaceHeader.Height = _disableNativeMapInitialization ? 68 : 0;
         if (WorkspaceColumn.RowDefinitions.Count > 0)
-            WorkspaceColumn.RowDefinitions[0].Height = _mapImmersive ? new GridLength(0) : GridLength.Auto;
+            WorkspaceColumn.RowDefinitions[0].Height = _disableNativeMapInitialization ? (_mapImmersive ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
         HeaderContentGrid.ColumnSpacing = compact ? 8 : medium ? 16 : 24;
         WindowChromeActions.Spacing = 8;
         HeaderNavigation.Spacing = 4;
@@ -794,10 +828,10 @@ public partial class MainWindow : Window
         MinimizeWindowButton.IsVisible = !_useSystemWindowChrome;
         MaximizeWindowButton.IsVisible = !_useSystemWindowChrome;
         CloseWindowButton.IsVisible = !_useSystemWindowChrome;
-        PageHost.Margin = _mapImmersive || _activeTab == MainTab.Home ? new Thickness(0) : compact
+        PageHost.Margin = !_disableNativeMapInitialization || _mapImmersive || _activeTab == MainTab.Home ? new Thickness(0) : compact
             ? new Thickness(20, 24)
             : medium ? new Thickness(32, 28) : new Thickness(64, 32);
-        WorkspaceHeader.IsVisible = !_mapImmersive;
+        WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !_mapImmersive;
 
         UpdateTopNavigation();
         UpdateWindowControlState();
@@ -832,8 +866,8 @@ public partial class MainWindow : Window
         else if (WindowState == Avalonia.Controls.WindowState.FullScreen)
             WindowState = _windowStateBeforeMapImmersive;
 
-        WorkspaceHeader.IsVisible = !enabled;
-        if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = enabled ? new GridLength(0) : GridLength.Auto;
+        WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !enabled;
+        if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = _disableNativeMapInitialization ? (enabled ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
         UpdateResponsiveLayout();
         UpdatePageHostWidth();
         UpdateHomeColumns();
@@ -841,6 +875,16 @@ public partial class MainWindow : Window
 
     private void UpdatePageHostWidth()
     {
+        if (!_disableNativeMapInitialization)
+        {
+            PageHost.MaxWidth = double.PositiveInfinity;
+            PageHost.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+            PageHost.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+            PageHost.Margin = new Thickness(0);
+            PageHost.Width = double.NaN;
+            return;
+        }
+
         if (_mapImmersive)
         {
             PageHost.MaxWidth = double.PositiveInfinity;

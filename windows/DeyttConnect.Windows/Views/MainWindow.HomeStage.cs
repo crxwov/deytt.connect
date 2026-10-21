@@ -506,13 +506,51 @@ public partial class MainWindow
         map.NodeTapped += node => _ = ShowMapRoutePickerAsync(node);
         map.HomeActionRequested += HandleHomeActionRequested;
         map.ImmersiveModeRequested += SetMapImmersive;
+        map.TabChanged += OnMapTabChanged;
+        map.RouteSelected += OnMapRouteSelected;
         return map;
+    }
+
+    private void OnMapTabChanged(string tabName)
+    {
+        var targetTab = tabName switch
+        {
+            "routes" => MainTab.Routes,
+            "profile" => MainTab.Profile,
+            "settings" => MainTab.Settings,
+            _ => MainTab.Home
+        };
+        if (_activeTab != targetTab)
+        {
+            ShowTab(targetTab);
+        }
+    }
+
+    private void OnMapRouteSelected(string routeKey)
+    {
+        var route = _routes.FirstOrDefault(r => string.Equals(r.Id, routeKey, StringComparison.OrdinalIgnoreCase))
+                 ?? _routes.FirstOrDefault(r => string.Equals(r.CountryCode, routeKey, StringComparison.OrdinalIgnoreCase))
+                 ?? _routes.FirstOrDefault(r => string.Equals(r.Tag, routeKey, StringComparison.OrdinalIgnoreCase));
+        if (route is not null)
+        {
+            _selectedRoute = route.Id;
+            SavePreferences();
+            if (_routeGlobe is not null) _routeGlobe.SelectedRoute = RouteGlobeWebView.RouteKeyFor(route.CountryCode);
+            RefreshHomePageInPlace();
+        }
     }
 
     private void UpdateHomeColumns()
     {
         if (_routeGlobe is null)
             return;
+
+        if (!_disableNativeMapInitialization)
+        {
+            _routeGlobe.Width = double.NaN;
+            _routeGlobe.Height = double.NaN;
+            return;
+        }
 
         var availableWidth = PageHost.Width > 0 ? PageHost.Width : PageScroll.Bounds.Width;
         var availableHeight = PageScroll.Bounds.Height - PageHost.Margin.Top - PageHost.Margin.Bottom;
