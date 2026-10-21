@@ -397,10 +397,9 @@
         this.dragDistance = 0;
         this.velocityLon = 0;
         this.velocityLat = 0;
-        this.dragVx = 0;
-        this.dragVy = 0;
         const now = performance.now();
         this.lastMoveTime = now;
+        this.pointerHistory = [{ time: now, x: event.clientX, y: event.clientY }];
         this.targetLon = this.centerLon;
         this.targetLat = this.centerLat;
         this.lastFrame = 0;
@@ -433,17 +432,19 @@
           this.lastPointer = { x: event.clientX, y: event.clientY, time: now };
           this.dragDistance += Math.hypot(dx, dy);
 
+          // 1:1 Instantaneous direct tracking with pointer (zero rubber-band lag)
           const dragScale = 1 / Math.max(1, this.targetZoom);
-          this.targetLon -= dx * 0.22 * dragScale;
-          this.targetLat = clamp(this.targetLat + dy * 0.16 * dragScale, -62, 72);
+          this.centerLon -= dx * 0.22 * dragScale;
+          this.centerLat = clamp(this.centerLat + dy * 0.16 * dragScale, -62, 72);
+          this.targetLon = this.centerLon;
+          this.targetLat = this.centerLat;
 
-          const dt = Math.max(1, now - (this.lastMoveTime || now));
-          this.lastMoveTime = now;
-          const instVx = -(dx / dt) * 0.22 * dragScale;
-          const instVy = (dy / dt) * 0.16 * dragScale;
-          this.dragVx = (this.dragVx || 0) * 0.5 + instVx * 0.5;
-          this.dragVy = (this.dragVy || 0) * 0.5 + instVy * 0.5;
+          this.pointerHistory.push({ time: now, x: event.clientX, y: event.clientY });
+          while (this.pointerHistory.length > 2 && now - this.pointerHistory[0].time > 80) {
+            this.pointerHistory.shift();
+          }
 
+          this.markMapDirty();
           this.start();
         } else if (event.pointerType !== "touch") {
           const box = this.canvasRect || (this.canvasRect = this.canvas.getBoundingClientRect());
@@ -474,19 +475,28 @@
         } else {
           this.root.classList.remove("is-dragging");
           this.canvas.style.cursor = "grab";
-          if (event.type === "pointerup") {
+          if (event.type === "pointerup" && this.pointerHistory && this.pointerHistory.length >= 2) {
             const now = performance.now();
-            const timeSinceLastMove = now - (this.lastMoveTime || now);
-            if (timeSinceLastMove < 70 && (Math.abs(this.dragVx || 0) > 0.001 || Math.abs(this.dragVy || 0) > 0.001)) {
-              this.velocityLon = clamp(this.dragVx * 16.667, -6.0, 6.0);
-              this.velocityLat = clamp(this.dragVy * 16.667, -3.0, 3.0);
+            const newest = this.pointerHistory[this.pointerHistory.length - 1];
+            const timeSinceMove = now - newest.time;
+            if (timeSinceMove < 70) {
+              const oldest = this.pointerHistory[0];
+              const dt = Math.max(12, newest.time - oldest.time);
+              const dx = newest.x - oldest.x;
+              const dy = newest.y - oldest.y;
+              const dragScale = 1 / Math.max(1, this.targetZoom);
+              const vx = -(dx / dt) * 16.667 * 0.22 * dragScale;
+              const vy = (dy / dt) * 16.667 * 0.16 * dragScale;
+              if (Math.abs(vx) > 0.02) this.velocityLon = clamp(vx, -5.0, 5.0);
+              else this.velocityLon = 0;
+              if (Math.abs(vy) > 0.02) this.velocityLat = clamp(vy, -3.0, 3.0);
+              else this.velocityLat = 0;
             } else {
               this.velocityLon = 0;
               this.velocityLat = 0;
             }
           }
-          this.dragVx = 0;
-          this.dragVy = 0;
+          this.pointerHistory = [];
         }
         if (event.pointerType === "touch") this.setHovered(null);
         if (event.type !== "pointerup") {
@@ -840,7 +850,8 @@
       const cy = this.centerY;
       const maxJump = this.radius * this.zoom * .24;
       const maxJumpSq = maxJump * maxJump;
-      const pointStep = 1;
+      const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
+      const pointStep = isMoving ? 2 : 1;
 
       const strokeLines = (lines, style, width, alpha) => {
         const len = lines.length;
@@ -1040,7 +1051,7 @@
       const isMoving = this.dragging || this.cameraMoving || Math.abs(this.velocityLon) > 0.001;
       const isLight = document.documentElement.dataset.theme === "light";
       const relief = this.options.landDepth === false && !isLight ? 0 : (isLight ? 1.5 : clamp(globeRadius * .014, 2, 5));
-      if (relief) {
+      if (relief && !isMoving) {
         context.save();
         const shadowOffsetX = isLight ? 0.6 : (relief * .24);
         const shadowOffsetY = isLight ? 1.4 : (relief * .56);
@@ -1650,6 +1661,11 @@
             el.style.display = "inline-flex";
             el._currentDisplay = "inline-flex";
           }
+          const widthVal = width + "px";
+          if (el._currentWidth !== widthVal) {
+            el.style.width = widthVal;
+            el._currentWidth = widthVal;
+          }
           const transformVal = `translate3d(${left.toFixed(2)}px, ${top.toFixed(2)}px, 0)`;
           if (el._currentTransform !== transformVal) {
             el.style.transform = transformVal;
@@ -1765,15 +1781,7 @@
       this.centerY = mix(this.centerY, this.targetCenterY, this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS));
       if (Math.abs(this.targetCenterX - this.centerX) < .1) this.centerX = this.targetCenterX;
       if (Math.abs(this.targetCenterY - this.centerY) < .1) this.centerY = this.targetCenterY;
-      if (this.dragging) {
-        // Continuous, time-delta independent Critically Damped Follower (35ms time constant)
-        // Eliminates all integer packet jitter / stutter while feeling 100% physically connected to the hand
-        const dragBlend = 1 - Math.exp(-Math.max(1, delta) / 35);
-        this.centerLon = mix(this.centerLon, this.targetLon, dragBlend);
-        this.centerLat = mix(this.centerLat, this.targetLat, dragBlend);
-        if (Math.abs(this.targetLon - this.centerLon) < 0.002) this.centerLon = this.targetLon;
-        if (Math.abs(this.targetLat - this.centerLat) < 0.002) this.centerLat = this.targetLat;
-      } else {
+      if (!this.dragging) {
         if (Math.abs(this.velocityLon) > 0.001 || Math.abs(this.velocityLat || 0) > 0.001) {
           // Direct Newtonian glide in zero-gravity: frameScale accounts for variable display refresh (60Hz, 120Hz, 144Hz)
           const frameScale = Math.min(3, Math.max(0.1, delta / 16.667));

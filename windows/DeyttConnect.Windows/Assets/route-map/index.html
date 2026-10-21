@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>./connect · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_23">
-  <script defer src="network-atlas.js?v=20261021_23"></script>
-  <script defer src="atlas-init.js?v=20261021_23"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261021_24">
+  <script defer src="network-atlas.js?v=20261021_24"></script>
+  <script defer src="atlas-init.js?v=20261021_24"></script>
 
   <style>
     :root {
@@ -329,10 +329,10 @@
       box-sizing: border-box;
       border-radius: 12px;
       
-      /* Crystal Clear Ultra-Transparent Liquid Glass (~88% transparent) */
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(11, 18, 32, 0.12);
-      backdrop-filter: blur(12px) saturate(220%) brightness(115%);
-      -webkit-backdrop-filter: blur(12px) saturate(220%) brightness(115%);
+      /* Crystal Clear Ultra-Transparent Liquid Glass (~85% transparent) */
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.03) 100%), rgba(11, 18, 32, 0.45);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       
       /* Razor-sharp specular highlight rim */
       border: 1px solid rgba(255, 255, 255, 0.18);
@@ -348,8 +348,7 @@
       user-select: none;
       white-space: nowrap;
       text-transform: lowercase;
-      will-change: transform, opacity;
-      /* CRITICAL: NO transform transition! Direct 60-144fps GPU compositor tracking! */
+      /* Direct 60-144fps GPU compositor tracking without layer thrashing */
       transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
     }
 
