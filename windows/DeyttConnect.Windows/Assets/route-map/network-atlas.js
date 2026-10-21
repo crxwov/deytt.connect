@@ -1532,10 +1532,11 @@
         ? this.copy(countryNames[location.country?.toUpperCase()] || location.country || "вход в сеть")
         : this.copy(location.country);
 
-      const titleFontSize = Math.round(11.5 * labelScale);
-      const metaFontSize = Math.round(10.5 * labelScale);
-      const inset = Math.round(9 * labelScale);
-      const height = Math.round((meta ? 34 : 20) * labelScale);
+      const titleFontSize = Math.round(9.5 * labelScale);
+      const metaFontSize = Math.round(8.2 * labelScale);
+      const inset = Math.round(6.5 * labelScale);
+      const height = Math.round((meta ? 24 : 16) * labelScale);
+      const radius = Math.round(5 * labelScale);
       const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
       const titleFont = (active ? "600 " : "500 ") + titleFontSize + "px " + fontFamily;
       const metaFont = "500 " + metaFontSize + "px " + fontFamily;
@@ -1551,14 +1552,14 @@
       const candidates = [];
       if (pref) candidates.push(pref);
       candidates.push(
-        { x: -28, y: -28, align: "right" },
-        { x: -28, y: 26, align: "right" },
-        { x: 26, y: -28, align: "left" },
-        { x: 26, y: 28, align: "left" },
-        { x: -32, y: 0, align: "right" },
-        { x: 32, y: 0, align: "left" },
-        { x: -22, y: -44, align: "right" },
-        { x: 24, y: 40, align: "left" }
+        { x: -24, y: -24, align: "right" },
+        { x: -24, y: 22, align: "right" },
+        { x: 22, y: -24, align: "left" },
+        { x: 22, y: 22, align: "left" },
+        { x: -28, y: 0, align: "right" },
+        { x: 28, y: 0, align: "left" },
+        { x: -18, y: -36, align: "right" },
+        { x: 20, y: 34, align: "left" }
       );
 
       let bestCandidate = null;
@@ -1576,8 +1577,8 @@
         let overlapArea = 0;
         for (let j = 0; j < occupied.length; j++) {
           const occ = occupied[j];
-          const ox = Math.max(0, Math.min(right + 10, occ.left + occ.width + 10) - Math.max(left - 10, occ.left - 10));
-          const oy = Math.max(0, Math.min(bottom + 8, occ.top + occ.height + 8) - Math.max(top - 8, occ.top - 8));
+          const ox = Math.max(0, Math.min(right + 8, occ.left + occ.width + 8) - Math.max(left - 8, occ.left - 8));
+          const oy = Math.max(0, Math.min(bottom + 6, occ.top + occ.height + 6) - Math.max(top - 6, occ.top - 6));
           if (ox > 0 && oy > 0) {
             overlapArea += ox * oy;
           }
@@ -1596,20 +1597,20 @@
 
       const left = bestCandidate.left;
       const top = bestCandidate.top;
-      const endX = clamp(point.x, left + 6, left + width - 6);
-      const endY = clamp(point.y, top + 6, top + height - 6);
+      const endX = clamp(point.x, left + 4, left + width - 4);
+      const endY = clamp(point.y, top + 4, top + height - 4);
 
       const leaderColor = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#10B981" : "#60A5FA";
       context.beginPath();
       context.moveTo(point.x, point.y);
       context.lineTo(endX, endY);
       context.strokeStyle = leaderColor;
-      context.lineWidth = active || isHovered ? 1.5 : 1.1;
-      context.globalAlpha = active || isHovered ? 0.95 : 0.75;
+      context.lineWidth = active || isHovered ? 1.2 : 0.9;
+      context.globalAlpha = active || isHovered ? 0.9 : 0.65;
       context.stroke();
 
       context.beginPath();
-      context.arc(point.x, point.y, 2, 0, TAU);
+      context.arc(point.x, point.y, 1.8, 0, TAU);
       context.fillStyle = leaderColor;
       context.globalAlpha = 0.9;
       context.fill();
@@ -1618,15 +1619,69 @@
       occupied.push(labelBox);
       this.labelBoxes.push(labelBox);
 
+      // Liquid Glass Pill Body (Translucent refractive gradient)
+      const glassGrad = context.createLinearGradient(left, top, left, top + height);
+      if (isHovered) {
+        glassGrad.addColorStop(0, "rgba(255, 255, 255, 0.24)");
+        glassGrad.addColorStop(0.35, "rgba(24, 38, 64, 0.58)");
+        glassGrad.addColorStop(1, "rgba(12, 20, 36, 0.76)");
+      } else if (isUser) {
+        glassGrad.addColorStop(0, "rgba(56, 189, 248, 0.22)");
+        glassGrad.addColorStop(0.35, "rgba(14, 28, 48, 0.55)");
+        glassGrad.addColorStop(1, "rgba(8, 16, 30, 0.72)");
+      } else if (isExit) {
+        glassGrad.addColorStop(0, "rgba(16, 185, 129, 0.22)");
+        glassGrad.addColorStop(0.35, "rgba(12, 32, 34, 0.55)");
+        glassGrad.addColorStop(1, "rgba(6, 18, 24, 0.72)");
+      } else {
+        glassGrad.addColorStop(0, "rgba(255, 255, 255, 0.14)");
+        glassGrad.addColorStop(0.35, "rgba(18, 26, 44, 0.50)");
+        glassGrad.addColorStop(1, "rgba(10, 16, 28, 0.68)");
+      }
+
       context.beginPath();
-      context.roundRect(left, top, width, height, Math.round(6 * labelScale));
-      context.fillStyle = "rgba(10, 16, 30, 0.94)";
-      context.globalAlpha = 0.96;
+      context.roundRect(left, top, width, height, radius);
+      context.fillStyle = glassGrad;
+      context.shadowColor = "rgba(0, 0, 0, 0.4)";
+      context.shadowBlur = 8;
+      context.shadowOffsetY = 2;
+      context.fill();
+      context.shadowBlur = 0;
+      context.shadowOffsetY = 0;
+
+      // Inner Top Specular Highlight Arc (Liquid glass reflection gleam)
+      context.beginPath();
+      context.roundRect(left + 1, top + 1, width - 2, Math.max(2, height * 0.45), [Math.max(1, radius - 1), Math.max(1, radius - 1), 0, 0]);
+      const shineGrad = context.createLinearGradient(left, top + 1, left, top + height * 0.45);
+      shineGrad.addColorStop(0, isHovered ? "rgba(255, 255, 255, 0.35)" : isUser ? "rgba(186, 230, 253, 0.30)" : isExit ? "rgba(167, 243, 208, 0.30)" : "rgba(255, 255, 255, 0.22)");
+      shineGrad.addColorStop(1, "rgba(255, 255, 255, 0.0)");
+      context.fillStyle = shineGrad;
       context.fill();
 
-      context.strokeStyle = isHovered ? "#FFFFFF" : isUser ? "rgba(56, 189, 248, 0.7)" : isExit ? "rgba(16, 185, 129, 0.7)" : "rgba(255, 255, 255, 0.16)";
-      context.globalAlpha = isHovered ? 1 : active ? 0.9 : 0.55;
-      context.lineWidth = active || isHovered ? 1.2 : 0.9;
+      // Liquid Glass Perimeter Specular Stroke
+      const strokeGrad = context.createLinearGradient(left, top, left, top + height);
+      if (isHovered) {
+        strokeGrad.addColorStop(0, "rgba(255, 255, 255, 0.95)");
+        strokeGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.45)");
+        strokeGrad.addColorStop(1, "rgba(255, 255, 255, 0.20)");
+      } else if (isUser) {
+        strokeGrad.addColorStop(0, "rgba(125, 211, 252, 0.90)");
+        strokeGrad.addColorStop(0.5, "rgba(56, 189, 248, 0.45)");
+        strokeGrad.addColorStop(1, "rgba(56, 189, 248, 0.15)");
+      } else if (isExit) {
+        strokeGrad.addColorStop(0, "rgba(110, 231, 183, 0.90)");
+        strokeGrad.addColorStop(0.5, "rgba(16, 185, 129, 0.45)");
+        strokeGrad.addColorStop(1, "rgba(16, 185, 129, 0.15)");
+      } else {
+        strokeGrad.addColorStop(0, "rgba(255, 255, 255, 0.55)");
+        strokeGrad.addColorStop(0.5, "rgba(255, 255, 255, 0.20)");
+        strokeGrad.addColorStop(1, "rgba(255, 255, 255, 0.08)");
+      }
+
+      context.beginPath();
+      context.roundRect(left, top, width, height, radius);
+      context.strokeStyle = strokeGrad;
+      context.lineWidth = active || isHovered ? 1.0 : 0.8;
       context.stroke();
 
       context.textBaseline = "middle";
@@ -1634,12 +1689,12 @@
       context.globalAlpha = 1;
       context.font = titleFont;
       context.fillStyle = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#34D399" : "#F8FAFC";
-      context.fillText(title, left + inset, top + (meta ? Math.round(11 * labelScale) : height / 2));
+      context.fillText(title, left + inset, top + (meta ? Math.round(8.5 * labelScale) : height / 2));
 
       if (meta) {
-        context.fillStyle = isHovered ? "rgba(255, 255, 255, 0.9)" : isUser ? "#BAE6FD" : isExit ? "#A7F3D0" : "#94A3B8";
+        context.fillStyle = isHovered ? "rgba(255, 255, 255, 0.88)" : isUser ? "#BAE6FD" : isExit ? "#A7F3D0" : "#94A3B8";
         context.font = metaFont;
-        context.fillText(meta, left + inset, top + Math.round(23 * labelScale));
+        context.fillText(meta, left + inset, top + Math.round(17.5 * labelScale));
       }
       context.restore();
     }
