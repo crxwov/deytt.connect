@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>./connect · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_09">
-  <script defer src="network-atlas.js?v=20261021_09"></script>
-  <script defer src="atlas-init.js?v=20261021_09"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261021_15">
+  <script defer src="network-atlas.js?v=20261021_15"></script>
+  <script defer src="atlas-init.js?v=20261021_15"></script>
 
   <style>
     :root {
@@ -95,22 +95,25 @@
       display: flex;
       align-items: center;
       gap: 12px;
-      min-width: 160px;
+      min-width: 180px;
     }
 
     .brand-logo {
-      font-size: 21px;
+      font-family: "Unbounded", -apple-system, sans-serif;
+      font-size: 23px;
       font-weight: 800;
       letter-spacing: -0.04em;
-      color: var(--text);
+      color: #FFFFFF;
       display: inline-flex;
       align-items: baseline;
+      text-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
     }
 
     .brand-accent {
       color: #38BDF8;
       font-weight: 800;
-      margin-right: 1px;
+      margin-right: 1.5px;
+      text-shadow: 0 0 14px rgba(56, 189, 248, 0.6);
     }
 
     /* Modern Glass Navigation Capsule Dock */
@@ -206,7 +209,7 @@
     .window-controls {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       min-width: 160px;
       justify-content: flex-end;
     }
@@ -215,24 +218,40 @@
       width: 38px;
       height: 38px;
       border-radius: 12px;
-      border: 1px solid transparent;
-      background: transparent;
-      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-top-color: rgba(255, 255, 255, 0.25);
+      background: rgba(255, 255, 255, 0.06);
+      color: rgba(255, 255, 255, 0.88);
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       transition: all 140ms ease;
     }
 
     .icon-btn:hover {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.04) 100%);
-      color: var(--text);
-      border-color: rgba(255, 255, 255, 0.22);
-      border-top-color: rgba(255, 255, 255, 0.5);
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), 0 2px 8px rgba(0, 0, 0, 0.25);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(255, 255, 255, 0.14);
+      color: #FFFFFF;
+      border-color: rgba(255, 255, 255, 0.28);
+      border-top-color: rgba(255, 255, 255, 0.55);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .icon-btn:active {
+      transform: translateY(1px);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .icon-btn[title="закрыть"]:hover {
+      background: rgba(239, 68, 68, 0.85);
+      border-color: #EF4444;
+      border-top-color: #F87171;
+      color: #FFFFFF;
+      box-shadow: 0 4px 14px rgba(239, 68, 68, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.3);
     }
 
     .icon-btn svg {
@@ -281,9 +300,9 @@
     .home-panel-shell {
       position: absolute;
       top: 50%;
-      right: 64px;
+      right: clamp(24px, 4.5vw, 64px);
       z-index: 4;
-      width: clamp(340px, 28vw, 420px);
+      width: clamp(340px, 30vw, 440px);
       transform: translateY(-50%);
       background: transparent !important;
       border: none !important;
@@ -324,6 +343,12 @@
       padding: 0 !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
+      max-width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    .route-heading > * {
+      min-width: 0;
     }
 
     .route-flag-pill {
@@ -343,14 +368,18 @@
 
     .home-city {
       font-family: "Unbounded", -apple-system, sans-serif !important;
-      font-size: clamp(34px, 3.4vw, 44px) !important;
+      font-size: clamp(21px, 2.1vw, 27px) !important;
       font-weight: 700 !important;
       color: #FFFFFF !important;
-      letter-spacing: -0.04em !important;
-      line-height: 1.15 !important;
+      letter-spacing: -0.03em !important;
+      line-height: 1.2 !important;
       text-transform: lowercase !important;
-      text-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
+      text-shadow: 0 3px 16px rgba(0, 0, 0, 0.6) !important;
       margin: 0 !important;
+      max-width: 100% !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      white-space: nowrap !important;
     }
 
     /* Modern Precision Connect Action Button */
@@ -417,7 +446,6 @@
       box-shadow: 0 12px 32px -2px rgba(225, 29, 72, 0.65),
                   inset 0 1px 0 rgba(255, 255, 255, 0.45) !important;
     }
-    }
 
     /* Minimal Typographic Telemetry Strip (Zero Card Boxes!) */
     .home-metrics {
@@ -462,6 +490,14 @@
       line-height: 1.1 !important;
     }
 
+    .home-metrics .metric strong.is-empty {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+      font-size: 13.5px !important;
+      font-weight: 500 !important;
+      color: #64748B !important;
+      letter-spacing: -0.01em !important;
+    }
+
     .home-metrics .metric small {
       font-family: -apple-system, sans-serif !important;
       font-size: 12px !important;
@@ -471,37 +507,51 @@
       font-weight: 400 !important;
     }
 
-    /* Clean Ghost Measure Link */
+    .home-metrics .metric small[hidden] {
+      display: none !important;
+    }
+
+    /* Elevated Interactive Measure Button Pill */
     .home-measure {
-      background: transparent !important;
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-      border: none !important;
-      color: #8E9EAF !important;
+      background: rgba(255, 255, 255, 0.06) !important;
+      backdrop-filter: blur(12px) !important;
+      -webkit-backdrop-filter: blur(12px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      border-top-color: rgba(255, 255, 255, 0.22) !important;
+      border-radius: 12px !important;
+      color: #E2E8F0 !important;
       font-size: 13px !important;
-      font-weight: 500 !important;
+      font-weight: 600 !important;
       text-transform: lowercase !important;
       cursor: pointer !important;
       display: inline-flex !important;
       align-items: center !important;
       gap: 8px !important;
-      padding: 4px 0 !important;
-      transition: color 150ms ease !important;
-      box-shadow: none !important;
+      padding: 8px 16px !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+      transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+      width: fit-content !important;
     }
 
     .home-measure:hover {
       color: #FFFFFF !important;
-      background: transparent !important;
-      transform: none !important;
+      background: rgba(255, 255, 255, 0.12) !important;
+      border-color: rgba(255, 255, 255, 0.24) !important;
+      border-top-color: rgba(255, 255, 255, 0.45) !important;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+      transform: translateY(-1px) !important;
+    }
+
+    .home-measure:active {
+      transform: translateY(1px) scale(0.98) !important;
     }
 
     .home-measure svg {
-      transition: transform 300ms ease;
+      transition: transform 350ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .home-measure:hover svg {
-      transform: rotate(90deg);
+      transform: rotate(180deg);
     }
 
     /* Universal Stage Container with Liquid Glass */
@@ -1510,17 +1560,17 @@
             <div class="home-metrics panel-copy" aria-label="последний замер маршрута">
               <div class="metric">
                 <span class="metric-label" id="latency-label"><span class="ping-dot"></span>отклик</span>
-                <div><strong id="home-latency">—</strong><small id="home-latency-unit">мс</small></div>
+                <div><strong id="home-latency" class="is-empty">не измерено</strong><small id="home-latency-unit" hidden>мс</small></div>
               </div>
               <div class="metric">
                 <span class="metric-label" id="speed-label"><span class="ping-dot" style="background:#38BDF8;box-shadow:0 0 8px #38BDF8;"></span>скорость</span>
-                <div><strong id="home-speed">—</strong><small id="home-speed-unit">мбит/с</small></div>
+                <div><strong id="home-speed" class="is-empty">не измерено</strong><small id="home-speed-unit" hidden>мбит/с</small></div>
               </div>
             </div>
             <p id="home-measurement-note" class="measurement-note panel-copy" hidden></p>
             <button id="home-measure" class="home-measure" type="button" data-action="home-measure">
               <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              <span>перезамер</span>
+              <span>обновить замер</span>
             </button>
             <p id="home-route-description" class="sr-only" aria-live="polite"></p>
           </div>
@@ -2571,13 +2621,24 @@
       const homeCountry = document.getElementById("home-country");
       const homeCity = document.getElementById("home-city");
       const homeLatency = document.getElementById("home-latency");
+      const latencyUnit = document.getElementById("home-latency-unit");
       if (homeFlag) homeFlag.textContent = data.flag;
       if (homeCountry) {
         homeCountry.textContent = "";
         homeCountry.hidden = true;
       }
       if (homeCity) homeCity.textContent = data.city;
-      if (homeLatency && isConnected) homeLatency.textContent = data.ping;
+      if (homeLatency) {
+        if (isConnected) {
+          homeLatency.classList.remove("is-empty");
+          homeLatency.textContent = data.ping;
+          if (latencyUnit) latencyUnit.hidden = false;
+        } else {
+          homeLatency.classList.add("is-empty");
+          homeLatency.textContent = "не измерено";
+          if (latencyUnit) latencyUnit.hidden = true;
+        }
+      }
 
       // Update compact panel if present
       const compactFlag = document.getElementById("compact-flag");
@@ -2753,13 +2814,23 @@
         const latency = document.getElementById("home-latency");
         const speed = document.getElementById("home-speed");
         const status = document.getElementById("home-status");
+        const latencyUnit = document.getElementById("home-latency-unit");
+        const speedUnit = document.getElementById("home-speed-unit");
 
         if (!isConnected) {
           isConnected = true;
           if (label) label.textContent = "отключиться";
           actionBtn.dataset.tone = "good";
-          if (latency) latency.textContent = (routeDetails[activeRouteKey]?.ping || 24).toString();
-          if (speed) speed.textContent = "185";
+          if (latency) {
+            latency.classList.remove("is-empty");
+            latency.textContent = (routeDetails[activeRouteKey]?.ping || 24).toString();
+          }
+          if (speed) {
+            speed.classList.remove("is-empty");
+            speed.textContent = "185";
+          }
+          if (latencyUnit) latencyUnit.hidden = false;
+          if (speedUnit) speedUnit.hidden = false;
           if (status) status.textContent = "подключено";
           if (window.deyttMapAtlas) {
             window.deyttMapAtlas.setTrafficActive(true);
@@ -2770,8 +2841,16 @@
           isConnected = false;
           if (label) label.textContent = "подключиться";
           actionBtn.dataset.tone = "idle";
-          if (latency) latency.textContent = "—";
-          if (speed) speed.textContent = "—";
+          if (latency) {
+            latency.classList.add("is-empty");
+            latency.textContent = "не измерено";
+          }
+          if (speed) {
+            speed.classList.add("is-empty");
+            speed.textContent = "не измерено";
+          }
+          if (latencyUnit) latencyUnit.hidden = true;
+          if (speedUnit) speedUnit.hidden = true;
           if (status) status.textContent = "не подключено";
           if (window.deyttMapAtlas) {
             window.deyttMapAtlas.setTrafficActive(false);
@@ -2787,12 +2866,30 @@
       measureBtn.addEventListener("click", () => {
         const latency = document.getElementById("home-latency");
         const speed = document.getElementById("home-speed");
-        if (latency) latency.textContent = "…";
-        if (speed) speed.textContent = "…";
+        const latencyUnit = document.getElementById("home-latency-unit");
+        const speedUnit = document.getElementById("home-speed-unit");
+        if (latency) {
+          latency.classList.add("is-empty");
+          latency.textContent = "замер…";
+          if (latencyUnit) latencyUnit.hidden = true;
+        }
+        if (speed) {
+          speed.classList.add("is-empty");
+          speed.textContent = "замер…";
+          if (speedUnit) speedUnit.hidden = true;
+        }
         setTimeout(() => {
           const currentPing = routeDetails[activeRouteKey]?.ping || 24;
-          if (latency) latency.textContent = (currentPing + Math.floor(Math.random() * 4) - 2).toString();
-          if (speed) speed.textContent = (Math.floor(Math.random() * 25) + 180).toString();
+          if (latency) {
+            latency.classList.remove("is-empty");
+            latency.textContent = (currentPing + Math.floor(Math.random() * 4) - 2).toString();
+            if (latencyUnit) latencyUnit.hidden = false;
+          }
+          if (speed) {
+            speed.classList.remove("is-empty");
+            speed.textContent = (Math.floor(Math.random() * 25) + 180).toString();
+            if (speedUnit) speedUnit.hidden = false;
+          }
           showToast("замер скорости и задержки обновлен");
         }, 350);
       });

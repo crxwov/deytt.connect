@@ -8,20 +8,20 @@
   const PAN_EASE_MS = 120;
   const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
   const LABEL_OFFSETS = {
-    nl: { x: -24, y: -42, align: "right" },
-    de: { x: -24, y: 54, align: "right" },
-    fi: { x: -22, y: -42, align: "right" },
-    it: { x: -24, y: 52, align: "right" },
-    ru: { x: 24, y: -42, align: "left" },
-    user: { x: 22, y: -38, align: "left" }
+    nl: { x: -32, y: -48, align: "right" },
+    de: { x: 28, y: 34, align: "left" },
+    fi: { x: -24, y: -64, align: "right" },
+    it: { x: -28, y: 56, align: "right" },
+    ru: { x: 30, y: -38, align: "left" },
+    user: { x: 26, y: -52, align: "left" }
   };
   const COMPACT_LABEL_OFFSETS = {
-    nl: { x: -20, y: -42, align: "right" },
-    de: { x: -20, y: 56, align: "right" },
-    fi: { x: -18, y: -82, align: "right" },
-    it: { x: -22, y: 54, align: "right" },
-    ru: { x: 18, y: -42, align: "left" },
-    user: { x: 18, y: -62, align: "left" }
+    nl: { x: -28, y: -48, align: "right" },
+    de: { x: 24, y: 38, align: "left" },
+    fi: { x: -20, y: -84, align: "right" },
+    it: { x: -24, y: 64, align: "right" },
+    ru: { x: 24, y: -42, align: "left" },
+    user: { x: 24, y: -66, align: "left" }
   };
   const LOCATIONS = {
     nl: { code: "nl", city: "амстердам", country: "нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
@@ -1453,32 +1453,58 @@
       const projected = this.projectLocation(location, 1.008);
       this.projectedNodes[key] = projected;
       if (projected.z <= 0.015) return;
-      const active = kind === "user" || this.activeRouteNodeKeys().includes(key);
-      const candidate = this.route === "auto" && ROUTES.auto.nodes.includes(key);
+      const isUser = kind === "user";
+      const isExit = !isUser && this.activeRouteNodeKeys().includes(key);
+      const isCandidate = !isUser && !isExit && ((this.route === "auto" && ROUTES.auto.nodes.includes(key)) || this.availableLocationKeys.has(key));
       const hovered = this.hovered === key;
-      const outer = active || hovered ? (hovered ? 12 : 8) : 0;
+
+      let nodeFill = "#60A5FA";
+      let nodeStroke = "#93C5FD";
+      let haloColor = "rgba(96, 165, 250, 0.18)";
+      let nodeRadius = 3.8;
+
+      if (hovered) {
+        nodeFill = "#FFFFFF";
+        nodeStroke = "#FFFFFF";
+        haloColor = "rgba(255, 255, 255, 0.4)";
+        nodeRadius = 5.6;
+      } else if (isUser) {
+        nodeFill = "#38BDF8";
+        nodeStroke = "#BAE6FD";
+        haloColor = "rgba(56, 189, 248, 0.32)";
+        nodeRadius = 5.0;
+      } else if (isExit) {
+        nodeFill = "#10B981";
+        nodeStroke = "#6EE7B7";
+        haloColor = "rgba(16, 185, 129, 0.35)";
+        nodeRadius = 5.0;
+      } else if (isCandidate) {
+        nodeFill = "#60A5FA";
+        nodeStroke = "#93C5FD";
+        haloColor = "rgba(96, 165, 250, 0.18)";
+        nodeRadius = 3.8;
+      }
+
+      const outer = (hovered || isUser || isExit) ? (hovered ? 13 : 9) : (isCandidate ? 6 : 0);
       if (outer) {
         context.beginPath();
         context.arc(projected.x, projected.y, outer, 0, TAU);
-        context.fillStyle = kind === "user" ? "rgba(117,216,255,.16)" : "rgba(83,101,246,.08)";
+        context.fillStyle = haloColor;
         context.fill();
-        context.globalAlpha = 1;
       }
       context.beginPath();
-      const nodeRadius = hovered ? 5.5 : active ? 4.6 : candidate ? 3.8 : 2.7;
       context.arc(projected.x, projected.y, nodeRadius, 0, TAU);
-      context.fillStyle = kind === "user" ? colors.routeHot : active || hovered || candidate ? colors.nodeCore : colors.landDim;
-      context.shadowColor = kind === "user" ? colors.routeHot : active || hovered || candidate ? colors.nodeCore : colors.border;
-      context.shadowBlur = hovered ? 18 : active ? 12 : 3;
+      context.fillStyle = nodeFill;
+      context.shadowColor = nodeFill;
+      context.shadowBlur = hovered ? 18 : isUser || isExit ? 12 : 5;
       context.fill();
       context.shadowBlur = 0;
-      if (active || hovered || candidate) {
-        context.beginPath();
-        context.arc(projected.x, projected.y, nodeRadius, 0, TAU);
-        context.lineWidth = document.documentElement.dataset.theme === "light" ? 1.8 : 1.5;
-        context.strokeStyle = colors.node;
-        context.stroke();
-      }
+
+      context.beginPath();
+      context.arc(projected.x, projected.y, nodeRadius, 0, TAU);
+      context.lineWidth = isUser || isExit || hovered ? 1.6 : 1.2;
+      context.strokeStyle = nodeStroke;
+      context.stroke();
     }
 
     drawLabel(key, colors, occupied) {
@@ -1487,27 +1513,29 @@
       if (point.x < 0 || point.x > this.width || point.y < 0 || point.y > this.height) return;
       if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
 
-      const active = key === "user" || this.activeRouteNodeKeys().includes(key);
+      const isUser = key === "user";
+      const isExit = !isUser && this.activeRouteNodeKeys().includes(key);
+      const active = isUser || isExit;
       const isHovered = this.hovered === key;
       const context = this.context;
-      const location = key === "user" ? this.userLocation : LOCATIONS[key];
+      const location = isUser ? this.userLocation : LOCATIONS[key];
       if (!location) return;
 
       const compact = this.width < 820;
       const labelScale = this.options.labelScale || 1;
       const countryNames = { RU: "россия", NL: "нидерланды", DE: "германия", FI: "финляндия", IT: "италия" };
       
-      const title = key === "user"
+      const title = isUser
         ? (this.copy(location.city) || this.copy("ваша сеть"))
         : this.copy(location.city || location.country);
-      const meta = key === "user"
+      const meta = isUser
         ? this.copy(countryNames[location.country?.toUpperCase()] || location.country || "вход в сеть")
         : this.copy(location.country);
 
-      const titleFontSize = Math.round(10.5 * labelScale);
-      const metaFontSize = Math.round(8.5 * labelScale);
-      const inset = Math.round(7 * labelScale);
-      const height = Math.round((meta ? 28 : 18) * labelScale);
+      const titleFontSize = Math.round(11.5 * labelScale);
+      const metaFontSize = Math.round(10.5 * labelScale);
+      const inset = Math.round(9 * labelScale);
+      const height = Math.round((meta ? 34 : 20) * labelScale);
       const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
       const titleFont = (active ? "600 " : "500 ") + titleFontSize + "px " + fontFamily;
       const metaFont = "500 " + metaFontSize + "px " + fontFamily;
@@ -1523,16 +1551,16 @@
       const candidates = [];
       if (pref) candidates.push(pref);
       candidates.push(
-        { x: 18, y: -24, align: "left" },
-        { x: -18, y: -24, align: "right" },
-        { x: 18, y: 24, align: "left" },
-        { x: -18, y: 24, align: "right" },
-        { x: 20, y: 0, align: "left" },
-        { x: -20, y: 0, align: "right" },
-        { x: 26, y: -38, align: "left" },
-        { x: -26, y: -38, align: "right" },
-        { x: 26, y: 38, align: "left" },
-        { x: -26, y: 38, align: "right" }
+        { x: -36, y: -48, align: "right" },
+        { x: 34, y: 36, align: "left" },
+        { x: -36, y: 52, align: "right" },
+        { x: 34, y: -48, align: "left" },
+        { x: -44, y: -24, align: "right" },
+        { x: 44, y: 24, align: "left" },
+        { x: -30, y: -72, align: "right" },
+        { x: 32, y: 64, align: "left" },
+        { x: 48, y: -36, align: "left" },
+        { x: -48, y: 44, align: "right" }
       );
 
       let bestCandidate = null;
@@ -1550,15 +1578,15 @@
         let overlapArea = 0;
         for (let j = 0; j < occupied.length; j++) {
           const occ = occupied[j];
-          const ox = Math.max(0, Math.min(right + 3, occ.left + occ.width + 3) - Math.max(left - 3, occ.left - 3));
-          const oy = Math.max(0, Math.min(bottom + 3, occ.top + occ.height + 3) - Math.max(top - 3, occ.top - 3));
+          const ox = Math.max(0, Math.min(right + 10, occ.left + occ.width + 10) - Math.max(left - 10, occ.left - 10));
+          const oy = Math.max(0, Math.min(bottom + 8, occ.top + occ.height + 8) - Math.max(top - 8, occ.top - 8));
           if (ox > 0 && oy > 0) {
             overlapArea += ox * oy;
           }
         }
 
         const clampPenalty = Math.abs(rawLeft - left) + Math.abs(rawTop - top);
-        const prefBonus = (i === 0) ? -50 : (i * 10);
+        const prefBonus = (i === 0) ? -60 : (i * 12);
         const score = overlapArea * 1000 + clampPenalty * 50 + prefBonus;
 
         if (score < minScore) {
@@ -1570,16 +1598,17 @@
 
       const left = bestCandidate.left;
       const top = bestCandidate.top;
-      const endX = clamp(point.x, left + 5, left + width - 5);
-      const endY = clamp(point.y, top + 5, top + height - 5);
+      const endX = clamp(point.x, left + 6, left + width - 6);
+      const endY = clamp(point.y, top + 6, top + height - 6);
 
+      const leaderColor = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#10B981" : "#60A5FA";
       context.beginPath();
       const distance = Math.max(1, Math.hypot(endX - point.x, endY - point.y));
       context.moveTo(point.x + (endX - point.x) * 6 / distance, point.y + (endY - point.y) * 6 / distance);
       context.lineTo(endX, endY);
-      context.strokeStyle = isHovered ? colors.borderHot : active ? colors.nodeCore : (colors.labelLeader || colors.node);
+      context.strokeStyle = leaderColor;
       context.lineWidth = active || isHovered ? 1.2 : 0.8;
-      context.globalAlpha = active || isHovered ? 0.85 : 0.55;
+      context.globalAlpha = isHovered ? 0.95 : active ? 0.85 : 0.45;
       context.stroke();
 
       const labelBox = { key, left, top, width, height, leader: [point, { x: endX, y: endY }] };
@@ -1587,27 +1616,27 @@
       this.labelBoxes.push(labelBox);
 
       context.beginPath();
-      context.roundRect(left, top, width, height, Math.round(3.5 * labelScale));
-      context.fillStyle = colors.labelBg;
-      context.globalAlpha = 0.94;
+      context.roundRect(left, top, width, height, Math.round(6 * labelScale));
+      context.fillStyle = "rgba(10, 16, 30, 0.94)";
+      context.globalAlpha = 0.96;
       context.fill();
 
-      context.strokeStyle = isHovered ? colors.borderHot : active ? colors.nodeCore : (colors.labelBorder || colors.border);
-      context.globalAlpha = isHovered ? 0.95 : active ? 0.9 : 0.45;
-      context.lineWidth = active || isHovered ? 1.0 : 0.8;
+      context.strokeStyle = isHovered ? "#FFFFFF" : isUser ? "rgba(56, 189, 248, 0.7)" : isExit ? "rgba(16, 185, 129, 0.7)" : "rgba(255, 255, 255, 0.16)";
+      context.globalAlpha = isHovered ? 1 : active ? 0.9 : 0.55;
+      context.lineWidth = active || isHovered ? 1.2 : 0.9;
       context.stroke();
 
       context.textBaseline = "middle";
       context.textAlign = "left";
       context.globalAlpha = 1;
       context.font = titleFont;
-      context.fillStyle = active ? colors.nodeCore : colors.label;
-      context.fillText(title, left + inset, top + (meta ? Math.round(10 * labelScale) : height / 2));
+      context.fillStyle = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#34D399" : "#F8FAFC";
+      context.fillText(title, left + inset, top + (meta ? Math.round(11 * labelScale) : height / 2));
 
       if (meta) {
-        context.fillStyle = colors.labelMuted;
+        context.fillStyle = isHovered ? "rgba(255, 255, 255, 0.9)" : isUser ? "#BAE6FD" : isExit ? "#A7F3D0" : "#94A3B8";
         context.font = metaFont;
-        context.fillText(meta, left + inset, top + Math.round(21 * labelScale));
+        context.fillText(meta, left + inset, top + Math.round(23 * labelScale));
       }
       context.restore();
     }
