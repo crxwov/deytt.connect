@@ -187,6 +187,8 @@
     }
     const countryCode = (state.countryCode || "").toLowerCase();
     let rawProto = (state.protocol || "").toLowerCase().replace(/^\.\//, "");
+    const compactRouteTag = prefix === "compact-" && countryCode && rawProto
+      ? `${countryCode}./${rawProto}` : "";
     if (countryCode && rawProto) {
       if (country) {
         country.textContent = "";
@@ -194,7 +196,7 @@
       }
       if (protocol) {
         protocol.textContent = `${countryCode}./${rawProto}`;
-        protocol.hidden = false;
+        protocol.hidden = prefix === "compact-";
       }
     } else {
       if (country) {
@@ -206,7 +208,7 @@
         protocol.hidden = !state.protocol;
       }
     }
-    if (city) city.textContent = state.city || "";
+    if (city) city.textContent = compactRouteTag || state.city || "";
     if (subtitle) {
       subtitle.hidden = Boolean(state.country || state.protocol || (countryCode && rawProto));
     }

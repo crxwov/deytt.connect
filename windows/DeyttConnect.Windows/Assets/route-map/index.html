@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>./connect · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261022_45">
-  <script defer src="network-atlas.js?v=20261022_45"></script>
-  <script defer src="atlas-init.js?v=20261022_45"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261022_46">
+  <script defer src="network-atlas.js?v=20261022_46"></script>
+  <script defer src="atlas-init.js?v=20261022_46"></script>
 
   <style>
     :root {
@@ -618,47 +618,6 @@
       position: relative !important;
       overflow: hidden !important;
       box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), 0 6px 18px rgba(0, 0, 0, 0.35) !important;
-    }
-
-    .route-flag-pill[data-country="DE"],
-    .route-flag[data-country="DE"] {
-      background: linear-gradient(to bottom, #111111 0% 33.33%, #D12D3A 33.33% 66.66%, #F2C230 66.66%) !important;
-      border-color: rgba(255, 255, 255, 0.25) !important;
-    }
-    .route-flag-pill[data-country="NL"],
-    .route-flag[data-country="NL"] {
-      background: linear-gradient(to bottom, #AE1C28 0% 33.33%, #FFFFFF 33.33% 66.66%, #21468B 66.66%) !important;
-      border-color: rgba(255, 255, 255, 0.25) !important;
-    }
-    .route-flag-pill[data-country="RU"],
-    .route-flag[data-country="RU"] {
-      background: linear-gradient(to bottom, #FFFFFF 0% 33.33%, #3159A5 33.33% 66.66%, #D43844 66.66%) !important;
-      border-color: rgba(255, 255, 255, 0.25) !important;
-    }
-    .route-flag-pill[data-country="FI"],
-    .route-flag[data-country="FI"] {
-      background: #FFFFFF !important;
-      position: relative !important;
-      border-color: rgba(255, 255, 255, 0.25) !important;
-    }
-    .route-flag-pill[data-country="FI"]::before,
-    .route-flag[data-country="FI"]::before {
-      content: "";
-      position: absolute;
-      top: 0; bottom: 0; left: 33%; width: 20%;
-      background: #003580;
-    }
-    .route-flag-pill[data-country="FI"]::after,
-    .route-flag[data-country="FI"]::after {
-      content: "";
-      position: absolute;
-      left: 0; right: 0; top: 40%; height: 20%;
-      background: #003580;
-    }
-    .route-flag-pill[data-country="IT"],
-    .route-flag[data-country="IT"] {
-      background: linear-gradient(to right, #15965A 0% 33.33%, #FFFFFF 33.33% 66.66%, #D7414B 66.66%) !important;
-      border-color: rgba(255, 255, 255, 0.25) !important;
     }
 
     .home-city {
@@ -1816,9 +1775,9 @@
     .glass-modal-backdrop {
       position: fixed;
       inset: 0;
-      background: rgba(3, 6, 12, 0.75);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      background: transparent;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       z-index: 200;
       display: flex;
       align-items: center;
@@ -3348,13 +3307,24 @@
       const data = routeDetails[key] || routeDetails.auto;
       const countryName = route?.countryName || data.country;
       const routeName = route?.protocolName || data.city;
-      const routeFlag = route?.flag || data.flag;
+      const routeCountryCode = String(route?.countryCode || (key === "ru-de" ? "RU-DE" : key.split("-")[0]) || "").toUpperCase();
+      const hasRouteProtocol = route ? Boolean(routeProtocolKey(route)) : /^(nl|de|ru|fi|it)-(vless|hy2|trojan|awg)$/.test(key);
+      const compactProtocol = hasRouteProtocol ? data.city : "";
+
+      function setSelectedFlag(element) {
+        if (!element) return;
+        const code = /^(NL|DE|RU|FI|IT|RU-DE)$/.test(routeCountryCode) ? routeCountryCode : "";
+        element.dataset.country = code;
+        element.classList.toggle("is-generic", !code);
+        element.innerHTML = code ? getFlagSvg(code, 22, 15) : "✦";
+        element.setAttribute("aria-label", code);
+      }
 
       // Update right connection panel
       const homeFlag = document.getElementById("home-flag");
       const homeCountry = document.getElementById("home-country");
       const homeCity = document.getElementById("home-city");
-      if (homeFlag) homeFlag.textContent = routeFlag || "✦";
+      setSelectedFlag(homeFlag);
       if (homeCountry) {
         homeCountry.textContent = countryName || "";
         homeCountry.hidden = key === "auto" || !countryName;
@@ -3375,12 +3345,18 @@
       const compactFlag = document.getElementById("compact-flag");
       const compactCountry = document.getElementById("compact-country");
       const compactCity = document.getElementById("compact-city");
-      if (compactFlag) compactFlag.textContent = routeFlag || "✦";
+      setSelectedFlag(compactFlag);
       if (compactCountry) {
         compactCountry.textContent = countryName || "";
-        compactCountry.hidden = key === "auto" || !countryName;
+        compactCountry.hidden = Boolean(compactProtocol) || key === "auto" || !countryName;
       }
-      if (compactCity) compactCity.textContent = routeName;
+      if (compactCity) compactCity.textContent = compactProtocol
+        ? `${routeCountryCode.toLowerCase()}./${compactProtocol}` : routeName;
+      const compactProtocolLabel = document.getElementById("compact-protocol");
+      if (compactProtocolLabel) {
+        compactProtocolLabel.textContent = "";
+        compactProtocolLabel.hidden = true;
+      }
 
       // Update card active classes for smart routes and protocol rows
       document.querySelectorAll("[data-route-key]").forEach(card => {

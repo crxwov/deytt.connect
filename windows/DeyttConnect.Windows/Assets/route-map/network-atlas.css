@@ -486,12 +486,25 @@ html.is-immersive .home-compact {
   transform: translateX(-50%);
   pointer-events: auto;
   border-radius: 18px;
-  box-shadow: 0 14px 42px rgba(0, 0, 0, .28);
+  background: linear-gradient(155deg, rgba(255, 255, 255, .105), rgba(255, 255, 255, .025) 55%), rgba(17, 24, 39, .74);
+  border-color: rgba(255, 255, 255, .18);
+  border-top-color: rgba(255, 255, 255, .38);
+  box-shadow: 0 14px 42px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255, 255, 255, .18);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
 }
 html.is-immersive .home-compact-content { grid-template-columns: minmax(0, 1fr) auto auto; transform: none; }
 html.is-immersive .compact-exit { display: grid; }
 html.is-immersive .globe-controls { left: 24px; bottom: 24px; }
-html.is-immersive .compact-action { width: auto; }
+html.is-immersive .compact-action {
+  width: auto;
+  background: linear-gradient(180deg, #1d8cf8, #1170dc);
+  border: 1px solid rgba(255,255,255,.24);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18), 0 6px 18px rgba(13,121,235,.2);
+}
+html.is-immersive .compact-action:hover { filter: brightness(1.1); }
+html.is-immersive .compact-action:disabled { background: var(--surface-2); box-shadow: none; filter: none; }
+html.is-immersive #compact-flag svg { width: 28px; height: 20px; }
 .network-atlas.is-immersive.reduce-motion .home-compact { transform: translateX(-50%) !important; }
 
 @media (max-width: 559px) {
