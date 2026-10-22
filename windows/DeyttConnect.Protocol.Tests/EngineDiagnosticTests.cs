@@ -91,6 +91,19 @@ public sealed class EngineDiagnosticTests
     }
 
     [Fact]
+    public void ShutdownDnsCancellationDoesNotOverwriteTheEngineStartupFailure()
+    {
+        var diagnostic = new EngineController.EngineRuntimeDiagnostic();
+        diagnostic.Record("FATAL[0000] inbound/tun: failed to initialize adapter");
+        diagnostic.Record("ERROR[0001] dns: exchange failed: context canceled");
+
+        var result = EngineController.FormatEngineExit(1, diagnostic);
+
+        Assert.Contains("failed to initialize adapter", result);
+        Assert.DoesNotContain("exchange failed: context canceled", result);
+    }
+
+    [Fact]
     public async Task UnlabelledTerminalCauseNoLongerBecomesUnknownExit()
     {
         var diagnostic = new EngineController.EngineRuntimeDiagnostic();

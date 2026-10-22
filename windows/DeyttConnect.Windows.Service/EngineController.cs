@@ -1768,8 +1768,19 @@ internal sealed class EngineController
             Volatile.Write(ref _latestLine, summary);
             if (System.Text.RegularExpressions.Regex.IsMatch(line,
                     @"(?i)\b(fatal|error|failed|invalid|unsupported|unknown|missing|decode|parse|panic)\b"))
-                Volatile.Write(ref _latestError, summary);
+            {
+                // Engine shutdown can emit a final DNS "exchange failed: context canceled"
+                // after the actionable startup failure. Keep cancellation as a fallback only.
+                if (IsCancellationCleanup(line))
+                    Interlocked.CompareExchange(ref _latestError, summary, null);
+                else
+                    Volatile.Write(ref _latestError, summary);
+            }
         }
+
+        private static bool IsCancellationCleanup(string line) =>
+            System.Text.RegularExpressions.Regex.IsMatch(line,
+                @"(?i)\b(?:context|operation|request)\s+(?:was\s+)?cancel(?:ed|led)\b");
     }
 
     private static string WritePrivateProfile(string content)
