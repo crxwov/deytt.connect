@@ -67,6 +67,17 @@ public partial class MainWindow
         SetupWindowResult? completedResult = null;
         try
         {
+            if (_routeGlobe is { Parent: not null } globe)
+            {
+                var capture = globe.CapturePreviewAsync();
+                try { _setupPagePreview = await capture.WaitAsync(PagePreviewCaptureTimeout); }
+                catch (TimeoutException)
+                {
+                    _ = capture.ContinueWith(task => task.Result?.Dispose(), CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
+                }
+            }
+            if (!IsVisible) return;
             ShowTab(MainTab.Setup);
             await setup.ActivateAsync();
             completedResult = await completion.Task;
@@ -78,6 +89,9 @@ public partial class MainWindow
             _setupFlowCompletion = null;
             if (IsVisible && _activeTab == MainTab.Setup)
                 ShowTab(completedResult is null ? returnTab : MainTab.Home);
+            _setupPagePreview?.Dispose();
+            _setupPagePreview = null;
+            _setupBackdropPage = null;
             if (IsVisible && _pendingExternalImportUrl is { Length: > 0 } queuedImportUrl)
             {
                 _pendingExternalImportUrl = null;

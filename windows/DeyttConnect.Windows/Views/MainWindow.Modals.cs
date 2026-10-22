@@ -13,7 +13,7 @@ namespace DeyttConnect.Windows.Views;
 public partial class MainWindow
 {
     private readonly SemaphoreSlim _shellModalGate = new(1, 1);
-    private static readonly TimeSpan HomePreviewCaptureTimeout = TimeSpan.FromMilliseconds(800);
+    private static readonly TimeSpan PagePreviewCaptureTimeout = TimeSpan.FromSeconds(2);
     private ShellContentDialog? _activeShellContentDialog;
 
     private async Task<bool> ConfirmInShellAsync(
@@ -104,8 +104,9 @@ public partial class MainWindow
         };
         Closed += closedHandler;
         var gateAcquired = false;
-        Bitmap? homePreview = null;
+        Bitmap? pagePreview = null;
         Task<Bitmap?>? previewCaptureTask = null;
+        Rect previewBounds = default;
         Control? previousFocus = null;
         (bool Sidebar, bool BottomNavigation, bool Page, bool HeaderNavigation) previousEnabled = default;
 
@@ -113,17 +114,19 @@ public partial class MainWindow
         {
             await _shellModalGate.WaitAsync(closingCancellation.Token);
             gateAcquired = true;
-            if (_activeTab == MainTab.Home && _routeGlobe is not null)
+            if (_routeGlobe is { Parent: not null, IsEffectivelyVisible: true } globe && globe.IsAttachedToVisualTree())
             {
+                var previewOrigin = globe.TranslatePoint(default, ModalOverlayHost) ?? default;
+                previewBounds = new Rect(previewOrigin, globe.Bounds.Size);
                 try
                 {
-                    previewCaptureTask = _routeGlobe.CapturePreviewAsync();
-                    homePreview = await previewCaptureTask.WaitAsync(HomePreviewCaptureTimeout,
+                    previewCaptureTask = globe.CapturePreviewAsync();
+                    pagePreview = await previewCaptureTask.WaitAsync(PagePreviewCaptureTimeout,
                         closingCancellation.Token);
                 }
                 catch (TimeoutException)
                 {
-                    // Use the theme surface when the atlas cannot be captured quickly.
+                    // A late capture must not retain the native bitmap after the dialog closes.
                     if (previewCaptureTask is not null)
                         _ = previewCaptureTask.ContinueWith(task => task.Result?.Dispose(),
                             CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion,
@@ -144,8 +147,12 @@ public partial class MainWindow
                     () => modal.Close());
                 close.Width = 38;
                 close.Height = 38;
+                DeyttTheme.StyleDialogButton(close);
+                close.MinHeight = 38;
+                close.Padding = new Thickness(0);
                 AutomationProperties.SetAutomationId(close, "DialogCloseButton");
                 AutomationProperties.SetName(close, Copy("Закрыть окно", "Close dialog"));
+                var heading = DeyttTheme.TextBlock(title, 20, DeyttTheme.Text, FontWeight.Bold, DeyttTheme.Unbounded);
                 var header = new Grid
                 {
                     ColumnDefinitions = new ColumnDefinitions("*,Auto"),
@@ -153,7 +160,7 @@ public partial class MainWindow
                     VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
                     Children =
                     {
-                        DeyttTheme.TextBlock(title, 18, DeyttTheme.Text, FontWeight.Bold, DeyttTheme.Unbounded),
+                          heading,
                         close,
                     },
                 };
@@ -164,22 +171,23 @@ public partial class MainWindow
                     ? Math.Max(320, Bounds.Width - 44)
                     : maxWidth;
                 var cardMaxWidth = Math.Min(maxWidth, availableCardWidth);
+                header.Measure(new Size(Math.Max(1, cardMaxWidth - 56), double.PositiveInfinity));
                 var footerHeight = 0d;
                 if (footer is not null)
                 {
-                    footer.Measure(new Size(Math.Max(1, cardMaxWidth - 48), double.PositiveInfinity));
-                    footerHeight = footer.DesiredSize.Height + 16;
+                    footer.Measure(new Size(Math.Max(1, cardMaxWidth - 56), double.PositiveInfinity));
+                    footerHeight = footer.DesiredSize.Height + 20;
                 }
                 var body = new ScrollViewer
                 {
                     Content = content,
-                    MaxHeight = Math.Max(48, availableCardHeight - 104 - footerHeight),
+                    MaxHeight = Math.Max(48, availableCardHeight - header.DesiredSize.Height - 76 - footerHeight),
                     VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
                     HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                 };
                 var cardContents = new StackPanel
                 {
-                    Spacing = 16,
+                    Spacing = 20,
                     Children = { header, body },
                 };
                 if (footer is not null)
@@ -198,7 +206,9 @@ public partial class MainWindow
                         HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                     };
                 }
-                var card = DeyttTheme.DialogCard(dialogContents, 21, new Thickness(24));
+                var card = DeyttTheme.DialogCard(dialogContents, 26, new Thickness(28));
+                AutomationProperties.SetAutomationId(card, "GlassDialogCard");
+                card.Width = cardMaxWidth;
                 card.MaxWidth = cardMaxWidth;
                 card.MaxHeight = availableCardHeight;
                 card.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
@@ -212,20 +222,61 @@ public partial class MainWindow
                 };
                 overlay.Resources["AppFocusBrush"] = DeyttTheme.Brush(DeyttTheme.DialogAccent);
                 KeyboardNavigation.SetTabNavigation(overlay, KeyboardNavigationMode.Cycle);
-                if (homePreview is not null)
-                    overlay.Children.Add(new Image
-                    {
-                        Source = homePreview,
-                        Stretch = Stretch.Fill,
-                        IsHitTestVisible = false,
-                    });
-                var pageTone = DeyttTheme.Background;
-                overlay.Children.Add(new Border
+                overlay.SizeChanged += (_, args) =>
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(208,
-                        pageTone.R, pageTone.G, pageTone.B)),
-                    IsHitTestVisible = false,
-                });
+                    var width = Math.Min(maxWidth, Math.Max(320, args.NewSize.Width - 44));
+                    var height = Math.Max(96, args.NewSize.Height - 44);
+                    card.Width = card.MaxWidth = width;
+                    card.MaxHeight = height;
+                    header.Measure(new Size(Math.Max(1, width - 56), double.PositiveInfinity));
+                    footer?.Measure(new Size(Math.Max(1, width - 56), double.PositiveInfinity));
+                    if (dialogContents is ScrollViewer scroller)
+                        scroller.MaxHeight = Math.Max(48, height - 56);
+                    else
+                        body.MaxHeight = Math.Max(48, height - header.DesiredSize.Height - 76 -
+                            (footer is null ? 0 : footer.DesiredSize.Height + 20));
+                };
+                Image? previewImage = null;
+                if (pagePreview is not null)
+                {
+                    previewImage = new Image
+                    {
+                        Name = "DialogPagePreview",
+                        Source = pagePreview,
+                        Stretch = Stretch.Fill,
+                        Margin = new Thickness(previewBounds.X, previewBounds.Y,
+                            Math.Max(0, ModalOverlayHost.Bounds.Width - previewBounds.Right),
+                            Math.Max(0, ModalOverlayHost.Bounds.Height - previewBounds.Bottom)),
+                        IsHitTestVisible = false,
+                    };
+                    overlay.Children.Add(previewImage);
+                }
+                if (previewImage is not null)
+                {
+                    // Sample only the card's backdrop; the page outside it stays untouched.
+                    var backdropBrush = new ImageBrush(pagePreview) { Stretch = Stretch.Fill };
+                    var backdrop = new Border { Background = backdropBrush, Effect = new BlurEffect { Radius = 28 }, IsHitTestVisible = false };
+                    var glass = new Grid { IsHitTestVisible = false, ClipToBounds = true };
+                    glass.Children.Add(backdrop);
+                    overlay.Children.Add(glass);
+                    card.LayoutUpdated += (_, _) =>
+                    {
+                        var position = card.TranslatePoint(default, overlay) ?? default;
+                        glass.Width = card.Bounds.Width;
+                        glass.Height = card.Bounds.Height;
+                        glass.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+                        glass.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
+                        glass.Margin = new Thickness(position.X, position.Y, 0, 0);
+                        glass.Clip = new RectangleGeometry(new Rect(card.Bounds.Size), 26, 26);
+                        var imageBounds = previewImage.Bounds;
+                        if (imageBounds.Width <= 0 || imageBounds.Height <= 0) return;
+                        backdropBrush.SourceRect = new RelativeRect(
+                            (position.X - imageBounds.X) / imageBounds.Width,
+                            (position.Y - imageBounds.Y) / imageBounds.Height,
+                            card.Bounds.Width / imageBounds.Width,
+                            card.Bounds.Height / imageBounds.Height, RelativeUnit.Relative);
+                    };
+                }
                 overlay.Children.Add(card);
                 overlay.KeyDown += (_, args) =>
                 {
@@ -301,8 +352,8 @@ public partial class MainWindow
                         Dispatcher.UIThread.Post(() => focusTarget.Focus(), DispatcherPriority.Input);
                     }
                 });
-                homePreview?.Dispose();
-                homePreview = null;
+                pagePreview?.Dispose();
+                pagePreview = null;
                 _shellModalGate.Release();
             }
         }

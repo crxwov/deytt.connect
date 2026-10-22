@@ -171,12 +171,13 @@ public partial class MainWindow
         void SaveAndRefresh()
         {
             SyncCurrentStateToPreset();
-            WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(
-                customDomains,
-                customProcesses,
-                currentMode,
-                activePresetId,
-                presets));
+            if (!_qaFixture)
+                WindowsSplitTunnelStore.Save(new WindowsSplitTunnelConfig(
+                    customDomains,
+                    customProcesses,
+                    currentMode,
+                    activePresetId,
+                    presets));
             refreshAllDynamicUi?.Invoke();
         }
 
@@ -201,76 +202,68 @@ public partial class MainWindow
         }
 
         // 0. Presets Section
-        var presetsCardStack = new StackPanel { Spacing = 10 };
-        var presetsSection = DeyttTheme.DialogCard(presetsCardStack, 14, new Thickness(14, 12));
+        var presetsCardStack = new StackPanel { Spacing = 12 };
+        var presetsSection = DeyttTheme.DialogPanel(presetsCardStack, 18, new Thickness(18, 16));
 
-        var presetsHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var presetsHeader = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            RowDefinitions = new RowDefinitions("Auto"),
+            RowSpacing = 8,
+        };
         var presetsTitleRow = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        presetsTitleRow.Children.Add(DeyttTheme.TextBlock(Copy("ПРЕСЕТЫ НАСТРОЕК", "PRESETS"), 11, DeyttTheme.Muted, FontWeight.Bold));
-        var presetsCountBadge = DeyttTheme.TextBlock(Copy($"{presets.Count}", $"{presets.Count}"), 11, DeyttTheme.DialogAccent, FontWeight.SemiBold);
+        presetsTitleRow.Children.Add(DeyttTheme.TextBlock(Copy("Сохранённые профили", "Saved presets"), 15, DeyttTheme.Text, FontWeight.SemiBold));
+        var presetsCountBadge = DeyttTheme.TextBlock(Copy($"{presets.Count}", $"{presets.Count}"), 12, DeyttTheme.Muted, FontWeight.Medium);
         presetsTitleRow.Children.Add(presetsCountBadge);
         presetsHeader.Children.Add(presetsTitleRow);
 
         var addPresetBtn = new Button
         {
-            Content = Copy("+ Новый пресет", "+ New preset"),
-            Classes = { "deytt-button" },
+            Content = Copy("+ Добавить профиль", "+ Add preset"),
             Background = Brushes.Transparent,
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogLine),
             BorderThickness = new Thickness(1),
             Foreground = DeyttTheme.Brush(DeyttTheme.DialogAccent),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(10, 4),
-            FontSize = 11,
-            FontWeight = FontWeight.SemiBold,
             Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
         };
+        Avalonia.Automation.AutomationProperties.SetAutomationId(addPresetBtn, "SplitPresetAdd");
+        DeyttTheme.StyleDialogButton(addPresetBtn);
+        addPresetBtn.Foreground = DeyttTheme.Brush(DeyttTheme.DialogAccent);
         presetsHeader.Children.Add(addPresetBtn);
         Grid.SetColumn(addPresetBtn, 1);
         presetsCardStack.Children.Add(presetsHeader);
 
         // Inline Add Preset Form
-        var addPresetRow = new Grid
+        var addPresetRow = new WrapPanel
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"),
-            ColumnSpacing = 6,
+            Orientation = Avalonia.Layout.Orientation.Horizontal,
             IsVisible = false
         };
         var presetNameBox = new TextBox
         {
             PlaceholderText = Copy("Название (например: Игры, Работа...)", "Preset name (e.g. Gaming, Work...)"),
-            FontSize = 12,
-            CornerRadius = new CornerRadius(8),
-            MinHeight = 32,
+            Width = 300,
             VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center
         };
+        Avalonia.Automation.AutomationProperties.SetAutomationId(presetNameBox, "SplitPresetName");
+        DeyttTheme.StyleDialogInput(presetNameBox);
+        presetNameBox.Margin = new Thickness(0, 0, 8, 8);
         var confirmAddPresetBtn = new Button
         {
             Content = Copy("Создать", "Create"),
-            Classes = { "deytt-button" },
-            Background = DeyttTheme.Brush(DeyttTheme.DialogActionBottom),
-            Foreground = Brushes.White,
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(12, 4),
-            FontSize = 11,
-            FontWeight = FontWeight.SemiBold,
-            MinHeight = 32,
             Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
         };
+        Avalonia.Automation.AutomationProperties.SetAutomationId(confirmAddPresetBtn, "SplitPresetCreate");
+        DeyttTheme.StyleDialogButton(confirmAddPresetBtn, primary: true);
+        confirmAddPresetBtn.Margin = new Thickness(0, 0, 8, 8);
         var cancelAddPresetBtn = new Button
         {
             Content = Copy("Отмена", "Cancel"),
-            Classes = { "deytt-button" },
-            Background = Brushes.Transparent,
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            Foreground = DeyttTheme.Brush(DeyttTheme.Muted),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(10, 4),
-            FontSize = 11,
-            MinHeight = 32,
             Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
         };
+        Avalonia.Automation.AutomationProperties.SetAutomationId(cancelAddPresetBtn, "SplitPresetCancel");
+        DeyttTheme.StyleDialogButton(cancelAddPresetBtn);
+        cancelAddPresetBtn.Margin = new Thickness(0, 0, 0, 8);
 
         void DoAddPreset()
         {
@@ -320,9 +313,6 @@ public partial class MainWindow
         addPresetRow.Children.Add(presetNameBox);
         addPresetRow.Children.Add(confirmAddPresetBtn);
         addPresetRow.Children.Add(cancelAddPresetBtn);
-        Grid.SetColumn(presetNameBox, 0);
-        Grid.SetColumn(confirmAddPresetBtn, 1);
-        Grid.SetColumn(cancelAddPresetBtn, 2);
         presetsCardStack.Children.Add(addPresetRow);
 
         var presetsWrapPanel = new WrapPanel { Orientation = Avalonia.Layout.Orientation.Horizontal };
@@ -330,91 +320,58 @@ public partial class MainWindow
 
         rootStack.Children.Add(presetsSection);
 
-        // 1. Mode Selector (Segmented Cards)
+        // 1. Mode selector
         var modeSelectorGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,*"),
             ColumnSpacing = 10,
+            RowSpacing = 10,
         };
 
-        Border? bypassModeCard = null;
-        Border? vpnOnlyModeCard = null;
+        Button? bypassModeCard = null;
+        Button? vpnOnlyModeCard = null;
+        Border? bypassModeSurface = null;
+        Border? vpnOnlyModeSurface = null;
         TextBlock? bypassModeTitle = null;
         TextBlock? vpnOnlyModeTitle = null;
         TextBlock? bypassModeCheck = null;
         TextBlock? vpnOnlyModeCheck = null;
 
-        // Card 1: Bypass mode
-        var bypassHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var bypassHeader = new StackPanel { Spacing = 4 };
         bypassModeTitle = DeyttTheme.TextBlock(Copy("Обход VPN для списка", "Bypass VPN for list"), 13, weight: FontWeight.SemiBold);
-        bypassModeCheck = DeyttTheme.TextBlock("✓", 13, DeyttTheme.Mint, FontWeight.Bold);
         bypassHeader.Children.Add(bypassModeTitle);
-        bypassHeader.Children.Add(bypassModeCheck);
-        Grid.SetColumn(bypassModeTitle, 0);
-        Grid.SetColumn(bypassModeCheck, 1);
+        bypassHeader.Children.Add(DeyttTheme.TextBlock(
+            Copy("Весь интернет через VPN. Сайты и программы в списке идут напрямую.",
+                "All traffic through VPN. Listed sites and apps go direct."),
+            12, DeyttTheme.Muted));
 
-        var bypassStack = new StackPanel
-        {
-            Spacing = 4,
-            Children =
-            {
-                bypassHeader,
-                DeyttTheme.TextBlock(
-                    Copy("Весь интернет через VPN. Сайты и программы из списка идут напрямую.",
-                        "All traffic through VPN. Sites and apps in the list go direct."),
-                    11, DeyttTheme.Muted)
-            }
-        };
-
-        bypassModeCard = new Border
-        {
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(14, 12),
-            BorderThickness = new Thickness(1.5),
-            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
-            Child = bypassStack,
-        };
-        bypassModeCard.PointerPressed += (_, _) =>
+        var bypassContent = new StackPanel { Spacing = 8, Children = { bypassHeader } };
+        bypassModeCard = DeyttTheme.DialogChoice(bypassContent, false, () =>
         {
             currentMode = WindowsSplitTunnelConfig.ModeBypass;
             SaveAndRefresh();
-        };
+        });
+        bypassModeSurface = (Border)bypassModeCard.Content!;
+        bypassModeCheck = (TextBlock)((Grid)bypassModeSurface.Child!).Children[1];
 
-        // Card 2: VPN only mode
-        var vpnOnlyHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var vpnOnlyHeader = new StackPanel { Spacing = 4 };
         vpnOnlyModeTitle = DeyttTheme.TextBlock(Copy("VPN только для списка", "VPN only for list"), 13, weight: FontWeight.SemiBold);
-        vpnOnlyModeCheck = DeyttTheme.TextBlock("✓", 13, DeyttTheme.Mint, FontWeight.Bold);
         vpnOnlyHeader.Children.Add(vpnOnlyModeTitle);
-        vpnOnlyHeader.Children.Add(vpnOnlyModeCheck);
-        Grid.SetColumn(vpnOnlyModeTitle, 0);
-        Grid.SetColumn(vpnOnlyModeCheck, 1);
+        vpnOnlyHeader.Children.Add(DeyttTheme.TextBlock(
+            Copy("Весь интернет идёт напрямую. Только сайты и программы в списке идут через VPN.",
+                "All traffic goes direct. Only listed sites and apps go through VPN."),
+            12, DeyttTheme.Muted));
 
-        var vpnOnlyStack = new StackPanel
-        {
-            Spacing = 4,
-            Children =
-            {
-                vpnOnlyHeader,
-                DeyttTheme.TextBlock(
-                    Copy("Весь интернет напрямую. Через VPN идут только сайты и программы из списка.",
-                        "All traffic direct. Only sites and apps in the list go through VPN."),
-                    11, DeyttTheme.Muted)
-            }
-        };
-
-        vpnOnlyModeCard = new Border
-        {
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(14, 12),
-            BorderThickness = new Thickness(1.5),
-            Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
-            Child = vpnOnlyStack,
-        };
-        vpnOnlyModeCard.PointerPressed += (_, _) =>
+        var vpnOnlyContent = new StackPanel { Spacing = 8, Children = { vpnOnlyHeader } };
+        vpnOnlyModeCard = DeyttTheme.DialogChoice(vpnOnlyContent, false, () =>
         {
             currentMode = WindowsSplitTunnelConfig.ModeVpnOnly;
             SaveAndRefresh();
-        };
+        });
+        Avalonia.Automation.AutomationProperties.SetAutomationId(bypassModeCard!, "SplitModeBypass");
+        Avalonia.Automation.AutomationProperties.SetAutomationId(vpnOnlyModeCard!, "SplitModeVpnOnly");
+        vpnOnlyModeSurface = (Border)vpnOnlyModeCard.Content!;
+        vpnOnlyModeCheck = (TextBlock)((Grid)vpnOnlyModeSurface.Child!).Children[1];
 
         modeSelectorGrid.Children.Add(bypassModeCard);
         modeSelectorGrid.Children.Add(vpnOnlyModeCard);
@@ -425,44 +382,32 @@ public partial class MainWindow
         void UpdateModeCardsVisual()
         {
             var isVpnOnly = string.Equals(currentMode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
-            if (!isVpnOnly)
+            void Update(Button button, Border surface, TextBlock title, TextBlock check, bool selected)
             {
-                bypassModeCard!.Background = DeyttTheme.Brush(DeyttTheme.DialogSelected);
-                bypassModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine);
-                bypassModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Mint);
-                bypassModeCheck!.IsVisible = true;
-
-                vpnOnlyModeCard!.Background = DeyttTheme.Brush(DeyttTheme.Surface);
-                vpnOnlyModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.Line);
-                vpnOnlyModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
-                vpnOnlyModeCheck!.IsVisible = false;
+                surface.Background = selected ? DeyttTheme.Brush(DeyttTheme.DialogSelected) : DeyttTheme.DialogSurface;
+                surface.BorderBrush = DeyttTheme.Brush(selected ? DeyttTheme.DialogSelectionLine : DeyttTheme.DialogLine);
+                title.Foreground = DeyttTheme.Brush(selected ? DeyttTheme.Mint : DeyttTheme.Text);
+                check.Text = selected ? "✓" : "○";
+                check.Foreground = DeyttTheme.Brush(selected ? DeyttTheme.Mint : DeyttTheme.Muted);
+                Avalonia.Automation.AutomationProperties.SetName(button,
+                    title.Text + (selected ? Copy(", выбрано", ", selected") : ""));
             }
-            else
-            {
-                bypassModeCard!.Background = DeyttTheme.Brush(DeyttTheme.Surface);
-                bypassModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.Line);
-                bypassModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
-                bypassModeCheck!.IsVisible = false;
 
-                vpnOnlyModeCard!.Background = DeyttTheme.Brush(DeyttTheme.DialogSelected);
-                vpnOnlyModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine);
-                vpnOnlyModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Mint);
-                vpnOnlyModeCheck!.IsVisible = true;
-            }
+            Update(bypassModeCard!, bypassModeSurface!, bypassModeTitle!, bypassModeCheck!, !isVpnOnly);
+            Update(vpnOnlyModeCard!, vpnOnlyModeSurface!, vpnOnlyModeTitle!, vpnOnlyModeCheck!, isVpnOnly);
         }
 
-        // 2. Base Rules Card (Lock icon, chips, subtle badge)
-        var baseRulesSection = new StackPanel { Spacing = 8 };
+        // 2. Base rules are read-only and kept visually quiet.
+        var baseRulesContent = new StackPanel { Spacing = 10 };
         var baseHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var baseTitleRow = new StackPanel
         {
             Orientation = Avalonia.Layout.Orientation.Horizontal,
-            Spacing = 6,
+            Spacing = 8,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             Children =
             {
-                DeyttTheme.TextBlock("🔒", 12),
-                DeyttTheme.RawTextBlock(Copy("Базовые правила подписки", "Base subscription rules"), 12, DeyttTheme.Text, FontWeight.SemiBold),
+                DeyttTheme.TextBlock(Copy("Базовые правила подписки", "Base subscription rules"), 14, DeyttTheme.Text, FontWeight.SemiBold),
             }
         };
         baseHeaderGrid.Children.Add(baseTitleRow);
@@ -473,13 +418,13 @@ public partial class MainWindow
             Background = DeyttTheme.Brush(DeyttTheme.DialogSelected),
             BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine),
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(8, 2),
-            Child = DeyttTheme.TextBlock(Copy("всегда без vpn", "always direct"), 10, DeyttTheme.Mint, FontWeight.SemiBold, wrap: false)
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(10, 5),
+            Child = DeyttTheme.TextBlock(Copy("Всегда напрямую", "Always direct"), 11, DeyttTheme.Mint, FontWeight.SemiBold, wrap: false)
         };
         baseHeaderGrid.Children.Add(baseBadge);
         Grid.SetColumn(baseBadge, 1);
-        baseRulesSection.Children.Add(baseHeaderGrid);
+        baseRulesContent.Children.Add(baseHeaderGrid);
 
         var chipsWrap = new WrapPanel
         {
@@ -491,13 +436,13 @@ public partial class MainWindow
             {
                 var chip = new Border
                 {
-                    Background = DeyttTheme.Brush(DeyttTheme.Surface2),
-                    BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+                    Background = DeyttTheme.DialogSurface,
+                    BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogLine),
                     BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(8),
-                    Padding = new Thickness(8, 3),
+                    CornerRadius = new CornerRadius(9),
+                    Padding = new Thickness(10, 5),
                     Margin = new Thickness(0, 0, 6, 6),
-                    Child = DeyttTheme.TextBlock(site, 11, DeyttTheme.Muted, family: DeyttTheme.JetBrainsMono, wrap: false)
+                    Child = DeyttTheme.TextBlock(site, 11, DeyttTheme.Muted, wrap: false)
                 };
                 chipsWrap.Children.Add(chip);
             }
@@ -519,17 +464,17 @@ public partial class MainWindow
                     11, DeyttTheme.Muted)
             }
         };
-        baseRulesSection.Children.Add(DeyttTheme.DialogCard(baseCardContent, 14, new Thickness(14, 12)));
-        rootStack.Children.Add(baseRulesSection);
+        baseRulesContent.Children.Add(baseCardContent);
+        rootStack.Children.Add(DeyttTheme.DialogPanel(baseRulesContent, 18, new Thickness(18, 16)));
 
         // 3. Custom Domains Section
         var domainsSection = new StackPanel { Spacing = 8 };
         var domainsHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        var domainsTitle = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.DialogAccent, FontWeight.SemiBold);
+        var domainsTitle = DeyttTheme.TextBlock(string.Empty, 15, DeyttTheme.Text, FontWeight.SemiBold);
         domainsHeaderGrid.Children.Add(domainsTitle);
         Grid.SetColumn(domainsTitle, 0);
 
-        var domainsCountBadge = DeyttTheme.TextBlock(string.Empty, 11, DeyttTheme.Muted);
+        var domainsCountBadge = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.Muted);
         domainsHeaderGrid.Children.Add(domainsCountBadge);
         Grid.SetColumn(domainsCountBadge, 1);
         domainsSection.Children.Add(domainsHeaderGrid);
@@ -537,30 +482,29 @@ public partial class MainWindow
         var domainInputGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            RowDefinitions = new RowDefinitions("Auto"),
             ColumnSpacing = 8,
+            RowSpacing = 8,
         };
         var domainTextBox = new TextBox
         {
             PlaceholderText = Copy("например: mydomain.com или *.domain.ru", "e.g. mydomain.com or *.domain.ru"),
-            FontSize = 13,
-            FontFamily = DeyttTheme.JetBrainsMono,
-            Height = 40,
-            CornerRadius = new CornerRadius(10),
+            MinHeight = 44,
             VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
+        DeyttTheme.StyleDialogInput(domainTextBox);
+        Avalonia.Automation.AutomationProperties.SetAutomationId(domainTextBox, "SplitDomainInput");
         domainInputGrid.Children.Add(domainTextBox);
         Grid.SetColumn(domainTextBox, 0);
 
         var addDomainBtn = new Button
         {
             Content = Copy("+ Добавить", "+ Add"),
-            Height = 40,
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(16, 0),
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            FontWeight = FontWeight.SemiBold,
             Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
         };
+        DeyttTheme.StyleDialogButton(addDomainBtn);
+        Avalonia.Automation.AutomationProperties.SetAutomationId(addDomainBtn, "SplitDomainAdd");
 
         void AddDomainAction()
         {
@@ -593,21 +537,21 @@ public partial class MainWindow
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
         });
-        rootStack.Children.Add(domainsSection);
+        rootStack.Children.Add(DeyttTheme.DialogPanel(domainsSection, 18, new Thickness(18, 16)));
 
         // 4. Custom Processes Section
         var processSection = new StackPanel { Spacing = 8 };
         var processHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        var processTitle = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.DialogAccent, FontWeight.SemiBold);
+        var processTitle = DeyttTheme.TextBlock(string.Empty, 15, DeyttTheme.Text, FontWeight.SemiBold);
         processHeaderGrid.Children.Add(processTitle);
         Grid.SetColumn(processTitle, 0);
 
-        var processCountBadge = DeyttTheme.TextBlock(string.Empty, 11, DeyttTheme.Muted);
+        var processCountBadge = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.Muted);
         processHeaderGrid.Children.Add(processCountBadge);
         Grid.SetColumn(processCountBadge, 1);
         processSection.Children.Add(processHeaderGrid);
 
-        var processDesc = DeyttTheme.TextBlock(string.Empty, 11, DeyttTheme.Muted);
+        var processDesc = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.Muted);
         processSection.Children.Add(processDesc);
 
         // Process Action Buttons (Side by Side)
@@ -619,32 +563,24 @@ public partial class MainWindow
 
         var pickRunningBtn = new Button
         {
-            Content = Copy("⚡ Выбрать из запущенных", "⚡ Pick from running apps"),
-            Height = 38,
-            Background = DeyttTheme.Brush(DeyttTheme.DialogSelected),
-            Foreground = DeyttTheme.Brush(DeyttTheme.Mint),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            FontWeight = FontWeight.SemiBold,
+            Content = Copy("Выбрать запущенное приложение", "Pick a running app"),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
         };
+        DeyttTheme.StyleDialogButton(pickRunningBtn);
+        Avalonia.Automation.AutomationProperties.SetAutomationId(pickRunningBtn, "SplitRunningPickerToggle");
+        pickRunningBtn.Background = DeyttTheme.Brush(DeyttTheme.DialogSelected);
+        pickRunningBtn.Foreground = DeyttTheme.Brush(DeyttTheme.Mint);
+        pickRunningBtn.BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine);
 
         var browseFileBtn = new Button
         {
-            Content = Copy("📁 Выбрать .exe файл…", "📁 Browse .exe file…"),
-            Height = 38,
-            Background = DeyttTheme.Brush(DeyttTheme.Surface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(10),
-            FontWeight = FontWeight.SemiBold,
+            Content = Copy("Обзор файла .exe…", "Browse for .exe…"),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
-            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
         };
+        DeyttTheme.StyleDialogButton(browseFileBtn);
+        Avalonia.Automation.AutomationProperties.SetAutomationId(browseFileBtn, "SplitProcessBrowse");
 
         processActionsGrid.Children.Add(pickRunningBtn);
         processActionsGrid.Children.Add(browseFileBtn);
@@ -653,26 +589,18 @@ public partial class MainWindow
         processSection.Children.Add(processActionsGrid);
 
         // Running processes selector panel
-        var runningPickerCard = new Border
-        {
-            Background = DeyttTheme.Brush(DeyttTheme.Surface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(12),
-            IsVisible = false
-        };
+        var runningPickerCard = DeyttTheme.DialogPanel(new StackPanel(), 16, new Thickness(16));
+        runningPickerCard.IsVisible = false;
 
         var runningPickerContent = new StackPanel { Spacing = 8 };
         var searchProcessBox = new TextBox
         {
             PlaceholderText = Copy("Поиск по названию окна или имени процесса...", "Search by window title or process name..."),
-            FontSize = 12,
-            FontFamily = DeyttTheme.JetBrainsMono,
-            Height = 36,
-            CornerRadius = new CornerRadius(8),
             VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
+        DeyttTheme.StyleDialogInput(searchProcessBox);
+        Avalonia.Automation.AutomationProperties.SetAutomationId(searchProcessBox, "SplitRunningSearch");
+        searchProcessBox.MinHeight = 40;
         runningPickerContent.Children.Add(searchProcessBox);
 
         var runningItemsStack = new StackPanel { Spacing = 4 };
@@ -723,12 +651,11 @@ public partial class MainWindow
                     var addBtn = new Button
                     {
                         Content = Copy("+ Добавить", "+ Add"),
-                        FontSize = 11,
-                        FontWeight = FontWeight.SemiBold,
-                        Padding = new Thickness(10, 4),
-                        CornerRadius = new CornerRadius(6),
                         Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
                     };
+                    DeyttTheme.StyleDialogButton(addBtn);
+                    Avalonia.Automation.AutomationProperties.SetAutomationId(addBtn, $"SplitRunningAdd_{app.ProcessName}");
+                    addBtn.MinHeight = 34;
                     addBtn.Click += (_, _) =>
                     {
                         if (!customProcesses.Contains(app.ProcessName, StringComparer.OrdinalIgnoreCase))
@@ -742,7 +669,7 @@ public partial class MainWindow
                     Grid.SetColumn(addBtn, 1);
                 }
 
-                runningItemsStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface2, DeyttTheme.Line, 8, new Thickness(10, 6)));
+                runningItemsStack.Children.Add(DeyttTheme.DialogPanel(row, 12, new Thickness(12, 8)));
             }
         }
 
@@ -794,25 +721,22 @@ public partial class MainWindow
         var processTextBox = new TextBox
         {
             PlaceholderText = Copy("или введите имя процесса вручную (например: discord.exe)", "or enter process name manually: discord.exe"),
-            FontSize = 12,
-            FontFamily = DeyttTheme.JetBrainsMono,
-            Height = 38,
-            CornerRadius = new CornerRadius(10),
+            MinHeight = 44,
             VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
+        DeyttTheme.StyleDialogInput(processTextBox);
+        Avalonia.Automation.AutomationProperties.SetAutomationId(processTextBox, "SplitProcessInput");
         processInputGrid.Children.Add(processTextBox);
         Grid.SetColumn(processTextBox, 0);
 
         var addProcessBtn = new Button
         {
             Content = Copy("+ Добавить", "+ Add"),
-            Height = 38,
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(16, 0),
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            FontWeight = FontWeight.SemiBold,
             Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
         };
+        DeyttTheme.StyleDialogButton(addProcessBtn);
+        Avalonia.Automation.AutomationProperties.SetAutomationId(addProcessBtn, "SplitProcessAdd");
 
         void AddProcessAction()
         {
@@ -837,6 +761,55 @@ public partial class MainWindow
         };
         processInputGrid.Children.Add(addProcessBtn);
         Grid.SetColumn(addProcessBtn, 1);
+
+        void ApplyResponsiveLayout(double contentWidth)
+        {
+            var compact = contentWidth < 600;
+            modeSelectorGrid.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "*,*");
+            modeSelectorGrid.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto");
+            modeSelectorGrid.ColumnSpacing = compact ? 0 : 10;
+            modeSelectorGrid.RowSpacing = compact ? 8 : 10;
+            Grid.SetColumn(bypassModeCard!, 0);
+            Grid.SetRow(bypassModeCard!, 0);
+            Grid.SetColumn(vpnOnlyModeCard!, compact ? 0 : 1);
+            Grid.SetRow(vpnOnlyModeCard!, compact ? 1 : 0);
+
+            presetsHeader.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "*,Auto");
+            presetsHeader.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto");
+            Grid.SetColumn(presetsTitleRow, 0);
+            Grid.SetRow(presetsTitleRow, 0);
+            Grid.SetColumn(addPresetBtn, compact ? 0 : 1);
+            Grid.SetRow(addPresetBtn, compact ? 1 : 0);
+            addPresetBtn.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
+
+            processActionsGrid.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "*,*");
+            processActionsGrid.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto");
+            processActionsGrid.RowSpacing = compact ? 8 : 0;
+            Grid.SetColumn(pickRunningBtn, 0);
+            Grid.SetRow(pickRunningBtn, 0);
+            Grid.SetColumn(browseFileBtn, compact ? 0 : 1);
+            Grid.SetRow(browseFileBtn, compact ? 1 : 0);
+
+            void ConfigureInputRow(Grid grid, Control field, Control action)
+            {
+                grid.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "*,Auto");
+                grid.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto");
+                grid.RowSpacing = compact ? 8 : 0;
+                Grid.SetColumn(field, 0);
+                Grid.SetRow(field, 0);
+                Grid.SetColumn(action, compact ? 0 : 1);
+                Grid.SetRow(action, compact ? 1 : 0);
+                action.HorizontalAlignment = compact
+                    ? Avalonia.Layout.HorizontalAlignment.Stretch
+                    : Avalonia.Layout.HorizontalAlignment.Left;
+            }
+
+            ConfigureInputRow(domainInputGrid, domainTextBox, addDomainBtn);
+            ConfigureInputRow(processInputGrid, processTextBox, addProcessBtn);
+        }
+
+        rootStack.SizeChanged += (_, args) => ApplyResponsiveLayout(args.NewSize.Width);
+        ApplyResponsiveLayout(720);
         processSection.Children.Add(processInputGrid);
 
         var processListStack = new StackPanel { Spacing = 6 };
@@ -847,7 +820,7 @@ public partial class MainWindow
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled
         });
-        rootStack.Children.Add(processSection);
+        rootStack.Children.Add(DeyttTheme.DialogPanel(processSection, 18, new Thickness(18, 16)));
 
         // Dynamic Refresh Function
         refreshAllDynamicUi = () =>
@@ -856,13 +829,13 @@ public partial class MainWindow
             var isVpnOnly = string.Equals(currentMode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
 
             domainsTitle.Text = isVpnOnly
-                ? Copy("САЙТЫ ЧЕРЕЗ VPN", "SITES THROUGH VPN")
-                : Copy("САЙТЫ В ОБХОД VPN", "SITES BYPASSING VPN");
+                ? Copy("Сайты через VPN", "Sites through VPN")
+                : Copy("Сайты в обход VPN", "Sites bypassing VPN");
             domainsCountBadge.Text = Copy($"{customDomains.Count} сайтов", $"{customDomains.Count} sites");
 
             processTitle.Text = isVpnOnly
-                ? Copy("ПРИЛОЖЕНИЯ ЧЕРЕЗ VPN", "APPLICATIONS THROUGH VPN")
-                : Copy("ПРИЛОЖЕНИЯ В ОБХОД VPN", "APPLICATIONS BYPASSING VPN");
+                ? Copy("Приложения через VPN", "Apps through VPN")
+                : Copy("Приложения в обход VPN", "Apps bypassing VPN");
             processCountBadge.Text = Copy($"{customProcesses.Count} приложений", $"{customProcesses.Count} apps");
 
             processDesc.Text = isVpnOnly
@@ -875,45 +848,42 @@ public partial class MainWindow
             domainsListStack.Children.Clear();
             if (customDomains.Count == 0)
             {
-                domainsListStack.Children.Add(DeyttTheme.Card(
+                domainsListStack.Children.Add(DeyttTheme.DialogPanel(
                     DeyttTheme.TextBlock(Copy("Список пуст. Введите домен выше и нажмите «+ Добавить».",
-                        "List is empty. Enter domain above and click «+ Add»."), 12, DeyttTheme.Muted),
-                    DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(12, 10)));
+                        "List is empty. Enter a domain above and select «+ Add»."), 12, DeyttTheme.Muted),
+                    12, new Thickness(12, 10)));
             }
             else
             {
                 foreach (var d in customDomains.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray())
                 {
-                    var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
-                    var icon = DeyttTheme.TextBlock("🌐", 12);
-                    row.Children.Add(icon);
-                    Grid.SetColumn(icon, 0);
-
+                    var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
                     var text = DeyttTheme.TextBlock(d, 12, DeyttTheme.Text, family: DeyttTheme.JetBrainsMono);
                     text.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
                     row.Children.Add(text);
-                    Grid.SetColumn(text, 1);
+                    Grid.SetColumn(text, 0);
 
                     var deleteBtn = new Button
                     {
-                        Content = "✕",
-                        Background = Brushes.Transparent,
-                        BorderThickness = new Thickness(0),
-                        Foreground = DeyttTheme.Brush(DeyttTheme.Coral),
-                        Padding = new Thickness(8, 2),
-                        FontSize = 13,
-                        FontWeight = FontWeight.SemiBold,
+                        Content = "×",
                         Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
                     };
+                    DeyttTheme.StyleDialogButton(deleteBtn);
+                    deleteBtn.Width = 36;
+                    deleteBtn.MinHeight = 32;
+                    deleteBtn.Padding = new Thickness(0);
+                    deleteBtn.Foreground = DeyttTheme.Brush(DeyttTheme.Coral);
+                    Avalonia.Automation.AutomationProperties.SetAutomationId(deleteBtn, $"SplitDomainRemove_{d}");
+                    Avalonia.Automation.AutomationProperties.SetName(deleteBtn, Copy($"Удалить домен {d}", $"Remove domain {d}"));
                     deleteBtn.Click += (_, _) =>
                     {
                         customDomains.Remove(d);
                         SaveAndRefresh();
                     };
                     row.Children.Add(deleteBtn);
-                    Grid.SetColumn(deleteBtn, 2);
+                    Grid.SetColumn(deleteBtn, 1);
 
-                    domainsListStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(12, 6)));
+                    domainsListStack.Children.Add(DeyttTheme.DialogPanel(row, 12, new Thickness(12, 6)));
                 }
             }
 
@@ -921,36 +891,33 @@ public partial class MainWindow
             processListStack.Children.Clear();
             if (customProcesses.Count == 0)
             {
-                processListStack.Children.Add(DeyttTheme.Card(
+                processListStack.Children.Add(DeyttTheme.DialogPanel(
                     DeyttTheme.TextBlock(Copy("Список пуст. Выберите процесс из запущенных или укажите .exe файл.",
-                        "List is empty. Pick a running process or browse an .exe file."), 12, DeyttTheme.Muted),
-                    DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(12, 10)));
+                        "List is empty. Pick a running app or browse for an .exe file."), 12, DeyttTheme.Muted),
+                    12, new Thickness(12, 10)));
             }
             else
             {
                 foreach (var p in customProcesses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray())
                 {
-                    var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
-                    var icon = DeyttTheme.TextBlock("⚡", 12, DeyttTheme.DialogAccent);
-                    row.Children.Add(icon);
-                    Grid.SetColumn(icon, 0);
-
+                    var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
                     var text = DeyttTheme.TextBlock(p, 12, DeyttTheme.Text, family: DeyttTheme.JetBrainsMono);
                     text.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
                     row.Children.Add(text);
-                    Grid.SetColumn(text, 1);
+                    Grid.SetColumn(text, 0);
 
                     var deleteBtn = new Button
                     {
-                        Content = "✕",
-                        Background = Brushes.Transparent,
-                        BorderThickness = new Thickness(0),
-                        Foreground = DeyttTheme.Brush(DeyttTheme.Coral),
-                        Padding = new Thickness(8, 2),
-                        FontSize = 13,
-                        FontWeight = FontWeight.SemiBold,
+                        Content = "×",
                         Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
                     };
+                    DeyttTheme.StyleDialogButton(deleteBtn);
+                    deleteBtn.Width = 36;
+                    deleteBtn.MinHeight = 32;
+                    deleteBtn.Padding = new Thickness(0);
+                    deleteBtn.Foreground = DeyttTheme.Brush(DeyttTheme.Coral);
+                    Avalonia.Automation.AutomationProperties.SetAutomationId(deleteBtn, $"SplitProcessRemove_{p}");
+                    Avalonia.Automation.AutomationProperties.SetName(deleteBtn, Copy($"Удалить приложение {p}", $"Remove app {p}"));
                     deleteBtn.Click += (_, _) =>
                     {
                         customProcesses.Remove(p);
@@ -959,9 +926,9 @@ public partial class MainWindow
                             RenderRunningList(searchProcessBox.Text ?? string.Empty);
                     };
                     row.Children.Add(deleteBtn);
-                    Grid.SetColumn(deleteBtn, 2);
+                    Grid.SetColumn(deleteBtn, 1);
 
-                    processListStack.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 8, new Thickness(12, 6)));
+                    processListStack.Children.Add(DeyttTheme.DialogPanel(row, 12, new Thickness(12, 6)));
                 }
             }
 
@@ -973,90 +940,54 @@ public partial class MainWindow
                 var isActive = string.Equals(pr.Id, activePresetId, StringComparison.OrdinalIgnoreCase);
                 var isVpnOnlyMode = string.Equals(pr.Mode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
                 var ruleCount = (pr.CustomDomains?.Count ?? 0) + (pr.CustomProcesses?.Count ?? 0);
-
-                var chipCard = new Border
+                var choiceDetails = new StackPanel { Spacing = 4 };
+                var presetName = DeyttTheme.TextBlock(pr.Name, 13, DeyttTheme.Text, FontWeight.SemiBold);
+                presetName.MaxWidth = 230;
+                choiceDetails.Children.Add(presetName);
+                choiceDetails.Children.Add(DeyttTheme.TextBlock(Copy(
+                    $"{(isVpnOnlyMode ? "только vpn" : "обход vpn")} · {ruleCount} правил",
+                    $"{(isVpnOnlyMode ? "vpn only" : "bypass vpn")} · {ruleCount} rules"),
+                    11, DeyttTheme.Muted));
+                var targetId = pr.Id;
+                var selectPresetBtn = DeyttTheme.DialogChoice(choiceDetails, isActive, () =>
                 {
-                    CornerRadius = new CornerRadius(10),
-                    BorderThickness = new Thickness(isActive ? 1.5 : 1),
-                    BorderBrush = DeyttTheme.Brush(isActive ? DeyttTheme.DialogSelectionLine : DeyttTheme.Line),
-                    Background = DeyttTheme.Brush(isActive ? DeyttTheme.DialogSelected : DeyttTheme.Surface2),
-                    Padding = new Thickness(10, 6),
-                    Margin = new Thickness(0, 0, 8, 8),
-                    Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
-                };
+                    if (!string.Equals(activePresetId, targetId, StringComparison.OrdinalIgnoreCase))
+                        SwitchPreset(targetId);
+                });
+                Avalonia.Automation.AutomationProperties.SetAutomationId(selectPresetBtn, $"SplitPresetSelect_{pr.Id}");
+                Avalonia.Automation.AutomationProperties.SetName(selectPresetBtn,
+                    pr.Name + (isActive ? Copy(", выбрано", ", selected") : ""));
+                selectPresetBtn.MinWidth = 210;
+                selectPresetBtn.MaxWidth = 330;
+                selectPresetBtn.Margin = new Thickness(0, 0, 8, 8);
 
-                var chipContent = new StackPanel
+                var presetControls = new StackPanel
                 {
                     Orientation = Avalonia.Layout.Orientation.Horizontal,
                     Spacing = 6,
-                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
                 };
-
-                if (isActive)
-                {
-                    chipContent.Children.Add(DeyttTheme.TextBlock("✓", 11, DeyttTheme.Mint, FontWeight.Bold));
-                }
-
-                chipContent.Children.Add(DeyttTheme.TextBlock(
-                    pr.Name,
-                    12,
-                    isActive ? DeyttTheme.Mint : DeyttTheme.Text,
-                    FontWeight.SemiBold));
-
-                // Small badge showing mode (обход / vpn)
-                var modeBadge = DeyttTheme.Card(
-                    DeyttTheme.TextBlock(
-                        isVpnOnlyMode ? Copy("vpn", "vpn") : Copy("обход", "bypass"),
-                        9,
-                        DeyttTheme.Muted),
-                    DeyttTheme.Surface,
-                    DeyttTheme.Line,
-                    4,
-                    new Thickness(5, 1));
-                chipContent.Children.Add(modeBadge);
-
-                if (ruleCount > 0)
-                {
-                    chipContent.Children.Add(DeyttTheme.TextBlock(
-                        $"{ruleCount}",
-                        10,
-                        DeyttTheme.Muted));
-                }
-
-                // Delete button (only if more than 1 preset exists)
+                presetControls.Children.Add(selectPresetBtn);
                 if (presets.Count > 1)
                 {
                     var delBtn = new Button
                     {
-                        Content = "✕",
-                        Classes = { "deytt-button" },
-                        Background = Brushes.Transparent,
-                        Foreground = DeyttTheme.Brush(DeyttTheme.Muted),
-                        Padding = new Thickness(4, 0),
-                        FontSize = 10,
-                        Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
+                        Content = "×",
+                        Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+                        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch,
+                        Margin = new Thickness(0, 0, 8, 8),
                     };
+                    DeyttTheme.StyleDialogButton(delBtn);
+                    delBtn.Width = 42;
+                    delBtn.MinHeight = 42;
+                    Avalonia.Automation.AutomationProperties.SetAutomationId(delBtn, $"SplitPresetDelete_{pr.Id}");
+                    Avalonia.Automation.AutomationProperties.SetName(delBtn,
+                        Copy($"Удалить профиль {pr.Name}", $"Delete preset {pr.Name}"));
                     var capturedId = pr.Id;
-                    delBtn.Click += (_, e) =>
-                    {
-                        e.Handled = true;
-                        DeletePreset(capturedId);
-                    };
-                    chipContent.Children.Add(delBtn);
+                    delBtn.Click += (_, _) => DeletePreset(capturedId);
+                    presetControls.Children.Add(delBtn);
                 }
-
-                chipCard.Child = chipContent;
-
-                var targetId = pr.Id;
-                chipCard.PointerPressed += (_, _) =>
-                {
-                    if (!string.Equals(activePresetId, targetId, StringComparison.OrdinalIgnoreCase))
-                    {
-                        SwitchPreset(targetId);
-                    }
-                };
-
-                presetsWrapPanel.Children.Add(chipCard);
+                presetsWrapPanel.Children.Add(presetControls);
             }
         };
 
@@ -1064,10 +995,12 @@ public partial class MainWindow
 
         ShellContentDialog? dialog = null;
         var footerButton = DeyttTheme.DialogPrimaryButton(
-            DeyttTheme.TextBlock(Copy("Готово", "Done"), 18, Colors.White, FontWeight.SemiBold, wrap: false), () =>
+            DeyttTheme.TextBlock(Copy("Готово", "Done"), 15, Colors.White, FontWeight.SemiBold, wrap: false), () =>
         {
             dialog?.Close();
         });
+        footerButton.Width = 180;
+        footerButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
 
         await ShowContentInShellAsync(
             Copy("Раздельное туннелирование", "Split tunneling"),
@@ -1076,6 +1009,7 @@ public partial class MainWindow
             shellDialog => dialog = shellDialog,
             footerButton);
 
-        await ApplySplitTunnelRulesAsync();
+        if (!_qaFixture)
+            await ApplySplitTunnelRulesAsync();
     }
 }

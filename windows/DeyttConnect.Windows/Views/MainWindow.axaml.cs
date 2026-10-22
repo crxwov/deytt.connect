@@ -793,6 +793,9 @@ public partial class MainWindow : Window
         var compact = Bounds.Width < 900;
         var medium = Bounds.Width < 1180;
         var shortCompact = compact && Bounds.Height < 700;
+        PageScroll.VerticalScrollBarVisibility = _disableNativeMapInitialization || _activeTab is MainTab.Setup or MainTab.Support
+            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+            : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
         if (_responsiveLayoutInitialized && _compactLayout == compact && _mediumLayout == medium &&
             _shortCompactLayout == shortCompact)
         {
@@ -837,9 +840,6 @@ public partial class MainWindow : Window
             : medium ? new Thickness(32, 28) : new Thickness(64, 32);
         WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !_mapImmersive;
 
-        PageScroll.VerticalScrollBarVisibility = _disableNativeMapInitialization
-            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
-            : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
         PageScroll.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
 
         UpdateTopNavigation();
@@ -2889,19 +2889,17 @@ public partial class MainWindow : Window
 
     private async Task ShowLanguagePickerAsync()
     {
-        var choices = new StackPanel { Spacing = 8 };
+        var choices = new StackPanel { Spacing = 10 };
+        choices.Children.Add(DeyttTheme.TextBlock(Copy("Выберите язык интерфейса.", "Choose your interface language."), 14, DeyttTheme.Muted));
         var buttons = new List<(string Language, Button Button)>();
         foreach (var (language, title) in new[] { ("ru", "Русский"), ("en", "English") })
         {
             var selected = _language == language;
-            var choice = DeyttTheme.Action(
-                DeyttTheme.Card(DeyttTheme.TextBlock(
-                        $"{(selected ? "✓  " : string.Empty)}{title}", 16,
-                        selected ? DeyttTheme.Mint : DeyttTheme.Text, FontWeight.SemiBold),
-                    selected ? DeyttTheme.DialogSelected : DeyttTheme.Surface,
-                    selected ? DeyttTheme.DialogSelectionLine : DeyttTheme.Line,
-                    16, new Thickness(16, 13)),
-                () => { });
+            var labels = new StackPanel { Spacing = 4 };
+            labels.Children.Add(DeyttTheme.RawTextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
+            labels.Children.Add(DeyttTheme.RawTextBlock(language == "ru" ? "Russian" : "Английский", 13, DeyttTheme.Muted));
+            var choice = DeyttTheme.DialogChoice(labels, selected, () => { });
+            AutomationProperties.SetName(choice, title);
             choices.Children.Add(choice);
             buttons.Add((language, choice));
         }
@@ -2909,6 +2907,7 @@ public partial class MainWindow : Window
             Copy("Язык приложения", "App language"), choices, 390,
             modal =>
             {
+                modal.InitialFocusTarget = buttons.First(pair => pair.Language == _language).Button;
                 foreach (var (language, button) in buttons)
                     button.Click += (_, _) => modal.Close(language);
             });
@@ -2922,7 +2921,7 @@ public partial class MainWindow : Window
 
     private async Task ShowProbeMethodPickerAsync()
     {
-        var options = new StackPanel { Spacing = 8 };
+        var options = new StackPanel { Spacing = 10 };
         var optionButtons = new List<(string Method, Button Button)>();
         foreach (var option in new[]
         {
@@ -2937,38 +2936,35 @@ public partial class MainWindow : Window
             var selected = _probeMethod == option.Method;
             var labels = new StackPanel { Spacing = 4 };
             labels.Children.Add(DeyttTheme.TextBlock(
-                $"{(selected ? "✓  " : string.Empty)}{option.Title}", 15,
-                selected ? DeyttTheme.Mint : DeyttTheme.Text, FontWeight.SemiBold));
-            labels.Children.Add(DeyttTheme.TextBlock(option.Detail, 12, DeyttTheme.Muted));
-            var choice = DeyttTheme.Action(
-                DeyttTheme.Card(labels, selected ? DeyttTheme.DialogSelected : DeyttTheme.Surface,
-                    selected ? DeyttTheme.DialogSelectionLine : DeyttTheme.Line, 16, new Thickness(14, 11)), () => { });
+                option.Title, 15, DeyttTheme.Text, FontWeight.SemiBold));
+            labels.Children.Add(DeyttTheme.TextBlock(option.Detail, 14, DeyttTheme.Muted));
+            var choice = DeyttTheme.DialogChoice(labels, selected, () => { });
+            AutomationProperties.SetName(choice, option.Title);
             options.Children.Add(choice);
             optionButtons.Add((option.Method, choice));
         }
         var close = DeyttTheme.Action(DeyttTheme.TextBlock(Copy("Отмена", "Cancel"), 14,
             DeyttTheme.Muted, FontWeight.SemiBold), () => { });
+        DeyttTheme.StyleDialogButton(close);
         var content = new StackPanel
         {
-            Spacing = 13,
+            Spacing = 18,
             Children =
             {
-                DeyttTheme.TextBlock(Copy("Способ проверки", "Check method"), 21,
-                    DeyttTheme.Text, FontWeight.Bold),
                 DeyttTheme.TextBlock(Copy("Проверка идёт через выбранный VPN-маршрут.",
-                    "Checks run through the selected VPN route."), 13, DeyttTheme.Muted),
+                    "Checks run through the selected VPN route."), 14, DeyttTheme.Muted),
                 options,
-                close,
             },
         };
         var selectedMethod = await ShowContentInShellAsync(
             Copy("Проверка маршрута", "Route check"), content, 600,
             modal =>
             {
+                modal.InitialFocusTarget = optionButtons.First(pair => pair.Method == _probeMethod).Button;
                 foreach (var (method, button) in optionButtons)
                     button.Click += (_, _) => modal.Close(method);
                 close.Click += (_, _) => modal.Close();
-            });
+            }, close);
         if (selectedMethod is not string method)
             return;
 

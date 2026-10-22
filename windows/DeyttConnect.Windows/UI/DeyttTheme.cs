@@ -60,8 +60,19 @@ internal static class DeyttTheme
     public static Color DialogAccent => Color.Parse("#38BDF8");
     public static Color DialogActionTop => Color.Parse("#1D8CF8");
     public static Color DialogActionBottom => Color.Parse("#1170DC");
-    public static Color DialogSelected => IsDark ? Color.Parse("#183A3B") : Color.Parse("#E0F7F2");
+    public static Color DialogSelected => IsDark ? Color.Parse("#2439E8BD") : Color.Parse("#24117A68");
     public static Color DialogSelectionLine => Color.FromArgb(125, Mint.R, Mint.G, Mint.B);
+    public static Color DialogLine => IsDark ? Color.Parse("#2EFFFFFF") : Color.Parse("#283B5877");
+    public static Brush DialogSurface => new LinearGradientBrush
+    {
+        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+        EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+        GradientStops =
+        {
+            new GradientStop(Color.Parse(IsDark ? "#17FFFFFF" : "#B3FFFFFF"), 0),
+            new GradientStop(Color.Parse(IsDark ? "#05FFFFFF" : "#40FFFFFF"), 1),
+        },
+    };
     public static Brush DialogActionFill => new LinearGradientBrush
     {
         StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
@@ -141,8 +152,8 @@ internal static class DeyttTheme
                 EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
                 GradientStops =
                 {
-                    new GradientStop(Color.Parse(IsDark ? "#E326354B" : "#F8FFFFFF"), 0),
-                    new GradientStop(Color.Parse(IsDark ? "#E6152031" : "#F0EEF2F8"), 1),
+                    new GradientStop(Color.Parse(IsDark ? "#BF344256" : "#DCFFFFFF"), 0),
+                    new GradientStop(Color.Parse(IsDark ? "#C4101B2C" : "#D4EEF2F8"), 1),
                 },
             },
             BorderBrush = new LinearGradientBrush
@@ -173,9 +184,12 @@ internal static class DeyttTheme
 
     public static Border DialogPrimaryButton(Control label, Action onClick)
     {
-        label.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        label.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         if (label is TextBlock text) text.TextAlignment = TextAlignment.Center;
         var button = Action(label, onClick);
+        button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        button.MinHeight = 46;
         button.BorderBrush = Brush(Colors.Transparent);
         button.BorderThickness = new Thickness(0);
         button.CornerRadius = new CornerRadius(14);
@@ -203,6 +217,68 @@ internal static class DeyttTheme
             OffsetY = 6,
             Color = Color.Parse("#661D8CF8"),
         });
+    }
+
+    public static Border DialogPanel(Control child, double radius = 16, Thickness? padding = null) => new()
+    {
+        Child = child,
+        Background = DialogSurface,
+        BorderBrush = Brush(DialogLine),
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(radius),
+        Padding = padding ?? new Thickness(16),
+    };
+
+    public static void StyleDialogButton(Button button, bool primary = false)
+    {
+        button.Classes.Add("deytt-button");
+        button.FontFamily = InterTight;
+        button.FontSize = 14;
+        button.FontWeight = FontWeight.SemiBold;
+        button.MinHeight = 40;
+        button.Padding = new Thickness(14, 8);
+        button.CornerRadius = new CornerRadius(12);
+        button.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        button.Background = primary ? DialogActionFill : DialogSurface;
+        button.Foreground = Brush(primary ? Colors.White : Text);
+        button.BorderBrush = Brush(DialogLine);
+        button.BorderThickness = new Thickness(1);
+    }
+
+    public static void StyleDialogInput(TextBox input)
+    {
+        input.Classes.Add("glass-input");
+        input.FontFamily = InterTight;
+        input.FontSize = 14;
+        input.MinHeight = 42;
+        input.Padding = new Thickness(14, 10);
+        input.CornerRadius = new CornerRadius(12);
+        input.Background = DialogSurface;
+        input.Foreground = Brush(Text);
+        input.BorderBrush = Brush(DialogLine);
+        input.BorderThickness = new Thickness(1);
+        input.SelectionBrush = Brush(DialogSelectionLine);
+        input.CaretBrush = Brush(DialogAccent);
+    }
+
+    public static Button DialogChoice(Control labels, bool selected, Action onClick)
+    {
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 16 };
+        row.Children.Add(labels);
+        var mark = TextBlock(selected ? "✓" : "○", 18, selected ? Mint : Muted, FontWeight.SemiBold, wrap: false);
+        Grid.SetColumn(mark, 1);
+        row.Children.Add(mark);
+        var surface = DialogPanel(row, padding: new Thickness(18, 16));
+        if (selected)
+        {
+            surface.Background = Brush(DialogSelected);
+            surface.BorderBrush = Brush(DialogSelectionLine);
+        }
+        var button = Action(surface, onClick);
+        button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        button.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+        button.VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+        return button;
     }
 
     public static Button Action(Control child, Action onClick)

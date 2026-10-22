@@ -956,6 +956,11 @@ internal sealed partial class QaApp : Application
                 }
                 if (modal is null)
                     throw new TimeoutException("QA shell modal did not become active.");
+                var overlayHost = window.FindControl<Panel>("ModalOverlayHost")!;
+                var overlay = (Grid)overlayHost.Children.Single();
+                if (overlay.Background is not ISolidColorBrush { Color.A: 0 } ||
+                    !overlay.GetVisualDescendants().OfType<Image>().Any(image => image.Name == "DialogPagePreview" && image.Source is Bitmap))
+                    throw new InvalidOperationException($"The {tab} dialog did not preserve its page on a transparent overlay.");
                 modal.GetType().GetMethod("Close", BindingFlags.Instance | BindingFlags.Public)!
                     .Invoke(modal, [null]);
                 await modalTask.WaitAsync(TimeSpan.FromSeconds(3));

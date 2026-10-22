@@ -1,5 +1,7 @@
 using System.Security.Cryptography;
 using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
 
@@ -8,6 +10,8 @@ namespace DeyttConnect.Windows.Views;
 public partial class MainWindow
 {
     private SetupWindow? _activeSetupView;
+    private Bitmap? _setupPagePreview;
+    private Grid? _setupBackdropPage;
     private SupportView? _supportView;
     private TaskCompletionSource<SetupWindowResult?>? _setupFlowCompletion;
     private MainTab _setupReturnTab = MainTab.Home;
@@ -19,7 +23,20 @@ public partial class MainWindow
     private Control BuildSetupPage()
     {
         if (_activeSetupView is { } setupView)
-            return setupView;
+        {
+            if (_setupPagePreview is null) return setupView;
+            if (_setupBackdropPage?.Children.Contains(setupView) == true) return _setupBackdropPage;
+            return _setupBackdropPage = new Grid
+            {
+                ClipToBounds = true,
+                Children =
+                {
+                    new Image { Source = _setupPagePreview, Stretch = Stretch.UniformToFill, Margin = new Avalonia.Thickness(-24),
+                        Effect = new BlurEffect { Radius = 16 }, IsHitTestVisible = false },
+                    setupView,
+                },
+            };
+        }
 
         return DeyttTheme.TextBlock(Copy("Мастер настройки недоступен.", "Setup is unavailable."),
             14, DeyttTheme.Muted);

@@ -28,7 +28,7 @@ public sealed class SetupWindowTests
         try
         {
             var text = view.GetVisualDescendants().OfType<TextBlock>().Select(block => block.Text).ToArray();
-            Assert.Contains("Подключите ./Connect", text);
+            Assert.Contains("подключите ./connect", text);
             Assert.Contains("у меня есть ссылка подписки", text);
             Assert.DoesNotContain("← назад", text);
             var input = Assert.Single(view.GetVisualDescendants().OfType<TextBox>());
