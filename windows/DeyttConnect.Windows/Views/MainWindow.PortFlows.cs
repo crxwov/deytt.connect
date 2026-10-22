@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -15,6 +16,10 @@ namespace DeyttConnect.Windows.Views;
 
 public partial class MainWindow
 {
+    private readonly Func<CancellationToken, Task<WindowsUpdateRelease?>>? _manualUpdateLookup;
+    private readonly Func<WindowsUpdateRelease, Action<long, long>?, CancellationToken,
+        Task<VerifiedWindowsUpdatePackage>>? _manualUpdateDownload;
+
     private static readonly HttpClient SubscriptionImportHttp = new(new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
@@ -461,6 +466,7 @@ public partial class MainWindow
             () => { });
         packageButton.IsVisible = false;
         var download = (Button)packageButton.Child!;
+        AutomationProperties.SetAutomationId(download, "ManualUpdateDownloadButton");
         var cancelDownloadButton = DeyttTheme.Action(
             DeyttTheme.TextBlock(Copy("Отменить загрузку", "Cancel download"), 13,
                 DeyttTheme.Muted, FontWeight.SemiBold), () => { });
@@ -501,8 +507,7 @@ public partial class MainWindow
             status.Text = Copy("Загружаем пакет и сверяем SHA-256…", "Downloading package and checking SHA-256…");
             try
             {
-                var package = await DownloadAndLaunchUpdateAsync(release,
-                    (received, total) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                Action<long, long> onProgress = (received, total) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                     {
                         if (dialogIsOpen)
                         {
@@ -510,7 +515,9 @@ public partial class MainWindow
                             status.Text = Copy($"Загрузка и проверка · {percent}%",
                                 $"Downloading and verifying · {percent}%");
                         }
-                    }), downloadCancellation.Token);
+                    });
+                var package = await (_manualUpdateDownload?.Invoke(release, onProgress, downloadCancellation.Token) ??
+                                     DownloadAndLaunchUpdateAsync(release, onProgress, downloadCancellation.Token));
 
                 if (!dialogIsOpen)
                     return;
@@ -561,7 +568,8 @@ public partial class MainWindow
         {
             try
             {
-                release = await FindManualUpdateAsync(cancellation.Token);
+                release = await (_manualUpdateLookup?.Invoke(cancellation.Token) ??
+                                 FindManualUpdateAsync(cancellation.Token));
                 if (!dialogIsOpen)
                     return;
                 if (release is null)
@@ -578,7 +586,6 @@ public partial class MainWindow
                         var megabytes = release.AssetSize!.Value / (1024d * 1024d);
                         status.Text = $"{releaseDetails}\n\n{release.AssetName} · {megabytes:0.0} MB";
                         packageButton.IsVisible = true;
-                        await BeginDownloadAsync();
                     }
                     else
                     {

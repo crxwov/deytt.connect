@@ -28,7 +28,10 @@ internal sealed record QaHomeFixture(
     bool RouteProbeCancelRequested = false,
     string? ExpandedRouteCountry = null,
     bool DisableNativeMapInitialization = false,
-    string? ThemePreference = null);
+    string? ThemePreference = null,
+    Func<CancellationToken, Task<WindowsUpdateRelease?>>? ManualUpdateLookup = null,
+    Func<WindowsUpdateRelease, Action<long, long>?, CancellationToken, Task<VerifiedWindowsUpdatePackage>>?
+        ManualUpdateDownload = null);
 
 sealed class Program
 {

@@ -190,6 +190,8 @@ public partial class MainWindow : Window
         _vpnServiceAvailable = true;
         _homeMapInitializationAllowed = true;
         _disableNativeMapInitialization = fixture.DisableNativeMapInitialization;
+        _manualUpdateLookup = fixture.ManualUpdateLookup;
+        _manualUpdateDownload = fixture.ManualUpdateDownload;
         if (_disableNativeMapInitialization)
             PageScroll.VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
         _routeProbeInProgress = fixture.RouteProbeInProgress;
