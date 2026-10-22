@@ -140,7 +140,6 @@ public partial class MainWindow : Window
             AttachSystemThemeWatcher();
             FitInitialWindowToWorkArea();
             await RunStartupFlowAsync();
-            if (_hideAfterStartup) Hide();
             await CheckForStartupUpdateAsync();
         };
         _vpnStatusTimer.Tick += (_, _) => _ = RefreshVpnStatusAsync();
@@ -2691,12 +2690,17 @@ public partial class MainWindow : Window
             var accepted = await ConfirmMapRegionConsentAsync();
             _mapRegionConsentAsked = true;
             if (!accepted)
+            {
+                SavePreferences();
+                UpdateHomeGlobePresentation();
                 return;
+            }
             _mapRegionConsentGranted = true;
         }
 
         _mapRegionEnabled = enabled;
         _mapLocationIssue = null;
+        SavePreferences();
         if (!enabled)
         {
             CancelMapLocationLookup();
@@ -2705,6 +2709,7 @@ public partial class MainWindow : Window
             _mapOriginLookupAttempted = false;
             _mapEgressLookupAttempted = false;
             _mapLocationStateInitialized = false;
+            UpdateHomeGlobePresentation();
             return;
         }
 
@@ -2712,6 +2717,7 @@ public partial class MainWindow : Window
         _mapEgressLookupAttempted = false;
         _mapLocationStateInitialized = true;
         StartMapLocationLookup(IsVpnDisplayConnected());
+        UpdateHomeGlobePresentation();
     }
 
     private async Task ShowInitialMapConsentIfNeededAsync()
@@ -3225,18 +3231,21 @@ public partial class MainWindow : Window
         if (_keysSnapshot?.ProfileJson is not { Length: > 0 } || _routes.Count == 0)
         {
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Failed;
+            MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
             RenderActiveTabPreservingScroll();
             return;
         }
         if (!_vpnServiceAvailable)
         {
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.ServiceUnavailable;
+            MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
             RenderActiveTabPreservingScroll();
             return;
         }
         if (_vpnActionInProgress || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.NeedsDisconnect;
+            MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
             RenderActiveTabPreservingScroll();
             return;
         }
@@ -3254,6 +3263,7 @@ public partial class MainWindow : Window
         foreach (var routeTag in request.RouteTags)
             freshResults.Remove(routeTag);
         _routeProbeResults = freshResults;
+        _routeGlobe?.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
         var node = _pendingRouteProbeQueue.AddLast(request);
         _pendingRouteProbeNodes[countryCode] = node;
         _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Queued;
@@ -3309,10 +3319,13 @@ public partial class MainWindow : Window
             var blockedState = !_vpnServiceAvailable
                 ? RouteCountryProbeState.ServiceUnavailable
                 : RouteCountryProbeState.NeedsDisconnect;
-            foreach (var request in _pendingRouteProbeQueue)
+            var blockedRequests = _pendingRouteProbeQueue.ToArray();
+            foreach (var request in blockedRequests)
                 _routeCountryProbeStates[request.CountryCode] = blockedState;
             _pendingRouteProbeQueue.Clear();
             _pendingRouteProbeNodes.Clear();
+            MarkRouteProbeFailure(blockedRequests.SelectMany(request => request.RouteTags),
+                RouteCountryProbeStatus(blockedRequests[0].CountryCode));
             RenderActiveTabPreservingScroll();
             return;
         }
@@ -3348,7 +3361,10 @@ public partial class MainWindow : Window
             if (countryCode is null)
                 ShowTab(MainTab.Settings);
             else
+            {
                 _routeCountryProbeStates[countryCode] = RouteCountryProbeState.ServiceUnavailable;
+                MarkRouteProbeFailure(requestedRouteTags ?? [], RouteCountryProbeStatus(countryCode));
+            }
             return;
         }
 
@@ -3545,6 +3561,7 @@ public partial class MainWindow : Window
         foreach (var routeTag in routeTags)
             updated[routeTag] = new WindowsRouteProbeResult(routeTag, null, null, message, "error");
         _routeProbeResults = updated;
+        _routeGlobe?.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
     }
 
     private void RenderProbeProgressPreservingFocus()

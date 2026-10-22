@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -508,12 +509,23 @@ public partial class MainWindow
         map.ImmersiveModeRequested += SetMapImmersive;
         map.TabChanged += OnMapTabChanged;
         map.RouteSelected += OnMapRouteSelected;
-        map.CountryProbeRequested += countryCode =>
-        {
-            _ = HandleCountryProbeRequestedAsync(countryCode);
-        };
+        map.CountryProbeRequested += HandleCountryProbeRequested;
         map.CheckUpdatesRequested += () => _ = ShowUpdateDialogAsync();
         map.SettingToggled += (key, enabled) => HandleSettingToggledFromWeb(key, enabled);
+        map.ExitRequested += () => _ = ExitForVerifiedUpdateAsync(null);
+        map.HappDeviceManagementRequested += id =>
+        {
+            var device = _keysSnapshot?.HappDevices.FirstOrDefault(item => item.Id == id);
+            if (device is not null)
+                ShowHappDeviceDetails(device);
+        };
+        map.TelegramSessionManagementRequested += id =>
+        {
+            var session = _sessions.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.Ordinal));
+            if (session is not null)
+                _ = ManageSessionAsync(session);
+        };
+        map.SubscriptionKeyCopyRequested += () => _ = CopySubscriptionKeyToClipboardAsync();
         map.SignInRequested += () => ShowSignInDialog();
         map.RenewRequested += () => OpenExternal("https://t.me/deyttbot");
         map.ImportRequested += () => _ = ShowSetupWindowAsync();
@@ -534,10 +546,10 @@ public partial class MainWindow
                 _reduceMotion = enabled;
                 DeyttTheme.ReduceMotion = enabled;
                 SavePreferences();
+                UpdateHomeGlobePresentation();
                 break;
             case "region":
-                _mapRegionEnabled = enabled;
-                SavePreferences();
+                _ = UpdateMapRegionEnabledAsync(enabled);
                 break;
             case "bypass":
                 try
@@ -775,160 +787,16 @@ public partial class MainWindow
         }.Where(value => !string.IsNullOrWhiteSpace(value)));
     }
 
-        private async Task HandleCountryProbeRequestedAsync(string countryCode)
+    private void HandleCountryProbeRequested(string countryCode)
     {
         countryCode = countryCode.ToUpperInvariant();
         _expandedRouteCountries.Add(countryCode);
         _activeTab = MainTab.Routes;
 
-        var tags = _routes.Where(r => string.Equals(r.CountryCode, countryCode, StringComparison.OrdinalIgnoreCase))
-                          .Select(r => r.Tag).ToArray();
-
-        if (_vpnServiceAvailable && _keysSnapshot?.ProfileJson is { Length: > 0 } &&
-            !_vpnActionInProgress && !WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) && tags.Length > 0)
-        {
-            QueueRouteCountryProbe(countryCode, tags);
-            return;
-        }
-
-        await RunDirectParallelCountryProbeAsync(countryCode, tags);
+        var tags = _routes.Where(route => string.Equals(route.CountryCode, countryCode, StringComparison.OrdinalIgnoreCase))
+            .Select(route => route.Tag).ToArray();
+        QueueRouteCountryProbe(countryCode, tags);
     }
-
-    private async Task RunDirectParallelCountryProbeAsync(string countryCode, string[] tags)
-    {
-        if (tags.Length == 0)
-        {
-            tags = [$"route:{countryCode}:VLESS", $"route:{countryCode}:HYSTERIA2", $"route:{countryCode}:TROJAN", $"awg31:{countryCode.ToLowerInvariant()}"];
-        }
-
-        var host = countryCode switch
-        {
-            "NL" => "nl-vpn.deytt.space",
-            "DE" => "de-vpn.deytt.space",
-            "RU" => "ru-vpn.deytt.space",
-            "FI" => "fi-vpn.deytt.space",
-            "IT" => "it-vpn.deytt.space",
-            "RU-DE" => "ru-vpn.deytt.space",
-            _ => "nl-vpn.deytt.space"
-        };
-
-        var pingResults = new System.Collections.Concurrent.ConcurrentDictionary<string, long>();
-        var pingTasks = tags.Select(async tag =>
-        {
-            _routeGlobe?.PushRouteProbeProgress(new WindowsRouteProbeResult(tag, null, null, null, "latency"));
-            
-            var protoPort = tag.ToUpperInvariant() switch
-            {
-                var t when t.Contains("HYSTERIA") || t.Contains("HY2") => 8443,
-                var t when t.Contains("AWG") || t.Contains("AMNEZIA") => 51820,
-                var t when t.Contains("TROJAN") => 443,
-                _ => 443
-            };
-
-            try
-            {
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                using var tcp = new System.Net.Sockets.TcpClient();
-                var connectTask = tcp.ConnectAsync(host, protoPort == 51820 ? 443 : protoPort);
-                if (await Task.WhenAny(connectTask, Task.Delay(2500)) == connectTask && tcp.Connected)
-                {
-                    sw.Stop();
-                    var basePing = Math.Max(8, sw.ElapsedMilliseconds);
-                    var protoPing = tag.ToUpperInvariant() switch
-                    {
-                        var t when t.Contains("HYSTERIA") || t.Contains("HY2") => Math.Max(7, basePing - 4),
-                        var t when t.Contains("AWG") => Math.Max(6, basePing - 6),
-                        var t when t.Contains("TROJAN") => basePing + 2,
-                        _ => basePing
-                    };
-                    pingResults[tag] = protoPing;
-                    _routeGlobe?.PushRouteProbeProgress(new WindowsRouteProbeResult(tag, protoPing, null, null, "waiting_speed"));
-                }
-                else
-                {
-                    var fallbackPing = countryCode switch { "RU" => 14, "FI" => 22, "NL" => 28, "DE" => 33, "IT" => 42, _ => 30 };
-                    pingResults[tag] = fallbackPing;
-                    _routeGlobe?.PushRouteProbeProgress(new WindowsRouteProbeResult(tag, fallbackPing, null, null, "waiting_speed"));
-                }
-            }
-            catch
-            {
-                var fallbackPing = countryCode switch { "RU" => 15, "FI" => 23, "NL" => 29, "DE" => 35, "IT" => 44, _ => 32 };
-                pingResults[tag] = fallbackPing;
-                _routeGlobe?.PushRouteProbeProgress(new WindowsRouteProbeResult(tag, fallbackPing, null, null, "waiting_speed"));
-            }
-        });
-        await Task.WhenAll(pingTasks);
-
-        using var httpClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(6) };
-        var speedTasks = tags.Select(async tag =>
-        {
-            var ping = pingResults.GetValueOrDefault(tag, 28);
-            _routeGlobe?.PushRouteProbeProgress(new WindowsRouteProbeResult(tag, ping, null, null, "download"));
-            try
-            {
-                var testUrl = "https://deytt.space/api/tg/mobile/probe/download";
-                using var req = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, testUrl);
-                if (!string.IsNullOrEmpty(_sessionToken))
-                    req.Headers.TryAddWithoutValidation("X-TG-App-Token", _sessionToken);
-
-                using var resp = await httpClient.SendAsync(req, System.Net.Http.HttpCompletionOption.ResponseHeadersRead);
-                var stream = await resp.Content.ReadAsStreamAsync();
-                var buf = new byte[64 * 1024];
-                var bytesSw = System.Diagnostics.Stopwatch.StartNew();
-                int totalRead = 0;
-                while (totalRead < 512 * 1024 && bytesSw.ElapsedMilliseconds < 1500)
-                {
-                    int r = await stream.ReadAsync(buf.AsMemory(0, buf.Length));
-                    if (r <= 0) break;
-                    totalRead += r;
-                }
-                bytesSw.Stop();
-
-                double sec = Math.Max(0.05, bytesSw.Elapsed.TotalSeconds);
-                long measuredSpeedMbps = (long)((totalRead * 8.0) / (sec * 1_000_000.0));
-
-                long protocolSpeed = tag.ToUpperInvariant() switch
-                {
-                    var t when t.Contains("HYSTERIA") || t.Contains("HY2") => Math.Clamp(measuredSpeedMbps * 12 / 10 + 35, 120, 920),
-                    var t when t.Contains("AWG") => Math.Clamp(measuredSpeedMbps * 11 / 10 + 20, 110, 880),
-                    var t when t.Contains("TROJAN") => Math.Clamp(measuredSpeedMbps + 10, 95, 780),
-                    _ => Math.Clamp(measuredSpeedMbps, 90, 750)
-                };
-
-                var bytesPerSec = protocolSpeed * 1_000_000L / 8;
-                var resItem = new WindowsRouteProbeResult(tag, ping, bytesPerSec, null, "complete");
-                var updated = new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal)
-                {
-                    [tag] = resItem
-                };
-                _routeProbeResults = updated;
-                _routeGlobe?.PushRouteProbeProgress(resItem);
-            }
-            catch
-            {
-                long protocolSpeed = tag.ToUpperInvariant() switch
-                {
-                    var t when t.Contains("HYSTERIA") || t.Contains("HY2") => 320,
-                    var t when t.Contains("AWG") => 290,
-                    var t when t.Contains("TROJAN") => 240,
-                    _ => 275
-                };
-                var bytesPerSec = protocolSpeed * 1_000_000L / 8;
-                var resItem = new WindowsRouteProbeResult(tag, ping, bytesPerSec, null, "complete");
-                var updated = new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal)
-                {
-                    [tag] = resItem
-                };
-                _routeProbeResults = updated;
-                _routeGlobe?.PushRouteProbeProgress(resItem);
-            }
-        });
-        await Task.WhenAll(speedTasks);
-
-        _routeGlobe?.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
-    }
-
     private void UpdateHomeGlobePresentation()
     {
         var map = _routeGlobe;
@@ -959,12 +827,35 @@ public partial class MainWindow
             daysRemaining = Math.Max(0, (int)(parsedExpiry - DateTimeOffset.UtcNow).TotalDays);
         }
 
-        var devices = _keysSnapshot?.HappDevices?.Select(d => new
+        var devices = (_keysSnapshot?.HappDevices ?? []).Select(d => new
         {
+            id = d.Id,
             icon = d.Os?.Contains("android", StringComparison.OrdinalIgnoreCase) == true ? "📱" : "💻",
-            name = $"{d.Model} ({d.Os})",
-            detail = d.LastSeen is not null ? $"в сети: {d.LastSeen}" : "активно",
-            isActive = !d.Blocked
+            name = string.IsNullOrWhiteSpace(d.Model) ? Copy("Устройство Happ", "Happ device") : d.Model,
+            detail = string.Join(" · ", new[]
+            {
+                string.Join(" ", new[] { d.Os, d.OsVersion }.Where(value => !string.IsNullOrWhiteSpace(value))),
+                d.LastSeen is not null
+                    ? $"{Copy("последнее подключение", "last connected")}: {FormatDeviceDate(d.LastSeen)}"
+                    : null,
+            }.Where(value => !string.IsNullOrWhiteSpace(value))),
+            isActive = !d.Blocked,
+            isBlocked = d.Blocked
+        }).Cast<object>().ToList();
+
+        var sessions = _sessions.Select(session => new
+        {
+            id = session.Id,
+            label = session.Label,
+            current = session.Current,
+            detail = string.Join(" · ", new[]
+            {
+                session.Current ? Copy("текущий сеанс", "current session") : null,
+                $"{Copy("вход", "signed in")}: {FormatLastSeen(session.CreatedAt)}",
+                string.IsNullOrWhiteSpace(session.ExpiresAt)
+                    ? null
+                    : $"{Copy("до", "until")}: {FormatLastSeen(session.ExpiresAt)}",
+            }.Where(value => !string.IsNullOrWhiteSpace(value))),
         }).Cast<object>().ToList();
 
         var subKey = _keysSnapshot?.AwgProfiles.FirstOrDefault()?.Config
@@ -980,7 +871,9 @@ public partial class MainWindow
             expiresFormatted,
             daysRemaining,
             subKey,
-            devices
+            devices,
+            sessions,
+            _sessionLoadIssue
         );
 
         var splitStore = WindowsSplitTunnelStore.Load();
@@ -997,8 +890,44 @@ public partial class MainWindow
             _vpnServiceAvailable,
             _mapRegionEnabled,
             _reduceMotion,
-            "0.11.39"
+            "0.11.40"
         );
+    }
+
+    private async Task CopySubscriptionKeyToClipboardAsync()
+    {
+        var key = _keysSnapshot?.AwgProfiles.FirstOrDefault()?.Config
+                  ?? (!string.IsNullOrEmpty(_sessionToken)
+                      ? $"https://deytt.space/api/tg/mobile/sub/token/{_sessionToken}"
+                      : null);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            ShowInfoDialog(Copy("Ссылка недоступна", "Subscription link unavailable"),
+                Copy("Войдите в аккаунт и обновите профиль.", "Sign in and refresh your profile."));
+            return;
+        }
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowInfoDialog(Copy("Не удалось скопировать", "Could not copy"),
+                Copy("Буфер обмена недоступен в этом окне.", "The clipboard is unavailable in this window."));
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(key);
+            ShowInfoDialog(Copy("Ссылка скопирована", "Link copied"),
+                Copy("Теперь её можно вставить на другом устройстве.", "You can now paste it on another device."));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+                                      InvalidOperationException or NotSupportedException or OperationCanceledException)
+        {
+            ShowInfoDialog(Copy("Не удалось скопировать", "Could not copy"),
+                Copy("Скопируйте ссылку вручную из поля ключа подписки.",
+                    "Copy the subscription link manually from the key field."));
+        }
     }
 
     private string? ConfirmedHomeAutoRouteKey()

@@ -155,6 +155,11 @@ public sealed class RouteGlobeWebView : ContentControl
         /// <summary>Raised when the user requests a route probe for a country.</summary>
     public event Action<string>? CountryProbeRequested;
 
+    public event Action<long>? HappDeviceManagementRequested;
+    public event Action<string>? TelegramSessionManagementRequested;
+    public event Action? SubscriptionKeyCopyRequested;
+    public event Action? ExitRequested;
+
     /// <summary>Raised when the user toggles a client setting in the web presentation.</summary>
     public event Action<string, bool>? SettingToggled;
 
@@ -199,6 +204,7 @@ public sealed class RouteGlobeWebView : ContentControl
             latency = probes != null && probes.TryGetValue(r.Tag, out var p) ? p.LatencyMilliseconds : null,
             speed = probes != null && probes.TryGetValue(r.Tag, out var p2) && p2.BytesPerSecond > 0 ? (long?)(p2.BytesPerSecond.Value * 8 / 1_000_000.0) : null,
             stage = probes != null && probes.TryGetValue(r.Tag, out var p3) ? p3.Stage : null,
+            error = probes != null && probes.TryGetValue(r.Tag, out var p4) ? p4.Error : null,
             isSelected = string.Equals(r.Id, selectedRouteId, StringComparison.OrdinalIgnoreCase) ||
                          string.Equals(r.Tag, selectedRouteId, StringComparison.OrdinalIgnoreCase)
         });
@@ -219,7 +225,9 @@ public sealed class RouteGlobeWebView : ContentControl
         string? expiresFormatted,
         int? daysRemaining,
         string? subscriptionKey,
-        IReadOnlyList<object>? devices)
+        IReadOnlyList<object>? devices,
+        IReadOnlyList<object>? sessions,
+        string? sessionsLoadIssue)
     {
         var payload = new
         {
@@ -232,7 +240,9 @@ public sealed class RouteGlobeWebView : ContentControl
             expiresFormatted,
             daysRemaining,
             subscriptionKey,
-            devices
+            devices,
+            sessions,
+            sessionsLoadIssue
         };
         _profileDataJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         _ = ExecuteScriptAsync($"window.deyttSetProfileData && window.deyttSetProfileData({_profileDataJson});");
@@ -941,8 +951,15 @@ public sealed class RouteGlobeWebView : ContentControl
         {
             Dispatcher.UIThread.Post(() =>
             {
+                if (_atlasFailed || !ReferenceEquals(sender, _webView))
+                    return;
                 if (VisualRoot is Window window)
-                    window.Close();
+                {
+                    if (ExitRequested is { } exitRequested)
+                        exitRequested();
+                    else
+                        window.Close();
+                }
             });
             return;
         }
@@ -984,6 +1001,38 @@ public sealed class RouteGlobeWebView : ContentControl
         if (node == "profile:renew")
         {
             Dispatcher.UIThread.Post(() => RenewRequested?.Invoke());
+            return;
+        }
+        if (node == "profile:copy_key")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SubscriptionKeyCopyRequested?.Invoke();
+            });
+            return;
+        }
+        const string deviceManagementPrefix = "profile:device:manage:";
+        if (node.StartsWith(deviceManagementPrefix, StringComparison.Ordinal) &&
+            long.TryParse(node.AsSpan(deviceManagementPrefix.Length), out var deviceId) && deviceId > 0)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    HappDeviceManagementRequested?.Invoke(deviceId);
+            });
+            return;
+        }
+        const string sessionManagementPrefix = "profile:session:manage:";
+        if (node.StartsWith(sessionManagementPrefix, StringComparison.Ordinal))
+        {
+            var sessionId = node[sessionManagementPrefix.Length..];
+            if (sessionId.Length is > 0 and <= 256)
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                        TelegramSessionManagementRequested?.Invoke(sessionId);
+                });
             return;
         }
         if (node == "profile:import" || node == "settings:import")
@@ -1264,7 +1313,7 @@ public sealed class RouteGlobeWebView : ContentControl
         script.Append("window.deyttSetHomePresentation && window.deyttSetHomePresentation(")
             .Append(JsonSerializer.Serialize(_homePresentation, new JsonSerializerOptions(JsonSerializerDefaults.Web)))
             .AppendLine(");");
-        if (_routesCatalog is { Count: > 0 } catalog)
+        if (_routesCatalog is { } catalog)
         {
             var items = catalog.Select(r => new
             {
@@ -1277,6 +1326,7 @@ public sealed class RouteGlobeWebView : ContentControl
                 latency = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p) ? p.LatencyMilliseconds : null,
                 speed = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p2) && p2.BytesPerSecond > 0 ? (long?)(p2.BytesPerSecond.Value * 8 / 1_000_000.0) : null,
                 stage = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p3) ? p3.Stage : null,
+                error = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p4) ? p4.Error : null,
                 isSelected = string.Equals(r.Id, _selectedRoute, StringComparison.OrdinalIgnoreCase) ||
                              string.Equals(r.Tag, _selectedRoute, StringComparison.OrdinalIgnoreCase)
             });

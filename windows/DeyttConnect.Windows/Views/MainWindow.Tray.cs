@@ -12,8 +12,6 @@ public partial class MainWindow
     private TrayIcon? _trayIcon;
     private bool _exitAuthorized;
     private bool _quitInProgress;
-    private bool _hideAfterStartup;
-
     private void InitializeTray()
     {
         if (_qaFixture || !OperatingSystem.IsWindows() || _trayIcon is not null || Application.Current is null)
@@ -150,12 +148,7 @@ public partial class MainWindow
             args.CloseReason is WindowCloseReason.OSShutdown or WindowCloseReason.ApplicationShutdown)
             return;
         args.Cancel = true;
-        if (!_sessionRestoreComplete)
-        {
-            _hideAfterStartup = true;
-            WindowState = WindowState.Minimized;
-        }
-        else Hide();
+        _ = ExitForVerifiedUpdateAsync(null);
     }
 
     private async Task SwitchTrayRouteAsync(WindowsRoute route)

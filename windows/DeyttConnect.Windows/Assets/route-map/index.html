@@ -1626,30 +1626,6 @@
       background: rgba(255, 255, 255, 0.08);
     }
 
-    .btn-disconnect-device {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px 10px;
-      border-radius: 8px;
-      font-family: inherit;
-      font-size: 11.5px;
-      font-weight: 500;
-      color: #FDA4AF;
-      background: rgba(244, 63, 94, 0.1);
-      border: 1px solid rgba(244, 63, 94, 0.22);
-      cursor: pointer;
-      text-transform: lowercase;
-      transition: all 140ms ease;
-    }
-
-    .btn-disconnect-device:hover {
-      background: rgba(244, 63, 94, 0.22);
-      color: #FFE4E6;
-      border-color: rgba(244, 63, 94, 0.45);
-      transform: translateY(-1px);
-    }
-
     .setting-item {
       display: flex;
       align-items: center;
@@ -2797,16 +2773,6 @@
             </div>
 
             <div class="device-list" id="profile-devices-list">
-              <div class="device-row">
-                <div class="device-info">
-                  <span>💻</span>
-                  <div>
-                    <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">это устройство</strong>
-                    <span style="font-size: 11.5px; color: var(--text-muted);">windows desktop · v0.11.39</span>
-                  </div>
-                </div>
-                <span class="device-status">активно</span>
-              </div>
             </div>
           </div>
         </div>
@@ -2820,7 +2786,6 @@
             <span id="masked-key">ссылка подписки станет доступна после входа в аккаунт</span>
             <div class="key-actions">
               <button class="btn-select-route" id="btn-copy-key">скопировать</button>
-              <button class="btn-select-route" id="btn-show-qr">qr-код</button>
             </div>
           </div>
         </div>
@@ -2928,7 +2893,7 @@
           <div class="glass-card" style="display: flex; align-items: center; justify-content: space-between;">
             <div>
               <strong style="color: #FFFFFF; font-size: 15px; display: block;">./connect</strong>
-              <span style="font-size: 13px; color: var(--text-muted);" id="settings-app-version">версия 0.11.39 (windows x64) · канал: ./beta</span>
+              <span style="font-size: 13px; color: var(--text-muted);" id="settings-app-version">версия 0.11.40 (windows x64) · канал: ./beta</span>
             </div>
             <button class="btn-select-route" id="btn-check-updates">проверить обновления</button>
           </div>
@@ -2936,88 +2901,6 @@
       </div>
     </section>
   </main>
-
-  <!-- Liquid Glass Modal for QR Code -->
-  <div class="glass-modal-backdrop" id="qr-modal">
-    <div class="glass-modal-card">
-      <h3 style="font-size: 20px; font-weight: 700; color: #FFFFFF;">qr-код для подключения</h3>
-      <p style="font-size: 13.5px; color: var(--text-muted); margin-top: 4px;">отсканируйте камерой в приложении ./connect на телефоне</p>
-
-      <div class="qr-preview-box">
-        <svg viewBox="0 0 200 200" width="176" height="176">
-          <rect width="200" height="200" fill="#FFFFFF"/>
-          <!-- Position Marks -->
-          <rect x="20" y="20" width="40" height="40" fill="#0B111B" rx="8"/>
-          <rect x="28" y="28" width="24" height="24" fill="#FFFFFF" rx="4"/>
-          <rect x="34" y="34" width="12" height="12" fill="#0B111B" rx="2"/>
-
-          <rect x="140" y="20" width="40" height="40" fill="#0B111B" rx="8"/>
-          <rect x="148" y="28" width="24" height="24" fill="#FFFFFF" rx="4"/>
-          <rect x="154" y="34" width="12" height="12" fill="#0B111B" rx="2"/>
-
-          <rect x="20" y="140" width="40" height="40" fill="#0B111B" rx="8"/>
-          <rect x="28" y="148" width="24" height="24" fill="#FFFFFF" rx="4"/>
-          <rect x="34" y="154" width="12" height="12" fill="#0B111B" rx="2"/>
-
-          <!-- Stylized Data Matrix -->
-          <g fill="#0B111B">
-            <rect x="70" y="24" width="8" height="8" rx="2"/>
-            <rect x="86" y="24" width="8" height="8" rx="2"/>
-            <rect x="102" y="24" width="8" height="8" rx="2"/>
-            <rect x="118" y="24" width="8" height="8" rx="2"/>
-            <rect x="78" y="36" width="8" height="8" rx="2"/>
-            <rect x="110" y="36" width="8" height="8" rx="2"/>
-
-            <rect x="24" y="70" width="8" height="8" rx="2"/>
-            <rect x="36" y="86" width="8" height="8" rx="2"/>
-            <rect x="24" y="102" width="8" height="8" rx="2"/>
-            <rect x="52" y="118" width="8" height="8" rx="2"/>
-
-            <rect x="70" y="70" width="12" height="12" rx="3" fill="#39E8BD"/>
-            <rect x="90" y="70" width="8" height="8" rx="2"/>
-            <rect x="106" y="70" width="14" height="8" rx="2"/>
-            <rect x="128" y="70" width="8" height="8" rx="2"/>
-            <rect x="144" y="70" width="8" height="14" rx="2"/>
-            <rect x="160" y="70" width="8" height="8" rx="2"/>
-
-            <rect x="70" y="90" width="8" height="14" rx="2"/>
-            <rect x="86" y="86" width="12" height="12" rx="3" fill="#38BDF8"/>
-            <rect x="106" y="90" width="8" height="8" rx="2"/>
-            <rect x="122" y="86" width="14" height="14" rx="3" fill="#0B111B"/>
-            <rect x="144" y="90" width="8" height="8" rx="2"/>
-            <rect x="160" y="90" width="8" height="8" rx="2"/>
-
-            <rect x="70" y="112" width="14" height="8" rx="2"/>
-            <rect x="92" y="106" width="8" height="8" rx="2"/>
-            <rect x="108" y="112" width="12" height="12" rx="3" fill="#39E8BD"/>
-            <rect x="128" y="112" width="8" height="8" rx="2"/>
-            <rect x="144" y="106" width="8" height="14" rx="2"/>
-            <rect x="160" y="112" width="8" height="8" rx="2"/>
-
-            <rect x="70" y="140" width="8" height="8" rx="2"/>
-            <rect x="86" y="140" width="8" height="8" rx="2"/>
-            <rect x="110" y="140" width="14" height="8" rx="2"/>
-            <rect x="132" y="140" width="8" height="8" rx="2"/>
-            <rect x="148" y="140" width="8" height="8" rx="2"/>
-            <rect x="164" y="140" width="8" height="8" rx="2"/>
-
-            <rect x="78" y="156" width="8" height="8" rx="2"/>
-            <rect x="102" y="156" width="8" height="8" rx="2"/>
-            <rect x="126" y="156" width="8" height="8" rx="2"/>
-            <rect x="150" y="156" width="14" height="8" rx="2"/>
-
-            <rect x="70" y="172" width="8" height="8" rx="2"/>
-            <rect x="94" y="172" width="14" height="8" rx="2"/>
-            <rect x="118" y="172" width="8" height="8" rx="2"/>
-            <rect x="142" y="172" width="8" height="8" rx="2"/>
-            <rect x="160" y="172" width="8" height="8" rx="2"/>
-          </g>
-        </svg>
-      </div>
-
-      <button class="btn-select-route" style="width: 100%; padding: 10px; font-size: 14px;" id="btn-close-qr">закрыть</button>
-    </div>
-  </div>
 
   <div class="motion-toast" id="toast"></div>
 
@@ -3184,33 +3067,16 @@
         if (!isNaN(val) && val > 0 && val < minPing) minPing = val;
       });
       const headerPing = acc.querySelector("[data-ping]");
-      if (headerPing && minPing < Infinity) {
-        headerPing.textContent = minPing.toString();
+      if (headerPing) {
+        headerPing.textContent = minPing < Infinity ? minPing.toString() : "—";
       }
     }
 
     window.deyttUpdateRouteProbe = function(tag, latency, speedMbps, stage, error) {
       if (!tag) return;
-      const normalizedTag = String(tag).toLowerCase();
-      let row = document.querySelector(`[data-route-tag="${tag}"]`) ||
-                document.querySelector(`[data-route-key="${tag}"]`);
-      if (!row) {
-        document.querySelectorAll(".proto-row").forEach(r => {
-          const t = (r.dataset.routeTag || r.dataset.routeKey || "").toLowerCase();
-          if (t === normalizedTag) {
-            row = r;
-          } else if (normalizedTag.startsWith("awg") && (t.includes("awg") || r.querySelector(".proto-logo.awg"))) {
-            const acc = r.closest(".country-accordion");
-            if (acc && acc.classList.contains("is-open")) {
-              row = r;
-            } else if (!row) {
-              row = r;
-            }
-          } else if (t && (normalizedTag.includes(t) || t.includes(normalizedTag))) {
-            if (!row) row = r;
-          }
-        });
-      }
+      const routeTag = String(tag);
+      const row = [...document.querySelectorAll(".proto-row")].find(candidate =>
+        candidate.dataset.routeTag === routeTag || candidate.dataset.routeKey === routeTag);
       if (row) {
         const latEl = row.querySelector(".proto-latency");
         const spdEl = row.querySelector(".proto-speed");
@@ -3223,6 +3089,7 @@
           if (latEl && latency) latEl.textContent = latency.toString();
           if (spdEl) spdEl.textContent = speedMbps ? `· ${speedMbps} мбит/с` : "· замер…";
         } else if (stage === "complete") {
+          row.removeAttribute("title");
           if (dot) {
             dot.classList.remove("is-probing");
             if (latency) {
@@ -3230,13 +3097,15 @@
               dot.style.boxShadow = `0 0 8px ${dot.style.background}`;
             }
           }
-          if (latEl) latEl.textContent = latency ? latency.toString() : "—";
-          if (spdEl) spdEl.textContent = speedMbps ? `· ${speedMbps} мбит/с` : "";
+          if (latEl) latEl.textContent = latency != null ? latency.toString() : "—";
+          if (spdEl) spdEl.textContent = speedMbps != null ? `· ${speedMbps} мбит/с` : "";
           updateCountryHeaderPing(row.closest(".country-accordion"));
         } else if (stage === "error") {
+          row.title = error || "";
           if (dot) dot.classList.remove("is-probing");
           if (latEl) latEl.textContent = "—";
           if (spdEl) spdEl.textContent = "· недоступен";
+          updateCountryHeaderPing(row.closest(".country-accordion"));
         }
       }
     };
@@ -3248,19 +3117,17 @@
     window.deyttSetProfileData = function(data) {
       if (!data) return;
       window.currentProfileData = data;
-      if (data.subscriptionKey) {
-        currentSubscriptionKey = data.subscriptionKey;
-      }
+      currentSubscriptionKey = typeof data.subscriptionKey === "string" ? data.subscriptionKey : "";
       const dName = document.getElementById("profile-display-name");
       const uName = document.getElementById("profile-username");
       const pId = document.getElementById("profile-id");
-      const sTag = document.getElementById("profile-sub-tag");
       const sDot = document.getElementById("profile-sub-dot");
       const sStatus = document.getElementById("profile-sub-status");
       const sSep = document.getElementById("profile-sub-sep");
       const sExp = document.getElementById("profile-sub-expiry");
       const btnRenew = document.getElementById("btn-renew-tg");
       const btnLogin = document.getElementById("btn-login-tg");
+      const btnCopyKey = document.getElementById("btn-copy-key");
       const tTitle = document.getElementById("profile-tariff-title");
       const tDetail = document.getElementById("profile-tariff-detail");
       const mKey = document.getElementById("masked-key");
@@ -3301,29 +3168,67 @@
         if (tDetail) tDetail.textContent = "оформите подписку в telegram боте";
       }
 
-      if (data.subscriptionKey && mKey) {
-        mKey.textContent = data.subscriptionKey;
-      }
-
-      if (Array.isArray(data.devices) && dList) {
-        let html = "";
-        data.devices.forEach(dev => {
-          html += `<div class="device-row">
-            <div class="device-info">
-              <span>${dev.icon || "💻"}</span>
-              <div>
-                <strong style="color: #FFFFFF; font-size: 13.5px; display: block;">${dev.name || "устройство"}</strong>
-                <span style="font-size: 11.5px; color: var(--text-muted);">${dev.detail || dev.platform || ""}</span>
-              </div>
-            </div>
-            <span class="device-status">${dev.isActive ? "активно" : "в сети"}</span>
-          </div>`;
+      if (mKey) mKey.textContent = currentSubscriptionKey || "ссылка подписки станет доступна после входа в аккаунт";
+      if (btnCopyKey) btnCopyKey.disabled = !currentSubscriptionKey;
+      if (!dList) return;
+      dList.replaceChildren();
+      const devices = Array.isArray(data.devices) ? data.devices : [];
+      const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+      const addMessage = message => {
+        const empty = document.createElement("span");
+        empty.className = "device-status";
+        empty.textContent = message;
+        dList.append(empty);
+      };
+      const addGroup = (title, items, kind) => {
+        const heading = document.createElement("strong");
+        heading.className = "device-status";
+        heading.textContent = title;
+        dList.append(heading);
+        if (!items.length) {
+          addMessage(kind === "device" ? "устройств Happ нет" : "активных сеансов нет");
+          return;
+        }
+        items.forEach(item => {
+          const row = document.createElement("div");
+          row.className = "device-row";
+          const info = document.createElement("div");
+          info.className = "device-info";
+          const icon = document.createElement("span");
+          icon.textContent = kind === "device" ? (item.icon || "💻") : "🔑";
+          const labels = document.createElement("div");
+          const name = document.createElement("strong");
+          name.style.cssText = "color:#FFFFFF;font-size:13.5px;display:block";
+          name.textContent = item.name || item.label || (kind === "device" ? "устройство Happ" : "сеанс Telegram");
+          const detail = document.createElement("span");
+          detail.style.cssText = "font-size:11.5px;color:var(--text-muted)";
+          detail.textContent = item.detail || "";
+          labels.append(name, detail);
+          info.append(icon, labels);
+          const status = document.createElement("span");
+          status.className = "device-status";
+          status.textContent = kind === "device" ? (item.isActive ? "активно" : "заблокировано") : (item.current ? "текущий" : "активен");
+          const button = document.createElement("button");
+          button.className = "btn-select-route";
+          button.style.cssText = "font-size:11px;padding:5px 10px";
+          button.dataset.profileAction = kind;
+          button.dataset.profileId = String(item.id || "");
+          button.textContent = kind === "session" && !item.current ? "завершить" : "управлять";
+          button.disabled = !button.dataset.profileId;
+          row.append(info, status, button);
+          dList.append(row);
         });
-        dList.innerHTML = html;
-        if (dCount) dCount.textContent = `${data.devices.length} подключенных устройств`;
-      }
-    };
+      };
 
+      if (!data.isSignedIn) {
+        addMessage("войдите в telegram, чтобы загрузить устройства и сеансы");
+      } else {
+        addGroup("устройства Happ", devices, "device");
+        if (data.sessionsLoadIssue) addMessage(data.sessionsLoadIssue);
+        else addGroup("сеансы Telegram", sessions, "session");
+      }
+      if (dCount) dCount.textContent = `${devices.length} устройств · ${sessions.length} сеансов`;
+    };
     window.deyttSetSettingsData = function(data) {
       if (!data) return;
       const sLang = document.getElementById("setting-lang-desc");
@@ -3349,55 +3254,102 @@
       if (sVer && data.appVersion) sVer.textContent = `версия ${data.appVersion} (windows x64) · канал: ./beta`;
     };
 
+    let currentRouteCatalog = [];
+    const routeProtocolKey = route => {
+      const protocol = String(route.protocol || route.protocolName || "").toLowerCase();
+      if (protocol.includes("awg") || protocol.includes("amnezia")) return "awg";
+      if (protocol.includes("hysteria") || protocol.includes("hy2")) return "hy2";
+      if (protocol.includes("trojan")) return "trojan";
+      if (protocol.includes("vless")) return "vless";
+      return "";
+    };
+    function routeForUiKey(key, routes = currentRouteCatalog) {
+      const value = String(key || "").toLowerCase();
+      const direct = routes.find(route => String(route.id || "").toLowerCase() === value || String(route.tag || "").toLowerCase() === value);
+      if (direct) return direct;
+      if (value === "auto") return routes.find(route => route.countryCode === "AUTO");
+      if (value === "ru-de") return routes.find(route => route.id === "ru-de" || route.countryCode === "RU-DE");
+      const [country, protocol] = value.split("-");
+      return routes.find(route => {
+        if (String(route.countryCode || "").toLowerCase() !== country) return false;
+        return protocol ? routeProtocolKey(route) === protocol : true;
+      });
+    }
+    function routeForCard(card, routes = currentRouteCatalog) {
+      const tag = card.dataset.routeTag;
+      return (tag && routes.find(route => route.tag === tag || route.id === tag)) ||
+             routeForUiKey(card.dataset.routeKey, routes);
+    }
+    const setRouteCardVisible = (element, visible) => {
+      element.hidden = !visible;
+      element.style.display = visible ? "" : "none";
+    };
+
+    document.querySelectorAll(".proto-latency").forEach(element => element.textContent = "—");
+    document.querySelectorAll(".proto-speed").forEach(element => element.textContent = "");
+    document.querySelectorAll(".country-accordion [data-ping]").forEach(element => element.textContent = "—");
+
     window.deyttSetRoutesData = function(routes) {
       if (!Array.isArray(routes)) return;
-      routes.forEach(route => {
-        if (!route.tag && !route.id) return;
-        const tag = route.tag || route.id;
-        if (route.latency || route.speed || route.stage) {
-          window.deyttUpdateRouteProbe(tag, route.latency, route.speed, route.stage || "complete", null);
-        }
-        if (route.isSelected) {
-          const key = route.id || route.tag;
-          document.querySelectorAll("[data-route-key]").forEach(card => {
-            const isMatch = card.dataset.routeKey === key || card.dataset.routeTag === tag;
-            card.classList.toggle("is-selected", isMatch);
-            const btn = card.querySelector(".btn-select-route");
-            if (btn) btn.textContent = isMatch ? "активен ✓" : "выбрать";
-          });
-        }
+      currentRouteCatalog = routes;
+      document.querySelectorAll(".proto-row, .smart-route-row").forEach(card => {
+        const route = routeForCard(card, routes);
+        setRouteCardVisible(card, !!route);
+        if (!route) return;
+        card.dataset.routeTag = route.tag || route.id || "";
+        const label = card.querySelector(".proto-name");
+        if (label && route.protocolName) label.textContent = route.protocolName;
+        const selected = route.isSelected === true;
+        card.classList.toggle("is-selected", selected);
+        const button = card.querySelector(".btn-select-route");
+        if (button) button.textContent = selected ? "активен ✓" : "выбрать";
+        if (route.stage || route.latency != null || route.speed != null)
+          window.deyttUpdateRouteProbe(route.tag || route.id, route.latency, route.speed, route.stage || "complete", route.error || null);
       });
+      document.querySelectorAll(".country-accordion").forEach(accordion => {
+        const rows = [...accordion.querySelectorAll(".proto-row:not([hidden])")];
+        setRouteCardVisible(accordion, rows.length > 0);
+        if (!rows.length) return;
+        const route = routeForCard(rows[0], routes);
+        const name = accordion.querySelector(".country-name");
+        if (name && route?.countryName) name.textContent = route.countryName;
+        const selected = rows.some(row => routeForCard(row, routes)?.isSelected === true);
+        accordion.classList.toggle("is-selected", selected);
+      });
+      const selected = routes.find(route => route.isSelected === true);
+      if (selected) activeRouteKey = selected.countryCode === "AUTO" ? "auto" :
+        selected.countryCode === "RU-DE" ? "ru-de" : `${String(selected.countryCode).toLowerCase()}-${routeProtocolKey(selected)}`;
     };
 
     // Routes Selection & Syncing with Globe (Authentic Routes from WindowsRouteCatalog)
     const routeDetails = {
-      auto: { flag: "✦", country: "", city: "автоподбор", ping: 24 },
-      "ru-de": { flag: "🇷🇺→🇩🇪", country: "россия → германия", city: "lte · белые списки", ping: 46 },
-      nl: { flag: "🇳🇱", country: "нидерланды", city: "амстердам", ping: 28 },
-      de: { flag: "🇩🇪", country: "германия", city: "франкфурт-на-майне", ping: 34 },
-      fi: { flag: "🇫🇮", country: "финляндия", city: "хельсинки", ping: 20 },
-      it: { flag: "🇮🇹", country: "италия", city: "милан", ping: 42 },
-      ru: { flag: "🇷🇺", country: "россия", city: "санкт-петербург", ping: 12 },
-      "nl-vless": { flag: "🇳🇱", country: "нидерланды", city: "vless+ws", ping: 24 },
-      "nl-hy2": { flag: "🇳🇱", country: "нидерланды", city: "hysteriav2", ping: 22 },
-      "nl-trojan": { flag: "🇳🇱", country: "нидерланды", city: "trojan", ping: 27 },
-      "nl-awg": { flag: "🇳🇱", country: "нидерланды", city: "amneziawg3.1", ping: 29 },
-      "de-vless": { flag: "🇩🇪", country: "германия", city: "vless+ws", ping: 32 },
-      "de-hy2": { flag: "🇩🇪", country: "германия", city: "hysteriav2", ping: 30 },
-      "de-trojan": { flag: "🇩🇪", country: "германия", city: "trojan", ping: 35 },
-      "de-awg": { flag: "🇩🇪", country: "германия", city: "amneziawg3.1", ping: 34 },
-      "ru-vless": { flag: "🇷🇺", country: "россия", city: "vless+ws", ping: 12 },
-      "ru-hy2": { flag: "🇷🇺", country: "россия", city: "hysteriav2", ping: 16 },
-      "ru-trojan": { flag: "🇷🇺", country: "россия", city: "trojan", ping: 14 },
-      "ru-awg": { flag: "🇷🇺", country: "россия", city: "amneziawg3.1", ping: 11 },
-      "fi-vless": { flag: "🇫🇮", country: "финляндия", city: "vless+ws", ping: 20 },
-      "fi-hy2": { flag: "🇫🇮", country: "финляндия", city: "hysteriav2", ping: 18 },
-      "fi-trojan": { flag: "🇫🇮", country: "финляндия", city: "trojan", ping: 23 },
-      "fi-awg": { flag: "🇫🇮", country: "финляндия", city: "amneziawg3.1", ping: 22 },
-      "it-vless": { flag: "🇮🇹", country: "италия", city: "vless+ws", ping: 42 },
-      "it-hy2": { flag: "🇮🇹", country: "италия", city: "hysteriav2", ping: 39 },
-      "it-trojan": { flag: "🇮🇹", country: "италия", city: "trojan", ping: 45 },
-      "it-awg": { flag: "🇮🇹", country: "италия", city: "amneziawg3.1", ping: 44 }
+      auto: { flag: "✦", country: "", city: "автоподбор" },
+      "ru-de": { flag: "🇷🇺→🇩🇪", country: "россия → германия", city: "lte · белые списки" },
+      nl: { flag: "🇳🇱", country: "нидерланды", city: "амстердам" },
+      de: { flag: "🇩🇪", country: "германия", city: "франкфурт-на-майне" },
+      fi: { flag: "🇫🇮", country: "финляндия", city: "хельсинки" },
+      it: { flag: "🇮🇹", country: "италия", city: "милан" },
+      ru: { flag: "🇷🇺", country: "россия", city: "санкт-петербург" },
+      "nl-vless": { flag: "🇳🇱", country: "нидерланды", city: "vless+ws" },
+      "nl-hy2": { flag: "🇳🇱", country: "нидерланды", city: "hysteriav2" },
+      "nl-trojan": { flag: "🇳🇱", country: "нидерланды", city: "trojan" },
+      "nl-awg": { flag: "🇳🇱", country: "нидерланды", city: "amneziawg3.1" },
+      "de-vless": { flag: "🇩🇪", country: "германия", city: "vless+ws" },
+      "de-hy2": { flag: "🇩🇪", country: "германия", city: "hysteriav2" },
+      "de-trojan": { flag: "🇩🇪", country: "германия", city: "trojan" },
+      "de-awg": { flag: "🇩🇪", country: "германия", city: "amneziawg3.1" },
+      "ru-vless": { flag: "🇷🇺", country: "россия", city: "vless+ws" },
+      "ru-hy2": { flag: "🇷🇺", country: "россия", city: "hysteriav2" },
+      "ru-trojan": { flag: "🇷🇺", country: "россия", city: "trojan" },
+      "ru-awg": { flag: "🇷🇺", country: "россия", city: "amneziawg3.1" },
+      "fi-vless": { flag: "🇫🇮", country: "финляндия", city: "vless+ws" },
+      "fi-hy2": { flag: "🇫🇮", country: "финляндия", city: "hysteriav2" },
+      "fi-trojan": { flag: "🇫🇮", country: "финляндия", city: "trojan" },
+      "fi-awg": { flag: "🇫🇮", country: "финляндия", city: "amneziawg3.1" },
+      "it-vless": { flag: "🇮🇹", country: "италия", city: "vless+ws" },
+      "it-hy2": { flag: "🇮🇹", country: "италия", city: "hysteriav2" },
+      "it-trojan": { flag: "🇮🇹", country: "италия", city: "trojan" },
+      "it-awg": { flag: "🇮🇹", country: "италия", city: "amneziawg3.1" }
     };
 
     let activeRouteKey = "auto";
@@ -3405,27 +3357,22 @@
     function selectRoute(key) {
       activeRouteKey = key;
       postHost('route:select:' + key);
+      const route = routeForUiKey(key);
       const data = routeDetails[key] || routeDetails.auto;
+      const countryName = route?.countryName || data.country;
+      const routeName = route?.protocolName || data.city;
+      const routeFlag = route?.flag || data.flag;
 
       // Update right connection panel
       const homeFlag = document.getElementById("home-flag");
       const homeCountry = document.getElementById("home-country");
       const homeCity = document.getElementById("home-city");
-      const homeLatency = document.getElementById("home-latency");
-      const latencyUnit = document.getElementById("home-latency-unit");
-      if (homeFlag) {
-        if (key === "auto") {
-          homeFlag.textContent = "✦";
-        } else {
-          const code = (key.includes("-") && key !== "ru-de" ? key.split("-")[0] : key).toUpperCase();
-          homeFlag.innerHTML = getFlagSvg(code, 22, 15);
-        }
-      }
+      if (homeFlag) homeFlag.textContent = routeFlag || "✦";
       if (homeCountry) {
-        homeCountry.textContent = "";
-        homeCountry.hidden = true;
+        homeCountry.textContent = countryName || "";
+        homeCountry.hidden = key === "auto" || !countryName;
       }
-      if (homeCity) homeCity.textContent = data.city;
+      if (homeCity) homeCity.textContent = routeName;
       const homeRouteSubtitle = document.getElementById("home-route-subtitle");
       if (homeRouteSubtitle) {
         if (key === "auto") {
@@ -3433,18 +3380,7 @@
         } else if (key === "ru-de") {
           homeRouteSubtitle.textContent = "российский вход и европейский выход";
         } else {
-          homeRouteSubtitle.textContent = `прямой шлюз · ${data.country || data.city}`;
-        }
-      }
-      if (homeLatency) {
-        if (isConnected) {
-          homeLatency.classList.remove("is-empty");
-          homeLatency.textContent = data.ping;
-          if (latencyUnit) latencyUnit.hidden = false;
-        } else {
-          homeLatency.classList.add("is-empty");
-          homeLatency.textContent = "не измерено";
-          if (latencyUnit) latencyUnit.hidden = true;
+          homeRouteSubtitle.textContent = `прямой шлюз · ${countryName || routeName}`;
         }
       }
 
@@ -3452,12 +3388,12 @@
       const compactFlag = document.getElementById("compact-flag");
       const compactCountry = document.getElementById("compact-country");
       const compactCity = document.getElementById("compact-city");
-      if (compactFlag) compactFlag.textContent = data.flag;
+      if (compactFlag) compactFlag.textContent = routeFlag || "✦";
       if (compactCountry) {
-        compactCountry.textContent = "";
-        compactCountry.hidden = true;
+        compactCountry.textContent = countryName || "";
+        compactCountry.hidden = key === "auto" || !countryName;
       }
-      if (compactCity) compactCity.textContent = data.city;
+      if (compactCity) compactCity.textContent = routeName;
 
       // Update card active classes for smart routes and protocol rows
       document.querySelectorAll("[data-route-key]").forEach(card => {
@@ -3473,7 +3409,7 @@
         window.deyttSetMapRoute(atlasKey);
       }
 
-      showToast(`выбран маршрут: ${data.city}`);
+      showToast(`выбран маршрут: ${routeName}`);
     }
 
     window.deyttSelectRouteFromAtlas = function(key) {
@@ -3533,53 +3469,12 @@
       });
     }
 
-    // Profile actions (Copy key, Show QR, Renew in TG)
+    // Profile actions
     const btnCopyKey = document.getElementById("btn-copy-key");
     if (btnCopyKey) {
       btnCopyKey.addEventListener("click", () => {
-        const keyToCopy = currentSubscriptionKey || "awg://deytt-connect-key";
-        navigator.clipboard?.writeText(keyToCopy).catch(() => {});
-        btnCopyKey.textContent = "скопировано!";
-        btnCopyKey.style.background = "#39E8BD";
-        btnCopyKey.style.color = "#0B111B";
-        showToast("ключ доступа скопирован в буфер обмена");
-        setTimeout(() => {
-          btnCopyKey.textContent = "скопировать";
-          btnCopyKey.style.background = "";
-          btnCopyKey.style.color = "";
-        }, 1800);
-      });
-    }
-
-    const qrModal = document.getElementById("qr-modal");
-    const btnShowQr = document.getElementById("btn-show-qr");
-    const btnCloseQr = document.getElementById("btn-close-qr");
-
-    if (btnShowQr && qrModal) {
-      btnShowQr.addEventListener("click", () => qrModal.classList.add("is-open"));
-    }
-    if (btnCloseQr && qrModal) {
-      btnCloseQr.addEventListener("click", () => qrModal.classList.remove("is-open"));
-    }
-    if (qrModal) {
-      qrModal.addEventListener("click", (e) => {
-        if (e.target === qrModal) qrModal.classList.remove("is-open");
-      });
-    }
-
-    const btnRenewTg = document.getElementById("btn-renew-tg");
-    if (btnRenewTg) {
-      btnRenewTg.addEventListener("click", () => {
-        showToast("открываю бот ./vpn в telegram...");
-        postHost("profile:renew");
-      });
-    }
-
-    const btnAddDevice = document.getElementById("btn-add-device");
-    if (btnAddDevice) {
-      btnAddDevice.addEventListener("click", () => {
-        showToast("добавление устройства: отсканируйте qr-код в приложении");
-        qrModal?.classList.add("is-open");
+        if (currentSubscriptionKey)
+          postHost("profile:copy_key");
       });
     }
 
@@ -3589,7 +3484,6 @@
         sw.classList.toggle("is-checked");
         const setting = sw.dataset.setting;
         const isChecked = sw.classList.contains("is-checked");
-        try { localStorage.setItem("setting_" + setting, isChecked ? "1" : "0"); } catch (_) {}
         postHost("settings:set:" + setting + ":" + (isChecked ? "true" : "false"));
         const state = isChecked ? "включено" : "выключено";
         showToast(`параметр ${setting}: ${state}`);
@@ -3597,21 +3491,8 @@
     });
 
     const btnCheckUpdates = document.getElementById("btn-check-updates");
-    if (btnCheckUpdates) {
-      btnCheckUpdates.addEventListener("click", () => {
-        btnCheckUpdates.textContent = "проверяю...";
-        btnCheckUpdates.style.pointerEvents = "none";
-        postHost("settings:check_updates");
-        setTimeout(() => {
-          btnCheckUpdates.textContent = "актуальная версия ✓";
-          showToast("у вас установлена последняя стабильная версия v0.11.39");
-          setTimeout(() => {
-            btnCheckUpdates.textContent = "проверить обновления";
-            btnCheckUpdates.style.pointerEvents = "";
-          }, 2500);
-        }, 700);
-      });
-    }
+    if (btnCheckUpdates)
+      btnCheckUpdates.addEventListener("click", () => postHost("settings:check_updates"));
 
     // Home Primary Action Handlers (Real VPN Connect / Disconnect / Cancel to C# Host)
     const handleHomePrimaryAction = (e) => {
@@ -3696,18 +3577,11 @@
       }
     };
 
-    // Disconnect Device Session Handler
-    document.querySelectorAll(".btn-disconnect-device").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const deviceName = btn.dataset.device || "устройство";
-        btn.textContent = "отключено";
-        btn.disabled = true;
-        btn.style.opacity = "0.45";
-        btn.style.pointerEvents = "none";
-        const row = btn.closest(".device-row");
-        if (row) row.style.opacity = "0.45";
-        showToast(`сессия ${deviceName} завершена`);
-      });
+    document.getElementById("profile-devices-list")?.addEventListener("click", event => {
+      const button = event.target.closest("[data-profile-action]");
+      if (!button || button.disabled || !button.dataset.profileId) return;
+      const action = button.dataset.profileAction === "device" ? "profile:device:manage:" : "profile:session:manage:";
+      postHost(action + button.dataset.profileId);
     });
 
     const measureBtn = document.getElementById("home-measure");
@@ -3734,7 +3608,6 @@
     
     // Profile & Settings IPC actions
     document.getElementById("btn-login-tg")?.addEventListener("click", () => postHost("profile:signin"));
-    document.getElementById("btn-renew-tg")?.addEventListener("click", () => postHost("profile:renew"));
     document.getElementById("btn-import-sub")?.addEventListener("click", () => postHost("profile:import"));
     document.getElementById("btn-setting-lang")?.addEventListener("click", () => postHost("settings:language"));
     document.getElementById("btn-setting-account")?.addEventListener("click", () => postHost("settings:signin"));
@@ -3743,22 +3616,11 @@
     document.getElementById("btn-setting-probe")?.addEventListener("click", () => postHost("settings:probemethod"));
     document.getElementById("btn-setting-service")?.addEventListener("click", () => postHost("settings:service"));
     document.getElementById("btn-setting-bot")?.addEventListener("click", () => postHost("settings:bot"));
-    document.getElementById("switch-setting-region")?.addEventListener("click", (e) => {
-      const sw = e.currentTarget;
-      sw.classList.toggle("is-checked");
-      postHost("settings:set:region:" + sw.classList.contains("is-checked"));
-    });
-    document.getElementById("switch-setting-motion")?.addEventListener("click", (e) => {
-      const sw = e.currentTarget;
-      sw.classList.toggle("is-checked");
-      postHost("settings:set:motion:" + sw.classList.contains("is-checked"));
-    });
 
     // Initialize pill position
     window.addEventListener("DOMContentLoaded", () => {
       const activeTab = document.querySelector(".nav-item.is-active");
       if (activeTab) updatePillPosition(activeTab, false);
-      selectRoute("auto");
     });
 
     window.addEventListener("load", () => {
