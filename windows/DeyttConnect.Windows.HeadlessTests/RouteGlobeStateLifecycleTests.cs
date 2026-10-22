@@ -96,6 +96,31 @@ public sealed class RouteGlobeStateLifecycleTests
         finally { window.Close(); oldResponse.TrySetResult(); }
     }
 
+    [AvaloniaFact]
+    public async Task Profile_bridge_dispatches_renew_and_preserves_session_identifier_case()
+    {
+        var (window, globe) = CreateReadyHost();
+        string? sessionId = null;
+        var renewRequests = 0;
+        globe.TelegramSessionManagementRequested += value => sessionId = value;
+        globe.RenewRequested += () => renewRequests++;
+        var webView = Field<NativeWebView>(globe, "_webView");
+        var onMessage = typeof(RouteGlobeWebView).GetMethod("OnWebMessageReceived",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        try
+        {
+            onMessage.Invoke(globe, [webView, new WebMessageReceivedEventArgs
+                { Body = "\"profile:session:manage:AbC-09xY\"" }]);
+            onMessage.Invoke(globe, [webView, new WebMessageReceivedEventArgs
+                { Body = "\"profile:renew\"" }]);
+            await DrainAsync();
+
+            Assert.Equal("AbC-09xY", sessionId);
+            Assert.Equal(1, renewRequests);
+        }
+        finally { window.Close(); }
+    }
+
     private static (Window, RouteGlobeWebView) CreateReadyHost()
     {
         var globe = new RouteGlobeWebView(disableNativeInitialization: true);

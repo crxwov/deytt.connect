@@ -891,7 +891,8 @@ public sealed class RouteGlobeWebView : ContentControl
             }
         }
 
-        node = node.Trim().ToLowerInvariant();
+        var originalNode = node.Trim();
+        node = originalNode.ToLowerInvariant();
         if (node == "atlas-ready")
         {
             Dispatcher.UIThread.Post(() =>
@@ -1026,7 +1027,8 @@ public sealed class RouteGlobeWebView : ContentControl
         const string sessionManagementPrefix = "profile:session:manage:";
         if (node.StartsWith(sessionManagementPrefix, StringComparison.Ordinal))
         {
-            var sessionId = node[sessionManagementPrefix.Length..];
+            // Session identifiers are opaque server values; keep their original casing.
+            var sessionId = originalNode[sessionManagementPrefix.Length..];
             if (sessionId.Length is > 0 and <= 256)
                 Dispatcher.UIThread.Post(() =>
                 {
