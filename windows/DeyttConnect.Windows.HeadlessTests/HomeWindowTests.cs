@@ -284,6 +284,50 @@ public sealed class HomeWindowTests
         }
     }
 
+    [AvaloniaFact]
+    public void Globe_protocol_message_selects_route_and_updates_home_presentation()
+    {
+        var window = new MainWindow(Fixture(signedIn: true)) { Width = 900, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var globe = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>());
+            var webView = new NativeWebView();
+            typeof(RouteGlobeWebView).GetField("_webView", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(globe, webView);
+            typeof(RouteGlobeWebView).GetField("_pageReady", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(globe, true);
+
+            typeof(RouteGlobeWebView).GetMethod("OnWebMessageReceived",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(globe,
+                [webView, new WebMessageReceivedEventArgs { Body = "\"route:select:de-hy2\"" }]);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal("de-hysteria2", typeof(MainWindow).GetProperty("_selectedRoute",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            Assert.Equal("de", globe.SelectedRoute);
+            Assert.Equal("германия", globe.HomePresentation?.Country);
+            Assert.Equal("франкфурт", globe.HomePresentation?.City);
+            Assert.Equal("./hysteria", globe.HomePresentation?.Protocol);
+            Assert.True(globe.HostActive);
+
+            Required<Button>(window, "TopRoutesNav").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("de-hysteria2", typeof(MainWindow).GetProperty("_selectedRoute",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            Required<Button>(window, "TopHomeNav").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(globe, Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>()));
+            Assert.Equal("de", globe.SelectedRoute);
+            Assert.Equal("./hysteria", globe.HomePresentation?.Protocol);
+        }
+        finally { window.Close(); }
+    }
+
     [AvaloniaTheory]
     [InlineData("vless", "./vless+ws")]
     [InlineData("trojan", "./trojan")]
@@ -922,6 +966,8 @@ public sealed class HomeWindowTests
             };
             var layout = window.BuildActiveVpnNoticeContent(detected, includeStopButton: true,
                 includeWindowsSettingsButton: true);
+            var pageHost = Required<Grid>(window, "PageHost");
+            var homeMap = Assert.Single(Descendants(pageHost).OfType<RouteGlobeWebView>());
             var showContent = typeof(MainWindow).GetMethod("ShowContentInShellAsync",
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.NotNull(showContent);
@@ -931,6 +977,8 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var overlay = Required<Grid>(window, "ModalOverlayHost");
+            var header = Required<Border>(window, "WorkspaceHeader");
+            var closeWindow = Required<Button>(window, "CloseWindowButton");
             var card = Assert.Single(Descendants(overlay).OfType<Border>(), border =>
                 border.Child is StackPanel);
             var closeAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
@@ -941,6 +989,11 @@ public sealed class HomeWindowTests
                 AutomationProperties.GetAutomationId(button) == "ExternalVpnSettings");
             var body = Assert.Single(Descendants(overlay).OfType<ScrollViewer>());
             Assert.InRange(card.Bounds.Width, 300, 560);
+            Assert.True(overlay.Bounds.Height > 0, $"Modal host has no visible area: {overlay.Bounds}.");
+            Assert.True(card.Bounds.Height > 0, $"Modal card has no visible area: {card.Bounds}.");
+            Assert.True(header.IsEffectivelyVisible);
+            Assert.True(closeWindow.IsEffectivelyVisible);
+            Assert.True(closeWindow.IsEnabled);
             Assert.Equal(44, stopAction.Bounds.Height);
             Assert.Equal(44, settingsAction.Bounds.Height);
             Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
@@ -960,6 +1013,8 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
             await dialogTask.WaitAsync(TimeSpan.FromSeconds(3));
             Assert.False(overlay.IsVisible);
+            Assert.Same(homeMap, Assert.Single(Descendants(pageHost).OfType<RouteGlobeWebView>()));
+            Assert.True(homeMap.HostActive);
         }
         finally
         {

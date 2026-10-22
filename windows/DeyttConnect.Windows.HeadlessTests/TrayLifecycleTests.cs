@@ -95,13 +95,12 @@ public sealed class TrayLifecycleTests
     }
 
     [AvaloniaTheory]
-    [InlineData(false, false, WindowCloseReason.WindowClosing, true)]
-    [InlineData(true, false, WindowCloseReason.WindowClosing, false)]
-    [InlineData(false, true, WindowCloseReason.WindowClosing, false)]
-    [InlineData(false, false, WindowCloseReason.OSShutdown, false)]
-    [InlineData(false, false, WindowCloseReason.ApplicationShutdown, false)]
-    public void CloseHidesForTrayButAllowsQaAuthorizedExitAndShutdown(bool qa, bool authorized,
-        WindowCloseReason reason, bool hide)
+    [InlineData(true, false, WindowCloseReason.WindowClosing)]
+    [InlineData(false, true, WindowCloseReason.WindowClosing)]
+    [InlineData(false, false, WindowCloseReason.OSShutdown)]
+    [InlineData(false, false, WindowCloseReason.ApplicationShutdown)]
+    public void CloseAllowsQaAuthorizedExitAndSystemShutdown(bool qa, bool authorized,
+        WindowCloseReason reason)
     {
         var window = Window();
         using var tray = new TrayIcon { IsVisible = false };
@@ -115,8 +114,33 @@ public sealed class TrayLifecycleTests
             var args = (WindowClosingEventArgs)Activator.CreateInstance(typeof(WindowClosingEventArgs),
                 BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [reason, false], null)!;
             Invoke(window, "OnTrayWindowClosing", window, args);
-            Assert.Equal(hide, args.Cancel);
-            Assert.Equal(!hide, window.IsVisible);
+            Assert.False(args.Cancel);
+            Assert.True(window.IsVisible);
+        }
+        finally { Set(window, "_qaFixture", true); Set(window, "_trayIcon", null); window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void Window_close_stays_visible_while_the_exit_lifecycle_owns_shutdown()
+    {
+        var window = Window();
+        using var tray = new TrayIcon { IsVisible = false };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Set(window, "_trayIcon", tray);
+            Set(window, "_qaFixture", false);
+            Set(window, "_quitInProgress", true);
+            var args = (WindowClosingEventArgs)Activator.CreateInstance(typeof(WindowClosingEventArgs),
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null,
+                [WindowCloseReason.WindowClosing, false], null)!;
+
+            Invoke(window, "OnTrayWindowClosing", window, args);
+
+            Assert.True(args.Cancel);
+            Assert.True(window.IsVisible);
+            Assert.True(Get<bool>(window, "_quitInProgress"));
         }
         finally { Set(window, "_qaFixture", true); Set(window, "_trayIcon", null); window.Close(); }
     }
