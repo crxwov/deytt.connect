@@ -402,9 +402,6 @@ internal sealed class QaApp : Application
             var showTab = typeof(MainWindow).GetMethod("ShowTab", flags)!;
             var tabType = showTab.GetParameters()[0].ParameterType;
             void Routes() => showTab.Invoke(window, [Enum.Parse(tabType, "Routes"), true]);
-            Button? FindButton(string id) => window.FindControl<Grid>("PageHost")!.GetVisualDescendants()
-                .OfType<Button>().FirstOrDefault(button => button.IsEffectivelyVisible &&
-                    AutomationProperties.GetAutomationId(button) == id);
             var results = new List<object>();
             CoreWebView2? retainedCore = null;
             RouteGlobeWebView? retainedGlobe = null;
@@ -461,6 +458,25 @@ internal sealed class QaApp : Application
             }
             var hiddenDelayIndex = Array.IndexOf(Environment.GetCommandLineArgs(), "--hidden-delay-ms");
             var hiddenDelayMs = hiddenDelayIndex >= 0 ? int.Parse(Environment.GetCommandLineArgs()[hiddenDelayIndex + 1], CultureInfo.InvariantCulture) : 150;
+            Routes();
+            var mapDeadline = DateTimeOffset.UtcNow.AddSeconds(30);
+            while (DateTimeOffset.UtcNow < mapDeadline)
+            {
+                var map = typeof(MainWindow).GetField("_routeGlobe", flags)?.GetValue(window) as RouteGlobeWebView;
+                var core = map is null ? null : typeof(RouteGlobeWebView).GetField("_coreWebView2", flags)?.GetValue(map) as CoreWebView2;
+                if (core is not null)
+                {
+                    try
+                    {
+                        var ready = await core.ExecuteScriptAsync("Boolean(window.deyttMapAtlas && window.deyttMapAtlas.canvas && document.getElementById('stage-routes')?.classList.contains('is-active'))");
+                        if (JsonSerializer.Deserialize<bool>(ready)) break;
+                    }
+                    catch (Exception) { }
+                }
+                await Task.Delay(150);
+            }
+            if (DateTimeOffset.UtcNow >= mapDeadline)
+                throw new TimeoutException("Route selection could not find a ready native Routes stage.");
             foreach (var routeId in new[] { "auto", "de-vless", "fi-trojan", "it-vless", "ru-vless", "ru-de",
                 "nl-vless", "nl-trojan", "nl-hysteria2", "auto", "de-trojan", "fi-vless", "auto" })
             {
@@ -468,31 +484,14 @@ internal sealed class QaApp : Application
                 await Task.Delay(results.Count == 0 ? hiddenDelayMs : 150);
                 var beforeGlobe = typeof(MainWindow).GetField("_routeGlobe", flags)?.GetValue(window) as RouteGlobeWebView;
                 var beforeCore = beforeGlobe is null ? null : typeof(RouteGlobeWebView).GetField("_coreWebView2", flags)?.GetValue(beforeGlobe) as CoreWebView2;
-                var beforeFrames = beforeCore is null ? 0 : (await ReadAtlasSnapshotAsync(beforeCore)).RenderCount;
-                Button? button;
-                if (routeId is "auto" or "ru-de")
-                {
-                    var title = routeId == "auto" ? "автоподбор" : "LTE · белые списки";
-                    button = window.FindControl<Grid>("PageHost")!.GetVisualDescendants().OfType<Button>()
-                        .FirstOrDefault(b => b.IsEffectivelyVisible && b.GetVisualDescendants().OfType<TextBlock>()
-                            .Any(t => string.Equals(t.Text, title, StringComparison.OrdinalIgnoreCase)));
-                }
-                else
-                {
-                    button = FindButton("RouteOption-" + routeId);
-                    if (button is null)
-                    {
-                        var country = routeId.Split('-')[0].ToUpperInvariant();
-                        (FindButton("RouteCountry-" + country) ?? throw new InvalidOperationException("Missing country " + country))
-                            .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-                        await Task.Delay(100);
-                        button = FindButton("RouteOption-" + routeId);
-                    }
-                }
-                if (button is null) throw new InvalidOperationException("Missing actual route button " + routeId);
-                Console.WriteLine("QA route selection start: " + routeId);
+                if (beforeGlobe is null || beforeCore is null)
+                    throw new InvalidOperationException("Route selection needs the retained native map WebView.");
+                var beforeFrames = (await ReadAtlasSnapshotAsync(beforeCore)).RenderCount;
+                var uiRouteId = routeId.Replace("-hysteria2", "-hy2", StringComparison.Ordinal);
                 var click = Stopwatch.StartNew();
-                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var clickResult = await beforeCore.ExecuteScriptAsync($"(()=>{{const key={JsonSerializer.Serialize(uiRouteId)};const button=[...document.querySelectorAll('[data-action-route]')].find(candidate=>candidate.dataset.actionRoute===key);if(!button)return false;button.click();return true;}})()");
+                if (clickResult != "true") throw new InvalidOperationException("Missing actual route action " + uiRouteId + ": " + clickResult);
+                Console.WriteLine("QA route selection start: " + routeId);
                 var clickMs = click.Elapsed.TotalMilliseconds;
                 var ready = Stopwatch.StartNew();
                 string? lastSample = null;
@@ -624,21 +623,41 @@ internal sealed class QaApp : Application
                 for (var cycle = 1; cycle <= 5 && options.VerifyNavigation; cycle++)
                 {
                     var routesCallMs = Measure(() => Navigate("Routes"));
-                    var hiddenBefore = await ReadAtlasSnapshotAsync(core);
-                    for (var attempt = 0; hiddenBefore.HostActive is true && attempt < 40; attempt++)
+                    var routesBefore = await ReadAtlasSnapshotAsync(core);
+                    for (var attempt = 0; (routesBefore.SelectedTab != "routes" || routesBefore.ActiveStageVisible is not true ||
+                             routesBefore.HomeBlurred is not true) && attempt < 40; attempt++)
                     {
                         await Task.Delay(15);
-                        hiddenBefore = await ReadAtlasSnapshotAsync(core);
+                        routesBefore = await ReadAtlasSnapshotAsync(core);
                     }
-                    var hiddenWatch = Stopwatch.StartNew();
+                    var routesWatch = Stopwatch.StartNew();
                     await Task.Delay(300);
-                    var hiddenAfter = await ReadAtlasSnapshotAsync(core);
-                    var hiddenDurationMs = hiddenWatch.Elapsed.TotalMilliseconds;
-                    var hiddenHost = hiddenAfter.HostActive;
-                    if (hiddenHost is true)
-                        throw new InvalidOperationException("The atlas host-active state remained active on the Routes page.");
-                    if (hiddenHost is false)
-                        Console.WriteLine($"QA navigation invariant host-paused cycle={cycle}: true");
+                    var routesAfter = await ReadAtlasSnapshotAsync(core);
+                    var routesDurationMs = routesWatch.Elapsed.TotalMilliseconds;
+                    if (routesAfter.SelectedTab != "routes" || routesAfter.ActiveStageVisible is not true ||
+                        routesAfter.HomeBlurred is not true)
+                        throw new InvalidOperationException("The native Routes stage did not become the selected visible stage.");
+                    if (routesAfter.HostActive is not true)
+                        throw new InvalidOperationException("The native host stopped accepting live state while Routes was visible.");
+
+                    var otherStageResults = new List<object>();
+                    foreach (var tab in new[] { "Profile", "Settings" })
+                    {
+                        var showStageMs = Measure(() => Navigate(tab));
+                        var stageName = tab.ToLowerInvariant();
+                        var stageWatch = Stopwatch.StartNew();
+                        var stage = await ReadAtlasSnapshotAsync(core);
+                        for (var attempt = 0; (stage.SelectedTab != stageName || stage.ActiveStageVisible is not true) && attempt < 40; attempt++)
+                        {
+                            await Task.Delay(15);
+                            stage = await ReadAtlasSnapshotAsync(core);
+                        }
+                        if (stage.SelectedTab != stageName || stage.ActiveStageVisible is not true || stage.HostActive is not true)
+                            throw new InvalidOperationException($"The native {tab} stage did not become visible with its host active.");
+                        otherStageResults.Add(new { tab, showStageMs, visibleAfterMs = stageWatch.Elapsed.TotalMilliseconds,
+                            stage.HostActive, stage.ActiveStageVisible });
+                    }
+                    var beforeHome = await ReadAtlasSnapshotAsync(core);
 
                     var homeCallMs = Measure(() => Navigate("Home"));
                     var resumeWatch = Stopwatch.StartNew();
@@ -647,7 +666,7 @@ internal sealed class QaApp : Application
                     {
                         await Task.Delay(15);
                         var sample = await ReadAtlasSnapshotAsync(core);
-                        if (sample.RenderCount > hiddenAfter.RenderCount)
+                        if (sample.SelectedTab == "home" && sample.RenderCount > beforeHome.RenderCount)
                         {
                             resumed = true;
                             break;
@@ -660,8 +679,9 @@ internal sealed class QaApp : Application
                         !ReferenceEquals(core, typeof(RouteGlobeWebView).GetField("_coreWebView2",
                             BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(globe)))
                         throw new InvalidOperationException("Navigation replaced the retained map or WebView core instance.");
-                    if (hiddenHost is false && afterResume.HostActive is not true)
-                        throw new InvalidOperationException("The atlas host-active state did not resume on the Home page.");
+                    if (afterResume.HostActive is not true || afterResume.HomeBlurred is not false ||
+                        afterResume.SelectedTab != "home" || afterResume.ActiveStageVisible is not true)
+                        throw new InvalidOperationException("The native Home stage did not become visible with its host active.");
                     if (!resumed)
                         throw new InvalidOperationException("The atlas render loop did not resume after returning Home.");
 
@@ -670,19 +690,21 @@ internal sealed class QaApp : Application
                         cycle,
                         routesShowTabMs = routesCallMs,
                         homeShowTabMs = homeCallMs,
-                        hiddenDurationMs,
-                        hiddenBeforeRenderCount = hiddenBefore.RenderCount,
-                        hiddenAfterRenderCount = hiddenAfter.RenderCount,
-                        hiddenRenderCountDelta = hiddenAfter.RenderCount - hiddenBefore.RenderCount,
-                        hiddenBeforeHostActive = hiddenBefore.HostActive,
-                        hiddenAfterHostActive = hiddenAfter.HostActive,
-                        hiddenBeforeActiveDomAnimations = hiddenBefore.ActiveDomAnimations,
-                        hiddenAfterActiveDomAnimations = hiddenAfter.ActiveDomAnimations,
-                        hostStateSupported = hiddenAfter.HostActive.HasValue,
-                        hiddenHostActive = hiddenAfter.HostActive,
+                        routesDurationMs,
+                        routesBeforeRenderCount = routesBefore.RenderCount,
+                        routesAfterRenderCount = routesAfter.RenderCount,
+                        routesRenderCountDelta = routesAfter.RenderCount - routesBefore.RenderCount,
+                        routesBeforeActiveDomAnimations = routesBefore.ActiveDomAnimations,
+                        routesAfterActiveDomAnimations = routesAfter.ActiveDomAnimations,
+                        routesStageActive = routesAfter.ActiveStageVisible,
+                        homeBlurredInRoutes = routesAfter.HomeBlurred,
+                        routesTabSelected = routesAfter.SelectedTab == "routes",
+                        routesHostActive = routesAfter.HostActive,
+                        otherStageResults,
                         homeHostActive = afterResume.HostActive,
+                        homeBlurred = afterResume.HomeBlurred,
                         homeResumeMs = resumeWatch.Elapsed.TotalMilliseconds,
-                        homeResumeStartedAtRenderCount = hiddenAfter.RenderCount,
+                        homeResumeStartedAtRenderCount = beforeHome.RenderCount,
                         homeResumeRenderCount = afterResume.RenderCount,
                         activeDomAnimations = afterResume.ActiveDomAnimations,
                         maxUiHeartbeatDelayMs = maxHeartbeatDelayMs,
@@ -728,7 +750,8 @@ internal sealed class QaApp : Application
         }
     }
 
-    private sealed record AtlasSnapshot(long RenderCount, bool? HostActive, int ActiveDomAnimations);
+    private sealed record AtlasSnapshot(long RenderCount, bool? HostActive, int ActiveDomAnimations,
+        string? SelectedTab, bool? ActiveStageVisible, bool? HomeBlurred);
 
     private static async Task RunZoomQaAsync(MainWindow window, CoreWebView2 core, QaOptions options)
     {
@@ -1006,7 +1029,14 @@ internal sealed class QaApp : Application
         const string script = """
             (()=>{const a=window.deyttMapAtlas;if(!a)return JSON.stringify({ready:false});
             const host=typeof a.hostActive==='boolean'?a.hostActive:null;
+            const homeStage=document.getElementById('stage-home'),selectedNav=document.querySelector('.nav-item[aria-selected="true"]');
+            const selectedTab=selectedNav?.dataset.tab||null,activeStage=selectedTab==='home'?homeStage:document.getElementById('stage-'+selectedTab);
+            const activeStageVisible=selectedTab==='home'
+              ? !!activeStage&&getComputedStyle(activeStage).visibility!=='hidden'
+              : !!activeStage&&activeStage.classList.contains('is-active')&&getComputedStyle(activeStage).visibility==='visible';
             return JSON.stringify({ready:true,renderCount:Number(a.renderCount)||0,hostActive:host,
+              selectedTab,activeStageVisible,
+              homeBlurred:homeStage?.classList.contains('is-blurred')===true,
               activeDomAnimations:document.getAnimations().filter(x=>x.playState==='running'||x.playState==='pending').length});})()
             """;
         var json = await core.ExecuteScriptAsync(script);
@@ -1016,12 +1046,21 @@ internal sealed class QaApp : Application
         {
             var value = root.RootElement;
             if (!value.TryGetProperty("ready", out var ready) || !ready.GetBoolean())
-                return new AtlasSnapshot(0, null, 0);
+                return new AtlasSnapshot(0, null, 0, null, null, null);
             bool? hostActive = value.TryGetProperty("hostActive", out var host) && host.ValueKind is JsonValueKind.True or JsonValueKind.False
                 ? host.GetBoolean()
                 : null;
+            var selectedTab = value.TryGetProperty("selectedTab", out var selected) && selected.ValueKind == JsonValueKind.String
+                ? selected.GetString()
+                : null;
+            bool? activeStageVisible = value.TryGetProperty("activeStageVisible", out var activeStage) && activeStage.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? activeStage.GetBoolean()
+                : null;
+            bool? homeBlurred = value.TryGetProperty("homeBlurred", out var home) && home.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? home.GetBoolean()
+                : null;
             return new AtlasSnapshot(value.GetProperty("renderCount").GetInt64(), hostActive,
-                value.GetProperty("activeDomAnimations").GetInt32());
+                value.GetProperty("activeDomAnimations").GetInt32(), selectedTab, activeStageVisible, homeBlurred);
         }
     }
 
