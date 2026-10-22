@@ -789,6 +789,42 @@ internal sealed class QaApp : Application
             if (core is null || !pageReady || !callbacksReady)
                 throw new TimeoutException("QA did not observe a page-ready WebView and initialized atlas home callback bridge.");
 
+            var protocolMarksReport = JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync("""
+                (()=>{
+                  const classes=['vless','trojan','awg','hy2'];
+                  const rows=[...document.querySelectorAll(classes.map(name=>'.proto-logo.'+name).join(','))];
+                  const expectedPath={
+                    vless:'M10 10L20 30L30 10',
+                    trojan:'M9 12H31M20 12V30'
+                  };
+                  const counts=Object.fromEntries(classes.map(name=>[
+                    name,rows.filter(row=>row.classList.contains(name)).length
+                  ]));
+                  const checks=rows.map(row=>{
+                    if(row.classList.contains('awg')||row.classList.contains('hy2')){
+                      const file=row.classList.contains('awg')?'amnezia-mark.svg':'hysteria-symbol.svg';
+                      const image=row.querySelector('img');
+                      const style=image?getComputedStyle(image):null;
+                      return {kind:file,passed:!!(image && image.alt==='' && image.src.endsWith('protocol-marks/'+file) &&
+                        image.complete && image.naturalWidth>0 && image.naturalHeight>0 && style?.width==='18px' &&
+                        style.height==='18px' && !row.querySelector('svg')),
+                        loaded:!!image?.complete,naturalWidth:image?.naturalWidth||0,naturalHeight:image?.naturalHeight||0,
+                        width:style?.width||'missing',height:style?.height||'missing'};
+                    }
+                    const name=row.classList.contains('vless')?'vless':'trojan';
+                    const svg=row.querySelector('svg');
+                    const path=svg?.querySelector('path');
+                    return {kind:name,passed:!!(svg?.getAttribute('viewBox')==='0 0 40 40' && svg.querySelectorAll('path').length===1 &&
+                      path?.getAttribute('d')===expectedPath[name])};
+                  });
+                  return JSON.stringify({counts,passed:Object.values(counts).every(count=>count===5)&&checks.every(check=>check.passed),checks:checks.filter(check=>!check.passed)});
+                })()
+                """));
+            using var protocolMarksAudit = JsonDocument.Parse(protocolMarksReport ?? "{}");
+            if (!protocolMarksAudit.RootElement.GetProperty("passed").GetBoolean())
+                throw new InvalidOperationException("Protocol mark assertion failed: " + protocolMarksReport);
+            Console.WriteLine("QA protocol marks: all 20 route rows rendered with expected native or bundled SVG marks.");
+
             var resultJson = await core.ExecuteScriptAsync("""
                 (()=>{
                   const originalInvoke=window.invokeCSharpAction,originalNotify=window.notifyHost;

@@ -1230,6 +1230,22 @@
       display: block;
     }
 
+    .proto-logo img {
+      width: 18px;
+      height: 18px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .proto-logo.awg img {
+      filter: brightness(0);
+    }
+
+    html[data-theme="dark"] .proto-logo.awg img,
+    html[data-theme="dark"] .proto-logo.hy2 img {
+      filter: brightness(0) invert(1);
+    }
+
     .svg-flag {
       width: 22px;
       height: 15px;
@@ -2037,18 +2053,10 @@
                 <div class="proto-row is-selected" data-route-key="nl-vless" data-route-tag="route:NL:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38BDF8"/>
-      <stop offset="100%" stop-color="#0284C7"/>
-    </linearGradient>
-  </defs>
-  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
-  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
-  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
@@ -2065,18 +2073,8 @@
                 <div class="proto-row" data-route-key="nl-hy2" data-route-tag="route:NL:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FBBF24"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
-    </linearGradient>
-  </defs>
-  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
-  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
-  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
@@ -2093,19 +2091,10 @@
                 <div class="proto-row" data-route-key="nl-trojan" data-route-tag="route:NL:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#C084FC"/>
-      <stop offset="100%" stop-color="#A855F7"/>
-    </linearGradient>
-  </defs>
-  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
-  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
-  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
-  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
@@ -2122,17 +2111,8 @@
                 <div class="proto-row" data-route-key="nl-awg" data-route-tag="awg31:nl">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#39E8BD"/>
-      <stop offset="100%" stop-color="#10B981"/>
-    </linearGradient>
-  </defs>
-  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
-  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
@@ -2166,18 +2146,10 @@
                 <div class="proto-row" data-route-key="de-vless" data-route-tag="route:DE:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38BDF8"/>
-      <stop offset="100%" stop-color="#0284C7"/>
-    </linearGradient>
-  </defs>
-  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
-  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
-  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
@@ -2194,18 +2166,8 @@
                 <div class="proto-row" data-route-key="de-hy2" data-route-tag="route:DE:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FBBF24"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
-    </linearGradient>
-  </defs>
-  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
-  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
-  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
@@ -2222,19 +2184,10 @@
                 <div class="proto-row" data-route-key="de-trojan" data-route-tag="route:DE:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#C084FC"/>
-      <stop offset="100%" stop-color="#A855F7"/>
-    </linearGradient>
-  </defs>
-  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
-  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
-  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
-  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
@@ -2251,17 +2204,8 @@
                 <div class="proto-row" data-route-key="de-awg" data-route-tag="awg31:de">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#39E8BD"/>
-      <stop offset="100%" stop-color="#10B981"/>
-    </linearGradient>
-  </defs>
-  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
-  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
@@ -2295,18 +2239,10 @@
                 <div class="proto-row" data-route-key="ru-vless" data-route-tag="route:RU:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38BDF8"/>
-      <stop offset="100%" stop-color="#0284C7"/>
-    </linearGradient>
-  </defs>
-  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
-  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
-  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
@@ -2323,18 +2259,8 @@
                 <div class="proto-row" data-route-key="ru-hy2" data-route-tag="route:RU:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FBBF24"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
-    </linearGradient>
-  </defs>
-  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
-  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
-  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
@@ -2351,19 +2277,10 @@
                 <div class="proto-row" data-route-key="ru-trojan" data-route-tag="route:RU:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#C084FC"/>
-      <stop offset="100%" stop-color="#A855F7"/>
-    </linearGradient>
-  </defs>
-  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
-  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
-  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
-  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
@@ -2380,17 +2297,8 @@
                 <div class="proto-row" data-route-key="ru-awg" data-route-tag="awg31:ru">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#39E8BD"/>
-      <stop offset="100%" stop-color="#10B981"/>
-    </linearGradient>
-  </defs>
-  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
-  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
@@ -2424,18 +2332,10 @@
                 <div class="proto-row" data-route-key="fi-vless" data-route-tag="route:FI:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38BDF8"/>
-      <stop offset="100%" stop-color="#0284C7"/>
-    </linearGradient>
-  </defs>
-  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
-  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
-  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
@@ -2452,18 +2352,8 @@
                 <div class="proto-row" data-route-key="fi-hy2" data-route-tag="route:FI:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FBBF24"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
-    </linearGradient>
-  </defs>
-  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
-  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
-  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
@@ -2480,19 +2370,10 @@
                 <div class="proto-row" data-route-key="fi-trojan" data-route-tag="route:FI:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#C084FC"/>
-      <stop offset="100%" stop-color="#A855F7"/>
-    </linearGradient>
-  </defs>
-  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
-  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
-  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
-  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
@@ -2509,17 +2390,8 @@
                 <div class="proto-row" data-route-key="fi-awg" data-route-tag="awg31:fi">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#39E8BD"/>
-      <stop offset="100%" stop-color="#10B981"/>
-    </linearGradient>
-  </defs>
-  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
-  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">
@@ -2553,18 +2425,10 @@
                 <div class="proto-row" data-route-key="it-vless" data-route-tag="route:IT:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="vlessGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#38BDF8"/>
-      <stop offset="100%" stop-color="#0284C7"/>
-    </linearGradient>
-  </defs>
-  <polygon points="4,4 12,20 20,4 15.5,4 12,13 8.5,4" fill="url(#vlessGrad)"/>
-  <polygon points="12,2 14.5,6.5 9.5,6.5" fill="#38BDF8" fill-opacity="0.85"/>
-  <polygon points="12,13 15.5,4 12,4" fill="#FFFFFF" fill-opacity="0.2"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
                   <div class="proto-right">
@@ -2581,18 +2445,8 @@
                 <div class="proto-row" data-route-key="it-hy2" data-route-tag="route:IT:HYSTERIA2">
                   <div class="proto-left">
                     <div class="proto-logo hy2" title="hysteriav2">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="hy2Grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FBBF24"/>
-      <stop offset="100%" stop-color="#F59E0B"/>
-    </linearGradient>
-  </defs>
-  <path d="M4 14.5C8.5 11 14.5 8.5 20.5 7.5L19 5.5C13.5 6.5 7.5 9.5 3 13L4 14.5Z" fill="url(#hy2Grad)"/>
-  <path d="M5.5 18.5C9.5 15 15 12.5 21 11.5L19.5 9.5C14 10.5 8.5 13.5 4.5 17L5.5 18.5Z" fill="url(#hy2Grad)" fill-opacity="0.85"/>
-  <polygon points="13,2 6,12.5 12,12.5 9.5,22 18,10.5 12.5,10.5 14.5,2" fill="url(#hy2Grad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">hysteriav2</span>
                   </div>
                   <div class="proto-right">
@@ -2609,19 +2463,10 @@
                 <div class="proto-row" data-route-key="it-trojan" data-route-tag="route:IT:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="trojanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#C084FC"/>
-      <stop offset="100%" stop-color="#A855F7"/>
-    </linearGradient>
-  </defs>
-  <path d="M18.5 18.5H4.5C4.5 17.2 5.8 16 7 15.3C7.2 14 6.8 12.6 5.8 11.2C5 9.8 5.5 8.2 6.5 7.2C7.2 6.5 8.5 6 9.5 6.5C10 5.5 11.2 5 12.2 5.2C13 5.4 13.5 6.2 13.8 7.2C15.2 8.2 16.8 9.8 17.5 12C18.2 14.2 18.5 16.5 18.5 18.5Z" fill="url(#trojanGrad)"/>
-  <circle cx="10" cy="9" r="1.1" fill="#0B111B"/>
-  <path d="M12.5 5.2L11 3.5L10 5.5" stroke="url(#trojanGrad)" stroke-width="1.2" stroke-linecap="round"/>
-  <rect x="4.5" y="18.5" width="14" height="2" rx="1" fill="url(#trojanGrad)"/>
+                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
+  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
-</div>
+                    </div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
@@ -2638,17 +2483,8 @@
                 <div class="proto-row" data-route-key="it-awg" data-route-tag="awg31:it">
                   <div class="proto-left">
                     <div class="proto-logo awg" title="amneziawg3.1">
-<svg viewBox="0 0 24 24" fill="none">
-  <defs>
-    <linearGradient id="awgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#39E8BD"/>
-      <stop offset="100%" stop-color="#10B981"/>
-    </linearGradient>
-  </defs>
-  <polygon points="12,2.5 20.2,7.2 20.2,16.8 12,21.5 3.8,16.8 3.8,7.2" fill="rgba(57, 232, 189, 0.12)" stroke="url(#awgGrad)" stroke-width="1.6" stroke-linejoin="round"/>
-  <path d="M12 6.5L7.8 16H9.8L10.8 13.5H13.2L14.2 16H16.2L12 6.5ZM12 9.5L12.6 11.8H11.4L12 9.5Z" fill="url(#awgGrad)"/>
-</svg>
-</div>
+                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
+                    </div>
                     <span class="proto-name">amneziawg3.1</span>
                   </div>
                   <div class="proto-right">

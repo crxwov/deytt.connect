@@ -31,6 +31,14 @@
     <Content Include="Assets\route-map\index.html;Assets\route-map\network-atlas.css;Assets\route-map\atlas-init.js;Assets\route-map\network-atlas.js"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\ProtocolMarks\amnezia-mark.svg"
+             Link="Assets\route-map\protocol-marks\amnezia-mark.svg"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\ProtocolMarks\hysteria-symbol.svg"
+             Link="Assets\route-map\protocol-marks\hysteria-symbol.svg"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Fonts\InterTight-Regular.ttf;Assets\Fonts\InterTight-SemiBold.ttf;Assets\Fonts\InterTight-Bold.ttf;Assets\Fonts\Unbounded-Bold.ttf;Assets\Fonts\JetBrainsMono-Regular.ttf"
              Link="Assets\route-map\fonts\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"
