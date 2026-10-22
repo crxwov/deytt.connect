@@ -32,24 +32,15 @@ internal sealed class ProtocolLogo(string protocol) : Control
             };
             var brush = DeyttTheme.Brush(color);
             var pen = new Pen(brush, 2.4, null, PenLineCap.Round, PenLineJoin.Round);
+            // These protocols have no verified bundled marks; show their initials instead of invented logos.
             switch (_protocol)
             {
                 case "VLESS":
                 {
                     using (PushSource40Transform(context))
                     {
-                        context.DrawGeometry(brush, null, Polygon(
-                            new(20, 1), new(16.5, 16.5), new(20, 18.4), new(23.5, 16.5),
-                            new(20, 1)));
-                        context.DrawGeometry(brush, null, Polygon(
-                            new(39, 20), new(23.5, 16.5), new(21.6, 20), new(23.5, 23.5),
-                            new(39, 20)));
-                        context.DrawGeometry(brush, null, Polygon(
-                            new(20, 39), new(23.5, 23.5), new(20, 21.6), new(16.5, 23.5),
-                            new(20, 39)));
-                        context.DrawGeometry(brush, null, Polygon(
-                            new(1, 20), new(16.5, 23.5), new(18.4, 20), new(16.5, 16.5),
-                            new(1, 20)));
+                        context.DrawLine(pen, new Point(10, 10), new Point(20, 30));
+                        context.DrawLine(pen, new Point(20, 30), new Point(30, 10));
                     }
                     break;
                 }
@@ -57,14 +48,8 @@ internal sealed class ProtocolLogo(string protocol) : Control
                 {
                     using (PushSource40Transform(context))
                     {
-                        context.DrawGeometry(brush, null, Polygon(
-                            new(8, 32), new(10.5, 27.5), new(10, 23), new(7.5, 19), new(10.5, 15),
-                            new(12, 8), new(16, 10), new(19, 6), new(21, 11), new(26, 10),
-                            new(29, 13), new(34, 13), new(33, 17), new(29, 19), new(28, 24),
-                            new(24, 27), new(23, 34), new(19, 34), new(17, 28), new(14, 28),
-                            new(12, 34), new(8, 34), new(8, 32)));
-                        context.DrawLine(new Pen(DeyttTheme.Brush(DeyttTheme.Background), 1.5),
-                            new(30, 16), new(32.5, 15.5));
+                        context.DrawLine(pen, new Point(9, 12), new Point(31, 12));
+                        context.DrawLine(pen, new Point(20, 12), new Point(20, 30));
                     }
                     break;
                 }
@@ -180,14 +165,4 @@ internal sealed class ProtocolLogo(string protocol) : Control
         return geometry;
     }
 
-    private static StreamGeometry Polyline(params Point[] points)
-    {
-        var geometry = new StreamGeometry();
-        using var context = geometry.Open();
-        context.BeginFigure(points[0], isFilled: false);
-        foreach (var point in points.Skip(1))
-            context.LineTo(point);
-        context.EndFigure(isClosed: false);
-        return geometry;
-    }
 }

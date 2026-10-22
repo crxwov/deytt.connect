@@ -142,7 +142,7 @@
             </Grid>
         </Border>
 
-        <Grid x:Name="ModalOverlayHost" Grid.ColumnSpan="2" Grid.RowSpan="3"
+        <Grid x:Name="ModalOverlayHost" Grid.Row="1" Grid.ColumnSpan="2"
               Panel.ZIndex="1000" IsVisible="False" />
     </Grid>
 </Window>

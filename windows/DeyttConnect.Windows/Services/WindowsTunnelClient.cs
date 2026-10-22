@@ -1,6 +1,5 @@
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
-using System.Security.Principal;
 using DeyttConnect.Protocol;
 using Microsoft.Win32.SafeHandles;
 
@@ -9,6 +8,13 @@ namespace DeyttConnect.Windows.Services;
 public sealed class WindowsTunnelClient
 {
     private const string PipeName = "DEYTT.Connect.v1";
+    private const string ServiceName = "DEYTTConnectVpn";
+    private const uint ScManagerConnect = 0x0001;
+    private const uint ServiceQueryConfig = 0x0001;
+    private const uint ServiceQueryStatus = 0x0004;
+    private const uint ServiceRunning = 0x00000004;
+    private const int ServiceStatusProcessInfo = 0;
+    private const int ErrorInsufficientBuffer = 122;
 
     public Task<WindowsTunnelSnapshot> GetStatusAsync(CancellationToken cancellationToken = default) =>
         SendAsync(new WindowsPipeRequest { Command = WindowsPipeCommand.Status }, cancellationToken, 5);
@@ -96,50 +102,114 @@ public sealed class WindowsTunnelClient
         if (allowCurrentProcessForTesting && serverPid == (uint)Environment.ProcessId)
             return;
 
-        var userSid = GetProcessUserSid(serverPid);
-        if (!string.Equals(userSid, "S-1-5-18", StringComparison.OrdinalIgnoreCase))
-            throw new UnauthorizedAccessException($"The Windows tunnel service named pipe is not owned by LocalSystem (PID: {serverPid}, SID: {userSid ?? "unknown"}).");
+        // A standard user can query the SCM service PID but cannot open a LocalSystem process token.
+        if (!IsVpnServiceProcess(serverPid))
+            throw new UnauthorizedAccessException("The Windows tunnel service named pipe is not owned by LocalSystem.");
     }
 
-    private const uint ProcessQueryLimitedInformation = 0x1000;
-    private const uint TokenQuery = 0x0008;
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr OpenProcess(uint processAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, uint processId);
-
-    [DllImport("advapi32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool OpenProcessToken(IntPtr processHandle, uint desiredAccess, out SafeAccessTokenHandle tokenHandle);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool CloseHandle(IntPtr handle);
-
-    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private static string? GetProcessUserSid(uint processId)
+    private static bool IsVpnServiceProcess(uint serverPid)
     {
-        var processHandle = OpenProcess(ProcessQueryLimitedInformation, false, processId);
-        if (processHandle == IntPtr.Zero)
-            throw new UnauthorizedAccessException($"Failed to query tunnel service process {processId} (Error {Marshal.GetLastWin32Error()}).");
+        var manager = OpenSCManager(null, null, ScManagerConnect);
+        if (manager == IntPtr.Zero)
+            return false;
 
         try
         {
-            if (!OpenProcessToken(processHandle, TokenQuery, out var tokenHandle))
-                throw new UnauthorizedAccessException($"Failed to query tunnel service process token for PID {processId} (Error {Marshal.GetLastWin32Error()}).");
+            var service = OpenService(manager, ServiceName, ServiceQueryConfig | ServiceQueryStatus);
+            if (service == IntPtr.Zero)
+                return false;
 
-            using (tokenHandle)
+            try
             {
-                using var identity = new WindowsIdentity(tokenHandle.DangerousGetHandle());
-                return identity.User?.Value;
+                return QueryServiceStatusEx(service, ServiceStatusProcessInfo, out var status,
+                           (uint)Marshal.SizeOf<ServiceStatusProcess>(), out _) &&
+                       status.CurrentState == ServiceRunning && status.ProcessId == serverPid &&
+                       IsLocalSystemService(service);
+            }
+            finally
+            {
+                CloseServiceHandle(service);
             }
         }
         finally
         {
-            CloseHandle(processHandle);
+            CloseServiceHandle(manager);
         }
     }
+
+    private static bool IsLocalSystemService(IntPtr service)
+    {
+        if (QueryServiceConfig(service, IntPtr.Zero, 0, out var bytesNeeded) ||
+            Marshal.GetLastWin32Error() != ErrorInsufficientBuffer || bytesNeeded == 0)
+            return false;
+
+        var buffer = Marshal.AllocHGlobal(checked((int)bytesNeeded));
+        try
+        {
+            if (!QueryServiceConfig(service, buffer, bytesNeeded, out _))
+                return false;
+
+            var config = Marshal.PtrToStructure<ServiceConfiguration>(buffer);
+            var startName = Marshal.PtrToStringUni(config.ServiceStartName);
+            return string.Equals(startName, "LocalSystem", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(startName, "NT AUTHORITY\\SYSTEM", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(startName, "SYSTEM", StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ServiceStatusProcess
+    {
+        public uint ServiceType;
+        public uint CurrentState;
+        public uint ControlsAccepted;
+        public uint Win32ExitCode;
+        public uint ServiceSpecificExitCode;
+        public uint CheckPoint;
+        public uint WaitHint;
+        public uint ProcessId;
+        public uint ServiceFlags;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct ServiceConfiguration
+    {
+        public uint ServiceType;
+        public uint StartType;
+        public uint ErrorControl;
+        public IntPtr BinaryPathName;
+        public IntPtr LoadOrderGroup;
+        public uint TagId;
+        public IntPtr Dependencies;
+        public IntPtr ServiceStartName;
+        public IntPtr DisplayName;
+    }
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr OpenSCManager(string? machineName, string? databaseName, uint desiredAccess);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr OpenService(IntPtr databaseHandle, string serviceName, uint desiredAccess);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryServiceStatusEx(IntPtr serviceHandle, int infoLevel,
+        out ServiceStatusProcess serviceStatus, uint bufferSize, out uint bytesNeeded);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool QueryServiceConfig(IntPtr serviceHandle, IntPtr serviceConfig,
+        uint bufferSize, out uint bytesNeeded);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseServiceHandle(IntPtr handle);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetNamedPipeServerProcessId(SafePipeHandle pipe, out uint serverProcessId);
 }

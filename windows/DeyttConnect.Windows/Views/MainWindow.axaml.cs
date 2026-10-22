@@ -3816,10 +3816,22 @@ public partial class MainWindow : Window
             var start = new ProcessStartInfo
             {
                 FileName = powerShellPath,
-                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{installerPath}\" -AllowedUserSid \"{sid}\" -BundleRoot \"{bundleRoot}\"",
                 UseShellExecute = true,
                 Verb = "runas",
                 WindowStyle = ProcessWindowStyle.Hidden,
+                ArgumentList =
+                {
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    installerPath,
+                    "-AllowedUserSid",
+                    sid,
+                    "-BundleRoot",
+                    bundleRoot,
+                },
             };
             using var installer = Process.Start(start)
                                   ?? throw new InvalidOperationException("The VPN installer did not start.");

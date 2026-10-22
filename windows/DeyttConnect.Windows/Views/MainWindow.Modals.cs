@@ -13,6 +13,7 @@ namespace DeyttConnect.Windows.Views;
 public partial class MainWindow
 {
     private readonly SemaphoreSlim _shellModalGate = new(1, 1);
+    private static readonly TimeSpan HomePreviewCaptureTimeout = TimeSpan.FromMilliseconds(800);
     private ShellContentDialog? _activeShellContentDialog;
 
     private async Task<bool> ConfirmInShellAsync(
@@ -105,7 +106,7 @@ public partial class MainWindow
         Bitmap? homePreview = null;
         Task<Bitmap?>? previewCaptureTask = null;
         Control? previousFocus = null;
-        (bool Sidebar, bool BottomNavigation, bool Page, bool Header) previousEnabled = default;
+        (bool Sidebar, bool BottomNavigation, bool Page, bool HeaderNavigation) previousEnabled = default;
 
         try
         {
@@ -116,8 +117,8 @@ public partial class MainWindow
                 try
                 {
                     previewCaptureTask = _routeGlobe.CapturePreviewAsync();
-                    homePreview = await previewCaptureTask.WaitAsync(
-                        TimeSpan.FromMilliseconds(200), closingCancellation.Token);
+                    homePreview = await previewCaptureTask.WaitAsync(HomePreviewCaptureTimeout,
+                        closingCancellation.Token);
                 }
                 catch (TimeoutException)
                 {
@@ -136,7 +137,7 @@ public partial class MainWindow
             {
                 previousFocus = FocusManager?.GetFocusedElement() as Control;
                 previousEnabled = (SidebarPanel.IsEnabled, BottomNavigationPanel.IsEnabled,
-                    PageScroll.IsEnabled, WorkspaceHeader.IsEnabled);
+                    PageScroll.IsEnabled, HeaderNavigation.IsEnabled);
                 var close = DeyttTheme.Action(
                     DeyttTheme.TextBlock("×", 22, DeyttTheme.Muted, FontWeight.SemiBold),
                     () => modal.Close());
@@ -242,7 +243,7 @@ public partial class MainWindow
                 SidebarPanel.IsEnabled = false;
                 BottomNavigationPanel.IsEnabled = false;
                 PageScroll.IsEnabled = false;
-                WorkspaceHeader.IsEnabled = false;
+                HeaderNavigation.IsEnabled = false;
                 ModalOverlayHost.Children.Clear();
                 ModalOverlayHost.Children.Add(overlay);
                 ModalOverlayHost.IsVisible = true;
@@ -274,7 +275,7 @@ public partial class MainWindow
                         SidebarPanel.IsEnabled = previousEnabled.Sidebar;
                         BottomNavigationPanel.IsEnabled = previousEnabled.BottomNavigation;
                         PageScroll.IsEnabled = previousEnabled.Page;
-                        WorkspaceHeader.IsEnabled = previousEnabled.Header;
+                        HeaderNavigation.IsEnabled = previousEnabled.HeaderNavigation;
                         var focusTarget = previousFocus is { IsVisible: true, IsEnabled: true } &&
                                           previousFocus.IsAttachedToVisualTree()
                             ? previousFocus
