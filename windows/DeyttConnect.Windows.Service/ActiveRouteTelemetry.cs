@@ -71,27 +71,54 @@ internal sealed class ActiveRouteTelemetry : IDisposable
 
     public async Task<string?> ReadActiveRouteTagAsync(CancellationToken cancellationToken)
     {
+        using var document = await ReadProxiesAsync(cancellationToken).ConfigureAwait(false);
+        return document is null ? null :
+            ResolveActiveRouteTag(_outbounds, _engineTag, _selectedTag, document.RootElement);
+    }
+
+    public async Task<string?> ReadActiveOutboundTagAsync(CancellationToken cancellationToken)
+    {
+        using var document = await ReadProxiesAsync(cancellationToken).ConfigureAwait(false);
+        return document is null ? null : ResolveSelectedOutboundTag(_outbounds, _engineTag, document.RootElement);
+    }
+
+    public async Task<string?> ReadSelectedOutboundTagAsync(string routeTag, CancellationToken cancellationToken)
+    {
+        using var document = await ReadProxiesAsync(cancellationToken).ConfigureAwait(false);
+        if (document is null)
+            return null;
+        return ResolveSelectedOutboundTag(_outbounds, routeTag, document.RootElement);
+    }
+
+    private async Task<JsonDocument?> ReadProxiesAsync(CancellationToken cancellationToken)
+    {
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(TimeSpan.FromSeconds(2));
         var boundedToken = budget.Token;
-        using var response = await _http.GetAsync("proxies", HttpCompletionOption.ResponseHeadersRead,
-            boundedToken).ConfigureAwait(false);
-        if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaximumResponseBytes)
-            return null;
-        await using var input = await response.Content.ReadAsStreamAsync(boundedToken).ConfigureAwait(false);
-        using var buffer = new MemoryStream();
-        var chunk = new byte[8192];
-        while (true)
+        try
         {
-            var count = await input.ReadAsync(chunk, boundedToken).ConfigureAwait(false);
-            if (count == 0)
-                break;
-            if (buffer.Length + count > MaximumResponseBytes)
+            using var response = await _http.GetAsync("proxies", HttpCompletionOption.ResponseHeadersRead,
+                boundedToken).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaximumResponseBytes)
                 return null;
-            buffer.Write(chunk, 0, count);
+            await using var input = await response.Content.ReadAsStreamAsync(boundedToken).ConfigureAwait(false);
+            using var buffer = new MemoryStream();
+            var chunk = new byte[8192];
+            while (true)
+            {
+                var count = await input.ReadAsync(chunk, boundedToken).ConfigureAwait(false);
+                if (count == 0)
+                    break;
+                if (buffer.Length + count > MaximumResponseBytes)
+                    return null;
+                buffer.Write(chunk, 0, count);
+            }
+            return JsonDocument.Parse(buffer.ToArray(), new JsonDocumentOptions { MaxDepth = 32 });
         }
-        using var document = JsonDocument.Parse(buffer.ToArray(), new JsonDocumentOptions { MaxDepth = 32 });
-        return ResolveActiveRouteTag(_outbounds, _engineTag, _selectedTag, document.RootElement);
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     internal static string? ResolveActiveRouteTag(string profile, string selectedTag, string response)
@@ -120,7 +147,7 @@ internal sealed class ActiveRouteTelemetry : IDisposable
                 explicitRoute ??= tag;
             if (outbound.Type is not ("selector" or "urltest"))
             {
-                if (outbound.Type is not ("vless" or "trojan" or "hysteria2" or "wireguard"))
+                if (outbound.Type is not ("vless" or "trojan" or "hysteria2" or "wireguard" or "awg"))
                     return null;
                 if (explicitRoute is not null)
                     return explicitRoute;
@@ -133,6 +160,29 @@ internal sealed class ActiveRouteTelemetry : IDisposable
                     .Take(2).ToArray();
                 return candidates.Length == 1 ? candidates[0] : null;
             }
+            if (!proxies.TryGetProperty(tag, out var group) || group.ValueKind != JsonValueKind.Object ||
+                !group.TryGetProperty("now", out var now) || now.ValueKind != JsonValueKind.String ||
+                now.GetString() is not { Length: > 0 and <= 256 } member || !outbound.Members.Contains(member))
+                return null;
+            tag = member;
+        }
+        return null;
+    }
+
+    private static string? ResolveSelectedOutboundTag(Dictionary<string, Outbound> outbounds, string tag,
+        JsonElement response)
+    {
+        if (response.ValueKind != JsonValueKind.Object ||
+            !response.TryGetProperty("proxies", out var proxies) || proxies.ValueKind != JsonValueKind.Object)
+            return null;
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        for (var depth = 0; depth < 32; depth++)
+        {
+            if (!visited.Add(tag) || !outbounds.TryGetValue(tag, out var outbound))
+                return null;
+            if (outbound.Type is not ("selector" or "urltest"))
+                return outbound.Type is "vless" or "trojan" or "hysteria2" or "wireguard" or "awg"
+                    ? tag : null;
             if (!proxies.TryGetProperty(tag, out var group) || group.ValueKind != JsonValueKind.Object ||
                 !group.TryGetProperty("now", out var now) || now.ValueKind != JsonValueKind.String ||
                 now.GetString() is not { Length: > 0 and <= 256 } member || !outbound.Members.Contains(member))

@@ -1,14 +1,12 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.NetworkInformation;
 
 namespace DeyttConnect.Windows.Service;
 
 internal static class RouteLatencyProbe
 {
-    // shortcut: This is HTTPS response time, not ICMP RTT to the VPN node; use ICMP only if node latency is the intended metric.
-    internal static readonly Uri MeasurementTarget = new("https://cp.cloudflare.com/generate_204");
-
     internal static readonly Uri[] DefaultTargets =
     [
         new("https://cp.cloudflare.com/generate_204"),
@@ -19,42 +17,29 @@ internal static class RouteLatencyProbe
         Overall: TimeSpan.FromSeconds(12),
         Individual: TimeSpan.FromSeconds(6));
 
-    internal static async Task<RouteLatencyProbeResult> MeasureFixedTargetAsync(
-        HttpClient proxyClient,
-        CancellationToken cancellationToken,
-        Action<RouteLatencyProbeObservation>? reportProgress = null)
+    internal static async Task<RouteLatencyProbeResult> MeasureServerAsync(IPAddress serverAddress,
+        CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(proxyClient);
+        ArgumentNullException.ThrowIfNull(serverAddress);
         cancellationToken.ThrowIfCancellationRequested();
-
-        if (proxyClient.DefaultRequestHeaders.Contains("Authorization"))
+        try
         {
-            return new RouteLatencyProbeResult(
-                LatencyMilliseconds: null,
-                Failure: "Не удалось выполнить HTTPS-проверку маршрута.");
+            // shortcut: ICMP measures RTT to the selected server IP, not its protocol handshake; use a protocol-specific probe if transport latency is needed.
+            using var ping = new Ping();
+            var reply = await ping.SendPingAsync(serverAddress.ToString(), TimeSpan.FromSeconds(3),
+                new byte[32], null, cancellationToken).ConfigureAwait(false);
+            return reply.Status == IPStatus.Success
+                ? new RouteLatencyProbeResult(reply.RoundtripTime, null)
+                : new RouteLatencyProbeResult(null, "Сервер VPN не ответил на ICMP-пинг.");
         }
-
-        using var overallCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        overallCancellation.CancelAfter(ProductionTimeouts.Overall);
-
-        var warmup = await MeasureRequestAsync(proxyClient, MeasurementTarget,
-            overallCancellation.Token, cancellationToken, overallCancellation.Token,
-            ProductionTimeouts.Individual).ConfigureAwait(false);
-        cancellationToken.ThrowIfCancellationRequested();
-        if (warmup.LatencyMilliseconds is null)
-            return new RouteLatencyProbeResult(null, DescribeFailure([warmup]));
-
-        var sample = await MeasureRequestAsync(proxyClient, MeasurementTarget,
-            overallCancellation.Token, cancellationToken, overallCancellation.Token,
-            ProductionTimeouts.Individual).ConfigureAwait(false);
-        cancellationToken.ThrowIfCancellationRequested();
-        reportProgress?.Invoke(new RouteLatencyProbeObservation(
-            Attempt: 1,
-            Phase: RouteLatencyProbePhase.WarmSample,
-            LatencyMilliseconds: sample.LatencyMilliseconds));
-
-        return new RouteLatencyProbeResult(sample.LatencyMilliseconds,
-            sample.LatencyMilliseconds is null ? DescribeFailure([sample]) : null);
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (PingException)
+        {
+            return new RouteLatencyProbeResult(null, "Не удалось отправить ICMP-пинг до сервера VPN.");
+        }
     }
 
     internal static async Task<RouteLatencyProbeResult> MeasureAsync(

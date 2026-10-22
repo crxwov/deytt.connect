@@ -50,14 +50,14 @@ public partial class MainWindow
                 LatencyMilliseconds = _vpnSnapshot.TunnelLatencyMilliseconds,
                 Error = _homeLiveProbe.Stage == "latency" ? null : _vpnSnapshot.TunnelLatencyError is null
                     ? _homeLiveProbe.Error
-                    : Copy("Не удалось проверить HTTPS через VPN.", "Could not verify HTTPS through the VPN."),
+                    : Copy("Не удалось выполнить пинг до выбранного сервера VPN.", "Could not ping the selected VPN server."),
             };
         }
         else if (_homeLiveProbe is null)
         {
             _homeLiveProbe = new(routeTag, _vpnSnapshot.TunnelLatencyMilliseconds, null,
-                _vpnSnapshot.TunnelLatencyError is null ? null : Copy("Не удалось проверить HTTPS через VPN.",
-                    "Could not verify HTTPS through the VPN."), "complete");
+                _vpnSnapshot.TunnelLatencyError is null ? null : Copy("Не удалось выполнить пинг до выбранного сервера VPN.",
+                    "Could not ping the selected VPN server."), "complete");
         }
         if (_homeProbeCancellation is not null || !forceRefresh && _homeLiveProbe?.RouteTag == routeTag && DateTimeOffset.UtcNow - _homeProbeUpdatedAt < TimeSpan.FromSeconds(30)) return;
         _ = MeasureHomeConnectionAsync(routeTag);
@@ -99,7 +99,7 @@ public partial class MainWindow
                     };
                     latency = measuredTunnel.TunnelLatencyMilliseconds;
                     latencyError = measuredTunnel.TunnelLatencyError is null ? null :
-                        Copy("Не удалось проверить HTTPS через VPN.", "Could not verify HTTPS through the VPN.");
+                        Copy("Не удалось выполнить пинг до выбранного сервера VPN.", "Could not ping the selected VPN server.");
                     UpdateHomeGlobePresentation();
                 }
             }
@@ -109,7 +109,7 @@ public partial class MainWindow
             }
             catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
             {
-                latencyError = Copy("Не удалось проверить HTTPS через VPN.", "Could not verify HTTPS through the VPN.");
+                latencyError = Copy("Не удалось выполнить пинг до выбранного сервера VPN.", "Could not ping the selected VPN server.");
             }
             var result = await HomeConnectionProbe.MeasureSpeedAsync(
                 routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
@@ -747,7 +747,7 @@ public partial class MainWindow
                 LatencyMilliseconds = _homeLiveProbe.Stage == "latency"
                     ? _homeLiveProbe.LatencyMilliseconds : _vpnSnapshot.TunnelLatencyMilliseconds,
                 Error = _vpnSnapshot.TunnelLatencyError is null ? _homeLiveProbe.Error :
-                    Copy("Не удалось проверить HTTPS через VPN.", "Could not verify HTTPS through the VPN."),
+                    Copy("Не удалось выполнить пинг до выбранного сервера VPN.", "Could not ping the selected VPN server."),
             };
         var probeQuality = displayedRoute is null ? RouteQualityGrade.Unrated : CountryRouteQuality(
             _routes.Where(route => string.Equals(route.CountryCode, displayedRoute.CountryCode,
