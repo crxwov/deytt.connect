@@ -87,8 +87,9 @@ internal sealed class EngineController
         {
             var tunnelInterface = FindTunInterface(tunAddresses)
                 ?? throw new InvalidOperationException("The configured TUN address is unavailable.");
-            latency = await VerifyHttpsThroughTunAsync(tunnelInterface, TimeSpan.FromSeconds(5),
-                cancellationToken, canaryAddresses).ConfigureAwait(false);
+            using var http = CreateTunnelHttpClient(tunnelInterface, TimeSpan.FromSeconds(5), canaryAddresses);
+            var result = await RouteLatencyProbe.MeasureFixedTargetAsync(http, cancellationToken).ConfigureAwait(false);
+            latency = result.LatencyMilliseconds ?? throw new HttpRequestException(result.Failure);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception error)
@@ -344,7 +345,7 @@ internal sealed class EngineController
                 {
                     using var client = new HttpClient(RouteProxyTransport.CreateHandler(endpoint)) { Timeout = Timeout.InfiniteTimeSpan };
                     long? lastSuccessfulSample = null;
-                    var result = await RouteLatencyProbe.MeasureAsync(client, ct,
+                    var result = await RouteLatencyProbe.MeasureFixedTargetAsync(client, ct,
                         observation =>
                         {
                             if (observation.LatencyMilliseconds is { } value)

@@ -6,6 +6,9 @@ namespace DeyttConnect.Windows.Service;
 
 internal static class RouteLatencyProbe
 {
+    // shortcut: This is HTTPS response time, not ICMP RTT to the VPN node; use ICMP only if node latency is the intended metric.
+    internal static readonly Uri MeasurementTarget = new("https://cp.cloudflare.com/generate_204");
+
     internal static readonly Uri[] DefaultTargets =
     [
         new("https://cp.cloudflare.com/generate_204"),
@@ -15,6 +18,44 @@ internal static class RouteLatencyProbe
     internal static readonly RouteLatencyProbeTimeouts ProductionTimeouts = new(
         Overall: TimeSpan.FromSeconds(12),
         Individual: TimeSpan.FromSeconds(6));
+
+    internal static async Task<RouteLatencyProbeResult> MeasureFixedTargetAsync(
+        HttpClient proxyClient,
+        CancellationToken cancellationToken,
+        Action<RouteLatencyProbeObservation>? reportProgress = null)
+    {
+        ArgumentNullException.ThrowIfNull(proxyClient);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (proxyClient.DefaultRequestHeaders.Contains("Authorization"))
+        {
+            return new RouteLatencyProbeResult(
+                LatencyMilliseconds: null,
+                Failure: "Не удалось выполнить HTTPS-проверку маршрута.");
+        }
+
+        using var overallCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        overallCancellation.CancelAfter(ProductionTimeouts.Overall);
+
+        var warmup = await MeasureRequestAsync(proxyClient, MeasurementTarget,
+            overallCancellation.Token, cancellationToken, overallCancellation.Token,
+            ProductionTimeouts.Individual).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (warmup.LatencyMilliseconds is null)
+            return new RouteLatencyProbeResult(null, DescribeFailure([warmup]));
+
+        var sample = await MeasureRequestAsync(proxyClient, MeasurementTarget,
+            overallCancellation.Token, cancellationToken, overallCancellation.Token,
+            ProductionTimeouts.Individual).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+        reportProgress?.Invoke(new RouteLatencyProbeObservation(
+            Attempt: 1,
+            Phase: RouteLatencyProbePhase.WarmSample,
+            LatencyMilliseconds: sample.LatencyMilliseconds));
+
+        return new RouteLatencyProbeResult(sample.LatencyMilliseconds,
+            sample.LatencyMilliseconds is null ? DescribeFailure([sample]) : null);
+    }
 
     internal static async Task<RouteLatencyProbeResult> MeasureAsync(
         HttpClient proxyClient,

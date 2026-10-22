@@ -84,8 +84,6 @@ public partial class MainWindow
             };
             UpdateHomeGlobePresentation();
         });
-        var speedTask = HomeConnectionProbe.MeasureSpeedAsync(
-            routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
         try
         {
             try
@@ -113,7 +111,8 @@ public partial class MainWindow
             {
                 latencyError = Copy("Не удалось проверить HTTPS через VPN.", "Could not verify HTTPS through the VPN.");
             }
-            var result = await speedTask;
+            var result = await HomeConnectionProbe.MeasureSpeedAsync(
+                routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
             if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
             {
                 _homeLiveProbe = result with
