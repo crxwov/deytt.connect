@@ -270,8 +270,11 @@ public partial class MainWindow
                         _activeShellContentDialog = null;
                         ModalOverlayHost.Children.Clear();
                         ModalOverlayHost.IsVisible = false;
-                        if (_activeTab == MainTab.Home)
-                            RenderActiveTabPreservingScroll();
+                        if (_activeTab is MainTab.Home or MainTab.Routes or MainTab.Profile or MainTab.Settings)
+                        {
+                            RefreshHomePageInPlace();
+                            RenderActiveTabPreservingScroll(reuseCachedPage: true);
+                        }
                         SidebarPanel.IsEnabled = previousEnabled.Sidebar;
                         BottomNavigationPanel.IsEnabled = previousEnabled.BottomNavigation;
                         PageScroll.IsEnabled = previousEnabled.Page;

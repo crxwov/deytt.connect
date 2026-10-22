@@ -30,7 +30,7 @@ public sealed class NavigationLifecycleTests
             Assert.Null(globe.Parent);
 
             typeof(MainWindow).GetMethod("RenderActiveTabPreservingScroll",
-                BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+                BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, [false]);
             Dispatcher.UIThread.RunJobs();
 
             Assert.Same(homePage, globe.Parent);
@@ -46,6 +46,55 @@ public sealed class NavigationLifecycleTests
 
             Assert.Same(homePage, globe.Parent);
             Assert.Same(globe, Assert.Single(pageHost.GetVisualDescendants().OfType<RouteGlobeWebView>()));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Shell_dialog_restores_the_native_host_after_routes_profile_and_settings()
+    {
+        var window = CreateWindow();
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var pageHost = window.FindControl<Grid>("PageHost")!;
+            var globe = Assert.Single(pageHost.GetVisualDescendants().OfType<RouteGlobeWebView>());
+            var showContent = typeof(MainWindow).GetMethod("ShowContentInShellAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var activeDialogField = typeof(MainWindow).GetField("_activeShellContentDialog",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var showTab = typeof(MainWindow).GetMethod("ShowTab", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+            foreach (var tab in new[] { "Routes", "Profile", "Settings" })
+            {
+                showTab.Invoke(window, [Enum.Parse(showTab.GetParameters()[0].ParameterType, tab), true]);
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(globe, Assert.Single(pageHost.GetVisualDescendants().OfType<RouteGlobeWebView>()));
+
+                var dialogTask = Assert.IsAssignableFrom<Task<object?>>(showContent.Invoke(window,
+                    ["QA restoration probe", new StackPanel(), 500d, null, null]));
+                object? dialog = null;
+                for (var attempt = 0; attempt < 50 && dialog is null; attempt++)
+                {
+                    Dispatcher.UIThread.RunJobs();
+                    dialog = activeDialogField.GetValue(window);
+                    if (dialog is null)
+                        await Task.Delay(10);
+                }
+                Assert.NotNull(dialog);
+
+                dialog.GetType().GetMethod("Close", BindingFlags.Instance | BindingFlags.Public)!
+                    .Invoke(dialog, [null]);
+                await dialogTask.WaitAsync(TimeSpan.FromSeconds(2));
+                Dispatcher.UIThread.RunJobs();
+
+                Assert.Same(globe, Assert.Single(pageHost.GetVisualDescendants().OfType<RouteGlobeWebView>()));
+                Assert.NotNull(globe.Parent);
+            }
         }
         finally
         {

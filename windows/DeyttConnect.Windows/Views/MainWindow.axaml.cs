@@ -3875,7 +3875,7 @@ public partial class MainWindow : Window
             OperationCanceledException or System.ComponentModel.Win32Exception or
             System.Text.Json.JsonException;
 
-    private void RenderActiveTabPreservingScroll()
+    private void RenderActiveTabPreservingScroll(bool reuseCachedPage = false)
     {
         if (_activeTab == MainTab.Home && _activeShellContentDialog is not null)
         {
@@ -3888,7 +3888,7 @@ public partial class MainWindow : Window
             return;
         }
         var offset = PageScroll.Offset;
-        ShowTab(_activeTab);
+        ShowTab(_activeTab, reuseCachedPage);
         PageScroll.Offset = offset;
     }
 
