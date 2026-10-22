@@ -35,7 +35,11 @@ internal sealed class QaApp : Application
             desktop.MainWindow = BuildWindow(options);
             if (desktop.MainWindow is MainWindow window)
             {
-                if (options.VerifyRouteSelection)
+                if ((desktop.Args ?? []).Contains("--verify-home-action-callbacks", StringComparer.Ordinal))
+                    window.Opened += async (_, _) => await RunHomeActionCallbackQaAsync(window);
+                else if ((desktop.Args ?? []).Contains("--verify-modal-restoration", StringComparer.Ordinal))
+                    window.Opened += async (_, _) => await RunModalRestorationQaAsync(window);
+                else if (options.VerifyRouteSelection)
                     window.Opened += async (_, _) => await RunRouteSelectionQaAsync(window, options);
                 else if (options.VerifyNavigation || options.VerifyZoom || options.CaptureMotion)
                     window.Opened += async (_, _) => await RunNavigationQaAsync(window, options);
@@ -752,6 +756,211 @@ internal sealed class QaApp : Application
 
     private sealed record AtlasSnapshot(long RenderCount, bool? HostActive, int ActiveDomAnimations,
         string? SelectedTab, bool? ActiveStageVisible, bool? HomeBlurred);
+
+    private static async Task RunHomeActionCallbackQaAsync(MainWindow window)
+    {
+        try
+        {
+            var flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var globe = typeof(MainWindow).GetField("_routeGlobe", flags)?.GetValue(window) as RouteGlobeWebView;
+            var pageReadyField = typeof(RouteGlobeWebView).GetField("_pageReady", flags);
+            var core = globe is null ? null : typeof(RouteGlobeWebView).GetField("_coreWebView2", flags)
+                ?.GetValue(globe) as CoreWebView2;
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+            var pageReady = false;
+            var callbacksReady = false;
+            while ((!pageReady || !callbacksReady) && DateTimeOffset.UtcNow < deadline)
+            {
+                await Task.Delay(100);
+                globe = typeof(MainWindow).GetField("_routeGlobe", flags)?.GetValue(window) as RouteGlobeWebView;
+                core = globe is null ? null : typeof(RouteGlobeWebView).GetField("_coreWebView2", flags)
+                    ?.GetValue(globe) as CoreWebView2;
+                pageReady = globe is not null && pageReadyField?.GetValue(globe) is true;
+                if (pageReady && core is not null)
+                {
+                    try
+                    {
+                        callbacksReady = JsonSerializer.Deserialize<bool>(await core.ExecuteScriptAsync(
+                            "Boolean(window.deyttMapAtlas && window.deyttMapAtlas.canvas && typeof window.applyAtlasHomePresentation==='function')"));
+                    }
+                    catch (Exception) { }
+                }
+            }
+            if (core is null || !pageReady || !callbacksReady)
+                throw new TimeoutException("QA did not observe a page-ready WebView and initialized atlas home callback bridge.");
+
+            var resultJson = await core.ExecuteScriptAsync("""
+                (()=>{
+                  const originalInvoke=window.invokeCSharpAction,originalNotify=window.notifyHost;
+                  const primary=document.getElementById('home-action'),compact=document.getElementById('compact-action'),measure=document.getElementById('home-measure');
+                  if(!primary||!compact||!measure)throw new Error('home action controls are missing');
+                  const saved=[primary,compact,measure].map(button=>({button,action:button.dataset.action,disabled:button.disabled}));
+                  const events=[];const recorder=message=>events.push(String(message));
+                  const results=[];
+                  try{
+                    window.invokeCSharpAction=recorder;window.notifyHost=recorder;
+                    for(const button of [primary,compact]){
+                      for(const action of ['home-connect','home-disconnect','home-cancel']){
+                        button.dataset.action=action;button.disabled=false;events.length=0;button.click();
+                        results.push({id:button.id,action,count:events.length,messages:[...events]});
+                      }
+                      button.disabled=true;events.length=0;button.click();
+                      results.push({id:button.id,action:'disabled',count:events.length,messages:[...events]});
+                    }
+                    measure.disabled=false;events.length=0;measure.click();
+                    results.push({id:measure.id,action:'home-measure',count:events.length,messages:[...events]});
+                    measure.disabled=true;events.length=0;measure.click();
+                    results.push({id:measure.id,action:'disabled',count:events.length,messages:[...events]});
+                  }finally{
+                    window.invokeCSharpAction=originalInvoke;window.notifyHost=originalNotify;
+                    for(const item of saved){item.button.dataset.action=item.action||'';item.button.disabled=item.disabled;}
+                  }
+                  return JSON.stringify(results);
+                })()
+                """);
+            using var outer = JsonDocument.Parse(resultJson);
+            using var inner = JsonDocument.Parse(outer.RootElement.GetString() ?? "[]");
+            var results = inner.RootElement.EnumerateArray().Select(entry => new
+            {
+                id = entry.GetProperty("id").GetString(),
+                action = entry.GetProperty("action").GetString(),
+                count = entry.GetProperty("count").GetInt32(),
+                messages = entry.GetProperty("messages").EnumerateArray().Select(message => message.GetString()).ToArray(),
+            }).ToArray();
+            var invalid = results.Where(item => item.count !=
+                (item.action == "disabled" ? 0 : 1) ||
+                (item.action != "disabled" && (item.messages.Length != 1 || item.messages[0] != item.action))).ToArray();
+            Console.WriteLine("QA home callback results: " + JsonSerializer.Serialize(results));
+            Console.WriteLine("QA home callback summary: " + JsonSerializer.Serialize(new { passed = invalid.Length == 0, callbacks = results.Length }));
+            if (invalid.Length != 0)
+                throw new InvalidOperationException("Enabled home actions must post one matching host callback; disabled controls must post none.");
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"QA home callback verification failed: {exception.GetType().Name}: {exception.Message}");
+            Program.QaExitCode = 1;
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static async Task RunModalRestorationQaAsync(MainWindow window)
+    {
+        try
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var windowType = typeof(MainWindow);
+            var globeField = windowType.GetField("_routeGlobe", flags)!;
+            var showTab = windowType.GetMethod("ShowTab", flags)!;
+            var showModal = windowType.GetMethod("ShowContentInShellAsync", flags)!;
+            var activeDialogField = windowType.GetField("_activeShellContentDialog", flags)!;
+            var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+            RouteGlobeWebView? globe = null;
+            CoreWebView2? core = null;
+            while (DateTimeOffset.UtcNow < deadline)
+            {
+                globe = globeField.GetValue(window) as RouteGlobeWebView;
+                core = globe is null ? null : typeof(RouteGlobeWebView).GetField("_coreWebView2", flags)
+                    ?.GetValue(globe) as CoreWebView2;
+                if (core is not null)
+                {
+                    try
+                    {
+                        var ready = await core.ExecuteScriptAsync("Boolean(window.deyttMapAtlas && window.deyttMapAtlas.canvas)");
+                        if (JsonSerializer.Deserialize<bool>(ready))
+                            break;
+                    }
+                    catch (Exception) { }
+                }
+                await Task.Delay(150);
+            }
+            if (globe is null || core is null || DateTimeOffset.UtcNow >= deadline)
+                throw new TimeoutException("QA modal verification could not find a ready native map WebView within 30 seconds.");
+
+            var pageHost = window.FindControl<Grid>("PageHost")
+                ?? throw new InvalidOperationException("QA modal verification could not find the page host.");
+            var tabType = showTab.GetParameters()[0].ParameterType;
+            var results = new List<object>();
+            foreach (var tab in new[] { "Routes", "Profile", "Settings" })
+            {
+                showTab.Invoke(window, [Enum.Parse(tabType, tab), true]);
+                var expected = tab.ToLowerInvariant();
+                var before = await ReadAtlasSnapshotAsync(core);
+                for (var attempt = 0; (before.SelectedTab != expected || before.ActiveStageVisible is not true) && attempt < 40; attempt++)
+                {
+                    await Task.Delay(15);
+                    before = await ReadAtlasSnapshotAsync(core);
+                }
+                if (before.SelectedTab != expected || before.ActiveStageVisible is not true || before.HostActive is not true)
+                    throw new InvalidOperationException($"The native {tab} stage was not active before the shell modal.");
+
+                var modalTask = AssertModalTask(showModal.Invoke(window,
+                    ["QA restoration probe", new StackPanel(), 500d, null, null]));
+                object? modal = null;
+                for (var attempt = 0; attempt < 100 && modal is null; attempt++)
+                {
+                    await Task.Delay(10);
+                    modal = activeDialogField.GetValue(window);
+                }
+                if (modal is null)
+                    throw new TimeoutException("QA shell modal did not become active.");
+                modal.GetType().GetMethod("Close", BindingFlags.Instance | BindingFlags.Public)!
+                    .Invoke(modal, [null]);
+                await modalTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+                AtlasSnapshot after = new(0, null, 0, null, null, null);
+                CoreWebView2? restoredCore = null;
+                var restoredDeadline = DateTimeOffset.UtcNow.AddSeconds(20);
+                while (DateTimeOffset.UtcNow < restoredDeadline)
+                {
+                    restoredCore = typeof(RouteGlobeWebView).GetField("_coreWebView2", flags)?.GetValue(globe) as CoreWebView2;
+                    if (restoredCore is not null)
+                    {
+                        try
+                        {
+                            after = await ReadAtlasSnapshotAsync(restoredCore);
+                            if (after.SelectedTab == expected && after.ActiveStageVisible is true && after.HostActive is true)
+                                break;
+                        }
+                        catch (InvalidOperationException)
+                        {
+                            // WebView2 may destroy its native adapter while the control is detached for the modal.
+                        }
+                    }
+                    await Task.Delay(100);
+                }
+                var sameControl = ReferenceEquals(globe, globeField.GetValue(window));
+                var coreReady = restoredCore is not null;
+                var attached = ReferenceEquals(globe, pageHost.GetVisualDescendants().OfType<RouteGlobeWebView>().SingleOrDefault());
+                if (!sameControl || !coreReady || !attached || after.SelectedTab != expected ||
+                    after.ActiveStageVisible is not true || after.HostActive is not true)
+                    throw new InvalidOperationException($"The native {tab} stage or retained WebView was not restored after the shell modal.");
+                results.Add(new { tab, restoredStage = after.SelectedTab, after.ActiveStageVisible,
+                    after.HostActive, sameControl, coreReady, sameCore = ReferenceEquals(core, restoredCore), attached });
+            }
+            Console.WriteLine("QA modal restoration results: " + JsonSerializer.Serialize(results));
+            Console.WriteLine("QA modal restoration summary: " + JsonSerializer.Serialize(new
+            {
+                passed = true,
+                pages = results.Count,
+                sameGlobeRetained = ReferenceEquals(globe, globeField.GetValue(window)),
+            }));
+        }
+        catch (Exception exception)
+        {
+            Console.Error.WriteLine($"QA modal restoration failed: {exception.GetType().Name}: {exception.Message}\n{exception.StackTrace}");
+            Program.QaExitCode = 1;
+        }
+        finally
+        {
+            window.Close();
+        }
+
+        static Task<object?> AssertModalTask(object? task) => task as Task<object?>
+            ?? throw new InvalidOperationException("QA shell modal did not return its completion task.");
+    }
 
     private static async Task RunZoomQaAsync(MainWindow window, CoreWebView2 core, QaOptions options)
     {

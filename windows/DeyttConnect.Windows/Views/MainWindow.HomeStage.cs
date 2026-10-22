@@ -890,7 +890,7 @@ public partial class MainWindow
             _vpnServiceAvailable,
             _mapRegionEnabled,
             _reduceMotion,
-            "0.11.40"
+            WindowsUpdateClient.GetInstalledVersion()?.ToString(3) ?? "—"
         );
     }
 

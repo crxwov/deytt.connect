@@ -2893,7 +2893,7 @@
           <div class="glass-card" style="display: flex; align-items: center; justify-content: space-between;">
             <div>
               <strong style="color: #FFFFFF; font-size: 15px; display: block;">./connect</strong>
-              <span style="font-size: 13px; color: var(--text-muted);" id="settings-app-version">версия 0.11.40 (windows x64) · канал: ./beta</span>
+              <span style="font-size: 13px; color: var(--text-muted);" id="settings-app-version">версия приложения (windows x64) · канал: ./beta</span>
             </div>
             <button class="btn-select-route" id="btn-check-updates">проверить обновления</button>
           </div>
@@ -3494,18 +3494,6 @@
     if (btnCheckUpdates)
       btnCheckUpdates.addEventListener("click", () => postHost("settings:check_updates"));
 
-    // Home Primary Action Handlers (Real VPN Connect / Disconnect / Cancel to C# Host)
-    const handleHomePrimaryAction = (e) => {
-      const btn = e.currentTarget;
-      if (btn.disabled) return;
-      const action = btn.dataset.action || "home-connect";
-      postHost(action);
-    };
-    const actionBtn = document.getElementById("home-action");
-    if (actionBtn) actionBtn.addEventListener("click", handleHomePrimaryAction);
-    const compactActionBtn = document.getElementById("compact-action");
-    if (compactActionBtn) compactActionBtn.addEventListener("click", handleHomePrimaryAction);
-
     // Synchronize full Home Presentation state across UI
     window.deyttSetHomePresentation = function(state) {
       if (!state || typeof state !== "object") return;
@@ -3583,27 +3571,6 @@
       const action = button.dataset.profileAction === "device" ? "profile:device:manage:" : "profile:session:manage:";
       postHost(action + button.dataset.profileId);
     });
-
-    const measureBtn = document.getElementById("home-measure");
-    if (measureBtn) {
-      measureBtn.addEventListener("click", () => {
-        const latency = document.getElementById("home-latency");
-        const speed = document.getElementById("home-speed");
-        const latencyUnit = document.getElementById("home-latency-unit");
-        const speedUnit = document.getElementById("home-speed-unit");
-        if (latency) {
-          latency.classList.add("is-empty");
-          latency.textContent = "…";
-          if (latencyUnit) latencyUnit.hidden = true;
-        }
-        if (speed) {
-          speed.classList.add("is-empty");
-          speed.textContent = "…";
-          if (speedUnit) speedUnit.hidden = true;
-        }
-        postHost("home-measure");
-      });
-    }
 
     
     // Profile & Settings IPC actions
