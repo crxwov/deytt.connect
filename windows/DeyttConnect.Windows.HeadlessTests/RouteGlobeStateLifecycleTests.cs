@@ -121,6 +121,35 @@ public sealed class RouteGlobeStateLifecycleTests
         finally { window.Close(); }
     }
 
+    [AvaloniaFact]
+    public async Task Webview_window_controls_reach_the_native_window()
+    {
+        var (window, globe) = CreateReadyHost();
+        var webView = Field<NativeWebView>(globe, "_webView");
+        var onMessage = typeof(RouteGlobeWebView).GetMethod("OnWebMessageReceived",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var closeRequests = 0;
+        globe.ExitRequested += () => closeRequests++;
+        try
+        {
+            onMessage.Invoke(globe, [webView, new WebMessageReceivedEventArgs { Body = "\"window:minimize\"" }]);
+            await DrainAsync();
+            Assert.Equal(WindowState.Minimized, window.WindowState);
+
+            onMessage.Invoke(globe, [webView, new WebMessageReceivedEventArgs { Body = "\"window:maximize\"" }]);
+            await DrainAsync();
+            Assert.Equal(WindowState.Maximized, window.WindowState);
+            onMessage.Invoke(globe, [webView, new WebMessageReceivedEventArgs { Body = "\"window:maximize\"" }]);
+            await DrainAsync();
+            Assert.Equal(WindowState.Normal, window.WindowState);
+
+            onMessage.Invoke(globe, [webView, new WebMessageReceivedEventArgs { Body = "\"window:close\"" }]);
+            await DrainAsync();
+            Assert.Equal(1, closeRequests);
+        }
+        finally { window.Close(); }
+    }
+
     private static (Window, RouteGlobeWebView) CreateReadyHost()
     {
         var globe = new RouteGlobeWebView(disableNativeInitialization: true);

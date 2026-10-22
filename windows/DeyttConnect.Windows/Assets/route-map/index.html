@@ -912,6 +912,7 @@
     .routes-view-wrap {
       width: 100%;
       max-width: 680px;
+      align-self: flex-start;
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -1378,6 +1379,17 @@
       overflow: hidden;
     }
 
+    .tg-avatar-img > img {
+      display: none;
+      width: 100%;
+      height: 100%;
+      border-radius: inherit;
+      object-fit: cover;
+    }
+
+    .tg-avatar-img.has-image > img { display: block; }
+    .tg-avatar-img.has-image > svg { display: none !important; }
+
     .tg-badge-corner {
       position: absolute;
       bottom: -3px;
@@ -1505,6 +1517,10 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 20px;
+    }
+
+    .profile-grid-2 > .glass-card:first-child {
+      align-self: start;
     }
 
     .stat-gauge-wrap {
@@ -2053,9 +2069,7 @@
                 <div class="proto-row is-selected" data-route-key="nl-vless" data-route-tag="route:NL:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/vless-xray-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
@@ -2091,9 +2105,7 @@
                 <div class="proto-row" data-route-key="nl-trojan" data-route-tag="route:NL:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/trojan-horse-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">trojan</span>
                   </div>
@@ -2146,9 +2158,7 @@
                 <div class="proto-row" data-route-key="de-vless" data-route-tag="route:DE:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/vless-xray-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
@@ -2184,9 +2194,7 @@
                 <div class="proto-row" data-route-key="de-trojan" data-route-tag="route:DE:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/trojan-horse-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">trojan</span>
                   </div>
@@ -2239,9 +2247,7 @@
                 <div class="proto-row" data-route-key="ru-vless" data-route-tag="route:RU:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/vless-xray-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
@@ -2277,9 +2283,7 @@
                 <div class="proto-row" data-route-key="ru-trojan" data-route-tag="route:RU:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/trojan-horse-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">trojan</span>
                   </div>
@@ -2332,9 +2336,7 @@
                 <div class="proto-row" data-route-key="fi-vless" data-route-tag="route:FI:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/vless-xray-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
@@ -2370,9 +2372,7 @@
                 <div class="proto-row" data-route-key="fi-trojan" data-route-tag="route:FI:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/trojan-horse-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">trojan</span>
                   </div>
@@ -2425,9 +2425,7 @@
                 <div class="proto-row" data-route-key="it-vless" data-route-tag="route:IT:VLESS">
                   <div class="proto-left">
                     <div class="proto-logo vless" title="vless+ws">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M10 10L20 30L30 10" stroke="var(--accent-azure)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/vless-xray-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">vless+ws</span>
                   </div>
@@ -2463,9 +2461,7 @@
                 <div class="proto-row" data-route-key="it-trojan" data-route-tag="route:IT:TROJAN">
                   <div class="proto-left">
                     <div class="proto-logo trojan" title="trojan">
-                      <svg viewBox="0 0 40 40" fill="none" aria-hidden="true" focusable="false">
-  <path d="M9 12H31M20 12V30" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-</svg>
+                      <img src="protocol-marks/trojan-horse-symbol.svg" alt="" aria-hidden="true" />
                     </div>
                     <span class="proto-name">trojan</span>
                   </div>
@@ -2519,6 +2515,7 @@
           <div class="profile-user-left">
             <div class="tg-avatar-wrap">
               <div class="tg-avatar-img" id="profile-avatar" title="аватар telegram">
+                <img id="profile-avatar-image" alt="" aria-hidden="true" />
                 <svg viewBox="0 0 64 64" width="62" height="62" style="display: block;">
                   <defs>
                     <linearGradient id="tgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -2948,6 +2945,23 @@
 
     
     let currentSubscriptionKey = "";
+
+    window.deyttSetProfileAvatar = function(dataUrl) {
+      const avatar = document.getElementById("profile-avatar");
+      const image = document.getElementById("profile-avatar-image");
+      if (!avatar || !image) return;
+      if (typeof dataUrl !== "string" || !/^data:image\/(?:png|jpeg|gif|webp);base64,[a-z0-9+/]+=*$/i.test(dataUrl)) {
+        image.removeAttribute("src");
+        avatar.classList.remove("has-image");
+        return;
+      }
+      image.onerror = () => {
+        image.removeAttribute("src");
+        avatar.classList.remove("has-image");
+      };
+      image.src = dataUrl;
+      avatar.classList.add("has-image");
+    };
 
     // Real Profile and Settings data bridge from C# host
     window.deyttSetProfileData = function(data) {

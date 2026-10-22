@@ -1579,12 +1579,47 @@
       const horizonFade = clamp((point.z - 0.05) / 0.17, 0, 1);
       const totalAlpha = (active || isHovered ? 0.95 : 0.75) * horizonFade;
 
-      const offset = (compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key]) || { x: 22, y: -22, align: "left" };
+      const preferredOffset = (compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key]) || { x: 22, y: -22, align: "left" };
+      const candidates = [];
+      const seenOffsets = new Set();
+      const addCandidate = (candidate) => {
+        if (!candidate) return;
+        const id = `${candidate.x}:${candidate.y}:${candidate.align}`;
+        if (seenOffsets.has(id)) return;
+        seenOffsets.add(id);
+        const left = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0),
+          8, Math.max(8, this.width - width - 8));
+        const top = clamp(point.y + candidate.y - height / 2, 8, Math.max(8, this.height - height - 8));
+        candidates.push({ ...candidate, left, top });
+      };
+      addCandidate(this.labelPlacements.get(key));
+      addCandidate(preferredOffset);
+      for (const align of [preferredOffset.align, preferredOffset.align === "right" ? "left" : "right"]) {
+        const x = align === preferredOffset.align
+          ? preferredOffset.x
+          : align === "right" ? -22 : 22;
+        for (const y of [0, preferredOffset.y, -42, 42, -84, 84, -126, 126, -168, 168])
+          addCandidate({ x, y, align });
+      }
+      const collides = (candidate) => occupied.some(box =>
+        candidate.left < box.left + box.width + 8 && candidate.left + width + 8 > box.left &&
+        candidate.top < box.top + box.height + 8 && candidate.top + height + 8 > box.top);
+      const offset = candidates.find(candidate => !collides(candidate));
+      if (!offset) {
+        this.labelPlacements.delete(key);
+        const el = this.domLabels?.get(key);
+        if (el) {
+          el.style.display = "none";
+          el._currentDisplay = "none";
+        }
+        return;
+      }
+      this.labelPlacements.set(key, { x: offset.x, y: offset.y, align: offset.align });
 
       // Sub-pixel precision: DO NOT round left, top, endX, endY!
       // This eliminates accordion stretching of the leader line and sub-pixel snapping jitter.
-      const left = point.x + offset.x - (offset.align === "right" ? width : 0);
-      const top = point.y + offset.y - height / 2;
+      const left = offset.left;
+      const top = offset.top;
       const endX = offset.align === "right" ? left + width : left;
       const endY = top + height / 2;
 

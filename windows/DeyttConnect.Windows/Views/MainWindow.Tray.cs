@@ -224,6 +224,24 @@ public partial class MainWindow
         catch (Exception error) when (IsTunnelTransportError(error) && !disconnectConfirmed)
         {
             ShowFromTray();
+            if (launchInstaller is null)
+            {
+                var exitAnyway = await ConfirmInShellAsync(
+                    Copy("VPN ещё подключён", "VPN is still connected"),
+                    Copy("Служба не подтвердила отключение. VPN может остаться активным после закрытия приложения.",
+                        "The service did not confirm disconnection. The VPN may remain active after the app closes."),
+                    Copy("Закрыть всё равно", "Close anyway"), Copy("Остаться", "Stay"));
+                if (!exitAnyway)
+                    return false;
+
+                _exitAuthorized = true;
+                _trayIcon?.Dispose();
+                _trayIcon = null;
+                if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+                    desktop.Shutdown();
+                else Close();
+                return true;
+            }
             ShowInfoDialog(Copy("VPN ещё не отключён", "VPN has not stopped"),
                 Copy("Служба не подтвердила отключение. Повторите выход после проверки службы в настройках.",
                     "The service did not confirm disconnection. Check the service in settings, then try quitting again."));
@@ -255,7 +273,14 @@ public partial class MainWindow
         // EngineProcessLifetime uses KillOnJobClose and the service reports
         // STOPPED only after Engine.Stop(). No service-owned tunnel can survive it.
         if (serviceInactive?.Invoke() == true) return new WindowsTunnelSnapshot("disconnected", "");
-        var stopped = await disconnect().WaitAsync(TimeSpan.FromSeconds(20));
+        WindowsTunnelSnapshot stopped;
+        try { stopped = await disconnect().WaitAsync(TimeSpan.FromSeconds(20)); }
+        catch
+        {
+            if (serviceInactive?.Invoke() == true)
+                return new WindowsTunnelSnapshot("disconnected", "");
+            throw;
+        }
         if (stopped.State != "disconnected") throw new IOException("VPN did not stop.");
         return stopped;
     }

@@ -20,8 +20,8 @@ public partial class MainWindow
     private CancellationTokenSource? _homeProbeCancellation;
     private WindowsRouteProbeResult? _homeLiveProbe;
     private DateTimeOffset _homeProbeUpdatedAt;
-    private bool _homeSpeedSampled;
     private string? _homeMeasurementSession;
+    private bool _initialNetherlandsRouteProbeStarted;
 
     private void RefreshHomeConnectionMeasurement(bool forceRefresh = false)
     {
@@ -31,7 +31,6 @@ public partial class MainWindow
         {
             _homeProbeCancellation?.Cancel();
             _homeLiveProbe = null;
-            _homeSpeedSampled = false;
             _homeMeasurementSession = null;
             return;
         }
@@ -40,7 +39,6 @@ public partial class MainWindow
         {
             _homeProbeCancellation?.Cancel();
             _homeLiveProbe = null;
-            _homeSpeedSampled = false;
             _homeMeasurementSession = session;
         }
         if (_homeLiveProbe?.RouteTag == routeTag && _homeProbeCancellation is null)
@@ -60,17 +58,17 @@ public partial class MainWindow
                     "Could not verify HTTPS through the VPN."), "complete");
         }
         if (_homeProbeCancellation is not null || !forceRefresh && _homeLiveProbe?.RouteTag == routeTag && DateTimeOffset.UtcNow - _homeProbeUpdatedAt < TimeSpan.FromSeconds(30)) return;
-        _ = MeasureHomeConnectionAsync(routeTag, forceRefresh || !_homeSpeedSampled, forceRefresh);
+        _ = MeasureHomeConnectionAsync(routeTag);
     }
 
-    private async Task MeasureHomeConnectionAsync(string routeTag, bool speed, bool tunnelLatency)
+    private async Task MeasureHomeConnectionAsync(string routeTag)
     {
         using var cancellation = new CancellationTokenSource();
         _homeProbeCancellation = cancellation;
         var previousSpeed = _homeLiveProbe?.RouteTag == routeTag ? _homeLiveProbe.BytesPerSecond : null;
-        long? latency = tunnelLatency ? null : _vpnSnapshot.TunnelLatencyMilliseconds;
+        long? latency = null;
         string? latencyError = null;
-        _homeLiveProbe = new(routeTag, latency, previousSpeed, null, tunnelLatency ? "latency" : "complete");
+        _homeLiveProbe = new(routeTag, latency, previousSpeed, null, "latency");
         UpdateHomeGlobePresentation();
         void Apply(WindowsRouteProbeResult sample) => Dispatcher.UIThread.Post(() =>
         {
@@ -79,14 +77,16 @@ public partial class MainWindow
             {
                 LatencyMilliseconds = latency,
                 Error = latencyError ?? sample.Error,
-                Stage = tunnelLatency && latency is null ? "latency" : sample.Stage,
+                Stage = latency is null ? "latency" : sample.Stage,
                 BytesPerSecond = sample.BytesPerSecond ?? previousSpeed,
             };
             UpdateHomeGlobePresentation();
         });
+        var speedTask = HomeConnectionProbe.MeasureSpeedAsync(
+            routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
         try
         {
-            if (tunnelLatency)
+            try
             {
                 var measuredTunnel = await _tunnelClient.MeasureTunnelLatencyAsync(cancellation.Token);
                 if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
@@ -103,8 +103,15 @@ public partial class MainWindow
                     UpdateHomeGlobePresentation();
                 }
             }
-            var result = await HomeConnectionProbe.MeasureSpeedAsync(
-                routeTag, _sessionToken, speed && latency is not null, Apply, cancellation.Token);
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
+            {
+                latencyError = Copy("Не удалось проверить HTTPS через VPN.", "Could not verify HTTPS through the VPN.");
+            }
+            var result = await speedTask;
             if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
             {
                 _homeLiveProbe = result with
@@ -113,7 +120,6 @@ public partial class MainWindow
                     Error = latencyError ?? result.Error,
                     BytesPerSecond = result.BytesPerSecond ?? previousSpeed,
                 };
-                _homeSpeedSampled |= speed && result.BytesPerSecond is > 0;
             }
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
@@ -534,6 +540,7 @@ public partial class MainWindow
         map.ProbeMethodRequested += () => _ = ShowProbeMethodPickerAsync();
         map.ServiceCheckRequested += () => _ = InstallVpnServiceAsync();
         map.BotRequested += () => OpenExternal("https://t.me/deyttbot");
+        map.UpdateProfileAvatar(_telegramAvatarDataUrl);
         return map;
     }
 
@@ -797,6 +804,24 @@ public partial class MainWindow
             .Select(route => route.Tag).ToArray();
         QueueRouteCountryProbe(countryCode, tags);
     }
+
+    private void EnsureInitialNetherlandsRouteProbe()
+    {
+        if (_qaFixture || _activeTab != MainTab.Routes || _initialNetherlandsRouteProbeStarted ||
+            !_vpnServiceAvailable || _vpnActionInProgress || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) ||
+            _keysSnapshot?.ProfileJson is not { Length: > 0 })
+            return;
+
+        var routeTags = _routes.Where(route => route.CountryCode == "NL")
+            .Select(route => route.Tag).Distinct(StringComparer.Ordinal).ToArray();
+        if (routeTags.Length == 0)
+            return;
+
+        _initialNetherlandsRouteProbeStarted = true;
+        _expandedRouteCountries.Add("NL");
+        QueueRouteCountryProbe("NL", routeTags);
+    }
+
     private void UpdateHomeGlobePresentation()
     {
         var map = _routeGlobe;
@@ -892,6 +917,7 @@ public partial class MainWindow
             _reduceMotion,
             WindowsUpdateClient.GetInstalledVersion()?.ToString(3) ?? "—"
         );
+        EnsureInitialNetherlandsRouteProbe();
     }
 
     private async Task CopySubscriptionKeyToClipboardAsync()

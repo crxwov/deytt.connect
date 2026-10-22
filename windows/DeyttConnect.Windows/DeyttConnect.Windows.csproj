@@ -39,6 +39,14 @@
              Link="Assets\route-map\protocol-marks\hysteria-symbol.svg"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\ProtocolMarks\vless-xray-symbol.svg"
+             Link="Assets\route-map\protocol-marks\vless-xray-symbol.svg"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Assets\ProtocolMarks\trojan-horse-symbol.svg"
+             Link="Assets\route-map\protocol-marks\trojan-horse-symbol.svg"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\Fonts\InterTight-Regular.ttf;Assets\Fonts\InterTight-SemiBold.ttf;Assets\Fonts\InterTight-Bold.ttf;Assets\Fonts\Unbounded-Bold.ttf;Assets\Fonts\JetBrainsMono-Regular.ttf"
              Link="Assets\route-map\fonts\%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest"

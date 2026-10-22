@@ -282,6 +282,17 @@ public sealed class TrayLifecycleTests
     }
 
     [Fact]
+    public async Task Service_confirmed_stopped_after_pipe_failure_allows_exit()
+    {
+        var statusChecks = 0;
+        var stopped = await MainWindow.StopVpnBeforeExitAsync(null,
+            () => Task.FromException<WindowsTunnelSnapshot>(new IOException("Service stopped during disconnect")),
+            serviceInactive: () => ++statusChecks > 1);
+        Assert.Equal("disconnected", stopped.State);
+        Assert.Equal(2, statusChecks);
+    }
+
+    [Fact]
     public async Task UnknownOrRunningServiceStillRequiresDisconnectAcknowledgement()
     {
         await Assert.ThrowsAsync<IOException>(() => MainWindow.StopVpnBeforeExitAsync(null,

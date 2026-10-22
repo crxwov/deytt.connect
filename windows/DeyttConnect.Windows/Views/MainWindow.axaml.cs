@@ -407,6 +407,7 @@ public partial class MainWindow : Window
         }
 
         ShowPageInHost(tab, page);
+        EnsureInitialNetherlandsRouteProbe();
         if (previousTab != tab)
             _pageEntranceCancellation?.Cancel();
         if (previousTab != tab && tab != MainTab.Home)

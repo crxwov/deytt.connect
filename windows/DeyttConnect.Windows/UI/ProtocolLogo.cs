@@ -13,6 +13,8 @@ internal sealed class ProtocolLogo(string protocol) : Control
 {
     private static readonly XNamespace SvgNamespace = "http://www.w3.org/2000/svg";
     private static readonly Lazy<Geometry> AmneziaGeometry = new(() => LoadAmneziaGeometry());
+    private static readonly Lazy<Geometry> VlessGeometry = new(() => LoadProtocolGeometry("vless-xray-symbol.svg"));
+    private static readonly Lazy<Geometry> TrojanGeometry = new(() => LoadProtocolGeometry("trojan-horse-symbol.svg"));
     private static readonly Lazy<IReadOnlyList<(Geometry Geometry, bool Accent)>> HysteriaGeometries =
         new(() => LoadHysteriaGeometries());
     private readonly string _protocol = protocol.ToUpperInvariant();
@@ -22,42 +24,17 @@ internal sealed class ProtocolLogo(string protocol) : Control
         base.Render(context);
         using (context.PushClip(new Rect(0, 0, Bounds.Width, Bounds.Height)))
         {
-            var color = _protocol switch
-            {
-                "VLESS" => DeyttTheme.Blue,
-                "TROJAN" => DeyttTheme.Text,
-                "HYSTERIA2" => DeyttTheme.Mint,
-                "AWG31" => DeyttTheme.Amber,
-                _ => DeyttTheme.Muted,
-            };
-            var brush = DeyttTheme.Brush(color);
-            var pen = new Pen(brush, 2.4, null, PenLineCap.Round, PenLineJoin.Round);
-            // These protocols have no verified bundled marks; show their initials instead of invented logos.
             switch (_protocol)
             {
-                case "VLESS":
-                {
-                    using (PushSource40Transform(context))
-                    {
-                        context.DrawLine(pen, new Point(10, 10), new Point(20, 30));
-                        context.DrawLine(pen, new Point(20, 30), new Point(30, 10));
-                    }
+                case "VLESS": DrawMark(context, VlessGeometry.Value, DeyttTheme.Blue);
                     break;
-                }
-                case "TROJAN":
-                {
-                    using (PushSource40Transform(context))
-                    {
-                        context.DrawLine(pen, new Point(9, 12), new Point(31, 12));
-                        context.DrawLine(pen, new Point(20, 12), new Point(20, 30));
-                    }
+                case "TROJAN": DrawMark(context, TrojanGeometry.Value, DeyttTheme.Text);
                     break;
-                }
                 case "HYSTERIA2":
                     DrawHysteriaMark(context);
                     break;
                 case "AWG31":
-                    DrawAmneziaMark(context);
+                    DrawMark(context, AmneziaGeometry.Value, DeyttTheme.Text);
                     break;
             }
         }
@@ -80,9 +57,8 @@ internal sealed class ProtocolLogo(string protocol) : Control
         }
     }
 
-    private void DrawAmneziaMark(DrawingContext context)
+    private void DrawMark(DrawingContext context, Geometry geometry, Color color)
     {
-        var geometry = AmneziaGeometry.Value;
         var bounds = geometry.Bounds;
         if (bounds.Width <= 0 || bounds.Height <= 0)
             return;
@@ -90,7 +66,7 @@ internal sealed class ProtocolLogo(string protocol) : Control
         var offsetX = (Bounds.Width - bounds.Width * scale) / 2 - bounds.X * scale;
         var offsetY = (Bounds.Height - bounds.Height * scale) / 2 - bounds.Y * scale;
         DrawScaledGeometry(context, geometry, bounds.Width, bounds.Height, scale,
-            offsetX, offsetY, DeyttTheme.Brush(DeyttTheme.Text));
+            offsetX, offsetY, DeyttTheme.Brush(color));
     }
 
     private static void DrawScaledGeometry(DrawingContext context, Geometry geometry,
@@ -100,15 +76,6 @@ internal sealed class ProtocolLogo(string protocol) : Control
             return;
         using (context.PushTransform(new Matrix(scale, 0, 0, scale, offsetX, offsetY)))
             context.DrawGeometry(brush, null, geometry);
-    }
-
-    private IDisposable PushSource40Transform(DrawingContext context)
-    {
-        const double sourceSize = 40;
-        var scale = Math.Min(Bounds.Width / sourceSize, Bounds.Height / sourceSize);
-        var offsetX = (Bounds.Width - sourceSize * scale) / 2;
-        var offsetY = (Bounds.Height - sourceSize * scale) / 2;
-        return context.PushTransform(new Matrix(scale, 0, 0, scale, offsetX, offsetY));
     }
 
     private static Geometry LoadAmneziaGeometry()
@@ -146,6 +113,16 @@ internal sealed class ProtocolLogo(string protocol) : Control
         if (polygons.Length == 0)
             throw new InvalidDataException("The Hysteria vector mark has no polygons.");
         return polygons;
+    }
+
+    private static Geometry LoadProtocolGeometry(string fileName)
+    {
+        using var stream = OpenMark(fileName);
+        var document = XDocument.Load(stream);
+        var data = (string?)document.Descendants(SvgNamespace + "path").FirstOrDefault()?.Attribute("d");
+        if (string.IsNullOrWhiteSpace(data))
+            throw new InvalidDataException($"The protocol mark {fileName} has no path data.");
+        return Geometry.Parse(data);
     }
 
     private static Stream OpenMark(string fileName)

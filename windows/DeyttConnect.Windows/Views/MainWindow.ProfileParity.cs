@@ -13,6 +13,7 @@ public partial class MainWindow
 {
     private readonly HashSet<long> _happDeviceChangesInFlight = [];
     private readonly HashSet<string> _sessionRevokesInFlight = new(StringComparer.Ordinal);
+    private string? _telegramAvatarDataUrl;
 
     internal static string NormalizeTariffDisplayName(string? value)
     {
@@ -170,12 +171,14 @@ public partial class MainWindow
     private void SetTelegramAvatar(byte[]? bytes)
     {
         Bitmap? bitmap = null;
+        string? dataUrl = null;
         if (bytes is { Length: > 0 })
         {
             try
             {
                 using var stream = new MemoryStream(bytes);
                 bitmap = Bitmap.DecodeToWidth(stream, 256, BitmapInterpolationMode.HighQuality);
+                dataUrl = CreateTelegramAvatarDataUrl(bytes);
             }
             catch (Exception error) when (error is ArgumentException or InvalidDataException or NotSupportedException or InvalidOperationException)
             {
@@ -185,9 +188,23 @@ public partial class MainWindow
 
         var previous = _telegramAvatarBitmap;
         _telegramAvatarBitmap = bitmap;
+        _telegramAvatarDataUrl = dataUrl;
+        _routeGlobe?.UpdateProfileAvatar(dataUrl);
         if (_profileAvatarImage is not null)
             _profileAvatarImage.Source = bitmap;
         previous?.Dispose();
+    }
+
+    private static string? CreateTelegramAvatarDataUrl(byte[] bytes)
+    {
+        string? mediaType = bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 &&
+            bytes[2] == 0x4E && bytes[3] == 0x47 && bytes[4] == 0x0D && bytes[5] == 0x0A &&
+            bytes[6] == 0x1A && bytes[7] == 0x0A ? "image/png" :
+            bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF ? "image/jpeg" :
+            bytes.Length >= 12 && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F' &&
+            bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P' ? "image/webp" :
+            bytes.Length >= 6 && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F' ? "image/gif" : null;
+        return mediaType is null ? null : $"data:{mediaType};base64,{Convert.ToBase64String(bytes)}";
     }
 
     private void ClearTelegramAvatar()

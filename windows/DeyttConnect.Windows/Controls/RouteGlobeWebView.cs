@@ -212,8 +212,24 @@ public sealed class RouteGlobeWebView : ContentControl
         _ = ExecuteScriptAsync(script);
     }
 
-        private string? _profileDataJson;
+    private string? _profileDataJson;
     private string? _settingsDataJson;
+    private string? _profileAvatarDataUrl;
+
+    public void UpdateProfileAvatar(string? dataUrl)
+    {
+        if (string.Equals(_profileAvatarDataUrl, dataUrl, StringComparison.Ordinal))
+            return;
+        _profileAvatarDataUrl = dataUrl;
+        PushProfileAvatar();
+    }
+
+    private void PushProfileAvatar()
+    {
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null)
+            return;
+        _ = ExecuteScriptAsync($"window.deyttSetProfileAvatar && window.deyttSetProfileAvatar({JsonSerializer.Serialize(_profileAvatarDataUrl)});");
+    }
 
     public void UpdateProfileData(
         bool isSignedIn,
@@ -903,6 +919,7 @@ public sealed class RouteGlobeWebView : ContentControl
                 StopAtlasReadyTimeout();
                 _pageReady = true;
                 QueueStateUpdate();
+                PushProfileAvatar();
             });
             return;
         }
