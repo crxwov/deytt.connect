@@ -1077,8 +1077,9 @@
     }
 
     routeLinks() {
+      if (this.trafficActive && !this.autoExitRouteKey) return [];
       const route = ROUTES[this.route];
-      const activeRoute = this.route === "auto" && this.autoExitRouteKey
+      const activeRoute = (this.trafficActive || this.route === "auto") && this.autoExitRouteKey
         ? ROUTES[this.autoExitRouteKey]
         : route;
       const links = (activeRoute || route).links.filter((link) =>
@@ -1456,6 +1457,7 @@
     }
 
     activeRouteNodeKeys() {
+      if (this.trafficActive) return ROUTES[this.autoExitRouteKey]?.nodes || [];
       if (this.route === "auto") {
         if (this.autoExitRouteKey && ROUTES[this.autoExitRouteKey]) return ROUTES[this.autoExitRouteKey].nodes;
         const key = COUNTRY_EXIT_KEYS[this.autoExitCountry];
@@ -1538,6 +1540,7 @@
         return;
       }
       if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
+      if (this.trafficActive && key !== "user" && !this.activeRouteNodeKeys().includes(key)) return;
 
       const isUser = key === "user";
       const isExit = !isUser && this.activeRouteNodeKeys().includes(key);
@@ -1594,6 +1597,13 @@
       };
       addCandidate(this.labelPlacements.get(key));
       addCandidate(preferredOffset);
+      const originLabel = key === "ru" && /^(уфа|ufa)(?:$|[,\s])/i.test(String(this.userLocation?.city || ""))
+        ? occupied.find(box => box.key === "user") : null;
+      if (originLabel) {
+        const y = originLabel.top - height / 2 - 8 - point.y;
+        addCandidate({ x: preferredOffset.x, y, align: preferredOffset.align });
+        addCandidate({ x: -22, y, align: "right" });
+      }
       for (const align of [preferredOffset.align, preferredOffset.align === "right" ? "left" : "right"]) {
         const x = align === preferredOffset.align
           ? preferredOffset.x
@@ -1601,7 +1611,7 @@
         for (const y of [0, preferredOffset.y, -42, 42, -84, 84, -126, 126, -168, 168])
           addCandidate({ x, y, align });
       }
-      const collides = (candidate) => occupied.some(box =>
+      const collides = (candidate) => (originLabel && candidate.top + height + 8 > originLabel.top) || occupied.some(box =>
         candidate.left < box.left + box.width + 8 && candidate.left + width + 8 > box.left &&
         candidate.top < box.top + box.height + 8 && candidate.top + height + 8 > box.top);
       const offset = candidates.find(candidate => !collides(candidate));
@@ -2055,6 +2065,7 @@
 
     setAnnotationFilter(keys) {
       this.annotationFilter = keys == null ? null : new Set(keys);
+      this.overlayDirty = true;
       this.start();
     }
 
@@ -2100,14 +2111,14 @@
     }
 
     setActiveAutoRoute(routeKey) {
-      const allowed = ["nl", "de", "fi", "it"];
+      const allowed = ["nl", "de", "fi", "it", "ru", "ru-de"];
       const requestedKey = String(routeKey || "").toLowerCase();
       const nextRouteKey = allowed.includes(requestedKey)
         ? requestedKey
         : null;
       if (this.autoExitRouteKey === nextRouteKey) return;
       this.autoExitRouteKey = nextRouteKey;
-      if (this.route === "auto" && nextRouteKey) this.focusRoute();
+      if ((this.trafficActive || this.route === "auto") && nextRouteKey) this.focusRoute();
       // Egress metadata changes the active endpoint, never the user's camera
       // after an active route is selected. The first active route update frames
       // the actual path; later country corrections only refresh its marker.
@@ -2120,6 +2131,8 @@
       if (this.trafficActive === next) return;
       this.trafficActive = next;
       this.trafficStartedAt = next ? performance.now() : 0;
+      this.labelPlacements.clear();
+      this.overlayDirty = true;
       if (!next && this.inspectingStream != null) this.resumeTraffic();
       this.start();
     }
@@ -2127,6 +2140,8 @@
     focusRoute() {
       const focusNodes = this.variant === "observatory"
         ? LOCATION_ORDER
+        : this.trafficActive
+          ? this.activeRouteNodeKeys()
         : this.route === "auto" && this.activeRouteNodeKeys().length
           ? this.activeRouteNodeKeys()
           : ROUTES[this.route].nodes;

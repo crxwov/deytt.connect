@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>./connect · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261021_24">
-  <script defer src="network-atlas.js?v=20261021_24"></script>
-  <script defer src="atlas-init.js?v=20261021_24"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261022_45">
+  <script defer src="network-atlas.js?v=20261022_45"></script>
+  <script defer src="atlas-init.js?v=20261022_45"></script>
 
   <style>
     :root {
@@ -51,6 +51,8 @@
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
+
+    [hidden] { display: none !important; }
 
     html, body {
       width: 100vw;
@@ -195,6 +197,26 @@
       stroke-width: 2;
       stroke-linecap: round;
       stroke-linejoin: round;
+    }
+
+    .nav-label-wrap { display: inline-flex; align-items: center; gap: 9px; white-space: nowrap; }
+
+    @media (max-width: 1100px) {
+      .desktop-header { padding-inline: 20px; gap: 12px; }
+      .brand-area, .window-controls { min-width: 0; }
+      .brand-logo { font-size: 20px; }
+      .nav-item { padding: 9px 10px; font-size: 13px; }
+      .nav-label-wrap { gap: 6px; }
+      .window-controls { gap: 5px; }
+      .icon-btn { width: 34px; height: 34px; }
+    }
+    @media (max-width: 720px) {
+      .desktop-header { padding-inline: 14px; gap: 8px; }
+      .brand-logo { font-size: 18px; }
+      .nav-item { width: 38px; padding: 9px; }
+      .nav-label-wrap > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+      .nav-container { padding: 4px; border-radius: 16px; }
+      .nav-jelly-pill { top: 4px; height: calc(100% - 8px); }
     }
 
     @keyframes jelly-micro-spring {
@@ -1515,8 +1537,21 @@
 
     .profile-grid-2 {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 900px) {
+      .profile-grid-2 { grid-template-columns: minmax(0, 1fr); }
+      .stage-view { padding-inline: 20px; }
+      .quota-heading { flex-wrap: wrap; }
+      .quota-amount { text-align: left; }
+      .profile-hero { flex-wrap: wrap; gap: 18px; }
+      .profile-user-left, .user-info-block { min-width: 0; }
+      .user-name-title { overflow-wrap: anywhere; }
+      .user-sub-status { flex-wrap: wrap; }
+      #masked-key { min-width: 0; overflow-wrap: anywhere; }
     }
 
     .profile-grid-2 > .glass-card:first-child {
@@ -1547,8 +1582,33 @@
       border-radius: 8px;
       background: linear-gradient(90deg, #39E8BD 0%, #38BDF8 100%);
       box-shadow: 0 0 12px rgba(57, 232, 189, 0.4);
-      width: 32%;
+      width: 0;
     }
+
+    .quota-row { margin-top: 20px; }
+    .quota-row + .quota-row { border-top: 1px solid var(--glass-border); padding-top: 18px; }
+    .quota-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; font-size: 13px; }
+    .quota-heading strong { color: #F8FAFC; font-weight: 600; }
+    .quota-amount { color: var(--text-muted); font-size: 12px; text-align: right; }
+    .quota-expiry { margin-top: 7px; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+    .quota-row[data-state="error"] .quota-amount { color: #F5B979; }
+    .quota-row.is-exhausted .gauge-fill { background: #F5B979; box-shadow: none; }
+    .quota-row--awg .gauge-fill { background: var(--accent-azure); box-shadow: none; }
+    .quota-row.is-unlimited .gauge-track { background: linear-gradient(90deg, rgba(57,232,189,.12), rgba(56,189,248,.12)); }
+    .quota-row.is-unlimited .gauge-fill { display: none; }
+    .device-group { border-top: 1px solid var(--glass-border); padding-top: 12px; }
+    .device-group summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 5px 0; color: #F8FAFC; font-size: 13px; font-weight: 600; }
+    .device-group summary::-webkit-details-marker { display: none; }
+    .device-group summary::after { content: "⌄"; color: var(--text-muted); margin-left: auto; transition: transform .15s ease; }
+    .device-group[open] summary::after { transform: rotate(180deg); }
+    .device-group-count { color: var(--text-muted); font-size: 12px; font-weight: 400; }
+    .device-group-body { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
+    .device-group summary:focus-visible { outline: 2px solid var(--accent-azure); outline-offset: 4px; border-radius: 4px; }
+    .device-row { gap: 10px; flex-wrap: wrap; }
+    .device-info { min-width: 0; flex: 1 1 180px; }
+    .device-info > div { min-width: 0; overflow-wrap: anywhere; }
+    .device-row > button { flex-shrink: 0; }
+    @media (prefers-reduced-motion: reduce) { .device-group summary::after { transition: none; } }
 
     .device-list {
       display: flex;
@@ -2548,17 +2608,17 @@
               </div>
               <div class="user-sub-status">
                 <span class="ping-tag" id="profile-sub-tag"><span class="ping-dot" id="profile-sub-dot"></span><span id="profile-sub-status">нет активной подписки</span></span>
-                <span id="profile-sub-sep" style="display:none;">·</span>
-                <span id="profile-sub-expiry" style="display:none;"></span>
+                <span id="profile-sub-sep" hidden>·</span>
+                <span id="profile-sub-expiry" hidden></span>
               </div>
             </div>
           </div>
           <div style="display: flex; gap: 8px; align-items: center;">
-            <button class="btn-renew-tg" id="btn-renew-tg" style="display:none;">
+            <button class="btn-renew-tg" id="btn-renew-tg" hidden>
               <svg viewBox="0 0 24 24">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
               </svg>
-              продлить в telegram ↗
+              <span id="profile-renew-label">продлить в telegram ↗</span>
             </button>
             <button class="btn-select-route" id="btn-login-tg">войти через telegram</button>
           </div>
@@ -2568,26 +2628,37 @@
         <div class="profile-grid-2">
           <!-- Subscription Details Card -->
           <div class="glass-card">
-            <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">подписка и тариф</h3>
+            <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;" id="profile-subscription-title">подписка и тариф</h3>
             <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="profile-sub-tariff-desc">данные тарифа и доступные шлюзы</p>
 
             <div class="stat-gauge-wrap" style="margin-top: 14px;">
               <div class="stat-gauge-header">
-                <span style="color: var(--text-muted); font-size: 13px;">текущий тариф</span>
+                <span style="color: var(--text-muted); font-size: 13px;" id="profile-current-plan-label">текущий тариф</span>
                 <strong style="color: #39E8BD; font-size: 18px; font-family: 'Unbounded', sans-serif;" id="profile-tariff-title">без подписки</strong>
               </div>
               <p style="font-size: 12px; color: #64748B; margin-top: 4px;" id="profile-tariff-detail">подключите telegram для активации доступа</p>
             </div>
 
+            <div class="quota-row" id="profile-main-quota" data-state="loading">
+              <div class="quota-heading"><strong data-quota-title>основная подписка</strong><span class="quota-amount" data-quota-amount>загрузка…</span></div>
+              <div class="gauge-track" data-quota-track hidden><div class="gauge-fill" data-quota-fill></div></div>
+              <p class="quota-expiry" data-quota-expiry></p>
+            </div>
+            <div class="quota-row quota-row--awg" id="profile-awg-quota" data-state="loading">
+              <div class="quota-heading"><strong data-quota-title>amnezia</strong><span class="quota-amount" data-quota-amount>загрузка…</span></div>
+              <div class="gauge-track" data-quota-track hidden><div class="gauge-fill" data-quota-fill></div></div>
+              <p class="quota-expiry" data-quota-expiry></p>
+            </div>
+
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 14px;">
               <div>
-                <span style="font-size: 11.5px; color: var(--text-muted); display: block;">активный выход</span>
+                <span style="font-size: 11.5px; color: var(--text-muted); display: block;" id="profile-egress-label">активный выход</span>
                 <strong style="font-size: 13.5px; color: #FFFFFF; display: inline-flex; align-items: center; gap: 6px;" id="profile-active-route">
                   автоподбор
                 </strong>
               </div>
               <div>
-                <span style="font-size: 11.5px; color: var(--text-muted); display: block;">статус подключения</span>
+                <span style="font-size: 11.5px; color: var(--text-muted); display: block;" id="profile-connection-label">статус подключения</span>
                 <strong style="font-size: 13.5px; color: #CBD5E1; display: block;" id="profile-tunnel-status">
                   отключено
                 </strong>
@@ -2599,7 +2670,7 @@
           <div class="glass-card">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <div>
-                <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">устройства и сессии</h3>
+                <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;" id="profile-devices-title">устройства и сессии</h3>
                 <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="profile-devices-count">подключения и слоты доступа</p>
               </div>
               <button class="btn-select-route" style="font-size: 11.5px; padding: 5px 12px;" id="btn-import-sub">импорт подписки</button>
@@ -2612,8 +2683,8 @@
 
         <!-- Connection Key Box -->
         <div class="glass-card">
-          <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;">ключ подписки</h3>
-          <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">персональная ссылка для подключения других устройств</p>
+          <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;" id="profile-key-title">ключ подписки</h3>
+          <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="profile-key-description">персональная ссылка для подключения других устройств</p>
 
           <div class="key-box">
             <span id="masked-key">ссылка подписки станет доступна после входа в аккаунт</span>
@@ -2812,6 +2883,9 @@
     }
 
     function switchStage(stageId) {
+      if (stageId === "profile" && !stageProfile?.classList.contains("is-active")) {
+        document.querySelectorAll(".device-group[open]").forEach(group => { group.open = false; });
+      }
       const isHome = stageId === "home";
       if (stageHome) {
         stageHome.classList.toggle("is-blurred", !isHome);
@@ -2866,23 +2940,25 @@
       switchStage(stageId);
     };
 
-        function getFlagSvg(code, w = 22, h = 15) {
+    let flagInstance = 0;
+    function getFlagSvg(code, w = 22, h = 15) {
       const c = String(code || "").toUpperCase();
       const rx = 3;
+      const clipId = `flag-${c.toLowerCase()}-${++flagInstance}`;
       if (c === "NL") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-nl"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-nl)"><rect width="24" height="5.33" fill="#C93D4B"/><rect y="5.33" width="24" height="5.34" fill="#F7F7F4"/><rect y="10.67" width="24" height="5.33" fill="#31579A"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="24" height="5.33" fill="#C93D4B"/><rect y="5.33" width="24" height="5.34" fill="#F7F7F4"/><rect y="10.67" width="24" height="5.33" fill="#31579A"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
       }
       if (c === "DE") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-de"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-de)"><rect width="24" height="5.33" fill="#17191E"/><rect y="5.33" width="24" height="5.34" fill="#C83C4A"/><rect y="10.67" width="24" height="5.33" fill="#F0C66B"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="24" height="5.33" fill="#17191E"/><rect y="5.33" width="24" height="5.34" fill="#C83C4A"/><rect y="10.67" width="24" height="5.33" fill="#F0C66B"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
       }
       if (c === "RU") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-ru"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-ru)"><rect width="24" height="5.33" fill="#F7F7F4"/><rect y="5.33" width="24" height="5.34" fill="#477CC0"/><rect y="10.67" width="24" height="5.33" fill="#C83C4A"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="24" height="5.33" fill="#F7F7F4"/><rect y="5.33" width="24" height="5.34" fill="#477CC0"/><rect y="10.67" width="24" height="5.33" fill="#C83C4A"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
       }
       if (c === "FI") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-fi"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-fi)"><rect width="24" height="16" fill="#F7F7F4"/><rect x="6.5" width="4.5" height="16" fill="#3973B4"/><rect y="6" width="24" height="4" fill="#3973B4"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="24" height="16" fill="#F7F7F4"/><rect x="6.5" width="4.5" height="16" fill="#3973B4"/><rect y="6" width="24" height="4" fill="#3973B4"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
       }
       if (c === "IT") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="f-it"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#f-it)"><rect width="8" height="16" fill="#168B4B"/><rect x="8" width="8" height="16" fill="#F7F7F4"/><rect x="16" width="8" height="16" fill="#D0474D"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="8" height="16" fill="#168B4B"/><rect x="8" width="8" height="16" fill="#F7F7F4"/><rect x="16" width="8" height="16" fill="#D0474D"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
       }
       if (c === "RU-DE") {
         return `<span class="dual-flag">${getFlagSvg("RU", 18, 12)}<span style="opacity:0.5;font-size:10px;margin:0 1px;">→</span>${getFlagSvg("DE", 18, 12)}</span>`;
@@ -2963,80 +3039,143 @@
       avatar.classList.add("has-image");
     };
 
+    function renderQuota(id, title, quota, signedIn) {
+      const row = document.getElementById(id);
+      if (!row) return;
+      const english = document.documentElement.lang === "en";
+      const copy = (ru, en) => english ? en : ru;
+      const amount = row.querySelector("[data-quota-amount]");
+      const expiry = row.querySelector("[data-quota-expiry]");
+      const track = row.querySelector("[data-quota-track]");
+      const fill = row.querySelector("[data-quota-fill]");
+      row.querySelector("[data-quota-title]").textContent = title;
+      const state = !signedIn ? "absent" : quota?.state || "loading";
+      row.dataset.state = state;
+      row.classList.remove("is-unlimited", "is-exhausted");
+      track.hidden = true;
+      track.removeAttribute("role");
+      for (const name of ["aria-valuenow", "aria-valuemin", "aria-valuemax", "aria-valuetext", "aria-label"]) track.removeAttribute(name);
+      fill.style.width = "0%";
+      expiry.textContent = "";
+      if (state !== "ready") {
+        amount.textContent = !signedIn ? copy("войдите в telegram", "sign in with telegram")
+          : state === "absent" ? copy("нет активного плана", "no active plan")
+          : state === "error" ? copy("данные недоступны", "data unavailable")
+          : copy("загрузка…", "loading…");
+        return;
+      }
+      const used = Number.isFinite(quota.usedBytes) && quota.usedBytes >= 0 ? quota.usedBytes : null;
+      const limit = Number.isFinite(quota.limitBytes) && quota.limitBytes > 0 ? quota.limitBytes : null;
+      const bytes = value => {
+        const units = english ? ["B", "KB", "MB", "GB", "TB", "PB"] : ["Б", "КБ", "МБ", "ГБ", "ТБ", "ПБ"];
+        const unit = value > 0 ? Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024))) : 0;
+        return new Intl.NumberFormat(english ? "en-US" : "ru-RU", { maximumFractionDigits: 1 }).format(value / 1024 ** unit) + " " + units[unit];
+      };
+      amount.textContent = used === null ? copy("расход недоступен", "usage unavailable")
+        : quota.unlimitedTraffic ? copy(`израсходовано ${bytes(used)} · безлимит`, `${bytes(used)} used · unlimited`)
+        : limit !== null ? copy(`израсходовано ${bytes(used)} из ${bytes(limit)}`, `${bytes(used)} of ${bytes(limit)} used`)
+        : copy(`израсходовано ${bytes(used)} · лимит неизвестен`, `${bytes(used)} used · limit unavailable`);
+      if (used !== null && (limit !== null || quota.unlimitedTraffic)) {
+        track.hidden = false;
+        row.classList.toggle("is-unlimited", Boolean(quota.unlimitedTraffic));
+        if (!quota.unlimitedTraffic) {
+          const percent = Math.min(100, used / limit * 100);
+          fill.style.width = percent + "%";
+          track.setAttribute("role", "progressbar");
+          track.setAttribute("aria-label", title);
+          track.setAttribute("aria-valuemin", "0");
+          track.setAttribute("aria-valuemax", "100");
+          track.setAttribute("aria-valuenow", String(Math.round(percent)));
+          track.setAttribute("aria-valuetext", amount.textContent);
+          row.classList.toggle("is-exhausted", used >= limit);
+        }
+      }
+      const end = quota.expiresAt ? new Date(quota.expiresAt) : null;
+      if (quota.unlimitedTime) expiry.textContent = copy("без ограничения срока", "no expiry date");
+      else if (end && Number.isFinite(end.getTime())) {
+        const date = new Intl.DateTimeFormat(english ? "en-US" : "ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(end);
+        const days = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86400000));
+        expiry.textContent = end.getTime() <= Date.now()
+          ? copy(`срок истёк ${date}`, `expired ${date}`)
+          : copy(`до ${date} · осталось ${days} дн.`, `until ${date} · ${days} days left`);
+      } else expiry.textContent = copy("срок недоступен", "expiry unavailable");
+    }
+
     // Real Profile and Settings data bridge from C# host
     window.deyttSetProfileData = function(data) {
       if (!data) return;
+      const english = document.documentElement.lang === "en";
+      const copy = (ru, en) => english ? en : ru;
+      const staticCopy = [
+        ['#stage-profile .stage-title', 'профиль и подписка', 'profile and subscription'],
+        ['#stage-profile .stage-subtitle', 'управление учетной записью, активными устройствами и ключом доступа', 'manage your account, devices and access key'],
+        ['#profile-subscription-title', 'подписка и тариф', 'subscription and plan'],
+        ['#profile-sub-tariff-desc', 'данные тарифа и доступные шлюзы', 'plan details and available gateways'],
+        ['#profile-devices-title', 'устройства и сессии', 'devices and sessions'],
+        ['#profile-current-plan-label', 'текущий тариф', 'current plan'],
+        ['#profile-egress-label', 'активный выход', 'active exit'],
+        ['#profile-connection-label', 'статус подключения', 'connection status'],
+        ['#profile-key-title', 'ключ подписки', 'subscription key'],
+        ['#profile-key-description', 'персональная ссылка для подключения других устройств', 'personal link for connecting your other devices'],
+        ['#profile-renew-label', 'продлить в telegram ↗', 'renew in telegram ↗'],
+        ['#btn-login-tg', 'войти через telegram', 'sign in with telegram'],
+        ['#btn-import-sub', 'импорт подписки', 'import subscription'],
+        ['#btn-copy-key', 'скопировать', 'copy']
+      ];
+      staticCopy.forEach(([selector, ru, en]) => { const element = document.querySelector(selector); if (element) element.textContent = copy(ru, en); });
+      const previous = window.currentProfileData;
       window.currentProfileData = data;
       currentSubscriptionKey = typeof data.subscriptionKey === "string" ? data.subscriptionKey : "";
-      const dName = document.getElementById("profile-display-name");
-      const uName = document.getElementById("profile-username");
-      const pId = document.getElementById("profile-id");
-      const sDot = document.getElementById("profile-sub-dot");
-      const sStatus = document.getElementById("profile-sub-status");
-      const sSep = document.getElementById("profile-sub-sep");
-      const sExp = document.getElementById("profile-sub-expiry");
-      const btnRenew = document.getElementById("btn-renew-tg");
-      const btnLogin = document.getElementById("btn-login-tg");
-      const btnCopyKey = document.getElementById("btn-copy-key");
-      const tTitle = document.getElementById("profile-tariff-title");
-      const tDetail = document.getElementById("profile-tariff-detail");
-      const mKey = document.getElementById("masked-key");
-      const dList = document.getElementById("profile-devices-list");
-      const dCount = document.getElementById("profile-devices-count");
-
-      if (data.isSignedIn) {
-        if (dName) dName.textContent = data.displayName || data.username || "пользователь";
-        if (uName) uName.textContent = data.username ? "@" + data.username.replace(/^@/, "") : "telegram подключен";
-        if (pId) pId.textContent = data.telegramId ? "· id: " + data.telegramId : "";
-        if (btnLogin) btnLogin.style.display = "none";
-        if (btnRenew) btnRenew.style.display = "";
-      } else {
-        if (dName) dName.textContent = "не подключено";
-        if (uName) uName.textContent = "войдите через telegram";
-        if (pId) pId.textContent = "";
-        if (btnLogin) btnLogin.style.display = "";
-        if (btnRenew) btnRenew.style.display = "none";
-      }
-
-      if (data.subscriptionActive) {
-        if (sStatus) sStatus.textContent = "подписка активна";
-        if (sDot) { sDot.style.background = "#39E8BD"; sDot.style.boxShadow = "0 0 8px #39E8BD"; }
-        if (sSep) sSep.style.display = "";
-        if (sExp) {
-          sExp.style.display = "";
-          sExp.textContent = (data.expiresFormatted ? "до " + data.expiresFormatted : "") +
-                             (data.daysRemaining !== undefined ? " (осталось " + data.daysRemaining + " дн.)" : "");
-        }
-        if (tTitle) tTitle.textContent = data.tariffName || "активный тариф";
-        if (tDetail) tDetail.textContent = "доступ ко всем локациям и протоколам";
-      } else {
-        if (sStatus) sStatus.textContent = data.isSignedIn ? "нет активной подписки" : "подписка не проверена";
-        if (sDot) { sDot.style.background = "#94A3B8"; sDot.style.boxShadow = "none"; }
-        if (sSep) sSep.style.display = "none";
-        if (sExp) sExp.style.display = "none";
-        if (tTitle) tTitle.textContent = "без подписки";
-        if (tDetail) tDetail.textContent = "оформите подписку в telegram боте";
-      }
-
-      if (mKey) mKey.textContent = currentSubscriptionKey || "ссылка подписки станет доступна после входа в аккаунт";
-      if (btnCopyKey) btnCopyKey.disabled = !currentSubscriptionKey;
-      if (!dList) return;
-      dList.replaceChildren();
+      const setText = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
+      setText("profile-display-name", data.isSignedIn ? data.displayName || data.username || copy("пользователь", "user") : copy("не подключено", "not connected"));
+      setText("profile-username", data.isSignedIn ? data.username ? "@" + data.username.replace(/^@/, "") : copy("telegram подключен", "telegram connected") : copy("войдите через telegram", "sign in with telegram"));
+      setText("profile-id", data.isSignedIn && data.telegramId ? "· id: " + data.telegramId : "");
+      document.getElementById("btn-login-tg").hidden = Boolean(data.isSignedIn);
+      document.getElementById("btn-renew-tg").hidden = !data.isSignedIn;
+      const dot = document.getElementById("profile-sub-dot");
+      dot.style.background = data.subscriptionActive ? "#39E8BD" : "#94A3B8";
+      dot.style.boxShadow = data.subscriptionActive ? "0 0 8px #39E8BD" : "none";
+      setText("profile-sub-status", data.subscriptionActive ? copy("подписка активна", "subscription active") : data.isSignedIn ? copy("нет активной подписки", "no active subscription") : copy("подписка не проверена", "subscription not checked"));
+      document.getElementById("profile-sub-sep").hidden = !data.subscriptionActive;
+      document.getElementById("profile-sub-expiry").hidden = !data.subscriptionActive;
+      setText("profile-sub-expiry", data.subscriptionActive ? data.mainQuota?.unlimitedTime ? copy("без ограничения срока", "no expiry date") : data.expiresFormatted ? copy("до ", "until ") + data.expiresFormatted : "" : "");
+      setText("profile-tariff-title", data.subscriptionActive ? data.tariffName || copy("активный тариф", "active plan") : copy("без подписки", "no subscription"));
+      setText("profile-tariff-detail", data.subscriptionActive ? copy("доступ ко всем локациям и протоколам", "access to all locations and protocols") : copy("оформите подписку в telegram боте", "subscribe in the telegram bot"));
+      renderQuota("profile-main-quota", copy("основная подписка", "main subscription"), data.mainQuota, data.isSignedIn);
+      renderQuota("profile-awg-quota", "amnezia", data.awgQuota, data.isSignedIn);
+      setText("masked-key", currentSubscriptionKey || copy("ссылка подписки станет доступна после входа в аккаунт", "your subscription link will appear after sign-in"));
+      document.getElementById("btn-copy-key").disabled = !currentSubscriptionKey;
+      const list = document.getElementById("profile-devices-list");
+      if (!list) return;
+      const sameAccount = data.isSignedIn && previous?.isSignedIn && previous.username === data.username && previous.telegramId === data.telegramId;
+      const expanded = new Set(sameAccount ? [...list.querySelectorAll("details[open]")].map(group => group.dataset.group) : []);
+      list.replaceChildren();
       const devices = Array.isArray(data.devices) ? data.devices : [];
       const sessions = Array.isArray(data.sessions) ? data.sessions : [];
-      const addMessage = message => {
-        const empty = document.createElement("span");
-        empty.className = "device-status";
-        empty.textContent = message;
-        dList.append(empty);
+      const addMessage = (target, message) => {
+        const text = document.createElement("span");
+        text.className = "quota-expiry";
+        text.textContent = message;
+        target.append(text);
       };
-      const addGroup = (title, items, kind) => {
-        const heading = document.createElement("strong");
-        heading.className = "device-status";
-        heading.textContent = title;
-        dList.append(heading);
+      const addGroup = (title, items, kind, issue) => {
+        const group = document.createElement("details");
+        group.className = "device-group";
+        group.dataset.group = kind;
+        group.open = expanded.has(kind);
+        const summary = document.createElement("summary");
+        summary.append(document.createTextNode(title));
+        const count = document.createElement("span");
+        count.className = "device-group-count";
+        count.textContent = issue ? "—" : String(items.length);
+        summary.append(count);
+        const body = document.createElement("div");
+        body.className = "device-group-body";
+        group.append(summary, body);
+        list.append(group);
+        if (issue) { addMessage(body, issue); return; }
         if (!items.length) {
-          addMessage(kind === "device" ? "устройств Happ нет" : "активных сеансов нет");
+          addMessage(body, kind === "device" ? copy("устройств Happ нет", "no Happ devices") : copy("активных сеансов нет", "no active sessions"));
           return;
         }
         items.forEach(item => {
@@ -3045,11 +3184,12 @@
           const info = document.createElement("div");
           info.className = "device-info";
           const icon = document.createElement("span");
-          icon.textContent = kind === "device" ? (item.icon || "💻") : "🔑";
+          icon.textContent = kind === "device" ? item.icon || "💻" : "🔑";
+          icon.setAttribute("aria-hidden", "true");
           const labels = document.createElement("div");
           const name = document.createElement("strong");
-          name.style.cssText = "color:#FFFFFF;font-size:13.5px;display:block";
-          name.textContent = item.name || item.label || (kind === "device" ? "устройство Happ" : "сеанс Telegram");
+          name.style.cssText = "color:#F8FAFC;font-size:13.5px;display:block";
+          name.textContent = item.name || item.label || (kind === "device" ? copy("устройство Happ", "Happ device") : copy("сеанс Telegram", "Telegram session"));
           const detail = document.createElement("span");
           detail.style.cssText = "font-size:11.5px;color:var(--text-muted)";
           detail.textContent = item.detail || "";
@@ -3057,27 +3197,24 @@
           info.append(icon, labels);
           const status = document.createElement("span");
           status.className = "device-status";
-          status.textContent = kind === "device" ? (item.isActive ? "активно" : "заблокировано") : (item.current ? "текущий" : "активен");
+          status.textContent = kind === "device" ? item.isActive ? copy("активно", "active") : copy("заблокировано", "blocked") : item.current ? copy("текущий", "current") : copy("активен", "active");
           const button = document.createElement("button");
           button.className = "btn-select-route";
           button.style.cssText = "font-size:11px;padding:5px 10px";
           button.dataset.profileAction = kind;
           button.dataset.profileId = String(item.id || "");
-          button.textContent = kind === "session" && !item.current ? "завершить" : "управлять";
+          button.textContent = kind === "session" && !item.current ? copy("завершить", "end session") : copy("управлять", "manage");
           button.disabled = !button.dataset.profileId;
           row.append(info, status, button);
-          dList.append(row);
+          body.append(row);
         });
       };
-
-      if (!data.isSignedIn) {
-        addMessage("войдите в telegram, чтобы загрузить устройства и сеансы");
-      } else {
-        addGroup("устройства Happ", devices, "device");
-        if (data.sessionsLoadIssue) addMessage(data.sessionsLoadIssue);
-        else addGroup("сеансы Telegram", sessions, "session");
+      if (!data.isSignedIn) addMessage(list, copy("войдите в telegram, чтобы загрузить устройства и сеансы", "sign in with telegram to load devices and sessions"));
+      else {
+        addGroup(copy("устройства Happ", "Happ devices"), devices, "device");
+        addGroup(copy("сеансы Telegram", "Telegram sessions"), sessions, "session", data.sessionsLoadIssue);
       }
-      if (dCount) dCount.textContent = `${devices.length} устройств · ${sessions.length} сеансов`;
+      setText("profile-devices-count", copy(`${devices.length} устройств · ${data.sessionsLoadIssue ? "—" : sessions.length} сеансов`, `${devices.length} devices · ${data.sessionsLoadIssue ? "—" : sessions.length} sessions`));
     };
     window.deyttSetSettingsData = function(data) {
       if (!data) return;

@@ -511,7 +511,8 @@
       return;
     }
     if (event.code !== "Space" && event.key !== " ") return;
-    if (target && target.closest && target.closest("button, [data-action]")) return;
+    if (root.classList.contains("is-blurred")) return;
+    if (target && target.closest && target.closest("button, summary, a, [role='button'], [data-action]")) return;
     event.preventDefault();
     requestImmersive(!immersive);
   });
