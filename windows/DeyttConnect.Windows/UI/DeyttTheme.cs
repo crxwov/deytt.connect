@@ -57,6 +57,21 @@ internal static class DeyttTheme
     public static Color BlueSurface => _palette.BlueSurface;
     public static Color SkySurface => _palette.SkySurface;
     public static Color MintSurface => _palette.MintSurface;
+    public static Color DialogAccent => Color.Parse("#38BDF8");
+    public static Color DialogActionTop => Color.Parse("#1D8CF8");
+    public static Color DialogActionBottom => Color.Parse("#1170DC");
+    public static Color DialogSelected => IsDark ? Color.Parse("#183A3B") : Color.Parse("#E0F7F2");
+    public static Color DialogSelectionLine => Color.FromArgb(125, Mint.R, Mint.G, Mint.B);
+    public static Brush DialogActionFill => new LinearGradientBrush
+    {
+        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+        EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+        GradientStops =
+        {
+            new GradientStop(DialogActionTop, 0),
+            new GradientStop(DialogActionBottom, 1),
+        },
+    };
 
     public static FontFamily InterTight { get; } = new("fonts:DEYTT#Inter Tight");
     public static FontFamily Unbounded { get; } = new("fonts:DEYTT#Unbounded");
@@ -114,6 +129,80 @@ internal static class DeyttTheme
             Padding = padding ?? new Thickness(18),
             Child = child,
         };
+    }
+
+    public static Border DialogCard(Control child, double radius = 22, Thickness? padding = null)
+    {
+        return new Border
+        {
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.Parse(IsDark ? "#E326354B" : "#F8FFFFFF"), 0),
+                    new GradientStop(Color.Parse(IsDark ? "#E6152031" : "#F0EEF2F8"), 1),
+                },
+            },
+            BorderBrush = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.FromArgb(IsDark ? (byte)120 : (byte)180,
+                        IsDark ? (byte)255 : DialogAccent.R, IsDark ? (byte)255 : DialogAccent.G,
+                        IsDark ? (byte)255 : DialogAccent.B), 0),
+                    new GradientStop(Color.FromArgb(70, Line.R, Line.G, Line.B), 1),
+                },
+            },
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(radius),
+            Padding = padding ?? new Thickness(18),
+            BoxShadow = new BoxShadows(new BoxShadow
+            {
+                Blur = 34,
+                Spread = 1,
+                OffsetY = 12,
+                Color = Color.Parse(IsDark ? "#66000000" : "#260C3153"),
+            }),
+            Child = child,
+        };
+    }
+
+    public static Border DialogPrimaryButton(Control label, Action onClick)
+    {
+        label.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        if (label is TextBlock text) text.TextAlignment = TextAlignment.Center;
+        var button = Action(label, onClick);
+        button.BorderBrush = Brush(Colors.Transparent);
+        button.BorderThickness = new Thickness(0);
+        button.CornerRadius = new CornerRadius(14);
+        var surface = new Border
+        {
+            MinHeight = 48,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            CornerRadius = new CornerRadius(14),
+            Child = button,
+        };
+        StyleDialogPrimarySurface(surface);
+        button.PointerEntered += (_, _) => surface.Opacity = 0.94;
+        button.PointerExited += (_, _) => surface.Opacity = 1;
+        return surface;
+    }
+
+    public static void StyleDialogPrimarySurface(Border surface)
+    {
+        surface.Background = DialogActionFill;
+        surface.BorderBrush = Brush(Color.FromArgb(90, 255, 255, 255));
+        surface.BorderThickness = new Thickness(1);
+        surface.BoxShadow = new BoxShadows(new BoxShadow
+        {
+            Blur = 24,
+            OffsetY = 6,
+            Color = Color.Parse("#661D8CF8"),
+        });
     }
 
     public static Button Action(Control child, Action onClick)

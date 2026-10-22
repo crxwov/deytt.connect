@@ -22,6 +22,8 @@ public partial class MainWindow
     private DateTimeOffset _homeProbeUpdatedAt;
     private string? _homeMeasurementSession;
     private bool _initialNetherlandsRouteProbeStarted;
+    private TelegramAwgTraffic? _awgTraffic;
+    private string _awgTrafficState = "absent";
 
     private void RefreshHomeConnectionMeasurement(bool forceRefresh = false)
     {
@@ -192,8 +194,8 @@ public partial class MainWindow
         // A normal IP lookup follows the machine's upstream VPN; it cannot prove
         // which exit the DEYTT tunnel selected.
         map.EgressCountryCode = null;
-        map.ActiveAutoRouteKey = _selectedRoute == "auto" && IsVpnDisplayConnected()
-            ? ConfirmedHomeAutoRouteKey()
+        map.ActiveAutoRouteKey = IsVpnDisplayConnected()
+            ? ConfirmedHomeRouteKey()
             : null;
         var presentation = BuildHomePresentation();
         map.HomePresentation = presentation;
@@ -250,8 +252,8 @@ public partial class MainWindow
             // A normal IP lookup follows the machine's upstream VPN (for example Happ).
             // It cannot prove which exit the DEYTT tunnel selected.
             map.EgressCountryCode = null;
-            map.ActiveAutoRouteKey = _selectedRoute == "auto" && IsVpnDisplayConnected()
-                ? ConfirmedHomeAutoRouteKey()
+            map.ActiveAutoRouteKey = IsVpnDisplayConnected()
+                ? ConfirmedHomeRouteKey()
                 : null;
 
             if (map.Parent is Panel oldHost)
@@ -836,20 +838,43 @@ public partial class MainWindow
         map.ReducedMotion = _reduceMotion;
         map.DarkTheme = DeyttTheme.IsDark;
         map.EgressCountryCode = null;
-        map.ActiveAutoRouteKey = _selectedRoute == "auto" && IsVpnDisplayConnected()
-            ? ConfirmedHomeAutoRouteKey()
+        map.ActiveAutoRouteKey = IsVpnDisplayConnected()
+            ? ConfirmedHomeRouteKey()
             : null;
         map.HomePresentation = BuildHomePresentation();
         map.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
 
         var signedIn = _sessionToken is not null;
         var sub = _account?.Subscription;
+        var mainQuotaState = !signedIn
+            ? "absent"
+            : _account is null
+                ? _profileLoadIssue is null ? "loading" : "error"
+                : sub?.Active == true ? "ready" : "absent";
+        var mainQuota = new
+        {
+            state = mainQuotaState,
+            usedBytes = mainQuotaState == "ready" ? sub?.TrafficUsedBytes : null,
+            limitBytes = mainQuotaState == "ready" ? sub?.TrafficLimitBytes : null,
+            unlimitedTraffic = mainQuotaState == "ready" && sub?.UnlimitedTraffic == true,
+            expiresAt = mainQuotaState == "ready" ? ToUtcIso(sub?.ExpiresAt) : null,
+            unlimitedTime = mainQuotaState == "ready" && sub?.UnlimitedTime == true,
+        };
+        var awgQuota = new
+        {
+            state = signedIn ? _awgTrafficState : "absent",
+            usedBytes = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.UsedBytes : null,
+            limitBytes = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.QuotaBytes : null,
+            unlimitedTraffic = signedIn && _awgTrafficState == "ready" && _awgTraffic?.QuotaBytes == 0,
+            expiresAt = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.ExpiresAt : null,
+            unlimitedTime = signedIn && _awgTrafficState == "ready" && _awgTraffic?.ExpiresAt is null,
+        };
         string? expiresFormatted = null;
         int? daysRemaining = null;
-        if (!string.IsNullOrEmpty(sub?.ExpiresAt) && DateTimeOffset.TryParse(sub.ExpiresAt, out var parsedExpiry))
+        if (!string.IsNullOrEmpty(sub?.ExpiresAt) && DateTimeOffset.TryParse(ToUtcIso(sub.ExpiresAt), out var parsedExpiry))
         {
-            expiresFormatted = parsedExpiry.ToString("d MMMM yyyy г.", new System.Globalization.CultureInfo("ru-RU"));
-            daysRemaining = Math.Max(0, (int)(parsedExpiry - DateTimeOffset.UtcNow).TotalDays);
+            expiresFormatted = parsedExpiry.ToLocalTime().ToString("d MMMM yyyy", UiCulture);
+            daysRemaining = Math.Max(0, (int)Math.Ceiling((parsedExpiry - DateTimeOffset.UtcNow).TotalDays));
         }
 
         var devices = (_keysSnapshot?.HappDevices ?? []).Select(d => new
@@ -898,7 +923,9 @@ public partial class MainWindow
             subKey,
             devices,
             sessions,
-            _sessionLoadIssue
+            _sessionLoadIssue,
+            mainQuota,
+            awgQuota
         );
 
         var splitStore = WindowsSplitTunnelStore.Load();
@@ -918,6 +945,17 @@ public partial class MainWindow
             WindowsUpdateClient.GetInstalledVersion()?.ToString(3) ?? "—"
         );
         EnsureInitialNetherlandsRouteProbe();
+    }
+
+    private static string? ToUtcIso(string? value) =>
+        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
+            : null;
+
+    private void ClearAwgTraffic(string state = "absent")
+    {
+        _awgTraffic = null;
+        _awgTrafficState = state;
     }
 
     private async Task CopySubscriptionKeyToClipboardAsync()
@@ -956,9 +994,11 @@ public partial class MainWindow
         }
     }
 
-    private string? ConfirmedHomeAutoRouteKey()
+    private string? ConfirmedHomeRouteKey()
     {
         var activeTag = _vpnSnapshot.ActiveRouteTag;
+        if (string.IsNullOrWhiteSpace(activeTag) && _selectedRoute != "auto")
+            activeTag = _vpnSnapshot.RouteTag;
         if (string.IsNullOrWhiteSpace(activeTag)) return null;
         var route = _routes.FirstOrDefault(candidate => candidate.Tag == activeTag && candidate.CountryCode != "AUTO");
         return route is null ? null : RouteGlobeWebView.RouteKeyFor(route.CountryCode);

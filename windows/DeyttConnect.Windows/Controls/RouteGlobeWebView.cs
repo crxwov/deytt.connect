@@ -243,7 +243,9 @@ public sealed class RouteGlobeWebView : ContentControl
         string? subscriptionKey,
         IReadOnlyList<object>? devices,
         IReadOnlyList<object>? sessions,
-        string? sessionsLoadIssue)
+        string? sessionsLoadIssue,
+        object mainQuota,
+        object awgQuota)
     {
         var payload = new
         {
@@ -258,7 +260,9 @@ public sealed class RouteGlobeWebView : ContentControl
             subscriptionKey,
             devices,
             sessions,
-            sessionsLoadIssue
+            sessionsLoadIssue,
+            mainQuota,
+            awgQuota
         };
         _profileDataJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         _ = ExecuteScriptAsync($"window.deyttSetProfileData && window.deyttSetProfileData({_profileDataJson});");
@@ -951,7 +955,7 @@ public sealed class RouteGlobeWebView : ContentControl
         {
             Dispatcher.UIThread.Post(() =>
             {
-                if (VisualRoot is Window window)
+                if (TopLevel.GetTopLevel(this) is Window window)
                     window.WindowState = WindowState.Minimized;
             });
             return;
@@ -960,7 +964,7 @@ public sealed class RouteGlobeWebView : ContentControl
         {
             Dispatcher.UIThread.Post(() =>
             {
-                if (VisualRoot is Window window)
+                if (TopLevel.GetTopLevel(this) is Window window)
                     window.WindowState = window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
             });
             return;
@@ -971,7 +975,7 @@ public sealed class RouteGlobeWebView : ContentControl
             {
                 if (_atlasFailed || !ReferenceEquals(sender, _webView))
                     return;
-                if (VisualRoot is Window window)
+                if (TopLevel.GetTopLevel(this) is Window window)
                 {
                     if (ExitRequested is { } exitRequested)
                         exitRequested();

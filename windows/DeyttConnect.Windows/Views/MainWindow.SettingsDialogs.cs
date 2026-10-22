@@ -201,22 +201,13 @@ public partial class MainWindow
         }
 
         // 0. Presets Section
-        var presetsSection = new Border
-        {
-            Background = DeyttTheme.Brush(DeyttTheme.Surface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(14, 12)
-        };
-
         var presetsCardStack = new StackPanel { Spacing = 10 };
-        presetsSection.Child = presetsCardStack;
+        var presetsSection = DeyttTheme.DialogCard(presetsCardStack, 14, new Thickness(14, 12));
 
         var presetsHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         var presetsTitleRow = new StackPanel { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 8, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
         presetsTitleRow.Children.Add(DeyttTheme.TextBlock(Copy("ПРЕСЕТЫ НАСТРОЕК", "PRESETS"), 11, DeyttTheme.Muted, FontWeight.Bold));
-        var presetsCountBadge = DeyttTheme.TextBlock(Copy($"{presets.Count}", $"{presets.Count}"), 11, DeyttTheme.Blue, FontWeight.SemiBold);
+        var presetsCountBadge = DeyttTheme.TextBlock(Copy($"{presets.Count}", $"{presets.Count}"), 11, DeyttTheme.DialogAccent, FontWeight.SemiBold);
         presetsTitleRow.Children.Add(presetsCountBadge);
         presetsHeader.Children.Add(presetsTitleRow);
 
@@ -227,7 +218,7 @@ public partial class MainWindow
             Background = Brushes.Transparent,
             BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
             BorderThickness = new Thickness(1),
-            Foreground = DeyttTheme.Brush(DeyttTheme.Blue),
+            Foreground = DeyttTheme.Brush(DeyttTheme.DialogAccent),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(10, 4),
             FontSize = 11,
@@ -257,7 +248,7 @@ public partial class MainWindow
         {
             Content = Copy("Создать", "Create"),
             Classes = { "deytt-button" },
-            Background = DeyttTheme.Brush(DeyttTheme.Blue),
+            Background = DeyttTheme.Brush(DeyttTheme.DialogActionBottom),
             Foreground = Brushes.White,
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(12, 4),
@@ -356,7 +347,7 @@ public partial class MainWindow
         // Card 1: Bypass mode
         var bypassHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         bypassModeTitle = DeyttTheme.TextBlock(Copy("Обход VPN для списка", "Bypass VPN for list"), 13, weight: FontWeight.SemiBold);
-        bypassModeCheck = DeyttTheme.TextBlock("✓", 13, DeyttTheme.Blue, FontWeight.Bold);
+        bypassModeCheck = DeyttTheme.TextBlock("✓", 13, DeyttTheme.Mint, FontWeight.Bold);
         bypassHeader.Children.Add(bypassModeTitle);
         bypassHeader.Children.Add(bypassModeCheck);
         Grid.SetColumn(bypassModeTitle, 0);
@@ -392,7 +383,7 @@ public partial class MainWindow
         // Card 2: VPN only mode
         var vpnOnlyHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         vpnOnlyModeTitle = DeyttTheme.TextBlock(Copy("VPN только для списка", "VPN only for list"), 13, weight: FontWeight.SemiBold);
-        vpnOnlyModeCheck = DeyttTheme.TextBlock("✓", 13, DeyttTheme.Blue, FontWeight.Bold);
+        vpnOnlyModeCheck = DeyttTheme.TextBlock("✓", 13, DeyttTheme.Mint, FontWeight.Bold);
         vpnOnlyHeader.Children.Add(vpnOnlyModeTitle);
         vpnOnlyHeader.Children.Add(vpnOnlyModeCheck);
         Grid.SetColumn(vpnOnlyModeTitle, 0);
@@ -436,9 +427,9 @@ public partial class MainWindow
             var isVpnOnly = string.Equals(currentMode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
             if (!isVpnOnly)
             {
-                bypassModeCard!.Background = DeyttTheme.Brush(DeyttTheme.Selected);
-                bypassModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine);
-                bypassModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Blue);
+                bypassModeCard!.Background = DeyttTheme.Brush(DeyttTheme.DialogSelected);
+                bypassModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine);
+                bypassModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Mint);
                 bypassModeCheck!.IsVisible = true;
 
                 vpnOnlyModeCard!.Background = DeyttTheme.Brush(DeyttTheme.Surface);
@@ -453,9 +444,9 @@ public partial class MainWindow
                 bypassModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
                 bypassModeCheck!.IsVisible = false;
 
-                vpnOnlyModeCard!.Background = DeyttTheme.Brush(DeyttTheme.Selected);
-                vpnOnlyModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine);
-                vpnOnlyModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Blue);
+                vpnOnlyModeCard!.Background = DeyttTheme.Brush(DeyttTheme.DialogSelected);
+                vpnOnlyModeCard.BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine);
+                vpnOnlyModeTitle!.Foreground = DeyttTheme.Brush(DeyttTheme.Mint);
                 vpnOnlyModeCheck!.IsVisible = true;
             }
         }
@@ -479,8 +470,8 @@ public partial class MainWindow
 
         var baseBadge = new Border
         {
-            Background = DeyttTheme.Brush(DeyttTheme.Selected),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine),
+            Background = DeyttTheme.Brush(DeyttTheme.DialogSelected),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(8, 2),
@@ -528,13 +519,13 @@ public partial class MainWindow
                     11, DeyttTheme.Muted)
             }
         };
-        baseRulesSection.Children.Add(DeyttTheme.Card(baseCardContent, DeyttTheme.Surface, DeyttTheme.Line, 14, new Thickness(14, 12)));
+        baseRulesSection.Children.Add(DeyttTheme.DialogCard(baseCardContent, 14, new Thickness(14, 12)));
         rootStack.Children.Add(baseRulesSection);
 
         // 3. Custom Domains Section
         var domainsSection = new StackPanel { Spacing = 8 };
         var domainsHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        var domainsTitle = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.Blue, FontWeight.SemiBold);
+        var domainsTitle = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.DialogAccent, FontWeight.SemiBold);
         domainsHeaderGrid.Children.Add(domainsTitle);
         Grid.SetColumn(domainsTitle, 0);
 
@@ -607,7 +598,7 @@ public partial class MainWindow
         // 4. Custom Processes Section
         var processSection = new StackPanel { Spacing = 8 };
         var processHeaderGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        var processTitle = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.Blue, FontWeight.SemiBold);
+        var processTitle = DeyttTheme.TextBlock(string.Empty, 12, DeyttTheme.DialogAccent, FontWeight.SemiBold);
         processHeaderGrid.Children.Add(processTitle);
         Grid.SetColumn(processTitle, 0);
 
@@ -630,9 +621,9 @@ public partial class MainWindow
         {
             Content = Copy("⚡ Выбрать из запущенных", "⚡ Pick from running apps"),
             Height = 38,
-            Background = DeyttTheme.Brush(DeyttTheme.Selected),
-            Foreground = DeyttTheme.Brush(DeyttTheme.Blue),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.SelectedLine),
+            Background = DeyttTheme.Brush(DeyttTheme.DialogSelected),
+            Foreground = DeyttTheme.Brush(DeyttTheme.Mint),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             FontWeight = FontWeight.SemiBold,
@@ -940,7 +931,7 @@ public partial class MainWindow
                 foreach (var p in customProcesses.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray())
                 {
                     var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
-                    var icon = DeyttTheme.TextBlock("⚡", 12, DeyttTheme.Sky);
+                    var icon = DeyttTheme.TextBlock("⚡", 12, DeyttTheme.DialogAccent);
                     row.Children.Add(icon);
                     Grid.SetColumn(icon, 0);
 
@@ -987,8 +978,8 @@ public partial class MainWindow
                 {
                     CornerRadius = new CornerRadius(10),
                     BorderThickness = new Thickness(isActive ? 1.5 : 1),
-                    BorderBrush = DeyttTheme.Brush(isActive ? DeyttTheme.SelectedLine : DeyttTheme.Line),
-                    Background = DeyttTheme.Brush(isActive ? DeyttTheme.Selected : DeyttTheme.Surface2),
+                    BorderBrush = DeyttTheme.Brush(isActive ? DeyttTheme.DialogSelectionLine : DeyttTheme.Line),
+                    Background = DeyttTheme.Brush(isActive ? DeyttTheme.DialogSelected : DeyttTheme.Surface2),
                     Padding = new Thickness(10, 6),
                     Margin = new Thickness(0, 0, 8, 8),
                     Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand)
@@ -1003,13 +994,13 @@ public partial class MainWindow
 
                 if (isActive)
                 {
-                    chipContent.Children.Add(DeyttTheme.TextBlock("✓", 11, DeyttTheme.Blue, FontWeight.Bold));
+                    chipContent.Children.Add(DeyttTheme.TextBlock("✓", 11, DeyttTheme.Mint, FontWeight.Bold));
                 }
 
                 chipContent.Children.Add(DeyttTheme.TextBlock(
                     pr.Name,
                     12,
-                    isActive ? DeyttTheme.Blue : DeyttTheme.Text,
+                    isActive ? DeyttTheme.Mint : DeyttTheme.Text,
                     FontWeight.SemiBold));
 
                 // Small badge showing mode (обход / vpn)
@@ -1072,7 +1063,8 @@ public partial class MainWindow
         refreshAllDynamicUi();
 
         ShellContentDialog? dialog = null;
-        var footerButton = DeyttTheme.PrimaryButton(Copy("Готово", "Done"), () =>
+        var footerButton = DeyttTheme.DialogPrimaryButton(
+            DeyttTheme.TextBlock(Copy("Готово", "Done"), 18, Colors.White, FontWeight.SemiBold, wrap: false), () =>
         {
             dialog?.Close();
         });

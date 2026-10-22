@@ -23,7 +23,7 @@ using DeyttConnect.Windows.Views;
 
 namespace DeyttConnect.Windows.QA;
 
-internal sealed class QaApp : Application
+internal sealed partial class QaApp : Application
 {
     public override void Initialize() => AvaloniaXamlLoader.Load(this);
 
@@ -35,7 +35,9 @@ internal sealed class QaApp : Application
             desktop.MainWindow = BuildWindow(options);
             if (desktop.MainWindow is MainWindow window)
             {
-                if ((desktop.Args ?? []).Contains("--verify-home-action-callbacks", StringComparer.Ordinal))
+                if ((desktop.Args ?? []).Contains("--verify-ui-repairs", StringComparer.Ordinal))
+                    window.Opened += async (_, _) => await RunUiRepairsQaAsync(window, options);
+                else if ((desktop.Args ?? []).Contains("--verify-home-action-callbacks", StringComparer.Ordinal))
                     window.Opened += async (_, _) => await RunHomeActionCallbackQaAsync(window);
                 else if ((desktop.Args ?? []).Contains("--verify-modal-restoration", StringComparer.Ordinal))
                     window.Opened += async (_, _) => await RunModalRestorationQaAsync(window);
@@ -923,11 +925,23 @@ internal sealed class QaApp : Application
             {
                 showTab.Invoke(window, [Enum.Parse(tabType, tab), true]);
                 var expected = tab.ToLowerInvariant();
-                var before = await ReadAtlasSnapshotAsync(core);
-                for (var attempt = 0; (before.SelectedTab != expected || before.ActiveStageVisible is not true) && attempt < 40; attempt++)
+                AtlasSnapshot before = new(0, null, 0, null, null, null);
+                var activeDeadline = DateTimeOffset.UtcNow.AddSeconds(20);
+                while (DateTimeOffset.UtcNow < activeDeadline)
                 {
-                    await Task.Delay(15);
-                    before = await ReadAtlasSnapshotAsync(core);
+                    // Detaching the retained control may replace its native WebView adapter.
+                    core = typeof(RouteGlobeWebView).GetField("_coreWebView2", flags)?.GetValue(globe) as CoreWebView2;
+                    if (core is not null)
+                    {
+                        try
+                        {
+                            before = await ReadAtlasSnapshotAsync(core);
+                            if (before.SelectedTab == expected && before.ActiveStageVisible is true && before.HostActive is true)
+                                break;
+                        }
+                        catch (InvalidOperationException) { }
+                    }
+                    await Task.Delay(100);
                 }
                 if (before.SelectedTab != expected || before.ActiveStageVisible is not true || before.HostActive is not true)
                     throw new InvalidOperationException($"The native {tab} stage was not active before the shell modal.");

@@ -12,6 +12,28 @@ namespace DeyttConnect.Windows.HeadlessTests;
 public sealed class UserFlowHomeTests
 {
     [AvaloniaFact]
+    public void Connected_map_follows_the_confirmed_route_while_another_route_is_selected()
+    {
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+        var routes = new WindowsRoute[]
+        {
+            new("nl", "active-nl", "NL", "Нидерланды", "", "VLESS", "VLESS"),
+            new("de", "selected-de", "DE", "Германия", "", "VLESS", "VLESS"),
+        };
+        var window = new MainWindow(new QaHomeFixture(true, "ru", "de", "home", null, null, routes,
+            new WindowsTunnelSnapshot("connected", "test", "active-nl", HealthCheckedAt: DateTimeOffset.UtcNow,
+                ActiveRouteTag: "active-nl"), DisableNativeMapInitialization: true));
+        try
+        {
+            window.Show(); Dispatcher.UIThread.RunJobs();
+            Assert.Equal("nl", typeof(MainWindow).GetMethod("ConfirmedHomeRouteKey", flags)!.Invoke(window, null));
+            var globe = (RouteGlobeWebView)typeof(MainWindow).GetField("_routeGlobe", flags)!.GetValue(window)!;
+            Assert.Equal("nl", globe.ActiveAutoRouteKey);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void Shell_navigation_cannot_escape_mandatory_first_run()
     {
         const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Instance;
@@ -56,7 +78,7 @@ public sealed class UserFlowHomeTests
             Assert.Equal(city, presentation.City);
             Assert.Equal(protocol, presentation.Protocol);
             Assert.Equal("отключить", presentation.ActionLabel);
-            var key = typeof(MainWindow).GetMethod("ConfirmedHomeAutoRouteKey", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
+            var key = typeof(MainWindow).GetMethod("ConfirmedHomeRouteKey", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
             Assert.Equal(countryCode == "FI" ? "fi" : null, key);
         }
         finally { window.Close(); }

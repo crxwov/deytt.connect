@@ -2897,9 +2897,9 @@ public partial class MainWindow : Window
             var choice = DeyttTheme.Action(
                 DeyttTheme.Card(DeyttTheme.TextBlock(
                         $"{(selected ? "✓  " : string.Empty)}{title}", 16,
-                        selected ? DeyttTheme.Sky : DeyttTheme.Text, FontWeight.SemiBold),
-                    selected ? DeyttTheme.Selected : DeyttTheme.Surface,
-                    selected ? DeyttTheme.SelectedLine : DeyttTheme.Line,
+                        selected ? DeyttTheme.Mint : DeyttTheme.Text, FontWeight.SemiBold),
+                    selected ? DeyttTheme.DialogSelected : DeyttTheme.Surface,
+                    selected ? DeyttTheme.DialogSelectionLine : DeyttTheme.Line,
                     16, new Thickness(16, 13)),
                 () => { });
             choices.Children.Add(choice);
@@ -2938,11 +2938,11 @@ public partial class MainWindow : Window
             var labels = new StackPanel { Spacing = 4 };
             labels.Children.Add(DeyttTheme.TextBlock(
                 $"{(selected ? "✓  " : string.Empty)}{option.Title}", 15,
-                selected ? DeyttTheme.Sky : DeyttTheme.Text, FontWeight.SemiBold));
+                selected ? DeyttTheme.Mint : DeyttTheme.Text, FontWeight.SemiBold));
             labels.Children.Add(DeyttTheme.TextBlock(option.Detail, 12, DeyttTheme.Muted));
             var choice = DeyttTheme.Action(
-                DeyttTheme.Card(labels, selected ? DeyttTheme.Selected : DeyttTheme.Surface,
-                    selected ? DeyttTheme.SelectedLine : DeyttTheme.Line, 16, new Thickness(14, 11)), () => { });
+                DeyttTheme.Card(labels, selected ? DeyttTheme.DialogSelected : DeyttTheme.Surface,
+                    selected ? DeyttTheme.DialogSelectionLine : DeyttTheme.Line, 16, new Thickness(14, 11)), () => { });
             options.Children.Add(choice);
             optionButtons.Add((option.Method, choice));
         }
@@ -3934,6 +3934,7 @@ public partial class MainWindow : Window
             _account = null;
             _keysSnapshot = null;
             _routes = [];
+            ClearAwgTraffic("error");
             _profileLoadIssue = Copy("Не удалось загрузить данные аккаунта.", "Could not load account data.");
         }
 
@@ -3950,20 +3951,36 @@ public partial class MainWindow : Window
         TelegramAccount? verifiedAccount = null,
         IProgress<string>? progress = null)
     {
+        if (_sessionToken == token)
+        {
+            ClearAwgTraffic("loading");
+            if (IsVisible)
+                RenderActiveTabPreservingScroll();
+        }
         var accountTask = verifiedAccount is null
             ? _telegramApi.GetAccountAsync(token, cancellationToken)
             : Task.FromResult(verifiedAccount);
         var subscriptionTask = _telegramApi.GetSubscriptionAsync(token, cancellationToken, progress);
+        var awgTrafficTask = LoadAwgTrafficForRefreshAsync(token, cancellationToken);
         var avatarTask = RefreshTelegramAvatarAsync(token, cancellationToken);
         var sessionsTask = LoadSessionsForRefreshAsync(token, cancellationToken);
         if (verifiedAccount is not null)
+        {
             _account = verifiedAccount;
+            if (_sessionToken == token && IsVisible)
+                RenderActiveTabPreservingScroll();
+        }
 
         try
         {
-            await Task.WhenAll(accountTask, subscriptionTask, avatarTask, sessionsTask);
+            await Task.WhenAll(accountTask, subscriptionTask, awgTrafficTask, avatarTask, sessionsTask);
+            if (_sessionToken != token)
+                return false;
             _account = await accountTask;
             _keysSnapshot = await subscriptionTask;
+            var awgTraffic = await awgTrafficTask;
+            _awgTraffic = awgTraffic.Traffic;
+            _awgTrafficState = awgTraffic.State;
             _sessions = await sessionsTask ?? [];
             _routes = _keysSnapshot.Routes;
             _profileLoadIssue = _keysSnapshot.HappAvailable
@@ -3978,14 +3995,28 @@ public partial class MainWindow : Window
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
+            if (_sessionToken != token)
+                return false;
             throw;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            if (_sessionToken != token)
+                return false;
+            if (_sessionToken == token)
+                ClearAwgTraffic("error");
             throw;
         }
         catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
+            if (_sessionToken != token)
+                return false;
+            if (_sessionToken == token && awgTrafficTask.IsCompletedSuccessfully)
+            {
+                var awgTraffic = awgTrafficTask.Result;
+                _awgTraffic = awgTraffic.Traffic;
+                _awgTrafficState = awgTraffic.State;
+            }
             if (accountTask.IsCompletedSuccessfully)
                 _account = accountTask.Result;
             _keysSnapshot = null;
@@ -3997,6 +4028,29 @@ public partial class MainWindow : Window
                 : Copy("Не удалось загрузить маршруты. Повтори обновление позже.",
                     "Could not load routes. Try refreshing again later.");
             return false;
+        }
+    }
+
+    private async Task<(string State, TelegramAwgTraffic? Traffic)> LoadAwgTrafficForRefreshAsync(
+        string token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var traffic = await _telegramApi.GetAwgTrafficAsync(token, cancellationToken);
+            return (traffic is null ? "absent" : "ready", traffic);
+        }
+        catch (TelegramApiException error) when (error.IsUnauthorized)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
+        {
+            return ("error", null);
         }
     }
 
@@ -4745,6 +4799,7 @@ public partial class MainWindow : Window
         _account = null;
         ClearTelegramAvatar();
         _keysSnapshot = null;
+        ClearAwgTraffic();
         _sessions = [];
         _routes = [];
         _selectedRoute = "auto";
@@ -4937,7 +4992,10 @@ public partial class MainWindow : Window
                     if (pairingCancellation.IsCancellationRequested || pairingDialog?.Completion.IsCompleted == true)
                         return;
                     if (_sessionToken is not null && !string.Equals(_sessionToken, pairing.Token, StringComparison.Ordinal))
+                    {
                         ResetRouteViewState();
+                        ClearAwgTraffic();
+                    }
                     WindowsSessionStore.Save(pairing.Token);
                     _sessionToken = pairing.Token;
                     _account = pairing.Account;

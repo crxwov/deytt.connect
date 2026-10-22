@@ -31,7 +31,8 @@ public partial class MainWindow
         cancel.HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         AutomationProperties.SetAutomationId(cancel, "DialogCancelAction");
         AutomationProperties.SetName(cancel, cancelLabel ?? Copy("Отмена", "Cancel"));
-        var confirm = DeyttTheme.PrimaryButton(confirmLabel, () => { });
+        var confirm = DeyttTheme.DialogPrimaryButton(
+            DeyttTheme.TextBlock(confirmLabel, 18, Colors.White, FontWeight.SemiBold, wrap: false), () => { });
         confirm.Height = 48;
         confirm.CornerRadius = new CornerRadius(14);
         if (confirm.Child is Button confirmActionButton)
@@ -152,7 +153,7 @@ public partial class MainWindow
                     VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
                     Children =
                     {
-                        DeyttTheme.TextBlock(title, 21, DeyttTheme.Text, FontWeight.Bold),
+                        DeyttTheme.TextBlock(title, 18, DeyttTheme.Text, FontWeight.Bold, DeyttTheme.Unbounded),
                         close,
                     },
                 };
@@ -197,8 +198,7 @@ public partial class MainWindow
                         HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                     };
                 }
-                var card = DeyttTheme.Card(dialogContents, DeyttTheme.Surface2, DeyttTheme.Line, 21,
-                    new Thickness(24));
+                var card = DeyttTheme.DialogCard(dialogContents, 21, new Thickness(24));
                 card.MaxWidth = cardMaxWidth;
                 card.MaxHeight = availableCardHeight;
                 card.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
@@ -210,6 +210,7 @@ public partial class MainWindow
                     Background = Brushes.Transparent,
                     Focusable = true,
                 };
+                overlay.Resources["AppFocusBrush"] = DeyttTheme.Brush(DeyttTheme.DialogAccent);
                 KeyboardNavigation.SetTabNavigation(overlay, KeyboardNavigationMode.Cycle);
                 if (homePreview is not null)
                     overlay.Children.Add(new Image
@@ -322,4 +323,5 @@ public partial class MainWindow
                 Closed?.Invoke();
         }
     }
+
 }

@@ -94,12 +94,13 @@ public sealed class SetupWindow : UserControl
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SetupImportCommitGate _importCommitGate = new();
     private Task? _activationTask;
-    private readonly StackPanel _body = new() { Spacing = 15 };
+    private readonly StackPanel _body = new() { Spacing = 12 };
     private readonly TextBlock _headline;
     private readonly TextBlock _intro;
     private readonly Border _statusPanel;
     private readonly TextBlock _statusText;
     private readonly Border[] _stepBars = new Border[3];
+    private readonly TextBlock[] _stepIndicators = new TextBlock[3];
 
     private ViewState _state = ViewState.Username;
     private TextBox? _usernameInput;
@@ -124,6 +125,7 @@ public sealed class SetupWindow : UserControl
 
     public SetupWindow(SetupWindowOptions? options = null)
     {
+        Resources["AppFocusBrush"] = DeyttTheme.Brush(DeyttTheme.DialogAccent);
         _options = options ?? new SetupWindowOptions();
         _api = _options.ApiClient ?? new TelegramApiClient();
         _language = string.Equals(_options.Language, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "ru";
@@ -150,7 +152,7 @@ public sealed class SetupWindow : UserControl
         var steps = BuildSteps();
         var content = new StackPanel
         {
-            Spacing = 20,
+            Spacing = 16,
             MaxWidth = 620,
             Children =
             {
@@ -160,8 +162,7 @@ public sealed class SetupWindow : UserControl
                 _body,
             },
         };
-        var card = DeyttTheme.Card(content, DeyttTheme.Surface, DeyttTheme.Line, 25,
-            new Thickness(30, 28));
+        var card = DeyttTheme.DialogCard(content, 25, new Thickness(24));
         card.MaxWidth = 680;
         card.HorizontalAlignment = HorizontalAlignment.Center;
         card.VerticalAlignment = VerticalAlignment.Center;
@@ -1142,29 +1143,38 @@ public sealed class SetupWindow : UserControl
         var isSelected = _selectedRoute?.Id == route.Id;
         var details = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         details.Children.Add(DeyttTheme.TextBlock($"{route.Flag}  {GetRouteTitle(route)}", 14,
-            DeyttTheme.Text, FontWeight.SemiBold));
+            isSelected ? DeyttTheme.Mint : DeyttTheme.Text, FontWeight.SemiBold));
         details.Children.Add(DeyttTheme.TextBlock(
             route.Protocol == "AUTO" ? GetRouteProtocol(route) : $"{GetRouteProtocol(route)}  ·  {route.CountryCode}",
             11, DeyttTheme.Muted));
 
         var row = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            ColumnSpacing = 15,
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            ColumnSpacing = 8,
         };
-        Grid.SetColumn(details, 0);
+        var routeAccent = new Border
+        {
+            Width = 3,
+            Height = 34,
+            CornerRadius = new CornerRadius(2),
+            Background = DeyttTheme.Brush(isSelected ? DeyttTheme.Mint : DeyttTheme.Line),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        row.Children.Add(routeAccent);
+        Grid.SetColumn(details, 1);
         row.Children.Add(details);
         var marker = new Border
         {
             Width = 20,
             Height = 20,
             CornerRadius = new CornerRadius(10),
-            BorderThickness = new Thickness(isSelected ? 6 : 1),
+            BorderThickness = new Thickness(1),
             BorderBrush = DeyttTheme.Brush(isSelected ? DeyttTheme.Mint : DeyttTheme.Line),
-            Background = DeyttTheme.Brush(isSelected ? DeyttTheme.MintSurface : DeyttTheme.Surface2),
+            Background = DeyttTheme.Brush(isSelected ? DeyttTheme.Mint : DeyttTheme.Surface2),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        Grid.SetColumn(marker, 1);
+        Grid.SetColumn(marker, 2);
         row.Children.Add(marker);
 
         var button = new Button
@@ -1172,8 +1182,8 @@ public sealed class SetupWindow : UserControl
             Content = row,
             Padding = new Thickness(13, 10),
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Background = DeyttTheme.Brush(isSelected ? DeyttTheme.Selected : DeyttTheme.Surface2),
-            BorderBrush = DeyttTheme.Brush(isSelected ? DeyttTheme.SelectedLine : DeyttTheme.Line),
+            Background = DeyttTheme.Brush(isSelected ? DeyttTheme.DialogSelected : DeyttTheme.Surface2),
+            BorderBrush = DeyttTheme.Brush(isSelected ? DeyttTheme.DialogSelectionLine : DeyttTheme.Line),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(13),
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -1189,33 +1199,24 @@ public sealed class SetupWindow : UserControl
 
     private Border BuildPrimary(string label, Action action)
     {
-        var text = DeyttTheme.TextBlock(label, 15, DeyttTheme.Background, FontWeight.SemiBold, wrap: false);
+        var text = DeyttTheme.TextBlock(label, 15, Colors.White, FontWeight.SemiBold, wrap: false);
         text.HorizontalAlignment = HorizontalAlignment.Stretch;
         text.TextAlignment = TextAlignment.Center;
-        var button = DeyttTheme.Action(text, action);
+        var surface = DeyttTheme.DialogPrimaryButton(text, action);
+        var button = (Button)surface.Child!;
         button.HorizontalAlignment = HorizontalAlignment.Stretch;
         button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         button.MinHeight = 52;
         _primaryButton = button;
         _primaryLabel = text;
-        return new Border
-        {
-            MinHeight = 52,
-            Background = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(DeyttTheme.Sky, 0), new GradientStop(DeyttTheme.Mint, 1) },
-            },
-            CornerRadius = new CornerRadius(16),
-            Child = button,
-        };
+        surface.MinHeight = 52;
+        return surface;
     }
 
     private Button BuildTextButton(string label, Action action)
     {
         var button = DeyttTheme.Action(
-            DeyttTheme.TextBlock(label, 13, DeyttTheme.Sky, FontWeight.SemiBold), action);
+            DeyttTheme.TextBlock(label, 13, DeyttTheme.DialogAccent, FontWeight.SemiBold), action);
         button.HorizontalAlignment = HorizontalAlignment.Left;
         button.MinHeight = 36;
         return button;
@@ -1290,19 +1291,41 @@ public sealed class SetupWindow : UserControl
         var labels = new[] { "TELEGRAM", Copy("ПОДПИСКА", "SUBSCRIPTION"), Copy("МАРШРУТ", "ROUTE") };
         for (var index = 0; index < labels.Length; index++)
         {
-            var segment = new StackPanel { Spacing = 7 };
-            var bar = new Border
+            var indicator = DeyttTheme.TextBlock($"0{index + 1}", 9, DeyttTheme.Muted,
+                FontWeight.Bold, DeyttTheme.JetBrainsMono, wrap: false);
+            indicator.HorizontalAlignment = HorizontalAlignment.Center;
+            var marker = new Border
             {
-                Height = 3,
-                CornerRadius = new CornerRadius(2),
-                Background = DeyttTheme.Brush(DeyttTheme.Line),
+                Width = 20,
+                Height = 20,
+                CornerRadius = new CornerRadius(10),
+                Background = DeyttTheme.Brush(DeyttTheme.Surface2),
+                BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+                BorderThickness = new Thickness(1),
+                Child = indicator,
+                VerticalAlignment = VerticalAlignment.Center,
             };
-            _stepBars[index] = bar;
-            segment.Children.Add(bar);
-            segment.Children.Add(DeyttTheme.TextBlock(labels[index], 9, DeyttTheme.Muted,
-                FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-            Grid.SetColumn(segment, index);
-            row.Children.Add(segment);
+            _stepIndicators[index] = indicator;
+            var segment = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children = { marker, DeyttTheme.TextBlock(labels[index], 9, DeyttTheme.Muted,
+                    FontWeight.SemiBold, DeyttTheme.JetBrainsMono) },
+            };
+            var card = new Border
+            {
+                Padding = new Thickness(9, 8),
+                CornerRadius = new CornerRadius(12),
+                Background = DeyttTheme.Brush(DeyttTheme.Surface2),
+                BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+                BorderThickness = new Thickness(1),
+                Child = segment,
+            };
+            _stepBars[index] = card;
+            Grid.SetColumn(card, index);
+            row.Children.Add(card);
         }
         return row;
     }
@@ -1344,7 +1367,16 @@ public sealed class SetupWindow : UserControl
     private void UpdateSteps(int activeStep)
     {
         for (var index = 0; index < _stepBars.Length; index++)
-            _stepBars[index].Background = DeyttTheme.Brush(index <= activeStep ? DeyttTheme.Mint : DeyttTheme.Line);
+        {
+            var complete = index < activeStep;
+            var current = index == activeStep;
+            _stepIndicators[index].Text = complete ? "✓" : $"0{index + 1}";
+            _stepIndicators[index].Foreground = DeyttTheme.Brush(complete || current ? DeyttTheme.Mint : DeyttTheme.Muted);
+            _stepBars[index].Background = DeyttTheme.Brush(current
+                ? DeyttTheme.DialogSelected
+                : complete ? DeyttTheme.MintSurface : DeyttTheme.Surface2);
+            _stepBars[index].BorderBrush = DeyttTheme.Brush(complete || current ? DeyttTheme.DialogSelectionLine : DeyttTheme.Line);
+        }
     }
 
     private void SetStatus(string message, Color color)

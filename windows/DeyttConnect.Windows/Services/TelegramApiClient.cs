@@ -102,6 +102,37 @@ public sealed class TelegramApiClient
         return TelegramAccount.ParseProfile(RequiredObject(response.RootElement, "profile"));
     }
 
+    public async Task<TelegramAwgTraffic?> GetAwgTrafficAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await SendJsonAsync(
+            "/api/tg/traffic", HttpMethod.Get, null, token, cancellationToken);
+        var root = response.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("awg", out var awg))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        if (awg.ValueKind == JsonValueKind.Null)
+            return null;
+        if (awg.ValueKind != JsonValueKind.Object ||
+            !awg.TryGetProperty("quota_bytes", out var quota) || quota.ValueKind != JsonValueKind.Number ||
+            !quota.TryGetInt64(out var quotaBytes) || quotaBytes < 0 ||
+            !awg.TryGetProperty("used_bytes", out var used) || used.ValueKind != JsonValueKind.Number ||
+            !used.TryGetInt64(out var usedBytes) || usedBytes < 0)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+
+        if (!awg.TryGetProperty("expires_at", out var expiry) ||
+            expiry.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        var expiresAt = expiry.ValueKind == JsonValueKind.String ? expiry.GetString() : null;
+        if (expiresAt is not null && !TryParseUtc(expiresAt, out expiresAt))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        var daysLeft = awg.TryGetProperty("days_left", out var days) && days.ValueKind == JsonValueKind.Number &&
+                       days.TryGetInt32(out var value)
+            ? value
+            : (int?)null;
+        return new TelegramAwgTraffic(quotaBytes, usedBytes, expiresAt, daysLeft);
+    }
+
     public async Task<byte[]?> GetAvatarAsync(string token, CancellationToken cancellationToken = default)
     {
         if (token.Length is < 32 or > 256)
@@ -966,6 +997,16 @@ public sealed class TelegramApiClient
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) &&
         value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
+    private static bool TryParseUtc(string value, out string utc)
+    {
+        utc = "";
+        if (!DateTimeOffset.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal, out var parsed))
+            return false;
+        utc = parsed.ToUniversalTime().ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+        return true;
+    }
+
     private static bool? ReadBoolean(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) &&
         value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : null;
@@ -990,6 +1031,7 @@ public sealed record TelegramKeysSnapshot(
     string? ProfileJson,
     IReadOnlyList<WindowsRoute> Routes,
     IReadOnlyList<WindowsAwgProfile> AwgProfiles);
+public sealed record TelegramAwgTraffic(long QuotaBytes, long UsedBytes, string? ExpiresAt, int? DaysLeft);
 public sealed record WindowsAwgProfile(
     string RouteId, string? ServerId, string Label, string ShortLabel, string Config, string Generation = "31");
 internal sealed record AwgServer(string Id, string Label, string ShortLabel);
@@ -1015,6 +1057,7 @@ public sealed record TelegramAccount(
         TelegramSubscription? subscription = null;
         if (profile.TryGetProperty("subscription", out var value) && value.ValueKind == JsonValueKind.Object)
         {
+            var trafficLimit = ReadInt64(value, "traffic_limit_bytes");
             subscription = new TelegramSubscription(
                 ReadBoolean(value, "active") ?? false,
                 ReadBoolean(value, "paid_active") ?? false,
@@ -1024,10 +1067,13 @@ public sealed record TelegramAccount(
                 ReadBoolean(value, "unlimited_time") ?? false,
                 ReadInt32(value, "device_limit"),
                 ReadInt32(value, "devices_used"),
-                ReadInt64(value, "traffic_limit_bytes"),
+                trafficLimit,
                 ReadInt64(value, "traffic_used_bytes"))
             {
                 TrafficTotalBytes = ReadInt64(value, "traffic_total_bytes"),
+                UnlimitedTraffic = value.TryGetProperty("traffic_limit_bytes", out var limitValue) &&
+                    (limitValue.ValueKind == JsonValueKind.Null ||
+                     limitValue.ValueKind == JsonValueKind.Number && limitValue.TryGetInt64(out var limit) && limit <= 0),
             };
         }
         return new TelegramAccount(username, firstName, blocked, subscription)
@@ -1070,6 +1116,7 @@ public sealed record TelegramSubscription(
     long? TrafficUsedBytes)
 {
     public long? TrafficTotalBytes { get; init; }
+    public bool UnlimitedTraffic { get; init; }
 }
 
 public sealed class TelegramApiException(string code, HttpStatusCode statusCode) : Exception(code)
