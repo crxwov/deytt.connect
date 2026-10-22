@@ -72,7 +72,7 @@ internal static class TunnelProfileBuilder
         string? upstreamInterface = null,
         IReadOnlyList<string>? customBypassDomains = null,
         IReadOnlyList<string>? customBypassProcesses = null,
-        string? splitTunnelMode = null)
+        string? splitTunnelMode = null, bool pruneUnusedDependencies = true)
     {
         JsonObject root;
         try
@@ -223,6 +223,9 @@ internal static class TunnelProfileBuilder
                 route["rules"] = rules;
             rules.Add(CreateAwgResolveRule((JsonObject)endpointArray![0]!));
         }
+        // The core starts unused endpoints too; their bootstrap failures must not abort the selected route.
+        if (pruneUnusedDependencies)
+            PruneRouteDependencies(root, [engineTag]);
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
     }
 
@@ -243,7 +246,7 @@ internal static class TunnelProfileBuilder
         }
 
         var root = JsonNode.Parse(Build(profileJson, endpoints[0].RouteTag,
-            endpoints[0].AwgConfig, upstreamInterface)) as JsonObject
+            endpoints[0].AwgConfig, upstreamInterface, pruneUnusedDependencies: false)) as JsonObject
                    ?? throw new InvalidDataException("Subscription JSON is invalid.");
         var endpointArray = root["endpoints"] as JsonArray ?? new JsonArray();
         var endpointTags = new HashSet<string>(StringComparer.Ordinal);
@@ -330,6 +333,9 @@ internal static class TunnelProfileBuilder
     }
 
     internal static void PruneProbeDependencies(JsonObject root, IReadOnlyList<ProbeRouteEndpoint> probes)
+        => PruneRouteDependencies(root, probes.Select(probe => AwgConfigTag(probe.RouteTag, probe.AwgConfig)));
+
+    private static void PruneRouteDependencies(JsonObject root, IEnumerable<string> selectedTags)
     {
         var outbounds = root["outbounds"] as JsonArray
                         ?? throw new InvalidDataException("Subscription has no outbounds.");
@@ -342,8 +348,13 @@ internal static class TunnelProfileBuilder
         var requiredEndpointTags = new HashSet<string>(StringComparer.Ordinal);
         var pendingTags = new Queue<string>();
 
-        foreach (var probe in probes)
-            pendingTags.Enqueue(AwgConfigTag(probe.RouteTag, probe.AwgConfig));
+        foreach (var tag in selectedTags)
+            pendingTags.Enqueue(tag);
+        EnqueueTag(root["route"]?["final"]);
+        EnqueueRuleTargets(root["route"]?["rules"]);
+        if (root["dns"]?["servers"] is JsonArray dnsServers)
+            foreach (var server in dnsServers.OfType<JsonObject>())
+                EnqueueTag(server["detour"]);
 
         while (pendingTags.TryDequeue(out var tag))
         {
@@ -363,7 +374,7 @@ internal static class TunnelProfileBuilder
             }
             else
             {
-                throw new InvalidDataException("A diagnostic route dependency is unavailable.");
+                throw new InvalidDataException("A selected route dependency is unavailable.");
             }
         }
 
@@ -377,7 +388,18 @@ internal static class TunnelProfileBuilder
                 .Where(node => requiredEndpointTags.Contains(ReadString(node, "tag")!))
                 .Select(node => (JsonNode?)node.DeepClone()).ToArray());
 
-        PruneProbeDns(root, requiredOutboundTags, requiredEndpointTags, outboundByTag, endpointByTag);
+        PruneDnsDependencies(root, requiredOutboundTags, requiredEndpointTags, outboundByTag, endpointByTag);
+
+        void EnqueueRuleTargets(JsonNode? value)
+        {
+            if (value is not JsonArray rules)
+                return;
+            foreach (var rule in rules.OfType<JsonObject>())
+            {
+                EnqueueTag(rule["outbound"]);
+                EnqueueRuleTargets(rule["rules"]);
+            }
+        }
 
         void EnqueueTags(JsonNode? value)
         {
@@ -395,7 +417,7 @@ internal static class TunnelProfileBuilder
         }
     }
 
-    private static void PruneProbeDns(JsonObject root, HashSet<string> outboundTags,
+    private static void PruneDnsDependencies(JsonObject root, HashSet<string> outboundTags,
         HashSet<string> endpointTags, IReadOnlyDictionary<string, JsonObject> outboundByTag,
         IReadOnlyDictionary<string, JsonObject> endpointByTag)
     {
@@ -430,8 +452,7 @@ internal static class TunnelProfileBuilder
         {
             if (!serversByTag.TryGetValue(tag, out var server))
                 return;
-            if (server["domain_resolver"] is JsonValue resolver &&
-                resolver.TryGetValue<string>(out var resolverTag) && requiredDnsTags.Add(resolverTag))
+            if (ReadDnsTag(server["domain_resolver"]) is { } resolverTag && requiredDnsTags.Add(resolverTag))
                 pendingDnsTags.Enqueue(resolverTag);
         }
 
@@ -442,9 +463,16 @@ internal static class TunnelProfileBuilder
 
         void AddDnsTag(JsonNode? value)
         {
-            if (value is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var tag) &&
-                !string.IsNullOrWhiteSpace(tag))
+            if (ReadDnsTag(value) is { } tag)
                 requiredDnsTags.Add(tag);
+        }
+
+        static string? ReadDnsTag(JsonNode? value)
+        {
+            if (value is JsonObject options)
+                value = options["server"];
+            return value is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var tag) &&
+                   !string.IsNullOrWhiteSpace(tag) ? tag : null;
         }
     }
 

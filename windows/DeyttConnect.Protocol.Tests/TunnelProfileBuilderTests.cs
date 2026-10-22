@@ -224,6 +224,70 @@ public sealed class TunnelProfileBuilderTests
     }
 
     [Fact]
+    public void ConnectionPrunesUnusedWireGuardEndpointsAndTheirSelectors()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        profile["endpoints"] = new JsonArray(new JsonObject
+        {
+            ["type"] = "wireguard",
+            ["tag"] = "unused-wg",
+            ["address"] = new JsonArray("10.8.0.2/32"),
+            ["peers"] = new JsonArray(new JsonObject { ["address"] = "unavailable.invalid" }),
+        });
+        profile["outbounds"]!.AsArray().Add(new JsonObject
+        {
+            ["type"] = "selector",
+            ["tag"] = "unused-wg-selector",
+            ["outbounds"] = new JsonArray("unused-wg"),
+        });
+
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), "route:NL:VLESS"))!.AsObject();
+
+        Assert.False(runtime.ContainsKey("endpoints"));
+        Assert.DoesNotContain(runtime["outbounds"]!.AsArray(), outbound =>
+            outbound!["tag"]!.GetValue<string>() == "unused-wg-selector");
+        Assert.Contains(runtime["outbounds"]!.AsArray(), outbound =>
+            outbound!["tag"]!.GetValue<string>() == "route:NL:VLESS");
+    }
+
+    [Fact]
+    public void ConnectionKeepsDetoursPolicyTargetsAndObjectDnsResolverDependencies()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        var outbounds = profile["outbounds"]!.AsArray();
+        outbounds[1]!["detour"] = "transport-hop";
+        outbounds[1]!["domain_resolver"] = new JsonObject { ["server"] = "bootstrap-dns" };
+        outbounds.Add(new JsonObject { ["type"] = "direct", ["tag"] = "transport-hop" });
+        outbounds.Add(new JsonObject { ["type"] = "direct", ["tag"] = "policy-hop" });
+        profile["route"]!["rules"] = new JsonArray(new JsonObject
+        {
+            ["ip_cidr"] = new JsonArray("192.0.2.0/24"), ["outbound"] = "policy-hop",
+        });
+        profile["dns"]!["servers"] = new JsonArray(
+            new JsonObject { ["type"] = "local", ["tag"] = "local-dns" },
+            new JsonObject { ["type"] = "https", ["tag"] = "remote-dns", ["server"] = "192.0.2.53" },
+            new JsonObject
+            {
+                ["type"] = "https", ["tag"] = "bootstrap-dns", ["server"] = "resolver.example.test",
+                ["domain_resolver"] = new JsonObject { ["server"] = "bootstrap-local" },
+            },
+            new JsonObject { ["type"] = "local", ["tag"] = "bootstrap-local" },
+            new JsonObject { ["type"] = "local", ["tag"] = "unused-dns" });
+
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), "route:NL:VLESS"))!;
+
+        var outboundTags = runtime["outbounds"]!.AsArray()
+            .Select(node => node!["tag"]!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("transport-hop", outboundTags);
+        Assert.Contains("policy-hop", outboundTags);
+        var dnsTags = runtime["dns"]!["servers"]!.AsArray()
+            .Select(node => node!["tag"]!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("bootstrap-dns", dnsTags);
+        Assert.Contains("bootstrap-local", dnsTags);
+        Assert.DoesNotContain("unused-dns", dnsTags);
+    }
+
+    [Fact]
     public void BuildProbeProfilePrunesUnselectedOutboundsEndpointsAndDnsServers()
     {
         const string profile = """

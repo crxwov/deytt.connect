@@ -49,6 +49,7 @@ internal sealed class EngineController
     private int _tunStartupCollisionRetries;
 
     internal sealed record AwgResolution(string Profile, IReadOnlySet<string> FailedEndpointTags);
+    internal sealed record OutboundHostResolution(string Profile, IReadOnlySet<string> FailedOutboundTags);
     internal sealed record ProbeAwgResolution(string Profile, IReadOnlyList<ProbeRouteEndpoint> Endpoints,
         IReadOnlyList<ServiceProbeResult> FailedResults);
 
@@ -144,12 +145,17 @@ internal sealed class EngineController
 
             SetSnapshot(new ServiceSnapshot("starting", "Подготовка VPN…", routeTag));
 
-            var upstreamInterface = FindActiveHappTunnel();
+            // A full TUN must bootstrap on the physical network; binding it to Happ creates a routing loop.
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
-                upstreamInterface, customBypassDomains, customBypassProcesses, splitTunnelMode);
+                null, customBypassDomains, customBypassProcesses, splitTunnelMode);
             preflight = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             // Start independent DNS bootstrap while AWG hosts and the profile are prepared.
             canaryTask = ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync, preflight.Token);
+            var outboundHosts = await ResolveOutboundServerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync,
+                preflight.Token).ConfigureAwait(false);
+            runtimeProfile = outboundHosts.Profile;
+            if (outboundHosts.FailedOutboundTags.Count != 0)
+                return SetError("Не удалось разрешить адрес VPN-сервера до запуска TUN. Проверьте DNS сети и повторите.");
             if (awgConfig is not null)
             {
                 var resolved = await ResolveAwgPeerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync,
@@ -1236,6 +1242,176 @@ internal sealed class EngineController
         }
 
         return new AwgResolution(root.ToJsonString(), failedTags);
+    }
+
+    internal static async Task<OutboundHostResolution> ResolveOutboundServerHostsAsync(string runtimeProfile,
+        Func<string, CancellationToken, Task<IPAddress[]>> resolve,
+        CancellationToken cancellationToken, TimeSpan? timeout = null)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var root = JsonNode.Parse(runtimeProfile) as JsonObject
+                   ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
+        var outbounds = root["outbounds"] as JsonArray
+                        ?? throw new InvalidDataException("Windows tunnel profile has no outbounds.");
+        var servers = outbounds.OfType<JsonObject>()
+            .Select(outbound => (Outbound: outbound, Tag: ReadJsonString(outbound, "tag"),
+                Server: ReadJsonString(outbound, "server")))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Server) &&
+                           !IsIpLiteral(item.Server!))
+            .ToArray();
+        var hosts = servers.Select(item => item.Server!)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout ?? TimeSpan.FromSeconds(15));
+        using var concurrency = new SemaphoreSlim(8, 8);
+        var resolvedHosts = new System.Collections.Concurrent.ConcurrentDictionary<string, IPAddress>(
+            StringComparer.OrdinalIgnoreCase);
+        TimeSpan[] dnsRetryDelays = [TimeSpan.FromMilliseconds(350), TimeSpan.FromMilliseconds(800)];
+
+        async Task ResolveOneAsync(string host)
+        {
+            var acquired = false;
+            try
+            {
+                await concurrency.WaitAsync(deadline.Token).ConfigureAwait(false);
+                acquired = true;
+                for (var attempt = 0; attempt < 3; attempt++)
+                {
+                    using var attemptTimeout = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
+                    attemptTimeout.CancelAfter(TimeSpan.FromSeconds(4));
+                    try
+                    {
+                        var addresses = await resolve(host, attemptTimeout.Token).WaitAsync(attemptTimeout.Token)
+                            .ConfigureAwait(false);
+                        var selected = addresses.Where(address => address.AddressFamily is
+                                AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)
+                            .OrderBy(address => address.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)
+                            .FirstOrDefault();
+                        if (selected is not null)
+                        {
+                            resolvedHosts[host] = selected;
+                            return;
+                        }
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Give a cold-start DNS service another bounded chance.
+                    }
+                    catch (SocketException error) when (IsTransientDnsFailure(error.SocketErrorCode))
+                    {
+                        // DNS can briefly fail while Windows starts or changes networks.
+                    }
+                    catch
+                    {
+                        // A permanent lookup failure is local to this outbound.
+                        return;
+                    }
+
+                    if (attempt < dnsRetryDelays.Length)
+                        await Task.Delay(dnsRetryDelays[attempt], deadline.Token).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                // The shared DNS deadline expired. Unresolved servers are marked failed below.
+            }
+            finally
+            {
+                if (acquired)
+                    concurrency.Release();
+            }
+        }
+
+        try
+        {
+            await Task.WhenAll(hosts.Select(ResolveOneAsync)).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+
+        static bool IsIpLiteral(string server)
+        {
+            var candidate = server.Length > 2 && server[0] == '[' && server[^1] == ']'
+                ? server[1..^1]
+                : server;
+            return IPAddress.TryParse(candidate, out _);
+        }
+
+        var failedTags = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in servers)
+        {
+            var server = item.Server!;
+            if (!resolvedHosts.TryGetValue(server, out var resolved))
+            {
+                if (item.Tag is { Length: > 0 } failedTag)
+                    failedTags.Add(failedTag);
+                continue;
+            }
+
+            var originalHost = server;
+            if (item.Outbound["tls"] is JsonObject tls &&
+                tls["enabled"] is JsonValue enabledValue &&
+                enabledValue.TryGetValue<bool>(out var tlsEnabled) && tlsEnabled &&
+                (tls["server_name"] is null ||
+                 tls["server_name"] is JsonValue serverNameValue &&
+                 serverNameValue.TryGetValue<string>(out var serverName) &&
+                 string.IsNullOrWhiteSpace(serverName)))
+            {
+                tls["server_name"] = originalHost;
+            }
+
+            if (item.Outbound["transport"] is JsonObject transport)
+            {
+                var transportType = ReadJsonString(transport, "type");
+                var hostIsMissing = transport["host"] is null ||
+                                    transport["host"] is JsonValue hostValue &&
+                                    hostValue.TryGetValue<string>(out var transportHost) &&
+                                    string.IsNullOrWhiteSpace(transportHost);
+                var hostListIsEmpty = transport["host"] is JsonArray hostArray && hostArray.Count == 0;
+                if (string.Equals(transportType, "ws", StringComparison.OrdinalIgnoreCase))
+                {
+                    JsonObject? headers = transport["headers"] as JsonObject;
+                    if (headers is null && transport["headers"] is null)
+                    {
+                        headers = new JsonObject();
+                        transport["headers"] = headers;
+                    }
+
+                    if (headers is not null &&
+                        !headers.Any(header => header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)))
+                        headers["Host"] = originalHost;
+                }
+                else if (string.Equals(transportType, "httpupgrade", StringComparison.OrdinalIgnoreCase) &&
+                         (hostIsMissing || hostListIsEmpty))
+                {
+                    transport["host"] = originalHost;
+                }
+                else if (string.Equals(transportType, "http", StringComparison.OrdinalIgnoreCase) &&
+                         (hostIsMissing || hostListIsEmpty))
+                {
+                    transport["host"] = new JsonArray(originalHost);
+                }
+            }
+
+            item.Outbound["server"] = resolved.ToString();
+        }
+
+        return new OutboundHostResolution(root.ToJsonString(), failedTags);
     }
 
     private static bool IsTransientDnsFailure(SocketError error) =>
