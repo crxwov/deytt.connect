@@ -13,8 +13,10 @@ internal sealed class ProtocolLogo(string protocol) : Control
 {
     private static readonly XNamespace SvgNamespace = "http://www.w3.org/2000/svg";
     private static readonly Lazy<Geometry> AmneziaGeometry = new(() => LoadAmneziaGeometry());
-    private static readonly Lazy<Geometry> VlessGeometry = new(() => LoadProtocolGeometry("vless-xray-symbol.svg"));
-    private static readonly Lazy<Geometry> TrojanGeometry = new(() => LoadProtocolGeometry("trojan-horse-symbol.svg"));
+    private static readonly Color VlessColor = Color.Parse("#EEE8D8");
+    private static readonly Color TrojanColor = Color.Parse("#74D8E8");
+    private static readonly Lazy<Geometry> VlessGeometry = new(() => LoadProtocolGeometry("vless-star-symbol.svg"));
+    private static readonly Lazy<Geometry> TrojanGeometry = new(() => LoadProtocolGeometry("trojan-diamond-symbol.svg"));
     private static readonly Lazy<IReadOnlyList<(Geometry Geometry, bool Accent)>> HysteriaGeometries =
         new(() => LoadHysteriaGeometries());
     private readonly string _protocol = protocol.ToUpperInvariant();
@@ -26,9 +28,9 @@ internal sealed class ProtocolLogo(string protocol) : Control
         {
             switch (_protocol)
             {
-                case "VLESS": DrawMark(context, VlessGeometry.Value, DeyttTheme.Blue);
+                case "VLESS": DrawMark(context, VlessGeometry.Value, VlessColor);
                     break;
-                case "TROJAN": DrawMark(context, TrojanGeometry.Value, DeyttTheme.Text);
+                case "TROJAN": DrawMark(context, TrojanGeometry.Value, TrojanColor);
                     break;
                 case "HYSTERIA2":
                     DrawHysteriaMark(context);
