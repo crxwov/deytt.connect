@@ -220,7 +220,13 @@
       });
     }
     function polygonRecord(rings) {
-      return { rings: rings.map(unwrapRing) };
+      const geographicRings = rings.map(unwrapRing);
+      return {
+        rings: geographicRings,
+        vectors: geographicRings.map(function (points) {
+          return points.map(function (point) { return vector(point[1], point[0]); });
+        })
+      };
     }
     function geometryPolygons(geometry) {
       const groups = geometry.type === "Polygon" ? [geometry.arcs] : geometry.arcs;
@@ -250,7 +256,10 @@
     });
     return {
       boundaryLines: decoded.map(boundaryLine),
-      targetBoundaryLines: targetBoundaryLines
+      targetBoundaryLines: targetBoundaryLines,
+      landPolygons: countries.flatMap(function (country) {
+        return country.polygons.map(function (polygon) { return { rings: polygon.vectors }; });
+      })
     };
   }
 
@@ -275,6 +284,7 @@
       this.lastFocusSignature = null;
       this.availableLocationKeys = new Set(LOCATION_ORDER);
       this.showcaseFocused = false;
+      this.overviewMode = false;
       this.hovered = null;
       this.annotationFilter = null;
       this.dragging = false;
@@ -297,6 +307,7 @@
       this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       this.boundaryLines = [];
       this.targetBoundaryLines = [];
+      this.landPolygons = [];
       this.pixelRatio = 1;
       this.staticCanvas = document.createElement("canvas");
       this.staticContext = this.staticCanvas.getContext("2d");
@@ -328,6 +339,7 @@
       const geography = decodeTopology(topology);
       this.boundaryLines = geography.boundaryLines;
       this.targetBoundaryLines = geography.targetBoundaryLines;
+      this.landPolygons = geography.landPolygons;
       this.root.dataset.atlasStatus = "ready";
       this.root.classList.add("is-ready");
       this.resize();
@@ -505,6 +517,27 @@
     projectLocation(location, lift) { return this.projectVector(vector(location.lat, location.lon), lift); }
 
     colors() {
+      const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
+      const windowsDark = document.documentElement.dataset.theme !== "light";
+      if (windowsPalette) return windowsDark ? {
+        sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
+        sphereEdge: "rgba(80,100,130,.22)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+        grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
+        landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
+        border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
+        download: "#FFBD32", downloadHot: "#FFE08A", upload: "#39E8BD", uploadHot: "#90F4DA",
+        control: "#B897FF", controlHot: "#D9C9FF",
+        node: "#F2F5FC", nodeCore: "#39E8BD", label: "#E6ECF5", labelMuted: "#A3B0C2", labelBg: "rgba(15,23,35,.88)", labelLeader: "#A3B0C2", labelBorder: "rgba(163,176,194,.16)"
+      } : {
+        sphereLight: "#D2E5F8", sphereMid: "#BFDBF4", sphereShade: "#A9CFEF",
+        sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+        grid: null, land: "#1299DC", landDim: "#0D86C7", landHot: "#22A6ED", landAlpha: 1,
+        landHighlight: "#22A6ED", landRelief: "rgba(18,55,95,.22)", landLow: "#0974AC",
+        border: "#BAE6FD", borderAlpha: .60, borderWidth: .8, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
+        download: "#D99000", downloadHot: "#FFC857", upload: "#10A889", uploadHot: "#79D6C1",
+        control: "#6E5BB4", controlHot: "#A58CEB",
+        node: "#FFFFFF", nodeCore: "#123A67", label: "#1B2938", labelMuted: "#4D6175", labelBg: "rgba(246,247,251,.96)", labelLeader: "#354B60", labelBorder: "rgba(53,75,96,.22)"
+      };
       const observatory = this.variant === "observatory";
       if (observatory) return {
         sphereLight: "#101832", sphereMid: "#0a1122", sphereShade: "#060a15", sphereEdge: "rgba(129,226,255,.42)", atmosphere: "rgba(99,126,255,.20)", atmosphereSoft: "rgba(99,126,255,.1)", rimLight: "rgba(129,226,255,.4)",
@@ -601,8 +634,169 @@
       context.fill();
     }
 
+    drawLand(colors) {
+      const context = this.context;
+      if (!this.landPolygons.length) return;
+      const horizon = 0.012;
+      const basis = this.currentBasis;
+      const east = basis.east;
+      const north = basis.north;
+      const fwd = basis.forward;
+      const scale = this.radius * this.zoom * 1.001;
+      const cx = this.width / 2;
+      const cy = this.height / 2;
+      const globeX = cx, globeY = cy;
+      const globeRadius = this.radius * this.zoom;
+
+      const findHorizon = (from, to) => {
+        const zFrom = from.x * fwd.x + from.y * fwd.y + from.z * fwd.z;
+        const zTo = to.x * fwd.x + to.y * fwd.y + to.z * fwd.z;
+        const denom = zTo - zFrom;
+        const t = Math.abs(denom) > 1e-6 ? clamp((horizon - zFrom) / denom, 0, 1) : 0.5;
+        const px = from.x + t * (to.x - from.x);
+        const py = from.y + t * (to.y - from.y);
+        const pz = from.z + t * (to.z - from.z);
+        const len = Math.hypot(px, py, pz) || 1;
+        const nx = px / len, ny = py / len, nz = pz / len;
+        return {
+          x: cx + (nx * east.x + ny * east.y + nz * east.z) * scale,
+          y: cy - (nx * north.x + ny * north.y + nz * north.z) * scale,
+          z: horizon
+        };
+      };
+
+      if (!this.projectedRingScratch) this.projectedRingScratch = [];
+      const scratch = this.projectedRingScratch;
+
+      const pathForRing = (ring) => {
+        const len = ring.length;
+        if (len < 3) return [];
+        while (scratch.length < len) scratch.push({ x: 0, y: 0, z: 0 });
+        let firstHidden = -1;
+        let visibleCount = 0;
+        for (let i = 0; i < len; i++) {
+          const pt = ring[i];
+          const z = pt.x * fwd.x + pt.y * fwd.y + pt.z * fwd.z;
+          scratch[i].z = z;
+          if (z <= horizon) {
+            if (firstHidden < 0) firstHidden = i;
+          } else {
+            visibleCount++;
+          }
+        }
+        if (visibleCount === 0) return [];
+        for (let i = 0; i < len; i++) {
+          const pt = ring[i];
+          scratch[i].x = cx + (pt.x * east.x + pt.y * east.y + pt.z * east.z) * scale;
+          scratch[i].y = cy - (pt.x * north.x + pt.y * north.y + pt.z * north.z) * scale;
+        }
+        if (firstHidden < 0) return [scratch.slice(0, len)];
+        const segments = [];
+        let segment = [];
+        for (let step = 0; step < len; step += 1) {
+          const index = (firstHidden + step) % len;
+          const nextIndex = (index + 1) % len;
+          const current = scratch[index];
+          const next = scratch[nextIndex];
+          const currentVisible = current.z > horizon;
+          const nextVisible = next.z > horizon;
+          if (currentVisible && nextVisible) {
+            if (!segment.length) segment.push(current);
+            segment.push(next);
+          } else if (currentVisible && !nextVisible) {
+            if (!segment.length) segment.push(current);
+            segment.push(findHorizon(ring[index], ring[nextIndex]));
+            if (segment.length > 2) segments.push(segment);
+            segment = [];
+          } else if (!currentVisible && nextVisible) {
+            segment = [findHorizon(ring[index], ring[nextIndex]), next];
+          }
+        }
+        if (segment.length > 2) segments.push(segment);
+        return segments;
+      };
+
+      const landPath = new Path2D();
+      const traceClippedRing = (segment, globeX, globeY) => {
+        const first = segment[0];
+        const last = segment[segment.length - 1];
+        landPath.moveTo(first.x, first.y);
+        for (let index = 1; index < segment.length; index += 1)
+          landPath.lineTo(segment[index].x, segment[index].y);
+
+        if (first.z > horizon + .05 || last.z > horizon + .05) {
+          landPath.closePath();
+          return;
+        }
+
+        // A clipped land boundary ends on the globe horizon. Closing it with
+        // one straight chord cuts a visible wedge across the sphere. Follow
+        // the shorter horizon arc instead so the clipped polygon stays on the
+        // globe's silhouette.
+        const globeRadius = this.radius * this.zoom * 1.001;
+        const startAngle = Math.atan2(first.y - globeY, first.x - globeX);
+        const endAngle = Math.atan2(last.y - globeY, last.x - globeX);
+        const arc = Math.atan2(Math.sin(startAngle - endAngle), Math.cos(startAngle - endAngle));
+        const steps = Math.max(1, Math.ceil(Math.abs(arc) * globeRadius / 8));
+        for (let step = 1; step <= steps; step += 1) {
+          const angle = endAngle + arc * step / steps;
+          landPath.lineTo(globeX + Math.cos(angle) * globeRadius, globeY + Math.sin(angle) * globeRadius);
+        }
+        landPath.closePath();
+      };
+
+      const landLight = context.createLinearGradient(
+        globeX - globeRadius * .62, globeY - globeRadius * .68,
+        globeX + globeRadius * .58, globeY + globeRadius * .72);
+      landLight.addColorStop(0, colors.landHighlight || colors.land);
+      landLight.addColorStop(.22, colors.land);
+      landLight.addColorStop(.68, colors.landDim);
+      landLight.addColorStop(1, colors.landLow || colors.landDim);
+      const landEdge = context.createLinearGradient(
+        globeX - globeRadius * .72, globeY - globeRadius * .7,
+        globeX + globeRadius * .62, globeY + globeRadius * .74);
+      landEdge.addColorStop(0, colors.landHighlight || colors.land);
+      landEdge.addColorStop(.52, colors.landDim);
+      landEdge.addColorStop(1, colors.landRelief || colors.landLow || colors.landDim);
+      const traceLand = () => {
+        this.landPolygons.forEach((polygon) => polygon.rings.forEach((ring) => {
+          pathForRing(ring).forEach((segment) => traceClippedRing(segment, globeX, globeY));
+        }));
+      };
+      traceLand();
+      context.save();
+      const isLight = document.documentElement.dataset.theme === "light";
+      const relief = this.options.landDepth === false && !isLight ? 0 : (isLight ? 1.5 : clamp(globeRadius * .014, 2, 5));
+      if (relief) {
+        context.save();
+        const shadowOffsetX = isLight ? 0.6 : (relief * .24);
+        const shadowOffsetY = isLight ? 1.4 : (relief * .56);
+        context.translate(shadowOffsetX, shadowOffsetY);
+        context.fillStyle = colors.landRelief || (isLight ? "rgba(18,55,95,.22)" : "rgba(12,22,34,.64)");
+        context.globalAlpha = isLight ? .50 : .68;
+        context.fill(landPath, "evenodd");
+        context.restore();
+      }
+
+      context.fillStyle = landLight;
+      context.globalAlpha = colors.landAlpha ?? .98;
+      context.shadowColor = "transparent";
+      context.shadowBlur = 0;
+      context.fill(landPath, "evenodd");
+      context.shadowColor = "transparent";
+      context.shadowBlur = 0;
+      context.shadowOffsetX = 0;
+      context.shadowOffsetY = 0;
+      context.globalAlpha = isLight ? .45 : (relief ? .48 : .20);
+      context.lineWidth = isLight ? 0.8 : clamp(globeRadius * .0032, .8, 1.3);
+      context.strokeStyle = landEdge;
+      context.stroke(landPath);
+      context.restore();
+    }
+
     drawBorders(colors) {
       const context = this.context;
+      this.drawLand(colors);
       // Keep the same topology while the camera moves. Decimating every second
       // point during pan/zoom made country outlines visibly change shape.
       const pointStep = 1;
@@ -842,8 +1036,9 @@
       const metaFontSize = Math.round((compact ? 7 : 8) * labelScale);
       const inset = Math.round((compact ? 10 : 12) * labelScale);
       const height = Math.round((compact ? 35 : 39) * labelScale);
-      const titleFont = "700 " + titleFontSize + "px " + (this.options.labelFontFamily || "ui-monospace, SFMono-Regular, Menlo, monospace");
-      const metaFont = "600 " + metaFontSize + "px ui-monospace, SFMono-Regular, Menlo, monospace";
+      const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
+      const titleFont = "700 " + titleFontSize + "px " + fontFamily;
+      const metaFont = "600 " + metaFontSize + "px " + fontFamily;
       context.save();
       context.font = titleFont;
       const titleWidth = context.measureText(title).width;
@@ -1163,6 +1358,7 @@
     }
 
     focusRoute() {
+      if (this.overviewMode) return;
       const focusNodes = this.variant === "observatory"
         ? LOCATION_ORDER
         : this.route === "auto" && this.activeRouteNodeKeys().length

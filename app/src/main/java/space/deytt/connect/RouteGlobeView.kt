@@ -24,6 +24,8 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var egressCountryCode: String? = null
     private var activeAutoRouteKey: String? = null
     private var pageLoaded = false
+    private var backdropStageActive = false
+    private var overviewModeActive = false
     private var availableLocations = setOf("nl", "de", "fi", "ru")
     private var trafficActive = false
     private val atlas: WebView
@@ -33,7 +35,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         @JavascriptInterface
         fun onNodeTap(code: String) {
             val node = code.lowercase()
-            if (node !in setOf("nl", "de", "fi", "ru", "user")) return
+            if (node !in setOf("nl", "de", "fi", "ru", "it", "user")) return
             post { onMapNodeTapped?.invoke(node) }
         }
     }
@@ -74,6 +76,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     pageLoaded = true
+                    applyOverviewMode()
                     applyMapLanguage()
                     applyAvailableLocations()
                     applySelectedRoute()
@@ -81,14 +84,15 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                     applyEgressCountry()
                     applyActiveAutoRoute()
                     applyTrafficActive()
+                    applyBackdropStage()
                 }
             }
             setOnTouchListener { view, event ->
-                when (event.actionMasked) {
-                    MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN ->
-                        view.parent?.requestDisallowInterceptTouchEvent(true)
-                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL ->
-                        view.parent?.requestDisallowInterceptTouchEvent(false)
+                parentInterceptPolicy(event.actionMasked, event.pointerCount)?.let { disallow ->
+                    // Single-finger movement belongs to the pager or Home scroll view. Lock
+                    // interception only once a second finger starts a globe gesture.
+                    if (disallow && backdropStageActive) return@setOnTouchListener false
+                    view.parent?.requestDisallowInterceptTouchEvent(disallow)
                 }
                 false
             }
@@ -135,6 +139,18 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (trafficActive == active) return
         trafficActive = active
         applyTrafficActive()
+    }
+
+    internal fun setBackdropStage(active: Boolean) {
+        if (backdropStageActive == active) return
+        backdropStageActive = active
+        applyBackdropStage()
+    }
+
+    internal fun setOverviewMode(active: Boolean) {
+        if (overviewModeActive == active) return
+        overviewModeActive = active
+        applyOverviewMode()
     }
 
     override fun onAttachedToWindow() {
@@ -217,6 +233,22 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         )
     }
 
+    private fun applyBackdropStage() {
+        if (!pageLoaded) return
+        atlas.evaluateJavascript(
+            "window.deyttSetMapBackdropStage && window.deyttSetMapBackdropStage($backdropStageActive)",
+            null,
+        )
+    }
+
+    private fun applyOverviewMode() {
+        if (!pageLoaded) return
+        atlas.evaluateJavascript(
+            "window.deyttSetMapOverviewMode && window.deyttSetMapOverviewMode($overviewModeActive)",
+            null,
+        )
+    }
+
     private fun mapDescription(route: String): String {
         if (AppLanguage.current(context) == AppLanguage.EN) {
             val destination = when (route) {
@@ -262,6 +294,9 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             "/map/network-atlas.js" -> "route-map/network-atlas.js"
             "/map/network-atlas.css" -> "route-map/network-atlas.css"
             "/map/world-land.json" -> "world-land.json"
+            "/map/fonts/InterTight-Regular.ttf" -> "route-map/fonts/InterTight-Regular.ttf"
+            "/map/fonts/InterTight-SemiBold.ttf" -> "route-map/fonts/InterTight-SemiBold.ttf"
+            "/map/fonts/InterTight-Bold.ttf" -> "route-map/fonts/InterTight-Bold.ttf"
             else -> return blockedResponse()
         }
         val assetName = assetPath.substringAfterLast('/')
@@ -269,6 +304,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             assetName.endsWith(".html") -> "text/html"
             assetName.endsWith(".js") -> "application/javascript"
             assetName.endsWith(".css") -> "text/css"
+            assetName.endsWith(".ttf") -> "font/ttf"
             else -> "application/json"
         }
         return runCatching {
@@ -296,6 +332,13 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
     companion object {
         private const val ASSET_HOST = "appassets.androidplatform.net"
+
+        internal fun parentInterceptPolicy(actionMasked: Int, pointerCount: Int): Boolean? = when {
+            actionMasked == MotionEvent.ACTION_POINTER_DOWN && pointerCount >= 2 -> true
+            actionMasked == MotionEvent.ACTION_POINTER_UP -> pointerCount > 2
+            actionMasked == MotionEvent.ACTION_UP || actionMasked == MotionEvent.ACTION_CANCEL -> false
+            else -> null
+        }
 
         internal fun routeKeyFor(selectedRouteId: String): String {
             val routeTokens = selectedRouteId.uppercase().split(Regex("[^A-Z]+"))

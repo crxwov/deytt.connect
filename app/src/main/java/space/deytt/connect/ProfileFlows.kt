@@ -91,8 +91,8 @@ internal class ProfileFlows(
 
     fun page(): View {
         val root = host.screen(withBackdrop = true)
-        root.addView(host.header(copy("ваш аккаунт", "your account"), "Профиль"))
-        root.addView(spacer(12, host))
+        root.addView(host.header("", "Профиль"))
+        root.addView(spacer(8, host))
         val token = TelegramSessionStore.read(host)
         // Rebuilding the signed-out page must invalidate requests issued before logout too.
         refreshGeneration++
@@ -104,11 +104,11 @@ internal class ProfileFlows(
         }
         root.addView(identityCard(token))
 
-        root.addView(spacer(18, host))
+        root.addView(spacer(12, host))
         root.addView(host.sectionLabel("подписка"))
         val card = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(host.dp(18), host.dp(16), host.dp(18), host.dp(16))
+            setPadding(host.dp(14), host.dp(13), host.dp(14), host.dp(13))
             background = host.rounded(SURFACE, 20f, LINE)
         }
         subscriptionText = host.text(
@@ -137,7 +137,7 @@ internal class ProfileFlows(
             setOnClickListener { showPlanPicker() }
         })
 
-        root.addView(spacer(18, host))
+        root.addView(spacer(12, host))
         val devicesGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
         deviceSummaryText = host.text(
             if (token == null) "Подключите аккаунт, чтобы увидеть устройства."
@@ -164,7 +164,7 @@ internal class ProfileFlows(
         ))
 
         root.addView(accordion(copy("Устройства и сессии", "Devices and sessions"), copy("Подключения и управление доступом", "Connections and access"), devicesGroup))
-        root.addView(spacer(10, host))
+        root.addView(spacer(8, host))
         val helpGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
         helpGroup.addView(host.row("Поддержка", "Диалог с командой DEYTT", "↗", "открыть").apply {
             setOnClickListener { showSupportChoices() }
@@ -254,15 +254,19 @@ internal class ProfileFlows(
     }
 
     private fun accordion(title: String, subtitle: String, content: LinearLayout): View {
-        val group = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
+        val group = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            background = host.rounded(SURFACE, 18f, LINE)
+            clipToOutline = true
+        }
         content.visibility = View.GONE
         val indicator = host.text("+", 22f, MUTED).apply { gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         val toggle = LinearLayout(host).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = host.dp(74)
-            setPadding(host.dp(16), host.dp(12), host.dp(16), host.dp(12))
-            background = host.rounded(SURFACE, 18f, LINE)
+            minimumHeight = host.dp(60)
+            setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(8))
+            background = host.rounded(SURFACE_2, 16f, LINE)
             isClickable = true
             isFocusable = true
             val labels = LinearLayout(host).apply {
@@ -282,6 +286,7 @@ internal class ProfileFlows(
             }
         }
         group.addView(toggle)
+        content.setPadding(host.dp(14), 0, host.dp(14), host.dp(10))
         group.addView(content)
         return group
     }

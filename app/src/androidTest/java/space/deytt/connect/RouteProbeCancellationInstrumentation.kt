@@ -6,9 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.VpnService
-import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import androidx.core.content.ContextCompat
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
@@ -42,12 +42,8 @@ class RouteProbeCancellationInstrumentation : Instrumentation() {
                 check(VpnService.prepare(targetContext) == null) { "VPN permission wasn't granted to the isolated QA package" }
             }
             ProfileValidator.validate(TEST_CONFIG)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                targetContext.registerReceiver(receiver, IntentFilter(RouteProbeClient.ACTION_RESULT), Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                @Suppress("DEPRECATION")
-                targetContext.registerReceiver(receiver, IntentFilter(RouteProbeClient.ACTION_RESULT))
-            }
+            ContextCompat.registerReceiver(targetContext, receiver,
+                IntentFilter(RouteProbeClient.ACTION_RESULT), ContextCompat.RECEIVER_NOT_EXPORTED)
             receiverRegistered = true
 
             requestId = RouteProbeClient.start(

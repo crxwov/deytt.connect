@@ -9,9 +9,41 @@ main {
   background: #0A1018;
 }
 
+html[data-atlas-palette="windows"],
+html[data-atlas-palette="windows"] body,
+html[data-atlas-palette="windows"] main,
+html[data-atlas-palette="windows"] .network-atlas,
+html[data-atlas-palette="windows"] .network-atlas__canvas-wrap {
+  background: transparent !important;
+}
+
 body {
   color-scheme: dark;
-  font-family: sans-serif;
+  font-family: "Inter Tight", "Segoe UI", sans-serif;
+}
+
+@font-face {
+  font-family: "Inter Tight";
+  src: url("fonts/InterTight-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter Tight";
+  src: url("fonts/InterTight-SemiBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Inter Tight";
+  src: url("fonts/InterTight-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
 }
 
 .network-atlas {
@@ -20,6 +52,11 @@ body {
   height: 100%;
   isolation: isolate;
   text-transform: lowercase;
+}
+
+.network-atlas.is-backdrop-stage {
+  filter: blur(16px) brightness(.4);
+  pointer-events: none;
 }
 
 .network-atlas__canvas-wrap {
@@ -76,10 +113,11 @@ html[data-atlas-profile="windows"] .network-atlas canvas {
 
 .network-atlas__loader {
   position: absolute;
+  pointer-events: none;
   top: 50%;
   left: 50%;
   color: #9daac4;
-  font: 600 10px ui-monospace, monospace;
+  font: 600 10px "Inter Tight", "Segoe UI", sans-serif;
   letter-spacing: .04em;
   transform: translate(-50%, -50%);
 }
@@ -91,12 +129,14 @@ html[data-atlas-profile="windows"] .network-atlas canvas {
   bottom: 2px;
   left: 50%;
   color: rgba(157, 170, 196, .82);
-  font: 600 8px ui-monospace, monospace;
+  font: 600 8px "Inter Tight", "Segoe UI", sans-serif;
   letter-spacing: .03em;
   white-space: nowrap;
   transform: translateX(-50%);
   pointer-events: none;
 }
+
+.network-atlas.is-overview-mode .network-atlas__hint { display: none; }
 
 .network-atlas__tooltip {
   position: absolute;
@@ -108,11 +148,11 @@ html[data-atlas-profile="windows"] .network-atlas canvas {
   border-radius: 12px;
   color: #f7f9ff;
   background: rgba(13, 14, 17, .91);
-  font: 600 10px sans-serif;
+  font: 600 10px "Inter Tight", "Segoe UI", sans-serif;
   pointer-events: none;
   transform: translate(-50%, -100%) translateY(-10px);
 }
 
 .network-atlas__tooltip[hidden] { display: none; }
 .network-atlas__tooltip span,
-.network-atlas__tooltip small { color: #9daac4; font: 600 8px ui-monospace, monospace; }
+.network-atlas__tooltip small { color: #9daac4; font: 600 8px "Inter Tight", "Segoe UI", sans-serif; }

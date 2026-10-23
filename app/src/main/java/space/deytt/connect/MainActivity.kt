@@ -42,13 +42,13 @@ import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.brandHeader
 import space.deytt.connect.DeyttUi.dp
+import space.deytt.connect.DeyttUi.displayText
 import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.sectionLabel
 import space.deytt.connect.DeyttUi.spacer
 import space.deytt.connect.DeyttUi.text
 import space.deytt.connect.DeyttUi.note
-import space.deytt.connect.DeyttUi.mapPanel
 import space.deytt.connect.DeyttUi.mono
 
 class MainActivity : Activity() {
@@ -56,6 +56,11 @@ class MainActivity : Activity() {
     private lateinit var detailText: TextView
     private lateinit var statusDot: View
     private lateinit var globe: RouteGlobeView
+    private lateinit var globeBackdrop: FrameLayout
+    private var homeMapSlot: FrameLayout? = null
+    private lateinit var homeDestinationTitle: TextView
+    private lateinit var homeDestinationFlag: TextView
+    private lateinit var connectionNotice: LinearLayout
     private lateinit var action: TextView
     private lateinit var latencyText: TextView
     private lateinit var qualityDots: DiagnosticDotsView
@@ -316,6 +321,7 @@ class MainActivity : Activity() {
         if (::primaryPages.isInitialized) primaryPages.startForegroundUpdates()
         selectedRouteLatencyHandler.removeCallbacks(selectedRouteLatencyTick)
         selectedRouteLatencyHandler.post(selectedRouteLatencyTick)
+        if (::pager.isInitialized) updatePrimaryPageMotion(pager.currentItem)
     }
 
     override fun onStop() {
@@ -335,7 +341,7 @@ class MainActivity : Activity() {
             runCatching { RouteProbeClient.cancel(this) }
             pendingRouteProbeId = null
             if (::latencyText.isInitialized) {
-                latencyText.text = uiCopy("Пинг: —")
+                latencyText.text = "—"
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
             }
@@ -350,6 +356,7 @@ class MainActivity : Activity() {
             pageAdapter.cachedPages().forEach { (_, page) -> DeyttUi.setStarfieldMotion(page, active = false) }
         }
         if (::statusInset.isInitialized) DeyttUi.setStarfieldMotion(statusInset, active = false)
+        if (::globeBackdrop.isInitialized) DeyttUi.setStarfieldMotion(globeBackdrop, active = false)
         super.onStop()
     }
 
@@ -528,6 +535,19 @@ class MainActivity : Activity() {
             isAppearanceLightNavigationBars = false
         }
 
+        globe = RouteGlobeView(this).apply {
+            setOverviewMode(true)
+            onMapNodeTapped = ::showMapRoutePicker
+            focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
+            setAvailableLocations(availableMapLocations())
+            setUserLocation(currentNetworkLocation)
+        }
+        globeBackdrop = FrameLayout(this).apply {
+            clipChildren = false
+            clipToPadding = false
+            background = DeyttUi.starfieldBackground(this@MainActivity)
+        }
+        globeBackdrop.addView(globe, FrameLayout.LayoutParams(-1, homeGlobeHeight()))
         primaryPages = PrimaryPages(this)
         pageAdapter = TopLevelViewPagerAdapter { position ->
             if (position == 0) buildHomePage() else primaryPages.create(position)
@@ -538,13 +558,36 @@ class MainActivity : Activity() {
             isUserInputEnabled = true
             adapter = pageAdapter
         }
+        val pageStage = FrameLayout(this).apply {
+            clipChildren = false
+            addView(globeBackdrop, FrameLayout.LayoutParams(-1, -1))
+            addView(pager, FrameLayout.LayoutParams(-1, -1))
+        }
         navigationBar = DeyttUi.PrimaryNavigationBar(this, initialPage) { selectTab(it) }
+        val dock = FrameLayout(this).apply {
+            setPadding(dp(12), 0, dp(12), dp(8))
+            addView(navigationBar, FrameLayout.LayoutParams(-1, dp(66)))
+        }
+        val accountHeader = brandHeader().apply { setPadding(dp(20), dp(6), dp(20), dp(6)) }
+        telegramAccountName = accountHeader.findViewWithTag("telegram-account-name")
+        telegramAvatarFallback = accountHeader.findViewWithTag("telegram-avatar-fallback")
+        telegramAvatarImage = accountHeader.findViewWithTag("telegram-avatar-image")
+        accountHeader.setOnClickListener { selectTab(2) }
+        TelegramIdentityCache.bind(TelegramSessionStore.read(this))
+        updateTelegramIdentity(TelegramIdentityCache.username, TelegramIdentityCache.avatar)
         // The inset is clipped to system bars but draws against the page's coordinate space.
         statusInset = View(this).apply { setBackgroundColor(DeyttUi.BG) }
         pager.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
             val viewportHeight = bottom - top
             if (viewportHeight > 0 && viewportHeight != oldBottom - oldTop) {
                 statusInset.background = DeyttUi.starfieldBackground(this@MainActivity, viewportHeight)
+                val mapHeight = homeGlobeHeight()
+                homeMapSlot?.let { slot ->
+                    slot.layoutParams = slot.layoutParams.apply { height = mapHeight }
+                }
+                if (globe.parent === globeBackdrop) {
+                    globe.layoutParams = globe.layoutParams.apply { height = mapHeight }
+                }
                 updatePrimaryPageMotion(pager.currentItem)
             }
         }
@@ -556,9 +599,10 @@ class MainActivity : Activity() {
             clipToPadding = false
         }
         root.addView(statusInset, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0))
+        root.addView(accountHeader, LinearLayout.LayoutParams(-1, dp(64)))
         root.addView(primaryPages.createUpdateBanner())
-        root.addView(pager, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        root.addView(navigationBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(66)))
+        root.addView(pageStage, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        root.addView(dock, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(82)))
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val status = insets.getInsets(
                 WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout(),
@@ -570,10 +614,10 @@ class MainActivity : Activity() {
                 height = status
                 statusInset.layoutParams = this
             }
-            navigationBar.setSystemBottomInset(bottom)
-            (navigationBar.layoutParams as LinearLayout.LayoutParams).apply {
-                height = dp(66) + bottom
-                navigationBar.layoutParams = this
+            dock.setPadding(dp(12), 0, dp(12), dp(8) + bottom)
+            (dock.layoutParams as LinearLayout.LayoutParams).apply {
+                height = dp(82) + bottom
+                dock.layoutParams = this
             }
             insets
         }
@@ -584,6 +628,7 @@ class MainActivity : Activity() {
 
             override fun onPageSelected(position: Int) {
                 navigationBar.setSelectedPage(position)
+                syncGlobeHost(position)
                 updatePrimaryPageMotion(position)
                 homeSpeedOnHome = position == 0
                 if (position == 0) { updateQualityStrip(); measureHomeRouteDownload() }
@@ -593,46 +638,76 @@ class MainActivity : Activity() {
         setContentView(root)
         ViewCompat.requestApplyInsets(root)
         pager.setCurrentItem(initialPage, false)
-        root.post { updatePrimaryPageMotion(pager.currentItem) }
+        root.post {
+            syncGlobeHost(pager.currentItem)
+            updatePrimaryPageMotion(pager.currentItem)
+        }
+    }
+
+    private fun homeGlobeHeight(): Int {
+        // Reserve space for the route, connection action, metrics and refresh above the dock.
+        val controlsHeight = dp(320)
+        val availableHeight = if (::pager.isInitialized && pager.height > 0) pager.height - controlsHeight else dp(320)
+        val mapWidth = homeMapSlot?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+        return minOf(mapWidth, availableHeight).coerceIn(dp(220), dp(420))
+    }
+
+    private fun syncGlobeHost(page: Int) {
+        if (!::globe.isInitialized || !::globeBackdrop.isInitialized) return
+        val target = if (page == 0) homeMapSlot ?: globeBackdrop else globeBackdrop
+        if (globe.parent !== target) {
+            (globe.parent as? ViewGroup)?.removeView(globe)
+            target.addView(globe, FrameLayout.LayoutParams(-1,
+                if (target === globeBackdrop) homeGlobeHeight() else -1))
+        }
+        globe.setBackdropStage(page != 0)
+        globe.importantForAccessibility = if (page == 0) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
+            else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
     }
 
     private fun buildHomePage(): View {
         val root = screen(withBackdrop = true)
-        val accountHeader = brandHeader()
-        telegramAccountName = accountHeader.findViewWithTag("telegram-account-name")
-        telegramAvatarFallback = accountHeader.findViewWithTag("telegram-avatar-fallback")
-        telegramAvatarImage = accountHeader.findViewWithTag("telegram-avatar-image")
-        accountHeader.setOnClickListener { selectTab(2) }
-        root.addView(accountHeader)
-        TelegramIdentityCache.bind(TelegramSessionStore.read(this))
-        updateTelegramIdentity(TelegramIdentityCache.username, TelegramIdentityCache.avatar)
-        root.addView(spacer(14, this))
-
-        globe = RouteGlobeView(this).apply {
-            onMapNodeTapped = ::showMapRoutePicker
-            focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
-            setAvailableLocations(availableMapLocations())
-            setUserLocation(currentNetworkLocation)
+        globeBackdrop.setPadding(root.paddingLeft, 0, root.paddingRight, 0)
+        val mapSlot = FrameLayout(this).apply {
+            clipChildren = false
+            clipToPadding = false
         }
-        root.addView(mapPanel(globe), LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(238)))
-        root.addView(spacer(10, this))
-        routeTitleText = text("", 19f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
-            setPadding(dp(3), dp(4), 0, dp(8))
+        homeMapSlot = mapSlot
+        root.addView(mapSlot, LinearLayout.LayoutParams(-1, homeGlobeHeight()))
+        val routeHeading = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+            minimumHeight = dp(72)
+            isClickable = true
+            isFocusable = true
             setOnClickListener { selectTab(1) }
         }
-        root.addView(routeTitleText)
-        root.addView(buildRouteFlow())
-        root.addView(buildQualityStrip())
-        updateRouteFlow(SelectedRouteStore(this).read())
-        updateNetworkLocationViews()
-        root.addView(spacer(16, this))
-
-        val connectionPanel = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(19), dp(18), dp(19), dp(18))
-            background = rounded(DeyttUi.SURFACE_2, 23f, DeyttUi.LINE)
+        homeDestinationFlag = text("◎", 24f).apply {
+            gravity = Gravity.CENTER
+            background = rounded(DeyttUi.SURFACE, 16f, DeyttUi.LINE)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
-
+        routeHeading.addView(homeDestinationFlag, LinearLayout.LayoutParams(dp(48), dp(48)).apply {
+            marginEnd = dp(12)
+        })
+        routeHeading.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.START
+            homeDestinationTitle = displayText("", 25f).apply {
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }
+            addView(homeDestinationTitle)
+            routeTitleText = mono("", 12f, DeyttUi.SKY).apply { setPadding(0, dp(4), 0, 0) }
+            addView(routeTitleText)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        root.addView(routeHeading)
+        root.addView(spacer(12, this))
+        connectionNotice = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
         val statusLine = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -645,24 +720,36 @@ class MainActivity : Activity() {
             }
         }
         statusLine.addView(statusDot, LinearLayout.LayoutParams(dp(9), dp(9)).apply { marginEnd = dp(11) })
-        statusText = text("Не подключено", 25f, DeyttUi.TEXT).apply {
+        statusText = text("", 17f, DeyttUi.TEXT).apply {
             gravity = Gravity.START
-            letterSpacing = -.025f
             maxLines = 2
         }
         statusLine.addView(statusText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        connectionPanel.addView(statusLine)
-        detailText = text("Готов к безопасному соединению", 12f, DeyttUi.MUTED).apply {
+        connectionNotice.addView(statusLine)
+        detailText = text("", 12f, DeyttUi.MUTED).apply {
             gravity = Gravity.START
-            setPadding(dp(20), dp(7), 0, 0)
+            setPadding(dp(20), dp(7), 0, dp(12))
         }
-        connectionPanel.addView(detailText)
+        connectionNotice.addView(detailText)
+        root.addView(connectionNotice)
         action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
-        connectionPanel.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56)).apply {
-            topMargin = dp(18)
-        })
-        root.addView(connectionPanel)
-
+        root.addView(action, LinearLayout.LayoutParams(-1, dp(56)))
+        root.addView(spacer(12, this))
+        root.addView(buildQualityStrip())
+        root.addView(button("Обновить замер", secondary = true).apply {
+            setOnClickListener { measureSelectedRoute() }
+        }, LinearLayout.LayoutParams(-2, dp(48)).apply { topMargin = dp(12) })
+        val routeDetails = buildRouteFlow().apply { visibility = View.GONE }
+        root.addView(button("Сведения о маршруте", secondary = true).apply {
+            setOnClickListener {
+                val expanded = routeDetails.visibility != View.VISIBLE
+                routeDetails.visibility = if (expanded) View.VISIBLE else View.GONE
+                contentDescription = uiCopy(if (expanded) "Скрыть сведения о маршруте" else "Показать сведения о маршруте")
+            }
+        }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
+        root.addView(routeDetails)
+        updateRouteFlow(SelectedRouteStore(this).read())
+        updateNetworkLocationViews()
         root.addView(spacer(12, this))
         getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_warning", null)
             ?.takeIf(String::isNotBlank)
@@ -675,7 +762,7 @@ class MainActivity : Activity() {
             }
         rebuildRouteRow()
         renderStoredState()
-        return ScrollView(this).apply {
+        val scroll = ScrollView(this).apply {
             isFillViewport = true
             clipToPadding = false
             overScrollMode = View.OVER_SCROLL_NEVER
@@ -685,6 +772,8 @@ class MainActivity : Activity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ))
         }
+        scroll.post { if (::pager.isInitialized) syncGlobeHost(pager.currentItem) }
+        return scroll
     }
 
     private fun rebuildRouteRow() {
@@ -696,10 +785,10 @@ class MainActivity : Activity() {
         if (::latencyText.isInitialized) {
             val cachedLatency = lastRouteLatency?.takeIf { it.first == selected.id }?.second
                 ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
-            latencyText.text = uiCopy("Пинг") + ": " + (cachedLatency?.let(::formatLatency) ?: "—")
+            latencyText.text = cachedLatency?.let(::formatLatency) ?: "—"
             latencyText.isEnabled = true
             latencyText.alpha = 1f
-            latencyText.textSize = 11f
+            latencyText.textSize = 23f
             latencyText.setTextColor(DeyttUi.MUTED)
             latencyText.contentDescription = uiCopy("Проверить задержку через выход ${selected.title}: два HTTPS-запроса HEAD или GET, тайм-аут 10 секунд")
         }
@@ -1217,6 +1306,7 @@ class MainActivity : Activity() {
             DeyttUi.setStarfieldMotion(page, active = position == selected && !isFinishing, reducedMotion = reduced)
         }
         DeyttUi.setStarfieldMotion(statusInset, active = selected in 0..3 && !isFinishing, reducedMotion = reduced)
+        DeyttUi.setStarfieldMotion(globeBackdrop, active = !isFinishing, reducedMotion = reduced)
     }
 
     private fun buildRouteFlow(): View {
@@ -1276,6 +1366,11 @@ class MainActivity : Activity() {
         val hasFlag = label.codePointAt(0) in 0x1F1E6..0x1F1FF
         destinationFlagText.text = if (hasFlag) label.substringBefore(' ') else "◎"
         destinationText.text = if (hasFlag) label.substringAfter(' ') else label
+        if (::homeDestinationTitle.isInitialized) {
+            homeDestinationFlag.text = destinationFlagText.text
+            homeDestinationTitle.text = destinationText.text.toString().lowercase(java.util.Locale.ROOT)
+            homeDestinationTitle.contentDescription = uiCopy("Выбранный выход: ${destinationText.text}")
+        }
     }
 
     private fun selectedExitLabel(selected: SelectedRoute): String {
@@ -1288,6 +1383,7 @@ class MainActivity : Activity() {
             "DE", "RU-DE" -> "Франкфурт"
             "RU" -> "Санкт-Петербург"
             "FI" -> "Хельсинки"
+            "IT" -> "Милан"
             else -> return uiCopy(selected.title)
         }
         return (if (route.countryCode == "RU-DE") "🇩🇪" else route.flag) + " " + uiCopy(city)
@@ -1583,29 +1679,33 @@ class MainActivity : Activity() {
     private fun buildQualityStrip(): View = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        setPadding(dp(3), dp(12), dp(3), dp(2))
-        val download = LinearLayout(this@MainActivity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(12), 0, dp(12))
+        fun metric(label: String, value: TextView, onClick: () -> Unit) = LinearLayout(this@MainActivity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.START or Gravity.CENTER_VERTICAL
+            minimumHeight = dp(76)
+            isClickable = true
+            isFocusable = true
+            addView(text(label, 12f, DeyttUi.MUTED))
+            addView(value, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
+            setOnClickListener { onClick() }
         }
-        downloadText = text("Скорость: —", 10.5f, DeyttUi.MUTED).apply {
-            maxLines = 1
+        latencyText = text("—", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
-        }
-        download.addView(downloadText)
-        download.setOnClickListener { selectTab(1) }
-        addView(download, LinearLayout.LayoutParams(0, dp(44), 1f))
-        qualityDots = DiagnosticDotsView(this@MainActivity)
-        addView(qualityDots, LinearLayout.LayoutParams(dp(24), dp(44)))
-        latencyText = text("Пинг: —", 11f, DeyttUi.MUTED).apply {
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-            minHeight = dp(44)
-            minWidth = dp(90)
+            gravity = Gravity.START
             setOnClickListener { measureSelectedRoute() }
         }
-        addView(latencyText)
+        addView(metric("Отклик", latencyText, ::measureSelectedRoute), LinearLayout.LayoutParams(0, -2, 1f))
+        addView(View(this@MainActivity).apply { setBackgroundColor(DeyttUi.LINE) },
+            LinearLayout.LayoutParams(dp(1), dp(62)).apply { marginEnd = dp(18) })
+        downloadText = text("—", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        addView(metric("Скорость", downloadText) { selectTab(1) }, LinearLayout.LayoutParams(0, -2, 1f))
+        qualityDots = DiagnosticDotsView(this@MainActivity)
+        addView(qualityDots, LinearLayout.LayoutParams(dp(20), dp(44)))
     }
 
     private fun updateQualityStrip() {
@@ -1615,9 +1715,9 @@ class MainActivity : Activity() {
         val route = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrNull() }
             ?.firstOrNull { it.id == selected.id }
         if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
-            RouteProtocol.AUTO -> uiCopy("Автоподбор")
-            RouteProtocol.RU_DE -> "./ru → de"
-            else -> route?.let { "./${it.countryCode.lowercase()} ${it.protocol.title.lowercase()}" } ?: uiCopy(selected.title)
+            RouteProtocol.AUTO -> "auto"
+            RouteProtocol.RU_DE -> "ru → de"
+            else -> route?.let { "${it.countryCode.lowercase()}./${it.protocol.title.lowercase().replace(" ", "")}" } ?: uiCopy(selected.title)
         }
         val sample = RouteQualityStore.read(this, selected.id)
         val recentSpeed = homeSpeedSample?.takeIf {
@@ -1636,15 +1736,15 @@ class MainActivity : Activity() {
                 if (en) "↓ %.1f Mbps…" else "↓ %.1f Мбит/с…",
                 mbps,
             )
-            homeSpeedInFlight -> if (en) "Speed: sampling…" else "Скорость: замер…"
-            homeSpeedError != null -> if (en) "Speed unavailable" else "Скорость недоступна"
-            mbps == null -> uiCopy("Скорость: —")
-            else -> String.format(java.util.Locale.US, if (en) "Speed: %.1f Mbps" else "Скорость: %.1f Мбит/с", mbps)
+            homeSpeedInFlight -> if (en) "sampling…" else "замер…"
+            homeSpeedError != null -> if (en) "unavailable" else "недоступна"
+            mbps == null -> "—"
+            else -> String.format(java.util.Locale.US, if (en) "%.1f Mbps" else "%.1f Мбит/с", mbps)
         }
         latencyText.text = when {
-            homePingErrorRouteId == selected.id -> if (en) "Ping: no response" else "Пинг: нет ответа"
-            latency != null -> (if (en) "Ping: " else "Пинг: ") + formatLatency(latency)
-            else -> if (en) "Ping: —" else "Пинг: —"
+            homePingErrorRouteId == selected.id -> if (en) "no response" else "нет ответа"
+            latency != null -> formatLatency(latency)
+            else -> "—"
         }
         latencyText.setTextColor(when {
             homePingErrorRouteId == selected.id -> DeyttUi.CORAL
@@ -1822,7 +1922,7 @@ class MainActivity : Activity() {
             if (resultCode == RESULT_OK) {
                 if (continuation != null) continuation() else measureSelectedRoute()
             } else if (::latencyText.isInitialized && continuation == null) {
-                latencyText.text = uiCopy("Пинг: —")
+                latencyText.text = "—"
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.contentDescription = "Для проверки через выход требуется системное разрешение Android"
@@ -1967,6 +2067,8 @@ class MainActivity : Activity() {
             }
         }
         statusText.text = uiCopy(displayValue)
+        connectionNotice.visibility = if (isConnecting || currentPhase == VpnPhase.STOPPING || currentPhase == VpnPhase.ERROR)
+            View.VISIBLE else View.GONE
         detailText.text = uiCopy(when (currentPhase) {
             VpnPhase.STARTING, VpnPhase.CHECKING -> progressDetail(currentPhase, connectionElapsedSeconds())
             VpnPhase.CONNECTED -> "Соединение активно"
@@ -2069,8 +2171,7 @@ class MainActivity : Activity() {
         }?.second
             ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
         homePingErrorRouteId = null
-        latencyText.text = if (previousLatency == null) uiCopy("Пинг: —")
-            else uiCopy("Пинг") + ": " + formatLatency(previousLatency)
+        latencyText.text = previousLatency?.let(::formatLatency) ?: "—"
         latencyText.isEnabled = false
         latencyText.alpha = .65f
         updateQualityStrip()
@@ -2079,7 +2180,7 @@ class MainActivity : Activity() {
             if (route.id != selected.id ||
                 (route.engine == TunnelEngine.LIBBOX && !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName))
             ) {
-                latencyText.text = uiCopy("Пинг: отключите соединение")
+                latencyText.text = uiCopy("Пинг: отключите соединение").substringAfter(": ")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.setTextColor(DeyttUi.AMBER)
@@ -2087,7 +2188,7 @@ class MainActivity : Activity() {
                 return
             }
             if (route.engine == TunnelEngine.AMNEZIAWG && !AwgTunnelController.isRunning()) {
-                latencyText.text = uiCopy("Пинг: подключите AmneziaWG")
+                latencyText.text = uiCopy("Пинг: подключите AmneziaWG").substringAfter(": ")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.setTextColor(DeyttUi.AMBER)
@@ -2137,7 +2238,7 @@ class MainActivity : Activity() {
             return
         }
         if (route.engine == TunnelEngine.AMNEZIAWG) {
-            latencyText.text = uiCopy("Пинг: подключите AmneziaWG")
+            latencyText.text = uiCopy("Пинг: подключите AmneziaWG").substringAfter(": ")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             latencyText.setTextColor(DeyttUi.AMBER)
@@ -2145,14 +2246,14 @@ class MainActivity : Activity() {
             return
         }
         if (route.engine == TunnelEngine.OPENFLUX) {
-            latencyText.text = uiCopy("Пинг: после подключения")
+            latencyText.text = uiCopy("Пинг: после подключения").substringAfter(": ")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             return
         }
         val vpnPermission = VpnService.prepare(this)
         if (vpnPermission != null) {
-            latencyText.text = uiCopy("Пинг: —")
+            latencyText.text = "—"
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             showRouteProbePermissionSheet(vpnPermission)
@@ -2164,7 +2265,7 @@ class MainActivity : Activity() {
             pendingRouteProbeId = RouteProbeClient.start(
                 this, config, listOf(route.configTag), method, TelegramSessionStore.read(this), latencyOnly = true,
             )
-            if (previousLatency == null) latencyText.text = uiCopy("Пинг: —")
+            if (previousLatency == null) latencyText.text = "—"
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             latencyText.setTextColor(DeyttUi.SKY)
@@ -2173,7 +2274,7 @@ class MainActivity : Activity() {
         } catch (_: Throwable) {
             if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
                 homePingErrorRouteId = selected.id
-                latencyText.text = uiCopy("Пинг: ошибка")
+                latencyText.text = uiCopy("Пинг: ошибка").substringAfter(": ")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.setTextColor(DeyttUi.CORAL)

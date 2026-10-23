@@ -2,6 +2,21 @@
 
 This is the implementation checklist for the Avalonia desktop port. Android source plus a physical TECNO CH6i capture on 2026-09-30 define the current reference. Screenshots contain account identity and remain local. Desktop visuals and native Windows behavior require separate evidence; source parity alone does not close a row.
 
+## Android visual update — 2026-10-24
+
+The Android redesign now follows the Windows v0.11.47 HTML stages (09e3575). The older desktop-port checklist below is historical; its Android Home order is superseded by this section.
+
+- Typography: Unbounded for display headings and the wordmark, Inter Tight for controls/body/map labels, JetBrains Mono for route metadata. Fonts remain bundled and offline.
+- Palette: dark navy native background `#080D17`, translucent slate surfaces, blue action `#1686F4` → `#1170DC`, cyan `#29B9F0`, mint `#39E8BD`. Globe shading uses `#34465B` / `#243345` / `#111B29`, gray filled land, subdued country borders and truthful route annotations.
+- Home: full globe, left-aligned flag/destination/protocol, one connection action, latency/speed and refresh. Normal idle/connected notices are omitted; progress/errors remain. Additional route details stay accessible below the primary controls.
+- Shell: one persistent `RouteGlobeView` moves between Home and a background behind transparent Routes/Profile/Settings. Secondary pages apply the Windows blur/dim treatment; the brand header and capsule dock stay outside `ViewPager2`.
+- Android overview mode suppresses automatic camera focus without enabling the Windows mouse-wheel interaction profile. `ProtocolActivity` retains its existing route-focus camera. Map taps, two-finger gestures and single-finger page navigation remain available.
+- Reuse the Windows land polygon decoder **and** painter together. The Android renderer centers at `width/2,height/2`; it has no Windows `centerX/centerY` fields. Atlas status overlays must not intercept pointer events, and native atmosphere drawing must stay inside drawable bounds.
+
+Physical offline QA passed on Android13 / TECNO CH6i using the isolated `.qa` package. The existing `OpenFluxVisibilityInstrumentation` checks route selection without connecting, all four settled pages, one shared globe, visible header/refresh, a real two-pointer zoom (1.1 → 2.79 without paging), reset, and the Home → Routes swipe. It also checks that the shared background cannot erase adjacent controls and that land polygons load. Screenshots are written to the QA app cache under `main-pager-visual-qa`.
+
+Build the isolated app/test with `-PisolatedQa=true -PqaRunner=space.deytt.connect.OpenFluxVisibilityInstrumentation`, grant its notification permission on Android13+, and run that instrumentation on `.qa.test`. It clears only the isolated fixture account/session data and must never target the production package. Live Telegram authentication, payments, real VPN traffic and production update installation need separate acceptance; this UI check does not claim them.
+
 ## Current implementation checkpoint
 
 - Scope update (2026-09-30): the user requested only important, local repairs. The active work is atlas/Home appearance, one-window adaptive layout, and Telegram code→import recovery. The broader gaps below are reference notes, not a mandate to expand this delivery.

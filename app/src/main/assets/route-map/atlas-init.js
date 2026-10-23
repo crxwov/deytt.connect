@@ -8,7 +8,9 @@
   window.deyttMapActiveAutoRoute = null;
   window.deyttMapTrafficActive = false;
   window.deyttMapReducedMotion = false;
+  window.deyttMapOverviewMode = false;
   const windowsProfile = new URLSearchParams(window.location.search).get("profile") === "windows";
+  const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
   if (windowsProfile) document.documentElement.dataset.atlasProfile = "windows";
   function updateInteractionHint() {
     if (!windowsProfile) return;
@@ -55,10 +57,18 @@
     window.deyttMapRoute = route;
     if (window.deyttMapAtlas) {
       window.deyttMapAtlas.setRoute(route, false);
-      window.deyttMapAtlas.showcaseFocused = route !== "auto";
+      window.deyttMapAtlas.showcaseFocused = !window.deyttMapOverviewMode && route !== "auto";
       window.deyttMapAtlas.start();
     }
     updateInteractionHint();
+  };
+  window.deyttSetMapOverviewMode = function (active) {
+    window.deyttMapOverviewMode = Boolean(active);
+    root.classList.toggle("is-overview-mode", window.deyttMapOverviewMode);
+    const atlas = window.deyttMapAtlas;
+    if (!atlas) return;
+    atlas.overviewMode = window.deyttMapOverviewMode;
+    if (atlas.overviewMode) window.deyttResetMapView();
   };
   window.deyttSetMapLanguage = function (language) {
     window.deyttMapLanguage = language === "en" ? "en" : "ru";
@@ -76,6 +86,9 @@
   window.deyttSetMapTrafficActive = function (active) {
     window.deyttMapTrafficActive = Boolean(active);
     if (window.deyttMapAtlas) window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
+  };
+  window.deyttSetMapBackdropStage = function (active) {
+    root.classList.toggle("is-backdrop-stage", Boolean(active));
   };
   window.deyttSetMapReducedMotion = function (enabled) {
     const next = Boolean(enabled);
@@ -116,8 +129,8 @@
     wheelZoomOnly: windowsProfile,
     pixelRatioFloor: windowsProfile ? 1.6 : 1,
     pixelRatioCap: windowsProfile ? 2.25 : undefined,
-    labelScale: windowsProfile ? 1.34 : 1,
-    labelFontFamily: windowsProfile ? 'system-ui, "Segoe UI", sans-serif' : undefined,
+    labelScale: windowsPalette ? 1.2 : windowsProfile ? 1.34 : 1,
+    labelFontFamily: windowsPalette ? '"Inter Tight", "Segoe UI", sans-serif' : windowsProfile ? 'system-ui, "Segoe UI", sans-serif' : undefined,
     routeFocusMinZoom: windowsProfile ? 4.2 : undefined,
     routeFocusMaxZoom: windowsProfile ? 8.5 : undefined,
     routeFocusSingleZoom: windowsProfile ? 8.5 : undefined,
@@ -125,6 +138,7 @@
     routeFocusScale: windowsProfile ? 1.06 : undefined,
   }).then(function (atlas) {
     window.deyttMapAtlas = atlas;
+    atlas.overviewMode = window.deyttMapOverviewMode;
     const systemReducedMotion = atlas.reducedMotion;
     atlas.reducedMotion = {
       get matches() { return window.deyttMapReducedMotion || systemReducedMotion.matches; }

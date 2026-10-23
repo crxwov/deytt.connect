@@ -43,25 +43,25 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 
 object DeyttUi {
-    const val BG = 0xFF080B12.toInt()
-    const val SURFACE = 0xFF111823.toInt()
-    const val SURFACE_2 = 0xFF192331.toInt()
-    const val LINE = 0xFF283548.toInt()
+    const val BG = 0xFF080D17.toInt()
+    const val SURFACE = 0xD1111A29.toInt()
+    const val SURFACE_2 = 0xD91B293B.toInt()
+    const val LINE = 0xFF33465D.toInt()
     const val TEXT = 0xFFF2F5FC.toInt()
     const val MUTED = 0xFF9AA8BC.toInt()
-    const val BLUE = 0xFF8494FF.toInt()
-    const val BLUE_DEEP = 0xFF5D6CF0.toInt()
-    const val SKY = 0xFF6BDDF2.toInt()
-    const val MINT = 0xFF63E0B4.toInt()
+    const val BLUE = 0xFF1686F4.toInt()
+    const val BLUE_DEEP = 0xFF1170DC.toInt()
+    const val SKY = 0xFF29B9F0.toInt()
+    const val MINT = 0xFF39E8BD.toInt()
     const val CORAL = 0xFFFF8295.toInt()
     const val AMBER = 0xFFFFC76E.toInt()
     const val MAP_SURFACE = 0xFF0A1018.toInt()
     const val MAP_LINE = 0xFF202B38.toInt()
-    const val SELECTED = 0xFF1C2940.toInt()
-    const val SELECTED_LINE = 0xFF435A87.toInt()
-    const val BLUE_SURFACE = 0xFF242C4A.toInt()
-    const val SKY_SURFACE = 0xFF1B303D.toInt()
-    const val MINT_SURFACE = 0xFF18342E.toInt()
+    const val SELECTED = 0xD61D3147.toInt()
+    const val SELECTED_LINE = 0xFF47708F.toInt()
+    const val BLUE_SURFACE = 0xD61A3350.toInt()
+    const val SKY_SURFACE = 0xD6193342.toInt()
+    const val MINT_SURFACE = 0xD61A3A32.toInt()
 
     private enum class FontFamily(val asset: String, val fallback: String) {
         INTER_TIGHT("fonts/inter-tight-variable.ttf", "sans-serif"),
@@ -78,7 +78,7 @@ object DeyttUi {
         orientation = LinearLayout.VERTICAL
         val gutter = contentGutter()
         setPadding(gutter, 0, gutter, dp(22))
-        background = if (withBackdrop) NetworkAtmosphereDrawable(this@screen) else ColorDrawable(BG)
+        background = if (withBackdrop) ColorDrawable(Color.TRANSPARENT) else ColorDrawable(BG)
         fitsSystemWindows = false
         clipToPadding = false
         WindowCompat.setDecorFitsSystemWindows(window, false)
@@ -123,7 +123,7 @@ object DeyttUi {
             }
             addView(text(uiCopy(title), 23f, TEXT).apply {
                 letterSpacing = -.035f
-                typeface = typeface(FontFamily.INTER_TIGHT, 650)
+                typeface = typeface(FontFamily.UNBOUNDED, 700)
                 setPadding(0, dp(5), 0, dp(7))
             })
         }
@@ -131,6 +131,22 @@ object DeyttUi {
     fun Activity.brandHeader(): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
+        foreground = ripple(24f)
+        addView(displayText("./connect", 18f).apply {
+            tag = "deytt-wordmark"
+            gravity = Gravity.CENTER_VERTICAL
+            text = android.text.SpannableString("./connect").apply {
+                setSpan(android.text.style.ForegroundColorSpan(SKY), 0, 2, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            letterSpacing = -.035f
+            contentDescription = uiCopy("./connect")
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
+        val profileControl = FrameLayout(this@brandHeader).apply {
+            tag = "telegram-profile-control"
+            background = rounded(SURFACE, 24f, LINE)
+            contentDescription = uiCopy("Профиль")
+        }
         val avatar = FrameLayout(this@brandHeader).apply {
             tag = "telegram-avatar-container"
             background = rounded(SURFACE_2, 50f, LINE)
@@ -152,16 +168,13 @@ object DeyttUi {
             }
             clipToOutline = true
         }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        addView(avatar, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(9) })
-        addView(text("./c · без аккаунта", 14f, TEXT).apply {
+        profileControl.addView(avatar, FrameLayout.LayoutParams(dp(34), dp(34), Gravity.CENTER))
+        addView(profileControl, LinearLayout.LayoutParams(dp(48), dp(48)))
+        addView(text("", 14f, TEXT).apply {
             tag = "telegram-account-name"
-            typeface = typeface(FontFamily.INTER_TIGHT, 580)
-            letterSpacing = -.02f
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-        })
-        addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
-        addView(mono("deytt./connect", 9f, MUTED, 600))
+            visibility = View.GONE
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(0, 0))
     }
 
     fun starfieldBackground(context: Context, referenceHeightPx: Int? = null): Drawable =
@@ -174,6 +187,12 @@ object DeyttUi {
             setTextColor(color)
             typeface = typeface(FontFamily.INTER_TIGHT, if (style == Typeface.BOLD) 560 else 400)
             includeFontPadding = false
+        }
+
+    fun Activity.displayText(value: String, size: Float = 22f, color: Int = TEXT): TextView =
+        text(value, size, color, Typeface.BOLD).apply {
+            typeface = typeface(FontFamily.UNBOUNDED, 650)
+            letterSpacing = -.025f
         }
 
     fun Activity.mono(value: String, size: Float, color: Int = MUTED, weight: Int = 560): TextView =
@@ -199,14 +218,14 @@ object DeyttUi {
     }
 
     fun Activity.button(label: String, secondary: Boolean = false): TextView =
-        text(label, 14f, if (secondary) TEXT else BG, Typeface.BOLD).apply {
+        text(label, 14f, TEXT, Typeface.BOLD).apply {
             typeface = typeface(FontFamily.INTER_TIGHT, if (secondary) 560 else 620)
             gravity = Gravity.CENTER
             minHeight = dp(52)
             setPadding(dp(18), dp(12), dp(18), dp(12))
             background = if (secondary) rounded(SURFACE_2, 15f, LINE) else GradientDrawable(
                 GradientDrawable.Orientation.TL_BR,
-                intArrayOf(SKY, MINT),
+                intArrayOf(BLUE, BLUE_DEEP),
             ).apply { cornerRadius = dp(15).toFloat() }
             elevation = if (secondary) 0f else dp(2).toFloat()
             isClickable = true
@@ -225,7 +244,7 @@ object DeyttUi {
     fun Activity.actionLabel(label: String = "пинг"): TextView =
         mono(label, 8.5f, SKY, 650).apply {
             gravity = Gravity.CENTER
-            minHeight = dp(38)
+            minHeight = dp(48)
             minWidth = dp(54)
             setPadding(dp(7), dp(7), dp(7), dp(7))
             background = rounded(0xFF18243A.toInt(), 11f, 0xFF344B71.toInt())
@@ -244,8 +263,8 @@ object DeyttUi {
     ): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = dp(64)
-        setPadding(if (emphasis) dp(12) else dp(2), dp(9), if (emphasis) dp(10) else dp(2), dp(9))
+        minimumHeight = dp(54)
+        setPadding(if (emphasis) dp(12) else dp(2), dp(5), if (emphasis) dp(10) else dp(2), dp(5))
         background = if (emphasis) rounded(SELECTED, 15f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
         if (leading.isNotBlank()) {
             val icon = when (leading) {
@@ -265,7 +284,7 @@ object DeyttUi {
                 }
                 }
             }
-            addView(icon, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(12) })
+            addView(icon, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(10) })
         }
         addView(LinearLayout(this@row).apply {
             orientation = LinearLayout.VERTICAL
@@ -281,11 +300,21 @@ object DeyttUi {
             })
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (trailing.isNotBlank()) {
-            addView(text(trailing, 12f, if (emphasis) SKY else MUTED, Typeface.BOLD).apply {
+            val trailingIsAction = trailing != "›" && trailing != "⌄" && trailing != "⌃"
+            addView(text(trailing, if (trailingIsAction) 11f else 16f, if (emphasis) SKY else MUTED, Typeface.BOLD).apply {
                 gravity = Gravity.CENTER
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
-            }, LinearLayout.LayoutParams(dp(58), ViewGroup.LayoutParams.WRAP_CONTENT))
+                if (trailingIsAction) {
+                    minWidth = dp(60)
+                    maxWidth = dp(92)
+                    minHeight = dp(48)
+                    setPadding(dp(8), dp(7), dp(8), dp(7))
+                    background = rounded(SURFACE_2, 12f, LINE)
+                }
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                if (trailingIsAction) leftMargin = dp(8)
+            })
         }
         isClickable = interactive
         isFocusable = interactive
@@ -397,7 +426,17 @@ object DeyttUi {
     }
 
     fun Activity.rounded(fill: Int, radius: Float, stroke: Int = fill): GradientDrawable = GradientDrawable().apply {
-        setColor(fill)
+        when (fill) {
+            SURFACE -> {
+                orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                setColors(intArrayOf(0xE81B2B40.toInt(), 0xCF0C1624.toInt()))
+            }
+            SURFACE_2 -> {
+                orientation = GradientDrawable.Orientation.TOP_BOTTOM
+                setColors(intArrayOf(0xE924354B.toInt(), 0xD6162436.toInt()))
+            }
+            else -> setColor(fill)
+        }
         cornerRadius = dp(radius.toInt()).toFloat()
         setStroke(dp(1), stroke)
     }
@@ -438,8 +477,9 @@ object DeyttUi {
         private var selectedPage = -1
 
         init {
-            setBackgroundColor(SURFACE)
-            elevation = activity.dp(12).toFloat()
+            background = activity.rounded(SURFACE, 28f, LINE)
+            clipToOutline = true
+            elevation = activity.dp(8).toFloat()
             contentDescription = activity.uiCopy("Основная навигация")
             val labels = listOf("Главная", "Маршруты", "Профиль", "Настройки")
                 .map { activity.uiCopy(it) }
@@ -466,7 +506,7 @@ object DeyttUi {
                     isFocusable = true
                     setOnClickListener { onSelect(index) }
                     foreground = activity.ripple(17f)
-                    addView(shell, LinearLayout.LayoutParams(activity.dp(38), activity.dp(29)))
+                    addView(shell, LinearLayout.LayoutParams(activity.dp(34), activity.dp(28)))
                     addView(title)
                 }
                 entries += Entry(label, glyphs[index], shell, title, item)
@@ -503,7 +543,7 @@ object DeyttUi {
                 val selected = position == selectedPage
                 entry.item.isSelected = selected
                 entry.item.contentDescription = if (selected) "${entry.label}, ${activity.uiCopy("выбран")}" else entry.label
-                entry.shell.background = if (selected) activity.rounded(SELECTED, 14f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
+                entry.item.background = if (selected) activity.rounded(SELECTED, 16f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
                 entry.shell.removeAllViews()
                 entry.shell.addView(NavGlyphView(activity, entry.glyph, if (selected) SKY else MUTED),
                     LayoutParams(activity.dp(20), activity.dp(20), Gravity.CENTER))
@@ -997,9 +1037,12 @@ private class NetworkAtmosphereDrawable(context: Context, private val referenceH
     }
 
     override fun draw(canvas: Canvas) {
-        canvas.drawColor(DeyttUi.BG)
         val area = bounds
         if (area.isEmpty) return
+        // The shared backdrop can have unclipped parents; never paint over sibling controls.
+        val saveCount = canvas.save()
+        canvas.clipRect(area)
+        canvas.drawColor(DeyttUi.BG)
         upperPaint.shader = upperGlow
         upperPaint.alpha = drawableAlpha
         upperPaint.colorFilter = colorFilter
@@ -1029,6 +1072,7 @@ private class NetworkAtmosphereDrawable(context: Context, private val referenceH
                 canvas.drawLine(x, y - reach, x, y + reach, flarePaint)
             }
         }
+        canvas.restoreToCount(saveCount)
     }
 
     override fun setAlpha(alpha: Int) { drawableAlpha = alpha.coerceIn(0, 255); invalidateSelf() }

@@ -1,9 +1,23 @@
 package space.deytt.connect
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
+import android.view.MotionEvent
 
 class RouteGlobeViewTest {
+    @Test
+    fun parentInterceptIsReleasedForSingleFingerAndLockedOnlyForPinch() {
+        assertNull(RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_DOWN, 1))
+        assertNull(RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_MOVE, 1))
+        assertNull(RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_DOWN, 1))
+        assertEquals(true, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_DOWN, 2))
+        assertEquals(true, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_UP, 3))
+        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_UP, 2))
+        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_UP, 1))
+        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_CANCEL, 1))
+    }
+
     @Test
     fun mapsPersistedProfileIdsToTheirRoute() {
         assertEquals("de", RouteGlobeView.routeKeyFor("route:DE:VLESS"))

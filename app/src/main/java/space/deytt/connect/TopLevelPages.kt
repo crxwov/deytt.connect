@@ -258,7 +258,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         val routes = config?.let { RouteCatalog.from(it, profiles, OpenFluxProfileStore(host).profiles(host)) }.orEmpty()
         val selectedId = SelectedRouteStore(host).read().id
         val root = host.screen(withBackdrop = true)
-        root.addView(host.header("выходы · выбор · диагностика", "Маршруты"))
+        root.addView(host.header("", "Маршруты"))
         root.addView(spacer(8, host))
         root.addView(host.text(
             copy(
@@ -270,10 +270,13 @@ internal class PrimaryPages(private val host: MainActivity) {
         )
             .apply { setPadding(0, 0, 0, host.dp(18)) })
 
-        root.addView(host.button("Обновить подписку", secondary = true).apply {
-            setOnClickListener { host.openSetup() }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(52)))
-        root.addView(spacer(20, host))
+        root.addView(host.row(
+            copy("Обновить подписку", "Refresh subscription"),
+            copy("Загрузить доступные маршруты", "Load available routes"),
+            "↻",
+            copy("обновить", "refresh"),
+        ).apply { setOnClickListener { host.openSetup() } })
+        root.addView(spacer(14, host))
 
         root.addView(host.sectionLabel("быстрый выбор"))
         val quickGroup = routeGroup()
@@ -315,7 +318,10 @@ internal class PrimaryPages(private val host: MainActivity) {
                     TunnelEngine.OPENFLUX -> route.protocol.title
                 }
             }.distinct().joinToString(" · ")
-            val detail = routeGroup().apply { visibility = View.GONE }
+            val detail = LinearLayout(host).apply {
+                orientation = LinearLayout.VERTICAL
+                visibility = View.GONE
+            }
             val summary = host.text(
                 cachedLatencySummary(cachedSamples) ?: copy("Пинг: —", "Ping: —"),
                 11f,
@@ -418,9 +424,11 @@ internal class PrimaryPages(private val host: MainActivity) {
                 }
                 (getChildAt(childCount - 1) as? TextView)?.tag = "country-chevron"
             }
-            root.addView(countryHeader)
-            root.addView(detail)
-            root.addView(spacer(6, host))
+            val countryGroup = routeGroup()
+            countryGroup.addView(countryHeader)
+            countryGroup.addView(detail)
+            root.addView(countryGroup)
+            root.addView(spacer(8, host))
         }
         if (routes.isEmpty()) {
             root.addView(host.note("Пока нет маршрутов. Обновите подписку по ссылке, с которой открывали приложение.", AMBER))
@@ -1437,10 +1445,11 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun settingsPage(): View {
         val root = host.screen(withBackdrop = true)
-        root.addView(host.header(copy("под вас", "make it yours"), "Настройки"))
+        root.addView(host.header("", "Настройки"))
         root.addView(spacer(12, host))
         root.addView(host.sectionLabel(copy("язык и аккаунт", "language and account")))
-        root.addView(host.row(copy("Язык приложения", "App language"), AppLanguage.label(host), "Aa", "›").apply {
+        val accountGroup = routeGroup()
+        appendToGroup(accountGroup, host.row(copy("Язык приложения", "App language"), AppLanguage.label(host), "Aa", "›").apply {
             setOnClickListener {
                 val codes = listOf(AppLanguage.RU, AppLanguage.EN)
                 AppDialog.Builder(host).setTitle(copy("Язык приложения", "App language"))
@@ -1454,14 +1463,16 @@ internal class PrimaryPages(private val host: MainActivity) {
             }
         })
         val linked = TelegramSessionStore.read(host) != null
-        root.addView(host.row(
+        appendToGroup(accountGroup, host.row(
             if (linked) copy("Telegram подключён", "Telegram connected") else copy("Войти через Telegram", "Sign in with Telegram"),
             if (linked) copy("Управление аккаунтом", "Manage account") else copy("Подписка и устройства", "Subscription and devices"),
             if (linked) "✓" else "↗", "›", emphasis = linked,
         ).apply { setOnClickListener { if (TelegramSessionStore.read(host) == null) showTelegramPairing() else showLinkedTelegramAccount() } })
 
+        root.addView(accountGroup)
         root.addView(spacer(16, host))
         root.addView(host.sectionLabel(copy("подключение", "connection")))
+        val connectionGroup = routeGroup()
         val splitStore = UserSplitTunnelStore(host)
         fun splitTunnelSummary(): String {
             val count = splitStore.readDomains().size + splitStore.readPackages().size
@@ -1480,9 +1491,9 @@ internal class PrimaryPages(private val host: MainActivity) {
                 splitRow.contentDescription = copy("Раздельное туннелирование", "Split tunneling") + ". " + splitTunnelSummary()
             }
         }
-        root.addView(splitRow)
+        appendToGroup(connectionGroup, splitRow)
         val probeSummary = { copy("HTTP ${RouteProbePreferences.method(host).title} · быстрая проверка, загрузка 1 с", "HTTP ${RouteProbePreferences.method(host).title} · fast check, 1 s download") }
-        root.addView(host.row(copy("Проверка маршрута", "Route check"), probeSummary(), "↻", "›").apply {
+        appendToGroup(connectionGroup, host.row(copy("Проверка маршрута", "Route check"), probeSummary(), "↻", "›").apply {
             val summary = (getChildAt(1) as? LinearLayout)?.getChildAt(1) as? TextView
             setOnClickListener {
                 val methods = RouteProbeMethod.values()
@@ -1495,12 +1506,13 @@ internal class PrimaryPages(private val host: MainActivity) {
                     }.setNegativeButton(host.uiCopy("Отмена"), null).show()
             }
         })
-        root.addView(host.row(copy("Разрешения VPN", "VPN permissions"), copy("Системные настройки Android", "Android system settings"), "↗", "›").apply {
+        appendToGroup(connectionGroup, host.row(copy("Разрешения VPN", "VPN permissions"), copy("Системные настройки Android", "Android system settings"), "↗", "›").apply {
             setOnClickListener { runCatching { host.startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) } }
         })
-        root.addView(host.row(copy("Бот DEYTT", "DEYTT bot"), copy("Другие действия в Telegram", "More actions in Telegram"), "↗", "›").apply {
+        appendToGroup(connectionGroup, host.row(copy("Бот DEYTT", "DEYTT bot"), copy("Другие действия в Telegram", "More actions in Telegram"), "↗", "›").apply {
             setOnClickListener { openUrl("https://t.me/deyttbot") }
         })
+        root.addView(connectionGroup)
 
         root.addView(spacer(16, host))
         root.addView(host.sectionLabel(copy("вид и приватность", "appearance and privacy")))
