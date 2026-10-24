@@ -151,7 +151,6 @@ jobs:
             adb shell dumpsys package "$package" > "$logs/$label-package.txt"
             adb shell dumpsys activity activities > "$logs/$label-activities.txt"
             adb logcat -d -s AndroidRuntime:E > "$crash"
-            adb exec-out screencap -p > "$logs/$label-screen.png"
             if grep -Eq 'FATAL EXCEPTION|Process: space\.deytt\.connect' "$crash"; then
               return 1
             fi
@@ -178,11 +177,29 @@ jobs:
           grep -Eq 'versionCode=80([[:space:]]|$)' <(adb shell dumpsys package "$package")
           launch_and_capture fresh-v0.11.50
 
-      - name: Upload emulator evidence
+      - name: Print bounded emulator diagnostics
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: android-api36-install-smoke
-          path: ${{ runner.temp }}/android-api36-smoke/logs
-          if-no-files-found: warn
-          retention-days: 7
+        shell: bash
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          logs="$RUNNER_TEMP/android-api36-smoke/logs"
+          shopt -s nullglob
+          files=(
+            "$logs/summary.txt"
+            "$logs/apk-sha256.txt"
+            "$logs/api-level.txt"
+            "$logs"/*-badging.txt
+            "$logs"/*-install.txt
+            "$logs"/*-activity.txt
+            "$logs"/*-android-runtime.txt
+          )
+          for file in "${files[@]}"; do
+            [[ -f "$file" ]] || continue
+            printf '\n--- %s (first 120 lines) ---\n' "$(basename "$file")"
+            sed -n '1,120p' "$file"
+          done
+          if [[ "$JOB_STATUS" != success && -f "$logs/emulator.log" ]]; then
+            printf '\n--- emulator.log (last 120 lines) ---\n'
+            tail -n 120 "$logs/emulator.log"
+          fi
