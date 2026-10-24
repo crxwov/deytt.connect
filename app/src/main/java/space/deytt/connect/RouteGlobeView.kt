@@ -26,6 +26,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var pageLoaded = false
     private var backdropStageActive = false
     private var overviewModeActive = false
+    private var reducedMotionActive = false
     private var availableLocations = setOf("nl", "de", "fi", "ru")
     private var trafficActive = false
     private val atlas: WebView
@@ -76,6 +77,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     pageLoaded = true
+                    applyReducedMotion()
                     applyOverviewMode()
                     applyMapLanguage()
                     applyAvailableLocations()
@@ -151,6 +153,12 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (overviewModeActive == active) return
         overviewModeActive = active
         applyOverviewMode()
+    }
+
+    internal fun setReducedMotion(enabled: Boolean) {
+        if (reducedMotionActive == enabled) return
+        reducedMotionActive = enabled
+        applyReducedMotion()
     }
 
     override fun onAttachedToWindow() {
@@ -237,6 +245,14 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (!pageLoaded) return
         atlas.evaluateJavascript(
             "window.deyttSetMapBackdropStage && window.deyttSetMapBackdropStage($backdropStageActive)",
+            null,
+        )
+    }
+
+    private fun applyReducedMotion() {
+        if (!pageLoaded) return
+        atlas.evaluateJavascript(
+            "window.deyttSetMapReducedMotion && window.deyttSetMapReducedMotion($reducedMotionActive)",
             null,
         )
     }

@@ -243,6 +243,7 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun scrollPage(content: LinearLayout): ScrollView = ScrollView(host).apply {
         isFillViewport = true
+        isVerticalScrollBarEnabled = false
         clipToPadding = false
         overScrollMode = View.OVER_SCROLL_NEVER
         setBackgroundColor(android.graphics.Color.TRANSPARENT)

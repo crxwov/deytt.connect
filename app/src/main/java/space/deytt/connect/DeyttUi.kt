@@ -1,9 +1,6 @@
 package space.deytt.connect
 
 import android.app.Activity
-import android.animation.ObjectAnimator
-import android.animation.AnimatorSet
-import android.animation.StateListAnimator
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
@@ -70,9 +67,11 @@ object DeyttUi {
     }
 
     private val typefaceCache = mutableMapOf<String, Typeface>()
+    private val pressInterpolator = PathInterpolator(.23f, 1f, .32f, 1f)
 
-    private fun Activity.prefersReducedMotion(): Boolean =
-        getSharedPreferences("profile_settings", Context.MODE_PRIVATE).getBoolean("reduced_motion", false)
+    fun Activity.prefersReducedMotion(): Boolean =
+        (this as? MainActivity)?.isReducedMotionEnabled()
+            ?: getSharedPreferences("profile_settings", Context.MODE_PRIVATE).getBoolean("reduced_motion", false)
 
     fun Activity.screen(withBackdrop: Boolean = false): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
@@ -144,12 +143,16 @@ object DeyttUi {
         addView(Space(this@brandHeader), LinearLayout.LayoutParams(0, 1, 1f))
         val profileControl = FrameLayout(this@brandHeader).apply {
             tag = "telegram-profile-control"
-            background = rounded(SURFACE, 24f, LINE)
+            background = ColorDrawable(Color.TRANSPARENT)
+            foreground = ripple(24f)
             contentDescription = uiCopy("Профиль")
         }
         val avatar = FrameLayout(this@brandHeader).apply {
             tag = "telegram-avatar-container"
-            background = rounded(SURFACE_2, 50f, LINE)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(Color.TRANSPARENT)
+            }
             clipToOutline = true
             contentDescription = uiCopy("Аватар Telegram")
         }
@@ -164,7 +167,7 @@ object DeyttUi {
             visibility = View.GONE
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(SURFACE_2)
+                setColor(Color.TRANSPARENT)
             }
             clipToOutline = true
         }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
@@ -175,6 +178,7 @@ object DeyttUi {
             visibility = View.GONE
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }, LinearLayout.LayoutParams(0, 0))
+        pressFeedback(this, .995f)
     }
 
     fun starfieldBackground(context: Context, referenceHeightPx: Int? = null): Drawable =
@@ -232,13 +236,7 @@ object DeyttUi {
             isFocusable = true
             contentDescription = uiCopy(label)
             foreground = ripple(17f)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled() && !prefersReducedMotion()) {
-                val target = this
-                stateListAnimator = StateListAnimator().apply {
-                    addState(intArrayOf(android.R.attr.state_pressed), scaleAnimator(target, .98f, 100))
-                    addState(intArrayOf(), scaleAnimator(target, 1f, 130))
-                }
-            }
+            pressFeedback(this, .985f)
         }
 
     fun Activity.actionLabel(label: String = "пинг"): TextView =
@@ -251,6 +249,7 @@ object DeyttUi {
             isClickable = true
             isFocusable = true
             contentDescription = uiCopy("Проверить задержку")
+            pressFeedback(this, .99f)
         }
 
     fun Activity.row(
@@ -292,7 +291,7 @@ object DeyttUi {
                 maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
             })
-            addView(text(subtitle, 12f, MUTED).apply {
+            addView(text(subtitle, 11f, MUTED).apply {
                 setPadding(0, dp(4), 0, 0)
                 maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
@@ -319,13 +318,7 @@ object DeyttUi {
         isClickable = interactive
         isFocusable = interactive
         if (interactive) foreground = ripple(if (emphasis) 15f else 12f)
-        if (interactive && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && ValueAnimator.areAnimatorsEnabled() && !prefersReducedMotion()) {
-            val target = this
-            stateListAnimator = StateListAnimator().apply {
-                addState(intArrayOf(android.R.attr.state_pressed), ObjectAnimator.ofFloat(target, "alpha", 1f, .76f).setDuration(90))
-                addState(intArrayOf(), ObjectAnimator.ofFloat(target, "alpha", .76f, 1f).setDuration(130))
-            }
-        }
+        if (interactive) pressFeedback(this, .99f)
     }
 
     private fun Activity.awgMark(emphasis: Boolean): FrameLayout {
@@ -403,12 +396,39 @@ object DeyttUi {
         }
     }
 
-    private fun scaleAnimator(target: View, scale: Float, duration: Long): AnimatorSet = AnimatorSet().apply {
-        playTogether(
-            ObjectAnimator.ofFloat(target, "scaleX", scale),
-            ObjectAnimator.ofFloat(target, "scaleY", scale),
-        )
-        this.duration = duration
+    fun Activity.pressFeedback(view: View, pressedScale: Float = .99f) {
+        var inside = false
+        fun animateScale(target: View, scale: Float, duration: Long) {
+            target.animate().cancel()
+            val motionEnabled = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
+            if (motionEnabled && !prefersReducedMotion()) {
+                target.animate().scaleX(scale).scaleY(scale)
+                    .setDuration(duration).setInterpolator(pressInterpolator).start()
+            } else {
+                target.scaleX = 1f
+                target.scaleY = 1f
+            }
+        }
+        view.setOnTouchListener { target, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    inside = true
+                    animateScale(target, pressedScale, 120L)
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val over = event.x >= 0f && event.x < target.width && event.y >= 0f && event.y < target.height
+                    if (inside != over) {
+                        inside = over
+                        animateScale(target, if (over) pressedScale else 1f, if (over) 120L else 140L)
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    inside = false
+                    animateScale(target, 1f, 140L)
+                }
+            }
+            false
+        }
     }
 
     fun spacer(height: Int, activity: Activity): Space = Space(activity).apply {
@@ -429,16 +449,19 @@ object DeyttUi {
         when (fill) {
             SURFACE -> {
                 orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                setColors(intArrayOf(0xE81B2B40.toInt(), 0xCF0C1624.toInt()))
+                setColors(intArrayOf(0xD01B2B40.toInt(), 0xAE0C1624.toInt()))
             }
             SURFACE_2 -> {
                 orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                setColors(intArrayOf(0xE924354B.toInt(), 0xD6162436.toInt()))
+                setColors(intArrayOf(0xD624354B.toInt(), 0xB8162436.toInt()))
             }
             else -> setColor(fill)
         }
         cornerRadius = dp(radius.toInt()).toFloat()
-        setStroke(dp(1), stroke)
+        val edge = if (fill == SURFACE || fill == SURFACE_2) {
+            (minOf(Color.alpha(stroke), 0x80) shl 24) or (stroke and 0x00FFFFFF)
+        } else stroke
+        setStroke(dp(1), edge)
     }
 
     private fun Activity.ripple(radius: Float): RippleDrawable = RippleDrawable(
@@ -468,26 +491,31 @@ object DeyttUi {
         )
 
         private val entries = mutableListOf<Entry>()
-        private val indicator = View(activity).apply {
-            background = activity.rounded(BLUE, 2f, Color.TRANSPARENT)
+        private var selectedPage = -1
+        private var pagePosition = initialPage.coerceIn(0, 3).toFloat()
+        private val selection = View(activity).apply {
+            background = activity.rounded(SELECTED, 20f, SELECTED_LINE)
             isClickable = false
             isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
-        private var pagePosition = initialPage.coerceIn(0, 3).toFloat()
-        private var selectedPage = -1
 
         init {
             background = activity.rounded(SURFACE, 28f, LINE)
             clipToOutline = true
             elevation = activity.dp(8).toFloat()
             contentDescription = activity.uiCopy("Основная навигация")
+            addView(selection, LayoutParams(0, activity.dp(50), Gravity.TOP or Gravity.START).apply {
+                leftMargin = activity.dp(8)
+                topMargin = activity.dp(8)
+            })
             val labels = listOf("Главная", "Маршруты", "Профиль", "Настройки")
                 .map { activity.uiCopy(it) }
             val glyphs = listOf(NavGlyph.HOME, NavGlyph.MAP, NavGlyph.PROFILE, NavGlyph.SETTINGS)
             val row = LinearLayout(activity).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER
-                setPadding(activity.dp(8), activity.dp(2), activity.dp(8), 0)
+                setPadding(activity.dp(8), activity.dp(8), activity.dp(8), activity.dp(8))
             }
             labels.forEachIndexed { index, label ->
                 val title = activity.text(label, 10f, MUTED).apply {
@@ -501,28 +529,20 @@ object DeyttUi {
                 val item = LinearLayout(activity).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
-                    minimumHeight = activity.dp(56)
+                    minimumHeight = activity.dp(48)
                     isClickable = true
                     isFocusable = true
                     setOnClickListener { onSelect(index) }
                     foreground = activity.ripple(17f)
+                    activity.pressFeedback(this, .985f)
                     addView(shell, LinearLayout.LayoutParams(activity.dp(34), activity.dp(28)))
                     addView(title)
                 }
                 entries += Entry(label, glyphs[index], shell, title, item)
-                row.addView(item, LinearLayout.LayoutParams(0, activity.dp(64), 1f))
+                row.addView(item, LinearLayout.LayoutParams(0, activity.dp(50), 1f))
             }
             addView(row, LayoutParams(LayoutParams.MATCH_PARENT, activity.dp(66), Gravity.TOP))
-            addView(indicator, LayoutParams(activity.dp(18), activity.dp(2), Gravity.TOP or Gravity.START).apply {
-                topMargin = activity.dp(62)
-            })
-            addView(View(activity).apply {
-                setBackgroundColor(LINE)
-                alpha = .55f
-                isClickable = false
-            }, LayoutParams(LayoutParams.MATCH_PARENT, activity.dp(1), Gravity.TOP))
             setSelectedPage(initialPage)
-            post { updateIndicator() }
         }
 
         fun setSystemBottomInset(inset: Int) {
@@ -531,20 +551,26 @@ object DeyttUi {
 
         fun setPageOffset(position: Int, offset: Float) {
             pagePosition = (position + offset).coerceIn(0f, 3f)
-            setSelectedPage((pagePosition + .5f).toInt().coerceIn(0, 3))
-            updateIndicator()
+            updateSelectedPage((pagePosition + .5f).toInt().coerceIn(0, 3))
+            updateSelectionPosition()
         }
 
         fun setSelectedPage(index: Int) {
-            val next = index.coerceIn(0, 3)
+            pagePosition = index.coerceIn(0, 3).toFloat()
+            updateSelectedPage(pagePosition.toInt())
+            updateSelectionPosition()
+        }
+
+        private fun updateSelectedPage(next: Int) {
             if (selectedPage == next) return
             selectedPage = next
             entries.forEachIndexed { position, entry ->
                 val selected = position == selectedPage
                 entry.item.isSelected = selected
                 entry.item.contentDescription = if (selected) "${entry.label}, ${activity.uiCopy("выбран")}" else entry.label
-                entry.item.background = if (selected) activity.rounded(SELECTED, 16f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
+                entry.item.background = ColorDrawable(Color.TRANSPARENT)
                 entry.shell.removeAllViews()
+                entry.shell.background = ColorDrawable(Color.TRANSPARENT)
                 entry.shell.addView(NavGlyphView(activity, entry.glyph, if (selected) SKY else MUTED),
                     LayoutParams(activity.dp(20), activity.dp(20), Gravity.CENTER))
                 entry.title.setTextColor(if (selected) TEXT else MUTED)
@@ -552,17 +578,23 @@ object DeyttUi {
             }
         }
 
-        private fun updateIndicator() {
+        private fun updateSelectionPosition() {
             if (width <= 0) return
-            val horizontalInset = activity.dp(8).toFloat()
-            val cellWidth = (width - horizontalInset * 2f) / 4f
-            indicator.translationX = horizontalInset + cellWidth * (pagePosition + .5f) - indicator.width / 2f
+            val cellWidth = (width - activity.dp(16)).coerceAtLeast(0) / 4f
+            val params = selection.layoutParams as? LayoutParams ?: return
+            val targetWidth = cellWidth.toInt()
+            if (params.width != targetWidth) {
+                params.width = targetWidth
+                selection.layoutParams = params
+            }
+            selection.translationX = cellWidth * pagePosition
         }
 
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
             super.onSizeChanged(w, h, oldw, oldh)
-            updateIndicator()
+            updateSelectionPosition()
         }
+
     }
 
     fun setStarfieldMotion(root: View, active: Boolean, reducedMotion: Boolean = false) {

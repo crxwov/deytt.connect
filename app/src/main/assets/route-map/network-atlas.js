@@ -370,7 +370,7 @@
           const points = Array.from(this.activePointers.values()).slice(0, 2);
           const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
           if (!this.wheelZoomOnly && this.pinchDistance > 0 && distance > 0) {
-            this.targetZoom = clamp(this.targetZoom * distance / this.pinchDistance, .82, MAX_ZOOM);
+            this.targetZoom = this.clampZoom(this.targetZoom * distance / this.pinchDistance);
             this.staticDirty = true;
           }
           this.pinchDistance = distance;
@@ -397,7 +397,7 @@
         const delta = event.deltaMode === 1 ? event.deltaY * 18 : event.deltaY;
         // Normalize large mouse-wheel bursts so the camera never jumps between frames.
         const normalizedDelta = clamp(delta, -160, 160);
-        this.targetZoom = clamp(this.targetZoom * Math.exp(-normalizedDelta * .00135), .82, MAX_ZOOM);
+        this.targetZoom = this.clampZoom(this.targetZoom * Math.exp(-normalizedDelta * .00135));
         this.staticDirty = true;
         this.start();
       }, { passive: false });
@@ -440,9 +440,9 @@
         if (event.key === "ArrowRight") this.targetLon += 9;
         if (event.key === "ArrowUp") this.targetLat = clamp(this.targetLat + 7, -62, 72);
         if (event.key === "ArrowDown") this.targetLat = clamp(this.targetLat - 7, -62, 72);
-        if (event.key === "+" || event.key === "=") this.targetZoom = clamp(this.targetZoom * 1.2, .82, MAX_ZOOM);
-        if (event.key === "-" || event.key === "_") this.targetZoom = clamp(this.targetZoom / 1.2, .82, MAX_ZOOM);
-        if (event.key === "0") this.targetZoom = 1;
+        if (event.key === "+" || event.key === "=") this.targetZoom = this.clampZoom(this.targetZoom * 1.2);
+        if (event.key === "-" || event.key === "_") this.targetZoom = this.clampZoom(this.targetZoom / 1.2);
+        if (event.key === "0") this.targetZoom = this.clampZoom(1);
         this.staticDirty = true;
         this.start();
       });
@@ -515,6 +515,8 @@
     }
 
     projectLocation(location, lift) { return this.projectVector(vector(location.lat, location.lon), lift); }
+
+    clampZoom(value) { return clamp(value, .82, this.overviewMode ? 1.2 : MAX_ZOOM); }
 
     colors() {
       const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
@@ -1029,7 +1031,8 @@
       const location = key === "user" ? this.userLocation : LOCATIONS[key];
       const compact = this.width < 520;
       const labelScale = this.options.labelScale || 1;
-      const offset = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
+      const baseOffset = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
+      const offset = { x: baseOffset.x * labelScale, y: baseOffset.y * labelScale, align: baseOffset.align };
       const title = key === "user" ? (this.copy(location.city) || this.copy("ваша сеть")) : this.copy(location.city);
       const meta = key === "user" ? (location.country || this.copy("вход в сеть")) : location.code + " · " + this.copy(location.country);
       const titleFontSize = Math.round((compact ? 9 : 10) * labelScale);
@@ -1047,12 +1050,12 @@
       // Prefer nearby labels; score all alternatives instead of falling back
       // to (8,8), which detached crowded user labels from their actual pin.
       const alternatives = [offset,
-        { x: 14, y: -height / 2 - 12, align: "left" },
-        { x: -14, y: -height / 2 - 12, align: "right" },
-        { x: 14, y: height / 2 + 12, align: "left" },
-        { x: -14, y: height / 2 + 12, align: "right" },
-        { x: -width / 2, y: -height - 30, align: "left" },
-        { x: -width / 2, y: height + 30, align: "left" }
+        { x: 14 * labelScale, y: -height / 2 - 12 * labelScale, align: "left" },
+        { x: -14 * labelScale, y: -height / 2 - 12 * labelScale, align: "right" },
+        { x: 14 * labelScale, y: height / 2 + 12 * labelScale, align: "left" },
+        { x: -14 * labelScale, y: height / 2 + 12 * labelScale, align: "right" },
+        { x: -width / 2, y: -height - 30 * labelScale, align: "left" },
+        { x: -width / 2, y: height + 30 * labelScale, align: "left" }
       ];
       let placementIndex = this.labelPlacements.get(key);
       if (placementIndex == null || placementIndex >= alternatives.length) {
@@ -1358,7 +1361,6 @@
     }
 
     focusRoute() {
-      if (this.overviewMode) return;
       const focusNodes = this.variant === "observatory"
         ? LOCATION_ORDER
         : this.route === "auto" && this.activeRouteNodeKeys().length
@@ -1383,6 +1385,11 @@
       const target = locationFromVector(center);
       this.targetLat = clamp(target.lat, -62, 72);
       this.targetLon = nearestLongitude(this.centerLon, target.lon);
+      if (this.overviewMode) {
+        this.targetZoom = this.clampZoom(this.targetZoom);
+        this.staticDirty = true;
+        return;
+      }
       // Desktop opens on the selected segment; wheel zoom reveals the whole globe.
       // Other clients retain the established Android/site framing.
       if (Number.isFinite(this.options.routeFocusMinZoom)) {

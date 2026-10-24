@@ -1,6 +1,9 @@
 package space.deytt.connect
 
 import android.app.Dialog
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.Typeface
@@ -8,10 +11,13 @@ import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.Build
 import android.text.InputFilter
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.PathInterpolator
 import android.view.WindowManager
 import android.widget.ImageView
 import android.widget.FrameLayout
@@ -35,6 +41,8 @@ import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.note
+import space.deytt.connect.DeyttUi.pressFeedback
+import space.deytt.connect.DeyttUi.prefersReducedMotion
 import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
@@ -181,6 +189,7 @@ internal class ProfileFlows(
         if (token != null) refreshProfile()
         return ScrollView(host).apply {
             isFillViewport = true
+            isVerticalScrollBarEnabled = false
             clipToPadding = false
             overScrollMode = View.OVER_SCROLL_NEVER
             setBackgroundColor(Color.TRANSPARENT)
@@ -260,6 +269,8 @@ internal class ProfileFlows(
             clipToOutline = true
         }
         content.visibility = View.GONE
+        var expanded = false
+        var expansionAnimator: ValueAnimator? = null
         val indicator = host.text("+", 22f, MUTED).apply { gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         val toggle = LinearLayout(host).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -269,6 +280,7 @@ internal class ProfileFlows(
             background = host.rounded(SURFACE_2, 16f, LINE)
             isClickable = true
             isFocusable = true
+            host.pressFeedback(this, .99f)
             val labels = LinearLayout(host).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(host.text(title, 14f, TEXT, Typeface.BOLD))
@@ -278,11 +290,68 @@ internal class ProfileFlows(
             addView(indicator, LinearLayout.LayoutParams(host.dp(28), host.dp(32)))
             contentDescription = "$title · " + copy("свернуто", "collapsed")
             setOnClickListener {
-                val expanded = content.visibility != View.VISIBLE
-                content.visibility = if (expanded) View.VISIBLE else View.GONE
-                indicator.text = if (expanded) "−" else "+"
-                contentDescription = "$title · " + if (expanded) copy("развернуто", "expanded") else copy("свернуто", "collapsed")
+                expanded = !expanded
+                val nowExpanded = expanded
+                expansionAnimator?.let {
+                    expansionAnimator = null
+                    it.cancel()
+                }
+                indicator.text = if (nowExpanded) "−" else "+"
+                contentDescription = "$title · " + if (nowExpanded) copy("развернуто", "expanded") else copy("свернуто", "collapsed")
                 announceForAccessibility(contentDescription)
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                val params = content.layoutParams as? LinearLayout.LayoutParams
+                val systemAllowsMotion = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
+                if (params == null || !systemAllowsMotion || host.prefersReducedMotion()) {
+                    content.visibility = if (nowExpanded) View.VISIBLE else View.GONE
+                    params?.let {
+                        it.height = if (nowExpanded) ViewGroup.LayoutParams.WRAP_CONTENT else 0
+                        content.layoutParams = it
+                    }
+                    return@setOnClickListener
+                }
+
+                val startHeight = if (content.visibility == View.VISIBLE) {
+                    if (params.height >= 0) params.height else content.height
+                } else 0
+                if (nowExpanded) {
+                    content.visibility = View.VISIBLE
+                    val width = (group.width - group.paddingLeft - group.paddingRight).coerceAtLeast(0)
+                    if (width == 0) {
+                        params.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                        content.layoutParams = params
+                        return@setOnClickListener
+                    }
+                    content.measure(
+                        View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED),
+                    )
+                }
+                val targetHeight = if (nowExpanded) content.measuredHeight else 0
+                params.height = startHeight
+                content.layoutParams = params
+                lateinit var animator: ValueAnimator
+                animator = ValueAnimator.ofInt(startHeight, targetHeight).apply {
+                    duration = 210L
+                    interpolator = PathInterpolator(.23f, 1f, .32f, 1f)
+                    addUpdateListener {
+                        if (expansionAnimator === animator) {
+                            params.height = it.animatedValue as Int
+                            content.layoutParams = params
+                        }
+                    }
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            if (expansionAnimator !== animator) return
+                            expansionAnimator = null
+                            params.height = if (nowExpanded) ViewGroup.LayoutParams.WRAP_CONTENT else 0
+                            content.layoutParams = params
+                            if (!nowExpanded) content.visibility = View.GONE
+                        }
+                    })
+                }
+                expansionAnimator = animator
+                animator.start()
             }
         }
         group.addView(toggle)

@@ -153,10 +153,31 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                     check(isTransparentScreenRoot(title)) { "$name screen must be transparent over the shared globe" }
                     check(findViews(launched.findViewById(android.R.id.content)) { it is RouteGlobeView }.single() === sharedGlobe)
                     if (pageIndex == 0) {
-                        val refresh = checkNotNull(findText(launched.findViewById(android.R.id.content), "Обновить замер"))
+                        val content = launched.findViewById<View>(android.R.id.content)
+                        val shell = checkNotNull(findView(content) { it.tag == "shell-starfield" })
+                        val shellBounds = Rect()
+                        check(shell.isShown && shell.getGlobalVisibleRect(shellBounds) && shellBounds.width() >= content.width * .95f) {
+                            "Home shell starfield should span the full content width: bounds=$shellBounds content=${content.width}x${content.height}"
+                        }
+                        val refresh = checkNotNull(findView(content) { it.tag == "home-refresh" })
                         val refreshBounds = Rect()
-                        check(refresh.getGlobalVisibleRect(refreshBounds) && refreshBounds.height() == refresh.height) {
-                            "Home refresh action should fit above the dock without scrolling"
+                        check(refresh.getGlobalVisibleRect(refreshBounds) && refreshBounds.height() == refresh.height &&
+                            refreshBounds.width() >= content.width * .85f) {
+                            "Home refresh action should fit above the dock and span the content width: bounds=$refreshBounds content=${content.width}x${content.height}"
+                        }
+                        val latency = checkNotNull(findView(content) { it.tag == "home-latency" })
+                        val speed = checkNotNull(findView(content) { it.tag == "home-speed" })
+                        val latencyBounds = Rect()
+                        val speedBounds = Rect()
+                        check(latency.isShown && speed.isShown && latency.getGlobalVisibleRect(latencyBounds) && speed.getGlobalVisibleRect(speedBounds)) {
+                            "Home latency and speed metrics should both be visible"
+                        }
+                        val widthRatio = latencyBounds.width().toFloat() / speedBounds.width().coerceAtLeast(1)
+                        check(widthRatio in .8f..1.25f) {
+                            "Home latency and speed metric columns should remain balanced: latency=$latencyBounds speed=$speedBounds ratio=$widthRatio"
+                        }
+                        check(findText(content, "Сведения о маршруте") == null) {
+                            "Home should not show a separate route-details control"
                         }
                     }
                     headerGeometryLogs += "$name:${readHeaderGeometry(launched)}"
@@ -191,12 +212,22 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             capturePage("profile", "Профиль", 2)
             assertEmptyCredentials()
 
+            stage = "profile_accordion_interruptible_expansion"
+            assertProfileAccordionExpansion(launched)
+            passed += stage
+
             // Selecting the synthetic OpenFlux route avoids diagnostic network calls on Home.
             clickNavigation(launched, "главная")
             awaitVisibleText(launched, "Подключить")
             check(SelectedRouteStore(targetContext).read().id == "openflux:DE")
             assertNoNativeConnection()
             capturePage("home", "Подключить", 0)
+            stage = "reduced_motion_keeps_home_page_identity"
+            assertReducedMotionPageIdentity(launched)
+            passed += stage
+            stage = "long_home_diagnostic_keeps_metrics_compact"
+            assertHomeLongDiagnosticFits(launched)
+            passed += stage
             val homeGlobeHost = onMainValue { sharedGlobe.parent }
 
             stage = "two_pointer_map_pinch_zoom_does_not_page"
@@ -287,6 +318,120 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         waitForIdleSync()
         awaitCondition {
             onMainCondition { (pager as? androidx.viewpager2.widget.ViewPager2)?.currentItem == 1 }
+        }
+    }
+
+    private fun assertProfileAccordionExpansion(activity: MainActivity) {
+        val pair = onMainValue {
+            val content = activity.findViewById<View>(android.R.id.content)
+            val toggle = checkNotNull(findView(content) {
+                it.isClickable && it.contentDescription?.toString()?.startsWith("Устройства и сессии") == true
+            }) { "Profile devices accordion toggle is missing" }
+            val group = toggle.parent as? ViewGroup
+                ?: error("Profile devices accordion has no content group")
+            check(group.childCount >= 2)
+            toggle to group.getChildAt(group.childCount - 1)
+        }
+        val (toggle, accordionContent) = pair
+        onMainValue {
+            check(accordionContent.visibility == View.GONE) { "Profile accordion should start collapsed" }
+            repeat(3) { index ->
+                check(toggle.performClick()) { "Profile accordion tap ${index + 1} was not handled" }
+                SystemClock.sleep(28)
+            }
+        }
+        awaitCondition {
+            onMainCondition {
+                accordionContent.visibility == View.VISIBLE && accordionContent.height > 0 &&
+                    accordionContent.layoutParams.height == ViewGroup.LayoutParams.WRAP_CONTENT
+            }
+        }
+        check(onMainValue {
+            findText(accordionContent, "Подключите аккаунт, чтобы увидеть устройства.") != null
+        }) { "Expanded profile accordion should show its offline empty-account summary" }
+        onMainValue { check(toggle.performClick()) }
+        awaitCondition { onMainCondition { accordionContent.visibility == View.GONE } }
+    }
+
+    private fun assertReducedMotionPageIdentity(activity: MainActivity) {
+        val preferences = targetContext.getSharedPreferences("profile_settings", Context.MODE_PRIVATE)
+        val original = preferences.getBoolean("reduced_motion", false)
+        try {
+            runOnMainSync { activity.setReducedMotionEnabled(true) }
+            waitForIdleSync()
+            val webView = onMainValue {
+                val globe = checkNotNull(findViews(activity.findViewById(android.R.id.content)) { it is RouteGlobeView }.singleOrNull())
+                checkNotNull(findViews(globe) { it is WebView }.singleOrNull()) as WebView
+            }
+            check(runAtlasScript(webView, "String(window.deyttMapReducedMotion)") == "true") {
+                "Reduced-motion preference should reach the shared map renderer"
+            }
+            val pager = onMainValue {
+                checkNotNull(findView(activity.findViewById(android.R.id.content)) {
+                    it.javaClass.name == "androidx.viewpager2.widget.ViewPager2"
+                }) as androidx.viewpager2.widget.ViewPager2
+            }
+            onMainValue {
+                check(pager.currentItem == 0 && pager.scrollState == androidx.viewpager2.widget.ViewPager2.SCROLL_STATE_IDLE)
+                val motionField = MainActivity::class.java.getDeclaredField("pageMotionEnabled").apply { isAccessible = true }
+                check(motionField.getBoolean(activity).not()) { "Reduced motion should disable page transforms" }
+                for (index in 0 until pager.childCount) {
+                    val page = pager.getChildAt(index)
+                    if (page.isShown) {
+                        check(kotlin.math.abs(page.alpha - 1f) < .001f &&
+                            kotlin.math.abs(page.scaleX - 1f) < .001f &&
+                            kotlin.math.abs(page.scaleY - 1f) < .001f &&
+                            kotlin.math.abs(page.translationX) < .5f) {
+                            "Reduced-motion pager page should retain identity transforms: alpha=${page.alpha}, scale=${page.scaleX}/${page.scaleY}, x=${page.translationX}"
+                        }
+                    }
+                }
+            }
+            runOnMainSync { activity.setReducedMotionEnabled(false) }
+            waitForIdleSync()
+            check(runAtlasScript(webView, "String(window.deyttMapReducedMotion)") == "false") {
+                "Restoring motion should reach the shared map renderer"
+            }
+            check(onMainValue { pager.currentItem == 0 && pager.scrollState == androidx.viewpager2.widget.ViewPager2.SCROLL_STATE_IDLE })
+        } finally {
+            runOnMainSync { activity.setReducedMotionEnabled(original) }
+        }
+    }
+
+    private fun assertHomeLongDiagnosticFits(activity: MainActivity) {
+        val views = onMainValue {
+            val content = activity.findViewById<View>(android.R.id.content)
+            val latency = checkNotNull(findView(content) { it.tag == "home-latency" })
+            val speed = checkNotNull(findView(content) { it.tag == "home-speed" })
+            fun value(metric: View): TextView = checkNotNull(findViews(metric) { it is TextView }
+                .filterIsInstance<TextView>().lastOrNull()) { "Metric value is missing" }
+            Triple(latency, value(latency), value(speed))
+        }
+        val (_, latency, speed) = views
+        val originalLatency = latency.text
+        val originalSpeed = speed.text
+        try {
+            onMainValue {
+                latency.text = "после подключения"
+                speed.text = "недоступно"
+            }
+            waitForIdleSync()
+            val density = targetContext.resources.displayMetrics.scaledDensity
+            check(latency.textSize <= 13.1f * density && speed.textSize <= 13.1f * density) {
+                "Long offline metric labels should compact to readable 13sp text: latency=${latency.textSize / density}sp speed=${speed.textSize / density}sp"
+            }
+            val content = activity.findViewById<View>(android.R.id.content)
+            val refresh = checkNotNull(findView(content) { it.tag == "home-refresh" })
+            val bounds = Rect()
+            check(onMainValue { refresh.getGlobalVisibleRect(bounds) && bounds.height() == refresh.height && bounds.width() >= content.width * .85f }) {
+                "Home refresh action must remain full-width and visible with long offline diagnostics: $bounds"
+            }
+        } finally {
+            onMainValue {
+                latency.text = originalLatency
+                speed.text = originalSpeed
+            }
+            waitForIdleSync()
         }
     }
 
@@ -382,8 +527,8 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
 
         val zoomAfter = readAtlasTargetZoom(webView)
         val pinchDiagnostics = readAtlasPinchDiagnostics(webView)
-        check(zoomAfter > zoomBefore * 1.25) {
-            "Native pinch did not increase atlas zoom by 25%: before=$zoomBefore after=$zoomAfter; $pinchDiagnostics"
+        check(zoomBefore in 1.08..1.12 && zoomAfter > zoomBefore + .02 && zoomAfter <= 1.2 + .005) {
+            "Native pinch should increase from default 1.1 while respecting the 1.2 cap: before=$zoomBefore after=$zoomAfter; $pinchDiagnostics"
         }
         val pager = onMainValue {
             checkNotNull(findView(activity.findViewById(android.R.id.content)) {
@@ -417,7 +562,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         }
         awaitPagerSettled(activity, 0, "Подключить")
         runOnMainSync {
-            android.util.Log.i("OpenFluxVisibilityQA", "pinch_zoom=$zoomBefore->$zoomAfter; pager=0; map_reset=1.1")
+            android.util.Log.i("OpenFluxVisibilityQA", "pinch_zoom=$zoomBefore->$zoomAfter; cap=1.2; pager=0; map_reset=1.1")
         }
     }
 
