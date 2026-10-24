@@ -73,6 +73,30 @@ internal object AppLanguage {
             "Остановить и сменить" to "Stop and change",
             "Значок AmneziaWG" to "AmneziaWG icon",
             "Оригинальный знак AmneziaWG" to "AmneziaWG logo",
+            "Введите код" to "Enter code",
+            "Получить код" to "Get code",
+            "Отправляем…" to "Sending…",
+            "Проверяю, доступен ли вход через бота." to "Checking whether bot sign-in is available.",
+            "Проверяем…" to "Checking…",
+            "Подтверждаю аккаунт и загружаю доступные профили." to "Verifying the account and loading available profiles.",
+            "Импортируйте подписку" to "Import your subscription",
+            "Привяжите Telegram" to "Link Telegram",
+            "Шаг 1 · Аккаунт" to "Step 1 · Account",
+            "Шаг 2 · Код" to "Step 2 · Code",
+            "Шаг 2 · Маршруты" to "Step 2 · Routes",
+            "Имя пользователя Telegram" to "Telegram username",
+            "Код подтверждения Telegram" to "Telegram verification code",
+            "Ссылка на релиз не прошла проверку." to "The release link did not pass verification.",
+            "Для проверки через выход требуется системное разрешение Android" to "Android system permission is required to check this exit",
+            "Код отправлен в Telegram и действует 5 минут." to "The code was sent to Telegram and is valid for five minutes.",
+            "Не удалось доставить код. Открой ./c ниже, чтобы получить его." to "Could not deliver the code. Open ./c below to retrieve it.",
+            "Этого username пока нет в боте. Открой ./c ниже один раз." to "This username is not in the bot yet. Open ./c below once.",
+            "Код отправлен в Telegram и действует 5 минут. Переключаться в бот не нужно." to "The code was sent to Telegram and is valid for five minutes. You do not need to switch to the bot.",
+            "Не получилось доставить сообщение. Открой ./c ниже, чтобы получить код." to "Could not deliver the message. Open ./c below to retrieve the code.",
+            "Этого аккаунта пока нет в боте. Открой ./c ниже один раз — код придёт в чат." to "This account is not in the bot yet. Open ./c below once and the code will arrive in the chat.",
+            "Слишком часто. Подожди и попробуй ещё раз." to "Too many attempts. Wait and try again.",
+            "Код неверный или истёк. Запроси новый." to "The code is incorrect or expired. Request a new one.",
+            "Попытки закончились. Начни вход заново." to "The attempt limit was reached. Start sign-in again.",
             "Перенос приложения" to "Transfer installation",
             "Отправить в поддержку обращение с просьбой перенести deytt.connect на это устройство?" to "Send support a request to move deytt.connect to this device?",
             "Обратиться в поддержку" to "Contact support",
@@ -90,6 +114,9 @@ internal object AppLanguage {
             "Задержка" to "Ping", "Задержка: —" to "Ping: —", "Пинг" to "Ping", "Пинг: —" to "Ping: —",
             "Скорость: —" to "Speed: —",
             "Скорость: проверить" to "Test speed",
+            "Отклик" to "Latency",
+            "Скорость" to "Speed",
+            "Обновить замер" to "Refresh measurement",
             "Последний замер загрузки. Нажмите, чтобы проверить маршруты." to "Last download test. Tap to compare routes.",
             "Войти через Telegram" to "Sign in with Telegram",
             "Быстрый QUIC-маршрут" to "QUIC transport",
@@ -113,6 +140,9 @@ internal object AppLanguage {
         Regex("^версия (.+)$").matchEntire(value)?.let { return "VERSION ${it.groupValues[1]}" }
         Regex("^Проверяем маршрут и интернет · (.+)$").matchEntire(value)?.let {
             return "Checking route and internet · ${it.groupValues[1]}"
+        }
+        Regex("^Не удалось начать вход\\. Проверь соединение и попробуй снова\\. Код: (.+)$").matchEntire(value)?.let {
+            return "Could not start sign-in. Check your connection and try again. Reference: ${it.groupValues[1]}"
         }
         Regex("^Настраиваем защищённый туннель · (.+)$").matchEntire(value)?.let {
             return "Setting up the secure tunnel · ${it.groupValues[1]}"
@@ -209,6 +239,9 @@ internal object AppLanguage {
         }
         Regex("^Пинг через выбранный маршрут: ([0-9]+) миллисекунд$").matchEntire(value)?.let {
             return "Selected route ping: ${it.groupValues[1]} milliseconds"
+        }
+        Regex("^Скорость загрузки, проба ([0-9]+) с\\. Нажмите для проверки маршрутов\\.$").matchEntire(value)?.let {
+            return "Download speed, ${it.groupValues[1]}-second sample. Tap to check routes."
         }
         Regex("^Медиана HTTPS-ответов через активное соединение: ([0-9]+) миллисекунд$").matchEntire(value)?.let {
             return "Median HTTPS response time through the active connection: ${it.groupValues[1]} milliseconds"
@@ -504,6 +537,7 @@ internal object AppLanguage {
         "измеряем скорость…" to "measuring speed…",
         "Telegram Stars" to "Telegram Stars",
         "Войдите в Telegram, чтобы загрузить подписку и маршруты." to "Sign in to Telegram to load your subscription and routes.",
+        "Войдите в Telegram, чтобы обновить подписку и маршруты." to "Sign in to Telegram to update your subscription and routes.",
         "Ссылка готова к импорту. Подписка будет заменена, текущее соединение отключится." to "The link is ready to import. Your subscription will be replaced and the current connection will disconnect.",
         "Ссылка готова к импорту. Нажмите кнопку ниже, чтобы загрузить подписку и маршруты." to "The link is ready to import. Tap the button below to load your subscription and routes.",
         "Импортировать подписку" to "Import subscription",
@@ -513,6 +547,9 @@ internal object AppLanguage {
         "Обновить подписку" to "Refresh subscription",
         "Повторить загрузку" to "Retry loading",
         "Проверяем подписку в Telegram…" to "Checking subscription in Telegram…",
+        "Проверяем подписку…" to "Checking subscription…",
+        "Загружаем дополнительные маршруты…" to "Loading additional routes…",
+        "Сохраняем подписку…" to "Saving subscription…",
         "Активная подписка не найдена. Оформите её в Telegram, затем повторите загрузку." to "No active subscription found. Start one in Telegram, then try loading again.",
         "Не удалось загрузить подписку. Проверьте соединение и попробуйте ещё раз." to "Could not load the subscription. Check your connection and try again.",
         "Сброс — только после подтверждения в Telegram." to "Keys reset only after confirmation in Telegram.",

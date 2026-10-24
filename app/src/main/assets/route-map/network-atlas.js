@@ -4,6 +4,9 @@
   const DEG = Math.PI / 180;
   const TAU = Math.PI * 2;
   const MAX_ZOOM = 32;
+  const SAVE_DATA_PIXEL_RATIO_CAP = 1.5;
+  const MOBILE_PIXEL_RATIO_CAP = 3;
+  const DESKTOP_PIXEL_RATIO_CAP = 2.25;
   const ZOOM_EASE_MS = 120;
   const PAN_EASE_MS = 120;
   const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
@@ -285,10 +288,13 @@
       this.availableLocationKeys = new Set(LOCATION_ORDER);
       this.showcaseFocused = false;
       this.overviewMode = false;
+      this.connected = false;
       this.hovered = null;
       this.annotationFilter = null;
       this.dragging = false;
       this.activePointers = new Map();
+      this.gesturePointers = new Set();
+      this.gestureStartedInsideGlobe = false;
       this.pinchDistance = 0;
       this.centerLon = Number.isFinite(this.options.initialLon) ? this.options.initialLon : 15;
       this.centerLat = Number.isFinite(this.options.initialLat) ? this.options.initialLat : 50;
@@ -309,6 +315,7 @@
       this.targetBoundaryLines = [];
       this.landPolygons = [];
       this.pixelRatio = 1;
+      this.lastReportedGlobeRadius = null;
       this.staticCanvas = document.createElement("canvas");
       this.staticContext = this.staticCanvas.getContext("2d");
       this.staticDirty = true;
@@ -351,6 +358,11 @@
 
     bind() {
       this.canvas.addEventListener("pointerdown", (event) => {
+        if (this.gesturePointers.size === 0) {
+          this.gestureStartedInsideGlobe = this.isInsideVisibleGlobe(event.clientX, event.clientY);
+        }
+        this.gesturePointers.add(event.pointerId);
+        if (!this.gestureStartedInsideGlobe) return;
         this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         this.dragging = true;
         this.velocityLon = 0;
@@ -363,6 +375,7 @@
         }
       });
       this.canvas.addEventListener("pointermove", (event) => {
+        if (this.gesturePointers.has(event.pointerId) && !this.gestureStartedInsideGlobe) return;
         const box = this.canvas.getBoundingClientRect();
         const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
         if (this.activePointers.has(event.pointerId)) this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -393,6 +406,7 @@
         this.start();
       });
       this.canvas.addEventListener("wheel", (event) => {
+        if (!this.isInsideVisibleGlobe(event.clientX, event.clientY)) return;
         event.preventDefault();
         const delta = event.deltaMode === 1 ? event.deltaY * 18 : event.deltaY;
         // Normalize large mouse-wheel bursts so the camera never jumps between frames.
@@ -402,6 +416,12 @@
         this.start();
       }, { passive: false });
       const release = (event) => {
+        if (!this.gesturePointers.has(event.pointerId)) return;
+        this.gesturePointers.delete(event.pointerId);
+        if (!this.gestureStartedInsideGlobe) {
+          if (this.gesturePointers.size === 0) this.gestureStartedInsideGlobe = false;
+          return;
+        }
         this.activePointers.delete(event.pointerId);
         this.pinchDistance = 0;
         this.dragging = this.activePointers.size > 0;
@@ -409,10 +429,13 @@
         if (remaining) this.lastPointer = remaining;
         else this.root.classList.remove("is-dragging");
         if (event.pointerType === "touch") this.setHovered(null);
+        if (this.gesturePointers.size === 0) this.gestureStartedInsideGlobe = false;
         this.start();
       };
-      this.canvas.addEventListener("pointerup", release);
-      this.canvas.addEventListener("pointercancel", release);
+      // An outside-start mouse drag is intentionally not captured, so finish
+      // its bookkeeping at document level if the pointer is released off-canvas.
+      document.addEventListener("pointerup", release);
+      document.addEventListener("pointercancel", release);
       this.canvas.addEventListener("pointerleave", () => {
         if (!this.dragging) this.setHovered(null);
       });
@@ -475,7 +498,9 @@
       const previousWidth = this.width;
       const previousHeight = this.height;
       const pixelRatioCap = this.options.pixelRatioCap ||
-        (rectangle.width < 520 || (navigator.connection && navigator.connection.saveData) ? 1.5 : 2);
+        (navigator.connection && navigator.connection.saveData
+          ? SAVE_DATA_PIXEL_RATIO_CAP
+          : rectangle.width < 520 ? MOBILE_PIXEL_RATIO_CAP : DESKTOP_PIXEL_RATIO_CAP);
       const pixelRatioFloor = Math.min(this.options.pixelRatioFloor || 1, pixelRatioCap);
       const ratio = Math.min(Math.max(window.devicePixelRatio || 1, pixelRatioFloor), pixelRatioCap);
       this.pixelRatio = ratio;
@@ -489,8 +514,25 @@
       this.staticCanvas.height = this.canvas.height;
       this.staticContext.setTransform(ratio, 0, 0, ratio, 0, 0);
       this.radius = Math.min(this.width, this.height) * (this.width < 520 ? 0.405 : 0.43);
+      this.reportNativeGlobeRadius();
       this.staticDirty = true;
       this.start();
+    }
+
+    isInsideVisibleGlobe(clientX, clientY) {
+      const box = this.canvas.getBoundingClientRect();
+      const radius = Math.max(0, this.radius * this.zoom - .5);
+      return Math.hypot(clientX - box.left - box.width / 2, clientY - box.top - box.height / 2) <= radius;
+    }
+
+    reportNativeGlobeRadius() {
+      const bridge = window.DeyttAtlasBridge;
+      const side = Math.min(this.width, this.height);
+      if (!bridge || typeof bridge.onGlobeRadiusChanged !== "function" || !side) return;
+      const radiusFraction = Math.max(0, this.radius * this.zoom - .5) / side;
+      if (this.lastReportedGlobeRadius != null && Math.abs(this.lastReportedGlobeRadius - radiusFraction) < .002) return;
+      this.lastReportedGlobeRadius = radiusFraction;
+      bridge.onGlobeRadiusChanged(radiusFraction);
     }
 
     basis() {
@@ -516,7 +558,7 @@
 
     projectLocation(location, lift) { return this.projectVector(vector(location.lat, location.lon), lift); }
 
-    clampZoom(value) { return clamp(value, .82, this.overviewMode ? 1.2 : MAX_ZOOM); }
+    clampZoom(value) { return clamp(value, .82, MAX_ZOOM); }
 
     colors() {
       const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
@@ -897,11 +939,8 @@
     }
 
     drawRoutes(colors, time) {
-      const route = ROUTES[this.route];
-      const activeRoute = this.route === "auto" && this.autoExitRouteKey
-        ? ROUTES[this.autoExitRouteKey]
-        : route;
-      (activeRoute || route).links.forEach((link) => {
+      const activeRoute = this.activeRouteDefinition();
+      (activeRoute ? activeRoute.links : []).forEach((link) => {
         if (link.every((key) => this.availableLocationKeys.has(key))) {
           this.drawArc(link[0], link[1], colors, true);
         }
@@ -914,10 +953,9 @@
     }
 
     drawTraffic(colors, time) {
-      const activeRoute = this.route === "auto" && this.autoExitRouteKey
-        ? ROUTES[this.autoExitRouteKey]
-        : ROUTES[this.route];
-      const links = (activeRoute || ROUTES[this.route]).links.filter((link) =>
+      const activeRoute = this.activeRouteDefinition();
+      if (!activeRoute) return;
+      const links = activeRoute.links.filter((link) =>
         link.every((key) => this.availableLocationKeys.has(key))
       );
       const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
@@ -989,12 +1027,21 @@
       return ROUTES[this.route].nodes;
     }
 
+    activeRouteDefinition() {
+      if (this.route === "auto") {
+        if (this.autoExitRouteKey && ROUTES[this.autoExitRouteKey]) return ROUTES[this.autoExitRouteKey];
+        if (this.connected) return null;
+      }
+      return ROUTES[this.route] || null;
+    }
+
     drawNode(key, location, colors, kind) {
+      const active = kind === "user" || this.activeRouteNodeKeys().includes(key);
+      if (this.connected && kind !== "user" && !active) return;
       const context = this.context;
       const projected = this.projectLocation(location, 1.008);
       this.projectedNodes[key] = projected;
       if (projected.z <= 0.015) return;
-      const active = kind === "user" || this.activeRouteNodeKeys().includes(key);
       const hovered = this.hovered === key;
       const outer = active || hovered ? (hovered ? 12 : 8) : 0;
       if (outer) {
@@ -1025,7 +1072,8 @@
       if (!point || point.z <= .03) return;
       if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
       const active = key === "user" || this.activeRouteNodeKeys().includes(key);
-      const autoCandidate = this.route === "auto" && ROUTES.auto.nodes.includes(key);
+      if (this.connected && key !== "user" && !active) return;
+      const autoCandidate = !this.connected && this.route === "auto" && ROUTES.auto.nodes.includes(key);
       if (!active && !autoCandidate && this.hovered !== key) return;
       const context = this.context;
       const location = key === "user" ? this.userLocation : LOCATIONS[key];
@@ -1186,6 +1234,7 @@
       if (Math.abs(this.targetLon - this.centerLon) < .01) this.centerLon = this.targetLon;
       if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
       if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
+      if (Math.abs(this.zoom - previousZoom) > .0001) this.reportNativeGlobeRadius();
       if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 || Math.abs(this.zoom - previousZoom) > .0001) {
         this.staticDirty = true;
       }
@@ -1357,6 +1406,18 @@
       if (this.trafficActive === next) return;
       this.trafficActive = next;
       this.trafficStartedAt = next ? performance.now() : 0;
+      this.start();
+    }
+
+    setConnected(active) {
+      const next = Boolean(active);
+      if (this.connected === next) return;
+      this.connected = next;
+      if (!next) {
+        this.autoExitCountry = null;
+        this.autoExitRouteKey = null;
+      }
+      this.labelPlacements.clear();
       this.start();
     }
 

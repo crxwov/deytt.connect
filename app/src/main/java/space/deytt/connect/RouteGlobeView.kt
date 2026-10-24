@@ -26,6 +26,9 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var pageLoaded = false
     private var backdropStageActive = false
     private var overviewModeActive = false
+    private var connected = false
+    private var gestureStartedInsideGlobe = false
+    @Volatile private var visibleGlobeRadiusFraction: Float? = null
     private var reducedMotionActive = false
     private var availableLocations = setOf("nl", "de", "fi", "ru")
     private var trafficActive = false
@@ -38,6 +41,13 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             val node = code.lowercase()
             if (node !in setOf("nl", "de", "fi", "ru", "it", "user")) return
             post { onMapNodeTapped?.invoke(node) }
+        }
+
+        @JavascriptInterface
+        fun onGlobeRadiusChanged(radiusFraction: Float) {
+            if (radiusFraction.isFinite() && radiusFraction in 0f..16f) {
+                visibleGlobeRadiusFraction = radiusFraction
+            }
         }
     }
 
@@ -85,16 +95,23 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                     applyUserLocation()
                     applyEgressCountry()
                     applyActiveAutoRoute()
+                    applyConnected()
                     applyTrafficActive()
                     applyBackdropStage()
                 }
             }
             setOnTouchListener { view, event ->
-                parentInterceptPolicy(event.actionMasked, event.pointerCount)?.let { disallow ->
-                    // Single-finger movement belongs to the pager or Home scroll view. Lock
-                    // interception only once a second finger starts a globe gesture.
-                    if (disallow && backdropStageActive) return@setOnTouchListener false
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    gestureStartedInsideGlobe = !backdropStageActive && isTouchInsideVisibleGlobe(
+                        event.x, event.y, view.width, view.height, visibleGlobeRadiusFraction,
+                    )
+                }
+                val allowGlobeGesture = gestureStartedInsideGlobe && !backdropStageActive
+                parentInterceptPolicy(event.actionMasked, allowGlobeGesture)?.let { disallow ->
                     view.parent?.requestDisallowInterceptTouchEvent(disallow)
+                }
+                if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                    gestureStartedInsideGlobe = false
                 }
                 false
             }
@@ -122,7 +139,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     }
 
     internal fun setEgressCountry(countryCode: String?) {
-        val normalized = countryCode?.uppercase()?.takeIf { it in setOf("NL", "DE", "FI", "RU", "IT") }
+        val normalized = countryCode?.uppercase()?.takeIf { connected && it in setOf("NL", "DE", "FI", "RU", "IT") }
         if (egressCountryCode == normalized) return
         egressCountryCode = normalized
         atlas.contentDescription = mapDescription(selectedRoute)
@@ -131,10 +148,23 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
     internal fun setActiveAutoRoute(routeKey: String?) {
         val allowed = setOf("nl", "de", "fi", "ru", "it", "ru-de")
-        val normalized = routeKey?.lowercase()?.takeIf(allowed::contains)
+        val normalized = routeKey?.lowercase()?.takeIf { connected && it in allowed }
         if (activeAutoRouteKey == normalized) return
         activeAutoRouteKey = normalized
         applyActiveAutoRoute()
+    }
+
+    internal fun setConnected(active: Boolean) {
+        if (connected == active) return
+        connected = active
+        if (!active) {
+            egressCountryCode = null
+            activeAutoRouteKey = null
+            atlas.contentDescription = mapDescription(selectedRoute)
+            applyEgressCountry()
+            applyActiveAutoRoute()
+        }
+        applyConnected()
     }
 
     internal fun setTrafficActive(active: Boolean) {
@@ -229,6 +259,14 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         val route = activeAutoRouteKey?.let(JSONObject::quote) ?: "null"
         atlas.evaluateJavascript(
             "window.deyttSetMapActiveAutoRoute && window.deyttSetMapActiveAutoRoute($route)",
+            null,
+        )
+    }
+
+    private fun applyConnected() {
+        if (!pageLoaded) return
+        atlas.evaluateJavascript(
+            "window.deyttSetMapConnected && window.deyttSetMapConnected($connected)",
             null,
         )
     }
@@ -349,11 +387,29 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     companion object {
         private const val ASSET_HOST = "appassets.androidplatform.net"
 
-        internal fun parentInterceptPolicy(actionMasked: Int, pointerCount: Int): Boolean? = when {
-            actionMasked == MotionEvent.ACTION_POINTER_DOWN && pointerCount >= 2 -> true
-            actionMasked == MotionEvent.ACTION_POINTER_UP -> pointerCount > 2
+        internal fun parentInterceptPolicy(actionMasked: Int, gestureStartedInsideGlobe: Boolean): Boolean? = when {
+            actionMasked == MotionEvent.ACTION_DOWN ||
+                actionMasked == MotionEvent.ACTION_MOVE ||
+                actionMasked == MotionEvent.ACTION_POINTER_DOWN ||
+                actionMasked == MotionEvent.ACTION_POINTER_UP -> gestureStartedInsideGlobe
             actionMasked == MotionEvent.ACTION_UP || actionMasked == MotionEvent.ACTION_CANCEL -> false
             else -> null
+        }
+
+        internal fun isTouchInsideVisibleGlobe(
+            x: Float,
+            y: Float,
+            width: Int,
+            height: Int,
+            radiusFraction: Float?,
+        ): Boolean {
+            if (width <= 0 || height <= 0 || radiusFraction == null || !radiusFraction.isFinite() || radiusFraction <= 0f) {
+                return false
+            }
+            val radius = minOf(width, height) * radiusFraction
+            val dx = x - width / 2f
+            val dy = y - height / 2f
+            return dx * dx + dy * dy <= radius * radius
         }
 
         internal fun routeKeyFor(selectedRouteId: String): String {

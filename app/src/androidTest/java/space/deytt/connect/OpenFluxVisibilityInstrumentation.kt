@@ -1,6 +1,7 @@
 package space.deytt.connect
 
 import android.Manifest
+import android.app.Dialog
 import android.app.Instrumentation
 import android.content.Context
 import android.content.Intent
@@ -14,9 +15,17 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.MotionEvent
 import android.view.InputDevice
+import android.view.Choreographer
+import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.TextView
 import android.webkit.WebView
 import android.widget.ScrollView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.CountDownLatch
@@ -31,6 +40,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         val passed = arrayListOf<String>()
         var stage = "isolated_qa_preflight"
         var activity: MainActivity? = null
+        var setupActivity: SetupActivity? = null
         try {
             check(targetContext.packageName.endsWith(".qa")) { "Isolated QA application required" }
             assertNoNativeConnection()
@@ -141,19 +151,34 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 results.putStringArrayList("header_geometry", ArrayList(headerGeometryLogs))
             }
 
-            fun capturePage(name: String, expectedText: String, pageIndex: Int) {
-                awaitPagerSettled(launched, pageIndex, expectedText)
-                awaitVisibleText(launched, expectedText)
-                scrollCurrentPageToTop(launched, expectedText)
-                awaitPagerSettled(launched, pageIndex, expectedText)
-                awaitAtlasReady(sharedGlobe)
+            fun capturePage(
+                name: String,
+                expectedText: String,
+                pageIndex: Int,
+                pageActivity: MainActivity = launched,
+            ) {
+                val pageGlobe = onMainValue {
+                    findViews(pageActivity.findViewById(android.R.id.content)) { it is RouteGlobeView }
+                        .single() as RouteGlobeView
+                }
+                awaitPagerSettled(pageActivity, pageIndex, expectedText)
+                awaitVisibleText(pageActivity, expectedText)
+                scrollCurrentPageToTop(pageActivity, expectedText)
+                awaitPagerSettled(pageActivity, pageIndex, expectedText)
+                awaitAtlasReady(pageGlobe)
                 runOnMainSync {
-                    val title = checkNotNull(findText(launched.findViewById(android.R.id.content), expectedText))
+                    val title = checkNotNull(findText(pageActivity.findViewById(android.R.id.content), expectedText))
                     check(isVisible(title)) { "$name title should be visible at the viewport top" }
                     check(isTransparentScreenRoot(title)) { "$name screen must be transparent over the shared globe" }
-                    check(findViews(launched.findViewById(android.R.id.content)) { it is RouteGlobeView }.single() === sharedGlobe)
+                    check(findViews(pageActivity.findViewById(android.R.id.content)) { it is RouteGlobeView }.single() === pageGlobe)
                     if (pageIndex == 0) {
-                        val content = launched.findViewById<View>(android.R.id.content)
+                        val content = pageActivity.findViewById<View>(android.R.id.content)
+                        val pager = checkNotNull(findView(content) { it.javaClass.name == "androidx.viewpager2.widget.ViewPager2" })
+                            as androidx.viewpager2.widget.ViewPager2
+                        val homePage = checkNotNull(activePagerPage(pager, expectedText))
+                        check(findView(homePage) { it is ScrollView } == null) {
+                            "Home should fit its controls in the pager without vertical scrolling"
+                        }
                         val shell = checkNotNull(findView(content) { it.tag == "shell-starfield" })
                         val shellBounds = Rect()
                         check(shell.isShown && shell.getGlobalVisibleRect(shellBounds) && shellBounds.width() >= content.width * .95f) {
@@ -180,10 +205,10 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                             "Home should not show a separate route-details control"
                         }
                     }
-                    headerGeometryLogs += "$name:${readHeaderGeometry(launched)}"
+                    headerGeometryLogs += "$name:${readHeaderGeometry(pageActivity)}"
                     results.putStringArrayList("header_geometry", ArrayList(headerGeometryLogs))
                 }
-                awaitPagerSettled(launched, pageIndex, expectedText)
+                awaitPagerSettled(pageActivity, pageIndex, expectedText)
                 val bitmap = checkNotNull(uiAutomation.takeScreenshot()) { "Could not capture $name page" }
                 val directory = File(targetContext.cacheDir, "main-pager-visual-qa")
                 check(directory.exists() || directory.mkdirs()) { "Cannot create screenshot directory" }
@@ -252,16 +277,203 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             check(SelectedRouteStore(targetContext).read().id == "openflux:DE")
             assertEmptyCredentials()
             assertNoNativeConnection()
+
+            stage = "setup_entry_and_pairing_form_stay_offline"
+            setupActivity = startActivitySync(Intent(targetContext, SetupActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SetupActivity
+            waitForIdleSync()
+            fun assertSetupLayout(expectedHeader: String, stateName: String): TextView {
+                val current = checkNotNull(setupActivity)
+                val setupRoot = current.findViewById<View>(android.R.id.content)
+                val page = checkNotNull(findView(setupRoot) { it.tag == "setup-content" })
+                val header = checkNotNull(findView(page) { it.tag == "setup-header" })
+                val topBack = findView(page) { it.tag == "setup-back" }
+                val headerTitle = checkNotNull(findText(header, expectedHeader))
+                val introCard = checkNotNull(findView(page) { it.tag == "setup-intro-card" && it.isShown })
+                val introCopy = checkNotNull(findView(introCard) { it.tag == "setup-intro-copy" })
+                val setupAction = checkNotNull(findView(introCard) { it.tag == "setup-primary" && it.isShown }) as TextView
+                val status = checkNotNull(findView(introCard) { it.tag == "setup-state" })
+                check(isVisible(introCard) && isVisible(headerTitle)) { "$stateName setup card and title should be visible" }
+                awaitCondition {
+                    onMainCondition {
+                        current.window.decorView.hasWindowFocus() && isVisible(introCard) && isVisible(headerTitle)
+                    }
+                }
+                check(setupAction.isEnabled && setupAction.parent === introCard && status.parent === introCard) {
+                    "$stateName action and status should stay in the explanatory card"
+                }
+                val copyBounds = Rect()
+                val actionBounds = Rect()
+                val headerBounds = Rect()
+                val cardBounds = Rect()
+                val pageBounds = Rect()
+                check(introCopy.getGlobalVisibleRect(copyBounds) && setupAction.getGlobalVisibleRect(actionBounds) &&
+                    header.getGlobalVisibleRect(headerBounds) && introCard.getGlobalVisibleRect(cardBounds) &&
+                    page.getGlobalVisibleRect(pageBounds)) { "$stateName setup geometry should be measurable" }
+                val density = current.resources.displayMetrics.density
+                val copyActionGap = actionBounds.top - copyBounds.bottom
+                val headerCardGap = cardBounds.top - headerBounds.bottom
+                check(copyActionGap in 0..(density * 34).toInt()) {
+                    "$stateName action should sit beside its explanation: gap=${copyActionGap / density}dp"
+                }
+                check(headerCardGap in 0..(density * 16).toInt()) {
+                    "$stateName card should stay close to its heading: gap=${headerCardGap / density}dp"
+                }
+                val centerTop = topBack?.let { back ->
+                    val backBounds = Rect()
+                    check(back.getGlobalVisibleRect(backBounds)) { "Update back action should be visible" }
+                    check(backBounds.top <= pageBounds.top + pageBounds.height() * .15f) {
+                        "Update back action should remain at the top: page=$pageBounds back=$backBounds"
+                    }
+                    backBounds.bottom
+                } ?: pageBounds.top
+                val availableCenter = (centerTop + pageBounds.bottom) / 2f
+                check(kotlin.math.abs((headerBounds.top + cardBounds.bottom) / 2f - availableCenter) <= pageBounds.height() * .20f) {
+                    "$stateName title and card should be centered in their available region: page=$pageBounds header=$headerBounds card=$cardBounds"
+                }
+                results.putString("setup_layout_$stateName", "headerCardGapDp=${headerCardGap / density};copyActionGapDp=${copyActionGap / density};cardHeightDp=${cardBounds.height() / density}")
+                awaitNextFrame(current.window.decorView)
+                return setupAction
+            }
+
+            check(SubscriptionStore(targetContext).readCurrent() != null) { "The update-stage screenshot needs the isolated synthetic subscription fixture" }
+            val updateAction = assertSetupLayout("Обновить подписку", "update")
+            check(updateAction.isEnabled)
+            waitForIdleSync()
+            saveQaScreenshot("setup-update", screenshots, results)
+            runOnMainSync { setupActivity!!.finish() }
+            setupActivity = null
+            waitForIdleSync()
+            val syntheticSubscriptionFile = File(targetContext.filesDir, "subscription/current.json")
+            check(syntheticSubscriptionFile.isFile && syntheticSubscriptionFile.delete()) {
+                "Could not clear the isolated synthetic subscription before the entry-stage screenshot"
+            }
+            check(SubscriptionStore(targetContext).readCurrent() == null)
+            setupActivity = startActivitySync(Intent(targetContext, SetupActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) as SetupActivity
+            waitForIdleSync()
+            val setupAction = assertSetupLayout("Подключить Telegram", "entry")
+            check(setupAction.isEnabled)
+            saveQaScreenshot("setup-entry", screenshots, results)
+            runOnMainSync { check(setupAction.performClick()) }
+            waitForIdleSync()
+            val pairingDialog = setupActivity!!.javaClass.getDeclaredField("pairingDialog").run {
+                isAccessible = true
+                get(setupActivity)
+            } as? Dialog
+            val activePairingDialog = checkNotNull(pairingDialog) { "Pairing form did not open" }
+            val pairingRoot = checkNotNull(activePairingDialog.window?.decorView) { "Pairing form window did not open" }
+            check(findView(pairingRoot) { it is ScrollView } != null) {
+                "Pairing form should allow scrolling when the keyboard reduces available height"
+            }
+            check((activePairingDialog.window!!.attributes.softInputMode and WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST) ==
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE) {
+                "Pairing dialog should resize for the on-screen keyboard"
+            }
+            val usernameInput = checkNotNull(findView(pairingRoot) {
+                it is EditText && it.contentDescription?.toString() == AppLanguage.text(targetContext, "Имя пользователя Telegram")
+            }) as EditText
+            val codeInput = checkNotNull(findView(pairingRoot) {
+                it is EditText && it.contentDescription?.toString() == AppLanguage.text(targetContext, "Код подтверждения Telegram")
+            }) as EditText
+            val pairingPrimary = checkNotNull(findView(pairingRoot) { it.tag == "pairing-primary" && it.isShown })
+            check(usernameInput.isShown && (usernameInput.imeOptions and EditorInfo.IME_MASK_ACTION) == EditorInfo.IME_ACTION_GO) {
+                "Username field should be visible and submit from the keyboard"
+            }
+            check((codeInput.imeOptions and EditorInfo.IME_MASK_ACTION) == EditorInfo.IME_ACTION_DONE) {
+                "Verification-code field should submit from the keyboard"
+            }
+            assertEmptyCredentials()
+            assertNoNativeConnection()
+            awaitCondition {
+                onMainCondition {
+                    activePairingDialog.isShowing && pairingRoot.hasWindowFocus() && usernameInput.hasWindowFocus() && usernameInput.isShown
+                }
+            }
+            runOnMainSync {
+                usernameInput.requestFocus()
+                val inputMethod = targetContext.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                check(inputMethod.showSoftInput(usernameInput, InputMethodManager.SHOW_IMPLICIT)) {
+                    "Input method did not accept the visible username field"
+                }
+                WindowCompat.getInsetsController(activePairingDialog.window!!, pairingRoot)
+                    .show(WindowInsetsCompat.Type.ime())
+                pairingRoot.postInvalidateOnAnimation()
+            }
+            awaitStableImeAndPrimary(activePairingDialog, pairingRoot, pairingPrimary)
+            awaitNextFrame(pairingRoot)
+            saveQaScreenshot("setup-pairing", screenshots, results)
+            runOnMainSync {
+                WindowCompat.getInsetsController(activePairingDialog.window!!, pairingRoot)
+                    .hide(WindowInsetsCompat.Type.ime())
+            }
+            runOnMainSync { activePairingDialog.dismiss() }
+            runOnMainSync { setupActivity!!.finish() }
+            setupActivity = null
+            waitForIdleSync()
+            SubscriptionStore(targetContext).saveValidated(CORE)
+
+            stage = "english_home_renders_without_account_data"
+            runOnMainSync { launched.finish() }
+            waitForIdleSync()
+            AppLanguage.set(targetContext, AppLanguage.EN)
+            try {
+                val englishHome = startActivitySync(Intent(targetContext, MainActivity::class.java)
+                    .putExtra(MainActivity.EXTRA_START_TAB, 0)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
+                activity = englishHome
+                awaitVisibleText(englishHome, "connect")
+                val englishPager = checkNotNull(findView(englishHome.findViewById(android.R.id.content)) {
+                    it.javaClass.name == "androidx.viewpager2.widget.ViewPager2"
+                }) as androidx.viewpager2.widget.ViewPager2
+                check(activePagerPage(englishPager, "connect") !is ScrollView) {
+                    "English Home should keep the compact non-scrolling layout"
+                }
+                val cyrillicText = onMainValue {
+                    findViews(englishHome.findViewById(android.R.id.content)) {
+                        it is TextView && it.isShown && Regex("[А-Яа-яЁё]").containsMatchIn(it.text.toString())
+                    }.map { (it as TextView).text.toString() }
+                }
+                check(cyrillicText.isEmpty()) { "English Home still shows Russian copy: ${cyrillicText.take(4)}" }
+                capturePage("home-english", "connect", 0, englishHome)
+                fun assertEnglishPage(name: String, expectedTitle: String, pageIndex: Int) {
+                    val cyrillic = onMainValue {
+                        findViews(englishHome.findViewById(android.R.id.content)) {
+                            it is TextView && it.isShown && Regex("[А-Яа-яЁё]").containsMatchIn(it.text.toString())
+                        }.map { (it as TextView).text.toString() }
+                    }
+                    check(cyrillic.isEmpty()) { "English $name still shows Russian copy: ${cyrillic.take(4)}" }
+                    capturePage("$name-english", expectedTitle, pageIndex, englishHome)
+                }
+                clickNavigation(englishHome, "routes")
+                awaitVisibleText(englishHome, "routes")
+                assertEnglishPage("routes", "routes", 1)
+                clickNavigation(englishHome, "profile")
+                awaitVisibleText(englishHome, "profile")
+                assertEnglishPage("profile", "profile", 2)
+                clickNavigation(englishHome, "settings")
+                awaitVisibleText(englishHome, "settings")
+                assertEnglishPage("settings", "settings", 3)
+                assertEmptyCredentials()
+                assertNoNativeConnection()
+            } finally {
+                activity?.let { current -> runOnMainSync { current.finish() } }
+                waitForIdleSync()
+                AppLanguage.set(targetContext, AppLanguage.RU)
+            }
             results.putStringArrayList("screenshots", screenshots)
             results.putStringArrayList("header_geometry", headerGeometryLogs)
             passed += stage
         } catch (failure: Throwable) {
+            captureFailureScreenshot(stage, results)
             results.putString("result", "FAIL:${failure.javaClass.simpleName}")
             results.putString("stage", stage)
             results.putString("failure_message", failure.message?.take(512))
         } finally {
+            setupActivity?.let { current -> runOnMainSync { current.finish() } }
             activity?.let { current -> runOnMainSync { current.finish() } }
             waitForIdleSync()
+            runCatching { SubscriptionStore(targetContext).saveValidated(CORE) }
         }
         results.putStringArrayList("passed", passed)
         if (!results.containsKey("result")) results.putString("result", "PASS")
@@ -452,6 +664,55 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 "Home map is too small for a reliable two-pointer gesture: $mapBounds"
             }
         }
+        val initialZoom = readAtlasTargetZoom(webView)
+        check(initialZoom in 1.08..1.12) {
+            "Map must start at overview zoom before gesture assertions: $initialZoom"
+        }
+        val wheelProbe = runAtlasScript(webView, """
+            (function(){
+              var a=window.deyttMapAtlas,c=document.querySelector('.network-atlas canvas');
+              if(!a||!c)return 'missing-atlas-or-canvas';
+              var b=c.getBoundingClientRect(),cx=b.left+b.width/2,cy=b.top+b.height/2,r=a.radius*a.zoom-.5;
+              var ox=cx+r+6;
+              if(ox>=b.right)return 'outside-point-unavailable:'+ox+'>='+b.right;
+              var outside=new WheelEvent('wheel',{deltaY:-120,clientX:ox,clientY:cy,bubbles:true,cancelable:true});
+              var before=a.targetZoom;c.dispatchEvent(outside);var afterOutside=a.targetZoom;
+              var pointerCleanup=typeof PointerEvent==='function';
+              if(pointerCleanup){var down=new PointerEvent('pointerdown',{pointerId:91,pointerType:'mouse',clientX:ox,clientY:cy,bubbles:true});c.dispatchEvent(down);var stayedOutside=a.activePointers.size===0;var up=new PointerEvent('pointerup',{pointerId:91,pointerType:'mouse',clientX:ox,clientY:cy,bubbles:true});document.dispatchEvent(up);pointerCleanup=stayedOutside&&a.gesturePointers.size===0;}
+              var inside=new WheelEvent('wheel',{deltaY:-120,clientX:cx,clientY:cy,bubbles:true,cancelable:true});
+              c.dispatchEvent(inside);
+              var result='outsidePrevented='+outside.defaultPrevented+';outsideDelta='+(afterOutside-before)+';insidePrevented='+inside.defaultPrevented+';insideZoom='+a.targetZoom;
+              var previous={connected:a.connected,route:a.route,routeKey:a.autoExitRouteKey,country:a.autoExitCountry};
+              a.connected=true;a.route='auto';a.autoExitRouteKey=null;a.autoExitCountry=null;
+              var unresolved=(a.activeRouteDefinition()===null&&a.activeRouteNodeKeys().length===0);
+              a.autoExitRouteKey='de';
+              var german=(a.activeRouteDefinition()===window.DeyttAtlas.routes.de&&JSON.stringify(a.activeRouteNodeKeys())===JSON.stringify(window.DeyttAtlas.routes.de.nodes));
+              a.connected=previous.connected;a.route=previous.route;a.autoExitRouteKey=previous.routeKey;a.autoExitCountry=previous.country;
+              return result+';outsidePointerCleaned='+pointerCleanup+';unresolvedAutoSuppressed='+unresolved+';activeDeUsesRealPath='+german+';manualZoomMax='+a.clampZoom(64);
+            })()
+        """.trimIndent())
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_interaction_contract=$wheelProbe")
+        check(wheelProbe.contains("outsidePrevented=false") &&
+            wheelProbe.contains("outsideDelta=0") &&
+            wheelProbe.contains("insidePrevented=true") &&
+            wheelProbe.substringAfter("insideZoom=").substringBefore(';').toDoubleOrNull()?.let { it > 1.2 } == true &&
+            wheelProbe.contains("outsidePointerCleaned=true") &&
+            wheelProbe.contains("unresolvedAutoSuppressed=true") &&
+            wheelProbe.contains("activeDeUsesRealPath=true") &&
+            wheelProbe.contains("manualZoomMax=32")) {
+            "Atlas wheel/connected-route behavior violated the globe interaction contract: $wheelProbe"
+        }
+        runOnMainSync { webView.evaluateJavascript("window.deyttResetMapView && window.deyttResetMapView()", null) }
+        val wheelResetDeadline = SystemClock.elapsedRealtime() + 10_000L
+        while (SystemClock.elapsedRealtime() < wheelResetDeadline &&
+            (kotlin.math.abs(readAtlasTargetZoom(webView) - 1.1) >= .01 ||
+                kotlin.math.abs(readAtlasCurrentZoom(webView) - 1.1) >= .03)) {
+            Thread.sleep(50)
+        }
+        check(kotlin.math.abs(readAtlasTargetZoom(webView) - 1.1) < .01 &&
+            kotlin.math.abs(readAtlasCurrentZoom(webView) - 1.1) < .03) {
+            "Wheel contract probe did not restore the map to default zoom: ${readAtlasPinchDiagnostics(webView)}"
+        }
         val zoomBefore = readAtlasTargetZoom(webView)
         val centerX = mapBounds.centerX().toFloat()
         val centerY = mapBounds.centerY().toFloat()
@@ -527,8 +788,8 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
 
         val zoomAfter = readAtlasTargetZoom(webView)
         val pinchDiagnostics = readAtlasPinchDiagnostics(webView)
-        check(zoomBefore in 1.08..1.12 && zoomAfter > zoomBefore + .02 && zoomAfter <= 1.2 + .005) {
-            "Native pinch should increase from default 1.1 while respecting the 1.2 cap: before=$zoomBefore after=$zoomAfter; $pinchDiagnostics"
+        check(zoomBefore in 1.08..1.12 && zoomAfter > 1.2 && zoomAfter > zoomBefore + .1 && zoomAfter <= 32.0 + .005) {
+            "Native pinch should zoom beyond 1.2 while respecting the 32x manual ceiling: before=$zoomBefore after=$zoomAfter; $pinchDiagnostics"
         }
         val pager = onMainValue {
             checkNotNull(findView(activity.findViewById(android.R.id.content)) {
@@ -562,7 +823,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         }
         awaitPagerSettled(activity, 0, "Подключить")
         runOnMainSync {
-            android.util.Log.i("OpenFluxVisibilityQA", "pinch_zoom=$zoomBefore->$zoomAfter; cap=1.2; pager=0; map_reset=1.1")
+            android.util.Log.i("OpenFluxVisibilityQA", "pinch_zoom=$zoomBefore->$zoomAfter; manual_max=32; pager=0; map_reset=1.1")
         }
     }
 
@@ -605,12 +866,11 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 val pager = findView(content) { it.javaClass.name == "androidx.viewpager2.widget.ViewPager2" }
                     as? androidx.viewpager2.widget.ViewPager2
                 if (pager == null) return@onMainValue "missing-pager"
-                val activePage = findViews(content) { it is ScrollView && it.isShown }
-                    .firstOrNull { findText(it, expectedText) != null }
+                val activePage = activePagerPage(pager, expectedText)
                 val pagerBounds = Rect()
                 val pageBounds = Rect()
                 val pagerVisible = pager.getGlobalVisibleRect(pagerBounds)
-                val pageVisible = (activePage as? ScrollView)?.getGlobalVisibleRect(pageBounds) == true
+                val pageVisible = activePage?.getGlobalVisibleRect(pageBounds) == true
                 val tolerance = (2 * activity.resources.displayMetrics.density).toInt()
                 val aligned = pagerVisible && pageVisible && pageBounds.width() > 0 &&
                     kotlin.math.abs(pageBounds.left - pagerBounds.left) <= tolerance &&
@@ -655,14 +915,37 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
     private fun scrollCurrentPageToTop(activity: MainActivity, expectedText: String) {
         val scroll = onMainValue {
             val content = activity.findViewById<View>(android.R.id.content)
-            checkNotNull(findViews(content) { it is ScrollView && it.isShown }.firstOrNull { page ->
-                val visibleBounds = Rect()
-                page.getGlobalVisibleRect(visibleBounds) && findText(page, expectedText) != null
-            }) { "Could not find the active page scroll view for $expectedText" } as ScrollView
+            val pager = checkNotNull(findView(content) { it.javaClass.name == "androidx.viewpager2.widget.ViewPager2" })
+                as androidx.viewpager2.widget.ViewPager2
+            val activePage = checkNotNull(activePagerPage(pager, expectedText)) { "Could not find the active pager page for $expectedText" }
+            findView(activePage) { it is ScrollView && it.isShown } as? ScrollView
         }
-        runOnMainSync { scroll.scrollTo(0, 0) }
-        waitForIdleSync()
-        awaitCondition { onMainCondition { scroll.scrollY == 0 } }
+        scroll?.let {
+            runOnMainSync { it.scrollTo(0, 0) }
+            waitForIdleSync()
+            awaitCondition { onMainCondition { it.scrollY == 0 } }
+        }
+    }
+
+    private fun activePagerPage(pager: androidx.viewpager2.widget.ViewPager2, expectedText: String): View? {
+        val pageHost = pager.getChildAt(0) as? ViewGroup ?: return null
+        return (0 until pageHost.childCount)
+            .asSequence()
+            .map(pageHost::getChildAt)
+            .firstOrNull { it.isShown && findText(it, expectedText) != null }
+    }
+
+    private fun saveQaScreenshot(name: String, screenshots: ArrayList<String>, results: Bundle) {
+        val bitmap = checkNotNull(uiAutomation.takeScreenshot()) { "Could not capture $name" }
+        val directory = File(targetContext.cacheDir, "main-pager-visual-qa")
+        check(directory.exists() || directory.mkdirs()) { "Cannot create QA screenshot directory" }
+        val image = File(directory, "$name.png")
+        FileOutputStream(image).use { output ->
+            check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) { "Could not save $name" }
+        }
+        bitmap.recycle()
+        screenshots += image.absolutePath
+        results.putStringArrayList("screenshots", ArrayList(screenshots))
     }
 
     private fun awaitAtlasReady(globe: RouteGlobeView) {
@@ -774,6 +1057,74 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             check(SystemClock.elapsedRealtime() < deadline) { "UI did not reach the expected state" }
             Thread.sleep(50)
         }
+    }
+
+    private fun awaitNextFrame(view: View) {
+        val frameDrawn = CountDownLatch(1)
+        runOnMainSync {
+            view.postInvalidateOnAnimation()
+            Choreographer.getInstance().postFrameCallback { frameDrawn.countDown() }
+        }
+        check(frameDrawn.await(2, TimeUnit.SECONDS)) { "Window did not reach the next rendered frame" }
+        waitForIdleSync()
+    }
+
+    private fun awaitStableImeAndPrimary(dialog: Dialog, root: View, primary: View) {
+        var previous: List<Int>? = null
+        var stableSamples = 0
+        var lastDiagnostic = "unavailable"
+        val deadline = SystemClock.elapsedRealtime() + 1_500L
+        while (SystemClock.elapsedRealtime() < deadline && stableSamples < 3) {
+            val sample = onMainValue {
+                val insets = ViewCompat.getRootWindowInsets(root)
+                val visibleFrame = Rect()
+                val primaryBounds = Rect()
+                val decor = dialog.window?.decorView
+                val imeHeight = insets?.getInsets(WindowInsetsCompat.Type.ime())?.bottom ?: 0
+                val imeVisible = insets?.isVisible(WindowInsetsCompat.Type.ime()) == true
+                val primaryVisible = primary.getGlobalVisibleRect(primaryBounds)
+                val location = IntArray(2)
+                primary.getLocationOnScreen(location)
+                val actualPrimary = Rect(location[0], location[1], location[0] + primary.width, location[1] + primary.height)
+                val viewportVisible = root.getWindowVisibleDisplayFrame(visibleFrame).let { visibleFrame.height() > 0 }
+                val rootBounds = Rect()
+                val rootVisible = root.getGlobalVisibleRect(rootBounds)
+                lastDiagnostic = "showing=${dialog.isShowing};windowFocus=${decor?.hasWindowFocus()};rootFocus=${root.hasWindowFocus()};" +
+                    "imeVisible=$imeVisible;imeInset=$imeHeight;decorHeight=${decor?.height};rootRect=$rootBounds;rootVisible=$rootVisible;" +
+                    "visibleFrame=$visibleFrame;viewportVisible=$viewportVisible;primaryShown=${primary.isShown};primaryVisibility=${primary.visibility};" +
+                    "primaryGlobal=$primaryBounds;primaryActual=$actualPrimary;primarySize=${primary.width}x${primary.height}"
+                val primaryAboveIme = primaryVisible && primaryBounds.height() == primary.height &&
+                    actualPrimary.top >= visibleFrame.top && actualPrimary.bottom <= visibleFrame.bottom
+                if (!dialog.isShowing || decor?.hasWindowFocus() != true || !imeVisible ||
+                    !viewportVisible || !primary.isShown || !primaryAboveIme) {
+                    null
+                } else {
+                    check(actualPrimary.bottom <= visibleFrame.bottom) {
+                        "Pairing CTA must remain above the visible keyboard: CTA=$actualPrimary viewport=$visibleFrame; $lastDiagnostic"
+                    }
+                    listOf(decor.height, visibleFrame.bottom, actualPrimary.top, actualPrimary.bottom, primaryBounds.height())
+                }
+            }
+            stableSamples = if (sample != null && sample == previous) stableSamples + 1 else 0
+            previous = sample
+            if (stableSamples < 3) Thread.sleep(50)
+        }
+        check(stableSamples >= 3) {
+            "IME geometry and pairing CTA did not settle within 1.5s: samples=$stableSamples previous=$previous; $lastDiagnostic"
+        }
+        waitForIdleSync()
+    }
+
+    private fun captureFailureScreenshot(stage: String, results: Bundle) {
+        runCatching {
+            val bitmap = uiAutomation.takeScreenshot() ?: error("Screenshot unavailable")
+            val directory = File(targetContext.cacheDir, "main-pager-visual-qa")
+            check(directory.exists() || directory.mkdirs())
+            val file = File(directory, "failure-${stage.replace(Regex("[^A-Za-z0-9_-]"), "_")}.png")
+            FileOutputStream(file).use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            bitmap.recycle()
+            results.putString("failure_screenshot", file.absolutePath)
+        }.onFailure { results.putString("failure_screenshot_error", it.message?.take(200)) }
     }
 
     private companion object {

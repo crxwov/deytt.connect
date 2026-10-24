@@ -1479,7 +1479,9 @@ internal class PrimaryPages(private val host: MainActivity) {
             val count = splitStore.readDomains().size + splitStore.readPackages().size
             val mode = if (splitStore.readMode() == UserSplitTunnelStore.MODE_VPN_ONLY) copy("VPN только для списка", "VPN only for list")
                 else copy("обход VPN", "bypass VPN")
-            return splitStore.activePreset().name + " · " + mode + " · " + count
+            val preset = splitStore.activePreset()
+            val presetName = if (preset.id == "default") copy(preset.name, "Main") else preset.name
+            return presetName + " · " + mode + " · " + count
         }
         val splitRow = host.row(
             copy("Раздельное туннелирование", "Split tunneling"),
@@ -1789,17 +1791,17 @@ internal class PrimaryPages(private val host: MainActivity) {
             usernameField.visibility = if (step == 0) View.VISIBLE else View.GONE
             codeField.visibility = if (step == 1) View.VISIBLE else View.GONE
             openBot.visibility = if (step == 1 && needsBotStart) View.VISIBLE else View.GONE
-            primary.text = when (step) {
+            primary.text = host.uiCopy(when (step) {
                 0 -> "Получить код"
                 1 -> "Подтвердить код"
                 else -> "Готово"
-            }
-            title.text = when (step) {
+            })
+            title.text = host.uiCopy(when (step) {
                 0 -> "Добавить приложение"
                 1 -> if (needsBotStart) "Сначала открой ./c" else "Код отправлен"
                 else -> "Аккаунт подключён"
-            }
-            detail.text = when (step) {
+            })
+            detail.text = host.uiCopy(when (step) {
                 0 -> "Укажи Telegram username. Бот подтвердит вход одноразовым кодом и подключит существующие профили."
                 1 -> if (needsBotStart) {
                     "Этот аккаунт ещё не начинал чат с ботом. Открой ./c один раз — код придёт сюда."
@@ -1807,7 +1809,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                     "Код уже отправлен в Telegram. Оставайся в приложении и введи его ниже."
                 }
                 else -> ""
-            }
+            })
         }
         fun openBotLink() {
             val link = botUrl ?: return
@@ -1816,7 +1818,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 check(uri.scheme?.lowercase() in setOf("https", "tg")) { "Unsupported URL scheme" }
                 host.startActivity(Intent(Intent.ACTION_VIEW, uri))
             }
-                .onFailure { status.text = "Ссылка готова. Открой бота ещё раз кнопкой ниже." }
+                .onFailure { status.text = host.uiCopy("Ссылка готова. Открой бота ещё раз кнопкой ниже.") }
         }
 
         openBot.setOnClickListener { openBotLink() }
@@ -1825,14 +1827,14 @@ internal class PrimaryPages(private val host: MainActivity) {
                 0 -> {
                     val username = usernameField.text.toString().trim()
                     if (!Regex("@?[A-Za-z0-9_]{5,32}").matches(username)) {
-                        status.text = "Введи username Telegram длиной от 5 до 32 знаков."
+                        status.text = host.uiCopy("Введи username Telegram длиной от 5 до 32 знаков.")
                         status.setTextColor(DeyttUi.CORAL)
                         return@setOnClickListener
                     }
                     primary.isEnabled = false
-                    primary.text = "Создаём ссылку…"
+                    primary.text = host.uiCopy("Создаём ссылку…")
                     status.setTextColor(BLUE)
-                    status.text = "Подготавливаем одноразовое подтверждение."
+                    status.text = host.uiCopy("Подготавливаем одноразовое подтверждение.")
                     pairingExecutor.execute {
                         val result = runCatching { TelegramPairingClient.start(username) }
                         host.runOnUiThread {
@@ -1844,16 +1846,16 @@ internal class PrimaryPages(private val host: MainActivity) {
                                 needsBotStart = it.delivery != "sent"
                                 setStep(1)
                                 status.setTextColor(BLUE)
-                                status.text = when (it.delivery) {
+                                status.text = host.uiCopy(when (it.delivery) {
                                     "sent" -> "Код отправлен в Telegram и действует 5 минут. Переключаться в бот не нужно."
                                     "delivery_failed" -> "Не получилось доставить сообщение. Открой ./c ниже, чтобы получить код."
                                     else -> "Этого аккаунта пока нет в боте. Открой ./c ниже один раз — код придёт в чат."
-                                }
+                                })
                             }.onFailure {
                                 val reference = SubscriptionLoadDiagnostics.record(host, "pair", it)
-                                primary.text = "Продолжить"
+                                primary.text = host.uiCopy("Продолжить")
                                 status.setTextColor(DeyttUi.CORAL)
-                                status.text = "${pairingError(it)} Код: $reference"
+                                status.text = "${host.uiCopy(pairingError(it))} ${host.uiCopy("код")}: $reference"
                             }
                         }
                     }
@@ -1862,13 +1864,13 @@ internal class PrimaryPages(private val host: MainActivity) {
                     val currentChallenge = challenge
                     val code = codeField.text.toString().trim()
                     if (currentChallenge == null || !Regex("\\d{6}").matches(code)) {
-                        status.text = "Введи шесть цифр из сообщения бота."
+                        status.text = host.uiCopy("Введи шесть цифр из сообщения бота.")
                         status.setTextColor(DeyttUi.CORAL)
                         return@setOnClickListener
                     }
                     primary.isEnabled = false
-                    primary.text = "Проверяем код…"
-                    status.text = "Подтверждаем Telegram-аккаунт и загружаем профили."
+                    primary.text = host.uiCopy("Проверяем код…")
+                    status.text = host.uiCopy("Подтверждаем Telegram-аккаунт и загружаем профили.")
                     status.setTextColor(BLUE)
                     pairingExecutor.execute {
                         val result = runCatching {
@@ -1904,16 +1906,16 @@ internal class PrimaryPages(private val host: MainActivity) {
                             primary.isEnabled = true
                             result.onSuccess { (session, message) ->
                                 status.setTextColor(DeyttUi.MINT)
-                                status.text = message
+                                status.text = host.uiCopy(message)
                                 setStep(2)
                                 host.updateTelegramUsername(session.username)
                                 host.refreshTelegramAccount()
                                 host.refreshAccountViews()
                             }.onFailure {
                                 val reference = SubscriptionLoadDiagnostics.record(host, "pair", it)
-                                primary.text = "Подтвердить код"
+                                primary.text = host.uiCopy("Подтвердить код")
                                 status.setTextColor(DeyttUi.CORAL)
-                                status.text = "${pairingError(it)} Код: $reference"
+                                status.text = "${host.uiCopy(pairingError(it))} ${host.uiCopy("код")}: $reference"
                             }
                         }
                     }
@@ -1996,7 +1998,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         actions.addView(unlink, LinearLayout.LayoutParams(0, host.dp(48), 1f))
         unlink.setOnClickListener {
             unlink.isEnabled = false
-            unlink.text = "Завершаем…"
+            unlink.text = host.uiCopy("Завершаем…")
             pairingExecutor.execute {
                 val result = runCatching { TelegramPairingClient.logout(token) }
                 host.runOnUiThread {
@@ -2009,8 +2011,8 @@ internal class PrimaryPages(private val host: MainActivity) {
                         host.refreshAccountViews()
                     }.onFailure {
                         unlink.isEnabled = true
-                        unlink.text = "Повторить"
-                        status.text = "Не удалось отозвать сессию. Проверь соединение и повтори."
+                        unlink.text = host.uiCopy("Повторить")
+                        status.text = host.uiCopy("Не удалось отозвать сессию. Проверь соединение и повтори.")
                     }
                 }
             }
@@ -2021,7 +2023,7 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun openLatest() {
         latestRelease?.pageUrl?.takeIf(ReleaseUrlPolicy::isOfficialPage)?.let(::openUrl)
-            ?: updateStatus?.apply { text = "Ссылка на релиз не прошла проверку." }
+            ?: updateStatus?.apply { text = host.uiCopy("Ссылка на релиз не прошла проверку.") }
     }
 
     private fun preferenceSwitch(

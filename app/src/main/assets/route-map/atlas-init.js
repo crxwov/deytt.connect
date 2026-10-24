@@ -6,6 +6,7 @@
   window.deyttMapUserLocation = null;
   window.deyttMapEgressCountry = null;
   window.deyttMapActiveAutoRoute = null;
+  window.deyttMapConnected = false;
   window.deyttMapTrafficActive = false;
   window.deyttMapReducedMotion = false;
   window.deyttMapOverviewMode = false;
@@ -87,6 +88,10 @@
     window.deyttMapActiveAutoRoute = routeKey || null;
     if (window.deyttMapAtlas) window.deyttMapAtlas.setActiveAutoRoute(window.deyttMapActiveAutoRoute);
   };
+  window.deyttSetMapConnected = function (active) {
+    window.deyttMapConnected = Boolean(active);
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setConnected(window.deyttMapConnected);
+  };
   window.deyttSetMapTrafficActive = function (active) {
     window.deyttMapTrafficActive = Boolean(active);
     if (window.deyttMapAtlas) window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
@@ -142,13 +147,15 @@
     routeFocusScale: windowsProfile ? 1.06 : undefined,
   }).then(function (atlas) {
     window.deyttMapAtlas = atlas;
-    atlas.overviewMode = window.deyttMapOverviewMode;
+    // Reapply native mode after async creation: an earlier setter cannot reset an atlas that does not exist yet.
+    window.deyttSetMapOverviewMode(window.deyttMapOverviewMode);
     const systemReducedMotion = atlas.reducedMotion;
     atlas.reducedMotion = {
       get matches() { return window.deyttMapReducedMotion || systemReducedMotion.matches; }
     };
     window.deyttMapAtlas.setLanguage(window.deyttMapLanguage);
     window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
+    window.deyttMapAtlas.setConnected(window.deyttMapConnected);
     window.deyttSetMapReducedMotion(window.deyttMapReducedMotion);
     const status = root.querySelector("[data-atlas-status]");
     if (status) {

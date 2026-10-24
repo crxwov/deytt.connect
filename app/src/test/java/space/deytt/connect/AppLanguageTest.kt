@@ -12,6 +12,62 @@ class AppLanguageTest {
         assertEquals("AMNEZIAWG · PROFILES", AppLanguage.english("AMNEZIAWG · ГОТОВЫЕ ПРОФИЛИ"))
         assertEquals("PRIVATE · ON DEVICE", AppLanguage.english("ЧАСТНО · НА УСТРОЙСТВЕ"))
         assertEquals("method", AppLanguage.english("метод"))
+        assertEquals("Main navigation", AppLanguage.english("Основная навигация"))
+        assertEquals("selected", AppLanguage.english("выбран"))
+    }
+
+    @Test
+    fun translatesHomeQualityLabelsAndDynamicSpeedDescription() {
+        assertEquals("Latency", AppLanguage.english("Отклик"))
+        assertEquals("Speed", AppLanguage.english("Скорость"))
+        assertEquals("Refresh measurement", AppLanguage.english("Обновить замер"))
+        assertEquals("bypass · germany", AppLanguage.english("обход · германия"))
+        assertEquals(
+            "Download speed, 3-second sample. Tap to check routes.",
+            AppLanguage.english("Скорость загрузки, проба 3 с. Нажмите для проверки маршрутов."),
+        )
+    }
+
+    @Test
+    fun translatesEntryFlowAndReleaseValidationCopy() {
+        assertEquals("Enter code", AppLanguage.english("Введите код"))
+        assertEquals("Get code", AppLanguage.english("Получить код"))
+        assertEquals("Import your subscription", AppLanguage.english("Импортируйте подписку"))
+        assertEquals("Link Telegram", AppLanguage.english("Привяжите Telegram"))
+        assertEquals("Sign in to Telegram to update your subscription and routes.", AppLanguage.english("Войдите в Telegram, чтобы обновить подписку и маршруты."))
+        assertEquals("Step 1 · Account", AppLanguage.english("Шаг 1 · Аккаунт"))
+        assertEquals("Step 2 · Code", AppLanguage.english("Шаг 2 · Код"))
+        assertEquals("Step 2 · Routes", AppLanguage.english("Шаг 2 · Маршруты"))
+        assertEquals("Telegram username", AppLanguage.english("Имя пользователя Telegram"))
+        assertEquals("Telegram verification code", AppLanguage.english("Код подтверждения Telegram"))
+        assertEquals("Checking subscription…", AppLanguage.english("Проверяем подписку…"))
+        assertEquals("Loading additional routes…", AppLanguage.english("Загружаем дополнительные маршруты…"))
+        assertEquals("Saving subscription…", AppLanguage.english("Сохраняем подписку…"))
+        assertEquals("Verify code", AppLanguage.english("Подтвердить код"))
+        assertEquals("The code is incorrect or expired. Request a new one.", AppLanguage.english("Код неверный или истёк. Запроси новый."))
+        assertEquals("The attempt limit was reached. Start sign-in again.", AppLanguage.english("Попытки закончились. Начни вход заново."))
+        assertEquals(
+            "Enter a Telegram username with 5 to 32 characters.",
+            AppLanguage.english("Введи username Telegram длиной от 5 до 32 знаков."),
+        )
+        assertEquals("Sending…", AppLanguage.english("Отправляем…"))
+        assertEquals("Checking…", AppLanguage.english("Проверяем…"))
+        assertEquals(
+            "The code was sent to Telegram and is valid for five minutes.",
+            AppLanguage.english("Код отправлен в Telegram и действует 5 минут."),
+        )
+        assertEquals(
+            "Android system permission is required to check this exit",
+            AppLanguage.english("Для проверки через выход требуется системное разрешение Android"),
+        )
+        assertEquals(
+            "Could not start sign-in. Check your connection and try again. Reference: ABC123",
+            AppLanguage.english("Не удалось начать вход. Проверь соединение и попробуй снова. Код: ABC123"),
+        )
+        assertEquals(
+            "The release link did not pass verification.",
+            AppLanguage.english("Ссылка на релиз не прошла проверку."),
+        )
     }
 
     @Test

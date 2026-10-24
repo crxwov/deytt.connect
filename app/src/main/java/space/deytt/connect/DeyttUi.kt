@@ -743,7 +743,7 @@ object DeyttUi {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             setPadding(dp(10), dp(2), dp(10), dp(2))
-            contentDescription = "Основная навигация"
+            contentDescription = uiCopy("Основная навигация")
             destinations.forEachIndexed { index, (label, destination, glyph) ->
                 val selected = index == current
                 val item = LinearLayout(this@bottomNavigation).apply {
@@ -752,7 +752,7 @@ object DeyttUi {
                     minimumHeight = dp(56)
                     isClickable = !selected
                     isFocusable = true
-                    contentDescription = if (selected) "$label, выбран" else label
+                    contentDescription = if (selected) "${uiCopy(label)}, ${uiCopy("выбран")}" else uiCopy(label)
                     if (!selected) {
                         setOnClickListener { navigateTopLevel(index) }
                         foreground = ripple(17f)

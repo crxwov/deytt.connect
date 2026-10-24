@@ -15,12 +15,14 @@ import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.edit
 import java.util.concurrent.Executors
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
+import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.note
 import space.deytt.connect.DeyttUi.present
 import space.deytt.connect.DeyttUi.rounded
@@ -52,23 +54,44 @@ class SetupActivity : Activity() {
         deviceSlotConflict = savedInstanceState?.getBoolean("device_slot_conflict") == true
         transferRequestSent = savedInstanceState?.getBoolean("transfer_request_sent") == true
         val root = screen()
-        root.addView(header(uiCopy("аккаунт · подписка · устройства"), uiCopy(if (updating) "Обновить подписку" else "Подключить подписку"), updating))
-        root.addView(spacer(8, this))
-        root.addView(note(
-            uiCopy(if (pendingImportUrl != null) {
+        root.tag = "setup-content"
+        val pageTitle = when {
+            pendingImportUrl != null -> "Импортировать подписку"
+            updating -> "Обновить подписку"
+            else -> "Подключить Telegram"
+        }
+        val pageHeader = header("аккаунт · подписка · устройства", pageTitle, updating).apply { tag = "setup-header" }
+        val topBack = if (updating && pageHeader.childCount > 0) {
+            pageHeader.getChildAt(0).also {
+                pageHeader.removeViewAt(0)
+                it.tag = "setup-back"
+            }
+        } else null
+        val intro = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(17), dp(18), dp(17))
+            background = rounded(DeyttUi.SURFACE_2, 22f, DeyttUi.LINE)
+            tag = "setup-intro-card"
+        }
+        intro.addView(mono("./connect · TELEGRAM", 9f, DeyttUi.SKY, 650))
+        val introText = uiCopy(if (pendingImportUrl != null) {
                 if (updating) "Ссылка готова к импорту. Подписка будет заменена, текущее соединение отключится."
                 else "Ссылка готова к импорту. Нажмите кнопку ниже, чтобы загрузить подписку и маршруты."
-            } else "Войдите в Telegram, чтобы загрузить подписку и маршруты."),
-            DeyttUi.MUTED,
-        ))
-        root.addView(spacer(14, this))
+            } else if (updating) "Войдите в Telegram, чтобы обновить подписку и маршруты."
+            else "Войдите в Telegram, чтобы загрузить подписку и маршруты.")
+        intro.addView(text(introText, 14f, DeyttUi.MUTED).apply {
+            setLineSpacing(dp(3).toFloat(), 1f)
+            tag = "setup-intro-copy"
+            setPadding(0, dp(9), 0, 0)
+        })
         accountAction = button(uiCopy(when {
             deviceSlotConflict && transferRequestSent -> "Повторить проверку"
             deviceSlotConflict -> "Обратиться в поддержку"
             pendingImportUrl != null -> "Импортировать подписку"
             sessionToken == null -> "Подключить аккаунт Telegram"
             else -> "Обновить подписку"
-        }), secondary = true).apply {
+        })).apply {
+            tag = "setup-primary"
             setOnClickListener {
                 when {
                     deviceSlotConflict && !transferRequestSent -> requestDeviceTransfer()
@@ -77,12 +100,28 @@ class SetupActivity : Activity() {
                 }
             }
         }
+        intro.addView(accountAction, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)).apply {
+            topMargin = dp(15)
+        })
         state = note("", DeyttUi.MUTED).apply {
             visibility = View.GONE
-            setPadding(dp(14), dp(13), dp(14), dp(13))
+            setPadding(dp(14), dp(10), dp(14), dp(10))
+            tag = "setup-state"
         }
-        root.addView(state)
-        present(root, accountAction)
+        intro.addView(state, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = dp(9)
+        })
+        val flexibleSpaceParams = { LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f) }
+        if (updating) {
+            // Keep only back navigation at the top; center the title with its related refresh card below.
+            root.addView(checkNotNull(topBack))
+        }
+        root.addView(View(this), flexibleSpaceParams())
+        root.addView(pageHeader)
+        root.addView(spacer(10, this))
+        root.addView(intro)
+        root.addView(View(this), flexibleSpaceParams())
+        present(root)
         savedInstanceState?.getString("failure_message")?.let {
             lastFailureMessage = it
             state.text = it
@@ -154,9 +193,9 @@ class SetupActivity : Activity() {
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed && loading) {
                         state.text = when (stage) {
-                            "validate" -> "Проверяем подписку…"
-                            "awg" -> "Загружаем дополнительные маршруты…"
-                            "save" -> "Сохраняем подписку…"
+                            "validate" -> uiCopy("Проверяем подписку…")
+                            "awg" -> uiCopy("Загружаем дополнительные маршруты…")
+                            "save" -> uiCopy("Сохраняем подписку…")
                             else -> uiCopy("Получаем маршруты…")
                         }
                     }
@@ -308,7 +347,13 @@ class SetupActivity : Activity() {
         val sheet = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(20), dp(22), dp(20))
-            background = rounded(DeyttUi.SURFACE, 24f, DeyttUi.LINE)
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0xFF1B293B.toInt(), 0xFF111A29.toInt()),
+            ).apply {
+                cornerRadius = dp(24).toFloat()
+                setStroke(dp(1), DeyttUi.LINE)
+            }
         }
         val title = text("Добавить приложение", 21f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
             setPadding(0, dp(4), 0, dp(6))
@@ -318,6 +363,26 @@ class SetupActivity : Activity() {
             setLineSpacing(dp(3).toFloat(), 1f)
         }
         sheet.addView(detail)
+        val stages = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val accountStage = text(uiCopy("Шаг 1 · Аккаунт"), 10f, DeyttUi.SKY, android.graphics.Typeface.BOLD).apply {
+            setPadding(dp(9), dp(7), dp(9), dp(7))
+            gravity = Gravity.CENTER
+            maxLines = 2
+            background = rounded(0x263B9EFF, 10f, 0x553B9EFF)
+        }
+        val codeStage = text(uiCopy("Шаг 2 · Код"), 10f, DeyttUi.MUTED, android.graphics.Typeface.BOLD).apply {
+            setPadding(dp(9), dp(7), dp(9), dp(7))
+            gravity = Gravity.CENTER
+            maxLines = 2
+            background = rounded(0x1AFFFFFF, 10f, DeyttUi.LINE)
+        }
+        stages.addView(accountStage, LinearLayout.LayoutParams(0, -2, 1f))
+        stages.addView(View(this), LinearLayout.LayoutParams(dp(7), 1))
+        stages.addView(codeStage, LinearLayout.LayoutParams(0, -2, 1f))
+        sheet.addView(stages, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
         fun field(hintText: String, inputTypeValue: Int, maxLength: Int): EditText =
             EditText(this).apply {
                 hint = hintText
@@ -334,11 +399,13 @@ class SetupActivity : Activity() {
             "username",
             InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
             33,
-        )
+        ).apply { contentDescription = uiCopy("Имя пользователя Telegram") }
         val code = field("123456", InputType.TYPE_CLASS_NUMBER, 6).apply {
             visibility = View.GONE
             gravity = Gravity.CENTER
             letterSpacing = .24f
+            imeOptions = EditorInfo.IME_ACTION_DONE
+            contentDescription = uiCopy("Код подтверждения Telegram")
         }
         sheet.addView(username, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)).apply {
             topMargin = dp(17)
@@ -355,13 +422,19 @@ class SetupActivity : Activity() {
         sheet.addView(openBot, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)).apply {
             topMargin = dp(11)
         })
-        val primary = button("Получить код")
+        val primary = button("Получить код").apply { tag = "pairing-primary" }
         sheet.addView(primary, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)).apply {
             topMargin = dp(9)
         })
         username.imeOptions = EditorInfo.IME_ACTION_GO
         username.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO || actionId == EditorInfo.IME_ACTION_DONE) {
+                primary.performClick()
+                true
+            } else false
+        }
+        code.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
                 primary.performClick()
                 true
             } else false
@@ -374,18 +447,24 @@ class SetupActivity : Activity() {
         sheet.addView(requestNewCode, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)))
         fun updateStep(next: Int) {
             step = next
+            accountStage.setTextColor(if (step == 0) DeyttUi.SKY else DeyttUi.MUTED)
+            accountStage.background = rounded(if (step == 0) 0x263B9EFF else 0x1AFFFFFF, 10f,
+                if (step == 0) 0x553B9EFF else DeyttUi.LINE)
+            codeStage.setTextColor(if (step == 1) DeyttUi.SKY else DeyttUi.MUTED)
+            codeStage.background = rounded(if (step == 1) 0x263B9EFF else 0x1AFFFFFF, 10f,
+                if (step == 1) 0x553B9EFF else DeyttUi.LINE)
             username.visibility = if (step == 0) View.VISIBLE else View.GONE
             code.visibility = if (step == 1) View.VISIBLE else View.GONE
             openBot.visibility = if (step == 1 && needsBotStart) View.VISIBLE else View.GONE
-            title.text = if (step == 0) "Добавить приложение" else "Введите код"
+            title.text = uiCopy(if (step == 0) "Добавить приложение" else "Введите код")
             detail.text = if (step == 0) {
-                "Укажи username Telegram. Если аккаунт уже есть в боте, код придёт сюда."
+                uiCopy("Укажи username Telegram. Если аккаунт уже есть в боте, код придёт сюда.")
             } else if (needsBotStart) {
-                "Этого username пока нет в боте. Открой ./c один раз — код появится здесь."
+                uiCopy("Этого username пока нет в боте. Открой ./c один раз — код появится здесь.")
             } else {
-                "Код уже отправлен в Telegram. Переключаться в бот не нужно."
+                uiCopy("Код уже отправлен в Telegram. Переключаться в бот не нужно.")
             }
-            primary.text = if (step == 0) "Получить код" else "Подтвердить код"
+            primary.text = uiCopy(if (step == 0) "Получить код" else "Подтвердить код")
             requestNewCode.visibility = if (step == 1) View.VISIBLE else View.GONE
         }
         requestNewCode.setOnClickListener {
@@ -403,7 +482,7 @@ class SetupActivity : Activity() {
                     check(uri.scheme?.lowercase() in setOf("https", "tg")) { "Unsupported URL scheme" }
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
                 }
-                    .onFailure { status.text = "Не удалось открыть ссылку. Попробуй ещё раз." }
+                    .onFailure { status.text = uiCopy("Не удалось открыть ссылку. Попробуй ещё раз.") }
             }
         }
         primary.setOnClickListener {
@@ -411,13 +490,13 @@ class SetupActivity : Activity() {
                 val value = username.text.toString().trim()
                 if (!Regex("@?[A-Za-z0-9_]{5,32}").matches(value)) {
                     status.setTextColor(DeyttUi.CORAL)
-                    status.text = "Введи username Telegram длиной от 5 до 32 знаков."
+                    status.text = uiCopy("Введи username Telegram длиной от 5 до 32 знаков.")
                     return@setOnClickListener
                 }
                 primary.isEnabled = false
-                primary.text = "Отправляем…"
+                primary.text = uiCopy("Отправляем…")
                 status.setTextColor(DeyttUi.SKY)
-                status.text = "Проверяю, доступен ли вход через бота."
+                status.text = uiCopy("Проверяю, доступен ли вход через бота.")
                 executor.execute {
                     val result = runCatching { TelegramPairingClient.start(value) }
                     runOnUiThread {
@@ -429,20 +508,20 @@ class SetupActivity : Activity() {
                             needsBotStart = started.delivery != "sent"
                             updateStep(1)
                             status.setTextColor(DeyttUi.SKY)
-                            status.text = when (started.delivery) {
+                            status.text = uiCopy(when (started.delivery) {
                                 "sent" -> "Код отправлен в Telegram и действует 5 минут."
                                 "delivery_failed" -> "Не удалось доставить код. Открой ./c ниже, чтобы получить его."
                                 else -> "Этого username пока нет в боте. Открой ./c ниже один раз."
-                            }
+                            })
                         }.onFailure { error ->
                             val reference = SubscriptionLoadDiagnostics.record(this, "pair", error)
-                            primary.text = "Получить код"
+                            primary.text = uiCopy("Получить код")
                             status.setTextColor(DeyttUi.CORAL)
-                            status.text = when ((error as? TelegramPairingException)?.code) {
+                            status.text = uiCopy(when ((error as? TelegramPairingException)?.code) {
                                 "invalid_username" -> "Проверь username Telegram."
                                 "pairing_rate_limited", "rate_limited" -> "Слишком часто. Подожди и попробуй ещё раз."
                                 else -> "Не удалось начать вход. Проверь соединение и попробуй снова. Код: $reference"
-                            }
+                            })
                         }
                     }
                 }
@@ -451,13 +530,13 @@ class SetupActivity : Activity() {
                 val pin = code.text.toString().trim()
                 if (currentChallenge == null || !Regex("[0-9]{6}").matches(pin)) {
                     status.setTextColor(DeyttUi.CORAL)
-                    status.text = "Введи шесть цифр из сообщения ./c."
+                    status.text = uiCopy("Введи шесть цифр из сообщения ./c.")
                     return@setOnClickListener
                 }
                 primary.isEnabled = false
-                primary.text = "Проверяем…"
+                primary.text = uiCopy("Проверяем…")
                 status.setTextColor(DeyttUi.SKY)
-                status.text = "Подтверждаю аккаунт и загружаю доступные профили."
+                status.text = uiCopy("Подтверждаю аккаунт и загружаю доступные профили.")
                 executor.execute {
                     val result = runCatching {
                         val session = TelegramPairingClient.verify(currentChallenge, pin)
@@ -489,11 +568,11 @@ class SetupActivity : Activity() {
                                 accountAction.alpha = 1f
                             }
                         }.onFailure { error ->
-                            primary.text = "Подтвердить код"
+                            primary.text = uiCopy("Подтвердить код")
                             status.setTextColor(DeyttUi.CORAL)
                             status.text = when ((error as? TelegramPairingException)?.code) {
-                                "pair_code_invalid" -> "Код неверный или истёк. Запроси новый."
-                                "pair_code_locked" -> "Попытки закончились. Начни вход заново."
+                                "pair_code_invalid" -> uiCopy("Код неверный или истёк. Запроси новый.")
+                                "pair_code_locked" -> uiCopy("Попытки закончились. Начни вход заново.")
                                 else -> "${uiCopy(SubscriptionLoadDiagnostics.userMessage(error))} ${uiCopy("Если код уже использован, запроси новый.")}"
                             }
                             SubscriptionLoadDiagnostics.record(this, "pair", error)
@@ -502,12 +581,19 @@ class SetupActivity : Activity() {
                 }
             }
         }
-        dialog.setContentView(sheet)
+        val scroll = ScrollView(this).apply {
+            isFillViewport = true
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(sheet, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+        }
+        dialog.setContentView(scroll)
         dialog.show()
         dialog.window?.apply {
             setBackgroundDrawableResource(android.R.color.transparent)
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
             setGravity(Gravity.BOTTOM)
+            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             attributes = attributes.apply { dimAmount = .58f }
         }

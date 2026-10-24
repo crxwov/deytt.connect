@@ -528,6 +528,7 @@ class MainActivity : Activity() {
 
         globe = RouteGlobeView(this).apply {
             setOverviewMode(true)
+            setConnected(ConnectVpnService.isRunning() || AwgTunnelController.isRunning())
             onMapNodeTapped = ::showMapRoutePicker
             focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
             setAvailableLocations(availableMapLocations())
@@ -580,9 +581,6 @@ class MainActivity : Activity() {
             val viewportHeight = bottom - top
             if (viewportHeight > 0 && viewportHeight != oldBottom - oldTop) {
                 val mapHeight = homeGlobeHeight()
-                homeMapSlot?.let { slot ->
-                    slot.layoutParams = slot.layoutParams.apply { height = mapHeight }
-                }
                 if (globe.parent === globeBackdrop) {
                     globe.layoutParams = globe.layoutParams.apply { height = mapHeight }
                 }
@@ -658,11 +656,12 @@ class MainActivity : Activity() {
     }
 
     private fun homeGlobeHeight(): Int {
-        // Reserve space for the route, connection action, metrics and refresh above the dock.
+        homeMapSlot?.height?.takeIf { it > 0 }?.let { return it }
+        // Home fills its remaining vertical space; this estimate sizes the shared secondary-page backdrop.
         val controlsHeight = dp(320)
         val availableHeight = if (::pager.isInitialized && pager.height > 0) pager.height - controlsHeight else dp(320)
         val mapWidth = homeMapSlot?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-        return minOf(mapWidth, availableHeight).coerceIn(dp(220), dp(420))
+        return minOf(mapWidth, availableHeight).coerceIn(dp(128), dp(420))
     }
 
     private fun syncGlobeHost(page: Int) {
@@ -684,9 +683,10 @@ class MainActivity : Activity() {
         val mapSlot = FrameLayout(this).apply {
             clipChildren = false
             clipToPadding = false
+            minimumHeight = dp(128)
         }
         homeMapSlot = mapSlot
-        root.addView(mapSlot, LinearLayout.LayoutParams(-1, homeGlobeHeight()))
+        root.addView(mapSlot, LinearLayout.LayoutParams(-1, 0, 1f))
         val routeHeading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL or Gravity.START
@@ -742,6 +742,8 @@ class MainActivity : Activity() {
         detailText = text("", 12f, DeyttUi.MUTED).apply {
             gravity = Gravity.START
             setPadding(dp(20), dp(7), 0, dp(12))
+            maxLines = 2
+            ellipsize = android.text.TextUtils.TruncateAt.END
         }
         connectionNotice.addView(detailText)
         root.addView(connectionNotice)
@@ -759,27 +761,20 @@ class MainActivity : Activity() {
         getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_warning", null)
             ?.takeIf(String::isNotBlank)
             ?.let { warning ->
-                root.addView(spacer(12, this))
                 val compactWarning = if (warning.startsWith("профили amneziawg ") && warning.contains(" не загружены.")) {
                     "профиль amneziawg 3.1 не загружен. обновите подписку."
                 } else warning
-                root.addView(note(compactWarning, DeyttUi.AMBER))
+                root.addView(note(compactWarning, DeyttUi.AMBER).apply {
+                    maxLines = 2
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    contentDescription = uiCopy(warning)
+                    setPadding(dp(12), dp(7), dp(12), dp(7))
+                })
             }
         rebuildRouteRow()
         renderStoredState()
-        val scroll = ScrollView(this).apply {
-            isFillViewport = true
-            isVerticalScrollBarEnabled = false
-            clipToPadding = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            setBackgroundColor(Color.TRANSPARENT)
-            addView(root, FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-            ))
-        }
-        scroll.post { if (::pager.isInitialized) syncGlobeHost(pager.currentItem) }
-        return scroll
+        root.post { if (::pager.isInitialized) syncGlobeHost(pager.currentItem) }
+        return root
     }
 
     private fun rebuildRouteRow() {
@@ -1353,6 +1348,7 @@ class MainActivity : Activity() {
         val enabled = isNetworkLocationEnabled()
         val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         if (::globe.isInitialized) {
+            globe.setConnected(tunnelActive)
             globe.setEgressCountry(if (enabled && tunnelActive) currentEgressLocation?.countryCode else null)
             val isAutoRoute = SelectedRouteStore(this).read().id == "auto"
             if (!tunnelActive || !isAutoRoute || currentAutoRouteKey != null) {
@@ -1634,7 +1630,7 @@ class MainActivity : Activity() {
         if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
             RouteProtocol.AUTO -> "auto"
             RouteProtocol.RU_DE -> "ru → de"
-            else -> route?.let { "${it.countryCode.lowercase()}./${it.protocol.title.lowercase().replace(" ", "")}" } ?: uiCopy(selected.title)
+            else -> route?.let { "${it.countryCode.lowercase()}./${uiCopy(it.protocol.title).replace(" ", "")}" } ?: uiCopy(selected.title)
         }
         val sample = RouteQualityStore.read(this, selected.id)
         val recentSpeed = homeSpeedSample?.takeIf {
@@ -1670,9 +1666,8 @@ class MainActivity : Activity() {
             else -> DeyttUi.MUTED
         })
         val sampleSeconds = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS / 1_000
-        downloadText.contentDescription = homeSpeedError
-            ?: if (en) "Download speed, $sampleSeconds-second sample. Tap to check routes."
-            else "Скорость загрузки, проба $sampleSeconds с. Нажмите для проверки маршрутов."
+        downloadText.contentDescription = homeSpeedError?.let { uiCopy(it) }
+            ?: uiCopy("Скорость загрузки, проба $sampleSeconds с. Нажмите для проверки маршрутов.")
         latencyText.contentDescription = when {
             homePingErrorRouteId == selected.id -> uiCopy("Пинг: нет ответа через выбранный маршрут")
             latency != null -> uiCopy("Пинг через выбранный маршрут: ${latency} миллисекунд")
@@ -1842,7 +1837,7 @@ class MainActivity : Activity() {
                 latencyText.text = "—"
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
-                latencyText.contentDescription = "Для проверки через выход требуется системное разрешение Android"
+                latencyText.contentDescription = uiCopy("Для проверки через выход требуется системное разрешение Android")
             }
             return
         }

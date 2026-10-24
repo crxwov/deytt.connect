@@ -1,21 +1,37 @@
 package space.deytt.connect
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import android.view.MotionEvent
 
 class RouteGlobeViewTest {
     @Test
-    fun parentInterceptIsReleasedForSingleFingerAndLockedOnlyForPinch() {
-        assertNull(RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_DOWN, 1))
-        assertNull(RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_MOVE, 1))
-        assertNull(RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_DOWN, 1))
-        assertEquals(true, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_DOWN, 2))
-        assertEquals(true, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_UP, 3))
-        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_UP, 2))
-        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_UP, 1))
-        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_CANCEL, 1))
+    fun parentInterceptFollowsTouchOriginThroughTheWholeGesture() {
+        assertEquals(true, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_DOWN, true))
+        assertEquals(true, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_MOVE, true))
+        assertEquals(true, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_DOWN, true))
+        assertEquals(true, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_UP, true))
+        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_UP, true))
+        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_CANCEL, true))
+        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_DOWN, false))
+        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_MOVE, false))
+        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_DOWN, false))
+        assertEquals(false, RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_POINTER_UP, false))
+        assertNull(RouteGlobeView.parentInterceptPolicy(MotionEvent.ACTION_HOVER_MOVE, false))
+    }
+
+    @Test
+    fun visibleGlobeHitTestUsesCurrentScaleAndViewportCircle() {
+        assertFalse(RouteGlobeView.isTouchInsideVisibleGlobe(500f, 500f, 1000, 1000, null))
+        assertTrue(RouteGlobeView.isTouchInsideVisibleGlobe(500f, 500f, 1000, 1000, .405f))
+        assertTrue(RouteGlobeView.isTouchInsideVisibleGlobe(890f, 500f, 1000, 1000, .405f))
+        assertFalse(RouteGlobeView.isTouchInsideVisibleGlobe(910f, 500f, 1000, 1000, .405f))
+        assertTrue(RouteGlobeView.isTouchInsideVisibleGlobe(890f, 500f, 1000, 1000, .45f))
+        assertTrue(RouteGlobeView.isTouchInsideVisibleGlobe(0f, 0f, 1000, 1000, 13.76f))
+        assertFalse(RouteGlobeView.isTouchInsideVisibleGlobe(0f, 0f, 0, 1000, .405f))
     }
 
     @Test
