@@ -1,0 +1,188 @@
+name: Android 16 APK install smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Create evidence directory
+        run: mkdir -p "$RUNNER_TEMP/android-api36-smoke/apks" "$RUNNER_TEMP/android-api36-smoke/logs"
+
+      - name: Configure preinstalled Android SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_HOME:-}"
+          test -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$ANDROID_HOME/platform-tools/adb"
+          printf '%s\n' \
+            "$ANDROID_HOME/cmdline-tools/latest/bin" \
+            "$ANDROID_HOME/platform-tools" \
+            "$ANDROID_HOME/emulator" >> "$GITHUB_PATH"
+
+      - name: Install API 36 emulator packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +o pipefail
+          yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
+          sdkmanager \
+            "platform-tools" \
+            "build-tools;35.0.0" \
+            "emulator" \
+            "system-images;android-36;google_apis;x86_64"
+
+      - name: Download and verify release APKs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          dir="$RUNNER_TEMP/android-api36-smoke/apks"
+          logs="$RUNNER_TEMP/android-api36-smoke/logs"
+
+          download_release_apk() {
+            local tag="$1" expected_sha="$2" require_draft="$3" require_prerelease="$4" metadata="$logs/$1-release.json"
+            gh api "repos/$repo/releases/tags/$tag" > "$metadata"
+            jq -e --arg tag "$tag" --arg draft "$require_draft" --arg prerelease "$require_prerelease" \
+              '.tag_name == $tag and ((.draft | tostring) == $draft) and ($prerelease == "any" or ((.prerelease | tostring) == $prerelease)) and any(.assets[]; .name == "app-universal-release.apk" and .state == "uploaded")' \
+              "$metadata" >/dev/null
+            gh release download "$tag" --repo "$repo" --pattern app-universal-release.apk --dir "$dir"
+            local apk="$dir/app-universal-release.apk"
+            mv "$apk" "$dir/$tag-app-universal-release.apk"
+            printf '%s  %s\n' "$expected_sha" "$dir/$tag-app-universal-release.apk" | sha256sum --check
+            sha256sum "$dir/$tag-app-universal-release.apk" | tee -a "$logs/apk-sha256.txt"
+          }
+
+          download_release_apk v0.11.10 1879aa08d73803069440f5d439a979bc30f813d6da50645569095430ae815ca8 false any
+          download_release_apk v0.11.49 e9a7d9b23da0b462257c57d864fa7cca1eb0e15fd9b749f2a4cd05c7c880a3d1 false any
+          download_release_apk v0.11.50 dd44aa6acba5c4c0b8360bdc77b9f52aed23dfd4c7d786ce21e3cf47d4c83cc9 false true
+
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          for tag in v0.11.10 v0.11.49 v0.11.50; do
+            "$aapt" dump badging "$dir/$tag-app-universal-release.apk" | sed -n '1p' | tee "$logs/$tag-badging.txt"
+          done
+          grep -Fq "versionName='0.11.10'" "$logs/v0.11.10-badging.txt"
+          grep -Fq "versionName='0.11.49'" "$logs/v0.11.49-badging.txt"
+          grep -Fq "versionName='0.11.50'" "$logs/v0.11.50-badging.txt"
+          grep -Fq "name='space.deytt.connect'" "$logs/v0.11.10-badging.txt"
+          grep -Fq "name='space.deytt.connect'" "$logs/v0.11.49-badging.txt"
+          grep -Fq "versionCode='79'" "$logs/v0.11.49-badging.txt"
+          grep -Fq "versionCode='80'" "$logs/v0.11.50-badging.txt"
+          grep -Fq "name='space.deytt.connect'" "$logs/v0.11.50-badging.txt"
+
+      - name: Start disposable API 36 emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/android-api36-smoke/avd"
+          echo no | avdmanager create avd \
+            --name api36-smoke \
+            --package "system-images;android-36;google_apis;x86_64" \
+            --device pixel_2 \
+            --force
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          emulator -accel-check
+          nohup emulator -avd api36-smoke \
+            -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics \
+            -gpu swiftshader -accel on -wipe-data \
+            > "$RUNNER_TEMP/android-api36-smoke/logs/emulator.log" 2>&1 &
+          timeout 120 adb wait-for-device
+          for attempt in $(seq 1 120); do
+            if [[ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" == "1" ]]; then
+              break
+            fi
+            if [[ "$attempt" == 120 ]]; then
+              echo "API 36 emulator did not complete boot within 10 minutes" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          adb shell input keyevent 82
+          adb shell getprop ro.build.version.sdk | tee "$RUNNER_TEMP/android-api36-smoke/logs/api-level.txt"
+          test "$(cat "$RUNNER_TEMP/android-api36-smoke/logs/api-level.txt" | tr -d '\r')" = 36
+
+      - name: Test fresh install and in-place upgrades
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/android-api36-smoke/apks"
+          logs="$RUNNER_TEMP/android-api36-smoke/logs"
+          package=space.deytt.connect
+          baseline="$dir/v0.11.10-app-universal-release.apk"
+
+          record_diagnostic() {
+            local label="$1" apk="$2" update="$3" output="$logs/$1-install.txt"
+            adb uninstall "$package" >/dev/null 2>&1 || true
+            if [[ "$update" == true ]]; then
+              adb install "$baseline" > "$logs/$label-baseline-install.txt" 2>&1
+              if ! adb install -r "$apk" > "$output" 2>&1; then
+                printf '%s: INSTALL FAILED (diagnostic only)\n' "$label" | tee -a "$logs/summary.txt"
+                return 0
+              fi
+            elif ! adb install "$apk" > "$output" 2>&1; then
+              printf '%s: FRESH INSTALL FAILED (diagnostic only)\n' "$label" | tee -a "$logs/summary.txt"
+              return 0
+            fi
+            printf '%s: INSTALL OK (diagnostic only)\n' "$label" | tee -a "$logs/summary.txt"
+            if ! launch_and_capture "$label"; then
+              printf '%s: COLD LAUNCH FAILED (diagnostic only)\n' "$label" | tee -a "$logs/summary.txt"
+            fi
+          }
+
+          launch_and_capture() {
+            local label="$1"
+            local activity="$logs/$label-activity.txt" crash="$logs/$label-android-runtime.txt"
+            adb logcat -c
+            adb shell am force-stop "$package"
+            if ! adb shell am start -W -n "$package/.MainActivity" > "$activity" 2>&1; then
+              return 1
+            fi
+            sleep 8
+            adb shell dumpsys package "$package" > "$logs/$label-package.txt"
+            adb shell dumpsys activity activities > "$logs/$label-activities.txt"
+            adb logcat -d -s AndroidRuntime:E > "$crash"
+            adb exec-out screencap -p > "$logs/$label-screen.png"
+            if grep -Eq 'FATAL EXCEPTION|Process: space\.deytt\.connect' "$crash"; then
+              return 1
+            fi
+            if ! grep -Eq 'versionCode=80([[:space:]]|$)' "$logs/$label-package.txt" && [[ "$label" == *0.11.50* ]]; then
+              return 1
+            fi
+            if ! grep -E 'mResumedActivity|topResumedActivity' "$logs/$label-activities.txt" | grep -F "$package" >/dev/null; then
+              return 1
+            fi
+            printf '%s: COLD LAUNCH OK\n' "$label" | tee -a "$logs/summary.txt"
+          }
+
+          record_diagnostic fresh-v0.11.49 "$dir/v0.11.49-app-universal-release.apk" false
+          record_diagnostic upgrade-v0.11.10-to-v0.11.49 "$dir/v0.11.49-app-universal-release.apk" true
+
+          adb uninstall "$package" >/dev/null 2>&1 || true
+          adb install "$baseline" > "$logs/upgrade-v0.11.10-to-v0.11.50-baseline.txt" 2>&1
+          adb install -r "$dir/v0.11.50-app-universal-release.apk" > "$logs/upgrade-v0.11.10-to-v0.11.50-install.txt" 2>&1
+          grep -Eq 'versionCode=80([[:space:]]|$)' <(adb shell dumpsys package "$package")
+          launch_and_capture upgrade-v0.11.10-to-v0.11.50
+
+          adb uninstall "$package" >/dev/null 2>&1 || true
+          adb install "$dir/v0.11.50-app-universal-release.apk" > "$logs/fresh-v0.11.50-install.txt" 2>&1
+          grep -Eq 'versionCode=80([[:space:]]|$)' <(adb shell dumpsys package "$package")
+          launch_and_capture fresh-v0.11.50
+
+      - name: Upload emulator evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: android-api36-install-smoke
+          path: ${{ runner.temp }}/android-api36-smoke/logs
+          if-no-files-found: warn
+          retention-days: 7
