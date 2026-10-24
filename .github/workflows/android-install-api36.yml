@@ -83,12 +83,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/android-api36-smoke/avd"
+          export ANDROID_AVD_HOME="$RUNNER_TEMP/android-api36-smoke/avd"
+          mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd \
             --name api36-smoke \
             --package "system-images;android-36;google_apis;x86_64" \
             --device pixel_2 \
             --force
+          test -f "$ANDROID_AVD_HOME/api36-smoke.ini"
+          avdmanager list avd
           test -c /dev/kvm
           sudo chmod a+rw /dev/kvm
           emulator -accel-check
