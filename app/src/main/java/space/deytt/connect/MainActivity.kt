@@ -63,6 +63,7 @@ class MainActivity : Activity() {
     private lateinit var shellRoot: LinearLayout
     private var pageMotionEnabled = true
     private var homeMapSlot: FrameLayout? = null
+    private var homeMapExpanded = false
     private lateinit var homeDestinationTitle: TextView
     private lateinit var homeDestinationFlag: TextView
     private lateinit var connectionNotice: LinearLayout
@@ -117,7 +118,6 @@ class MainActivity : Activity() {
     private var homeConnectionGeneration = 0L
     private var homeSpeedAttemptAt = 0L
     private var homeSpeedInFlight = false
-    private var homeSpeedCurrentBps: Long? = null
     private var homeSpeedError: String? = null
     private var homeSpeedErrorKey: HomeRouteMetricKey? = null
     private var homeSpeedBypassedKey: HomeRouteMetricKey? = null
@@ -588,6 +588,7 @@ class MainActivity : Activity() {
             setOverviewMode(true)
             setConnected(ConnectVpnService.isRunning() || AwgTunnelController.isRunning())
             onMapNodeTapped = ::showMapRoutePicker
+            onMapViewportExpanded = ::setHomeMapExpanded
             focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
             setAvailableLocations(availableMapLocations())
             setUserLocation(currentNetworkLocation)
@@ -638,6 +639,7 @@ class MainActivity : Activity() {
         pager.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
             val viewportHeight = bottom - top
             if (viewportHeight > 0 && viewportHeight != oldBottom - oldTop) {
+                if (homeMapExpanded) updateHomeMapSlotSize()
                 val mapHeight = homeGlobeHeight()
                 if (globe.parent === globeBackdrop) {
                     globe.layoutParams = globe.layoutParams.apply { height = mapHeight }
@@ -720,6 +722,23 @@ class MainActivity : Activity() {
         val availableHeight = if (::pager.isInitialized && pager.height > 0) pager.height - controlsHeight else dp(320)
         val mapWidth = homeMapSlot?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
         return minOf(mapWidth, availableHeight).coerceIn(dp(128), dp(420))
+    }
+
+    private fun setHomeMapExpanded(expanded: Boolean) {
+        if (!::pager.isInitialized || homeMapExpanded == expanded) return
+        homeMapExpanded = expanded
+        updateHomeMapSlotSize()
+    }
+
+    private fun updateHomeMapSlotSize() {
+        val slot = homeMapSlot ?: return
+        val params = slot.layoutParams as? LinearLayout.LayoutParams ?: return
+        val height = if (homeMapExpanded) pager.height else 0
+        val weight = if (homeMapExpanded) 0f else 1f
+        if (params.height == height && params.weight == weight) return
+        params.height = height
+        params.weight = weight
+        slot.layoutParams = params
     }
 
     private fun syncGlobeHost(page: Int) {
@@ -1701,13 +1720,9 @@ class MainActivity : Activity() {
             SystemClock.elapsedRealtime() - homeSpeedSampleAt in 0..(15 * 60_000L)
         }
         val recentSpeed = HomeMetricPresentation.value(connected, metricKey, recentSpeedSample?.first, recentSpeedSample?.second)
-        val displayedSpeed = HomeMetricPresentation.value(
-            connected, metricKey, if (homeSpeedInFlight) metricKey else recentSpeedSample?.first,
-            if (homeSpeedInFlight) homeSpeedCurrentBps else recentSpeed,
-        )
         val speedError = HomeMetricPresentation.value(connected, metricKey, homeSpeedErrorKey, homeSpeedError)
         val speedBypassed = HomeMetricPresentation.isCurrent(connected, metricKey, homeSpeedBypassedKey)
-        val mbps = displayedSpeed?.times(8.0)?.div(1_000_000.0)
+        val mbps = recentSpeed?.times(8.0)?.div(1_000_000.0)
         val en = AppLanguage.current(this) == AppLanguage.EN
         val latency = HomeMetricPresentation.value(connected, metricKey, lastRouteLatency?.first, lastRouteLatency?.second)
             ?.takeIf(RouteProbeStatistics::isValidLatencyMillis)
@@ -1830,7 +1845,6 @@ class MainActivity : Activity() {
         homeSpeedError = null
         homeSpeedErrorKey = metricKey
         homeSpeedBypassedKey = null
-        homeSpeedCurrentBps = null
         val generation = homeSpeedGeneration
         val stillCurrent = {
             generation == homeSpeedGeneration && homeSpeedForeground && homeSpeedOnHome &&
@@ -1847,22 +1861,12 @@ class MainActivity : Activity() {
                     token,
                     stillCurrent,
                     sampleMillis = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS,
-                    onProgress = { bytesPerSecond ->
-                        runOnUiThread {
-                            if (generation != homeSpeedGeneration || !stillCurrent() || isFinishing || isDestroyed) {
-                                return@runOnUiThread
-                            }
-                            homeSpeedCurrentBps = bytesPerSecond
-                            updateQualityStrip()
-                        }
-                    },
                 )
             }
             runOnUiThread {
                 if (generation != homeSpeedGeneration) return@runOnUiThread
                 homeSpeedInFlight = false
                 homeSpeedFuture = null
-                homeSpeedCurrentBps = null
                 if (!stillCurrent() || isFinishing || isDestroyed) {
                     if (!isFinishing && !isDestroyed && renderedPhase == VpnPhase.CONNECTED &&
                         SelectedRouteStore(this).read().id == selected.id &&

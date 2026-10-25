@@ -4,6 +4,8 @@
   const DEG = Math.PI / 180;
   const TAU = Math.PI * 2;
   const MAX_ZOOM = 32;
+  const EXPAND_VIEWPORT_ZOOM = 2;
+  const COLLAPSE_VIEWPORT_ZOOM = 1.25;
   const SAVE_DATA_PIXEL_RATIO_CAP = 1.5;
   const MOBILE_PIXEL_RATIO_CAP = 3;
   const DESKTOP_PIXEL_RATIO_CAP = 2.25;
@@ -322,6 +324,7 @@
       this.renderCount = 0;
       this.staticRenderCount = 0;
       this.cameraMoving = false;
+      this.viewportExpanded = false;
       this.trafficActive = false;
       this.trafficStartedAt = 0;
       this.projectedNodes = {};
@@ -514,26 +517,15 @@
       this.staticCanvas.height = this.canvas.height;
       this.staticContext.setTransform(ratio, 0, 0, ratio, 0, 0);
       this.radius = Math.min(this.width, this.height) * (this.width < 520 ? 0.405 : 0.43);
-      this.reportNativeGlobeRadius();
       this.staticDirty = true;
       this.start();
     }
 
     isInsideVisibleGlobe(clientX, clientY) {
+      if (window.DeyttAtlasBridge) return true;
       const box = this.canvas.getBoundingClientRect();
       const radius = Math.max(0, this.radius * this.zoom - .5);
       return Math.hypot(clientX - box.left - box.width / 2, clientY - box.top - box.height / 2) <= radius;
-    }
-
-    reportNativeGlobeRadius() {
-      const bridge = window.DeyttAtlasBridge;
-      const side = Math.min(this.width, this.height);
-      if (!bridge || typeof bridge.onGlobeRadiusChanged !== "function" || !side) return;
-      // Android exposes a circular viewport so overscaled map pixels never end at the WebView's rectangle.
-      const radiusFraction = Math.min(.5, Math.max(0, this.radius * this.zoom - .5) / side);
-      if (this.lastReportedGlobeRadius != null && Math.abs(this.lastReportedGlobeRadius - radiusFraction) < .002) return;
-      this.lastReportedGlobeRadius = radiusFraction;
-      bridge.onGlobeRadiusChanged(radiusFraction);
     }
 
     basis() {
@@ -1179,8 +1171,7 @@
     }
 
     isAndroidViewportAnchorVisible(point) {
-      const radius = Math.min(this.width, this.height) * .5;
-      return Math.hypot(point.x - this.width / 2, point.y - this.height / 2) <= radius;
+      return point.x >= 0 && point.x <= this.width && point.y >= 0 && point.y <= this.height;
     }
 
     renderStatic(colors) {
@@ -1209,10 +1200,8 @@
     render(time) {
       this.frame = 0;
       if (!this.visible || document.hidden || !this.width) return;
-      const wasCameraMoving = this.cameraMoving;
       const cameraMoving = this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
-      if (wasCameraMoving && !cameraMoving) this.labelPlacements.clear();
       // The atlas only animates while the user pans or zooms. Once the camera
       // settles, static routes and labels stay still and consume no frame loop.
       const frameInterval = !cameraMoving && this.trafficActive && !this.reducedMotion.matches ? 33 : 0;
@@ -1244,7 +1233,14 @@
       if (Math.abs(this.targetLon - this.centerLon) < .01) this.centerLon = this.targetLon;
       if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
       if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
-      if (Math.abs(this.zoom - previousZoom) > .0001) this.reportNativeGlobeRadius();
+      const nextViewportExpanded = this.zoom >= (this.viewportExpanded ? COLLAPSE_VIEWPORT_ZOOM : EXPAND_VIEWPORT_ZOOM);
+      if (nextViewportExpanded !== this.viewportExpanded) {
+        this.viewportExpanded = nextViewportExpanded;
+        const bridge = window.DeyttAtlasBridge;
+        if (bridge && typeof bridge.onViewportExpandedChanged === "function") {
+          bridge.onViewportExpandedChanged(nextViewportExpanded);
+        }
+      }
       if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 || Math.abs(this.zoom - previousZoom) > .0001) {
         this.staticDirty = true;
       }
@@ -1255,29 +1251,9 @@
       this.context.drawImage(this.staticCanvas, 0, 0, this.width, this.height);
       this.drawRoutes(colors, time);
       this.drawNodes(colors);
-      this.maskAndroidViewport();
       this.drawLabels(colors);
       this.renderCount += 1;
       if (Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || (this.trafficActive && !this.reducedMotion.matches)) this.start();
-    }
-
-    maskAndroidViewport() {
-      if (!window.DeyttAtlasBridge) return;
-      const side = Math.min(this.width, this.height);
-      if (!side) return;
-      const radius = side * .5;
-      const feather = Math.max(1, side * .012);
-      const gradient = this.context.createRadialGradient(
-        this.width / 2, this.height / 2, radius - feather,
-        this.width / 2, this.height / 2, radius,
-      );
-      gradient.addColorStop(0, "rgba(255,255,255,1)");
-      gradient.addColorStop(1, "rgba(255,255,255,0)");
-      this.context.save();
-      this.context.globalCompositeOperation = "destination-in";
-      this.context.fillStyle = gradient;
-      this.context.fillRect(0, 0, this.width, this.height);
-      this.context.restore();
     }
 
     start() {

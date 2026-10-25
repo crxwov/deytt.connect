@@ -28,12 +28,12 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var overviewModeActive = false
     private var connected = false
     private var gestureStartedInsideGlobe = false
-    @Volatile private var visibleGlobeRadiusFraction: Float? = null
     private var reducedMotionActive = false
     private var availableLocations = setOf("nl", "de", "fi", "ru")
     private var trafficActive = false
     private val atlas: WebView
     var onMapNodeTapped: ((String) -> Unit)? = null
+    var onMapViewportExpanded: ((Boolean) -> Unit)? = null
 
     private val nodeTapBridge = object {
         @JavascriptInterface
@@ -44,9 +44,9 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         }
 
         @JavascriptInterface
-        fun onGlobeRadiusChanged(radiusFraction: Float) {
-            if (radiusFraction.isFinite() && radiusFraction in 0f..16f) {
-                visibleGlobeRadiusFraction = viewportRadiusFraction(radiusFraction)
+        fun onViewportExpandedChanged(expanded: Boolean) {
+            post {
+                if (!backdropStageActive) onMapViewportExpanded?.invoke(expanded)
             }
         }
     }
@@ -102,8 +102,8 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             }
             setOnTouchListener { view, event ->
                 if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                    gestureStartedInsideGlobe = !backdropStageActive && isTouchInsideVisibleGlobe(
-                        event.x, event.y, view.width, view.height, visibleGlobeRadiusFraction,
+                    gestureStartedInsideGlobe = !backdropStageActive && isTouchInsideViewport(
+                        event.x, event.y, view.width, view.height,
                     )
                 }
                 val allowGlobeGesture = gestureStartedInsideGlobe && !backdropStageActive
@@ -396,24 +396,14 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             else -> null
         }
 
-        internal fun isTouchInsideVisibleGlobe(
+        internal fun isTouchInsideViewport(
             x: Float,
             y: Float,
             width: Int,
             height: Int,
-            radiusFraction: Float?,
         ): Boolean {
-            if (width <= 0 || height <= 0 || radiusFraction == null || !radiusFraction.isFinite() || radiusFraction <= 0f) {
-                return false
-            }
-            val radius = minOf(width, height) * radiusFraction
-            val dx = x - width / 2f
-            val dy = y - height / 2f
-            return dx * dx + dy * dy <= radius * radius
+            return width > 0 && height > 0 && x >= 0f && x < width && y >= 0f && y < height
         }
-
-        internal fun viewportRadiusFraction(globeRadiusFraction: Float): Float =
-            globeRadiusFraction.coerceIn(0f, .5f)
 
         internal fun routeKeyFor(selectedRouteId: String): String {
             val routeTokens = selectedRouteId.uppercase().split(Regex("[^A-Z]+"))
