@@ -105,6 +105,11 @@
   window.deyttSetMapBackdropStage = function (active) {
     root.classList.toggle("is-backdrop-stage", Boolean(active));
   };
+  window.deyttSetMapBackdropProgress = function (progress) {
+    const value = Math.max(0, Math.min(1, Number(progress) || 0));
+    root.style.setProperty("--backdrop-blur", (value * 28).toFixed(2) + "px");
+    root.style.setProperty("--backdrop-opacity", (1 - value * .6).toFixed(3));
+  };
   window.deyttSetMapReducedMotion = function (enabled) {
     const next = Boolean(enabled);
     root.classList.toggle("is-reduced-motion", next);

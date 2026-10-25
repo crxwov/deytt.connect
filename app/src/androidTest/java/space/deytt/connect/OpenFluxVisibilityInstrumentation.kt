@@ -73,12 +73,15 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 .remove("subscription_url")
                 .putString("app_language", "ru")
                 .putBoolean("network_location_enabled", false)
+                .putBoolean("reduced_motion", false)
                 // MainActivity starts the updater on foreground; suppress its network request.
                 .putLong("last_official_update_check_ms", System.currentTimeMillis())
                 .commit())
             check(targetContext.getSharedPreferences(ConnectVpnService.STATE_PREFS, Context.MODE_PRIVATE)
                 .edit().clear().commit())
-            SelectedRouteStore(targetContext).save(RouteCatalog.from(CORE, emptyList()).first())
+            SelectedRouteStore(targetContext).save(DeyttRoute(
+                "openflux:DE", "DE", "германия", "🇩🇪", RouteProtocol.OPENFLUX, TunnelEngine.OPENFLUX,
+            ))
             assertEmptyCredentials()
             passed += stage
 
@@ -90,6 +93,15 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
             activity = launched
             waitForIdleSync()
+            stage = "startup_splash_types_brand_mark"
+            awaitCondition {
+                onMainCondition {
+                    val mark = findView(launched.findViewById(android.R.id.content)) { it.tag == "startup-mark" } as? TextView
+                    mark?.text?.toString()?.isNotBlank() == true && mark.isShown
+                }
+            }
+            passed += stage
+            stage = "open_routes_through_visible_navigation"
             awaitCondition {
                 onMainCondition {
                     findView(launched.findViewById(android.R.id.content)) {
@@ -105,29 +117,12 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             }
             passed += stage
 
-            stage = "empty_cache_routes_remain_visible"
+            stage = "legacy_cups_selection_migrates_and_route_is_hidden"
             awaitVisibleText(launched, "lte + белые списки")
-            awaitVisibleText(launched, "обход cups · германия")
             check(SelectedRouteStore(targetContext).read().id == "auto")
-            assertEmptyCredentials()
-            assertNoNativeConnection()
-            passed += stage
-
-            stage = "single_click_selects_cups_without_connecting"
-            runOnMainSync {
-                val title = checkNotNull(findText(launched.findViewById(android.R.id.content), "обход cups · германия"))
-                check(isVisible(title))
-                var clickTarget: View? = title
-                while (clickTarget != null && !clickTarget.isClickable) clickTarget = clickTarget.parent as? View
-                val row = checkNotNull(clickTarget)
-                check(row.isEnabled && row.performClick())
-            }
-            awaitCondition {
-                val selected = SelectedRouteStore(targetContext).read()
-                selected.id == "openflux:DE" && selected.engine == TunnelEngine.OPENFLUX
-            }
-            waitForIdleSync()
-            check(SelectedRouteStore(targetContext).read().configTag.isEmpty())
+            check(onMainValue {
+                findText(launched.findViewById(android.R.id.content), "обход cups · германия") == null
+            })
             assertEmptyCredentials()
             assertNoNativeConnection()
             passed += stage
@@ -145,6 +140,18 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 val accountName = findView(content) { it.tag == "telegram-account-name" }
                 check(accountName is TextView && accountName.visibility == View.GONE)
                 globes.single() as RouteGlobeView
+            }
+            awaitAtlasReady(sharedGlobe)
+            val visualMap = onMainValue {
+                checkNotNull(findViews(sharedGlobe) { it is WebView }.singleOrNull()) as WebView
+            }
+            runOnMainSync {
+                // CORE contains only a synthetic RU-DE route; the zoom matrix needs a Finland endpoint.
+                sharedGlobe.setAvailableLocations(setOf("nl", "de", "fi", "ru", "it"))
+                sharedGlobe.focus("fi", animate = false)
+            }
+            awaitCondition {
+                runAtlasScript(visualMap, "String(window.deyttMapAtlas.availableLocationKeys.has('fi')&&window.deyttMapAtlas.route==='fi')") == "true"
             }
             runOnMainSync {
                 headerGeometryLogs += "initial:${readHeaderGeometry(launched)}"
@@ -244,10 +251,13 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             assertProfileAccordionExpansion(launched)
             passed += stage
 
-            // Selecting the synthetic OpenFlux route avoids diagnostic network calls on Home.
+            // The removed legacy route must remain Auto after returning to Home; no test tunnel is started.
+            stage = "home_return_preserves_auto_after_legacy_route_migration"
             clickNavigation(launched, "главная")
             awaitVisibleText(launched, "Подключить")
-            check(SelectedRouteStore(targetContext).read().id == "openflux:DE")
+            check(SelectedRouteStore(targetContext).read().id == "auto") {
+                "Returning Home must preserve the Auto migration instead of restoring the removed Cups route"
+            }
             assertNoNativeConnection()
             stage = "cancelled_vpn_permission_clears_pending_route"
             assertCanceledVpnPermissionClearsPendingRoute(launched)
@@ -278,7 +288,9 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 (homeGlobeHost as? View)?.tag == "globe-underlay") {
                 "The globe must remain attached to the fixed full-window underlay while pages change"
             }
-            check(SelectedRouteStore(targetContext).read().id == "openflux:DE")
+            check(SelectedRouteStore(targetContext).read().id == "auto") {
+                "Opening Routes must preserve Auto after the legacy Cups selection migration"
+            }
             assertEmptyCredentials()
             assertNoNativeConnection()
             passed += stage
@@ -303,7 +315,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             passed += stage
 
             stage = "globe_blur_animates_reverses_and_respects_reduced_motion"
-            assertGlobeBlurTransition(transitionWebView)
+            assertGlobeBlurTransition(launched, transitionWebView, pagerSwipeY)
             passed += stage
 
             stage = "two_pointer_map_pinch_zoom_does_not_page"
@@ -631,7 +643,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             }) { "Profile devices accordion toggle is missing" }
             val group = toggle.parent as? ViewGroup
                 ?: error("Profile devices accordion has no content group")
-            check(group.childCount >= 2)
+            check(group.childCount >= 2) { "Profile accordion should contain both its toggle and content: children=${group.childCount}" }
             toggle to group.getChildAt(group.childCount - 1)
         }
         val (toggle, accordionContent) = pair
@@ -651,7 +663,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         check(onMainValue {
             findText(accordionContent, "Подключите аккаунт, чтобы увидеть устройства.") != null
         }) { "Expanded profile accordion should show its offline empty-account summary" }
-        onMainValue { check(toggle.performClick()) }
+        onMainValue { check(toggle.performClick()) { "Profile accordion close tap was not handled" } }
         awaitCondition { onMainCondition { accordionContent.visibility == View.GONE } }
     }
 
@@ -986,12 +998,13 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             }
             if (target in listOf(1.28, 2.05, 3.0)) {
                 val labels = readAtlasLabelLayout(webView)
-                check(labels == labelBaseline) {
-                    "Label placement/scale changed after settled zoom $target: before=$labelBaseline after=$labels; $settled"
+                val endpoint = runAtlasScript(webView, "(function(){var a=window.deyttMapAtlas,p=a.projectedNodes.fi;return 'visible='+(!!p&&p.z>.015&&a.isAndroidViewportAnchorVisible(p));})()")
+                check(labelPlacementIndices(labels).isNotEmpty() && endpoint == "visible=true") {
+                    "Zoom lost all route labels or the Helsinki endpoint at $target: labels=$labels endpoint=$endpoint; $settled"
                 }
             }
             fixedZoomDiagnostics += "zoom=$target underlay=$currentBounds anchor=$anchor radius=$radius/$currentZoom " +
-                "chromeStable=true;labelsStable=${target !in listOf(1.1, 32.0)};"
+                "chromeStable=true;labelsFit=${target in listOf(1.28, 2.05, 3.0)};"
             saveQaScreenshot("globe-zoom-${target.toString().replace('.', '-')}", screenshots, results)
         }
         val idleBefore = readAtlasRenderCount(webView)
@@ -1010,7 +1023,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 annotationFilter:a.annotationFilter,userLocation:a.userLocation,hovered:a.hovered,centerLon:a.centerLon,centerLat:a.centerLat,
                 targetLon:a.targetLon,targetLat:a.targetLat,zoom:a.zoom,targetZoom:a.targetZoom,currentBasis:a.currentBasis,
                 centerX:a.centerX,centerY:a.centerY,viewportAnchor:a.viewportAnchor,
-                projectedNodes:a.projectedNodes,labelPlacements:a.labelPlacements,drawLabel:a.drawLabel};
+                projectedNodes:a.projectedNodes,routeSegments:a.routeSegments,labelPlacements:a.labelPlacements,drawLabel:a.drawLabel};
               var drawn=[];
               try{
                 var probe=document.createElement('canvas');probe.width=320;probe.height=220;
@@ -1019,21 +1032,27 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 a.route='auto';a.connected=false;a.autoExitCountry=null;a.autoExitRouteKey=null;
                 a.availableLocationKeys=new Set(['nl','de','fi','ru','it']);a.annotationFilter=null;a.userLocation=null;a.hovered='de';
                 a.centerLon=a.targetLon=15;a.centerLat=a.targetLat=50;a.zoom=a.targetZoom=.82;a.currentBasis=a.basis();
-                a.projectedNodes={};a.labelPlacements=new Map();
+                a.projectedNodes={};a.routeSegments=[];a.labelPlacements=new Map();
                 a.drawLabel=function(key,colors,occupied){var before=occupied.length;snapshot.drawLabel.call(this,key,colors,occupied);if(occupied.length>before){
                   var r=occupied[occupied.length-1];drawn.push({key:key,left:r.left,top:r.top,width:r.width,height:r.height});}};
                 var colors=a.colors();a.drawNodes(colors);a.drawLabels(colors);
                 var overlapCount=0;for(var i=0;i<drawn.length;i++)for(var j=i+1;j<drawn.length;j++){
                   var x=drawn[i],y=drawn[j];if(x.left<y.left+y.width&&x.left+x.width>y.left&&x.top<y.top+y.height&&x.top+x.height>y.top)overlapCount++;}
+                var pinCovers=drawn.reduce(function(total,r){return total+Object.keys(a.projectedNodes).filter(function(k){var p=a.projectedNodes[k];return p.z>.03&&p.x>r.left-5&&p.x<r.left+r.width+5&&p.y>r.top-5&&p.y<r.top+r.height+5;}).length;},0);
                 var visible=Object.keys(a.projectedNodes).filter(function(k){return a.projectedNodes[k].z>.03;}).length;
-                return 'visible='+visible+';drawn='+drawn.map(function(x){return x.key;}).join(',')+';overlaps='+overlapCount+';hoverFirst='+(drawn.length?drawn[0].key:'none');
+                var crowded='visible='+visible+';drawn='+drawn.map(function(x){return x.key;}).join(',')+';overlaps='+overlapCount+';pinCovers='+pinCovers+';hoverFirst='+(drawn.length?drawn[0].key:'none');
+                a.route='ru-de';a.routeSegments=[];drawn=[];a.projectedNodes={};a.drawRoutes(colors,performance.now());a.drawNodes(colors);a.drawLabels(colors);
+                var routeCrossings=drawn.reduce(function(total,r){return total+a.routeSegments.filter(function(s){return s.left<r.left+r.width+4&&s.right>r.left-4&&s.top<r.top+r.height+4&&s.bottom>r.top-4;}).length;},0);
+                return crowded+';routeLabels='+drawn.map(function(x){return x.key;}).join(',')+';routeCrossings='+routeCrossings;
               }finally{Object.assign(a,snapshot);}
             })()
         """.trimIndent())
         android.util.Log.i("OpenFluxVisibilityQA", "globe_crowded_auto_labels=$crowdedLabelProbe")
         check(crowdedLabelProbe.contains("visible=5") &&
             crowdedLabelProbe.substringAfter("drawn=").substringBefore(';').isNotBlank() &&
-            crowdedLabelProbe.contains("overlaps=0") && crowdedLabelProbe.contains("hoverFirst=de")) {
+            crowdedLabelProbe.contains("overlaps=0") && crowdedLabelProbe.contains("pinCovers=0") &&
+            crowdedLabelProbe.contains("hoverFirst=de") && crowdedLabelProbe.contains("routeLabels=de,ru") &&
+            crowdedLabelProbe.contains("routeCrossings=0")) {
             "Crowded all-location Auto labels overlapped or ignored hover priority: $crowdedLabelProbe"
         }
         val orientationBaseline = readAtlasViewportAnchor(webView)
@@ -1118,63 +1137,105 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         }
     }
 
-    private fun assertGlobeBlurTransition(webView: WebView) {
-        val camera = readAtlasCameraSnapshot(webView, resetResizeCount = true)
-        runAtlasScript(webView, """
-            (function(){
-              var root=document.querySelector('.network-atlas');
-              window.__qaBlurResult=null;
-              function read(){var s=getComputedStyle(root),m=s.filter.match(/blur\(([\d.]+)px\)/);
-                return {blur:m?Number(m[1]):0,opacity:Number(s.opacity)};}
-              function sample(ms){return new Promise(function(resolve){var start=performance.now(),values=[],last=start,gap=0;
-                function frame(t){gap=Math.max(gap,t-last);last=t;values.push(read());
-                  if(t-start>=ms)resolve({values:values,maxFrameGap:gap});else requestAnimationFrame(frame);}
-                requestAnimationFrame(frame);});}
-              (async function(){
-                window.deyttSetMapReducedMotion(false);
-                var initial=read();
-                window.deyttSetMapBackdropStage(true);
-                var enter=await sample(300),backdrop=read();
-                window.deyttSetMapBackdropStage(false);
-                var exit=await sample(60),beforeReverse=read();
-                window.deyttSetMapBackdropStage(true);
-                var afterReverse=read(),reverse=await sample(300);
-                window.deyttSetMapReducedMotion(true);
-                window.deyttSetMapBackdropStage(false);var reducedHome=read();
-                window.deyttSetMapBackdropStage(true);var reducedBackdrop=read();
-                window.deyttSetMapBackdropStage(false);window.deyttSetMapReducedMotion(false);
-                window.__qaBlurResult={initial,enter,backdrop,exit,beforeReverse,afterReverse,reverse,reducedHome,reducedBackdrop};
-              })().catch(function(e){window.__qaBlurResult={error:String(e)};});
-              return 'started';
-            })()
-        """.trimIndent())
-        var value = ""
-        awaitCondition {
-            value = runAtlasScript(webView, "window.__qaBlurResult || ''")
-            value.isNotBlank()
+    private fun assertGlobeBlurTransition(activity: MainActivity, webView: WebView, pagerSwipeY: Float) {
+        val pager = onMainValue {
+            checkNotNull(findView(activity.findViewById(android.R.id.content)) {
+                it.javaClass.name == "androidx.viewpager2.widget.ViewPager2"
+            }) as androidx.viewpager2.widget.ViewPager2
         }
-        val result = org.json.JSONObject(value)
-        check(!result.has("error")) { "Blur transition probe failed: $value" }
-        check(result.getJSONObject("initial").getDouble("blur") < .01 &&
-            result.getJSONObject("backdrop").getDouble("blur") >= 27.9 &&
-            kotlin.math.abs(result.getJSONObject("backdrop").getDouble("opacity") - .4) < .01) { value }
-        val enter = result.getJSONObject("enter").getJSONArray("values")
-        check((0 until enter.length()).any { enter.getJSONObject(it).getDouble("blur") in .1..27.8 }) {
-            "Blur jumped to its endpoint instead of animating: $value"
+        val globe = onMainValue {
+            checkNotNull(findViews(activity.findViewById(android.R.id.content)) { it is RouteGlobeView }.singleOrNull()) as RouteGlobeView
         }
-        val beforeReverse = result.getJSONObject("beforeReverse").getDouble("blur")
-        val afterReverse = result.getJSONObject("afterReverse").getDouble("blur")
-        check(beforeReverse in .01..27.9 && kotlin.math.abs(beforeReverse - afterReverse) < .1) {
-            "Interrupted blur must reverse from its current value: $value"
+        val progressField = RouteGlobeView::class.java.getDeclaredField("backdropProgress").apply { isAccessible = true }
+        fun state() = onMainValue {
+            progressField.getFloat(globe) to globe.alpha
         }
-        check(result.getJSONObject("reducedHome").getDouble("blur") < .01 &&
-            result.getJSONObject("reducedBackdrop").getDouble("blur") >= 27.9) {
-            "Reduced motion must apply blur immediately: $value"
+        fun checkVisual(expected: Float, label: String) {
+            val actual = state()
+            check(kotlin.math.abs(actual.first - expected) < .015f) {
+                "$label: progress=$actual expected=$expected"
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                check(kotlin.math.abs(actual.second - (1f - .6f * expected)) < .025f) {
+                    "$label: native blur/opacity did not follow swipe progress: $actual"
+                }
+            } else {
+                val css = runAtlasScript(webView,
+                    "(function(){var s=getComputedStyle(document.querySelector('.network-atlas'));return parseFloat(s.getPropertyValue('--backdrop-blur'))+'|'+parseFloat(s.getPropertyValue('--backdrop-opacity'));})()")
+                    .split('|').mapNotNull(String::toDoubleOrNull)
+                check(css.size == 2 && kotlin.math.abs(css[0] - 28.0 * expected) < 1.0 &&
+                    kotlin.math.abs(css[1] - (1.0 - .6 * expected)) < .03) {
+                    "$label: CSS blur/opacity did not follow swipe progress: $css expected=$expected"
+                }
+            }
         }
-        check(camera.navigationEquivalent(readAtlasCameraSnapshot(webView))) { "Blur changed globe geometry" }
-        android.util.Log.i("OpenFluxVisibilityQA", "globe_blur_transition=$value")
-    }
 
+        val camera = readAtlasCameraSnapshot(webView, resetResizeCount = true)
+        checkVisual(0f, "Home should start clear")
+        val normalSamples = arrayListOf<Pair<Float, Float>>()
+        val normalRecorder = object : androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+            override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
+                normalSamples += (progressField.getFloat(globe) to globe.alpha)
+            }
+        }
+        onMainValue { pager.registerOnPageChangeCallback(normalRecorder) }
+        swipePageLeft(activity, pagerSwipeY)
+        awaitPagerSettled(activity, 1, "lte + белые списки")
+        check(normalSamples.any { (progress, alpha) -> progress in .05f.. .95f &&
+            (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || kotlin.math.abs(alpha - (1f - .6f * progress)) < .025f) }) {
+            "Routes swipe did not report intermediate blur progress: " + normalSamples.take(12)
+        }
+        onMainValue { pager.unregisterOnPageChangeCallback(normalRecorder) }
+        checkVisual(1f, "Routes should finish with the globe blurred")
+
+        val reverseSamples = arrayListOf<Pair<Float, Float>>()
+        val reverseRecorder = object : androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+            override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
+                reverseSamples += (progressField.getFloat(globe) to globe.alpha)
+            }
+        }
+        onMainValue { pager.registerOnPageChangeCallback(reverseRecorder) }
+        swipePageRight(activity, pagerSwipeY)
+        awaitPagerSettled(activity, 0, "Подключить")
+        check(reverseSamples.any { (progress, alpha) -> progress in .05f.. .95f &&
+            (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || kotlin.math.abs(alpha - (1f - .6f * progress)) < .025f) }) {
+            "Returning swipe did not report intermediate blur progress: " + reverseSamples.take(12)
+        }
+        onMainValue { pager.unregisterOnPageChangeCallback(reverseRecorder) }
+        checkVisual(0f, "Home return should clear the globe")
+
+        val preferences = targetContext.getSharedPreferences("profile_settings", Context.MODE_PRIVATE)
+        val originalReducedMotion = preferences.getBoolean("reduced_motion", false)
+        val reducedSamples = arrayListOf<Float>()
+        val reducedRecorder = object : androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
+            override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
+                reducedSamples += progressField.getFloat(globe)
+            }
+        }
+        runOnMainSync { activity.setReducedMotionEnabled(true) }
+        onMainValue { pager.registerOnPageChangeCallback(reducedRecorder) }
+        try {
+            swipePageLeft(activity, pagerSwipeY)
+            awaitPagerSettled(activity, 1, "lte + белые списки")
+            check(reducedSamples.isNotEmpty() && reducedSamples.all { it < .01f || it > .99f }) {
+                "Reduced-motion swipe should use endpoint blur states only: " + reducedSamples.take(12)
+            }
+            checkVisual(1f, "Reduced-motion Routes should finish with the globe blurred")
+            swipePageRight(activity, pagerSwipeY)
+            awaitPagerSettled(activity, 0, "Подключить")
+            checkVisual(0f, "Reduced-motion Home should finish with the globe clear")
+        } finally {
+            onMainValue { pager.unregisterOnPageChangeCallback(reducedRecorder) }
+            runOnMainSync { activity.setReducedMotionEnabled(originalReducedMotion) }
+            if (onMainValue { pager.currentItem != 0 }) onMainValue { pager.setCurrentItem(0, false) }
+        }
+        val cameraAfter = readAtlasCameraSnapshot(webView)
+        check(camera.navigationEquivalent(cameraAfter)) {
+            "Blur changed globe geometry: before=$camera after=$cameraAfter"
+        }
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_blur_transition=progress=" + normalSamples.size +
+            ";reverse=" + reverseSamples.size + ";reduced=" + reducedSamples.size)
+    }
     private fun awaitAtlasSettled(webView: WebView, targetZoom: Double): String {
         val deadline = SystemClock.elapsedRealtime() + 10_000L
         var last = "unavailable"

@@ -72,7 +72,6 @@ class ProfileRoutesTest {
                 RouteProtocol.RU_DE,
                 RouteProtocol.AWG15,
                 RouteProtocol.AWG31,
-                RouteProtocol.OPENFLUX,
             ),
             routes.map(DeyttRoute::protocol),
         )

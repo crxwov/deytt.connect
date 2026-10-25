@@ -227,10 +227,8 @@ object DeyttUi {
             gravity = Gravity.CENTER
             minHeight = dp(52)
             setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = if (secondary) rounded(SURFACE_2, 15f, LINE) else GradientDrawable(
-                GradientDrawable.Orientation.TL_BR,
-                intArrayOf(BLUE, BLUE_DEEP),
-            ).apply { cornerRadius = dp(15).toFloat() }
+            background = if (secondary) glassRowBackground(false, 15f)
+                else glassButtonBackground(0xD9269CF2.toInt(), 0xC01066CD.toInt(), 15f)
             elevation = if (secondary) 0f else dp(2).toFloat()
             isClickable = true
             isFocusable = true
@@ -239,13 +237,19 @@ object DeyttUi {
             pressFeedback(this, .985f)
         }
 
+    fun Activity.glassButtonBackground(topColor: Int, bottomColor: Int, radius: Float = 15f): Drawable =
+        GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(topColor, bottomColor)).apply {
+            cornerRadius = dp(radius.roundToInt()).toFloat()
+            setStroke(dp(1), 0x70FFFFFF)
+        }
+
     fun Activity.actionLabel(label: String = "пинг"): TextView =
         mono(label, 8.5f, SKY, 650).apply {
             gravity = Gravity.CENTER
             minHeight = dp(48)
             minWidth = dp(54)
             setPadding(dp(7), dp(7), dp(7), dp(7))
-            background = rounded(0xFF18243A.toInt(), 11f, 0xFF344B71.toInt())
+            background = glassRowBackground(false, 11f)
             isClickable = true
             isFocusable = true
             contentDescription = uiCopy("Проверить задержку")
@@ -264,7 +268,7 @@ object DeyttUi {
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = dp(54)
         setPadding(if (emphasis) dp(12) else dp(2), dp(5), if (emphasis) dp(10) else dp(2), dp(5))
-        background = if (emphasis) rounded(SELECTED, 15f, SELECTED_LINE) else ColorDrawable(Color.TRANSPARENT)
+        background = if (interactive) glassRowBackground(emphasis, 15f) else ColorDrawable(Color.TRANSPARENT)
         if (leading.isNotBlank()) {
             val icon = when (leading) {
                 "AWG_MARK" -> awgMark(emphasis)
@@ -276,7 +280,8 @@ object DeyttUi {
                     if (isCountryFlag) Typeface.NORMAL else Typeface.BOLD).apply {
                     gravity = Gravity.CENTER
                     letterSpacing = .025f
-                    background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f, if (emphasis) 0xFF3F5985.toInt() else LINE)
+                    background = if (isCountryFlag) ColorDrawable(Color.TRANSPARENT)
+                        else glassRowBackground(emphasis, 12f)
                     minWidth = dp(38)
                     minHeight = dp(38)
                     maxLines = 1
@@ -299,27 +304,45 @@ object DeyttUi {
             })
         }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         if (trailing.isNotBlank()) {
-            val trailingIsAction = trailing != "›" && trailing != "⌄" && trailing != "⌃"
-            addView(text(trailing, if (trailingIsAction) 11f else 16f, if (emphasis) SKY else MUTED, Typeface.BOLD).apply {
-                gravity = Gravity.CENTER
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                if (trailingIsAction) {
-                    minWidth = dp(60)
-                    maxWidth = dp(92)
-                    minHeight = dp(48)
-                    setPadding(dp(8), dp(7), dp(8), dp(7))
-                    background = rounded(SURFACE_2, 12f, LINE)
+            if (trailing == "›" || trailing == "⌄" || trailing == "⌃") {
+                val chevron = ImageView(this@row).apply {
+                    setImageResource(R.drawable.ic_chevron)
+                    imageTintList = ColorStateList.valueOf(if (emphasis) SKY else MUTED)
+                    rotation = when (trailing) { "⌄" -> 90f; "⌃" -> 270f; else -> 0f }
+                    tag = if (trailing == "›") null else "country-chevron"
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                if (trailingIsAction) leftMargin = dp(8)
-            })
+                addView(chevron, LinearLayout.LayoutParams(dp(22), dp(22)).apply { leftMargin = dp(8) })
+            } else {
+                addView(text(trailing, 12f, if (emphasis) SKY else TEXT, Typeface.BOLD).apply {
+                    gravity = Gravity.CENTER
+                    maxLines = 1
+                    ellipsize = android.text.TextUtils.TruncateAt.END
+                    minWidth = dp(68)
+                    maxWidth = dp(92)
+                    minHeight = dp(44)
+                    setPadding(dp(10), dp(7), dp(10), dp(7))
+                    background = glassRowBackground(emphasis, 12f)
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    leftMargin = dp(8)
+                })
+            }
         }
         isClickable = interactive
         isFocusable = interactive
         if (interactive) foreground = ripple(if (emphasis) 15f else 12f)
         if (interactive) pressFeedback(this, .99f)
     }
+
+    private fun Activity.glassRowBackground(emphasis: Boolean, radius: Float): Drawable =
+        GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,
+            if (emphasis) intArrayOf(0xC82B4562.toInt(), 0xA31B2C43.toInt())
+            else intArrayOf(0x9D223247.toInt(), 0x78131D2B.toInt()),
+        ).apply {
+            cornerRadius = dp(radius.roundToInt()).toFloat()
+            setStroke(dp(1), if (emphasis) 0x855F91B6.toInt() else 0x4AFFFFFF)
+        }
 
     private fun Activity.awgMark(emphasis: Boolean): FrameLayout {
         val context = this

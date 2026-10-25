@@ -147,6 +147,10 @@ internal object AppLanguage {
         Regex("^Настраиваем защищённый туннель · (.+)$").matchEntire(value)?.let {
             return "Setting up the secure tunnel · ${it.groupValues[1]}"
         }
+        Regex("^amneziawg (1\\.5|3\\.1): часть серверов временно не ответила\\. Доступные точки уже добавлены\\. Обновите подписку, если нужной точки нет\\.$")
+            .matchEntire(value)?.let {
+                return "amneziawg ${it.groupValues[1]}: some servers did not respond. Available routes are ready. Refresh if a route is missing."
+            }
         Regex("^из (.+) использовано$").matchEntire(value)?.let { return "${it.groupValues[1]} used" }
         Regex("^из (.+)$").matchEntire(value)?.let { return "of ${it.groupValues[1]}" }
         Regex("^Использовано (.+) из (.+)\\. Скачано (.+), отправлено (.+)\\.$").matchEntire(value)?.let {
@@ -337,6 +341,7 @@ internal object AppLanguage {
         "Не подключено" to "Not connected",
         "Подключено" to "Connected",
         "Готово к подключению" to "Ready to connect",
+        "Ждём окончания проверки…" to "Waiting for the route check…",
         "Подключить" to "Connect",
         "Отключить" to "Disconnect",
         "Отключаем…" to "Disconnecting…",

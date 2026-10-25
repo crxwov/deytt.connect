@@ -3,7 +3,11 @@ package space.deytt.connect
 import android.content.Context
 import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.RenderEffect
+import android.graphics.Shader
 import android.net.Uri
+import android.os.Build
+import android.os.SystemClock
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
@@ -26,6 +30,8 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var activeAutoRouteKey: String? = null
     private var pageLoaded = false
     private var backdropStageActive = false
+    private var backdropProgress = 0f
+    private var lastBackdropProgressSentAt = 0L
     private var overviewModeActive = false
     private var connected = false
     private var gestureStartedInsideGlobe = false
@@ -95,6 +101,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                     applyConnected()
                     applyTrafficActive()
                     applyBackdropStage()
+                    applyBackdropProgress()
                 }
             }
             setOnTouchListener { view, event ->
@@ -193,6 +200,25 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (backdropStageActive == active) return
         backdropStageActive = active
         applyBackdropStage()
+    }
+
+    internal fun setBackdropProgress(progress: Float) {
+        val next = progress.coerceIn(0f, 1f)
+        if (kotlin.math.abs(next - backdropProgress) < .008f) return
+        backdropProgress = next
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            alpha = 1f - .6f * next
+            val radius = resources.displayMetrics.density * 18f * next
+            setRenderEffect(if (next <= 0f) null else RenderEffect.createBlurEffect(
+                radius, radius, Shader.TileMode.CLAMP,
+            ))
+        } else if (pageLoaded) {
+            val now = SystemClock.uptimeMillis()
+            if (next == 0f || next == 1f || now - lastBackdropProgressSentAt >= 32L) {
+                lastBackdropProgressSentAt = now
+                applyBackdropProgress()
+            }
+        }
     }
 
     internal fun setOverviewMode(active: Boolean) {
@@ -299,6 +325,14 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (!pageLoaded) return
         atlas.evaluateJavascript(
             "window.deyttSetMapBackdropStage && window.deyttSetMapBackdropStage($backdropStageActive)",
+            null,
+        )
+    }
+
+    private fun applyBackdropProgress() {
+        if (!pageLoaded || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
+        atlas.evaluateJavascript(
+            "window.deyttSetMapBackdropProgress && window.deyttSetMapBackdropProgress($backdropProgress)",
             null,
         )
     }

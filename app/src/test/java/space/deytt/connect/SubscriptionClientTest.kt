@@ -29,7 +29,7 @@ class SubscriptionClientTest {
         assertFalse(error.message.orEmpty().contains("private-controller-detail"))
         val config = """{"outbounds":[{"type":"selector","tag":"автоподбор"},{"type":"vless","tag":"route:DE:VLESS"},{"type":"trojan","tag":"route:RU-DE:CHAIN"}]}"""
         val routes = RouteCatalog.from(config, emptyList(), result.profiles)
-        assertTrue(routes.any { it.id == "openflux:DE" })
+        assertFalse(routes.any { it.id == "openflux:DE" })
         assertTrue(routes.any { it.protocol == RouteProtocol.RU_DE })
         assertEquals(RouteProtocol.AUTO, routes.first().protocol)
     }
@@ -266,7 +266,8 @@ class SubscriptionClientTest {
         assertEquals(SubscriptionClient.AwgFetchState.PARTIAL_FAILURE, result.state)
         assertEquals(listOf("awg31:de"), result.profiles.map(AwgProfile::id))
         assertEquals(setOf("nl"), result.failedIds)
-        assertTrue(result.warning.orEmpty().contains("1 сервер"))
+        assertTrue(result.warning.orEmpty().contains("часть серверов временно не ответила"))
+        assertTrue(result.warning.orEmpty().contains("если нужной точки нет"))
         assertFalse(result.warning.orEmpty().contains("IP"))
     }
 
@@ -295,7 +296,7 @@ class SubscriptionClientTest {
         assertEquals(SubscriptionClient.AwgFetchState.PARTIAL_FAILURE, result.state)
         assertEquals(listOf("awg31:nl"), result.profiles.map(AwgProfile::id))
         assertEquals(setOf("de"), result.failedIds)
-        assertTrue(result.warning.orEmpty().contains("Доступные точки добавлены"))
+        assertTrue(result.warning.orEmpty().contains("Доступные точки уже добавлены"))
     }
 
     @Test
@@ -401,7 +402,8 @@ class SubscriptionClientTest {
         assertEquals(SubscriptionClient.AwgFetchState.PARTIAL_FAILURE, result.state)
         assertTrue(result.profiles.isEmpty())
         assertEquals(setOf("nl"), result.failedIds)
-        assertTrue(result.warning.orEmpty().contains("1 сервер"))
+        assertTrue(result.warning.orEmpty().contains("серверы временно недоступны"))
+        assertTrue(result.warning.orEmpty().contains("Доступных точек нет"))
         assertFalse(result.warning.orEmpty().contains("IP"))
     }
 

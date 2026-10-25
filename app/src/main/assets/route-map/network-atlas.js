@@ -328,6 +328,7 @@
       this.trafficActive = false;
       this.trafficStartedAt = 0;
       this.projectedNodes = {};
+      this.routeSegments = [];
       this.bind();
     }
 
@@ -902,6 +903,16 @@
         const amount = index / segments;
         points.push(this.projectVector(slerp(from, to, amount), 1 + Math.sin(amount * Math.PI) * baseLift));
       }
+      for (let index = 1; index < points.length; index += 1) {
+        const start = points[index - 1];
+        const end = points[index];
+        if (start.z > -.02 && end.z > -.02) this.routeSegments.push({
+          left: Math.min(start.x, end.x),
+          top: Math.min(start.y, end.y),
+          right: Math.max(start.x, end.x),
+          bottom: Math.max(start.y, end.y)
+        });
+      }
       const visible = points.filter((point) => point.z > -.02);
       if (visible.length < 2) return;
       const routeColor = colors.route;
@@ -985,7 +996,7 @@
       const linkDuration = 1800;
       const routeDuration = linkDuration * links.length;
       const elapsed = Math.max(0, time - this.trafficStartedAt);
-      const packetCount = this.reducedMotion.matches ? 1 : 2;
+      const packetCount = this.reducedMotion.matches ? 1 : 4;
       for (let packet = 0; packet < packetCount; packet += 1) {
         const routePosition = this.reducedMotion.matches
           ? links.length * .52
@@ -1105,30 +1116,42 @@
         { x: -width / 2, y: -height - 30 * labelScale, align: "left" },
         { x: -width / 2, y: height + 30 * labelScale, align: "left" }
       ];
-      let placementIndex = this.labelPlacements.get(key);
-      if (placementIndex == null || placementIndex >= alternatives.length) {
-        let bestScore = Infinity;
-        placementIndex = 0;
-        for (let index = 0; index < alternatives.length; index += 1) {
-          const candidate = alternatives[index];
-          const candidateLeft = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
-          const candidateTop = clamp(point.y + candidate.y - height / 2, 8, this.height - height - 8);
-          const overlap = occupied.reduce((sum, label) => sum +
-            Math.max(0, Math.min(candidateLeft + width + 6, label.left + label.width + 6) - Math.max(candidateLeft - 6, label.left - 6)) *
-            Math.max(0, Math.min(candidateTop + height + 6, label.top + label.height + 6) - Math.max(candidateTop - 6, label.top - 6)), 0);
-          const dx = point.x - clamp(point.x, candidateLeft, candidateLeft + width);
-          const dy = point.y - clamp(point.y, candidateTop, candidateTop + height);
-          const coveringPin = Object.values(this.projectedNodes).some(p => p.z > .03 && p.x > candidateLeft - 5 && p.x < candidateLeft + width + 5 && p.y > candidateTop - 5 && p.y < candidateTop + height + 5);
-          const score = overlap * 100 + dx * dx + dy * dy + (coveringPin ? 100000 : 0);
-          if (score < bestScore) { bestScore = score; placementIndex = index; }
-        }
-        this.labelPlacements.set(key, placementIndex);
+      const previousPlacement = this.labelPlacements.get(key);
+      let placementIndex = -1;
+      let bestScore = Infinity;
+      for (let index = 0; index < alternatives.length; index += 1) {
+        const candidate = alternatives[index];
+        const candidateLeft = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
+        const candidateTop = clamp(point.y + candidate.y - height / 2, 8, this.height - height - 8);
+        const overlapsLabel = occupied.some(label =>
+          candidateLeft < label.left + label.width + 5 && candidateLeft + width + 5 > label.left &&
+          candidateTop < label.top + label.height + 5 && candidateTop + height + 5 > label.top);
+        const coversPin = Object.values(this.projectedNodes).some(p => p.z > .03 &&
+          p.x > candidateLeft - 5 && p.x < candidateLeft + width + 5 &&
+          p.y > candidateTop - 5 && p.y < candidateTop + height + 5);
+        const routeCrossings = this.routeSegments.reduce((count, segment) => count + Number(
+          segment.left < candidateLeft + width + 4 && segment.right > candidateLeft - 4 &&
+          segment.top < candidateTop + height + 4 && segment.bottom > candidateTop - 4), 0);
+        const dx = point.x - clamp(point.x, candidateLeft, candidateLeft + width);
+        const dy = point.y - clamp(point.y, candidateTop, candidateTop + height);
+        const score = (coversPin ? 1e9 : 0) + (overlapsLabel ? 1e8 : 0) + routeCrossings * 1e5 +
+          dx * dx + dy * dy + (candidate.y > 0 ? 900 : 0) - (previousPlacement === index ? 30 : 0);
+        if (score < bestScore) { bestScore = score; placementIndex = index; }
       }
+      if (placementIndex < 0) { context.restore(); return; }
+      this.labelPlacements.set(key, placementIndex);
       const placement = alternatives[placementIndex];
       const left = clamp(point.x + placement.x - (placement.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
       const top = clamp(point.y + placement.y - height / 2, 8, this.height - height - 8);
-      // Keep the cached anchor stable; crowded pins remain available without overlapping text.
-      if (occupied.some(label => left < label.left + label.width + 4 && left + width + 4 > label.left && top < label.top + label.height + 4 && top + height + 4 > label.top)) {
+      const labelOverlap = occupied.some(label => left < label.left + label.width + 5 && left + width + 5 > label.left &&
+        top < label.top + label.height + 5 && top + height + 5 > label.top);
+      const pinOverlap = Object.values(this.projectedNodes).some(p => p.z > .03 &&
+        p.x > left - 5 && p.x < left + width + 5 && p.y > top - 5 && p.y < top + height + 5);
+      const routeOverlap = this.routeSegments.some(segment =>
+        segment.left < left + width + 4 && segment.right > left - 4 &&
+        segment.top < top + height + 4 && segment.bottom > top - 4);
+      // Keep pins visible when a dense route leaves no collision-free label slot.
+      if (labelOverlap || pinOverlap || routeOverlap) {
         context.restore();
         return;
       }
@@ -1254,6 +1277,7 @@
       const colors = this.colors();
       if (this.staticDirty) this.renderStatic(colors);
       this.context.drawImage(this.staticCanvas, 0, 0, this.width, this.height);
+      this.routeSegments = [];
       this.drawRoutes(colors, time);
       this.drawNodes(colors);
       this.drawLabels(colors);

@@ -131,8 +131,6 @@ class SelectedRouteStore(context: Context) {
 }
 
 object RouteCatalog {
-    private const val OPENFLUX_COUNTRY = "DE"
-    private const val OPENFLUX_ROUTE_ID = "openflux:$OPENFLUX_COUNTRY"
     private val countries = mapOf(
         "NL" to ("🇳🇱" to "нидерланды"),
         "DE" to ("🇩🇪" to "германия"),
@@ -176,6 +174,7 @@ object RouteCatalog {
         return awgCountries[mark]?.let { mark to it }
     }
 
+    @Suppress("UNUSED_PARAMETER")
     fun from(config: String, awgProfiles: List<AwgProfile>, openFluxProfiles: List<OpenFluxProfile> = emptyList()): List<DeyttRoute> {
         val automaticTag = autoTag(config)
         require(automaticTag.isNotBlank()) { "В подписке отсутствует автоподбор" }
@@ -217,15 +216,6 @@ object RouteCatalog {
                 profileName = profile.label,
             )
         }
-        // Discovery must outlive short managed leases. The VPN service still
-        // acquires and validates credentials only when this route is connected.
-        val currentOpenFlux = openFluxProfiles.firstOrNull {
-            it.id == OPENFLUX_ROUTE_ID && it.country == OPENFLUX_COUNTRY &&
-                it.isCurrent(System.currentTimeMillis() / 1000)
-        }
-        val presentation = countries.getValue(OPENFLUX_COUNTRY)
-        routes += DeyttRoute(OPENFLUX_ROUTE_ID, OPENFLUX_COUNTRY, presentation.second, presentation.first,
-            RouteProtocol.OPENFLUX, TunnelEngine.OPENFLUX, profileName = currentOpenFlux?.label)
         return routes
     }
 

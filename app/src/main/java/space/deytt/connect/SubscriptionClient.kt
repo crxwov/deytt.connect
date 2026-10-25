@@ -568,7 +568,7 @@ object SubscriptionClient {
                     version = version,
                     profiles = emptyList(),
                     state = AwgFetchState.PARTIAL_FAILURE,
-                    warning = awgWarning(version, failedIds.size, availableCount = 0, temporary = failedRequestsAreTransient),
+                    warning = awgWarning(version, availableCount = 0, temporary = failedRequestsAreTransient),
                     failedIds = failedIds,
                 )
             } else if (failedIds.isNotEmpty()) {
@@ -576,7 +576,7 @@ object SubscriptionClient {
                     version = version,
                     profiles = profiles,
                     state = AwgFetchState.PARTIAL_FAILURE,
-                    warning = awgWarning(version, failedIds.size, availableCount = profiles.size, temporary = failedRequestsAreTransient),
+                    warning = awgWarning(version, availableCount = profiles.size, temporary = failedRequestsAreTransient),
                     failedIds = failedIds,
                 )
             } else {
@@ -608,13 +608,13 @@ object SubscriptionClient {
         else -> "amneziawg"
     }
 
-    private fun awgWarning(version: String, failedCount: Int, availableCount: Int, temporary: Boolean): String {
+    private fun awgWarning(version: String, availableCount: Int, temporary: Boolean): String {
         val name = awgName(version)
         return if (temporary) {
             if (availableCount == 0) {
-                "$name: $failedCount ${if (failedCount == 1) "сервер" else "сервера"} временно недоступ${if (failedCount == 1) "ен" else "ны"}. Доступных точек нет, обновите подписку позже."
+                "$name: серверы временно недоступны. Доступных точек нет. Повторите обновление позже."
             } else {
-                "$name: $failedCount ${if (failedCount == 1) "сервер" else "сервера"} временно недоступ${if (failedCount == 1) "ен" else "ны"}. Доступные точки добавлены."
+                "$name: часть серверов временно не ответила. Доступные точки уже добавлены. Обновите подписку, если нужной точки нет."
             }
         } else {
             if (availableCount == 0) {

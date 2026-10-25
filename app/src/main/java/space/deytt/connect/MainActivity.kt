@@ -42,6 +42,7 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.viewpager2.widget.ViewPager2
 import space.deytt.connect.AppLanguage.uiCopy
 import space.deytt.connect.DeyttUi.button
+import space.deytt.connect.DeyttUi.glassButtonBackground
 import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.brandHeader
 import space.deytt.connect.DeyttUi.dp
@@ -56,9 +57,6 @@ import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.pressFeedback
 
 class MainActivity : Activity() {
-    private lateinit var statusText: TextView
-    private lateinit var detailText: TextView
-    private lateinit var statusDot: View
     private lateinit var globe: RouteGlobeView
     private lateinit var globeBackdrop: FrameLayout
     private lateinit var globeStage: FrameLayout
@@ -67,7 +65,6 @@ class MainActivity : Activity() {
     private var homeMapSlot: FrameLayout? = null
     private lateinit var homeDestinationTitle: TextView
     private lateinit var homeDestinationFlag: TextView
-    private lateinit var connectionNotice: LinearLayout
     private lateinit var action: TextView
     private lateinit var latencyText: TextView
     private lateinit var qualityDots: DiagnosticDotsView
@@ -327,6 +324,7 @@ class MainActivity : Activity() {
             finish()
             return
         }
+        migrateRemovedSelectedRoute()
         initialPage = savedInstanceState?.getInt(STATE_SELECTED_TAB)
             ?: intent?.getIntExtra(EXTRA_START_TAB, 0)?.coerceIn(0, 3)
             ?: 0
@@ -335,6 +333,7 @@ class MainActivity : Activity() {
         IpNetworkLocationStore(this).clear()
         currentNetworkLocation = OriginLocationMemory.location
         buildScreen()
+        if (savedInstanceState == null) showStartupAnimation()
         window.decorView.post { showNetworkLocationConsentIfNeeded() }
         requestNotificationPermissionIfNeeded()
     }
@@ -360,7 +359,7 @@ class MainActivity : Activity() {
             IntentFilter(RouteProbeClient.ACTION_RESULT),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
-        if (::statusText.isInitialized) {
+        if (::action.isInitialized) {
             renderStoredState()
             rebuildRouteRow()
         }
@@ -553,7 +552,7 @@ class MainActivity : Activity() {
                 if (routes.none { it.id == SelectedRouteStore(this).read().id }) {
                     routes.firstOrNull()?.let { SelectedRouteStore(this).save(it) }
                 }
-                if (::statusText.isInitialized) rebuildRouteRow()
+                if (::action.isInitialized) rebuildRouteRow()
                 if (::pageAdapter.isInitialized) {
                     pageAdapter.refresh(1)
                     pageAdapter.refresh(2)
@@ -687,6 +686,8 @@ class MainActivity : Activity() {
 
             override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
                 navigationBar.setPageOffset(position, positionOffset)
+                val progress = (position + positionOffset).coerceIn(0f, 1f)
+                globe.setBackdropProgress(if (isReducedMotionEnabled()) if (progress >= .5f) 1f else 0f else progress)
             }
 
             override fun onPageSelected(position: Int) {
@@ -701,6 +702,7 @@ class MainActivity : Activity() {
             override fun onPageScrollStateChanged(state: Int) {
                 if (state == ViewPager2.SCROLL_STATE_IDLE) {
                     confirmSelection()
+                    syncGlobeHost(pager.currentItem)
                     updateHomeMapAnchor()
                 }
             }
@@ -730,12 +732,83 @@ class MainActivity : Activity() {
         globe.setViewportAnchor(slotLocation[0] - globeLocation[0], slotLocation[1] - globeLocation[1], slot.width, slot.height)
     }
 
+    private fun migrateRemovedSelectedRoute(): Boolean {
+        if (ConnectVpnService.isRunning() || AwgTunnelController.isRunning() || isSystemTunnelActive()) return false
+        val store = SelectedRouteStore(this)
+        val selected = store.read()
+        if (selected.id != "openflux:DE" && selected.engine != TunnelEngine.OPENFLUX) return false
+        val config = SubscriptionStore(this).readCurrent() ?: return false
+        val automatic = RouteCatalog.from(config, AwgProfileStore(this).profiles())
+            .firstOrNull { it.protocol == RouteProtocol.AUTO } ?: return false
+        store.save(automatic)
+        return true
+    }
+
     private fun syncGlobeHost(page: Int) {
         if (!::globe.isInitialized || !::globeBackdrop.isInitialized) return
         if (page == 0) homeMapSlot?.post { updateHomeMapAnchor() }
         globe.setBackdropStage(page != 0)
+        if (!::pager.isInitialized || pager.scrollState == ViewPager2.SCROLL_STATE_IDLE) {
+            globe.setBackdropProgress(if (page == 0) 0f else 1f)
+        }
         globe.importantForAccessibility = if (page == 0) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
             else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+    }
+
+    private fun showStartupAnimation() {
+        val splash = FrameLayout(this).apply {
+            tag = "startup-splash"
+            setBackgroundColor(Color.BLACK)
+            isClickable = false
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+        }
+        val logo = displayText("", 58f, Color.WHITE).apply {
+            tag = "startup-mark"
+            letterSpacing = -.02f
+        }
+        val cursor = View(this).apply {
+            setBackgroundColor(Color.WHITE)
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        splash.addView(LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(logo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(cursor, LinearLayout.LayoutParams(dp(3), dp(40)).apply { leftMargin = dp(4) })
+        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        globeStage.addView(splash, FrameLayout.LayoutParams(-1, -1))
+
+        if (isReducedMotionEnabled()) {
+            logo.text = "./d"
+            splash.postDelayed({ splash.animate().alpha(0f).setDuration(180L).withEndAction { globeStage.removeView(splash) } }, 240L)
+            return
+        }
+        val blink = ValueAnimator.ofFloat(1f, .18f).apply {
+            duration = 325L
+            repeatMode = ValueAnimator.REVERSE
+            repeatCount = ValueAnimator.INFINITE
+            addUpdateListener { cursor.alpha = it.animatedValue as Float }
+            start()
+        }
+        fun type(value: String) {
+            logo.text = value
+            logo.alpha = .3f
+            logo.translationY = dp(3).toFloat()
+            logo.rotation = if (value.endsWith('/')) 1.5f else -1f
+            logo.animate().alpha(1f).translationY(0f).rotation(0f).setDuration(120L).start()
+        }
+        splash.postDelayed({ type(".") }, 140L)
+        splash.postDelayed({ type("./") }, 320L)
+        splash.postDelayed({ type("./d") }, 500L)
+        splash.postDelayed({
+            logo.letterSpacing = -.065f
+            blink.cancel()
+            cursor.animate().alpha(0f).setDuration(120L).start()
+            splash.animate().alpha(0f).setStartDelay(220L).setDuration(340L).withEndAction {
+                globeStage.removeView(splash)
+            }.start()
+        }, 680L)
     }
 
     private fun buildHomePage(): View {
@@ -792,38 +865,15 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(routeHeading)
         root.addView(spacer(12, this))
-        connectionNotice = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            visibility = View.GONE
+        action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
+        action.apply {
+            tag = "connection-action"
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            textSize = 13f
+            setPadding(dp(14), dp(4), dp(14), dp(4))
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }
-        val statusLine = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        statusDot = View(this).apply {
-            contentDescription = uiCopy("Состояние соединения")
-            background = android.graphics.drawable.GradientDrawable().apply {
-                shape = android.graphics.drawable.GradientDrawable.OVAL
-                setColor(DeyttUi.MUTED)
-            }
-        }
-        statusLine.addView(statusDot, LinearLayout.LayoutParams(dp(9), dp(9)).apply { marginEnd = dp(11) })
-        statusText = text("", 17f, DeyttUi.TEXT).apply {
-            gravity = Gravity.START
-            maxLines = 2
-        }
-        statusLine.addView(statusText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        connectionNotice.addView(statusLine)
-        detailText = text("", 12f, DeyttUi.MUTED).apply {
-            gravity = Gravity.START
-            setPadding(dp(20), dp(7), 0, dp(12))
-            maxLines = 2
-            ellipsize = android.text.TextUtils.TruncateAt.END
-        }
-        connectionNotice.addView(detailText)
-        root.addView(connectionNotice)
-        action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
         root.addView(action, LinearLayout.LayoutParams(-1, dp(56)))
         root.addView(spacer(12, this))
         root.addView(buildQualityStrip())
@@ -923,13 +973,15 @@ class MainActivity : Activity() {
 
     private fun queueSelectedTunnel(selected: SelectedRoute, generation: Long) {
         homeConnectQueued = true
+        action.text = uiCopy("Ждём окончания проверки…")
+        action.contentDescription = action.text
         action.isEnabled = false
         action.alpha = .65f
         awaitEnginesStopped(waitForDiagnostics = true,
             isCurrent = { homeConnectQueued && generation == homeConnectGeneration },
             onFailure = {
                 homeConnectQueued = false
-                if (!isFinishing && !isDestroyed) { action.isEnabled = true; action.alpha = 1f }
+                if (!isFinishing && !isDestroyed) { action.isEnabled = true; action.alpha = 1f; renderStoredState() }
             }, action = {
                 homeConnectQueued = false
                 if (VpnControlDecision.canResumeQueuedStart(
@@ -2100,16 +2152,9 @@ class MainActivity : Activity() {
     }
 
     private fun renderStatus(phase: VpnPhase?, status: String?, error: String?) {
-        if (!::statusText.isInitialized) return
-        val value = status ?: "Соединение выключено"
-        val displayValue = when (value) {
-            "VPN подключён" -> "Подключено"
-            "VPN отключён", "Соединение выключено" -> "Не подключено"
-            else -> value
-        }
+        if (!::action.isInitialized) return
         val currentPhase = phase ?: VpnPhase.IDLE
         val previousPhase = renderedPhase
-        val phaseChanged = renderedPhase != null && renderedPhase != currentPhase
         val isConnecting = currentPhase == VpnPhase.STARTING || currentPhase == VpnPhase.CHECKING
         if (isConnecting) {
             ensureConnectionProgressStarted(previousPhase)
@@ -2120,6 +2165,9 @@ class MainActivity : Activity() {
             }
         }
         renderedPhase = currentPhase
+        if (currentPhase == VpnPhase.IDLE && migrateRemovedSelectedRoute() && ::globe.isInitialized) {
+            rebuildRouteRow()
+        }
         if (previousPhase != currentPhase) {
             cancelHomeRouteDownload()
             if (currentPhase == VpnPhase.CONNECTED) {
@@ -2140,52 +2188,28 @@ class MainActivity : Activity() {
                 refreshNetworkLocation(force = true)
             }
         }
-        statusText.text = uiCopy(displayValue)
-        connectionNotice.visibility = if (isConnecting || currentPhase == VpnPhase.STOPPING || currentPhase == VpnPhase.ERROR)
-            View.VISIBLE else View.GONE
-        detailText.text = uiCopy(when (currentPhase) {
-            VpnPhase.STARTING, VpnPhase.CHECKING -> progressDetail(currentPhase, connectionElapsedSeconds())
-            VpnPhase.CONNECTED -> "Соединение активно"
-            VpnPhase.STOPPING -> "Завершаем работу туннеля"
-            VpnPhase.ERROR -> error ?: "Попробуйте ещё раз или выберите другой маршрут"
-            VpnPhase.IDLE -> "Готово к подключению"
-        })
         if (isConnecting) {
             connectionProgressHandler.removeCallbacks(connectionProgressTick)
             connectionProgressHandler.postDelayed(connectionProgressTick, CONNECTION_PROGRESS_INTERVAL_MS)
         }
-        val animationsEnabled =
-            (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()) && !isReducedMotionEnabled()
-        if (phaseChanged && animationsEnabled) {
-            statusText.alpha = .72f
-            statusText.translationY = dp(4).toFloat()
-            statusText.animate().alpha(1f).translationY(0f).setDuration(210L).start()
-        }
-        if (::statusDot.isInitialized) {
-            val color = when (currentPhase) {
-                VpnPhase.CONNECTED -> DeyttUi.MINT
-                VpnPhase.ERROR -> DeyttUi.CORAL
-                VpnPhase.STARTING, VpnPhase.CHECKING -> DeyttUi.SKY
-                else -> DeyttUi.MUTED
-            }
-            statusDot.background = android.graphics.drawable.GradientDrawable().apply {
-                shape = android.graphics.drawable.GradientDrawable.OVAL
-                setColor(color)
-            }
-            statusDot.contentDescription = uiCopy(displayValue)
-            if (phaseChanged && animationsEnabled) {
-                statusDot.scaleX = .7f
-                statusDot.scaleY = .7f
-                statusDot.animate().scaleX(1f).scaleY(1f).setDuration(300L).start()
-            }
-        }
-        action.text = uiCopy(when (currentPhase) {
-            VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.CONNECTED -> "Отключить"
+        val actionLabel = when (currentPhase) {
+            VpnPhase.STARTING, VpnPhase.CHECKING -> progressDetail(currentPhase, connectionElapsedSeconds())
+            VpnPhase.CONNECTED -> "Отключить"
             VpnPhase.STOPPING -> "Отключаем…"
-            VpnPhase.ERROR -> "Повторить"
+            VpnPhase.ERROR -> "Ошибка соединения · повторить"
             VpnPhase.IDLE -> "Подключить"
-        })
-        action.contentDescription = action.text.toString()
+        }
+        action.text = uiCopy(actionLabel)
+        val errorDetail = if (currentPhase == VpnPhase.ERROR) error ?: status else null
+        action.contentDescription = uiCopy(actionLabel) + if (!errorDetail.isNullOrBlank()) ". ${uiCopy(errorDetail)}" else ""
+        val colors = when (currentPhase) {
+            VpnPhase.CONNECTED -> 0xD82AAE86.toInt() to 0xC015765C.toInt()
+            VpnPhase.STARTING, VpnPhase.CHECKING -> 0xD92BA5D6.toInt() to 0xC0156A9A.toInt()
+            VpnPhase.STOPPING -> 0xB65B6D83.toInt() to 0x9D303E51.toInt()
+            VpnPhase.ERROR -> 0xD9D95E78.toInt() to 0xC0833449.toInt()
+            VpnPhase.IDLE -> 0xD9269CF2.toInt() to 0xC01066CD.toInt()
+        }
+        action.background = glassButtonBackground(colors.first, colors.second, 16f)
         action.isEnabled = currentPhase != VpnPhase.STOPPING && !homeConnectQueued
         action.alpha = if (action.isEnabled) 1f else .66f
         if (::downloadText.isInitialized) updateQualityStrip()
@@ -2224,8 +2248,9 @@ class MainActivity : Activity() {
     }
 
     private fun renderConnectionProgressDetail(phase: VpnPhase) {
-        if (!::detailText.isInitialized) return
-        detailText.text = progressDetail(phase, connectionElapsedSeconds())
+        if (!::action.isInitialized) return
+        action.text = uiCopy(progressDetail(phase, connectionElapsedSeconds()))
+        action.contentDescription = action.text.toString()
     }
 
     private fun Long.twoDigits(): String = if (this < 10L) "0$this" else toString()

@@ -141,6 +141,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         var speedCheckEnabled: Boolean = false,
         var selectionAtStart: String? = null,
         var cancelled: Boolean = false,
+        var isChecking: Boolean = false,
     )
 
     private val diagnosticExecutor = Executors.newSingleThreadExecutor()
@@ -263,8 +264,8 @@ internal class PrimaryPages(private val host: MainActivity) {
         root.addView(spacer(8, host))
         root.addView(host.text(
             copy(
-                "Откройте страну: отклик маршрутов проверяется параллельно, скорость измеряется по очереди.",
-                "Open a country: route-response checks run in parallel, then speed is measured one route at a time.",
+                "Откройте страну — проверим отклик её маршрутов и скорость по очереди. Дождитесь результата.",
+                "Open a country to check its routes. Response checks start together; speed tests follow one by one.",
             ),
             13f,
             MUTED,
@@ -292,13 +293,6 @@ internal class PrimaryPages(private val host: MainActivity) {
                 "ROUTE_RU_DE",
                 "выбрать",
                 selectedId == route.id,
-            ).apply { setOnClickListener { host.selectRoute(route) } })
-        }
-        routes.firstOrNull { it.protocol == RouteProtocol.OPENFLUX }?.let { route ->
-            appendToGroup(quickGroup, host.row(
-                copy("Обход Cups · Германия", "Cups bypass · Germany"),
-                copy("Через cups · выбрать вручную", "Via cups · select manually"),
-                route.flag, "выбрать", selectedId == route.id,
             ).apply { setOnClickListener { host.selectRoute(route) } })
         }
         if (quickGroup.childCount > 0) root.addView(quickGroup)
@@ -412,11 +406,10 @@ internal class PrimaryPages(private val host: MainActivity) {
                 setOnClickListener {
                     val expanded = detail.visibility != View.VISIBLE
                     detail.visibility = if (expanded) View.VISIBLE else View.GONE
-                    findViewWithTag<TextView>("country-chevron")?.text = if (expanded) "⌃" else "⌄"
+                    findViewWithTag<android.widget.ImageView>("country-chevron")?.rotation = if (expanded) 270f else 90f
                     if (expanded) startCountryProbe(countryState)
                     else cancelCountryProbe(countryState)
                 }
-                (getChildAt(childCount - 1) as? TextView)?.tag = "country-chevron"
             }
             val countryGroup = routeGroup()
             countryGroup.addView(countryHeader)
@@ -464,17 +457,38 @@ internal class PrimaryPages(private val host: MainActivity) {
         country.cancelled = false
         if (RouteProbeClient.isRunning(host) || awgMeasurementRunning) {
             pendingCountries[country.code] = country
-            country.rows.values.forEach { it.status.text = copy("В очереди…", "Queued…") }
+            country.isChecking = false
+            country.summary.text = copy("В очереди · дождитесь предыдущей проверки", "Queued · waiting for the current check")
+            country.summaryDots.setLoading(false)
+            country.rows.values.forEach {
+                it.progress.setLoading(false)
+                it.status.text = copy("В очереди…", "Queued…")
+            }
             return
         }
+        country.isChecking = true
         country.selectionAtStart = SelectedRouteStore(host).read().id
         country.samples.clear()
         country.pingTraces.clear()
         country.errors.clear()
-        country.summary.text = copy("Отклик: —", "Response: —")
+        country.summary.text = copy("Проверяем все маршруты · подождите", "Checking all routes · please wait")
+        country.summary.contentDescription = country.summary.text
         country.summaryDots.setLoading(true)
-        if (VpnService.prepare(host) != null && host.requestRouteProbePermission { startCountryProbe(country) }) return
-        val config = SubscriptionStore(host).readCurrent() ?: return
+        if (VpnService.prepare(host) != null) {
+            country.isChecking = false
+            country.summary.text = copy("Разрешите проверку маршрутов в Android", "Allow route checks in Android")
+            country.summaryDots.setLoading(false)
+            if (host.requestRouteProbePermission { startCountryProbe(country) }) return
+            country.isChecking = true
+            country.summary.text = copy("Проверяем все маршруты · подождите", "Checking all routes · please wait")
+            country.summaryDots.setLoading(true)
+        }
+        val config = SubscriptionStore(host).readCurrent() ?: run {
+            country.isChecking = false
+            country.summary.text = copy("Подписка недоступна · обновите маршруты", "Subscription unavailable · refresh routes")
+            country.summaryDots.setLoading(false)
+            return
+        }
         val token = TelegramSessionStore.read(host)
         country.speedCheckEnabled = !token.isNullOrBlank()
         country.rows.values.forEach { row ->
@@ -633,6 +647,7 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun finishCountryProbe(country: CountryProbeState) {
         if (country.cancelled || closed || !diagnosticForeground) { launchNextCountry(); return }
+        country.isChecking = false
         val samples = country.samples.values.toList()
         val grades = RouteProbeScoring.grade(samples)
         val latencyGrades = RouteProbeScoring.gradeByLatency(samples)
@@ -713,6 +728,7 @@ internal class PrimaryPages(private val host: MainActivity) {
     private fun cancelCountryProbe(country: CountryProbeState) {
         pendingCountries.remove(country.code)
         country.cancelled = true
+        country.isChecking = false
         country.summaryDots.setLoading(false)
         country.rows.values.forEach {
             it.progress.setLoading(false)
@@ -752,14 +768,16 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun updateCountryLatencySummary(country: CountryProbeState) {
         val summary = RouteProbeStatistics.latencySummary(country.samples.values.mapNotNull { it.latencyMillis })
-        if (summary == null) {
-            country.summary.text = copy("Отклик: —", "Response: —")
-            country.summaryDots.setLoading(country.rows.values.any { it.progress.visibility == View.VISIBLE })
-        } else {
-            country.summary.text = latencySummaryLabel(summary)
-            country.summary.contentDescription = country.summary.text
-            country.summaryDots.setLoading(false)
+        val summaryLabel = summary?.let(::latencySummaryLabel)
+        country.summary.text = when {
+            country.isChecking && summaryLabel != null -> summaryLabel + copy(" · проверка идёт", " · check in progress")
+            country.isChecking -> copy("Проверяем все маршруты · подождите", "Checking all routes · please wait")
+            summaryLabel != null -> summaryLabel + copy(" · готово", " · complete")
+            country.cancelled -> copy("Проверка отменена · откройте страну снова", "Check cancelled · reopen the country")
+            else -> copy("Нет результата · откройте страну для повтора", "No result · reopen the country to retry")
         }
+        country.summary.contentDescription = country.summary.text
+        country.summaryDots.setLoading(country.isChecking)
         val grades = RouteProbeScoring.gradeByLatency(country.samples.values.toList())
         country.rows.values.forEach { row ->
             if (country.samples[row.route.id]?.latencyMillis != null) {
@@ -905,19 +923,14 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun routeGroup(): LinearLayout = LinearLayout(host).apply {
         orientation = LinearLayout.VERTICAL
-        background = host.rounded(SURFACE, 20f, LINE)
-        clipToOutline = true
+        clipChildren = false
+        clipToPadding = false
     }
 
     private fun appendToGroup(group: LinearLayout, item: View) {
-        if (group.childCount > 0) {
-            group.addView(View(host).apply { setBackgroundColor(LINE) },
-                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(1)).apply {
-                    leftMargin = host.dp(54)
-                    rightMargin = host.dp(16)
-                })
-        }
-        group.addView(item)
+        group.addView(item, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            if (group.childCount > 0) topMargin = host.dp(7)
+        })
     }
 
     private fun profilePage(): View = profileFlows.page()

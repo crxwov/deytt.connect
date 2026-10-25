@@ -226,7 +226,7 @@ class SetupActivity : Activity() {
                         append(getString(R.string.import_complete, routes.size))
                         if (imported.warnings.isNotEmpty()) {
                             append("\n\n")
-                            append(imported.warnings.joinToString("\n"))
+                            append(imported.warnings.joinToString("\n") { uiCopy(it) })
                         }
                     }
                     state.announceForAccessibility(state.text)
