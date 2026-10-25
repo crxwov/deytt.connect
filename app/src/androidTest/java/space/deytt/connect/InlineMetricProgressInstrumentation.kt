@@ -2,14 +2,17 @@ package space.deytt.connect
 
 import android.app.Activity
 import android.app.Instrumentation
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
+import android.provider.Settings
 import android.text.Spanned
 import android.text.style.ReplacementSpan
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.FrameLayout
 
 /** Exercises real Android span/layout behavior without account or VPN data. */
 class InlineMetricProgressInstrumentation : Instrumentation() {
@@ -54,11 +57,84 @@ class InlineMetricProgressInstrumentation : Instrumentation() {
                 } catch (error: Throwable) { checkFailure = error }
             }
             checkFailure?.let { throw it }
-            result.putString("result", "PASS: two/one/no inline slots, live updates, wrapping, drawing, completion")
+            val originalScale = Settings.Global.getString(targetContext.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE)
+            check(originalScale == null || originalScale.matches(Regex("[0-9.]+")))
+            fun scale(value: String?) {
+                val command = if (value == null) "settings delete global animator_duration_scale"
+                    else "settings put global animator_duration_scale $value"
+                uiAutomation.executeShellCommand(command).use { descriptor ->
+                    java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+                }
+                Thread.sleep(100)
+                check(Settings.Global.getString(targetContext.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE) == value) {
+                    "Device must apply the requested animation scale before checking visible frames"
+                }
+            }
+            try {
+                scale("1")
+                checkVisibleAnimation()
+                scale("0")
+                checkVisibleAnimation()
+            } finally { scale(originalScale) }
+            result.putString("result", "PASS: inline slots, updates, wrapping, visible frames with animations ON/OFF, completion")
             finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) {
             result.putString("error", error.toString())
             finish(Activity.RESULT_CANCELED, result)
+        }
+    }
+
+    private fun checkVisibleAnimation() {
+        val activity = startActivitySync(Intent(targetContext, SetupActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        lateinit var label: TextView
+        lateinit var progress: InlineMetricProgress
+        try {
+            runOnMainSync {
+                label = TextView(activity).apply {
+                    textSize = 18f
+                    setTextColor(android.graphics.Color.WHITE)
+                    text = "Response: — · Speed: —"
+                }
+                activity.setContentView(FrameLayout(activity).apply {
+                    setBackgroundColor(android.graphics.Color.BLACK)
+                    setPadding(24, 180, 24, 24)
+                    addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 120))
+                })
+                progress = InlineMetricProgress(label)
+                progress.setLoading(true)
+            }
+            waitForIdleSync()
+            Thread.sleep(1_600)
+            val position = IntArray(2)
+            runOnMainSync { label.getLocationOnScreen(position) }
+            fun capture(): Bitmap {
+                val screen = checkNotNull(uiAutomation.takeScreenshot())
+                val crop = Bitmap.createBitmap(screen, position[0], position[1], label.width, label.height)
+                if (crop !== screen) screen.recycle()
+                return crop
+            }
+            val first = capture()
+            var changed = false
+            repeat(4) {
+                Thread.sleep(110)
+                val next = capture()
+                changed = changed || !first.sameAs(next)
+                next.recycle()
+            }
+            first.recycle()
+            check(changed) { "Attached loading indicators must change pixels on a hardware-rendered window" }
+            runOnMainSync { progress.setLoading(false) }
+            waitForIdleSync()
+            Thread.sleep(100)
+            val stopped = capture()
+            Thread.sleep(180)
+            val later = capture()
+            check(stopped.sameAs(later)) { "Completed indicators must stop redrawing" }
+            stopped.recycle()
+            later.recycle()
+        } finally {
+            runOnMainSync { activity.finish() }
         }
     }
 }

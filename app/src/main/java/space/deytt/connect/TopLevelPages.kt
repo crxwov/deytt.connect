@@ -314,7 +314,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             val detail = LinearLayout(host).apply {
                 orientation = LinearLayout.VERTICAL
                 visibility = View.GONE
-                background = host.rounded(SURFACE_2, 14f, LINE)
+                background = host.rounded(SURFACE_2, 22f, LINE)
                 clipToOutline = true
                 setPadding(host.dp(8), host.dp(8), host.dp(8), host.dp(8))
             }
@@ -330,14 +330,14 @@ internal class PrimaryPages(private val host: MainActivity) {
             detail.addView(LinearLayout(host).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(host.dp(70), host.dp(2), host.dp(16), host.dp(2))
+                setPadding(host.dp(58), host.dp(2), host.dp(16), host.dp(2))
                 addView(summary, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             })
             val rowById = linkedMapOf<String, ProbeRouteRow>()
             countryRoutes.forEachIndexed { index, route ->
                 if (index > 0) detail.addView(View(host).apply { setBackgroundColor(LINE) },
                     LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(1)).apply {
-                        leftMargin = host.dp(70)
+                        leftMargin = host.dp(58)
                         rightMargin = host.dp(16)
                     })
                 val isAwg = route.engine == TunnelEngine.AMNEZIAWG
@@ -374,7 +374,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                     }, 0, params)
                 }
                 val metricsColumn = item.getChildAt(1) as LinearLayout
-                metric.setPadding(0, host.dp(6), 0, host.dp(3))
+                metric.setPadding(0, host.dp(4), 0, host.dp(2))
                 metricsColumn.addView(metric)
                 if (route.id != selectedId) item.background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
                 item.setOnClickListener { host.selectRoute(route) }
@@ -1468,7 +1468,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 setImageResource(if (TelegramSessionStore.read(host) != null) R.drawable.ic_user_round else R.drawable.ic_send)
                 imageTintList = ColorStateList.valueOf(SKY)
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                setPadding(host.dp(12), host.dp(12), host.dp(12), host.dp(12))
+                setPadding(host.dp(8), host.dp(8), host.dp(8), host.dp(8))
             }
         }
     }

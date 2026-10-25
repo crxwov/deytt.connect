@@ -1,6 +1,5 @@
 package space.deytt.connect
 
-import android.animation.ValueAnimator
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.os.SystemClock
@@ -9,18 +8,18 @@ import android.text.Spannable
 import android.text.TextWatcher
 import android.text.style.ReplacementSpan
 import android.view.View
-import android.view.animation.LinearInterpolator
 import android.widget.TextView
 
 /** Keeps each pending metric in its own text slot, including wrapped lines. */
 internal class InlineMetricProgress(private val label: TextView) {
     private var loading = false
     private val startedAt = SystemClock.uptimeMillis()
-    private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-        duration = 1_000L
-        repeatCount = ValueAnimator.INFINITE
-        interpolator = LinearInterpolator()
-        addUpdateListener { label.invalidate() }
+    // Essential progress uses opacity only and remains visible when decorative motion is disabled.
+    private val frame = object : Runnable {
+        override fun run() {
+            label.invalidate()
+            label.postDelayed(this, 1_000L / 16)
+        }
     }
 
     init {
@@ -32,7 +31,7 @@ internal class InlineMetricProgress(private val label: TextView) {
         })
         label.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(view: View) { updateAnimation() }
-            override fun onViewDetachedFromWindow(view: View) { animator.cancel() }
+            override fun onViewDetachedFromWindow(view: View) { label.removeCallbacks(frame) }
         })
     }
 
@@ -54,11 +53,8 @@ internal class InlineMetricProgress(private val label: TextView) {
 
     private fun updateAnimation() {
         val hasSlots = (label.text as? Spannable)?.getSpans(0, label.length(), LoadingSpan::class.java)?.isNotEmpty() == true
-        val reduced = (label.context as? MainActivity)?.isReducedMotionEnabled() == true ||
-            (android.os.Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled())
-        if (loading && hasSlots && label.isAttachedToWindow && !reduced) {
-            if (!animator.isStarted) animator.start()
-        } else animator.cancel()
+        label.removeCallbacks(frame)
+        if (loading && hasSlots && label.isAttachedToWindow) label.postOnAnimation(frame)
     }
 
     private inner class LoadingSpan : ReplacementSpan() {

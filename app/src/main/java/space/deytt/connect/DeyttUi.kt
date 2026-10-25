@@ -236,19 +236,19 @@ object DeyttUi {
         text(label, 14f, TEXT, Typeface.BOLD).apply {
             typeface = typeface(FontFamily.INTER_TIGHT, if (secondary) 560 else 620)
             gravity = Gravity.CENTER
-            minHeight = dp(52)
-            setPadding(dp(18), dp(12), dp(18), dp(12))
-            background = if (secondary) glassRowBackground(false, 15f)
-                else glassButtonBackground(0xD9269CF2.toInt(), 0xC01066CD.toInt(), 15f)
+            minHeight = dp(48)
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+            background = if (secondary) glassRowBackground(false, 24f)
+                else glassButtonBackground(0xD9269CF2.toInt(), 0xC01066CD.toInt(), 24f)
             elevation = if (secondary) 0f else dp(2).toFloat()
             isClickable = true
             isFocusable = true
             contentDescription = uiCopy(label)
-            foreground = ripple(17f)
+            foreground = ripple(24f)
             pressFeedback(this, .985f)
         }
 
-    fun Activity.glassButtonBackground(topColor: Int, bottomColor: Int, radius: Float = 15f): Drawable =
+    fun Activity.glassButtonBackground(topColor: Int, bottomColor: Int, radius: Float = 24f): Drawable =
         GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(topColor, bottomColor)).apply {
             cornerRadius = dp(radius.roundToInt()).toFloat()
             setStroke(dp(1), 0x70FFFFFF)
@@ -278,15 +278,15 @@ object DeyttUi {
     ): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = dp(72)
-        setPadding(dp(10), dp(10), dp(10), dp(10))
-        background = if (interactive) glassRowBackground(emphasis, 15f) else ColorDrawable(Color.TRANSPARENT)
+        minimumHeight = dp(64)
+        setPadding(dp(8), dp(8), dp(8), dp(8))
+        background = if (interactive) glassRowBackground(emphasis, 22f) else ColorDrawable(Color.TRANSPARENT)
         if (leading.isNotBlank()) {
             val icon = if (avatar != null) {
                 ImageView(this@row).apply {
                     setImageBitmap(avatar)
                     scaleType = ImageView.ScaleType.CENTER_CROP
-                    background = glassRowBackground(emphasis, 12f)
+                    background = glassRowBackground(emphasis, 16f)
                     clipToOutline = true
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
@@ -306,7 +306,7 @@ object DeyttUi {
                 "↻" -> android.widget.ImageView(this@row).apply {
                     setImageResource(R.drawable.ic_sync)
                     imageTintList = ColorStateList.valueOf(SKY)
-                    background = glassRowBackground(emphasis, 12f)
+                    background = glassRowBackground(emphasis, 16f)
                     setPadding(dp(8), dp(8), dp(8), dp(8))
                     scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -318,14 +318,14 @@ object DeyttUi {
                     gravity = Gravity.CENTER
                     letterSpacing = .025f
                     background = if (isCountryFlag) ColorDrawable(Color.TRANSPARENT)
-                        else glassRowBackground(emphasis, 12f)
+                        else glassRowBackground(emphasis, 16f)
                     minWidth = dp(38)
                     minHeight = dp(38)
                     maxLines = 1
                 }
                 }
             }
-            addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(12) })
+            addView(icon, LinearLayout.LayoutParams(dp(40), dp(40)).apply { marginEnd = dp(10) })
         }
         addView(LinearLayout(this@row).apply {
             orientation = LinearLayout.VERTICAL
@@ -355,11 +355,11 @@ object DeyttUi {
                     gravity = Gravity.CENTER
                     maxLines = 1
                     ellipsize = android.text.TextUtils.TruncateAt.END
-                    minWidth = dp(68)
-                    maxWidth = dp(92)
-                    minHeight = dp(44)
-                    setPadding(dp(10), dp(7), dp(10), dp(7))
-                    background = glassRowBackground(emphasis, 12f)
+                    minWidth = dp(60)
+                    maxWidth = dp(84)
+                    minHeight = dp(36)
+                    setPadding(dp(8), dp(6), dp(8), dp(6))
+                    background = glassRowBackground(emphasis, 18f)
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     leftMargin = dp(8)
                 })
@@ -367,15 +367,15 @@ object DeyttUi {
         }
         isClickable = interactive
         isFocusable = interactive
-        if (interactive) foreground = ripple(if (emphasis) 15f else 12f)
+        if (interactive) foreground = ripple(22f)
         if (interactive) pressFeedback(this, .99f)
     }
 
     private fun Activity.actionIcon(resource: Int, emphasis: Boolean) = ImageView(this).apply {
         setImageResource(resource)
         imageTintList = ColorStateList.valueOf(SKY)
-        background = glassRowBackground(emphasis, 12f)
-        setPadding(dp(12), dp(12), dp(12), dp(12))
+        background = glassRowBackground(emphasis, 16f)
+        setPadding(dp(8), dp(8), dp(8), dp(8))
         scaleType = ImageView.ScaleType.FIT_CENTER
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
@@ -393,7 +393,7 @@ object DeyttUi {
     private fun Activity.awgMark(emphasis: Boolean): FrameLayout {
         val context = this
         return FrameLayout(context).apply {
-            background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f,
+            background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 16f,
                 if (emphasis) 0xFF3F5985.toInt() else LINE)
             contentDescription = uiCopy("Значок AmneziaWG")
             addView(ImageView(context).apply {
@@ -401,20 +401,20 @@ object DeyttUi {
                 imageTintList = ColorStateList.valueOf(DeyttUi.TEXT)
                 scaleType = ImageView.ScaleType.FIT_CENTER
                 contentDescription = uiCopy("Оригинальный знак AmneziaWG")
-            }, FrameLayout.LayoutParams(dp(27), dp(27), Gravity.CENTER))
+            }, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
         }
     }
 
     private fun Activity.routePairMark(emphasis: Boolean): FrameLayout {
         val context = this
         return FrameLayout(context).apply {
-            background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f,
+            background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 16f,
                 if (emphasis) 0xFF3F5985.toInt() else LINE)
             contentDescription = uiCopy("Маршрут через Россию и Германию")
             addView(text("🇷🇺", 14f, TEXT).apply { gravity = Gravity.CENTER },
-                FrameLayout.LayoutParams(dp(25), dp(26), Gravity.CENTER_VERTICAL or Gravity.START))
+                FrameLayout.LayoutParams(dp(20), dp(24), Gravity.CENTER_VERTICAL or Gravity.START))
             addView(text("🇩🇪", 14f, TEXT).apply { gravity = Gravity.CENTER },
-                FrameLayout.LayoutParams(dp(25), dp(26), Gravity.CENTER_VERTICAL or Gravity.END))
+                FrameLayout.LayoutParams(dp(20), dp(24), Gravity.CENTER_VERTICAL or Gravity.END))
         }
     }
 
