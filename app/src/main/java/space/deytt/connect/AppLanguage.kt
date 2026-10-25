@@ -386,6 +386,7 @@ internal object AppLanguage {
         "1 сервер · выбрать точку" to "1 server · choose a node",
         "Отклик" to "Response",
         "Отклик: —" to "Response: —",
+        "HTTPS-отклик" to "HTTPS response",
         "Отклик: нет ответа через выбранный маршрут" to "Response: no reply via the selected route",
         "Отклик: отключите соединение" to "Response: disconnect first",
         "Отклик: подключите AmneziaWG" to "Response: connect AmneziaWG",

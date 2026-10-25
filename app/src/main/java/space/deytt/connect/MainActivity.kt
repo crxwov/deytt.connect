@@ -37,6 +37,7 @@ import androidx.core.content.edit
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.doOnNextLayout
 import androidx.core.widget.doAfterTextChanged
 import androidx.viewpager2.widget.ViewPager2
 import space.deytt.connect.AppLanguage.uiCopy
@@ -432,6 +433,8 @@ class MainActivity : Activity() {
     override fun onBackPressed() {
         if (::pager.isInitialized && pager.currentItem != 0) {
             pager.setCurrentItem(0, true)
+        } else if (homeMapExpanded) {
+            globe.resetViewport()
         } else {
             super.onBackPressed()
         }
@@ -735,16 +738,34 @@ class MainActivity : Activity() {
         val params = slot.layoutParams as? LinearLayout.LayoutParams ?: return
         val height = if (homeMapExpanded) pager.height else 0
         val weight = if (homeMapExpanded) 0f else 1f
-        if (params.height == height && params.weight == weight) return
+        val parent = slot.parent as? View ?: return
+        val leftMargin = if (homeMapExpanded) -parent.paddingLeft else 0
+        val rightMargin = if (homeMapExpanded) -parent.paddingRight else 0
+        if (params.height == height && params.weight == weight &&
+            params.leftMargin == leftMargin && params.rightMargin == rightMargin) return
+        val previousHeight = slot.height
         params.height = height
         params.weight = weight
+        params.leftMargin = leftMargin
+        params.rightMargin = rightMargin
         slot.layoutParams = params
+        slot.doOnNextLayout {
+            if (globe.parent === slot && previousHeight > 0 && !isReducedMotionEnabled() &&
+                (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled())) {
+                globe.animate().cancel()
+                globe.translationY += (previousHeight - slot.height) / 2f
+                globe.animate().translationY(0f).setDuration(MAP_VIEWPORT_TRANSITION_MS).start()
+            }
+        }
     }
 
     private fun syncGlobeHost(page: Int) {
         if (!::globe.isInitialized || !::globeBackdrop.isInitialized) return
+        if (page == 0) updateHomeMapSlotSize()
         val target = if (page == 0) homeMapSlot ?: globeBackdrop else globeBackdrop
         if (globe.parent !== target) {
+            globe.animate().cancel()
+            globe.translationY = 0f
             (globe.parent as? ViewGroup)?.removeView(globe)
             target.addView(globe, FrameLayout.LayoutParams(-1,
                 if (target === globeBackdrop) homeGlobeHeight() else -1))
@@ -1693,7 +1714,7 @@ class MainActivity : Activity() {
             gravity = Gravity.START
             setOnClickListener { measureSelectedRoute() }
         }
-        addView(metric(uiCopy("Отклик"), latencyText, "home-latency", onClick = ::measureSelectedRoute), LinearLayout.LayoutParams(0, -2, 1f))
+        addView(metric(uiCopy("HTTPS-отклик"), latencyText, "home-latency", onClick = ::measureSelectedRoute), LinearLayout.LayoutParams(0, -2, 1f))
         addView(View(this@MainActivity).apply { setBackgroundColor(DeyttUi.LINE) },
             LinearLayout.LayoutParams(dp(1), dp(56)))
         downloadText = text("—", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
@@ -2287,30 +2308,7 @@ class MainActivity : Activity() {
             updateQualityStrip()
             LatencyExecutor.pool.execute {
                 val elapsed = runCatching {
-                    RouteProxyProbe.measureThroughSystemVpn(method, onSample = { _, sample ->
-                        runOnUiThread {
-                            if (!HomeMetricPresentation.ownsRequest(generation, latencyGeneration) || currentHomeRouteMetricKey(selected.id) != metricKey || isFinishing || isDestroyed) return@runOnUiThread
-                            if (route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)) {
-                                homePingSamples.clear()
-                                lastRouteLatency = null
-                                homePingBypassedKey = metricKey
-                                homePingErrorKey = null
-                                latencyText.isEnabled = true
-                                latencyText.alpha = 1f
-                                updateQualityStrip()
-                                return@runOnUiThread
-                            }
-                            if (sample != null && RouteProbeStatistics.isValidLatencyMillis(sample)) {
-                                homePingSamples += sample
-                                RouteProbeStatistics.medianLatencyMillis(homePingSamples)?.let { median ->
-                                    lastRouteLatency = metricKey to median
-                                    homePingErrorKey = null
-                                }
-                            }
-                            latencyText.setTextColor(DeyttUi.SKY)
-                            updateQualityStrip()
-                        }
-                    })
+                    RouteProxyProbe.measureThroughSystemVpn(method)
                 }.getOrNull()
                 runOnUiThread {
                     if (!HomeMetricPresentation.ownsRequest(generation, latencyGeneration)) return@runOnUiThread
@@ -2471,6 +2469,7 @@ class MainActivity : Activity() {
         private const val SELECTED_ROUTE_LATENCY_INTERVAL_MS = 5_000L
         private const val MAP_TRAFFIC_SAMPLE_INTERVAL_MS = 420L
         private const val MAP_TRAFFIC_GRACE_MS = 2_800L
+        private const val MAP_VIEWPORT_TRANSITION_MS = 180L
     }
 }
 

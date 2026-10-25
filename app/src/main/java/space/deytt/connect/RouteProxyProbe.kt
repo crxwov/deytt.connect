@@ -68,6 +68,7 @@ object RouteProxyProbe {
     const val QUICK_DOWNLOAD_MILLIS = 3_000
     const val LATENCY_SAMPLE_COUNT = 3
     private const val DOWNLOAD_PROGRESS_INTERVAL_MILLIS = 250L
+    private const val MAX_DOWNLOAD_BYTES = 32L * 1024 * 1024
     private const val SYSTEM_DOWNLOAD_CONNECT_TIMEOUT_MILLIS = 3_500
     private const val SYSTEM_DOWNLOAD_DEADLINE_MILLIS = 8_000L
     private val systemVpnProbeExecutor = ThreadPoolExecutor(
@@ -270,7 +271,7 @@ object RouteProxyProbe {
         session: RouteProbeSession,
         token: String,
         sampleMillis: Int = QUICK_DOWNLOAD_MILLIS,
-        maximumBytes: Long = 32L * 1024L * 1024L,
+        maximumBytes: Long = MAX_DOWNLOAD_BYTES,
         onProgress: (bytesPerSecond: Long) -> Unit = {},
     ): Long {
         require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
@@ -292,12 +293,13 @@ object RouteProxyProbe {
             }
             val response = readHttpResponse(socket, socket.inputStream, connectDeadline)
             if (response.status != HTTP_OK) throw IOException("Сервер скорости ответил HTTP ${response.status}")
+            validateDownloadContentType(response.headers["content-type"])
 
             val sampleDeadline = SystemClock.elapsedRealtime() + sampleMillis
             val sampleStarted = SystemClock.elapsedRealtime()
             val body = socket.inputStream
             val transferEncoding = response.headers["transfer-encoding"].orEmpty()
-            val contentLength = response.headers["content-length"]?.toLongOrNull()
+            val contentLength = response.headers["content-length"]?.toLongOrNull()?.takeIf { it >= 0L }
             var lastProgressAt = sampleStarted
             val reportBytes: (Long) -> Unit = { total ->
                 val now = SystemClock.elapsedRealtime()
@@ -309,7 +311,10 @@ object RouteProxyProbe {
             val received = if (transferEncoding.contains("chunked", ignoreCase = true)) {
                 countChunkedBody(socket, body, sampleDeadline, maximumBytes, reportBytes)
             } else {
-                countBody(socket, body, sampleDeadline, minOf(contentLength ?: maximumBytes, maximumBytes), reportBytes)
+                countBody(
+                    socket, body, sampleDeadline, minOf(contentLength ?: maximumBytes, maximumBytes), reportBytes,
+                    expectedLength = contentLength,
+                )
             }
             check(received > 0L) { "Сервер скорости не передал данные" }
             val elapsed = (SystemClock.elapsedRealtime() - sampleStarted).coerceAtLeast(1L)
@@ -431,6 +436,7 @@ object RouteProxyProbe {
         deadline: Long,
         maximumBytes: Long,
         onBytesRead: (Long) -> Unit = {},
+        expectedLength: Long? = null,
     ): Long {
         var total = 0L
         val buffer = ByteArray(8 * 1024)
@@ -446,7 +452,12 @@ object RouteProxyProbe {
             } catch (timeout: SocketTimeoutException) {
                 if (total > 0L) break else throw timeout
             }
-            if (count < 0) break
+            if (count < 0) {
+                if (isPrematureDownloadEof(total, expectedLength, maximumBytes)) {
+                    throw IOException("Поток скорости завершился раньше ожидаемого")
+                }
+                break
+            }
             if (count > 0) {
                 total += count
                 onBytesRead(total)
@@ -606,44 +617,58 @@ object RouteProxyProbe {
             check(stillCurrent()) { "Route changed during measurement" }
             val responseCode = connection.responseCode
             if (responseCode != HTTP_OK) throw IOException("Download endpoint returned HTTP $responseCode")
-            val headersAt = SystemClock.elapsedRealtime()
+            validateDownloadContentType(connection.contentType)
             val totalDeadline = requestStarted + SYSTEM_DOWNLOAD_DEADLINE_MILLIS
-            var sampleStarted: Long? = null
-            var lastProgressAt = 0L
+            val contentLength = connection.contentLengthLong.takeIf { it >= 0L }
+            val maximumBytes = MAX_DOWNLOAD_BYTES
             var received = 0L
             val buffer = ByteArray(32 * 1024)
-            connection.inputStream.use { input ->
-                while (received < 32L * 1024 * 1024) {
+            val result = connection.inputStream.use { input ->
+                val sampleStarted = SystemClock.elapsedRealtime()
+                val sampleDeadline = minOf(sampleStarted + sampleMillis, totalDeadline)
+                var lastProgressAt = sampleStarted
+                while (received < maximumBytes) {
                     check(stillCurrent() && !Thread.currentThread().isInterrupted) { "Route changed during measurement" }
                     val now = SystemClock.elapsedRealtime()
-                    val sampleDeadline = sampleStarted?.plus(sampleMillis) ?: totalDeadline
-                    if (now >= sampleDeadline || now >= totalDeadline) break
-                    connection.readTimeout = (sampleDeadline - now).coerceAtLeast(1L).toInt()
+                    if (now >= sampleDeadline) break
+                    connection.readTimeout = (sampleDeadline - now)
+                        .coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
                     val count = try { input.read(buffer) } catch (error: SocketTimeoutException) {
                         if (received > 0) break else throw error
                     }
-                    if (count < 0) break
+                    if (count < 0) {
+                        if (isPrematureDownloadEof(received, contentLength, maximumBytes)) {
+                            throw IOException("Download endpoint ended before Content-Length")
+                        }
+                        break
+                    }
                     if (count > 0) {
-                        if (sampleStarted == null) sampleStarted = SystemClock.elapsedRealtime()
                         received += count
                         val progressAt = SystemClock.elapsedRealtime()
                         if (progressAt - lastProgressAt >= DOWNLOAD_PROGRESS_INTERVAL_MILLIS) {
-                            val measuredFrom = sampleStarted ?: progressAt
-                            onProgress(received * 1_000L / (progressAt - measuredFrom).coerceAtLeast(1L))
+                            onProgress(received * 1_000L / (progressAt - sampleStarted).coerceAtLeast(1L))
                             lastProgressAt = progressAt
                         }
                     }
                 }
+                check(stillCurrent() && received > 0) { "Measurement did not complete" }
+                received * 1_000L / (SystemClock.elapsedRealtime() - sampleStarted).coerceAtLeast(1L)
             }
-            val measuredFrom = sampleStarted ?: headersAt
-            check(stillCurrent() && received > 0) { "Measurement did not complete" }
-            return (received * 1_000L / (SystemClock.elapsedRealtime() - measuredFrom).coerceAtLeast(1L))
-                .also(onProgress)
+            return result.also(onProgress)
         } finally {
             connection.disconnect()
             activeConnection.compareAndSet(connection, null)
         }
     }
+
+    internal fun validateDownloadContentType(contentType: String?) {
+        if (contentType?.substringBefore(';')?.trim()?.equals("application/octet-stream", ignoreCase = true) != true) {
+            throw IOException("Download endpoint returned an unexpected Content-Type")
+        }
+    }
+
+    internal fun isPrematureDownloadEof(received: Long, contentLength: Long?, maximumBytes: Long): Boolean =
+        contentLength != null && received < contentLength && received < maximumBytes
 
     fun isApplicationRoutedByTunnel(
         config: String,

@@ -317,7 +317,6 @@
       this.targetBoundaryLines = [];
       this.landPolygons = [];
       this.pixelRatio = 1;
-      this.lastReportedGlobeRadius = null;
       this.staticCanvas = document.createElement("canvas");
       this.staticContext = this.staticCanvas.getContext("2d");
       this.staticDirty = true;
@@ -509,14 +508,18 @@
       this.pixelRatio = ratio;
       this.width = Math.max(1, Math.round(rectangle.width));
       this.height = Math.max(1, Math.round(rectangle.height));
-      if (this.width !== previousWidth || this.height !== previousHeight) this.labelPlacements.clear();
+      if ((!window.DeyttAtlasBridge && (this.width !== previousWidth || this.height !== previousHeight)) ||
+          (this.width < 520) !== (previousWidth < 520)) this.labelPlacements.clear();
       this.canvas.width = Math.round(this.width * ratio);
       this.canvas.height = Math.round(this.height * ratio);
       this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
       this.staticCanvas.width = this.canvas.width;
       this.staticCanvas.height = this.canvas.height;
       this.staticContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-      this.radius = Math.min(this.width, this.height) * (this.width < 520 ? 0.405 : 0.43);
+      // Expanding the native viewport must not add a second zoom to the user's gesture.
+      if (!window.DeyttAtlasBridge || !this.viewportExpanded || !this.radius) {
+        this.radius = Math.min(this.width, this.height) * (this.width < 520 ? 0.405 : 0.43);
+      }
       this.staticDirty = true;
       this.start();
     }
@@ -1234,7 +1237,7 @@
       if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
       if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
       const nextViewportExpanded = this.zoom >= (this.viewportExpanded ? COLLAPSE_VIEWPORT_ZOOM : EXPAND_VIEWPORT_ZOOM);
-      if (nextViewportExpanded !== this.viewportExpanded) {
+      if (!this.dragging && nextViewportExpanded !== this.viewportExpanded) {
         this.viewportExpanded = nextViewportExpanded;
         const bridge = window.DeyttAtlasBridge;
         if (bridge && typeof bridge.onViewportExpandedChanged === "function") {

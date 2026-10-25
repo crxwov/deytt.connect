@@ -256,7 +256,12 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             val homeGlobeHost = onMainValue { sharedGlobe.parent }
 
             stage = "two_pointer_map_pinch_zoom_does_not_page"
-            pinchMapWithoutPaging(launched, sharedGlobe, screenshots, results)
+            android.os.Trace.beginSection("GlobePinchQA")
+            try {
+                pinchMapWithoutPaging(launched, sharedGlobe, screenshots, results)
+            } finally {
+                android.os.Trace.endSection()
+            }
             passed += stage
 
             // Exercise the requested leftward swipe from Home to Routes using the real ViewPager2.
@@ -678,34 +683,32 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
               var a=window.deyttMapAtlas,c=document.querySelector('.network-atlas canvas');
               if(!a||!c)return 'missing-atlas-or-canvas';
               var b=c.getBoundingClientRect(),cx=b.left+b.width/2,cy=b.top+b.height/2,r=a.radius*a.zoom-.5;
-              var ox=cx+r+6;
-              if(ox>=b.right)return 'outside-point-unavailable:'+ox+'>='+b.right;
-              var outside=new WheelEvent('wheel',{deltaY:-120,clientX:ox,clientY:cy,bubbles:true,cancelable:true});
+              var ox=b.left+4,oy=b.top+4,outsideCircle=Math.hypot(ox-cx,oy-cy)>r;
+              var outside=new WheelEvent('wheel',{deltaY:-120,clientX:ox,clientY:oy,bubbles:true,cancelable:true});
               var before=a.targetZoom;c.dispatchEvent(outside);var afterOutside=a.targetZoom;
-              var pointerCleanup=typeof PointerEvent==='function';
-              if(pointerCleanup){var down=new PointerEvent('pointerdown',{pointerId:91,pointerType:'mouse',clientX:ox,clientY:cy,bubbles:true});c.dispatchEvent(down);var stayedOutside=a.activePointers.size===0;var up=new PointerEvent('pointerup',{pointerId:91,pointerType:'mouse',clientX:ox,clientY:cy,bubbles:true});document.dispatchEvent(up);pointerCleanup=stayedOutside&&a.gesturePointers.size===0;}
               var inside=new WheelEvent('wheel',{deltaY:-120,clientX:cx,clientY:cy,bubbles:true,cancelable:true});
               c.dispatchEvent(inside);
-              var result='outsidePrevented='+outside.defaultPrevented+';outsideDelta='+(afterOutside-before)+';insidePrevented='+inside.defaultPrevented+';insideZoom='+a.targetZoom;
+              var result='outsideCircle='+outsideCircle+';cornerInsideRect='+(ox>=b.left&&oy>=b.top&&ox<b.right&&oy<b.bottom)+';cornerPrevented='+outside.defaultPrevented+';cornerDelta='+(afterOutside-before)+';insidePrevented='+inside.defaultPrevented+';insideZoom='+a.targetZoom;
               var previous={connected:a.connected,route:a.route,routeKey:a.autoExitRouteKey,country:a.autoExitCountry};
               a.connected=true;a.route='auto';a.autoExitRouteKey=null;a.autoExitCountry=null;
               var unresolved=(a.activeRouteDefinition()===null&&a.activeRouteNodeKeys().length===0);
               a.autoExitRouteKey='de';
               var german=(a.activeRouteDefinition()===window.DeyttAtlas.routes.de&&JSON.stringify(a.activeRouteNodeKeys())===JSON.stringify(window.DeyttAtlas.routes.de.nodes));
               a.connected=previous.connected;a.route=previous.route;a.autoExitRouteKey=previous.routeKey;a.autoExitCountry=previous.country;
-              return result+';outsidePointerCleaned='+pointerCleanup+';unresolvedAutoSuppressed='+unresolved+';activeDeUsesRealPath='+german+';manualZoomMax='+a.clampZoom(64);
+              return result+';unresolvedAutoSuppressed='+unresolved+';activeDeUsesRealPath='+german+';manualZoomMax='+a.clampZoom(64);
             })()
         """.trimIndent())
-        android.util.Log.i("OpenFluxVisibilityQA", "globe_interaction_contract=$wheelProbe")
-        check(wheelProbe.contains("outsidePrevented=false") &&
-            wheelProbe.contains("outsideDelta=0") &&
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_rectangular_interaction=$wheelProbe")
+        check(wheelProbe.contains("outsideCircle=true") &&
+            wheelProbe.contains("cornerInsideRect=true") &&
+            wheelProbe.contains("cornerPrevented=true") &&
+            wheelProbe.substringAfter("cornerDelta=").substringBefore(';').toDoubleOrNull()?.let { it > 0.1 } == true &&
             wheelProbe.contains("insidePrevented=true") &&
             wheelProbe.substringAfter("insideZoom=").substringBefore(';').toDoubleOrNull()?.let { it > 1.2 } == true &&
-            wheelProbe.contains("outsidePointerCleaned=true") &&
             wheelProbe.contains("unresolvedAutoSuppressed=true") &&
             wheelProbe.contains("activeDeUsesRealPath=true") &&
             wheelProbe.contains("manualZoomMax=32")) {
-            "Atlas wheel/connected-route behavior violated the globe interaction contract: $wheelProbe"
+            "Atlas rectangular viewport/connected-route behavior failed: $wheelProbe"
         }
         runOnMainSync { webView.evaluateJavascript("window.deyttResetMapView && window.deyttResetMapView()", null) }
         val wheelResetDeadline = SystemClock.elapsedRealtime() + 10_000L
@@ -808,14 +811,58 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         }
         awaitPagerSettled(activity, 0, "Подключить")
 
-        runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=3;window.deyttMapAtlas.start()", null) }
-        val midZoomDeadline = SystemClock.elapsedRealtime() + 10_000L
-        while (SystemClock.elapsedRealtime() < midZoomDeadline && readAtlasCurrentZoom(webView) < 2.98) {
-            Thread.sleep(50)
+        runOnMainSync { webView.evaluateJavascript("window.deyttResetMapView && window.deyttResetMapView()", null) }
+        awaitAtlasSettled(webView, 1.1, expanded = false)
+        val normalRadius = readAtlasRadius(webView)
+        val labelsBeforeExpand = readAtlasLabelLayout(webView)
+        val placementsBeforeExpand = labelPlacementIndices(labelsBeforeExpand)
+        check(placementsBeforeExpand.isNotEmpty()) {
+            "Normal Home viewport did not produce label placements for resize comparison: $labelsBeforeExpand"
         }
-        check(kotlin.math.abs(readAtlasCurrentZoom(webView) - 3.0) < .03) {
-            "Mid-zoom globe did not settle before viewport QA: ${readAtlasPinchDiagnostics(webView)}"
+        runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=2.05;window.deyttMapAtlas.start()", null) }
+        val expandedDiagnostics = awaitAtlasSettled(webView, 2.05, expanded = true)
+        val expandedBounds = awaitNativeMapFillsPager(activity, webView)
+        val expandedRadius = readAtlasRadius(webView)
+        val expectedExpandedRadius = normalRadius * 2.05
+        val actualExpandedRadius = expandedRadius * readAtlasCurrentZoom(webView)
+        val scaleError = kotlin.math.abs(actualExpandedRadius - expectedExpandedRadius) / expectedExpandedRadius
+        check(scaleError <= .02) {
+            "Native viewport expansion changed globe scale: normalRadius=$normalRadius expandedRadius=$expandedRadius " +
+                "zoom=${readAtlasCurrentZoom(webView)} expectedRadiusZoom=$expectedExpandedRadius actualRadiusZoom=$actualExpandedRadius " +
+                "relativeError=$scaleError; $expandedBounds; $expandedDiagnostics"
         }
+        val labelsAfterExpand = readAtlasLabelLayout(webView)
+        val placementsAfterExpand = labelPlacementIndices(labelsAfterExpand)
+        val commonLabels = placementsBeforeExpand.keys.intersect(placementsAfterExpand.keys)
+        check(commonLabels.isNotEmpty()) {
+            "No label keys survived native viewport expansion for placement comparison: before=$labelsBeforeExpand after=$labelsAfterExpand"
+        }
+        val changedPlacements = commonLabels.filter { placementsBeforeExpand[it] != placementsAfterExpand[it] }
+        check(changedPlacements.isEmpty()) {
+            "Size-only expansion changed placement indices for common labels $changedPlacements: before=$labelsBeforeExpand after=$labelsAfterExpand"
+        }
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_expanded_viewport=$expandedBounds;scaleError=$scaleError;labels=$labelsAfterExpand;$expandedDiagnostics")
+        saveQaScreenshot("globe-expanded", screenshots, results)
+
+        val labelBaseline = labelsAfterExpand
+        check(labelBaseline.substringAfter("placements=").substringBefore(';').isNotBlank()) {
+            "Expanded atlas did not produce any label placements: $labelBaseline"
+        }
+        for (target in listOf(2.2, 2.8, 2.05, 2.5)) {
+            runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=$target;window.deyttMapAtlas.start()", null) }
+            val settled = awaitAtlasSettled(webView, target, expanded = true)
+            val labels = readAtlasLabelLayout(webView)
+            check(labels == labelBaseline) {
+                "Label placement/scale changed after zoom settled at $target: before=$labelBaseline after=$labels; $settled"
+            }
+        }
+        val idleBefore = readAtlasRenderCount(webView)
+        Thread.sleep(750)
+        val idleAfter = readAtlasRenderCount(webView)
+        check(idleAfter == idleBefore) {
+            "Settled atlas continued redrawing while idle: renderCount=$idleBefore->$idleAfter; ${readAtlasPinchDiagnostics(webView)}"
+        }
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_zoom_labels=$labelBaseline;idle_render_count=$idleBefore->$idleAfter")
         saveQaScreenshot("globe-zoom3", screenshots, results)
 
         runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=32;window.deyttMapAtlas.start()", null) }
@@ -824,7 +871,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             Thread.sleep(50)
         }
         check(readAtlasTargetZoom(webView) == 32.0 && readAtlasCurrentZoom(webView) >= 31.95) {
-            "Maximum zoom did not settle before circular-viewport QA: ${readAtlasPinchDiagnostics(webView)}"
+            "Maximum zoom did not settle before rectangular-viewport QA: ${readAtlasPinchDiagnostics(webView)}"
         }
         val offscreenLabel = runAtlasScript(webView, """
             (function(){var a=window.deyttMapAtlas,p=a.projectedNodes.de||a.projectLocation(window.DeyttAtlas.locations.de,1.008);
@@ -838,24 +885,50 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
               return [[0,0],[w-1,0],[0,h-1],[w-1,h-1]].map(function(p){return x.getImageData(p[0],p[1],1,1).data[3]}).join(',');})()
         """.trimIndent())
         val cornerValues = cornerAlpha.split(',').mapNotNull(String::toIntOrNull)
-        check(cornerValues.size == 4 && cornerValues.all { it < 8 }) {
-            "Zoom 32 viewport corners should reveal the continuous sky, got alpha=$cornerAlpha"
+        check(cornerValues.size == 4 && cornerValues.all { it > 248 }) {
+            "Zoom 32 geography should cover all rectangular viewport corners, got alpha=$cornerAlpha"
         }
-        runOnMainSync { android.util.Log.i("OpenFluxVisibilityQA", "globe_zoom32_corner_alpha=$cornerAlpha") }
+        runOnMainSync { android.util.Log.i("OpenFluxVisibilityQA", "globe_zoom32_rect_corner_alpha=$cornerAlpha") }
         saveQaScreenshot("globe-zoom32", screenshots, results)
 
         runOnMainSync {
             webView.evaluateJavascript("window.deyttResetMapView && window.deyttResetMapView()", null)
         }
-        val resetDeadline = SystemClock.elapsedRealtime() + 10_000L
-        while (SystemClock.elapsedRealtime() < resetDeadline &&
-            (kotlin.math.abs(readAtlasTargetZoom(webView) - 1.1) >= .01 ||
-                kotlin.math.abs(readAtlasCurrentZoom(webView) - 1.1) >= .03)) {
-            Thread.sleep(50)
+        val collapsedDiagnostics = awaitAtlasSettled(webView, 1.1, expanded = false)
+        val collapsedBounds = onMainValue {
+            val bounds = Rect()
+            check(webView.getGlobalVisibleRect(bounds)) { "Collapsed Home map is not visible" }
+            bounds.toShortString()
         }
-        check(kotlin.math.abs(readAtlasTargetZoom(webView) - 1.1) < .01 &&
-            kotlin.math.abs(readAtlasCurrentZoom(webView) - 1.1) < .03) {
-            "Map reset did not settle at default zoom: ${readAtlasPinchDiagnostics(webView)}"
+        val homeControls = onMainValue {
+            val content = activity.findViewById<View>(android.R.id.content)
+            listOf("Подключить", "home-refresh", "home-latency", "home-speed").map { key ->
+                val view = if (key.startsWith("home-")) findView(content) { it.tag == key } else findText(content, key)
+                val bounds = Rect()
+                check(view != null && view.isShown && view.getGlobalVisibleRect(bounds) && bounds.height() == view.height) {
+                    "Home control $key was not restored after globe collapse: view=$view bounds=$bounds map=$collapsedBounds"
+                }
+                "$key=${bounds.toShortString()}"
+            }.joinToString(";")
+        }
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_collapsed_viewport=$collapsedBounds;$collapsedDiagnostics;controls=$homeControls")
+        saveQaScreenshot("globe-collapsed", screenshots, results)
+        runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=2.05;window.deyttMapAtlas.start()", null) }
+        awaitAtlasSettled(webView, 2.05, expanded = true)
+        awaitNativeMapFillsPager(activity, webView)
+        runOnMainSync { activity.onBackPressed() }
+        val backDiagnostics = awaitAtlasSettled(webView, 1.1, expanded = false)
+        val backControlsVisible = onMainValue {
+            val content = activity.findViewById<View>(android.R.id.content)
+            listOf("Подключить", "home-refresh", "home-latency", "home-speed").all { key ->
+                val view = if (key.startsWith("home-")) findView(content) { it.tag == key } else findText(content, key)
+                val bounds = Rect()
+                view != null && view.isShown && view.getGlobalVisibleRect(bounds) && bounds.height() == view.height
+            }
+        }
+        check(!activity.isFinishing && backControlsVisible) {
+            "Back from expanded Home did not collapse the viewport and retain Home controls: finishing=${activity.isFinishing}; " +
+                "controlsVisible=$backControlsVisible; $backDiagnostics"
         }
         onMainValue {
             check(pager.currentItem == 0 && pager.scrollState == androidx.viewpager2.widget.ViewPager2.SCROLL_STATE_IDLE) {
@@ -867,6 +940,76 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             android.util.Log.i("OpenFluxVisibilityQA", "pinch_zoom=$zoomBefore->$zoomAfter; manual_max=32; pager=0; map_reset=1.1")
         }
     }
+
+    private fun awaitAtlasSettled(webView: WebView, targetZoom: Double, expanded: Boolean): String {
+        val deadline = SystemClock.elapsedRealtime() + 10_000L
+        var last = "unavailable"
+        while (SystemClock.elapsedRealtime() < deadline) {
+            last = runAtlasScript(webView, """
+                (function(){var a=window.deyttMapAtlas;return [a.targetZoom,a.zoom,a.viewportExpanded,a.renderCount].join('|');})()
+            """.trimIndent())
+            val values = last.split('|')
+            val target = values.getOrNull(0)?.toDoubleOrNull()
+            val current = values.getOrNull(1)?.toDoubleOrNull()
+            val isExpanded = values.getOrNull(2) == "true"
+            val renders = values.getOrNull(3)?.toIntOrNull()
+            if (target != null && current != null && kotlin.math.abs(target - targetZoom) < .01 &&
+                kotlin.math.abs(current - targetZoom) < .03 && isExpanded == expanded && renders != null) {
+                Thread.sleep(150)
+                val settled = runAtlasScript(webView, """
+                    (function(){var a=window.deyttMapAtlas;return [a.targetZoom,a.zoom,a.viewportExpanded,a.renderCount].join('|');})()
+                """.trimIndent())
+                val settledParts = settled.split('|')
+                if (settledParts.getOrNull(0)?.toDoubleOrNull()?.let { kotlin.math.abs(it - targetZoom) < .01 } == true &&
+                    settledParts.getOrNull(1)?.toDoubleOrNull()?.let { kotlin.math.abs(it - targetZoom) < .03 } == true &&
+                    settledParts.getOrNull(2) == expanded.toString() && settledParts.getOrNull(3)?.toIntOrNull() == renders) return settled
+            }
+            Thread.sleep(50)
+        }
+        error("Atlas did not settle at zoom=$targetZoom expanded=$expanded: $last; ${readAtlasPinchDiagnostics(webView)}")
+    }
+
+    private fun awaitNativeMapFillsPager(activity: MainActivity, webView: WebView): String {
+        val deadline = SystemClock.elapsedRealtime() + 10_000L
+        var last = "unavailable"
+        var fillsPager = false
+        while (SystemClock.elapsedRealtime() < deadline) {
+            onMainValue {
+                val content = activity.findViewById<View>(android.R.id.content)
+                val pager = checkNotNull(findView(content) {
+                    it.javaClass.name == "androidx.viewpager2.widget.ViewPager2"
+                }) as androidx.viewpager2.widget.ViewPager2
+                val pagerBounds = Rect()
+                val mapBounds = Rect()
+                fillsPager = pager.getGlobalVisibleRect(pagerBounds) && webView.getGlobalVisibleRect(mapBounds) &&
+                    kotlin.math.abs(pagerBounds.left - mapBounds.left) <= 2 &&
+                    kotlin.math.abs(pagerBounds.top - mapBounds.top) <= 2 &&
+                    kotlin.math.abs(pagerBounds.right - mapBounds.right) <= 2 &&
+                    kotlin.math.abs(pagerBounds.bottom - mapBounds.bottom) <= 2
+                last = "pager=${pagerBounds.toShortString()};map=${mapBounds.toShortString()};view=${webView.width}x${webView.height}"
+            }
+            if (fillsPager) return last
+            Thread.sleep(50)
+        }
+        error("Expanded native map does not fill the pager area: $last; ${readAtlasPinchDiagnostics(webView)}")
+    }
+
+    private fun readAtlasLabelLayout(webView: WebView): String = runAtlasScript(webView, """
+        (function(){var a=window.deyttMapAtlas;return 'placements='+Array.from(a.labelPlacements.entries()).sort(function(x,y){return x[0].localeCompare(y[0]);}).map(function(x){return x[0]+':'+x[1];}).join(',')+';scale='+(a.options.labelScale||1)+';compact='+(a.width<520)+';size='+a.width+'x'+a.height;})()
+    """.trimIndent())
+
+    private fun labelPlacementIndices(layout: String): Map<String, String> =
+        layout.substringAfter("placements=").substringBefore(';').split(',')
+            .mapNotNull { entry -> entry.split(':', limit = 2).takeIf { it.size == 2 }?.let { it[0] to it[1] } }
+            .toMap()
+
+    private fun readAtlasRadius(webView: WebView): Double =
+        runAtlasScript(webView, "window.deyttMapAtlas ? window.deyttMapAtlas.radius : null")
+            .toDoubleOrNull() ?: error("Atlas radius is unavailable")
+
+    private fun readAtlasRenderCount(webView: WebView): Int =
+        runAtlasScript(webView, "window.deyttMapAtlas ? window.deyttMapAtlas.renderCount : -1")
+            .toIntOrNull() ?: error("Atlas render count is unavailable")
 
     private fun readAtlasTargetZoom(webView: WebView): Double {
         return readAtlasZoom(webView, "targetZoom")

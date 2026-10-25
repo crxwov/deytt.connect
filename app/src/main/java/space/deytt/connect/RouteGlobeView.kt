@@ -45,9 +45,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
         @JavascriptInterface
         fun onViewportExpandedChanged(expanded: Boolean) {
-            post {
-                if (!backdropStageActive) onMapViewportExpanded?.invoke(expanded)
-            }
+            post { onMapViewportExpanded?.invoke(expanded) }
         }
     }
 
@@ -124,6 +122,10 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     fun focus(code: String, animate: Boolean = true) {
         selectedRoute = routeKeyFor(code)
         applySelectedRoute()
+    }
+
+    internal fun resetViewport() {
+        if (pageLoaded) atlas.evaluateJavascript("window.deyttResetMapView && window.deyttResetMapView()", null)
     }
 
     internal fun setAvailableLocations(locations: Set<String>) {

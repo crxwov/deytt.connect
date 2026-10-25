@@ -3,8 +3,10 @@ package space.deytt.connect
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Test
 import org.json.JSONObject
+import java.io.IOException
 
 class RouteProxyProbeTest {
     private val profile = """
@@ -42,6 +44,29 @@ class RouteProxyProbeTest {
     fun parsesHttpStatusLineForTheProxyAndCanaryResponses() {
         assertEquals(200, RouteProxyProbe.parseHttpStatusCode("HTTP/1.1 200 Connection established"))
         assertEquals(204, RouteProxyProbe.parseHttpStatusCode("HTTP/1.1 204 No Content"))
+    }
+
+    @Test
+    fun acceptsOnlyDocumentedDownloadContentType() {
+        RouteProxyProbe.validateDownloadContentType("application/octet-stream")
+        RouteProxyProbe.validateDownloadContentType("Application/Octet-Stream; charset=binary")
+        listOf(null, "text/html", "application/json").forEach { contentType ->
+            try {
+                RouteProxyProbe.validateDownloadContentType(contentType)
+                fail("Expected invalid Content-Type to be rejected: $contentType")
+            } catch (_: IOException) {
+                // Expected: successful error pages are not speed samples.
+            }
+        }
+    }
+
+    @Test
+    fun distinguishesPrematureEofFromIntentionalPartialSamples() {
+        assertTrue(RouteProxyProbe.isPrematureDownloadEof(12, 32, 32))
+        assertTrue(RouteProxyProbe.isPrematureDownloadEof(12, 64, 32))
+        assertFalse(RouteProxyProbe.isPrematureDownloadEof(32, 32, 32))
+        assertFalse(RouteProxyProbe.isPrematureDownloadEof(16, 32, 16))
+        assertFalse(RouteProxyProbe.isPrematureDownloadEof(12, null, 32))
     }
 
     @Test(expected = IllegalArgumentException::class)
