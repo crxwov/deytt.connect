@@ -5,4 +5,7 @@
         <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
         <item name="android:windowSplashScreenAnimationDuration">1100</item>
     </style>
+    <style name="AppTheme.MainStarting" parent="@style/AppTheme.Starting">
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_startup_animation</item>
+    </style>
 </resources>

@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.os.Bundle
+import android.os.SystemClock
 import android.provider.Settings
 import android.text.Spanned
 import android.text.style.ReplacementSpan
@@ -76,7 +77,8 @@ class InlineMetricProgressInstrumentation : Instrumentation() {
                 scale("0")
                 checkVisibleAnimation()
             } finally { scale(originalScale) }
-            result.putString("result", "PASS: inline slots, updates, wrapping, visible frames with animations ON/OFF, completion")
+            captureColdMainStartupFrames()
+            result.putString("result", "PASS: inline slots, updates, wrapping, visible frames with animations ON/OFF, completion; cold MainActivity frames captured")
             finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) {
             result.putString("error", error.toString())
@@ -108,7 +110,7 @@ class InlineMetricProgressInstrumentation : Instrumentation() {
                 progress.setLoading(true)
             }
             waitForIdleSync()
-            Thread.sleep(1_600)
+            Thread.sleep(2_000)
             val position = IntArray(2)
             runOnMainSync { label.getLocationOnScreen(position) }
             fun capture(): Bitmap {
@@ -138,6 +140,31 @@ class InlineMetricProgressInstrumentation : Instrumentation() {
             later.recycle()
         } finally {
             runOnMainSync { activity.finish() }
+        }
+    }
+
+    private fun captureColdMainStartupFrames() {
+        fun shell(command: String) {
+            uiAutomation.executeShellCommand(command).use { descriptor ->
+                java.io.FileInputStream(descriptor.fileDescriptor).use { it.readBytes() }
+            }
+        }
+        val mediaRoot = targetContext.externalMediaDirs.firstOrNull()
+            ?: error("Instrumentation media output is unavailable")
+        val output = java.io.File(mediaRoot, "additional_test_output/main-startup").apply {
+            check(mkdirs() || isDirectory)
+        }
+        shell("am force-stop space.deytt.connect")
+        val startedAt = SystemClock.uptimeMillis()
+        shell("am start -n space.deytt.connect/.MainActivity")
+        listOf(150L, 350L, 600L, 850L, 1_100L, 1_350L, 1_600L, 1_900L, 2_300L, 2_800L, 3_400L).forEach { target ->
+            val remaining = startedAt + target - SystemClock.uptimeMillis()
+            if (remaining > 0) SystemClock.sleep(remaining)
+            val screenshot = checkNotNull(uiAutomation.takeScreenshot())
+            java.io.File(output, "frame-$target.png").outputStream().use {
+                check(screenshot.compress(Bitmap.CompressFormat.PNG, 100, it))
+            }
+            screenshot.recycle()
         }
     }
 }

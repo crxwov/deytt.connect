@@ -9,6 +9,17 @@ data class ActiveRouteSelection(
     companion object {
         private val directRoute = Regex("^route:(NL|DE|FI|RU|IT)(?::|$)", RegexOption.IGNORE_CASE)
 
+        fun configuredAutoRoute(
+            selected: SelectedRoute,
+            outboundTag: String?,
+            routes: List<DeyttRoute>,
+            connected: Boolean,
+        ): DeyttRoute? {
+            if (!connected || selected.id != "auto" || selected.protocol != RouteProtocol.AUTO) return null
+            val tag = outboundTag?.trim()?.takeIf(String::isNotEmpty) ?: return null
+            return routes.firstOrNull { it.configTag == tag && it.protocol != RouteProtocol.AUTO }
+        }
+
         fun fromOutboundTag(tag: String): ActiveRouteSelection? {
             val normalized = tag.trim()
             if (normalized.startsWith("route:RU-DE:", ignoreCase = true)) {

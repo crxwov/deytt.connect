@@ -14,17 +14,32 @@ import android.view.animation.PathInterpolator
 /** Native port of the Mini App terminal splash; only its final letter differs. */
 internal class StartupAnimationView(activity: Activity, private val reducedMotion: Boolean) : View(activity) {
     companion object {
+        internal const val SPLASH_ALIGN_END_MS = 1_100L
+        internal const val SPLASH_EXIT_HOLD_MS = 220L
+        internal const val SPLASH_EXIT_START_MS = SPLASH_ALIGN_END_MS + SPLASH_EXIT_HOLD_MS
+        internal const val SPLASH_EXIT_DURATION_MS = 340L
+
+        internal fun systemSplashExitDelayMillis(iconElapsedMillis: Long?): Long =
+            (SPLASH_EXIT_START_MS - (iconElapsedMillis ?: 0L)).coerceAtLeast(0L)
+
         fun configureSystemSplash(activity: Activity) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
             activity.splashScreen.setOnExitAnimationListener { nativeSplash ->
                 val elapsed = nativeSplash.iconAnimationStart?.let {
                     System.currentTimeMillis() - it.toEpochMilli()
-                } ?: 0L
+                }
+                nativeSplash.setBackgroundColor(Color.BLACK)
+                nativeSplash.iconView?.alpha = 1f
                 nativeSplash.postDelayed({
-                    nativeSplash.animate().alpha(0f).setDuration(340L)
-                        .setInterpolator(PathInterpolator(.16f, 1f, .3f, 1f))
-                        .withEndAction { nativeSplash.remove() }.start()
-                }, (900L - elapsed).coerceAtLeast(0L))
+                    val icon = nativeSplash.iconView
+                    if (icon == null) {
+                        nativeSplash.postDelayed({ nativeSplash.remove() }, SPLASH_EXIT_DURATION_MS)
+                    } else {
+                        icon.animate().alpha(0f).setDuration(SPLASH_EXIT_DURATION_MS)
+                            .setInterpolator(PathInterpolator(.16f, 1f, .3f, 1f))
+                            .withEndAction { nativeSplash.remove() }.start()
+                    }
+                }, systemSplashExitDelayMillis(elapsed))
             }
         }
     }
@@ -63,10 +78,12 @@ internal class StartupAnimationView(activity: Activity, private val reducedMotio
         super.onDraw(canvas)
         if (startedAt == 0L) return
         val elapsed = SystemClock.uptimeMillis() - startedAt
-        if (elapsed >= 1_240L) {
+        if (elapsed >= SPLASH_EXIT_START_MS + SPLASH_EXIT_DURATION_MS) {
             post { (parent as? ViewGroup)?.removeView(this) }
             return
         }
+        val exitAlpha = if (elapsed < SPLASH_EXIT_START_MS) 1f else
+            1f - alignCurve.getInterpolation(((elapsed - SPLASH_EXIT_START_MS) / SPLASH_EXIT_DURATION_MS.toFloat()).coerceIn(0f, 1f))
         val aligned = if (reducedMotion) 1f else alignCurve.getInterpolation(((elapsed - 680L) / 420f).coerceIn(0f, 1f))
         val tracking = fontSize * (-.02f - .045f * aligned)
         val visible = revealTimes.count { elapsed >= it }
@@ -90,21 +107,17 @@ internal class StartupAnimationView(activity: Activity, private val reducedMotio
             canvas.translate(x + pivotX, pivotY + offsetY)
             canvas.rotate(rotation)
             canvas.scale(scale, scale)
+            paint.alpha = (255 * exitAlpha).toInt()
             canvas.drawText(characters[index].toString(), -pivotX, baseline - pivotY, paint)
             canvas.restore()
             x += advances[index]
         }
         val cursorAlpha = 1f - ((elapsed - 680L) / 160f).coerceIn(0f, 1f)
-        paint.alpha = (255 * cursorAlpha).toInt()
+        paint.alpha = (255 * cursorAlpha * exitAlpha).toInt()
         val cursorBottom = baseline + fontSize * .04f
         canvas.drawRoundRect(x + cursorMargin, cursorBottom - fontSize * .76f, x + cursorMargin + cursorWidth,
             cursorBottom, 1.5f * density, 1.5f * density, paint)
         paint.alpha = 255
-        if (elapsed >= 900L) {
-            val exit = alignCurve.getInterpolation(((elapsed - 900L) / 340f).coerceIn(0f, 1f))
-            alpha = 1f - exit
-            if (!reducedMotion) { scaleX = 1f + exit * .02f; scaleY = scaleX }
-        }
         postInvalidateOnAnimation()
     }
 }

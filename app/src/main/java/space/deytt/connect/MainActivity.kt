@@ -169,11 +169,10 @@ class MainActivity : Activity() {
                 currentAutoOutboundTag = intent.getStringExtra(ConnectVpnService.EXTRA_ACTIVE_OUTBOUND_TAG)
                 if (::globe.isInitialized) globe.setActiveAutoRoute(currentAutoRouteKey)
                 val selected = SelectedRouteStore(this@MainActivity).read()
-                val route = SubscriptionStore(this@MainActivity).readCurrent()?.let { config ->
-                    runCatching { RouteCatalog.from(config, AwgProfileStore(this@MainActivity).profiles(), OpenFluxProfileStore(this@MainActivity).profiles(this@MainActivity)) }
-                        .getOrNull()?.firstOrNull { it.id == selected.id }
-                }
-                if ((previousKey != currentAutoRouteKey || previousOutboundTag != currentAutoOutboundTag) && route?.protocol == RouteProtocol.AUTO) {
+                if ((previousKey != currentAutoRouteKey || previousOutboundTag != currentAutoOutboundTag) &&
+                    selected.id == "auto" && selected.protocol == RouteProtocol.AUTO
+                ) {
+                    updateRouteFlow(selected)
                     cancelHomeRouteDownload()
                     clearHomeMetricSamples()
                     homeSpeedAttemptAt = 0L
@@ -315,7 +314,6 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        StartupAnimationView.configureSystemSplash(this)
         if (openIncomingSubscription(intent)) {
             finish()
             return
@@ -325,6 +323,7 @@ class MainActivity : Activity() {
             finish()
             return
         }
+        StartupAnimationView.configureSystemSplash(this)
         migrateRemovedSelectedRoute()
         initialPage = savedInstanceState?.getInt(STATE_SELECTED_TAB)
             ?: intent?.getIntExtra(EXTRA_START_TAB, 0)?.coerceIn(0, 3)
@@ -334,9 +333,7 @@ class MainActivity : Activity() {
         IpNetworkLocationStore(this).clear()
         currentNetworkLocation = OriginLocationMemory.location
         buildScreen()
-        if (savedInstanceState == null && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
-            showStartupAnimation()
-        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) showStartupAnimation()
         window.decorView.post { showNetworkLocationConsentIfNeeded() }
         requestNotificationPermissionIfNeeded()
     }
@@ -603,8 +600,12 @@ class MainActivity : Activity() {
             clipToPadding = false
         }
         globeBackdrop.addView(globe, FrameLayout.LayoutParams(-1, -1))
-        primaryPages = PrimaryPages(this)
-        pageAdapter = TopLevelViewPagerAdapter { position ->
+        primaryPages = PrimaryPages(this) {
+            if (::pageAdapter.isInitialized) pageAdapter.flushDeferredRouteRefresh()
+        }
+        pageAdapter = TopLevelViewPagerAdapter(
+            shouldDeferRouteRefresh = { ::primaryPages.isInitialized && primaryPages.hasActiveRouteDiagnostics() },
+        ) { position ->
             if (position == 0) buildHomePage() else primaryPages.create(position)
         }
         pager = ViewPager2(this).apply {
@@ -762,7 +763,7 @@ class MainActivity : Activity() {
     private fun showStartupAnimation() {
         val startup = StartupAnimationView(this, isReducedMotionEnabled())
         globeStage.addView(startup, FrameLayout.LayoutParams(-1, -1))
-        startup.post(startup::start)
+        startup.start()
     }
 
     private fun buildHomePage(): View {
@@ -1407,8 +1408,17 @@ class MainActivity : Activity() {
 
     private fun selectedExitLabel(selected: SelectedRoute): String {
         val config = SubscriptionStore(this).readCurrent()
-        val route = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrNull() }
-            ?.firstOrNull { it.id == selected.id }
+        val routes = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrNull() }.orEmpty()
+        val activeAutoRoute = ActiveRouteSelection.configuredAutoRoute(
+            selected,
+            currentAutoOutboundTag,
+            routes,
+            renderedPhase == VpnPhase.CONNECTED,
+        )
+        if (activeAutoRoute != null) {
+            return "${activeAutoRoute.flag} ./${activeAutoRoute.countryCode.lowercase(java.util.Locale.ROOT)}"
+        }
+        val route = routes.firstOrNull { it.id == selected.id }
         if (route == null) return uiCopy(selected.title)
         val city = when (route.countryCode) {
             "NL" -> "Амстердам"
@@ -1693,7 +1703,7 @@ class MainActivity : Activity() {
             gravity = Gravity.START
             setOnClickListener { measureSelectedRoute() }
         }
-        addView(metric(uiCopy("HTTPS-отклик"), latencyText, "home-latency", onClick = ::measureSelectedRoute), LinearLayout.LayoutParams(0, -2, 1f))
+        addView(metric(uiCopy("Задержка"), latencyText, "home-latency", onClick = ::measureSelectedRoute), LinearLayout.LayoutParams(0, -2, 1f))
         addView(View(this@MainActivity).apply { setBackgroundColor(DeyttUi.LINE) },
             LinearLayout.LayoutParams(dp(1), dp(56)))
         downloadText = text("—", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
@@ -1709,15 +1719,16 @@ class MainActivity : Activity() {
         if (!::downloadText.isInitialized) return
         val selected = SelectedRouteStore(this).read()
         val config = SubscriptionStore(this).readCurrent()
-        val route = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrNull() }
-            ?.firstOrNull { it.id == selected.id }
+        val routes = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrNull() }.orEmpty()
+        val route = routes.firstOrNull { it.id == selected.id }
+        val connected = renderedPhase == VpnPhase.CONNECTED
+        val activeAutoRoute = ActiveRouteSelection.configuredAutoRoute(selected, currentAutoOutboundTag, routes, connected)
         if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
-            RouteProtocol.AUTO -> "auto"
+            RouteProtocol.AUTO -> activeAutoRoute?.let { uiCopy(it.protocol.title).replace(" ", "") } ?: "auto"
             RouteProtocol.RU_DE -> "ru → de"
             else -> route?.let { "${it.countryCode.lowercase()}./${uiCopy(it.protocol.title).replace(" ", "")}" } ?: uiCopy(selected.title)
         }
         val metricKey = currentHomeRouteMetricKey(selected.id)
-        val connected = renderedPhase == VpnPhase.CONNECTED
         val speedNeedsLogin = HomeMetricPresentation.speedNeedsLogin(connected, metricKey)
         val recentSpeedSample = homeSpeedSample?.takeIf {
             SystemClock.elapsedRealtime() - homeSpeedSampleAt in 0..(15 * 60_000L)
@@ -2141,6 +2152,8 @@ class MainActivity : Activity() {
             ) {
                 refreshNetworkLocation(force = true)
             }
+            val selected = SelectedRouteStore(this).read()
+            if (selected.id == "auto") updateRouteFlow(selected)
         }
         if (isConnecting) {
             connectionProgressHandler.removeCallbacks(connectionProgressTick)

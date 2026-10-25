@@ -210,7 +210,6 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_ROUTE_PROBE) {
-            activeRouteProbeRequestId = intent.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID)
             if (!started && !runtimeRunning) {
                 try {
                     startForegroundCompat("Подготавливаем проверку маршрутов")
@@ -291,6 +290,10 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     private fun beginRouteProbe(intent: Intent, startId: Int) {
         val requestId = intent.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty()
+        val requestStartedAt = intent.getLongExtra(
+            RouteProbeClient.EXTRA_REQUEST_STARTED_AT,
+            android.os.SystemClock.elapsedRealtime(),
+        )
         val config = intent.getStringExtra("config")
         val token = intent.getStringExtra(RouteProbeClient.EXTRA_TOKEN).orEmpty()
         val routeTags = intent.getStringArrayListExtra("route_tags").orEmpty()
@@ -298,7 +301,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             RouteProbeMethod.valueOf(intent.getStringExtra("method") ?: RouteProbeMethod.HEAD.name)
         }.getOrDefault(RouteProbeMethod.HEAD)
         if (started || runtimeRunning) {
-            sendRouteProbeResult(requestId, "", null, "Сначала отключите активный VPN", complete = true)
+            sendRouteProbeResult(requestId, "", null, "Проверка маршрутов уже выполняется", complete = true, stage = "busy",
+                elapsedMillis = probeElapsed(requestStartedAt))
             return
         }
         if (isUpstreamVpnActive()) {
@@ -315,10 +319,12 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         started = true
         routeProbeOnly = true
         routeProbeRunning = true
+        activeRouteProbeRequestId = requestId
         val operationId = operation.incrementAndGet()
         try {
             startForegroundCompat("Проверяем маршрут через прокси…")
-            executor.execute { runRouteProbe(requestId, config, routeTags, method, token, operationId, startId) }
+            reportRouteProbeStage(requestId, "accepted", requestStartedAt)
+            executor.execute { runRouteProbe(requestId, config, routeTags, method, token, operationId, startId, requestStartedAt) }
         } catch (error: Throwable) {
             sendRouteProbeResult(requestId, "", null, "Не удалось запустить проверку", complete = true)
             closeRouteProbeCore()
@@ -338,9 +344,11 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         token: String,
         operationId: Long,
         startId: Int,
+        requestStartedAt: Long,
     ) {
         var stage = "profile validation"
         try {
+            reportRouteProbeStage(requestId, "startup_profile_validation", requestStartedAt)
             ProfileValidator.validate(config)
             stage = "loopback proxy setup"
             val sessions = linkedMapOf<String, RouteProbeSession>()
@@ -351,17 +359,23 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             }
             if (operation.get() != operationId || !routeProbeOnly) return
             stage = "libbox setup"
+            reportRouteProbeStage(requestId, "startup_libbox_setup", requestStartedAt)
             setupLibbox()
+            reportRouteProbeStage(requestId, "startup_libbox_ready", requestStartedAt)
             stage = "command server start"
+            reportRouteProbeStage(requestId, "startup_command_server_start", requestStartedAt)
             val server = CommandServer(this, this)
             commandServer = server
             server.start()
+            reportRouteProbeStage(requestId, "startup_command_server_ready", requestStartedAt)
             if (operation.get() != operationId || !routeProbeOnly) return
             stage = "batch routes setup"
+            reportRouteProbeStage(requestId, "startup_batch_routes_setup", requestStartedAt)
             server.startOrReloadService(
                 runtimeConfig(RouteProxyProbe.batchConfiguration(config, sessions)),
                 OverrideOptions().apply { autoRedirect = false },
             )
+            reportRouteProbeStage(requestId, "startup_batch_routes_ready", requestStartedAt)
             val latencies = linkedMapOf<String, Long>()
             val workers = Executors.newFixedThreadPool(minOf(3, sessions.size))
             probeWorkers = workers
@@ -370,7 +384,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 completed.submit(java.util.concurrent.Callable {
                     if (operation.get() != operationId || !routeProbeOnly) return@Callable tag to null
                     try {
-                        sendRouteProbeResult(requestId, tag, null, null, stage = "latency")
+                        val elapsed = probeElapsed(requestStartedAt)
+                        Log.i(TAG, "route_probe stage=latency_attempt elapsed_ms=$elapsed")
+                        sendRouteProbeResult(requestId, tag, null, null, stage = "latency", elapsedMillis = elapsed)
                         val latency = RouteProxyProbe.measureProxy(session, method) { sampleIndex, sample ->
                             if (operation.get() == operationId && routeProbeOnly) {
                                 if (sample != null) {
@@ -381,6 +397,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                                         null,
                                         stage = "latency_sample",
                                         sampleIndex = sampleIndex,
+                                        elapsedMillis = probeElapsed(requestStartedAt),
                                     )
                                 } else {
                                     sendRouteProbeResult(
@@ -390,6 +407,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                                         null,
                                         stage = "latency_retry",
                                         sampleIndex = sampleIndex,
+                                        elapsedMillis = probeElapsed(requestStartedAt),
                                     )
                                 }
                             }
@@ -499,6 +517,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         stage: String? = null,
         bytesPerSecond: Long? = null,
         sampleIndex: Int? = null,
+        elapsedMillis: Long? = null,
     ) {
         if (complete) {
             if (activeRouteProbeRequestId == requestId) activeRouteProbeRequestId = null
@@ -514,7 +533,17 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         if (!stage.isNullOrBlank()) intent.putExtra(RouteProbeClient.EXTRA_STAGE, stage)
         if (bytesPerSecond != null) intent.putExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, bytesPerSecond)
         if (sampleIndex != null) intent.putExtra(RouteProbeClient.EXTRA_SAMPLE_INDEX, sampleIndex)
+        if (elapsedMillis != null) intent.putExtra(RouteProbeClient.EXTRA_ELAPSED_MILLIS, elapsedMillis)
         sendBroadcast(intent)
+    }
+
+    private fun probeElapsed(requestStartedAt: Long): Long =
+        (android.os.SystemClock.elapsedRealtime() - requestStartedAt).coerceAtLeast(0L)
+
+    private fun reportRouteProbeStage(requestId: String, stage: String, requestStartedAt: Long) {
+        val elapsed = probeElapsed(requestStartedAt)
+        Log.i(TAG, "route_probe stage=$stage elapsed_ms=$elapsed")
+        sendRouteProbeResult(requestId, "", null, null, stage = stage, elapsedMillis = elapsed)
     }
 
     private fun routeProbeError(error: Throwable, speedProbe: Boolean = false): String = when {

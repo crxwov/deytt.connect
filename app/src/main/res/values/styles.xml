@@ -10,6 +10,7 @@
     <style name="AppTheme.Starting" parent="@style/AppTheme">
         <item name="android:windowBackground">#000000</item>
     </style>
+    <style name="AppTheme.MainStarting" parent="@style/AppTheme.Starting" />
     <style name="DeyttDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
         <item name="android:colorAccent">#6BDDF2</item>
         <item name="android:colorBackground">#111823</item>

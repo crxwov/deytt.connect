@@ -171,7 +171,7 @@ internal class AndroidNetworkBridge(
     }
 
     private fun underlyingNetwork(): Network {
-        currentNetwork?.let { network ->
+        _currentNetwork?.let { network ->
             val capabilities = connectivity.getNetworkCapabilities(network)
             if (capabilities != null &&
                 !capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN) &&

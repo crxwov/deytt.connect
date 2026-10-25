@@ -68,9 +68,11 @@ private const val KEY_LAST_UPDATE_CHECK = "last_official_update_check_ms"
 private const val KEY_LAST_OFFERED_UPDATE = "last_offered_official_update"
 
 internal class TopLevelViewPagerAdapter(
+    private val shouldDeferRouteRefresh: () -> Boolean = { false },
     private val createPage: (Int) -> View,
 ) : RecyclerView.Adapter<TopLevelViewPagerAdapter.PageHolder>() {
     private val pages = arrayOfNulls<View>(PAGE_COUNT)
+    private val routeRefreshGate = RoutePageRefreshGate()
 
     override fun getItemCount(): Int = PAGE_COUNT
 
@@ -110,6 +112,15 @@ internal class TopLevelViewPagerAdapter(
 
     fun refresh(position: Int) {
         if (position !in pages.indices) return
+        if (position == ROUTE_PAGE && !routeRefreshGate.request(shouldDeferRouteRefresh())) return
+        refreshNow(position)
+    }
+
+    fun flushDeferredRouteRefresh() {
+        if (routeRefreshGate.takeIfReady(shouldDeferRouteRefresh())) refreshNow(ROUTE_PAGE)
+    }
+
+    private fun refreshNow(position: Int) {
         pages[position]?.let { (it.parent as? ViewGroup)?.removeView(it) }
         pages[position] = null
         notifyItemChanged(position)
@@ -119,10 +130,33 @@ internal class TopLevelViewPagerAdapter(
 
     private companion object {
         const val PAGE_COUNT = 4
+        const val ROUTE_PAGE = 1
     }
 }
 
-internal class PrimaryPages(private val host: MainActivity) {
+internal class RoutePageRefreshGate {
+    private var deferred = false
+
+    fun request(busy: Boolean): Boolean {
+        if (!busy) {
+            deferred = false
+            return true
+        }
+        deferred = true
+        return false
+    }
+
+    fun takeIfReady(busy: Boolean): Boolean {
+        if (busy || !deferred) return false
+        deferred = false
+        return true
+    }
+}
+
+internal class PrimaryPages(
+    private val host: MainActivity,
+    private val onRouteDiagnosticsIdle: () -> Unit = {},
+) {
     private data class ProbeRouteRow(
         val route: DeyttRoute,
         val status: TextView,
@@ -220,10 +254,15 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     fun startForegroundUpdates() {
         diagnosticForeground = true
+        if (!RouteProbeClient.isRunning(host) && !awgMeasurementRunning) routeProbeStates.clear()
         updateHandler.removeCallbacks(updateCycle)
         checkForUpdate(force = false)
         updateHandler.postDelayed(updateCycle, UPDATE_CHECK_INTERVAL_MS)
+        launchNextCountry()
     }
+
+    fun hasActiveRouteDiagnostics(): Boolean = RouteProbeClient.isRunning(host) ||
+        routeProbeStates.isNotEmpty() || pendingCountries.isNotEmpty() || awgMeasurementRunning || activeAwgCountry != null
 
     fun stopForegroundUpdates() {
         diagnosticForeground = false
@@ -545,6 +584,14 @@ internal class PrimaryPages(private val host: MainActivity) {
             return
         }
         val tag = event.getStringExtra(RouteProbeClient.EXTRA_ROUTE_TAG).orEmpty()
+        val stage = event.getStringExtra(RouteProbeClient.EXTRA_STAGE).orEmpty()
+        if (tag.isBlank() && (stage == "accepted" || stage.startsWith("startup_"))) {
+            val elapsed = event.getLongExtra(RouteProbeClient.EXTRA_ELAPSED_MILLIS, -1L)
+            country.summary.text = copy("Подготавливаем проверку…", "Preparing route check…") +
+                elapsed.takeIf { it >= 0L }?.let { " · ${it} мс" }.orEmpty()
+            country.summary.contentDescription = country.summary.text
+            country.summaryProgress.setLoading(true)
+        }
         if (tag.isNotBlank()) {
             val row = country.rows.values.firstOrNull { it.route.configTag == tag }
             if (row != null) {
@@ -732,12 +779,12 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun launchNextCountry() {
         updateHandler.postDelayed({
-            if (!closed && diagnosticForeground && !host.isDestroyed && !RouteProbeClient.isRunning(host) && !awgMeasurementRunning) {
-                pendingCountries.values.firstOrNull()?.let { next ->
-                    pendingCountries.remove(next.code)
-                    startCountryProbe(next)
-                }
-            }
+            if (closed || host.isDestroyed || RouteProbeClient.isRunning(host) || awgMeasurementRunning) return@postDelayed
+            val next = if (diagnosticForeground) pendingCountries.values.firstOrNull() else null
+            if (next != null) {
+                pendingCountries.remove(next.code)
+                startCountryProbe(next)
+            } else if (pendingCountries.isEmpty()) onRouteDiagnosticsIdle()
         }, 200)
     }
 

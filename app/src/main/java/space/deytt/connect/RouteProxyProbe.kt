@@ -731,6 +731,8 @@ object RouteProbeClient {
     const val EXTRA_BYTES_PER_SECOND = "bytes_per_second"
     const val EXTRA_SAMPLE_INDEX = "sample_index"
     const val EXTRA_TOKEN = "session_token"
+    const val EXTRA_REQUEST_STARTED_AT = "request_started_at_elapsed_ms"
+    const val EXTRA_ELAPSED_MILLIS = "elapsed_millis"
     @Volatile
     private var activeRequestId: String? = null
 
@@ -779,6 +781,7 @@ object RouteProbeClient {
             .putStringArrayListExtra("route_tags", ArrayList(routeTags))
             .putExtra("method", method.name)
             .putExtra(EXTRA_TOKEN, if (latencyOnly) "" else token.orEmpty())
+            .putExtra(EXTRA_REQUEST_STARTED_AT, SystemClock.elapsedRealtime())
         activeRequestId = requestId
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(intent)
