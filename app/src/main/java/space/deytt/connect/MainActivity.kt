@@ -25,6 +25,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -37,7 +38,6 @@ import androidx.core.content.edit
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.doOnNextLayout
 import androidx.core.widget.doAfterTextChanged
 import androidx.viewpager2.widget.ViewPager2
 import space.deytt.connect.AppLanguage.uiCopy
@@ -61,10 +61,10 @@ class MainActivity : Activity() {
     private lateinit var statusDot: View
     private lateinit var globe: RouteGlobeView
     private lateinit var globeBackdrop: FrameLayout
+    private lateinit var globeStage: FrameLayout
     private lateinit var shellRoot: LinearLayout
     private var pageMotionEnabled = true
     private var homeMapSlot: FrameLayout? = null
-    private var homeMapExpanded = false
     private lateinit var homeDestinationTitle: TextView
     private lateinit var homeDestinationFlag: TextView
     private lateinit var connectionNotice: LinearLayout
@@ -406,7 +406,7 @@ class MainActivity : Activity() {
         }
         selectedRouteLatencyHandler.removeCallbacks(selectedRouteLatencyTick)
         connectionProgressHandler.removeCallbacks(connectionProgressTick)
-        if (::shellRoot.isInitialized) DeyttUi.setStarfieldMotion(shellRoot, active = false)
+        if (::globeStage.isInitialized) DeyttUi.setStarfieldMotion(globeStage, active = false)
         super.onStop()
     }
 
@@ -433,8 +433,6 @@ class MainActivity : Activity() {
     override fun onBackPressed() {
         if (::pager.isInitialized && pager.currentItem != 0) {
             pager.setCurrentItem(0, true)
-        } else if (homeMapExpanded) {
-            globe.resetViewport()
         } else {
             super.onBackPressed()
         }
@@ -591,16 +589,16 @@ class MainActivity : Activity() {
             setOverviewMode(true)
             setConnected(ConnectVpnService.isRunning() || AwgTunnelController.isRunning())
             onMapNodeTapped = ::showMapRoutePicker
-            onMapViewportExpanded = ::setHomeMapExpanded
             focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
             setAvailableLocations(availableMapLocations())
             setUserLocation(currentNetworkLocation)
         }
         globeBackdrop = FrameLayout(this).apply {
+            tag = "globe-underlay"
             clipChildren = false
             clipToPadding = false
         }
-        globeBackdrop.addView(globe, FrameLayout.LayoutParams(-1, homeGlobeHeight()))
+        globeBackdrop.addView(globe, FrameLayout.LayoutParams(-1, -1))
         primaryPages = PrimaryPages(this)
         pageAdapter = TopLevelViewPagerAdapter { position ->
             if (position == 0) buildHomePage() else primaryPages.create(position)
@@ -620,7 +618,6 @@ class MainActivity : Activity() {
         }
         val pageStage = FrameLayout(this).apply {
             clipChildren = false
-            addView(globeBackdrop, FrameLayout.LayoutParams(-1, -1))
             addView(pager, FrameLayout.LayoutParams(-1, -1))
         }
         navigationBar = DeyttUi.PrimaryNavigationBar(this, initialPage) { selectTab(it) }
@@ -642,11 +639,7 @@ class MainActivity : Activity() {
         pager.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
             val viewportHeight = bottom - top
             if (viewportHeight > 0 && viewportHeight != oldBottom - oldTop) {
-                if (homeMapExpanded) updateHomeMapSlotSize()
-                val mapHeight = homeGlobeHeight()
-                if (globe.parent === globeBackdrop) {
-                    globe.layoutParams = globe.layoutParams.apply { height = mapHeight }
-                }
+                updateHomeMapAnchor()
                 updatePrimaryPageMotion()
             }
         }
@@ -654,7 +647,6 @@ class MainActivity : Activity() {
         shellRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             tag = "shell-starfield"
-            background = DeyttUi.starfieldBackground(this@MainActivity)
             clipChildren = false
             clipToPadding = false
         }
@@ -706,10 +698,20 @@ class MainActivity : Activity() {
             }
 
             override fun onPageScrollStateChanged(state: Int) {
-                if (state == ViewPager2.SCROLL_STATE_IDLE) confirmSelection()
+                if (state == ViewPager2.SCROLL_STATE_IDLE) {
+                    confirmSelection()
+                    updateHomeMapAnchor()
+                }
             }
         })
-        setContentView(root)
+        globeStage = FrameLayout(this).apply {
+            tag = "globe-stage"
+            background = DeyttUi.starfieldBackground(this@MainActivity)
+            addView(globeBackdrop, FrameLayout.LayoutParams(-1, -1))
+            addView(root, FrameLayout.LayoutParams(-1, -1))
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateHomeMapAnchor() }
+        }
+        setContentView(globeStage)
         ViewCompat.requestApplyInsets(root)
         pager.setCurrentItem(initialPage, false)
         root.post {
@@ -718,58 +720,18 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun homeGlobeHeight(): Int {
-        homeMapSlot?.height?.takeIf { it > 0 }?.let { return it }
-        // Home fills its remaining vertical space; this estimate sizes the shared secondary-page backdrop.
-        val controlsHeight = dp(320)
-        val availableHeight = if (::pager.isInitialized && pager.height > 0) pager.height - controlsHeight else dp(320)
-        val mapWidth = homeMapSlot?.width?.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-        return minOf(mapWidth, availableHeight).coerceIn(dp(128), dp(420))
-    }
-
-    private fun setHomeMapExpanded(expanded: Boolean) {
-        if (!::pager.isInitialized || homeMapExpanded == expanded) return
-        homeMapExpanded = expanded
-        updateHomeMapSlotSize()
-    }
-
-    private fun updateHomeMapSlotSize() {
+    private fun updateHomeMapAnchor() {
         val slot = homeMapSlot ?: return
-        val params = slot.layoutParams as? LinearLayout.LayoutParams ?: return
-        val height = if (homeMapExpanded) pager.height else 0
-        val weight = if (homeMapExpanded) 0f else 1f
-        val parent = slot.parent as? View ?: return
-        val leftMargin = if (homeMapExpanded) -parent.paddingLeft else 0
-        val rightMargin = if (homeMapExpanded) -parent.paddingRight else 0
-        if (params.height == height && params.weight == weight &&
-            params.leftMargin == leftMargin && params.rightMargin == rightMargin) return
-        val previousHeight = slot.height
-        params.height = height
-        params.weight = weight
-        params.leftMargin = leftMargin
-        params.rightMargin = rightMargin
-        slot.layoutParams = params
-        slot.doOnNextLayout {
-            if (globe.parent === slot && previousHeight > 0 && !isReducedMotionEnabled() &&
-                (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled())) {
-                globe.animate().cancel()
-                globe.translationY += (previousHeight - slot.height) / 2f
-                globe.animate().translationY(0f).setDuration(MAP_VIEWPORT_TRANSITION_MS).start()
-            }
-        }
+        if (!::globe.isInitialized || !::pager.isInitialized || pager.currentItem != 0 ||
+            slot.width <= 0 || slot.height <= 0) return
+        val slotLocation = IntArray(2).also(slot::getLocationOnScreen)
+        val globeLocation = IntArray(2).also(globe::getLocationOnScreen)
+        globe.setViewportAnchor(slotLocation[0] - globeLocation[0], slotLocation[1] - globeLocation[1], slot.width, slot.height)
     }
 
     private fun syncGlobeHost(page: Int) {
         if (!::globe.isInitialized || !::globeBackdrop.isInitialized) return
-        if (page == 0) updateHomeMapSlotSize()
-        val target = if (page == 0) homeMapSlot ?: globeBackdrop else globeBackdrop
-        if (globe.parent !== target) {
-            globe.animate().cancel()
-            globe.translationY = 0f
-            (globe.parent as? ViewGroup)?.removeView(globe)
-            target.addView(globe, FrameLayout.LayoutParams(-1,
-                if (target === globeBackdrop) homeGlobeHeight() else -1))
-        }
+        if (page == 0) homeMapSlot?.post { updateHomeMapAnchor() }
         globe.setBackdropStage(page != 0)
         globe.importantForAccessibility = if (page == 0) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO
             else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -777,11 +739,26 @@ class MainActivity : Activity() {
 
     private fun buildHomePage(): View {
         val root = screen(withBackdrop = true)
-        globeBackdrop.setPadding(root.paddingLeft, 0, root.paddingRight, 0)
         val mapSlot = FrameLayout(this).apply {
+            tag = "home-map-gesture"
             clipChildren = false
             clipToPadding = false
             minimumHeight = dp(128)
+            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateHomeMapAnchor() }
+            setOnTouchListener { view, event ->
+                RouteGlobeView.parentInterceptPolicy(event.actionMasked, true)?.let {
+                    view.parent?.requestDisallowInterceptTouchEvent(it)
+                }
+                val slotLocation = IntArray(2).also(view::getLocationOnScreen)
+                val globeLocation = IntArray(2).also(globe::getLocationOnScreen)
+                val forwarded = MotionEvent.obtain(event)
+                try {
+                    forwarded.offsetLocation((slotLocation[0] - globeLocation[0]).toFloat(), (slotLocation[1] - globeLocation[1]).toFloat())
+                    globe.dispatchTouchEvent(forwarded)
+                } finally {
+                    forwarded.recycle()
+                }
+            }
         }
         homeMapSlot = mapSlot
         root.addView(mapSlot, LinearLayout.LayoutParams(-1, 0, 1f))
@@ -1413,8 +1390,8 @@ class MainActivity : Activity() {
             (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled())
         pageMotionEnabled = !reduced
         if (::globe.isInitialized) globe.setReducedMotion(reduced)
-        if (::shellRoot.isInitialized) {
-            DeyttUi.setStarfieldMotion(shellRoot, active = !isFinishing, reducedMotion = reduced)
+        if (::globeStage.isInitialized) {
+            DeyttUi.setStarfieldMotion(globeStage, active = !isFinishing, reducedMotion = reduced)
         }
         pager.requestTransform()
     }
@@ -2482,7 +2459,6 @@ class MainActivity : Activity() {
         private const val SELECTED_ROUTE_LATENCY_INTERVAL_MS = 5_000L
         private const val MAP_TRAFFIC_SAMPLE_INTERVAL_MS = 420L
         private const val MAP_TRAFFIC_GRACE_MS = 2_800L
-        private const val MAP_VIEWPORT_TRANSITION_MS = 180L
     }
 }
 

@@ -10,6 +10,11 @@
   window.deyttMapTrafficActive = false;
   window.deyttMapReducedMotion = false;
   window.deyttMapOverviewMode = false;
+  window.deyttMapViewportAnchor = null;
+  window.deyttSetMapViewportAnchor = function (x, y, width, height) {
+    window.deyttMapViewportAnchor = { x, y, width, height };
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setViewportAnchor(x, y, width, height);
+  };
   const windowsProfile = new URLSearchParams(window.location.search).get("profile") === "windows";
   const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
   if (windowsProfile) document.documentElement.dataset.atlasProfile = "windows";
@@ -147,6 +152,10 @@
     routeFocusScale: windowsProfile ? 1.06 : undefined,
   }).then(function (atlas) {
     window.deyttMapAtlas = atlas;
+    if (window.deyttMapViewportAnchor) {
+      const anchor = window.deyttMapViewportAnchor;
+      atlas.setViewportAnchor(anchor.x, anchor.y, anchor.width, anchor.height);
+    }
     // Reapply native mode after async creation: an earlier setter cannot reset an atlas that does not exist yet.
     window.deyttSetMapOverviewMode(window.deyttMapOverviewMode);
     const systemReducedMotion = atlas.reducedMotion;

@@ -2,6 +2,7 @@ package space.deytt.connect
 
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Rect
 import android.net.Uri
 import android.view.MotionEvent
 import android.view.View
@@ -32,8 +33,8 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var availableLocations = setOf("nl", "de", "fi", "ru")
     private var trafficActive = false
     private val atlas: WebView
+    private var viewportAnchor: Rect? = null
     var onMapNodeTapped: ((String) -> Unit)? = null
-    var onMapViewportExpanded: ((Boolean) -> Unit)? = null
 
     private val nodeTapBridge = object {
         @JavascriptInterface
@@ -43,10 +44,6 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             post { onMapNodeTapped?.invoke(node) }
         }
 
-        @JavascriptInterface
-        fun onViewportExpandedChanged(expanded: Boolean) {
-            post { onMapViewportExpanded?.invoke(expanded) }
-        }
     }
 
     init {
@@ -86,6 +83,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     pageLoaded = true
+                    applyViewportAnchor()
                     applyReducedMotion()
                     applyOverviewMode()
                     applyMapLanguage()
@@ -125,8 +123,23 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         applySelectedRoute()
     }
 
-    internal fun resetViewport() {
-        if (pageLoaded) atlas.evaluateJavascript("window.deyttResetMapView && window.deyttResetMapView()", null)
+    internal fun setViewportAnchor(left: Int, top: Int, width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        val next = Rect(left, top, left + width, top + height)
+        if (viewportAnchor == next) return
+        viewportAnchor = next
+        applyViewportAnchor()
+    }
+
+    private fun applyViewportAnchor() {
+        val anchor = viewportAnchor ?: return
+        if (!pageLoaded) return
+        val density = resources.displayMetrics.density
+        atlas.evaluateJavascript(
+            "window.deyttSetMapViewportAnchor && window.deyttSetMapViewportAnchor(" +
+                "${anchor.left / density},${anchor.top / density},${anchor.width() / density},${anchor.height() / density})",
+            null,
+        )
     }
 
     internal fun setAvailableLocations(locations: Set<String>) {

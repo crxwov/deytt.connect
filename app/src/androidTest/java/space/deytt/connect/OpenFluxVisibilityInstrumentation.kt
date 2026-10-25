@@ -279,8 +279,9 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 }
             }
             capturePage("routes", "lte + белые списки", 1)
-            check(onMainValue { sharedGlobe.parent } !== homeGlobeHost) {
-                "The same globe should move between the Home map slot and shared secondary-page backdrop"
+            check(onMainValue { sharedGlobe.parent } === homeGlobeHost &&
+                (homeGlobeHost as? View)?.tag == "globe-underlay") {
+                "The globe must remain attached to the fixed full-window underlay while pages change"
             }
             check(SelectedRouteStore(targetContext).read().id == "openflux:DE")
             assertEmptyCredentials()
@@ -666,20 +667,45 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 "Home globe should contain one local WebView for pinch QA"
             } as WebView
         }
+        val gestureSlot = onMainValue {
+            checkNotNull(findView(activity.findViewById(android.R.id.content)) { it.tag == "home-map-gesture" }) {
+                "Home map gesture-forwarding slot is missing"
+            }
+        }
         val mapBounds = Rect()
         val screenLocation = IntArray(2)
         val windowLocation = IntArray(2)
+        val slotLocation = IntArray(2)
         runOnMainSync {
-            check(webView.getGlobalVisibleRect(mapBounds)) { "Home map is not visible for pinch QA" }
+            check(gestureSlot.getGlobalVisibleRect(mapBounds)) { "Home map gesture slot is not visible for pinch QA" }
             webView.getLocationOnScreen(screenLocation)
             webView.getLocationInWindow(windowLocation)
+            gestureSlot.getLocationOnScreen(slotLocation)
             check(mapBounds.width() >= 180 && mapBounds.height() >= 180) {
-                "Home map is too small for a reliable two-pointer gesture: $mapBounds"
+                "Home map gesture slot is too small for a reliable two-pointer gesture: $mapBounds"
             }
         }
         val initialZoom = readAtlasTargetZoom(webView)
         check(initialZoom in 1.08..1.12) {
             "Map must start at overview zoom before gesture assertions: $initialZoom"
+        }
+        val density = activity.resources.displayMetrics.density
+        val slotCenterCssX = ((slotLocation[0] + gestureSlot.width / 2f - screenLocation[0]) / density).toDouble()
+        val slotCenterCssY = ((slotLocation[1] + gestureSlot.height / 2f - screenLocation[1]) / density).toDouble()
+        val anchor = readAtlasViewportAnchor(webView)
+        val anchorError = maxOf(
+            kotlin.math.abs(anchor.centerX - slotCenterCssX),
+            kotlin.math.abs(anchor.centerY - slotCenterCssY),
+            kotlin.math.abs(anchor.centerX - (anchor.x + anchor.width / 2.0)),
+            kotlin.math.abs(anchor.centerY - (anchor.y + anchor.height / 2.0)),
+            kotlin.math.abs(anchor.width - gestureSlot.width / density.toDouble()),
+            kotlin.math.abs(anchor.height - gestureSlot.height / density.toDouble()),
+        )
+        val anchorRadiusError = kotlin.math.abs(readAtlasRadius(webView) - minOf(anchor.width, anchor.height) * .405)
+        check(anchorError <= 1.5 && anchorRadiusError <= 1.0) {
+            "Initial globe anchor/radius must match the Home slot in full-window CSS coordinates: " +
+                "anchor=$anchor expectedCenter=$slotCenterCssX,$slotCenterCssY radius=${readAtlasRadius(webView)} " +
+                "expectedRadius=${minOf(anchor.width, anchor.height) * .405}; pinch=${readAtlasPinchDiagnostics(webView)}"
         }
         val wheelProbe = runAtlasScript(webView, """
             (function(){
@@ -725,18 +751,21 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             "Wheel contract probe did not restore the map to default zoom: ${readAtlasPinchDiagnostics(webView)}"
         }
         val zoomBefore = readAtlasTargetZoom(webView)
-        val centerX = mapBounds.centerX().toFloat()
-        val centerY = mapBounds.centerY().toFloat()
-        val density = activity.resources.displayMetrics.density
-        val startHalfSpan = (mapBounds.width() * .075f).coerceAtLeast(20f * density)
-        val endHalfSpan = (mapBounds.width() * .19f).coerceAtMost(88f * density)
+        val slotScreenBounds = Rect(
+            slotLocation[0], slotLocation[1],
+            slotLocation[0] + gestureSlot.width, slotLocation[1] + gestureSlot.height,
+        )
+        val centerX = slotScreenBounds.centerX().toFloat()
+        val centerY = slotScreenBounds.centerY().toFloat()
+        val startHalfSpan = (slotScreenBounds.width() * .075f).coerceAtLeast(20f * density)
+        val endHalfSpan = (slotScreenBounds.width() * .19f).coerceAtMost(88f * density)
         check(endHalfSpan > startHalfSpan * 1.6f) {
             "Map bounds do not allow a measurable pinch: $mapBounds, spans=$startHalfSpan..$endHalfSpan"
         }
-        val left = (centerX - startHalfSpan).coerceAtLeast(mapBounds.left + 2f * density)
-        val right = (centerX + startHalfSpan).coerceAtMost(mapBounds.right - 2f * density)
-        val leftEnd = (centerX - endHalfSpan).coerceAtLeast(mapBounds.left + 2f * density)
-        val rightEnd = (centerX + endHalfSpan).coerceAtMost(mapBounds.right - 2f * density)
+        val left = (centerX - startHalfSpan).coerceAtLeast(slotScreenBounds.left + 2f * density)
+        val right = (centerX + startHalfSpan).coerceAtMost(slotScreenBounds.right - 2f * density)
+        val leftEnd = (centerX - endHalfSpan).coerceAtLeast(slotScreenBounds.left + 2f * density)
+        val rightEnd = (centerX + endHalfSpan).coerceAtMost(slotScreenBounds.right - 2f * density)
         val cssCenterX = (centerX - screenLocation[0]) / density
         val cssCenterY = (centerY - screenLocation[1]) / density
         val pointerTraceScript = """
@@ -753,7 +782,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             })()
         """.trimIndent()
         val pointerTraceSetup = runAtlasScript(webView, pointerTraceScript)
-        android.util.Log.i("OpenFluxVisibilityQA", "pinch_native_geometry=global=$mapBounds;screen=${screenLocation.contentToString()};window=${windowLocation.contentToString()};view=${webView.width}x${webView.height};density=$density;points=$left,$centerY,$right->$leftEnd,$centerY,$rightEnd")
+        android.util.Log.i("OpenFluxVisibilityQA", "pinch_native_geometry=slot=$mapBounds;slotScreen=$slotScreenBounds;webviewScreen=${screenLocation.contentToString()};window=${windowLocation.contentToString()};view=${webView.width}x${webView.height};density=$density;points=$left,$centerY,$right->$leftEnd,$centerY,$rightEnd")
         android.util.Log.i("OpenFluxVisibilityQA", "pinch_trace_setup=$pointerTraceSetup")
         val downTime = SystemClock.uptimeMillis()
 
@@ -802,6 +831,10 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         check(zoomBefore in 1.08..1.12 && zoomAfter > 1.2 && zoomAfter > zoomBefore + .1 && zoomAfter <= 32.0 + .005) {
             "Native pinch should zoom beyond 1.2 while respecting the 32x manual ceiling: before=$zoomBefore after=$zoomAfter; $pinchDiagnostics"
         }
+        val deliveredPointerEvents = pinchDiagnostics.substringAfter("canvasEvents=").substringBefore(";documentEvents=")
+        check(listOf("pointerdown:", "pointermove:", "pointerup:").all { deliveredPointerEvents.contains(it) }) {
+            "Pinch injected through the Home gesture slot was not forwarded to the full-window WebView canvas: $pinchDiagnostics"
+        }
         val pager = onMainValue {
             checkNotNull(findView(activity.findViewById(android.R.id.content)) {
                 it.javaClass.name == "androidx.viewpager2.widget.ViewPager2"
@@ -815,24 +848,14 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         awaitPagerSettled(activity, 0, "Подключить")
 
         runOnMainSync { webView.evaluateJavascript("window.deyttResetMapView && window.deyttResetMapView()", null) }
-        awaitAtlasSettled(webView, 1.1, expanded = false)
+        val defaultDiagnostics = awaitAtlasSettled(webView, 1.1)
+        val fixedNativeBounds = assertGlobeUnderlayFillsContent(activity, webView)
+        val chromeBaseline = readHomeChromeBounds(activity)
         val normalRadius = readAtlasRadius(webView)
-        val labelsBeforeExpand = readAtlasLabelLayout(webView)
-        val placementsBeforeExpand = labelPlacementIndices(labelsBeforeExpand)
-        check(placementsBeforeExpand.isNotEmpty()) {
-            "Normal Home viewport did not produce label placements for resize comparison: $labelsBeforeExpand"
-        }
-        runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=2.05;window.deyttMapAtlas.start()", null) }
-        val expandedDiagnostics = awaitAtlasSettled(webView, 2.05, expanded = true)
-        val expandedBounds = awaitNativeMapFillsPager(activity, webView)
-        val expandedRadius = readAtlasRadius(webView)
-        val expectedExpandedRadius = normalRadius * 2.05
-        val actualExpandedRadius = expandedRadius * readAtlasCurrentZoom(webView)
-        val scaleError = kotlin.math.abs(actualExpandedRadius - expectedExpandedRadius) / expectedExpandedRadius
-        check(scaleError <= .02) {
-            "Native viewport expansion changed globe scale: normalRadius=$normalRadius expandedRadius=$expandedRadius " +
-                "zoom=${readAtlasCurrentZoom(webView)} expectedRadiusZoom=$expectedExpandedRadius actualRadiusZoom=$actualExpandedRadius " +
-                "relativeError=$scaleError; $expandedBounds; $expandedDiagnostics"
+        val anchorBaseline = readAtlasViewportAnchor(webView)
+        val labelBaseline = readAtlasLabelLayout(webView)
+        check(labelPlacementIndices(labelBaseline).isNotEmpty()) {
+            "Normal Home viewport did not produce label placements: $labelBaseline"
         }
         val canvasResolution = runAtlasScript(webView, """
             (function(){var a=window.deyttMapAtlas,c=a.canvas,s=a.staticCanvas,cap=Math.min(a.pixelRatio,2);
@@ -844,36 +867,50 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             "Static/live canvas resolutions do not match their pixel-ratio contracts: $canvasResolution"
         }
         android.util.Log.i("OpenFluxVisibilityQA", "globe_canvas_resolution=$canvasResolution")
-        val labelsAfterExpand = readAtlasLabelLayout(webView)
-        val placementsAfterExpand = labelPlacementIndices(labelsAfterExpand)
-        val commonLabels = placementsBeforeExpand.keys.intersect(placementsAfterExpand.keys)
-        check(commonLabels.isNotEmpty()) {
-            "No label keys survived native viewport expansion for placement comparison: before=$labelsBeforeExpand after=$labelsAfterExpand"
-        }
-        val changedPlacements = commonLabels.filter { placementsBeforeExpand[it] != placementsAfterExpand[it] }
-        check(changedPlacements.isEmpty()) {
-            "Size-only expansion changed placement indices for common labels $changedPlacements: before=$labelsBeforeExpand after=$labelsAfterExpand"
-        }
         val pathCacheSetup = runAtlasScript(webView, "(function(){var a=window.deyttMapAtlas;window.__qaLandPath=a.landPathCache&&a.landPathCache.path;return String(!!window.__qaLandPath);})()")
-        check(pathCacheSetup == "true") { "Expanded atlas did not retain a coastline path cache: $pathCacheSetup" }
-        android.util.Log.i("OpenFluxVisibilityQA", "globe_expanded_viewport=$expandedBounds;scaleError=$scaleError;labels=$labelsAfterExpand;$expandedDiagnostics")
-        saveQaScreenshot("globe-expanded", screenshots, results)
-
-        val labelBaseline = labelsAfterExpand
-        check(labelBaseline.substringAfter("placements=").substringBefore(';').isNotBlank()) {
-            "Expanded atlas did not produce any label placements: $labelBaseline"
-        }
-        for (target in listOf(2.2, 2.8, 2.05, 2.5)) {
-            runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=$target;window.deyttMapAtlas.start()", null) }
-            val settled = awaitAtlasSettled(webView, target, expanded = true)
-            val labels = readAtlasLabelLayout(webView)
-            check(labels == labelBaseline) {
-                "Label placement/scale changed after zoom settled at $target: before=$labelBaseline after=$labels; $settled"
+        check(pathCacheSetup == "true") { "Atlas did not retain a coastline path cache: $pathCacheSetup" }
+        val fixedZooms = listOf(1.1, 1.3, 2.05, 3.0)
+        var fixedZoomDiagnostics = ""
+        for (target in fixedZooms) {
+            if (target != 1.1) {
+                runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=$target;window.deyttMapAtlas.start()", null) }
             }
-            val pathReused = runAtlasScript(webView, "String(window.deyttMapAtlas.landPathCache.path===window.__qaLandPath)")
-            check(pathReused == "true") {
-                "Same-orientation zoom rebuilt the coastline path cache at $target: reused=$pathReused; $settled"
+            val settled = if (target == 1.1) defaultDiagnostics else awaitAtlasSettled(webView, target)
+            val currentBounds = assertGlobeUnderlayFillsContent(activity, webView)
+            check(sameRectangleMap(fixedNativeBounds, currentBounds)) {
+                "Full-window globe underlay moved or resized at zoom=$target: baseline=$fixedNativeBounds current=$currentBounds"
             }
+            val chrome = readHomeChromeBounds(activity)
+            check(sameRectangleMap(chromeBaseline, chrome)) {
+                "Home/header/dock geometry changed at zoom=$target: baseline=$chromeBaseline current=$chrome"
+            }
+            val anchor = readAtlasViewportAnchor(webView)
+            check(anchorNear(anchorBaseline, anchor, 1.5)) {
+                "Globe anchor/gesture slot moved at zoom=$target: baseline=$anchorBaseline current=$anchor"
+            }
+            val radius = readAtlasRadius(webView)
+            val currentZoom = readAtlasCurrentZoom(webView)
+            val radiusError = kotlin.math.abs(radius - normalRadius) / normalRadius
+            val scaleError = kotlin.math.abs(radius * currentZoom - normalRadius * target) / (normalRadius * target)
+            check(radiusError <= .01 && scaleError <= .02) {
+                "Zoom changed the anchored globe scale at $target: baseRadius=$normalRadius radius=$radius " +
+                    "zoom=$currentZoom radiusError=$radiusError scaleError=$scaleError; $settled"
+            }
+            if (target != 32.0) {
+                val pathReused = runAtlasScript(webView, "String(window.deyttMapAtlas.landPathCache.path===window.__qaLandPath)")
+                check(pathReused == "true") {
+                    "Same-orientation zoom rebuilt the coastline path cache at $target: reused=$pathReused; $settled"
+                }
+            }
+            if (target in listOf(1.3, 2.05, 3.0)) {
+                val labels = readAtlasLabelLayout(webView)
+                check(labels == labelBaseline) {
+                    "Label placement/scale changed after settled zoom $target: before=$labelBaseline after=$labels; $settled"
+                }
+            }
+            fixedZoomDiagnostics += "zoom=$target underlay=$currentBounds anchor=$anchor radius=$radius/$currentZoom " +
+                "chromeStable=true;labelsStable=${target !in listOf(1.1, 32.0)};"
+            saveQaScreenshot("globe-zoom-${target.toString().replace('.', '-')}", screenshots, results)
         }
         val idleBefore = readAtlasRenderCount(webView)
         Thread.sleep(750)
@@ -881,7 +918,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         check(idleAfter == idleBefore) {
             "Settled atlas continued redrawing while idle: renderCount=$idleBefore->$idleAfter; ${readAtlasPinchDiagnostics(webView)}"
         }
-        android.util.Log.i("OpenFluxVisibilityQA", "globe_zoom_labels=$labelBaseline;idle_render_count=$idleBefore->$idleAfter")
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_fixed_underlay=$fixedNativeBounds;baselineChrome=$chromeBaseline;$fixedZoomDiagnostics;labels=$labelBaseline;idle_render_count=$idleBefore->$idleAfter")
         val crowdedLabelProbe = runAtlasScript(webView, """
             (function(){
               var a=window.deyttMapAtlas;
@@ -890,11 +927,13 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 autoExitCountry:a.autoExitCountry,autoExitRouteKey:a.autoExitRouteKey,availableLocationKeys:a.availableLocationKeys,
                 annotationFilter:a.annotationFilter,userLocation:a.userLocation,hovered:a.hovered,centerLon:a.centerLon,centerLat:a.centerLat,
                 targetLon:a.targetLon,targetLat:a.targetLat,zoom:a.zoom,targetZoom:a.targetZoom,currentBasis:a.currentBasis,
+                centerX:a.centerX,centerY:a.centerY,viewportAnchor:a.viewportAnchor,
                 projectedNodes:a.projectedNodes,labelPlacements:a.labelPlacements,drawLabel:a.drawLabel};
               var drawn=[];
               try{
                 var probe=document.createElement('canvas');probe.width=320;probe.height=220;
-                a.context=probe.getContext('2d');a.width=320;a.height=220;a.radius=220*.405;
+                a.context=probe.getContext('2d');a.width=320;a.height=220;a.viewportAnchor={x:30,y:20,width:260,height:180};
+                a.centerX=160;a.centerY=110;a.radius=Math.min(a.viewportAnchor.width,a.viewportAnchor.height)*.405;
                 a.route='auto';a.connected=false;a.autoExitCountry=null;a.autoExitRouteKey=null;
                 a.availableLocationKeys=new Set(['nl','de','fi','ru','it']);a.annotationFilter=null;a.userLocation=null;a.hovered='de';
                 a.centerLon=a.targetLon=15;a.centerLat=a.targetLat=50;a.zoom=a.targetZoom=.82;a.currentBasis=a.basis();
@@ -915,6 +954,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             crowdedLabelProbe.contains("overlaps=0") && crowdedLabelProbe.contains("hoverFirst=de")) {
             "Crowded all-location Auto labels overlapped or ignored hover priority: $crowdedLabelProbe"
         }
+        val orientationBaseline = readAtlasViewportAnchor(webView)
         runAtlasScript(webView, "(function(){var a=window.deyttMapAtlas;a.centerLon+=9;a.targetLon=a.centerLon;a.staticDirty=true;a.start();return 'scheduled';})()")
         val cacheDeadline = SystemClock.elapsedRealtime() + 10_000L
         var invalidation = "pending"
@@ -925,8 +965,11 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         check(invalidation == "rebuilt=true;orientation=true") {
             "Orientation change did not invalidate and rebuild the coastline cache: $invalidation; ${readAtlasPinchDiagnostics(webView)}"
         }
+        val orientationAfter = readAtlasViewportAnchor(webView)
+        check(anchorNear(orientationBaseline, orientationAfter, 1.5)) {
+            "Globe orientation changed the fixed Home slot anchor: before=$orientationBaseline after=$orientationAfter"
+        }
         android.util.Log.i("OpenFluxVisibilityQA", "globe_orientation_cache=$invalidation")
-        saveQaScreenshot("globe-zoom3", screenshots, results)
 
         runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=32;window.deyttMapAtlas.start()", null) }
         val maxZoomDeadline = SystemClock.elapsedRealtime() + 10_000L
@@ -935,6 +978,19 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         }
         check(readAtlasTargetZoom(webView) == 32.0 && readAtlasCurrentZoom(webView) >= 31.95) {
             "Maximum zoom did not settle before rectangular-viewport QA: ${readAtlasPinchDiagnostics(webView)}"
+        }
+        val maxZoomBounds = assertGlobeUnderlayFillsContent(activity, webView)
+        val maxZoomChrome = readHomeChromeBounds(activity)
+        val maxZoomAnchor = readAtlasViewportAnchor(webView)
+        val maxZoomRadius = readAtlasRadius(webView)
+        val maxZoomRadiusError = kotlin.math.abs(maxZoomRadius - normalRadius) / normalRadius
+        val maxZoomScaleError = kotlin.math.abs(maxZoomRadius * readAtlasCurrentZoom(webView) - normalRadius * 32.0) /
+            (normalRadius * 32.0)
+        check(sameRectangleMap(fixedNativeBounds, maxZoomBounds) && sameRectangleMap(chromeBaseline, maxZoomChrome) &&
+            anchorNear(anchorBaseline, maxZoomAnchor, 1.5) && maxZoomRadiusError <= .01 && maxZoomScaleError <= .02) {
+            "Full-window underlay, Home controls, anchor, or globe scale changed at zoom 32: " +
+                "underlay=$maxZoomBounds chrome=$maxZoomChrome anchor=$maxZoomAnchor radius=$maxZoomRadius " +
+                "radiusError=$maxZoomRadiusError scaleError=$maxZoomScaleError; baselineUnderlay=$fixedNativeBounds baselineChrome=$chromeBaseline"
         }
         val offscreenLabel = runAtlasScript(webView, """
             (function(){var a=window.deyttMapAtlas,p=a.projectedNodes.de||a.projectLocation(window.DeyttAtlas.locations.de,1.008);
@@ -957,105 +1013,143 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         runOnMainSync {
             webView.evaluateJavascript("window.deyttResetMapView && window.deyttResetMapView()", null)
         }
-        val collapsedDiagnostics = awaitAtlasSettled(webView, 1.1, expanded = false)
-        val collapsedBounds = onMainValue {
-            val bounds = Rect()
-            check(webView.getGlobalVisibleRect(bounds)) { "Collapsed Home map is not visible" }
-            bounds.toShortString()
-        }
-        val homeControls = onMainValue {
-            val content = activity.findViewById<View>(android.R.id.content)
-            listOf("Подключить", "home-refresh", "home-latency", "home-speed").map { key ->
-                val view = if (key.startsWith("home-")) findView(content) { it.tag == key } else findText(content, key)
-                val bounds = Rect()
-                check(view != null && view.isShown && view.getGlobalVisibleRect(bounds) && bounds.height() == view.height) {
-                    "Home control $key was not restored after globe collapse: view=$view bounds=$bounds map=$collapsedBounds"
-                }
-                "$key=${bounds.toShortString()}"
-            }.joinToString(";")
-        }
-        android.util.Log.i("OpenFluxVisibilityQA", "globe_collapsed_viewport=$collapsedBounds;$collapsedDiagnostics;controls=$homeControls")
-        saveQaScreenshot("globe-collapsed", screenshots, results)
-        runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=2.05;window.deyttMapAtlas.start()", null) }
-        awaitAtlasSettled(webView, 2.05, expanded = true)
-        awaitNativeMapFillsPager(activity, webView)
-        runOnMainSync { activity.onBackPressed() }
-        val backDiagnostics = awaitAtlasSettled(webView, 1.1, expanded = false)
-        val backControlsVisible = onMainValue {
-            val content = activity.findViewById<View>(android.R.id.content)
-            listOf("Подключить", "home-refresh", "home-latency", "home-speed").all { key ->
-                val view = if (key.startsWith("home-")) findView(content) { it.tag == key } else findText(content, key)
-                val bounds = Rect()
-                view != null && view.isShown && view.getGlobalVisibleRect(bounds) && bounds.height() == view.height
-            }
-        }
-        check(!activity.isFinishing && backControlsVisible) {
-            "Back from expanded Home did not collapse the viewport and retain Home controls: finishing=${activity.isFinishing}; " +
-                "controlsVisible=$backControlsVisible; $backDiagnostics"
+        val resetDiagnostics = awaitAtlasSettled(webView, 1.1)
+        val resetBounds = assertGlobeUnderlayFillsContent(activity, webView)
+        val resetChrome = readHomeChromeBounds(activity)
+        check(!activity.isFinishing && sameRectangleMap(fixedNativeBounds, resetBounds) && sameRectangleMap(chromeBaseline, resetChrome)) {
+            "Resetting zoom changed the fixed Home composition: finishing=${activity.isFinishing} underlay=$resetBounds " +
+                "chrome=$resetChrome; baselineUnderlay=$fixedNativeBounds baselineChrome=$chromeBaseline; $resetDiagnostics"
         }
         onMainValue {
             check(pager.currentItem == 0 && pager.scrollState == androidx.viewpager2.widget.ViewPager2.SCROLL_STATE_IDLE) {
-                "Resetting the map changed pager state: item=${pager.currentItem}, scroll=${pager.scrollState}"
+                "Resetting globe zoom changed pager state: item=${pager.currentItem}, scroll=${pager.scrollState}"
             }
         }
         awaitPagerSettled(activity, 0, "Подключить")
         runOnMainSync {
-            android.util.Log.i("OpenFluxVisibilityQA", "pinch_zoom=$zoomBefore->$zoomAfter; manual_max=32; pager=0; map_reset=1.1")
+            android.util.Log.i("OpenFluxVisibilityQA", "pinch_zoom=$zoomBefore->$zoomAfter; manual_max=32; pager=0; fixed_underlay=true; map_reset=1.1")
         }
     }
 
-    private fun awaitAtlasSettled(webView: WebView, targetZoom: Double, expanded: Boolean): String {
+    private fun awaitAtlasSettled(webView: WebView, targetZoom: Double): String {
         val deadline = SystemClock.elapsedRealtime() + 10_000L
         var last = "unavailable"
         while (SystemClock.elapsedRealtime() < deadline) {
             last = runAtlasScript(webView, """
-                (function(){var a=window.deyttMapAtlas;return [a.targetZoom,a.zoom,a.viewportExpanded,a.renderCount].join('|');})()
+                (function(){var a=window.deyttMapAtlas;return [a.targetZoom,a.zoom,a.renderCount].join('|');})()
             """.trimIndent())
             val values = last.split('|')
             val target = values.getOrNull(0)?.toDoubleOrNull()
             val current = values.getOrNull(1)?.toDoubleOrNull()
-            val isExpanded = values.getOrNull(2) == "true"
-            val renders = values.getOrNull(3)?.toIntOrNull()
+            val renders = values.getOrNull(2)?.toIntOrNull()
             if (target != null && current != null && kotlin.math.abs(target - targetZoom) < .01 &&
-                kotlin.math.abs(current - targetZoom) < .03 && isExpanded == expanded && renders != null) {
+                kotlin.math.abs(current - targetZoom) < .03 && renders != null) {
                 Thread.sleep(150)
                 val settled = runAtlasScript(webView, """
-                    (function(){var a=window.deyttMapAtlas;return [a.targetZoom,a.zoom,a.viewportExpanded,a.renderCount].join('|');})()
+                    (function(){var a=window.deyttMapAtlas;return [a.targetZoom,a.zoom,a.renderCount].join('|');})()
                 """.trimIndent())
                 val settledParts = settled.split('|')
                 if (settledParts.getOrNull(0)?.toDoubleOrNull()?.let { kotlin.math.abs(it - targetZoom) < .01 } == true &&
                     settledParts.getOrNull(1)?.toDoubleOrNull()?.let { kotlin.math.abs(it - targetZoom) < .03 } == true &&
-                    settledParts.getOrNull(2) == expanded.toString() && settledParts.getOrNull(3)?.toIntOrNull() == renders) return settled
+                    settledParts.getOrNull(2)?.toIntOrNull() == renders) return settled
             }
             Thread.sleep(50)
         }
-        error("Atlas did not settle at zoom=$targetZoom expanded=$expanded: $last; ${readAtlasPinchDiagnostics(webView)}")
+        error("Atlas did not settle at zoom=$targetZoom: $last; ${readAtlasPinchDiagnostics(webView)}")
     }
 
-    private fun awaitNativeMapFillsPager(activity: MainActivity, webView: WebView): String {
-        val deadline = SystemClock.elapsedRealtime() + 10_000L
-        var last = "unavailable"
-        var fillsPager = false
-        while (SystemClock.elapsedRealtime() < deadline) {
-            onMainValue {
-                val content = activity.findViewById<View>(android.R.id.content)
-                val pager = checkNotNull(findView(content) {
-                    it.javaClass.name == "androidx.viewpager2.widget.ViewPager2"
-                }) as androidx.viewpager2.widget.ViewPager2
-                val pagerBounds = Rect()
-                val mapBounds = Rect()
-                fillsPager = pager.getGlobalVisibleRect(pagerBounds) && webView.getGlobalVisibleRect(mapBounds) &&
-                    kotlin.math.abs(pagerBounds.left - mapBounds.left) <= 2 &&
-                    kotlin.math.abs(pagerBounds.top - mapBounds.top) <= 2 &&
-                    kotlin.math.abs(pagerBounds.right - mapBounds.right) <= 2 &&
-                    kotlin.math.abs(pagerBounds.bottom - mapBounds.bottom) <= 2
-                last = "pager=${pagerBounds.toShortString()};map=${mapBounds.toShortString()};view=${webView.width}x${webView.height}"
-            }
-            if (fillsPager) return last
-            Thread.sleep(50)
+    private fun assertGlobeUnderlayFillsContent(activity: MainActivity, webView: WebView): Map<String, Rect> = onMainValue {
+        val content = activity.findViewById<View>(android.R.id.content)
+        val stage = checkNotNull(findView(content) { it.tag == "globe-stage" } as? ViewGroup) {
+            "Full-window globe stage is missing"
         }
-        error("Expanded native map does not fill the pager area: $last; ${readAtlasPinchDiagnostics(webView)}")
+        val underlay = checkNotNull(findView(stage) { it.tag == "globe-underlay" }) {
+            "Fixed globe underlay is missing from globe-stage"
+        }
+        val chromeRoot = checkNotNull(findView(content) { it.tag == "shell-starfield" }) {
+            "Home/header/dock overlay root is missing"
+        }
+        check(underlay.parent === stage && chromeRoot.parent === stage && stage.indexOfChild(underlay) < stage.indexOfChild(chromeRoot)) {
+            "Globe underlay must be a stage sibling drawn below the Home/header/dock layer"
+        }
+        val views = linkedMapOf(
+            "content" to content,
+            "stage" to stage,
+            "underlay" to underlay,
+            "webview" to webView,
+        )
+        val bounds = views.mapValues { (name, view) ->
+            val rect = Rect()
+            check(view.isShown && view.getGlobalVisibleRect(rect)) { "$name is not globally visible: $rect" }
+            rect
+        }
+        listOf("stage", "underlay", "webview").forEach { name ->
+            check(rectNear(bounds.getValue("content"), bounds.getValue(name), 2)) {
+                "Fixed globe $name must fill app content behind the controls: content=${bounds["content"]} $name=${bounds[name]}"
+            }
+        }
+        bounds
     }
+
+    private fun readHomeChromeBounds(activity: MainActivity): Map<String, Rect> = onMainValue {
+        val content = activity.findViewById<View>(android.R.id.content)
+        val views = linkedMapOf<String, View>()
+        fun add(name: String, view: View?) {
+            views[name] = checkNotNull(view) { "Missing fixed Home chrome view: $name" }
+        }
+        add("header", findView(content) { it.tag == "shell-header" })
+        add("wordmark", findView(content) { it.tag == "deytt-wordmark" })
+        add("profile", findView(content) { it.tag == "telegram-profile-control" })
+        add("gesture-slot", findView(content) { it.tag == "home-map-gesture" })
+        add("connect", findText(content, "Подключить"))
+        add("refresh", findView(content) { it.tag == "home-refresh" })
+        add("latency", findView(content) { it.tag == "home-latency" })
+        add("speed", findView(content) { it.tag == "home-speed" })
+        val navigation = checkNotNull(findView(content) { it is DeyttUi.PrimaryNavigationBar }) {
+            "Primary navigation dock is missing"
+        }
+        add("dock", navigation)
+        val dockItems = findViews(navigation) { it.isShown && it.isClickable }
+        check(dockItems.size == 4) { "Expected four visible primary navigation items, got ${dockItems.size}" }
+        dockItems.forEachIndexed { index, item -> add("dock-$index", item) }
+        views.mapValues { (name, view) ->
+            val rect = Rect()
+            check(view.isShown && view.getGlobalVisibleRect(rect) && rect.width() > 0 && rect.height() > 0) {
+                "Home/header/dock view $name is clipped or hidden: $rect"
+            }
+            rect
+        }
+    }
+
+    private fun readAtlasViewportAnchor(webView: WebView): AtlasViewportAnchor {
+        val value = runAtlasScript(webView, """
+            (function(){var a=window.deyttMapAtlas,v=a&&a.viewportAnchor;if(!a||!v)return 'missing';
+              return [a.centerX,a.centerY,v.x,v.y,v.width,v.height].join(',');})()
+        """.trimIndent())
+        val parts = value.split(',').mapNotNull(String::toDoubleOrNull)
+        check(parts.size == 6) { "Atlas viewport anchor is unavailable or malformed: $value" }
+        return AtlasViewportAnchor(parts[0], parts[1], parts[2], parts[3], parts[4], parts[5])
+    }
+
+    private fun anchorNear(left: AtlasViewportAnchor, right: AtlasViewportAnchor, tolerance: Double): Boolean =
+        listOf(left.centerX - right.centerX, left.centerY - right.centerY, left.x - right.x, left.y - right.y,
+            left.width - right.width, left.height - right.height).all { kotlin.math.abs(it) <= tolerance }
+
+    private fun sameRectangleMap(left: Map<String, Rect>, right: Map<String, Rect>): Boolean =
+        left.keys == right.keys && left.all { (key, rect) -> right[key]?.let { rectNear(rect, it, 2) } == true }
+
+    private fun rectNear(left: Rect, right: Rect, tolerance: Int): Boolean =
+        kotlin.math.abs(left.left - right.left) <= tolerance && kotlin.math.abs(left.top - right.top) <= tolerance &&
+            kotlin.math.abs(left.right - right.right) <= tolerance && kotlin.math.abs(left.bottom - right.bottom) <= tolerance
+
+    private data class AtlasViewportAnchor(
+        val centerX: Double,
+        val centerY: Double,
+        val x: Double,
+        val y: Double,
+        val width: Double,
+        val height: Double,
+    )
 
     private fun readAtlasLabelLayout(webView: WebView): String = runAtlasScript(webView, """
         (function(){var a=window.deyttMapAtlas;return 'placements='+Array.from(a.labelPlacements.entries()).sort(function(x,y){return x[0].localeCompare(y[0]);}).map(function(x){return x[0]+':'+x[1];}).join(',')+';scale='+(a.options.labelScale||1)+';compact='+(a.width<520)+';size='+a.width+'x'+a.height;})()

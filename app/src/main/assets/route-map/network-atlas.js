@@ -4,8 +4,6 @@
   const DEG = Math.PI / 180;
   const TAU = Math.PI * 2;
   const MAX_ZOOM = 32;
-  const EXPAND_VIEWPORT_ZOOM = 2;
-  const COLLAPSE_VIEWPORT_ZOOM = 1.25;
   const SAVE_DATA_PIXEL_RATIO_CAP = 1.5;
   const MOBILE_PIXEL_RATIO_CAP = 3;
   const DESKTOP_PIXEL_RATIO_CAP = 2.25;
@@ -309,6 +307,9 @@
       this.velocityLon = 0;
       this.width = 0;
       this.height = 0;
+      this.centerX = 0;
+      this.centerY = 0;
+      this.viewportAnchor = null;
       this.radius = 0;
       this.lastFrame = 0;
       this.frame = 0;
@@ -324,7 +325,6 @@
       this.renderCount = 0;
       this.staticRenderCount = 0;
       this.cameraMoving = false;
-      this.viewportExpanded = false;
       this.trafficActive = false;
       this.trafficStartedAt = 0;
       this.projectedNodes = {};
@@ -519,12 +519,18 @@
       this.staticCanvas.width = Math.round(this.width * geographyRatio);
       this.staticCanvas.height = Math.round(this.height * geographyRatio);
       this.staticContext.setTransform(geographyRatio, 0, 0, geographyRatio, 0, 0);
-      // Expanding the native viewport must not add a second zoom to the user's gesture.
-      if (!window.DeyttAtlasBridge || !this.viewportExpanded || !this.radius) {
-        this.radius = Math.min(this.width, this.height) * (this.width < 520 ? 0.405 : 0.43);
-      }
+      const anchor = this.viewportAnchor;
+      this.centerX = anchor ? anchor.x + anchor.width / 2 : this.width / 2;
+      this.centerY = anchor ? anchor.y + anchor.height / 2 : this.height / 2;
+      this.radius = Math.min(anchor ? anchor.width : this.width, anchor ? anchor.height : this.height) * (this.width < 520 ? 0.405 : 0.43);
       this.staticDirty = true;
       this.start();
+    }
+
+    setViewportAnchor(x, y, width, height) {
+      if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
+      this.viewportAnchor = { x, y, width, height };
+      this.resize();
     }
 
     isInsideVisibleGlobe(clientX, clientY) {
@@ -548,8 +554,8 @@
       const basis = this.currentBasis;
       const scale = this.radius * this.zoom * (lift || 1);
       return {
-        x: this.width / 2 + dot(point, basis.east) * scale,
-        y: this.height / 2 - dot(point, basis.north) * scale,
+        x: this.centerX + dot(point, basis.east) * scale,
+        y: this.centerY - dot(point, basis.north) * scale,
         z: dot(point, basis.forward),
         lift: lift || 1
       };
@@ -610,8 +616,8 @@
 
     drawSphere(colors) {
       const context = this.context;
-      const x = this.width / 2;
-      const y = this.height / 2;
+      const x = this.centerX;
+      const y = this.centerY;
       const radius = this.radius * this.zoom;
 
       /* Outer atmosphere: a wide luminous halo that breathes slightly while
@@ -686,8 +692,8 @@
       const north = basis.north;
       const fwd = basis.forward;
       const scale = this.radius * this.zoom * 1.001;
-      const cx = this.width / 2;
-      const cy = this.height / 2;
+      const cx = this.centerX;
+      const cy = this.centerY;
       const globeX = cx, globeY = cy;
       const globeRadius = this.radius * this.zoom;
 
@@ -1191,7 +1197,7 @@
         context.beginPath();
         const clipRadius = this.radius * this.zoom - .5;
         if (clipRadius > 0) {
-          context.arc(this.width / 2, this.height / 2, clipRadius, 0, TAU);
+          context.arc(this.centerX, this.centerY, clipRadius, 0, TAU);
           context.clip();
           this.drawBorders(colors);
         }
@@ -1206,6 +1212,7 @@
     render(time) {
       this.frame = 0;
       if (!this.visible || document.hidden || !this.width) return;
+      if (window.DeyttAtlasBridge && !this.viewportAnchor) return;
       const cameraMoving = this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
       // The atlas only animates while the user pans or zooms. Once the camera
@@ -1239,14 +1246,6 @@
       if (Math.abs(this.targetLon - this.centerLon) < .01) this.centerLon = this.targetLon;
       if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
       if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
-      const nextViewportExpanded = this.zoom >= (this.viewportExpanded ? COLLAPSE_VIEWPORT_ZOOM : EXPAND_VIEWPORT_ZOOM);
-      if (!this.dragging && nextViewportExpanded !== this.viewportExpanded) {
-        this.viewportExpanded = nextViewportExpanded;
-        const bridge = window.DeyttAtlasBridge;
-        if (bridge && typeof bridge.onViewportExpandedChanged === "function") {
-          bridge.onViewportExpandedChanged(nextViewportExpanded);
-        }
-      }
       if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 || Math.abs(this.zoom - previousZoom) > .0001) {
         this.staticDirty = true;
       }
