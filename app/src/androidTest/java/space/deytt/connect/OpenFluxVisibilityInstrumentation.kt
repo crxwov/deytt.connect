@@ -302,6 +302,10 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             android.util.Log.i("OpenFluxVisibilityQA", "globe_routes_home_camera=$cameraBeforeHomeSwipe->$cameraAfterHomeSwipe")
             passed += stage
 
+            stage = "globe_blur_animates_reverses_and_respects_reduced_motion"
+            assertGlobeBlurTransition(transitionWebView)
+            passed += stage
+
             stage = "two_pointer_map_pinch_zoom_does_not_page"
             android.os.Trace.beginSection("GlobePinchQA")
             try {
@@ -1112,6 +1116,63 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         runOnMainSync {
             android.util.Log.i("OpenFluxVisibilityQA", "pinch_zoom=$zoomBefore->$zoomAfter; manual_max=32; pager=0; fixed_underlay=true; map_reset=$initialZoom")
         }
+    }
+
+    private fun assertGlobeBlurTransition(webView: WebView) {
+        val camera = readAtlasCameraSnapshot(webView, resetResizeCount = true)
+        runAtlasScript(webView, """
+            (function(){
+              var root=document.querySelector('.network-atlas');
+              window.__qaBlurResult=null;
+              function read(){var s=getComputedStyle(root),m=s.filter.match(/blur\(([\d.]+)px\)/);
+                return {blur:m?Number(m[1]):0,opacity:Number(s.opacity)};}
+              function sample(ms){return new Promise(function(resolve){var start=performance.now(),values=[],last=start,gap=0;
+                function frame(t){gap=Math.max(gap,t-last);last=t;values.push(read());
+                  if(t-start>=ms)resolve({values:values,maxFrameGap:gap});else requestAnimationFrame(frame);}
+                requestAnimationFrame(frame);});}
+              (async function(){
+                window.deyttSetMapReducedMotion(false);
+                var initial=read();
+                window.deyttSetMapBackdropStage(true);
+                var enter=await sample(300),backdrop=read();
+                window.deyttSetMapBackdropStage(false);
+                var exit=await sample(60),beforeReverse=read();
+                window.deyttSetMapBackdropStage(true);
+                var afterReverse=read(),reverse=await sample(300);
+                window.deyttSetMapReducedMotion(true);
+                window.deyttSetMapBackdropStage(false);var reducedHome=read();
+                window.deyttSetMapBackdropStage(true);var reducedBackdrop=read();
+                window.deyttSetMapBackdropStage(false);window.deyttSetMapReducedMotion(false);
+                window.__qaBlurResult={initial,enter,backdrop,exit,beforeReverse,afterReverse,reverse,reducedHome,reducedBackdrop};
+              })().catch(function(e){window.__qaBlurResult={error:String(e)};});
+              return 'started';
+            })()
+        """.trimIndent())
+        var value = ""
+        awaitCondition {
+            value = runAtlasScript(webView, "window.__qaBlurResult || ''")
+            value.isNotBlank()
+        }
+        val result = org.json.JSONObject(value)
+        check(!result.has("error")) { "Blur transition probe failed: $value" }
+        check(result.getJSONObject("initial").getDouble("blur") < .01 &&
+            result.getJSONObject("backdrop").getDouble("blur") >= 27.9 &&
+            kotlin.math.abs(result.getJSONObject("backdrop").getDouble("opacity") - .4) < .01) { value }
+        val enter = result.getJSONObject("enter").getJSONArray("values")
+        check((0 until enter.length()).any { enter.getJSONObject(it).getDouble("blur") in .1..27.8 }) {
+            "Blur jumped to its endpoint instead of animating: $value"
+        }
+        val beforeReverse = result.getJSONObject("beforeReverse").getDouble("blur")
+        val afterReverse = result.getJSONObject("afterReverse").getDouble("blur")
+        check(beforeReverse in .01..27.9 && kotlin.math.abs(beforeReverse - afterReverse) < .1) {
+            "Interrupted blur must reverse from its current value: $value"
+        }
+        check(result.getJSONObject("reducedHome").getDouble("blur") < .01 &&
+            result.getJSONObject("reducedBackdrop").getDouble("blur") >= 27.9) {
+            "Reduced motion must apply blur immediately: $value"
+        }
+        check(camera.navigationEquivalent(readAtlasCameraSnapshot(webView))) { "Blur changed globe geometry" }
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_blur_transition=$value")
     }
 
     private fun awaitAtlasSettled(webView: WebView, targetZoom: Double): String {

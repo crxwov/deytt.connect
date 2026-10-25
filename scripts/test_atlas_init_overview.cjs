@@ -11,7 +11,9 @@ const source = fs.readFileSync(
 async function runCase(setOverviewBeforeAtlasExists, native) {
   let resolveAtlas;
   let createOptions;
-  const root = { classList: { toggle() {} }, querySelector() { return null; } };
+  const classes = new Set();
+  const root = { classList: { toggle(name, active) { if (active) classes.add(name); else classes.delete(name); } },
+    querySelector() { return null; } };
   const window = {
     location: { search: "" },
     DeyttAtlas: {
@@ -56,6 +58,14 @@ async function runCase(setOverviewBeforeAtlasExists, native) {
   atlas.targetZoom = 4;
   window.deyttResetMapView();
   assert.equal(atlas.targetZoom, native ? 1.28 : 1.1);
+  window.deyttSetMapBackdropStage(true);
+  assert.equal(classes.has("is-backdrop-stage"), true);
+  window.deyttSetMapBackdropStage(false);
+  assert.equal(classes.has("is-backdrop-stage"), false);
+  window.deyttSetMapReducedMotion(true);
+  assert.equal(classes.has("is-reduced-motion"), true);
+  window.deyttSetMapReducedMotion(false);
+  assert.equal(classes.has("is-reduced-motion"), false);
 }
 
 (async () => {

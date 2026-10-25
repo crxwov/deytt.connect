@@ -107,6 +107,7 @@
   };
   window.deyttSetMapReducedMotion = function (enabled) {
     const next = Boolean(enabled);
+    root.classList.toggle("is-reduced-motion", next);
     if (window.deyttMapReducedMotion === next) return;
     window.deyttMapReducedMotion = next;
     const atlas = window.deyttMapAtlas;
