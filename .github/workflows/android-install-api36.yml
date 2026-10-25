@@ -7,27 +7,27 @@ on:
         description: Release tag to clean-install and upgrade to
         required: true
         type: string
-        default: v0.11.57
+        default: v0.11.64
       target_sha256:
         description: Expected SHA-256 of the target universal APK
         required: true
         type: string
-        default: f66106390052e489b8149e61227928f11fd278ff72dd7accc5215c3285aca937
+        default: 8f330f8fd1b249fac1a96a38e4259c4a98e2891cdbcb4cf1903530b32348cb31
       baseline_tag:
         description: Release tag to install before the target upgrade
         required: true
         type: string
-        default: v0.11.56
+        default: v0.11.63
       baseline_sha256:
         description: Expected SHA-256 of the baseline universal APK
         required: true
         type: string
-        default: 82e79c66021d89a2e604f8b413ec4888b0daf062e84bcfc0cd3d494d74ea7591
+        default: 07de49e9506fadc587b1d3790cffa675169c41454d028562476b13995a19d458
       target_version_code:
         description: Expected Android versionCode of the target APK
         required: true
         type: string
-        default: "87"
+        default: "94"
 
 permissions:
   contents: read
@@ -97,6 +97,7 @@ jobs:
           set -o pipefail
           sdkmanager \
             "platform-tools" \
+            "platforms;android-35" \
             "build-tools;35.0.0" \
             "emulator" \
             "$SYSTEM_IMAGE"
@@ -247,6 +248,46 @@ jobs:
           printf 'In-place upgrade and cold launch passed for %s -> %s (versionCode %s)\n' \
             "$BASELINE_TAG" "$TARGET_TAG" "$TARGET_VERSION_CODE" | tee -a "$logs/summary.txt"
 
+      - name: Check inline loading frames on Android 16
+        if: matrix.page_bytes == 4096
+        shell: bash
+        env:
+          TARGET_TAG: ${{ steps.validate.outputs.target_tag }}
+        run: |
+          set -euo pipefail
+          source_dir="$RUNNER_TEMP/android-inline-ui"
+          logs="$RUNNER_TEMP/android-api36-smoke/logs"
+          git clone --depth 1 --branch "$TARGET_TAG" "https://github.com/$GITHUB_REPOSITORY.git" "$source_dir"
+          expected_revision="$(jq -r '.target_commitish' "$logs/$TARGET_TAG-release.json")"
+          test "$(git -C "$source_dir" rev-parse HEAD)" = "$expected_revision"
+          git -C "$source_dir" submodule update --init --depth 1 third_party/amneziawg-android
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          sdkmanager "ndk;26.1.10909125" "cmake;3.22.1"
+          cd "$source_dir"
+          # This isolated UI fixture never connects a tunnel; test the production Kotlin renderer without rebuilding VPN engines.
+          cat > "$RUNNER_TEMP/inline-ui.gradle" <<'GRADLE'
+          allprojects {
+              tasks.configureEach {
+                  if (name.contains('CMake') || name.startsWith('externalNativeBuild') ||
+                      name == 'prepareWindowsAwgGo' || name == 'prepareDeyttAwgBackendMakefile') enabled = false
+              }
+          }
+          GRADLE
+          bash gradlew :app:assembleDebug :app:assembleDebugAndroidTest \
+            -PisolatedQa=true -PqaVersionCode=1 \
+            -PqaRunner=space.deytt.connect.InlineMetricProgressInstrumentation \
+            "-Pandroid.aapt2FromMavenOverride=$ANDROID_HOME/build-tools/35.0.0/aapt2" \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            -I "$RUNNER_TEMP/inline-ui.gradle" --no-daemon --max-workers=2 --console=plain \
+            > "$logs/inline-ui-build.txt" 2>&1 || { tail -n 120 "$logs/inline-ui-build.txt"; exit 1; }
+          adb install app/build/outputs/apk/debug/app-debug.apk
+          adb install app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          adb shell am instrument -w \
+            space.deytt.connect.qa.test/space.deytt.connect.InlineMetricProgressInstrumentation \
+            | tee "$logs/inline-animation.txt"
+          grep -Fq 'INSTRUMENTATION_RESULT: result=PASS:' "$logs/inline-animation.txt"
+
       - name: Print bounded emulator diagnostics
         if: always()
         shell: bash
@@ -260,6 +301,7 @@ jobs:
             "$logs/apk-sha256.txt"
             "$logs/api-level.txt"
             "$logs/page-size.txt"
+            "$logs/inline-animation.txt"
             "$logs"/*-badging.txt
             "$logs"/*-signature.txt
             "$logs"/*-install.txt

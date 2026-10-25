@@ -23,6 +23,8 @@ internal class InlineMetricProgress(private val label: TextView) {
     }
 
     init {
+        // Editor can cache ReplacementSpan pixels after setText; keep each loading frame live.
+        label.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
         label.setText(label.text, TextView.BufferType.SPANNABLE)
         label.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(text: CharSequence?, start: Int, count: Int, after: Int) = Unit

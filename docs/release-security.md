@@ -72,9 +72,9 @@ Do not publish separate ABI packages or duplicate updater/branded filenames.
 Retain old files locally until the new single APK has passed signature, size,
 device-update and download checks.
 
-The byte-identical v0.11.63 APK is also available from the
-[first-party mirror](https://deytt.space/connect/releases/v0.11.63/app-universal-release.apk)
-with its [SHA-256 sidecar](https://deytt.space/connect/releases/v0.11.63/app-universal-release.apk.sha256).
+The byte-identical v0.11.64 APK is also available from the
+[first-party mirror](https://deytt.space/connect/releases/v0.11.64/app-universal-release.apk)
+with its [SHA-256 sidecar](https://deytt.space/connect/releases/v0.11.64/app-universal-release.apk.sha256).
 This provides a direct download without GitHub redirects; it does not establish
 acceptance by an OEM installer.
 

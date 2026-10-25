@@ -91,10 +91,10 @@ class InlineMetricProgressInstrumentation : Instrumentation() {
         lateinit var progress: InlineMetricProgress
         try {
             runOnMainSync {
-                label = TextView(activity).apply {
-                    textSize = 18f
-                    setTextColor(android.graphics.Color.WHITE)
-                    text = "Response: — · Speed: —"
+                label = with(DeyttUi) {
+                    activity.text("Response: — · Speed: —", 11f, android.graphics.Color.WHITE)
+                }.apply {
+                    maxLines = 2
                 }
                 activity.setContentView(FrameLayout(activity).apply {
                     setBackgroundColor(android.graphics.Color.BLACK)
@@ -102,6 +102,9 @@ class InlineMetricProgressInstrumentation : Instrumentation() {
                     addView(label, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 120))
                 })
                 progress = InlineMetricProgress(label)
+                // Route callbacks replace the text after the watcher has been registered.
+                label.text = "Response: — · Speed: —"
+                check(label.text is android.text.Editable) { "Exercise the same late text-update layout as route callbacks" }
                 progress.setLoading(true)
             }
             waitForIdleSync()
