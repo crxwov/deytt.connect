@@ -565,13 +565,14 @@ object RouteProxyProbe {
         token: String,
         stillCurrent: () -> Boolean,
         sampleMillis: Int = QUICK_DOWNLOAD_MILLIS,
+        transferActive: () -> Boolean = stillCurrent,
         onProgress: (bytesPerSecond: Long) -> Unit = {},
     ): Long {
         require(sampleMillis in 1_000..5_000)
         require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
         val activeConnection = AtomicReference<HttpsURLConnection?>()
         val task = FutureTask {
-            measureSystemDownloadBlocking(token, stillCurrent, sampleMillis, onProgress, activeConnection)
+            measureSystemDownloadBlocking(token, stillCurrent, transferActive, sampleMillis, onProgress, activeConnection)
         }
         try {
             systemVpnProbeExecutor.execute(task)
@@ -599,6 +600,7 @@ object RouteProxyProbe {
     private fun measureSystemDownloadBlocking(
         token: String,
         stillCurrent: () -> Boolean,
+        transferActive: () -> Boolean,
         sampleMillis: Int,
         onProgress: (Long) -> Unit,
         activeConnection: AtomicReference<HttpsURLConnection?>,
@@ -623,16 +625,21 @@ object RouteProxyProbe {
             val maximumBytes = MAX_DOWNLOAD_BYTES
             var received = 0L
             val buffer = ByteArray(32 * 1024)
+            check(stillCurrent()) { "Route changed during measurement" }
             val result = connection.inputStream.use { input ->
                 val sampleStarted = SystemClock.elapsedRealtime()
-                val sampleDeadline = minOf(sampleStarted + sampleMillis, totalDeadline)
+                val sampleDeadline = sampleStarted + sampleMillis
+                val bodyDeadline = minOf(sampleDeadline, totalDeadline)
                 var lastProgressAt = sampleStarted
                 while (received < maximumBytes) {
-                    check(stillCurrent() && !Thread.currentThread().isInterrupted) { "Route changed during measurement" }
+                    check(isSystemDownloadTransferActive(transferActive) { Thread.currentThread().isInterrupted }) {
+                        "Measurement interrupted"
+                    }
                     val now = SystemClock.elapsedRealtime()
-                    if (now >= sampleDeadline) break
-                    connection.readTimeout = (sampleDeadline - now)
-                        .coerceAtLeast(1L).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+                    if (now >= bodyDeadline) break
+                    connection.readTimeout = remainingSystemDownloadReadTimeoutMillis(
+                        now, sampleDeadline, totalDeadline,
+                    ) ?: break
                     val count = try { input.read(buffer) } catch (error: SocketTimeoutException) {
                         if (received > 0) break else throw error
                     }
@@ -651,8 +658,12 @@ object RouteProxyProbe {
                         }
                     }
                 }
-                check(stillCurrent() && received > 0) { "Measurement did not complete" }
-                received * 1_000L / (SystemClock.elapsedRealtime() - sampleStarted).coerceAtLeast(1L)
+                check(received > 0) { "Measurement did not complete" }
+                val bytesPerSecond = received * 1_000L /
+                    (SystemClock.elapsedRealtime() - sampleStarted).coerceAtLeast(1L)
+                check(stillCurrent()) { "Route changed during measurement" }
+                check(!Thread.currentThread().isInterrupted) { "Measurement interrupted" }
+                bytesPerSecond
             }
             return result.also(onProgress)
         } finally {
@@ -669,6 +680,20 @@ object RouteProxyProbe {
 
     internal fun isPrematureDownloadEof(received: Long, contentLength: Long?, maximumBytes: Long): Boolean =
         contentLength != null && received < contentLength && received < maximumBytes
+
+    internal fun remainingSystemDownloadReadTimeoutMillis(
+        now: Long,
+        sampleDeadline: Long,
+        totalDeadline: Long,
+    ): Int? = (minOf(sampleDeadline, totalDeadline) - now)
+        .takeIf { it > 0L }
+        ?.coerceAtMost(Int.MAX_VALUE.toLong())
+        ?.toInt()
+
+    internal fun isSystemDownloadTransferActive(
+        transferActive: () -> Boolean,
+        isInterrupted: () -> Boolean,
+    ): Boolean = transferActive() && !isInterrupted()
 
     fun isApplicationRoutedByTunnel(
         config: String,

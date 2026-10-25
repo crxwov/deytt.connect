@@ -2,6 +2,7 @@ package space.deytt.connect
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -67,6 +68,25 @@ class RouteProxyProbeTest {
         assertFalse(RouteProxyProbe.isPrematureDownloadEof(32, 32, 32))
         assertFalse(RouteProxyProbe.isPrematureDownloadEof(16, 32, 16))
         assertFalse(RouteProxyProbe.isPrematureDownloadEof(12, null, 32))
+    }
+
+    @Test
+    fun boundsSystemDownloadReadTimeoutBySampleAndTotalDeadlines() {
+        assertEquals(400, RouteProxyProbe.remainingSystemDownloadReadTimeoutMillis(100, 500, 700))
+        assertEquals(200, RouteProxyProbe.remainingSystemDownloadReadTimeoutMillis(100, 500, 300))
+        assertNull(RouteProxyProbe.remainingSystemDownloadReadTimeoutMillis(300, 500, 300))
+    }
+
+    @Test
+    fun checksFastTransferPredicateOnEveryBodyRead() {
+        var transferChecks = 0
+        repeat(4) {
+            assertTrue(RouteProxyProbe.isSystemDownloadTransferActive(
+                transferActive = { transferChecks++; true },
+                isInterrupted = { false },
+            ))
+        }
+        assertEquals(4, transferChecks)
     }
 
     @Test(expected = IllegalArgumentException::class)

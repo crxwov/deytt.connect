@@ -1877,13 +1877,15 @@ class MainActivity : Activity() {
         homeSpeedErrorKey = metricKey
         homeSpeedBypassedKey = null
         val generation = homeSpeedGeneration
-        val stillCurrent = {
+        val transferActive = {
             generation == homeSpeedGeneration && homeSpeedForeground && homeSpeedOnHome &&
-                !temporaryAwgMeasurement && !RouteProbeClient.isRunning(this) &&
-                renderedPhase == VpnPhase.CONNECTED && SelectedRouteStore(this).read().id == selected.id &&
-                TelegramSessionStore.read(this) == token && currentHomeRouteMetricKey(selected.id) == metricKey &&
-                (route.engine != TunnelEngine.LIBBOX || isHomeApplicationRoutedByTunnel(config)) &&
+                !temporaryAwgMeasurement && !RouteProbeClient.isRunning(this) && renderedPhase == VpnPhase.CONNECTED &&
                 (if (route.engine == TunnelEngine.AMNEZIAWG) AwgTunnelController.isRunning() else ConnectVpnService.isRunning())
+        }
+        val stillCurrent = {
+            transferActive() && SelectedRouteStore(this).read().id == selected.id &&
+                TelegramSessionStore.read(this) == token && currentHomeRouteMetricKey(selected.id) == metricKey &&
+                (route.engine != TunnelEngine.LIBBOX || isHomeApplicationRoutedByTunnel(config))
         }
         updateQualityStrip()
         homeSpeedFuture = LatencyExecutor.pool.submit {
@@ -1892,6 +1894,7 @@ class MainActivity : Activity() {
                     token,
                     stillCurrent,
                     sampleMillis = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS,
+                    transferActive = transferActive,
                 )
             }
             runOnUiThread {
