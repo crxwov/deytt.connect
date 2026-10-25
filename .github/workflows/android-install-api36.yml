@@ -247,6 +247,7 @@ jobs:
             "$logs/apk-sha256.txt"
             "$logs/api-level.txt"
             "$logs"/*-badging.txt
+            "$logs"/*-signature.txt
             "$logs"/*-install.txt
             "$logs"/*-activity.txt
             "$logs"/*-android-runtime.txt
@@ -261,11 +262,3 @@ jobs:
             tail -n 120 "$logs/emulator.log"
           fi
 
-      - name: Upload API 36 install evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-api36-install-${{ github.run_id }}
-          path: ${{ runner.temp }}/android-api36-smoke
-          if-no-files-found: warn
-          retention-days: 14
