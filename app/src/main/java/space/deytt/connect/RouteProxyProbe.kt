@@ -645,8 +645,18 @@ object RouteProxyProbe {
         }
     }
 
-    fun isApplicationRoutedByTunnel(config: String, packageName: String): Boolean {
-        val inbounds = JSONObject(config).optJSONArray("inbounds") ?: return false
+    fun isApplicationRoutedByTunnel(
+        config: String,
+        packageName: String,
+        customPackages: Collection<String> = emptyList(),
+        splitMode: String = UserSplitTunnelStore.MODE_BYPASS,
+    ): Boolean {
+        val effectiveConfig = if (customPackages.isEmpty()) config else SplitTunnelProfile.apply(
+            config,
+            customPackages = customPackages,
+            mode = splitMode,
+        )
+        val inbounds = JSONObject(effectiveConfig).optJSONArray("inbounds") ?: return false
         val tun = (0 until inbounds.length())
             .asSequence()
             .mapNotNull(inbounds::optJSONObject)

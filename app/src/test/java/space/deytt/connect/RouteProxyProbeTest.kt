@@ -2,6 +2,7 @@ package space.deytt.connect
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.json.JSONObject
 
@@ -96,5 +97,56 @@ class RouteProxyProbeTest {
     @Test(expected = IllegalArgumentException::class)
     fun batchRejectsInternalRoute() {
         RouteProxyProbe.batchConfiguration(profile, mapOf("direct" to RouteProbeSession(42001, "a", "one")))
+    }
+
+    @Test
+    fun applicationTunnelCheckAppliesUserPackageSplitPolicy() {
+        val packageName = "space.deytt.connect"
+
+        assertTrue(RouteProxyProbe.isApplicationRoutedByTunnel(profile, packageName))
+        assertFalse(RouteProxyProbe.isApplicationRoutedByTunnel(
+            profile,
+            packageName,
+            customPackages = listOf(packageName),
+            splitMode = UserSplitTunnelStore.MODE_BYPASS,
+        ))
+        assertTrue(RouteProxyProbe.isApplicationRoutedByTunnel(
+            profile,
+            packageName,
+            customPackages = listOf(packageName),
+            splitMode = UserSplitTunnelStore.MODE_VPN_ONLY,
+        ))
+    }
+
+    @Test
+    fun applicationTunnelCheckCombinesProviderAndUserPackageRules() {
+        val packageName = "space.deytt.connect"
+        val providerProfile = JSONObject(profile).apply {
+            val tun = getJSONArray("inbounds").getJSONObject(0)
+            tun.put("include_package", org.json.JSONArray().put(packageName))
+            tun.put("exclude_package", org.json.JSONArray().put("com.example.provider-excluded"))
+        }.toString()
+
+        assertFalse(RouteProxyProbe.isApplicationRoutedByTunnel(
+            providerProfile,
+            packageName,
+            customPackages = listOf(packageName),
+            splitMode = UserSplitTunnelStore.MODE_BYPASS,
+        ))
+        assertTrue(RouteProxyProbe.isApplicationRoutedByTunnel(
+            providerProfile,
+            packageName,
+            customPackages = listOf(packageName),
+            splitMode = UserSplitTunnelStore.MODE_VPN_ONLY,
+        ))
+        assertFalse(RouteProxyProbe.isApplicationRoutedByTunnel(
+            JSONObject(providerProfile).apply {
+                getJSONArray("inbounds").getJSONObject(0)
+                    .put("exclude_package", org.json.JSONArray().put(packageName))
+            }.toString(),
+            packageName,
+            customPackages = listOf(packageName),
+            splitMode = UserSplitTunnelStore.MODE_VPN_ONLY,
+        ))
     }
 }

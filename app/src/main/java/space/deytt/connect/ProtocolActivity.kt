@@ -19,6 +19,7 @@ import android.widget.TextView
 import android.view.animation.PathInterpolator
 import android.os.Build
 import androidx.core.content.ContextCompat
+import space.deytt.connect.AppLanguage.uiCopy
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
@@ -111,7 +112,7 @@ class ProtocolActivity : Activity() {
             runCatching { RouteProbeClient.cancel(this) }
             pendingProbeRequestId = null
             latencyViews.values.forEach { view ->
-                view.text = "пинг"
+                view.text = uiCopy("Отклик")
                 view.isEnabled = true
                 view.alpha = 1f
             }
@@ -283,7 +284,7 @@ class ProtocolActivity : Activity() {
                         })
                     }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-                    val latency = mono("пинг", 8f, DeyttUi.SKY, 650).apply {
+                    val latency = mono("Отклик", 8f, DeyttUi.SKY, 650).apply {
                         gravity = android.view.Gravity.CENTER
                         minHeight = dp(40)
                         setPadding(dp(9), dp(8), dp(9), dp(8))
@@ -419,8 +420,14 @@ class ProtocolActivity : Activity() {
             return
         }
 
+        val splitTunnel = UserSplitTunnelStore(this)
         if (active && route.engine == TunnelEngine.LIBBOX &&
-            !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName)
+            !RouteProxyProbe.isApplicationRoutedByTunnel(
+                config,
+                packageName,
+                customPackages = splitTunnel.readPackages(),
+                splitMode = splitTunnel.readMode(),
+            )
         ) {
             view.text = "нет ответа"
             view.isEnabled = true

@@ -18,7 +18,11 @@ class AppLanguageTest {
 
     @Test
     fun translatesHomeQualityLabelsAndDynamicSpeedDescription() {
-        assertEquals("Latency", AppLanguage.english("Отклик"))
+        assertEquals("Response", AppLanguage.english("Отклик"))
+        assertEquals("Response: after connecting", AppLanguage.english("Отклик: после подключения"))
+        assertEquals("Response bypasses VPN", AppLanguage.english("Отклик: в обход VPN"))
+        assertEquals("Speed is unavailable because current bypass settings exclude this app from the VPN", AppLanguage.english("Скорость не измеряется: приложение исключено из VPN текущими настройками обхода"))
+        assertEquals("HTTPS response bypasses VPN with the current settings", AppLanguage.english("HTTPS-отклик не проходит через VPN при текущих настройках обхода"))
         assertEquals("Speed", AppLanguage.english("Скорость"))
         assertEquals("Refresh measurement", AppLanguage.english("Обновить замер"))
         assertEquals("bypass · germany", AppLanguage.english("обход · германия"))

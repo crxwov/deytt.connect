@@ -263,8 +263,8 @@ internal class PrimaryPages(private val host: MainActivity) {
         root.addView(spacer(8, host))
         root.addView(host.text(
             copy(
-                "Откройте страну: пинги маршрутов идут параллельно, скорость измеряется по очереди.",
-                "Open a country: route pings run in parallel, then speed is measured one route at a time.",
+                "Откройте страну: отклик маршрутов проверяется параллельно, скорость измеряется по очереди.",
+                "Open a country: route-response checks run in parallel, then speed is measured one route at a time.",
             ),
             13f,
             MUTED,
@@ -324,7 +324,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 visibility = View.GONE
             }
             val summary = host.text(
-                cachedLatencySummary(cachedSamples) ?: copy("Пинг: —", "Ping: —"),
+                cachedLatencySummary(cachedSamples) ?: copy("Отклик: —", "Response: —"),
                 11f,
                 MUTED,
             ).apply {
@@ -352,7 +352,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 val cached = RouteQualityStore.read(host, route.id)
                 val isCachedBest = route.id == cachedBestRouteId
                 val metric = host.text(
-                    cached?.let { sampleLabel(it, isCachedBest) } ?: copy("Пинг: — · Скорость: —", "Ping: — · Speed: —"),
+                    cached?.let { sampleLabel(it, isCachedBest) } ?: copy("Отклик: — · Скорость: —", "Response: — · Speed: —"),
                     11f,
                     if (isCachedBest) DeyttUi.MINT else MUTED,
                 ).apply {
@@ -390,7 +390,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                             }.show()
                     }
                     metric.text = cached?.let { sampleLabel(it, isCachedBest) }
-                        ?: copy("Пинг: — · Скорость: —", "Ping: — · Speed: —")
+                        ?: copy("Отклик: — · Скорость: —", "Response: — · Speed: —")
                     metric.setOnClickListener { startAwgProbe(probeRow) }
                 }
                 rowById[route.id] = probeRow
@@ -478,7 +478,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         country.samples.clear()
         country.pingTraces.clear()
         country.errors.clear()
-        country.summary.text = copy("Пинг: —", "Ping: —")
+        country.summary.text = copy("Отклик: —", "Response: —")
         country.summaryDots.setLoading(true)
         if (VpnService.prepare(host) != null && host.requestRouteProbePermission { startCountryProbe(country) }) return
         val config = SubscriptionStore(host).readCurrent() ?: return
@@ -490,7 +490,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 row.status.text = copy("Проверка после подключения", "Measure after connecting")
                 return@forEach
             }
-            row.status.text = copy("Пинг: —", "Ping: —")
+            row.status.text = copy("Отклик: —", "Response: —")
             row.status.setTextColor(DeyttUi.SKY)
             row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
             row.progress.setLoading(true)
@@ -743,7 +743,7 @@ internal class PrimaryPages(private val host: MainActivity) {
     private fun copy(ru: String, en: String): String = if (AppLanguage.current(host) == AppLanguage.EN) en else ru
 
     private fun sampleLabel(sample: RouteProbeSample, isBest: Boolean = false): String =
-        copy("Пинг: ", "Ping: ") + (sample.latencyMillis?.let(::formatLatency) ?: "—") +
+        copy("Отклик: ", "Response: ") + (sample.latencyMillis?.let(::formatLatency) ?: "—") +
             "  ·  " + copy("Скорость: ", "Speed: ") + (sample.downloadBytesPerSecond?.takeIf { it > 0L }?.let(::formatSpeed) ?: "—") +
             if (isBest) copy(" · лучший выбор", " · best choice") else ""
 
@@ -752,15 +752,15 @@ internal class PrimaryPages(private val host: MainActivity) {
 
     private fun latencySummaryLabel(summary: RouteLatencySummary): String =
         if (AppLanguage.current(host) == AppLanguage.EN) {
-            "Ping · best ${summary.bestMillis} · avg ${summary.averageMillis} · worst ${summary.worstMillis} ms"
+            "Response · best ${summary.bestMillis} · avg ${summary.averageMillis} · worst ${summary.worstMillis} ms"
         } else {
-            "Пинг · лучший ${summary.bestMillis} · средний ${summary.averageMillis} · худший ${summary.worstMillis} мс"
+            "Отклик · лучший ${summary.bestMillis} · средний ${summary.averageMillis} · худший ${summary.worstMillis} мс"
         }
 
     private fun updateCountryLatencySummary(country: CountryProbeState) {
         val summary = RouteProbeStatistics.latencySummary(country.samples.values.mapNotNull { it.latencyMillis })
         if (summary == null) {
-            country.summary.text = copy("Пинг: —", "Ping: —")
+            country.summary.text = copy("Отклик: —", "Response: —")
             country.summaryDots.setLoading(country.rows.values.any { it.progress.visibility == View.VISIBLE })
         } else {
             country.summary.text = latencySummaryLabel(summary)

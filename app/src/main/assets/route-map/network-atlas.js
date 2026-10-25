@@ -529,7 +529,8 @@
       const bridge = window.DeyttAtlasBridge;
       const side = Math.min(this.width, this.height);
       if (!bridge || typeof bridge.onGlobeRadiusChanged !== "function" || !side) return;
-      const radiusFraction = Math.max(0, this.radius * this.zoom - .5) / side;
+      // Android exposes a circular viewport so overscaled map pixels never end at the WebView's rectangle.
+      const radiusFraction = Math.min(.5, Math.max(0, this.radius * this.zoom - .5) / side);
       if (this.lastReportedGlobeRadius != null && Math.abs(this.lastReportedGlobeRadius - radiusFraction) < .002) return;
       this.lastReportedGlobeRadius = radiusFraction;
       bridge.onGlobeRadiusChanged(radiusFraction);
@@ -1070,6 +1071,7 @@
     drawLabel(key, colors, occupied) {
       const point = this.projectedNodes[key];
       if (!point || point.z <= .03) return;
+      if (window.DeyttAtlasBridge && !this.isAndroidViewportAnchorVisible(point)) return;
       if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
       const active = key === "user" || this.activeRouteNodeKeys().includes(key);
       if (this.connected && key !== "user" && !active) return;
@@ -1166,11 +1168,19 @@
         if (this.availableLocationKeys.has(key)) this.drawNode(key, LOCATIONS[key], colors, "server");
       });
       if (this.userLocation) this.drawNode("user", this.userLocation, colors, "user");
+    }
+
+    drawLabels(colors) {
       const occupied = [];
       if (this.userLocation) this.drawLabel("user", colors, occupied);
       LOCATION_ORDER.forEach((key) => {
         if (this.availableLocationKeys.has(key)) this.drawLabel(key, colors, occupied);
       });
+    }
+
+    isAndroidViewportAnchorVisible(point) {
+      const radius = Math.min(this.width, this.height) * .5;
+      return Math.hypot(point.x - this.width / 2, point.y - this.height / 2) <= radius;
     }
 
     renderStatic(colors) {
@@ -1245,8 +1255,29 @@
       this.context.drawImage(this.staticCanvas, 0, 0, this.width, this.height);
       this.drawRoutes(colors, time);
       this.drawNodes(colors);
+      this.maskAndroidViewport();
+      this.drawLabels(colors);
       this.renderCount += 1;
       if (Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || (this.trafficActive && !this.reducedMotion.matches)) this.start();
+    }
+
+    maskAndroidViewport() {
+      if (!window.DeyttAtlasBridge) return;
+      const side = Math.min(this.width, this.height);
+      if (!side) return;
+      const radius = side * .5;
+      const feather = Math.max(1, side * .012);
+      const gradient = this.context.createRadialGradient(
+        this.width / 2, this.height / 2, radius - feather,
+        this.width / 2, this.height / 2, radius,
+      );
+      gradient.addColorStop(0, "rgba(255,255,255,1)");
+      gradient.addColorStop(1, "rgba(255,255,255,0)");
+      this.context.save();
+      this.context.globalCompositeOperation = "destination-in";
+      this.context.fillStyle = gradient;
+      this.context.fillRect(0, 0, this.width, this.height);
+      this.context.restore();
     }
 
     start() {

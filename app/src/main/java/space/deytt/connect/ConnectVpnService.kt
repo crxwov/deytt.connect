@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.graphics.drawable.Icon
 import android.net.ConnectivityManager
@@ -76,6 +77,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         const val ACTION_ACTIVE_ROUTE = "space.deytt.connect.action.ACTIVE_ROUTE"
         const val EXTRA_ACTIVE_ROUTE_KEY = "active_route_key"
         const val EXTRA_ACTIVE_EXIT_COUNTRY = "active_exit_country"
+        const val EXTRA_ACTIVE_OUTBOUND_TAG = "active_outbound_tag"
         const val EXTRA_STATUS = "status"
         const val EXTRA_ERROR = "error"
         private const val CHANNEL_ID = "vpn"
@@ -101,6 +103,16 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
         fun isRunning(): Boolean = runtimeRunning
         fun isRouteProbeRunning(): Boolean = routeProbeRunning
+
+        fun activeAutoOutboundTag(context: Context): String? {
+            if (!runtimeRunning) return null
+            val appContext = context.applicationContext
+            if (VpnStateStore(appContext).read().phase != VpnPhase.CONNECTED) return null
+            return appContext.getSharedPreferences(STATE_PREFS, Context.MODE_PRIVATE)
+                .getString(EXTRA_ACTIVE_OUTBOUND_TAG, null)
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+        }
     }
 
     private val executor = Executors.newSingleThreadExecutor()
@@ -882,16 +894,20 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         lastActiveAutoRoute = route
         val preferences = getSharedPreferences(STATE_PREFS, MODE_PRIVATE).edit()
         if (route == null) {
-            preferences.remove(EXTRA_ACTIVE_ROUTE_KEY).remove(EXTRA_ACTIVE_EXIT_COUNTRY)
+            preferences.remove(EXTRA_ACTIVE_ROUTE_KEY)
+                .remove(EXTRA_ACTIVE_EXIT_COUNTRY)
+                .remove(EXTRA_ACTIVE_OUTBOUND_TAG)
         } else {
             preferences.putString(EXTRA_ACTIVE_ROUTE_KEY, route.routeKey)
                 .putString(EXTRA_ACTIVE_EXIT_COUNTRY, route.exitCountry)
+                .putString(EXTRA_ACTIVE_OUTBOUND_TAG, route.outboundTag)
         }
         preferences.apply()
         sendBroadcast(
             Intent(ACTION_ACTIVE_ROUTE).setPackage(packageName)
                 .putExtra(EXTRA_ACTIVE_ROUTE_KEY, route?.routeKey.orEmpty())
-                .putExtra(EXTRA_ACTIVE_EXIT_COUNTRY, route?.exitCountry.orEmpty()),
+                .putExtra(EXTRA_ACTIVE_EXIT_COUNTRY, route?.exitCountry.orEmpty())
+                .putExtra(EXTRA_ACTIVE_OUTBOUND_TAG, route?.outboundTag.orEmpty()),
         )
         if (started && runtimeRunning && VpnStateStore(this).read().phase == VpnPhase.CONNECTED) {
             updateNotification(formatConnectedNotificationText(route))
@@ -1070,6 +1086,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         activeCanary = null
         if (!started && commandServer == null && tunnel == null && awgProxy == null && openFluxProxy == null) {
             runtimeRunning = false
+            publishActiveAutoRoute(null)
             releaseWakeLock()
             stopForeground(STOP_FOREGROUND_REMOVE)
             if (VpnStateStore(this).read().phase != VpnPhase.ERROR)

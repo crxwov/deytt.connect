@@ -5,18 +5,43 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.util.Locale
 
+internal data class HomeRouteMetricKey(
+    val routeId: String,
+    val sessionToken: String?,
+    val configTag: String,
+    val activeAutoRouteKey: String?,
+    val activeAutoOutboundTag: String?,
+    val connectionGeneration: Long,
+)
+
+internal object HomeMetricPresentation {
+    fun bypassLabel(english: Boolean): String = if (english) "vpn bypassed" else "в обход vpn"
+
+    fun ownsRequest(requestGeneration: Int, currentGeneration: Int): Boolean = requestGeneration == currentGeneration
+
+    fun isCurrent(connected: Boolean, currentKey: HomeRouteMetricKey?, sampleKey: HomeRouteMetricKey?): Boolean =
+        connected && currentKey != null && currentKey == sampleKey
+
+    fun <T> value(
+        connected: Boolean,
+        currentKey: HomeRouteMetricKey?,
+        sampleKey: HomeRouteMetricKey?,
+        value: T?,
+    ): T? = value.takeIf { isCurrent(connected, currentKey, sampleKey) }
+}
+
 internal object RouteProbePresentation {
     fun speedProgress(latency: String?, english: Boolean, bytesPerSecond: Long? = null): String {
-        val measuredPing = latency?.takeIf(String::isNotBlank)?.let {
-            if (english) "Ping: $it" else "Пинг: $it"
-        } ?: if (english) "Ping: —" else "Пинг: —"
+        val measuredResponse = latency?.takeIf(String::isNotBlank)?.let {
+            if (english) "Response: $it" else "Отклик: $it"
+        } ?: if (english) "Response: —" else "Отклик: —"
         val separator = " · "
         val liveRate = bytesPerSecond?.takeIf { it > 0L }?.let { formatSpeed(it, english) }
         return when {
-            english && liveRate != null -> measuredPing + separator + "Speed: ↓ $liveRate · measuring…"
-            english -> measuredPing + separator + "Speed: sampling…"
-            liveRate != null -> measuredPing + separator + "Скорость: ↓ $liveRate · замер…"
-            else -> measuredPing + separator + "Скорость: замер…"
+            english && liveRate != null -> measuredResponse + separator + "Speed: ↓ $liveRate · measuring…"
+            english -> measuredResponse + separator + "Speed: sampling…"
+            liveRate != null -> measuredResponse + separator + "Скорость: ↓ $liveRate · замер…"
+            else -> measuredResponse + separator + "Скорость: замер…"
         }
     }
 

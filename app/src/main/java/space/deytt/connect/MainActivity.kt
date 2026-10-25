@@ -91,6 +91,7 @@ class MainActivity : Activity() {
     private var currentNetworkLocation: IpNetworkLocation? = null
     private var currentEgressLocation: IpNetworkLocation? = null
     private var currentAutoRouteKey: String? = null
+    private var currentAutoOutboundTag: String? = null
     private var locationRequestInFlight = false
     private var locationLookupFailed = false
     private var locationRequestGeneration = 0
@@ -98,11 +99,13 @@ class MainActivity : Activity() {
     private var egressLookupFailed = false
     private var egressRequestGeneration = 0
     private var pendingRouteProbeId: String? = null
+    private var pendingRouteProbeMetricKey: HomeRouteMetricKey? = null
     private var pendingRouteProbeHasOutcome = false
-    private var homePingErrorRouteId: String? = null
+    private var homePingErrorKey: HomeRouteMetricKey? = null
+    private var homePingBypassedKey: HomeRouteMetricKey? = null
     private var homeConnectQueued = false
     private var homeConnectGeneration = 0L
-    private var lastRouteLatency: Pair<String, Long>? = null
+    private var lastRouteLatency: Pair<HomeRouteMetricKey, Long>? = null
     private var pendingRouteProbeAuthorization: (() -> Unit)? = null
     private var selectedRouteLatencyInFlight = false
     @Volatile private var homeSpeedForeground = false
@@ -111,12 +114,14 @@ class MainActivity : Activity() {
     private var homeSpeedFuture: java.util.concurrent.Future<*>? = null
     private var homeSpeedConnectedRouteId: String? = null
     private var homeSpeedConnectedAt = 0L
+    private var homeConnectionGeneration = 0L
     private var homeSpeedAttemptAt = 0L
     private var homeSpeedInFlight = false
     private var homeSpeedCurrentBps: Long? = null
     private var homeSpeedError: String? = null
-    private var homeSpeedSample: Pair<String, Long>? = null
-    private var homeSpeedSampleToken: String? = null
+    private var homeSpeedErrorKey: HomeRouteMetricKey? = null
+    private var homeSpeedBypassedKey: HomeRouteMetricKey? = null
+    private var homeSpeedSample: Pair<HomeRouteMetricKey, Long>? = null
     private var homeSpeedSampleAt = 0L
     private val locationExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val accountExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -148,6 +153,7 @@ class MainActivity : Activity() {
         override fun run() {
             if (isFinishing || isDestroyed) return
             if (::pager.isInitialized && pager.currentItem == 0 &&
+                renderedPhase == VpnPhase.CONNECTED &&
                 VpnService.prepare(this@MainActivity) == null &&
                 !RouteProbeClient.isRunning(this@MainActivity)) measureSelectedRoute()
             measureHomeRouteDownload()
@@ -158,9 +164,24 @@ class MainActivity : Activity() {
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == ConnectVpnService.ACTION_ACTIVE_ROUTE) {
+                val previousKey = currentAutoRouteKey
+                val previousOutboundTag = currentAutoOutboundTag
                 currentAutoRouteKey = intent.getStringExtra(ConnectVpnService.EXTRA_ACTIVE_ROUTE_KEY)
                     ?.takeIf { it in setOf("nl", "de", "fi", "ru", "it", "ru-de") }
+                currentAutoOutboundTag = intent.getStringExtra(ConnectVpnService.EXTRA_ACTIVE_OUTBOUND_TAG)
                 if (::globe.isInitialized) globe.setActiveAutoRoute(currentAutoRouteKey)
+                val selected = SelectedRouteStore(this@MainActivity).read()
+                val route = SubscriptionStore(this@MainActivity).readCurrent()?.let { config ->
+                    runCatching { RouteCatalog.from(config, AwgProfileStore(this@MainActivity).profiles(), OpenFluxProfileStore(this@MainActivity).profiles(this@MainActivity)) }
+                        .getOrNull()?.firstOrNull { it.id == selected.id }
+                }
+                if ((previousKey != currentAutoRouteKey || previousOutboundTag != currentAutoOutboundTag) && route?.protocol == RouteProtocol.AUTO) {
+                    cancelHomeRouteDownload()
+                    clearHomeMetricSamples()
+                    homeSpeedAttemptAt = 0L
+                    if (::downloadText.isInitialized) updateQualityStrip()
+                    if (renderedPhase == VpnPhase.CONNECTED) selectedRouteLatencyHandler.postDelayed({ measureHomeRouteDownload() }, 1_800L)
+                }
                 return
             }
             val phase = intent?.getStringExtra(ConnectVpnService.STATE_PHASE)
@@ -185,10 +206,43 @@ class MainActivity : Activity() {
                 RouteProbeClient.clear(this@MainActivity, event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty())
             }
             if (::primaryPages.isInitialized) primaryPages.onRouteProbeEvent(event)
-            if (event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID) != pendingRouteProbeId) return
+            val requestId = event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty()
+            if (requestId.isBlank() || requestId != pendingRouteProbeId) return
             val selected = SelectedRouteStore(this@MainActivity).read()
             val tag = event.getStringExtra(RouteProbeClient.EXTRA_ROUTE_TAG).orEmpty()
-            if (tag.isNotBlank() && tag != selected.configTag) return
+            if (tag.isNotBlank() && tag != selected.configTag) {
+                if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
+                    pendingRouteProbeId = null
+                    pendingRouteProbeMetricKey = null
+                    if (::latencyText.isInitialized) {
+                        latencyText.isEnabled = true
+                        latencyText.alpha = 1f
+                    }
+                    if (::action.isInitialized) {
+                        action.isEnabled = true
+                        action.alpha = 1f
+                    }
+                    updateQualityStrip()
+                }
+                return
+            }
+            val metricKey = currentHomeRouteMetricKey(selected.id) ?: return
+            if (pendingRouteProbeMetricKey != null && pendingRouteProbeMetricKey != metricKey) {
+                if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
+                    pendingRouteProbeId = null
+                    pendingRouteProbeMetricKey = null
+                    if (::latencyText.isInitialized) {
+                        latencyText.isEnabled = true
+                        latencyText.alpha = 1f
+                    }
+                    if (::action.isInitialized) {
+                        action.isEnabled = true
+                        action.alpha = 1f
+                    }
+                    updateQualityStrip()
+                }
+                return
+            }
             if (!::latencyText.isInitialized) return
             val stage = event.getStringExtra(RouteProbeClient.EXTRA_STAGE).orEmpty()
             val elapsed = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
@@ -198,6 +252,7 @@ class MainActivity : Activity() {
                     event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID) == pendingRouteProbeId
                 ) {
                     pendingRouteProbeId = null
+                    pendingRouteProbeMetricKey = null
                     latencyText.isEnabled = true
                     latencyText.alpha = 1f
                 }
@@ -206,8 +261,8 @@ class MainActivity : Activity() {
             if (stage == "latency_sample") {
                 if (RouteProbeStatistics.isValidLatencyMillis(elapsed)) homePingSamples += elapsed
                 RouteProbeStatistics.medianLatencyMillis(homePingSamples)?.let { median ->
-                    lastRouteLatency = selected.id to median
-                    homePingErrorRouteId = null
+                    lastRouteLatency = metricKey to median
+                    homePingErrorKey = null
                 }
                 latencyText.setTextColor(DeyttUi.SKY)
                 updateQualityStrip()
@@ -221,8 +276,8 @@ class MainActivity : Activity() {
             when {
                 RouteProbeStatistics.isValidLatencyMillis(elapsed) -> {
                     pendingRouteProbeHasOutcome = true
-                    lastRouteLatency = selected.id to elapsed
-                    homePingErrorRouteId = null
+                    lastRouteLatency = metricKey to elapsed
+                    homePingErrorKey = null
                     latencyText.setTextColor(DeyttUi.MINT)
                     val english = AppLanguage.current(this@MainActivity) == AppLanguage.EN
                     latencyText.contentDescription = if (english) {
@@ -233,7 +288,7 @@ class MainActivity : Activity() {
                 }
                 !error.isNullOrBlank() -> {
                     pendingRouteProbeHasOutcome = true
-                    homePingErrorRouteId = selected.id
+                    homePingErrorKey = metricKey
                     latencyText.setTextColor(DeyttUi.CORAL)
                     latencyText.contentDescription = uiCopy("Проверка выхода через прокси: $error")
                 }
@@ -241,6 +296,7 @@ class MainActivity : Activity() {
             updateQualityStrip()
             if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
                 pendingRouteProbeId = null
+                pendingRouteProbeMetricKey = null
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 if (::action.isInitialized) {
@@ -250,7 +306,7 @@ class MainActivity : Activity() {
                 // A request's final broadcast only closes the queue. The preceding
                 // route broadcast already contains its result or error.
                 if (!pendingRouteProbeHasOutcome) {
-                    homePingErrorRouteId = selected.id
+                    homePingErrorKey = metricKey
                     latencyText.setTextColor(DeyttUi.CORAL)
                     updateQualityStrip()
                 }
@@ -290,6 +346,7 @@ class MainActivity : Activity() {
         currentAutoRouteKey = getSharedPreferences(ConnectVpnService.STATE_PREFS, MODE_PRIVATE)
             .getString(ConnectVpnService.EXTRA_ACTIVE_ROUTE_KEY, null)
             ?.takeIf { it in setOf("nl", "de", "fi", "ru", "it", "ru-de") }
+        currentAutoOutboundTag = ConnectVpnService.activeAutoOutboundTag(this)
         val filter = IntentFilter().apply {
             addAction(ConnectVpnService.ACTION_STATUS)
             addAction(ConnectVpnService.ACTION_ACTIVE_ROUTE)
@@ -335,6 +392,7 @@ class MainActivity : Activity() {
         if (RouteProbeClient.isRunning(this)) {
             runCatching { RouteProbeClient.cancel(this) }
             pendingRouteProbeId = null
+            pendingRouteProbeMetricKey = null
             if (::latencyText.isInitialized) {
                 latencyText.text = "—"
                 latencyText.isEnabled = true
@@ -784,8 +842,10 @@ class MainActivity : Activity() {
         updateRouteFlow(selected)
         updateQualityStrip()
         if (::latencyText.isInitialized) {
-            val cachedLatency = lastRouteLatency?.takeIf { it.first == selected.id }?.second
-                ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
+            val metricKey = currentHomeRouteMetricKey(selected.id)
+            val cachedLatency = lastRouteLatency?.takeIf {
+                renderedPhase == VpnPhase.CONNECTED && it.first == metricKey
+            }?.second
             latencyText.text = cachedLatency?.let(::formatLatency) ?: "—"
             latencyText.isEnabled = true
             latencyText.alpha = 1f
@@ -809,6 +869,7 @@ class MainActivity : Activity() {
             val selected = SelectedRouteStore(this).read()
             homeConnectQueued = true
             pendingRouteProbeId = null
+            pendingRouteProbeMetricKey = null
             if (::primaryPages.isInitialized) primaryPages.cancelRouteDiagnosticsForSelection()
             runCatching { RouteProbeClient.cancel(this) }
             action.isEnabled = false
@@ -902,6 +963,7 @@ class MainActivity : Activity() {
         if (RouteProbeClient.isRunning(this)) {
             runCatching { RouteProbeClient.cancel(this) }
             pendingRouteProbeId = null
+            pendingRouteProbeMetricKey = null
         }
         if (ConnectVpnService.isRunning()) {
             startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
@@ -959,6 +1021,7 @@ class MainActivity : Activity() {
         temporaryAwgMeasurement = true
         runCatching { RouteProbeClient.cancel(this) }
         pendingRouteProbeId = null
+        pendingRouteProbeMetricKey = null
         val app = applicationContext
         val handler = Handler(Looper.getMainLooper())
         var restorationRequested = false
@@ -1463,7 +1526,7 @@ class MainActivity : Activity() {
             if (currentNetworkLocation == null) refreshOriginOutsideVpn()
             if (ConnectVpnService.isRunning()) {
                 val config = SubscriptionStore(this).readCurrent()
-                if (config != null && !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName)) {
+                if (config != null && !isHomeApplicationRoutedByTunnel(config)) {
                     egressLookupFailed = true
                     egressRequestInFlight = false
                     updateNetworkLocationViews()
@@ -1611,7 +1674,7 @@ class MainActivity : Activity() {
             gravity = Gravity.START
             setOnClickListener { measureSelectedRoute() }
         }
-        addView(metric("Отклик", latencyText, "home-latency", onClick = ::measureSelectedRoute), LinearLayout.LayoutParams(0, -2, 1f))
+        addView(metric(uiCopy("Отклик"), latencyText, "home-latency", onClick = ::measureSelectedRoute), LinearLayout.LayoutParams(0, -2, 1f))
         addView(View(this@MainActivity).apply { setBackgroundColor(DeyttUi.LINE) },
             LinearLayout.LayoutParams(dp(1), dp(56)))
         downloadText = text("—", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
@@ -1632,51 +1695,104 @@ class MainActivity : Activity() {
             RouteProtocol.RU_DE -> "ru → de"
             else -> route?.let { "${it.countryCode.lowercase()}./${uiCopy(it.protocol.title).replace(" ", "")}" } ?: uiCopy(selected.title)
         }
-        val sample = RouteQualityStore.read(this, selected.id)
-        val recentSpeed = homeSpeedSample?.takeIf {
-            it.first == selected.id && homeSpeedSampleToken == TelegramSessionStore.read(this) &&
-                SystemClock.elapsedRealtime() - homeSpeedSampleAt in 0..(15 * 60_000L)
-        }?.second ?: sample?.downloadBytesPerSecond
-        val displayedSpeed = if (homeSpeedInFlight) homeSpeedCurrentBps else recentSpeed
+        val metricKey = currentHomeRouteMetricKey(selected.id)
+        val connected = renderedPhase == VpnPhase.CONNECTED
+        val recentSpeedSample = homeSpeedSample?.takeIf {
+            SystemClock.elapsedRealtime() - homeSpeedSampleAt in 0..(15 * 60_000L)
+        }
+        val recentSpeed = HomeMetricPresentation.value(connected, metricKey, recentSpeedSample?.first, recentSpeedSample?.second)
+        val displayedSpeed = HomeMetricPresentation.value(
+            connected, metricKey, if (homeSpeedInFlight) metricKey else recentSpeedSample?.first,
+            if (homeSpeedInFlight) homeSpeedCurrentBps else recentSpeed,
+        )
+        val speedError = HomeMetricPresentation.value(connected, metricKey, homeSpeedErrorKey, homeSpeedError)
+        val speedBypassed = HomeMetricPresentation.isCurrent(connected, metricKey, homeSpeedBypassedKey)
         val mbps = displayedSpeed?.times(8.0)?.div(1_000_000.0)
         val en = AppLanguage.current(this) == AppLanguage.EN
-        val latency = lastRouteLatency?.takeIf {
-            it.first == selected.id && RouteProbeStatistics.isValidLatencyMillis(it.second)
-        }?.second ?: sample?.latencyMillis
+        val latency = HomeMetricPresentation.value(connected, metricKey, lastRouteLatency?.first, lastRouteLatency?.second)
+            ?.takeIf(RouteProbeStatistics::isValidLatencyMillis)
+        val pingError = HomeMetricPresentation.isCurrent(connected, metricKey, homePingErrorKey)
+        val pingBypassed = HomeMetricPresentation.isCurrent(connected, metricKey, homePingBypassedKey)
         downloadText.text = when {
+            speedBypassed -> HomeMetricPresentation.bypassLabel(en)
             homeSpeedInFlight && mbps != null -> String.format(
                 java.util.Locale.US,
                 if (en) "↓ %.1f Mbps…" else "↓ %.1f Мбит/с…",
                 mbps,
             )
             homeSpeedInFlight -> if (en) "sampling…" else "замер…"
-            homeSpeedError != null -> if (en) "unavailable" else "недоступна"
+            speedError != null -> if (en) "unavailable" else "недоступна"
             mbps == null -> "—"
             else -> String.format(java.util.Locale.US, if (en) "%.1f Mbps" else "%.1f Мбит/с", mbps)
         }
         latencyText.text = when {
-            homePingErrorRouteId == selected.id -> if (en) "no response" else "нет ответа"
+            pingBypassed -> HomeMetricPresentation.bypassLabel(en)
+            pingError -> if (en) "no response" else "нет ответа"
             latency != null -> formatLatency(latency)
             else -> "—"
         }
         latencyText.setTextColor(when {
-            homePingErrorRouteId == selected.id -> DeyttUi.CORAL
-            selectedRouteLatencyInFlight || pendingRouteProbeId != null -> DeyttUi.SKY
+            pingBypassed -> DeyttUi.AMBER
+            pingError -> DeyttUi.CORAL
+            connected && (selectedRouteLatencyInFlight || pendingRouteProbeId != null) -> DeyttUi.SKY
             latency != null -> DeyttUi.MINT
             else -> DeyttUi.MUTED
         })
         val sampleSeconds = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS / 1_000
-        downloadText.contentDescription = homeSpeedError?.let { uiCopy(it) }
-            ?: uiCopy("Скорость загрузки, проба $sampleSeconds с. Нажмите для проверки маршрутов.")
+        downloadText.contentDescription = when {
+            speedBypassed -> uiCopy("Скорость не измеряется: приложение исключено из VPN текущими настройками обхода")
+            speedError != null -> uiCopy(speedError)
+            connected -> uiCopy("Скорость загрузки, проба $sampleSeconds с. Нажмите для проверки маршрутов.")
+            else -> uiCopy("Скорость проверяется после подключения")
+        }
         latencyText.contentDescription = when {
-            homePingErrorRouteId == selected.id -> uiCopy("Пинг: нет ответа через выбранный маршрут")
-            latency != null -> uiCopy("Пинг через выбранный маршрут: ${latency} миллисекунд")
-            else -> uiCopy("Проверить пинг через выбранный маршрут")
+            pingBypassed -> uiCopy("HTTPS-отклик не проходит через VPN при текущих настройках обхода")
+            pingError -> uiCopy("Отклик: нет ответа через выбранный маршрут")
+            latency != null -> uiCopy("Время HTTPS-ответа через выбранный маршрут: ${latency} миллисекунд")
+            connected -> uiCopy("Проверить время HTTPS-ответа через выбранный маршрут")
+            else -> uiCopy("Отклик проверяется после подключения")
         }
         qualityDots.setLoading(
-            (latency == null && homePingErrorRouteId != selected.id) ||
-                (mbps == null && homeSpeedError == null && renderedPhase == VpnPhase.CONNECTED),
+            (latency == null && !pingError && !pingBypassed) || (mbps == null && speedError == null && !speedBypassed && connected),
         )
+    }
+
+    private fun currentHomeRouteMetricKey(routeId: String): HomeRouteMetricKey? {
+        val config = SubscriptionStore(this).readCurrent() ?: return null
+        val route = runCatching {
+            RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
+                .firstOrNull { it.id == routeId }
+        }.getOrNull() ?: return null
+        return HomeRouteMetricKey(
+            routeId = route.id,
+            sessionToken = TelegramSessionStore.read(this),
+            configTag = route.configTag,
+            activeAutoRouteKey = currentAutoRouteKey.takeIf { route.protocol == RouteProtocol.AUTO },
+            activeAutoOutboundTag = currentAutoOutboundTag.takeIf { route.protocol == RouteProtocol.AUTO },
+            connectionGeneration = homeConnectionGeneration,
+        )
+    }
+
+    private fun isHomeApplicationRoutedByTunnel(config: String): Boolean {
+        val split = UserSplitTunnelStore(this)
+        return RouteProxyProbe.isApplicationRoutedByTunnel(
+            config,
+            packageName,
+            customPackages = split.readPackages(),
+            splitMode = split.readMode(),
+        )
+    }
+
+    private fun clearHomeMetricSamples() {
+        homePingSamples.clear()
+        lastRouteLatency = null
+        homePingErrorKey = null
+        homePingBypassedKey = null
+        homeSpeedSample = null
+        homeSpeedSampleAt = 0L
+        homeSpeedError = null
+        homeSpeedErrorKey = null
+        homeSpeedBypassedKey = null
     }
 
     private fun cancelHomeRouteDownload() {
@@ -1697,18 +1813,31 @@ class MainActivity : Activity() {
         val token = TelegramSessionStore.read(this) ?: return
         val config = SubscriptionStore(this).readCurrent() ?: return
         val route = RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)).firstOrNull { it.id == selected.id } ?: return
-        if (route.engine == TunnelEngine.LIBBOX && (!ConnectVpnService.isRunning() || !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName))) return
+        val metricKey = currentHomeRouteMetricKey(selected.id) ?: return
+        if (route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)) {
+            homeSpeedSample = null
+            homeSpeedSampleAt = 0L
+            homeSpeedError = null
+            homeSpeedErrorKey = null
+            homeSpeedBypassedKey = metricKey
+            updateQualityStrip()
+            return
+        }
+        if (route.engine == TunnelEngine.LIBBOX && !ConnectVpnService.isRunning()) return
         if (route.engine == TunnelEngine.AMNEZIAWG && !AwgTunnelController.isRunning()) return
         homeSpeedAttemptAt = now
         homeSpeedInFlight = true
         homeSpeedError = null
+        homeSpeedErrorKey = metricKey
+        homeSpeedBypassedKey = null
         homeSpeedCurrentBps = null
         val generation = homeSpeedGeneration
         val stillCurrent = {
             generation == homeSpeedGeneration && homeSpeedForeground && homeSpeedOnHome &&
                 !temporaryAwgMeasurement && !RouteProbeClient.isRunning(this) &&
                 renderedPhase == VpnPhase.CONNECTED && SelectedRouteStore(this).read().id == selected.id &&
-                TelegramSessionStore.read(this) == token &&
+                TelegramSessionStore.read(this) == token && currentHomeRouteMetricKey(selected.id) == metricKey &&
+                (route.engine != TunnelEngine.LIBBOX || isHomeApplicationRoutedByTunnel(config)) &&
                 (if (route.engine == TunnelEngine.AMNEZIAWG) AwgTunnelController.isRunning() else ConnectVpnService.isRunning())
         }
         updateQualityStrip()
@@ -1734,19 +1863,33 @@ class MainActivity : Activity() {
                 homeSpeedInFlight = false
                 homeSpeedFuture = null
                 homeSpeedCurrentBps = null
-                if (!stillCurrent() || isFinishing || isDestroyed) return@runOnUiThread
+                if (!stillCurrent() || isFinishing || isDestroyed) {
+                    if (!isFinishing && !isDestroyed && renderedPhase == VpnPhase.CONNECTED &&
+                        SelectedRouteStore(this).read().id == selected.id &&
+                        currentHomeRouteMetricKey(selected.id) == metricKey && route.engine == TunnelEngine.LIBBOX &&
+                        !isHomeApplicationRoutedByTunnel(config)
+                    ) {
+                        homeSpeedSample = null
+                        homeSpeedSampleAt = 0L
+                        homeSpeedError = null
+                        homeSpeedErrorKey = null
+                        homeSpeedBypassedKey = metricKey
+                        updateQualityStrip()
+                    }
+                    return@runOnUiThread
+                }
                 result.getOrNull()?.takeIf { it > 0L }?.let { speed ->
                     homeSpeedError = null
-                    homeSpeedSample = selected.id to speed
-                    homeSpeedSampleToken = token
+                    homeSpeedErrorKey = null
+                    homeSpeedSample = metricKey to speed
                     homeSpeedSampleAt = SystemClock.elapsedRealtime()
-                    val latency = lastRouteLatency?.takeIf { it.first == selected.id }?.second
-                        ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
+                    val latency = lastRouteLatency?.takeIf { it.first == metricKey }?.second
                     if (latency != null) RouteQualityStore.write(this, RouteProbeSample(selected.id, latency, speed))
                 } ?: run {
                     homeSpeedError = result.exceptionOrNull()?.let {
                         RouteProbePresentation.failure(it, AppLanguage.current(this) == AppLanguage.EN)
                     }
+                    homeSpeedErrorKey = metricKey.takeIf { homeSpeedError != null }
                 }
                 updateQualityStrip()
             }
@@ -1967,6 +2110,12 @@ class MainActivity : Activity() {
         if (previousPhase != currentPhase) {
             cancelHomeRouteDownload()
             if (currentPhase == VpnPhase.CONNECTED) {
+                homeConnectionGeneration++
+                clearHomeMetricSamples()
+                pendingRouteProbeId = null
+                pendingRouteProbeMetricKey = null
+                pendingRouteProbeHasOutcome = false
+                selectedRouteLatencyInFlight = false
                 homeSpeedConnectedRouteId = SelectedRouteStore(this).read().id
                 homeSpeedConnectedAt = SystemClock.elapsedRealtime()
                 homeSpeedAttemptAt = 0L
@@ -2026,6 +2175,7 @@ class MainActivity : Activity() {
         action.contentDescription = action.text.toString()
         action.isEnabled = currentPhase != VpnPhase.STOPPING && !homeConnectQueued
         action.alpha = if (action.isEnabled) 1f else .66f
+        if (::downloadText.isInitialized) updateQualityStrip()
     }
 
     private fun ensureConnectionProgressStarted(previousPhase: VpnPhase?) {
@@ -2071,36 +2221,58 @@ class MainActivity : Activity() {
         if (!::latencyText.isInitialized) return
         if (RouteProbeClient.isRunning(this) || selectedRouteLatencyInFlight) return
         if (homeConnectQueued || temporaryAwgMeasurement || renderedPhase in setOf(VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.STOPPING)) return
+        if (renderedPhase != VpnPhase.CONNECTED) {
+            latencyText.contentDescription = uiCopy("HTTPS-отклик проверяется после подключения")
+            updateQualityStrip()
+            latencyText.text = uiCopy("Отклик: после подключения").substringAfter(": ")
+            return
+        }
+        val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
+        if (!tunnelActive) {
+            latencyText.contentDescription = uiCopy("HTTPS-отклик проверяется после подключения")
+            latencyText.isEnabled = true
+            latencyText.alpha = 1f
+            updateQualityStrip()
+            latencyText.text = uiCopy("Отклик: после подключения").substringAfter(": ")
+            return
+        }
         val generation = ++latencyGeneration
         homePingSamples.clear()
         val selected = SelectedRouteStore(this).read()
         val config = SubscriptionStore(this).readCurrent() ?: return
         val route = RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
             .firstOrNull { it.id == selected.id } ?: return
+        val metricKey = currentHomeRouteMetricKey(selected.id) ?: return
         val method = RouteProbePreferences.method(this)
         val previousLatency = lastRouteLatency?.takeIf {
-            it.first == selected.id && RouteProbeStatistics.isValidLatencyMillis(it.second)
+            renderedPhase == VpnPhase.CONNECTED && it.first == metricKey && RouteProbeStatistics.isValidLatencyMillis(it.second)
         }?.second
-            ?: RouteQualityStore.read(this, selected.id)?.latencyMillis
-        homePingErrorRouteId = null
+        homePingErrorKey = null
+        homePingBypassedKey = null
         latencyText.text = previousLatency?.let(::formatLatency) ?: "—"
         latencyText.isEnabled = false
         latencyText.alpha = .65f
         updateQualityStrip()
-        val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         if (tunnelActive) {
-            if (route.id != selected.id ||
-                (route.engine == TunnelEngine.LIBBOX && !RouteProxyProbe.isApplicationRoutedByTunnel(config, packageName))
-            ) {
-                latencyText.text = uiCopy("Пинг: отключите соединение").substringAfter(": ")
+            val appBypassed = route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)
+            if (route.id != selected.id || appBypassed) {
+                if (appBypassed) {
+                    homePingSamples.clear()
+                    lastRouteLatency = null
+                    homePingBypassedKey = metricKey
+                    homePingErrorKey = null
+                    updateQualityStrip()
+                }
+                latencyText.text = uiCopy(if (appBypassed) "Отклик: в обход VPN" else "Отклик: отключите соединение").substringAfter(": ")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.setTextColor(DeyttUi.AMBER)
-                latencyText.contentDescription = uiCopy("Чтобы проверить другой выход, сначала отключите текущее соединение")
+                latencyText.contentDescription = if (appBypassed) uiCopy("HTTPS-отклик не проходит через VPN при текущих настройках обхода")
+                    else uiCopy("Чтобы проверить другой выход, сначала отключите текущее соединение")
                 return
             }
             if (route.engine == TunnelEngine.AMNEZIAWG && !AwgTunnelController.isRunning()) {
-                latencyText.text = uiCopy("Пинг: подключите AmneziaWG").substringAfter(": ")
+                latencyText.text = uiCopy("Отклик: подключите AmneziaWG").substringAfter(": ")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.setTextColor(DeyttUi.AMBER)
@@ -2113,12 +2285,22 @@ class MainActivity : Activity() {
                 val elapsed = runCatching {
                     RouteProxyProbe.measureThroughSystemVpn(method, onSample = { _, sample ->
                         runOnUiThread {
-                            if (generation != latencyGeneration || isFinishing || isDestroyed) return@runOnUiThread
+                            if (!HomeMetricPresentation.ownsRequest(generation, latencyGeneration) || currentHomeRouteMetricKey(selected.id) != metricKey || isFinishing || isDestroyed) return@runOnUiThread
+                            if (route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)) {
+                                homePingSamples.clear()
+                                lastRouteLatency = null
+                                homePingBypassedKey = metricKey
+                                homePingErrorKey = null
+                                latencyText.isEnabled = true
+                                latencyText.alpha = 1f
+                                updateQualityStrip()
+                                return@runOnUiThread
+                            }
                             if (sample != null && RouteProbeStatistics.isValidLatencyMillis(sample)) {
                                 homePingSamples += sample
                                 RouteProbeStatistics.medianLatencyMillis(homePingSamples)?.let { median ->
-                                    lastRouteLatency = selected.id to median
-                                    homePingErrorRouteId = null
+                                    lastRouteLatency = metricKey to median
+                                    homePingErrorKey = null
                                 }
                             }
                             latencyText.setTextColor(DeyttUi.SKY)
@@ -2127,30 +2309,46 @@ class MainActivity : Activity() {
                     })
                 }.getOrNull()
                 runOnUiThread {
+                    if (!HomeMetricPresentation.ownsRequest(generation, latencyGeneration)) return@runOnUiThread
                     selectedRouteLatencyInFlight = false
-                    if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
-                        val validElapsed = elapsed?.takeIf(RouteProbeStatistics::isValidLatencyMillis)
-                        if (validElapsed != null) {
-                            lastRouteLatency = selected.id to validElapsed
-                            homePingErrorRouteId = null
-                        } else {
-                            homePingErrorRouteId = selected.id
-                        }
-                        if (validElapsed != null && homePingSamples.isEmpty()) homePingSamples += validElapsed
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (currentHomeRouteMetricKey(selected.id) != metricKey) {
                         latencyText.isEnabled = true
                         latencyText.alpha = 1f
-                        latencyText.setTextColor(if (validElapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
-                        latencyText.contentDescription = validElapsed?.let {
-                            uiCopy("Медиана HTTPS-ответов через активное соединение: ${it} миллисекунд")
-                        } ?: uiCopy("HTTPS-проверка через активное соединение не ответила за 8 секунд")
                         updateQualityStrip()
+                        return@runOnUiThread
                     }
+                    if (route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)) {
+                        homePingSamples.clear()
+                        lastRouteLatency = null
+                        homePingBypassedKey = metricKey
+                        homePingErrorKey = null
+                        latencyText.isEnabled = true
+                        latencyText.alpha = 1f
+                        updateQualityStrip()
+                        return@runOnUiThread
+                    }
+                    val validElapsed = elapsed?.takeIf(RouteProbeStatistics::isValidLatencyMillis)
+                    if (validElapsed != null) {
+                        lastRouteLatency = metricKey to validElapsed
+                        homePingErrorKey = null
+                    } else {
+                        homePingErrorKey = metricKey
+                    }
+                    if (validElapsed != null && homePingSamples.isEmpty()) homePingSamples += validElapsed
+                    latencyText.isEnabled = true
+                    latencyText.alpha = 1f
+                    latencyText.setTextColor(if (validElapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
+                    latencyText.contentDescription = validElapsed?.let {
+                        uiCopy("Медиана HTTPS-ответов через активное соединение: ${it} миллисекунд")
+                    } ?: uiCopy("HTTPS-проверка через активное соединение не ответила за 8 секунд")
+                    updateQualityStrip()
                 }
             }
             return
         }
         if (route.engine == TunnelEngine.AMNEZIAWG) {
-            latencyText.text = uiCopy("Пинг: подключите AmneziaWG").substringAfter(": ")
+            latencyText.text = uiCopy("Отклик: подключите AmneziaWG").substringAfter(": ")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             latencyText.setTextColor(DeyttUi.AMBER)
@@ -2158,7 +2356,7 @@ class MainActivity : Activity() {
             return
         }
         if (route.engine == TunnelEngine.OPENFLUX) {
-            latencyText.text = uiCopy("Пинг: после подключения").substringAfter(": ")
+            latencyText.text = uiCopy("Отклик: после подключения").substringAfter(": ")
             latencyText.isEnabled = true
             latencyText.alpha = 1f
             return
@@ -2173,6 +2371,7 @@ class MainActivity : Activity() {
         }
         try {
             pendingRouteProbeHasOutcome = false
+            pendingRouteProbeMetricKey = metricKey
             homePingSamples.clear()
             pendingRouteProbeId = RouteProbeClient.start(
                 this, config, listOf(route.configTag), method, TelegramSessionStore.read(this), latencyOnly = true,
@@ -2185,8 +2384,8 @@ class MainActivity : Activity() {
             updateQualityStrip()
         } catch (_: Throwable) {
             if (generation == latencyGeneration && !isFinishing && !isDestroyed) {
-                homePingErrorRouteId = selected.id
-                latencyText.text = uiCopy("Пинг: ошибка").substringAfter(": ")
+                homePingErrorKey = metricKey
+                latencyText.text = uiCopy("Отклик: ошибка").substringAfter(": ")
                 latencyText.isEnabled = true
                 latencyText.alpha = 1f
                 latencyText.setTextColor(DeyttUi.CORAL)

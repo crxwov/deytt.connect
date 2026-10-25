@@ -111,10 +111,10 @@ internal object AppLanguage {
             "выходы · выбор · диагностика" to "LOCATIONS · PROTOCOLS",
             "Раскройте страну, чтобы проверить выходы. Выбор не запускает подключение." to "Open a country to compare its routes. Select a route, then connect.",
             "быстрый выбор" to "Quick select", "выбрать" to "select", "ТРАНЗИТ" to "VIA",
-            "Задержка" to "Ping", "Задержка: —" to "Ping: —", "Пинг" to "Ping", "Пинг: —" to "Ping: —",
+            "Задержка" to "Response", "Задержка: —" to "Response: —", "Пинг" to "Response", "Пинг: —" to "Response: —",
             "Скорость: —" to "Speed: —",
             "Скорость: проверить" to "Test speed",
-            "Отклик" to "Latency",
+            "Отклик" to "Response",
             "Скорость" to "Speed",
             "Обновить замер" to "Refresh measurement",
             "Последний замер загрузки. Нажмите, чтобы проверить маршруты." to "Last download test. Tap to compare routes.",
@@ -162,8 +162,8 @@ internal object AppLanguage {
         Regex("^1 профиль загружен$").matchEntire(value)?.let { return "1 profile loaded" }
         Regex("^([0-9]+) профиля загружено$").matchEntire(value)?.let { return "${it.groupValues[1]} profiles loaded" }
         Regex("^([0-9]+) профилей загружено$").matchEntire(value)?.let { return "${it.groupValues[1]} profiles loaded" }
-        Regex("^Пинг (.+)\\. Короткое нажатие проверяет один сервер, удержание — все$")
-            .matchEntire(value)?.let { return "Ping ${it.groupValues[1]}. Tap to check one server; press and hold to check all." }
+        Regex("^Отклик (.+)\\. Короткое нажатие проверяет один сервер, удержание — все$")
+            .matchEntire(value)?.let { return "Response ${it.groupValues[1]}. Tap to check one server; press and hold to check all." }
         Regex("^Проверка маршрута: Via Proxy, Double, тайм-аут 10 секунд, метод (.+)$")
             .matchEntire(value)?.let { return "Route check: Via Proxy, Double, 10-second timeout, ${it.groupValues[1]} method" }
         Regex("^Via Proxy · Double · 10 с · (.+)$").matchEntire(value)?.let {
@@ -237,8 +237,11 @@ internal object AppLanguage {
         Regex("^Выбранный выход: (.+)$").matchEntire(value)?.let {
             return "Selected exit: ${english(it.groupValues[1])}"
         }
-        Regex("^Пинг через выбранный маршрут: ([0-9]+) миллисекунд$").matchEntire(value)?.let {
-            return "Selected route ping: ${it.groupValues[1]} milliseconds"
+        Regex("^Время HTTPS-ответа через выбранный маршрут: ([0-9]+) миллисекунд$").matchEntire(value)?.let {
+            return "HTTPS response time through the selected route: ${it.groupValues[1]} milliseconds"
+        }
+        Regex("^Проверить время HTTPS-ответа через выбранный маршрут$").matchEntire(value)?.let {
+            return "Check HTTPS response time through the selected route"
         }
         Regex("^Скорость загрузки, проба ([0-9]+) с\\. Нажмите для проверки маршрутов\\.$").matchEntire(value)?.let {
             return "Download speed, ${it.groupValues[1]}-second sample. Tap to check routes."
@@ -305,7 +308,7 @@ internal object AppLanguage {
         "Маршруты" to "Routes",
         "обход · германия" to "bypass · germany",
         "через cups → германию" to "via cups → germany",
-        "Пинг: после подключения" to "Ping: after connecting",
+        "Отклик: после подключения" to "Response: after connecting",
         "Обновите подписку: профиль обхода отсутствует или истёк" to "Refresh your subscription: the bypass profile is missing or expired",
         "Обход Cups сейчас недоступен для этой подписки. Попробуйте позже или выберите другой маршрут." to "Cups bypass is currently unavailable for this subscription. Try later or choose another route.",
         "Сервер подписки пока не поддерживает обход Cups. Выберите другой маршрут." to "This subscription server does not support Cups bypass yet. Choose another route.",
@@ -381,7 +384,13 @@ internal object AppLanguage {
         "AmneziaWG · готовые профили" to "AmneziaWG · profiles",
         "Профили не найдены · обновите подписку" to "No profiles found · refresh the subscription",
         "1 сервер · выбрать точку" to "1 server · choose a node",
-        "пинг" to "ping",
+        "Отклик" to "Response",
+        "Отклик: —" to "Response: —",
+        "Отклик: нет ответа через выбранный маршрут" to "Response: no reply via the selected route",
+        "Отклик: отключите соединение" to "Response: disconnect first",
+        "Отклик: подключите AmneziaWG" to "Response: connect AmneziaWG",
+        "Отклик: в обход VPN" to "Response bypasses VPN",
+        "Отклик: ошибка" to "Response: error",
         "проверка…" to "checking…",
         "нет ответа" to "no response",
         "нет" to "none",
@@ -389,14 +398,15 @@ internal object AppLanguage {
         "через прокси…" to "checking route…",
         "ошибка" to "error",
         "тайм-аут" to "timed out",
-        "Пинг: нет ответа через выбранный маршрут" to "Ping: no response via the selected route",
-        "Проверить пинг через выбранный маршрут" to "Check ping via the selected route",
-        "Пинг: отключите соединение" to "Ping: disconnect first",
+        "HTTPS-отклик проверяется после подключения" to "HTTPS response is checked after connecting",
+        "HTTPS-отклик не проходит через VPN при текущих настройках обхода" to "HTTPS response bypasses VPN with the current settings",
+        "Приложение идёт в обход VPN" to "App bypasses VPN",
         "Чтобы проверить другой выход, сначала отключите текущее соединение" to "Disconnect the current connection to check another exit",
-        "Пинг: подключите AmneziaWG" to "Ping: connect AmneziaWG",
+        "Отклик: подключите AmneziaWG" to "Response: connect AmneziaWG",
+        "Скорость не измеряется: приложение исключено из VPN текущими настройками обхода" to "Speed is unavailable because current bypass settings exclude this app from the VPN",
         "Для HTTP-проверки подключите выбранный профиль AmneziaWG" to "Connect the selected AmneziaWG profile for HTTP checks",
         "HTTPS-проверка через активное соединение не ответила за 8 секунд" to "HTTPS check through the active connection timed out after 8 seconds",
-        "Пинг: ошибка" to "Ping: error",
+        "Отклик: после подключения" to "Response: after connecting",
         "Не удалось запустить проверку через прокси" to "Could not start the proxy check",
         "Получаем маршруты…" to "Loading routes…",
         "Создать" to "Create",

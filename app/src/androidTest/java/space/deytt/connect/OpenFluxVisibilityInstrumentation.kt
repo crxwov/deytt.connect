@@ -256,7 +256,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             val homeGlobeHost = onMainValue { sharedGlobe.parent }
 
             stage = "two_pointer_map_pinch_zoom_does_not_page"
-            pinchMapWithoutPaging(launched, sharedGlobe)
+            pinchMapWithoutPaging(launched, sharedGlobe, screenshots, results)
             passed += stage
 
             // Exercise the requested leftward swipe from Home to Routes using the real ViewPager2.
@@ -647,7 +647,12 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         }
     }
 
-    private fun pinchMapWithoutPaging(activity: MainActivity, globe: RouteGlobeView) {
+    private fun pinchMapWithoutPaging(
+        activity: MainActivity,
+        globe: RouteGlobeView,
+        screenshots: ArrayList<String>,
+        results: Bundle,
+    ) {
         val webView = onMainValue {
             checkNotNull(findViews(globe) { it is WebView }.singleOrNull()) {
                 "Home globe should contain one local WebView for pinch QA"
@@ -802,6 +807,42 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             }
         }
         awaitPagerSettled(activity, 0, "Подключить")
+
+        runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=3;window.deyttMapAtlas.start()", null) }
+        val midZoomDeadline = SystemClock.elapsedRealtime() + 10_000L
+        while (SystemClock.elapsedRealtime() < midZoomDeadline && readAtlasCurrentZoom(webView) < 2.98) {
+            Thread.sleep(50)
+        }
+        check(kotlin.math.abs(readAtlasCurrentZoom(webView) - 3.0) < .03) {
+            "Mid-zoom globe did not settle before viewport QA: ${readAtlasPinchDiagnostics(webView)}"
+        }
+        saveQaScreenshot("globe-zoom3", screenshots, results)
+
+        runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=32;window.deyttMapAtlas.start()", null) }
+        val maxZoomDeadline = SystemClock.elapsedRealtime() + 10_000L
+        while (SystemClock.elapsedRealtime() < maxZoomDeadline && readAtlasCurrentZoom(webView) < 31.95) {
+            Thread.sleep(50)
+        }
+        check(readAtlasTargetZoom(webView) == 32.0 && readAtlasCurrentZoom(webView) >= 31.95) {
+            "Maximum zoom did not settle before circular-viewport QA: ${readAtlasPinchDiagnostics(webView)}"
+        }
+        val offscreenLabel = runAtlasScript(webView, """
+            (function(){var a=window.deyttMapAtlas,p=a.projectedNodes.de||a.projectLocation(window.DeyttAtlas.locations.de,1.008);
+              return 'deAnchorVisible='+a.isAndroidViewportAnchorVisible(p);})()
+        """.trimIndent())
+        check(offscreenLabel == "deAnchorVisible=false") {
+            "Offscreen DE label anchor should be hidden as a whole at 32x, got $offscreenLabel"
+        }
+        val cornerAlpha = runAtlasScript(webView, """
+            (function(){var c=document.querySelector('.network-atlas canvas'),x=c.getContext('2d'),w=c.width,h=c.height;
+              return [[0,0],[w-1,0],[0,h-1],[w-1,h-1]].map(function(p){return x.getImageData(p[0],p[1],1,1).data[3]}).join(',');})()
+        """.trimIndent())
+        val cornerValues = cornerAlpha.split(',').mapNotNull(String::toIntOrNull)
+        check(cornerValues.size == 4 && cornerValues.all { it < 8 }) {
+            "Zoom 32 viewport corners should reveal the continuous sky, got alpha=$cornerAlpha"
+        }
+        runOnMainSync { android.util.Log.i("OpenFluxVisibilityQA", "globe_zoom32_corner_alpha=$cornerAlpha") }
+        saveQaScreenshot("globe-zoom32", screenshots, results)
 
         runOnMainSync {
             webView.evaluateJavascript("window.deyttResetMapView && window.deyttResetMapView()", null)

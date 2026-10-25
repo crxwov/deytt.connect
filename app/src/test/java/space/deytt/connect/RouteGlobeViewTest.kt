@@ -30,7 +30,10 @@ class RouteGlobeViewTest {
         assertTrue(RouteGlobeView.isTouchInsideVisibleGlobe(890f, 500f, 1000, 1000, .405f))
         assertFalse(RouteGlobeView.isTouchInsideVisibleGlobe(910f, 500f, 1000, 1000, .405f))
         assertTrue(RouteGlobeView.isTouchInsideVisibleGlobe(890f, 500f, 1000, 1000, .45f))
-        assertTrue(RouteGlobeView.isTouchInsideVisibleGlobe(0f, 0f, 1000, 1000, 13.76f))
+        val maskedRadius = RouteGlobeView.viewportRadiusFraction(13.76f)
+        assertEquals(.5f, maskedRadius)
+        assertFalse(RouteGlobeView.isTouchInsideVisibleGlobe(0f, 0f, 1000, 1000, maskedRadius))
+        assertTrue(RouteGlobeView.isTouchInsideVisibleGlobe(500f, 500f, 1000, 1000, maskedRadius))
         assertFalse(RouteGlobeView.isTouchInsideVisibleGlobe(0f, 0f, 0, 1000, .405f))
     }
 

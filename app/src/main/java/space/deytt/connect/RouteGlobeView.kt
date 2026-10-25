@@ -46,7 +46,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         @JavascriptInterface
         fun onGlobeRadiusChanged(radiusFraction: Float) {
             if (radiusFraction.isFinite() && radiusFraction in 0f..16f) {
-                visibleGlobeRadiusFraction = radiusFraction
+                visibleGlobeRadiusFraction = viewportRadiusFraction(radiusFraction)
             }
         }
     }
@@ -411,6 +411,9 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             val dy = y - height / 2f
             return dx * dx + dy * dy <= radius * radius
         }
+
+        internal fun viewportRadiusFraction(globeRadiusFraction: Float): Float =
+            globeRadiusFraction.coerceIn(0f, .5f)
 
         internal fun routeKeyFor(selectedRouteId: String): String {
             val routeTokens = selectedRouteId.uppercase().split(Regex("[^A-Z]+"))
