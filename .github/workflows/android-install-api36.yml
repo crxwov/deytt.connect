@@ -36,6 +36,17 @@ jobs:
   install-smoke:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - page_bytes: 4096
+            image: google_apis
+          - page_bytes: 16384
+            image: google_apis_ps16k
+    env:
+      SYSTEM_IMAGE: system-images;android-36;${{ matrix.image }};x86_64
+      EXPECTED_PAGE_SIZE: ${{ matrix.page_bytes }}
     steps:
       - name: Validate dispatch inputs
         id: validate
@@ -88,7 +99,7 @@ jobs:
             "platform-tools" \
             "build-tools;35.0.0" \
             "emulator" \
-            "system-images;android-36;google_apis;x86_64"
+            "$SYSTEM_IMAGE"
 
       - name: Download and verify release APKs
         shell: bash
@@ -148,7 +159,7 @@ jobs:
           mkdir -p "$ANDROID_AVD_HOME"
           echo no | avdmanager create avd \
             --name api36-smoke \
-            --package "system-images;android-36;google_apis;x86_64" \
+            --package "$SYSTEM_IMAGE" \
             --device pixel_2 \
             --force
           test -f "$ANDROID_AVD_HOME/api36-smoke.ini"
@@ -174,6 +185,8 @@ jobs:
           adb shell input keyevent 82
           adb shell getprop ro.build.version.sdk | tee "$RUNNER_TEMP/android-api36-smoke/logs/api-level.txt"
           test "$(cat "$RUNNER_TEMP/android-api36-smoke/logs/api-level.txt" | tr -d '\r')" = 36
+          adb shell getconf PAGE_SIZE | tee "$RUNNER_TEMP/android-api36-smoke/logs/page-size.txt"
+          test "$(cat "$RUNNER_TEMP/android-api36-smoke/logs/page-size.txt" | tr -d '\r')" = "$EXPECTED_PAGE_SIZE"
 
       - name: Test fresh install and in-place upgrades
         shell: bash
@@ -246,6 +259,7 @@ jobs:
             "$logs/summary.txt"
             "$logs/apk-sha256.txt"
             "$logs/api-level.txt"
+            "$logs/page-size.txt"
             "$logs"/*-badging.txt
             "$logs"/*-signature.txt
             "$logs"/*-install.txt
