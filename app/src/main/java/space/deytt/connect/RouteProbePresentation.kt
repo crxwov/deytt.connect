@@ -15,6 +15,9 @@ internal data class HomeRouteMetricKey(
 )
 
 internal object HomeMetricPresentation {
+    fun speedNeedsLogin(connected: Boolean, key: HomeRouteMetricKey?): Boolean =
+        connected && key != null && key.sessionToken.isNullOrBlank()
+
     fun bypassLabel(english: Boolean): String = if (english) "vpn bypassed" else "в обход vpn"
 
     fun ownsRequest(requestGeneration: Int, currentGeneration: Int): Boolean = requestGeneration == currentGeneration

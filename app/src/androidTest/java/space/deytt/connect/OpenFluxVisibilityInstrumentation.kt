@@ -192,6 +192,9 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                         }
                         val latency = checkNotNull(findView(content) { it.tag == "home-latency" })
                         val speed = checkNotNull(findView(content) { it.tag == "home-speed" })
+                        check(findView(content) { it is DiagnosticDotsView }?.isShown == false) {
+                            "Disconnected Home must not animate a measurement that is not running"
+                        }
                         val latencyBounds = Rect()
                         val speedBounds = Rect()
                         check(latency.isShown && speed.isShown && latency.getGlobalVisibleRect(latencyBounds) && speed.getGlobalVisibleRect(speedBounds)) {

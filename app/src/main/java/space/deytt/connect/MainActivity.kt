@@ -851,7 +851,11 @@ class MainActivity : Activity() {
         root.addView(buildQualityStrip())
         root.addView(button("Обновить замер", secondary = true).apply {
             tag = "home-refresh"
-            setOnClickListener { measureSelectedRoute() }
+            setOnClickListener {
+                homeSpeedAttemptAt = 0L
+                measureHomeRouteDownload()
+                measureSelectedRoute()
+            }
         }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
         updateRouteFlow(SelectedRouteStore(this).read())
         updateNetworkLocationViews()
@@ -1721,7 +1725,9 @@ class MainActivity : Activity() {
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
-        addView(metric("Скорость", downloadText, "home-speed", showQuality = true) { selectTab(1) }, LinearLayout.LayoutParams(0, -2, 1f))
+        addView(metric("Скорость", downloadText, "home-speed", showQuality = true) {
+            selectTab(if (TelegramSessionStore.read(this@MainActivity) == null) 2 else 1)
+        }, LinearLayout.LayoutParams(0, -2, 1f))
     }
 
     private fun updateQualityStrip() {
@@ -1737,6 +1743,7 @@ class MainActivity : Activity() {
         }
         val metricKey = currentHomeRouteMetricKey(selected.id)
         val connected = renderedPhase == VpnPhase.CONNECTED
+        val speedNeedsLogin = HomeMetricPresentation.speedNeedsLogin(connected, metricKey)
         val recentSpeedSample = homeSpeedSample?.takeIf {
             SystemClock.elapsedRealtime() - homeSpeedSampleAt in 0..(15 * 60_000L)
         }
@@ -1751,6 +1758,7 @@ class MainActivity : Activity() {
         val pingBypassed = HomeMetricPresentation.isCurrent(connected, metricKey, homePingBypassedKey)
         downloadText.text = when {
             speedBypassed -> HomeMetricPresentation.bypassLabel(en)
+            speedNeedsLogin -> if (en) "sign in" else "войдите"
             homeSpeedInFlight && mbps != null -> String.format(
                 java.util.Locale.US,
                 if (en) "↓ %.1f Mbps…" else "↓ %.1f Мбит/с…",
@@ -1777,6 +1785,8 @@ class MainActivity : Activity() {
         val sampleSeconds = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS / 1_000
         downloadText.contentDescription = when {
             speedBypassed -> uiCopy("Скорость не измеряется: приложение исключено из VPN текущими настройками обхода")
+            speedNeedsLogin -> if (en) "Sign in to Telegram to measure speed. Tap to open your profile."
+                else "Для замера скорости войдите через Telegram. Нажмите, чтобы открыть профиль."
             speedError != null -> uiCopy(speedError)
             connected -> uiCopy("Скорость загрузки, проба $sampleSeconds с. Нажмите для проверки маршрутов.")
             else -> uiCopy("Скорость проверяется после подключения")
@@ -1789,7 +1799,7 @@ class MainActivity : Activity() {
             else -> uiCopy("Отклик проверяется после подключения")
         }
         qualityDots.setLoading(
-            (latency == null && !pingError && !pingBypassed) || (mbps == null && speedError == null && !speedBypassed && connected),
+            connected && (selectedRouteLatencyInFlight || pendingRouteProbeId != null || homeSpeedInFlight),
         )
     }
 

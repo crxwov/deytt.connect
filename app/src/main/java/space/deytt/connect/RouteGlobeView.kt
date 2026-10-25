@@ -50,6 +50,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     }
 
     init {
+        if (BuildConfig.DEBUG && context.packageName.endsWith(".qa")) WebView.setWebContentsDebuggingEnabled(true)
         clipChildren = false
         clipToPadding = false
         setBackgroundColor(Color.TRANSPARENT)

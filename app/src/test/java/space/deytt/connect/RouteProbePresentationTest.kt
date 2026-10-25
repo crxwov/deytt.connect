@@ -66,6 +66,15 @@ class RouteProbePresentationTest {
     }
 
     @Test
+    fun importedProfilesExplainMissingSpeedAuthorizationOnlyWhenConnected() {
+        val imported = HomeRouteMetricKey("auto", null, "tag-a", "de", "outbound-de-1", 1L)
+        assertEquals(true, HomeMetricPresentation.speedNeedsLogin(true, imported))
+        assertEquals(false, HomeMetricPresentation.speedNeedsLogin(false, imported))
+        assertEquals(false, HomeMetricPresentation.speedNeedsLogin(true, imported.copy(sessionToken = "session-a")))
+        assertEquals(false, HomeMetricPresentation.speedNeedsLogin(true, null))
+    }
+
+    @Test
     fun homeMetricValueIsVisibleOnlyForTheFreshConnectedRouteContext() {
         val current = HomeRouteMetricKey("auto", "session-a", "tag-a", "de", "outbound-de-1", 3L)
         assertEquals(42L, HomeMetricPresentation.value(true, current, current, 42L))
