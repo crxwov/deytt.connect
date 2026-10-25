@@ -1,5 +1,6 @@
 """Focused tests for the distribution signing contract."""
 import contextlib
+import hashlib
 import importlib.util
 import io
 from pathlib import Path
@@ -19,6 +20,80 @@ APPROVED = release.POLICY["certificate_sha256"]
 
 
 class ReleaseSigningContractTests(unittest.TestCase):
+    def test_bundle_contains_exact_verified_apk_and_checksum_in_unique_entries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            apk = root / "source.apk"
+            output = root / "deytt-connect-0.11.57-install.zip"
+            payload = b"already signed release APK bytes"
+            apk.write_bytes(payload)
+            digest = hashlib.sha256(payload).hexdigest()
+            args = type("Args", (), {
+                "apk": apk, "output": output, "expected_version": "0.11.57",
+                "expected_version_code": 87,
+            })()
+            with mock.patch.object(release, "verify", return_value=digest) as verify:
+                release.bundle(args)
+
+            verify.assert_called_once_with(apk, expected_version="0.11.57", expected_version_code=87)
+            with zipfile.ZipFile(output) as archive:
+                self.assertEqual(archive.namelist(), [
+                    "app-universal-release.apk", "app-universal-release.apk.sha256",
+                ])
+                self.assertIsNone(archive.testzip())
+                self.assertEqual(archive.read("app-universal-release.apk"), payload)
+                self.assertEqual(
+                    archive.read("app-universal-release.apk.sha256").decode(),
+                    f"{digest}  app-universal-release.apk\n",
+                )
+
+    def test_bundle_does_not_promote_output_when_apk_verification_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            apk = root / "source.apk"
+            output = root / "deytt-connect-0.11.57-install.zip"
+            apk.write_bytes(b"invalid APK")
+            output.write_bytes(b"previous bundle")
+            args = type("Args", (), {
+                "apk": apk, "output": output, "expected_version": None,
+                "expected_version_code": None,
+            })()
+            with mock.patch.object(release, "verify", side_effect=ValueError("invalid APK")):
+                with self.assertRaisesRegex(ValueError, "invalid APK"):
+                    release.bundle(args)
+            self.assertEqual(output.read_bytes(), b"previous bundle")
+
+    def test_bundle_rejects_apk_changed_after_verification(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            apk, output = root / "source.apk", root / "install.zip"
+            apk.write_bytes(b"verified")
+            output.write_bytes(b"previous bundle")
+            digest = hashlib.sha256(apk.read_bytes()).hexdigest()
+            def changed(*args, **kwargs):
+                apk.write_bytes(b"changed")
+                return digest
+            args = type("Args", (), {
+                "apk": apk, "output": output, "expected_version": None,
+                "expected_version_code": None,
+            })()
+            with mock.patch.object(release, "verify", side_effect=changed):
+                with self.assertRaisesRegex(ValueError, "changed after signature verification"):
+                    release.bundle(args)
+            self.assertEqual(output.read_bytes(), b"previous bundle")
+
+    def test_bundle_rejects_apk_as_output_and_does_not_offer_qa_mode(self):
+        parser = release.build_parser()
+        with self.assertRaisesRegex(ValueError, "must not overwrite the APK"):
+            release.bundle(type("Args", (), {
+                "apk": Path("release.apk"), "output": Path("release.apk"),
+                "expected_version": None, "expected_version_code": None,
+            })())
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
+            parser.parse_args(["bundle", "release.apk", "--output", "install.zip", "--qa"])
+        self.assertEqual(raised.exception.code, 2)
+        self.assertTrue(parser.parse_args(["verify", "release.apk", "--qa"]).qa)
+
     def test_inspect_rejects_corrupt_zip_payload(self):
         with tempfile.TemporaryDirectory() as temporary:
             apk = Path(temporary) / "corrupt.apk"
