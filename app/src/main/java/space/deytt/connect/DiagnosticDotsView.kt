@@ -10,7 +10,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.TextView
 
-/** A small text-only pending indicator, shown only while a diagnostic has no value yet. */
+/** Text-only pending indicator retained for the Home quality summary. */
 internal class DiagnosticDotsView(context: Context) : TextView(context) {
     private val handler = Handler(Looper.getMainLooper())
     private val frames = arrayOf("·", "··", "···", "··")

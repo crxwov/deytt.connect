@@ -1,7 +1,6 @@
 package space.deytt.connect
 
 import android.app.Dialog
-import android.app.AlertDialog
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Canvas
@@ -127,14 +126,14 @@ internal class PrimaryPages(private val host: MainActivity) {
     private data class ProbeRouteRow(
         val route: DeyttRoute,
         val status: TextView,
-        val progress: DiagnosticDotsView,
+        val progress: DiagnosticProgressView,
     )
     private data class CountryProbeState(
         val code: String,
         val routes: List<DeyttRoute>,
         val rows: Map<String, ProbeRouteRow>,
         val summary: TextView,
-        val summaryDots: DiagnosticDotsView,
+        val summaryProgress: DiagnosticProgressView,
         val samples: MutableMap<String, RouteProbeSample> = mutableMapOf(),
         val pingTraces: MutableMap<String, MutableList<Long>> = mutableMapOf(),
         val errors: MutableMap<String, String> = mutableMapOf(),
@@ -325,13 +324,13 @@ internal class PrimaryPages(private val host: MainActivity) {
                 maxLines = 2
                 setPadding(0, host.dp(8), 0, host.dp(8))
             }
-            val summaryDots = DiagnosticDotsView(host)
+            val summaryProgress = DiagnosticProgressView(host)
             detail.addView(LinearLayout(host).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(host.dp(54), host.dp(2), host.dp(16), host.dp(2))
                 addView(summary, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                addView(summaryDots, LinearLayout.LayoutParams(host.dp(26), host.dp(30)))
+                addView(summaryProgress, LinearLayout.LayoutParams(host.dp(20), host.dp(20)))
             })
             val rowById = linkedMapOf<String, ProbeRouteRow>()
             countryRoutes.forEachIndexed { index, route ->
@@ -354,7 +353,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                     setPadding(0, host.dp(4), 0, host.dp(8))
                     if (isCachedBest) setTypeface(null, android.graphics.Typeface.BOLD)
                 }
-                val dots = DiagnosticDotsView(host)
+                val progress = DiagnosticProgressView(host)
                 val item = host.row(rowTitle, rowSubtitle, if (isAwg) "AWG_MARK" else protocolMark(route.protocol), "",
                     emphasis = route.id == selectedId)
                 val protocolDrawable = when (route.protocol) {
@@ -373,8 +372,15 @@ internal class PrimaryPages(private val host: MainActivity) {
                         contentDescription = route.protocol.title
                     }, 0, params)
                 }
+                val metricsColumn = item.getChildAt(1) as LinearLayout
+                metric.setPadding(0, host.dp(6), 0, host.dp(3))
+                metricsColumn.addView(metric)
+                item.addView(progress, LinearLayout.LayoutParams(host.dp(20), host.dp(20)).apply {
+                    marginStart = host.dp(8)
+                    marginEnd = host.dp(10)
+                })
                 item.setOnClickListener { host.selectRoute(route) }
-                val probeRow = ProbeRouteRow(route, metric, dots)
+                val probeRow = ProbeRouteRow(route, metric, progress)
                 if (isAwg) {
                     metric.text = cached?.let { sampleLabel(it, isCachedBest) }
                         ?: copy("Отклик: — · Скорость: —", "Response: — · Speed: —")
@@ -382,19 +388,8 @@ internal class PrimaryPages(private val host: MainActivity) {
                 }
                 rowById[route.id] = probeRow
                 detail.addView(item)
-                detail.addView(LinearLayout(host).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(metric, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
-                        leftMargin = host.dp(54)
-                        rightMargin = host.dp(8)
-                    })
-                    addView(dots, LinearLayout.LayoutParams(host.dp(26), host.dp(32)).apply {
-                        rightMargin = host.dp(16)
-                    })
-                })
             }
-            val countryState = CountryProbeState(code, networkRoutes + awgRoutes, rowById, summary, summaryDots)
+            val countryState = CountryProbeState(code, networkRoutes + awgRoutes, rowById, summary, summaryProgress)
             val countryHeader = host.row(
                 if (code == "AWG_UNKNOWN") "Регион не указан" else first.country,
                 if (protocolSummary.isBlank()) "Маршруты не найдены" else protocolSummary,
@@ -459,7 +454,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             pendingCountries[country.code] = country
             country.isChecking = false
             country.summary.text = copy("В очереди · дождитесь предыдущей проверки", "Queued · waiting for the current check")
-            country.summaryDots.setLoading(false)
+            country.summaryProgress.setLoading(false)
             country.rows.values.forEach {
                 it.progress.setLoading(false)
                 it.status.text = copy("В очереди…", "Queued…")
@@ -473,20 +468,20 @@ internal class PrimaryPages(private val host: MainActivity) {
         country.errors.clear()
         country.summary.text = copy("Проверяем все маршруты · подождите", "Checking all routes · please wait")
         country.summary.contentDescription = country.summary.text
-        country.summaryDots.setLoading(true)
+        country.summaryProgress.setLoading(true)
         if (VpnService.prepare(host) != null) {
             country.isChecking = false
             country.summary.text = copy("Разрешите проверку маршрутов в Android", "Allow route checks in Android")
-            country.summaryDots.setLoading(false)
+            country.summaryProgress.setLoading(false)
             if (host.requestRouteProbePermission { startCountryProbe(country) }) return
             country.isChecking = true
             country.summary.text = copy("Проверяем все маршруты · подождите", "Checking all routes · please wait")
-            country.summaryDots.setLoading(true)
+            country.summaryProgress.setLoading(true)
         }
         val config = SubscriptionStore(host).readCurrent() ?: run {
             country.isChecking = false
             country.summary.text = copy("Подписка недоступна · обновите маршруты", "Subscription unavailable · refresh routes")
-            country.summaryDots.setLoading(false)
+            country.summaryProgress.setLoading(false)
             return
         }
         val token = TelegramSessionStore.read(host)
@@ -651,7 +646,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         val samples = country.samples.values.toList()
         val grades = RouteProbeScoring.grade(samples)
         val latencyGrades = RouteProbeScoring.gradeByLatency(samples)
-        country.summaryDots.setLoading(false)
+        country.summaryProgress.setLoading(false)
         updateCountryLatencySummary(country)
         country.rows.values.forEach { row ->
             row.progress.setLoading(false)
@@ -729,7 +724,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         pendingCountries.remove(country.code)
         country.cancelled = true
         country.isChecking = false
-        country.summaryDots.setLoading(false)
+        country.summaryProgress.setLoading(false)
         country.rows.values.forEach {
             it.progress.setLoading(false)
             if (it.route.id !in country.samples) it.status.text = copy("Проверка отменена · откройте страну снова", "Measurement cancelled · reopen country")
@@ -777,7 +772,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             else -> copy("Нет результата · откройте страну для повтора", "No result · reopen the country to retry")
         }
         country.summary.contentDescription = country.summary.text
-        country.summaryDots.setLoading(country.isChecking)
+        country.summaryProgress.setLoading(country.isChecking)
         val grades = RouteProbeScoring.gradeByLatency(country.samples.values.toList())
         country.rows.values.forEach { row ->
             if (country.samples[row.route.id]?.latencyMillis != null) {
@@ -941,7 +936,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         val sheet = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(18))
-            background = host.rounded(SURFACE, 24f, LINE)
+            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f, LINE)
         }
 
         sheet.addView(host.mono(copy("./c · РАЗДЕЛЬНОЕ ТУННЕЛИРОВАНИЕ", "./c · SPLIT TUNNELING"), 9f, MUTED, 650))
@@ -1000,7 +995,7 @@ internal class PrimaryPages(private val host: MainActivity) {
 
         presetName.setOnClickListener {
             val presets = store.readPresets()
-            AlertDialog.Builder(host).setTitle(copy("Выберите пресет", "Choose a preset"))
+            AppDialog.Builder(host).setTitle(copy("Выберите пресет", "Choose a preset"))
                 .setItems(presets.map { if (it.id == "default") copy(it.name, "Main") else it.name }.toTypedArray()) { _, index ->
                     store.selectPreset(presets[index].id)
                     updatePresetControls()
@@ -1020,7 +1015,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                         updatePresetControls()
                         renderContent()
                         onChanged()
-                    } else AlertDialog.Builder(host).setMessage(copy("Имя пустое или уже занято.", "Name is empty or already used."))
+                    } else AppDialog.Builder(host).setMessage(copy("Имя пустое или уже занято.", "Name is empty or already used."))
                         .setPositiveButton("OK", null).show()
                 }.show()
         }
@@ -1037,7 +1032,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         modeButton.setOnClickListener {
             val modes = arrayOf(copy("Обход VPN для списка", "Bypass VPN for list"), copy("VPN только для списка", "VPN only for list"))
             val selected = if (store.readMode() == UserSplitTunnelStore.MODE_VPN_ONLY) 1 else 0
-            AlertDialog.Builder(host).setTitle(copy("Режим", "Mode")).setSingleChoiceItems(modes, selected) { choice, index ->
+            AppDialog.Builder(host).setTitle(copy("Режим", "Mode")).setSingleChoiceItems(modes, selected) { choice, index ->
                 store.setMode(if (index == 1) UserSplitTunnelStore.MODE_VPN_ONLY else UserSplitTunnelStore.MODE_BYPASS)
                 choice.dismiss()
                 updatePresetControls()
@@ -1301,7 +1296,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         val sheet = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(18))
-            background = host.rounded(SURFACE, 24f, LINE)
+            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f, LINE)
         }
 
         sheet.addView(host.mono("./c · ВЫБОР ПРИЛОЖЕНИЯ", 9f, MUTED, 650))
@@ -1374,12 +1369,12 @@ internal class PrimaryPages(private val host: MainActivity) {
                 })
                 return
             }
-            filtered.forEach { app ->
+            filtered.forEachIndexed { index, app ->
                 val row = LinearLayout(host).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    setPadding(host.dp(8), host.dp(8), host.dp(8), host.dp(8))
-                    background = host.rounded(Color.TRANSPARENT, 12f)
+                    setPadding(host.dp(10), host.dp(8), host.dp(10), host.dp(8))
+                    background = host.rounded(SURFACE_2, 12f, LINE)
                     if (app.icon != null) {
                         val iv = ImageView(host).apply {
                             setImageDrawable(app.icon)
@@ -1393,13 +1388,23 @@ internal class PrimaryPages(private val host: MainActivity) {
                         addView(host.mono(app.packageName, 11f, MUTED))
                     }
                     addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(host.text(copy("+ добавить", "+ add"), 10f, SKY, android.graphics.Typeface.BOLD).apply {
+                        gravity = Gravity.CENTER
+                        setPadding(host.dp(8), host.dp(7), host.dp(8), host.dp(7))
+                        background = host.rounded(DeyttUi.SKY_SURFACE, 10f, LINE)
+                    }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                        marginStart = host.dp(8)
+                    })
                     isClickable = true
+                    isFocusable = true
                     setOnClickListener {
                         onSelected(app.packageName)
                         dialog.dismiss()
                     }
                 }
-                listContainer.addView(row)
+                listContainer.addView(row, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    if (index > 0) topMargin = host.dp(6)
+                })
             }
         }
 
@@ -1443,6 +1448,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setDimAmount(.58f)
+            DeyttUi.blurBehind(this, host.dp(20))
             setGravity(Gravity.BOTTOM)
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             decorView.setPadding(host.dp(14), 0, host.dp(14), host.dp(18))

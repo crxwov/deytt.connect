@@ -1021,6 +1021,7 @@ internal class ProfileFlows(
             setDimAmount(.62f)
             setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            DeyttUi.blurBehind(this, host.dp(20))
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             setGravity(Gravity.BOTTOM)
             decorView.setPadding(host.dp(14), 0, host.dp(14), host.dp(18))

@@ -18,13 +18,14 @@ object AppDialog {
             dialog.setOnShowListener {
                 dialog.window?.apply {
                     setBackgroundDrawable(GradientDrawable().apply {
-                        setColor(DeyttUi.SURFACE)
+                        setColor(DeyttUi.SHEET_SURFACE)
                         cornerRadius = host.dp(26).toFloat()
                         setStroke(host.dp(1), DeyttUi.LINE)
                     })
                     setLayout(minOf(host.resources.displayMetrics.widthPixels - host.dp(32), host.dp(390)), ViewGroup.LayoutParams.WRAP_CONTENT)
                     decorView.clipToOutline = true
                     setDimAmount(.65f)
+                    DeyttUi.blurBehind(this, host.dp(20))
                 }
                 fun styleText(view: View) {
                     if (view is TextView) {

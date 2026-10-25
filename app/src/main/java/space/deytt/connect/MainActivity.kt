@@ -2194,14 +2194,17 @@ class MainActivity : Activity() {
         }
         val actionLabel = when (currentPhase) {
             VpnPhase.STARTING, VpnPhase.CHECKING -> progressDetail(currentPhase, connectionElapsedSeconds())
-            VpnPhase.CONNECTED -> "Отключить"
+            VpnPhase.CONNECTED -> "Подключено"
             VpnPhase.STOPPING -> "Отключаем…"
             VpnPhase.ERROR -> "Ошибка соединения · повторить"
             VpnPhase.IDLE -> "Подключить"
         }
         action.text = uiCopy(actionLabel)
         val errorDetail = if (currentPhase == VpnPhase.ERROR) error ?: status else null
-        action.contentDescription = uiCopy(actionLabel) + if (!errorDetail.isNullOrBlank()) ". ${uiCopy(errorDetail)}" else ""
+        action.contentDescription = when (currentPhase) {
+            VpnPhase.CONNECTED -> uiCopy(actionLabel) + ". " + uiCopy("Отключить")
+            else -> uiCopy(actionLabel) + if (!errorDetail.isNullOrBlank()) ". ${uiCopy(errorDetail)}" else ""
+        }
         val colors = when (currentPhase) {
             VpnPhase.CONNECTED -> 0xD82AAE86.toInt() to 0xC015765C.toInt()
             VpnPhase.STARTING, VpnPhase.CHECKING -> 0xD92BA5D6.toInt() to 0xC0156A9A.toInt()

@@ -24,6 +24,8 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.VelocityTracker
+import android.view.Window
+import android.view.WindowManager
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -42,6 +44,7 @@ import kotlin.math.sin
 object DeyttUi {
     const val BG = 0xFF080D17.toInt()
     const val SURFACE = 0xD1111A29.toInt()
+    const val SHEET_SURFACE = 0xFF111A29.toInt()
     const val SURFACE_2 = 0xD91B293B.toInt()
     const val LINE = 0xFF33465D.toInt()
     const val TEXT = 0xFFF2F5FC.toInt()
@@ -59,6 +62,13 @@ object DeyttUi {
     const val BLUE_SURFACE = 0xD61A3350.toInt()
     const val SKY_SURFACE = 0xD6193342.toInt()
     const val MINT_SURFACE = 0xD61A3A32.toInt()
+
+    fun blurBehind(window: Window, radiusPx: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+            window.attributes = window.attributes.apply { setBlurBehindRadius(radiusPx) }
+        }
+    }
 
     private enum class FontFamily(val asset: String, val fallback: String) {
         INTER_TIGHT("fonts/inter-tight-variable.ttf", "sans-serif"),

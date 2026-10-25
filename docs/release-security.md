@@ -13,11 +13,13 @@ The updater selects that universal APK, checks its package,
 version and signing identity, and asks Android to install it after user action.
 Production builds reject debuggable update candidates.
 
-The APK needs `REQUEST_INSTALL_PACKAGES` for that explicit update flow. It does
-not request Accessibility, SMS, contacts, device administrator or package-query
-access. The VPN services require Android's `BIND_VPN_SERVICE` permission and
-foreground notifications. Imported subscription links require a tap before
-network requests or replacement of an active configuration.
+The APK needs `REQUEST_INSTALL_PACKAGES` for that explicit update flow. The split
+tunnel picker queries only apps with a launcher activity through a manifest
+`<queries>` intent; it does not request broad `QUERY_ALL_PACKAGES` access. It
+does not request Accessibility, SMS, contacts or device administrator access.
+The VPN services require Android's `BIND_VPN_SERVICE` permission and foreground
+notifications. Imported subscription links require a tap before network requests
+or replacement of an active configuration.
 
 AmneziaWG's userspace engines (`libwg-go.so`, `libdeytt-awg.so`) and the protected
 OpenFlux engine (`libopenflux_jni.so`) are packaged. The unused privileged `wg` /

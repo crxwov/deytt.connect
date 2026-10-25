@@ -132,6 +132,33 @@ class SplitTunnelUiInstrumentation : Instrumentation() {
             Thread.sleep(250)
             check(store.readMode() == UserSplitTunnelStore.MODE_VPN_ONLY) { "VPN-only mode selection was not saved" }
 
+            // The launcher query in the manifest must make every launchable app visible to the picker.
+            val refreshedSheet = (uiAutomation.windows.mapNotNull { it.root } +
+                listOfNotNull(uiAutomation.rootInActiveWindow)).distinctBy { it.windowId }
+                .first { root -> listOf("Раздельное туннелирование", "Split tunneling").any { root.findAccessibilityNodeInfosByText(it).isNotEmpty() } }
+            val addApps = listOf("+ Добавить", "+ Add").asSequence()
+                .flatMap { refreshedSheet.findAccessibilityNodeInfosByText(it).asSequence() }.firstOrNull()
+            check(addApps != null) { "Add-apps control was not shown" }
+            addApps.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+            waitForIdleSync()
+            Thread.sleep(500)
+            val pickerRoot = uiAutomation.windows.mapNotNull { it.root }
+                .firstOrNull { root -> listOf("Выберите приложение", "Select application").any { root.findAccessibilityNodeInfosByText(it).isNotEmpty() } }
+                ?: uiAutomation.rootInActiveWindow
+            check(pickerRoot != null) { "App picker was not shown" }
+            val launcherIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+            val launchablePackages = context.packageManager.queryIntentActivities(launcherIntent, 0)
+                .map { it.activityInfo.packageName }.filter { it != context.packageName }.distinct()
+            check(launchablePackages.isNotEmpty()) { "Device has no other launcher apps to verify" }
+            val packagesUsedByPicker = context.packageManager.getInstalledApplications(android.content.pm.PackageManager.GET_META_DATA)
+                .filter { it.packageName != context.packageName && context.packageManager.getLaunchIntentForPackage(it.packageName) != null }
+                .map { it.packageName }.toSet()
+            val missingPackages = launchablePackages.filterNot(packagesUsedByPicker::contains)
+            check(missingPackages.isEmpty()) { "Package visibility hides launcher apps from the picker: ${missingPackages.joinToString()}" }
+            check(listOf("Ничего не найдено", "No apps found").none { pickerRoot.findAccessibilityNodeInfosByText(it).isNotEmpty() }) {
+                "App picker showed an empty state despite visible launcher apps"
+            }
+
             // 7. Clean up
             store.clearAll()
             activity.finish()
