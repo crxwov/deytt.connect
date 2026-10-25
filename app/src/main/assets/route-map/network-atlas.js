@@ -9,6 +9,7 @@
   const SAVE_DATA_PIXEL_RATIO_CAP = 1.5;
   const MOBILE_PIXEL_RATIO_CAP = 3;
   const DESKTOP_PIXEL_RATIO_CAP = 2.25;
+  const ANDROID_GEOGRAPHY_PIXEL_RATIO_CAP = 2;
   const ZOOM_EASE_MS = 120;
   const PAN_EASE_MS = 120;
   const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
@@ -513,9 +514,11 @@
       this.canvas.width = Math.round(this.width * ratio);
       this.canvas.height = Math.round(this.height * ratio);
       this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      this.staticCanvas.width = this.canvas.width;
-      this.staticCanvas.height = this.canvas.height;
-      this.staticContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+      // Keep text at device resolution while limiting geography raster work on Android.
+      const geographyRatio = window.DeyttAtlasBridge ? Math.min(ratio, ANDROID_GEOGRAPHY_PIXEL_RATIO_CAP) : ratio;
+      this.staticCanvas.width = Math.round(this.width * geographyRatio);
+      this.staticCanvas.height = Math.round(this.height * geographyRatio);
+      this.staticContext.setTransform(geographyRatio, 0, 0, geographyRatio, 0, 0);
       // Expanding the native viewport must not add a second zoom to the user's gesture.
       if (!window.DeyttAtlasBridge || !this.viewportExpanded || !this.radius) {
         this.radius = Math.min(this.width, this.height) * (this.width < 520 ? 0.405 : 0.43);
@@ -722,14 +725,11 @@
             if (firstHidden < 0) firstHidden = i;
           } else {
             visibleCount++;
+            scratch[i].x = cx + (pt.x * east.x + pt.y * east.y + pt.z * east.z) * scale;
+            scratch[i].y = cy - (pt.x * north.x + pt.y * north.y + pt.z * north.z) * scale;
           }
         }
         if (visibleCount === 0) return [];
-        for (let i = 0; i < len; i++) {
-          const pt = ring[i];
-          scratch[i].x = cx + (pt.x * east.x + pt.y * east.y + pt.z * east.z) * scale;
-          scratch[i].y = cy - (pt.x * north.x + pt.y * north.y + pt.z * north.z) * scale;
-        }
         if (firstHidden < 0) return [scratch.slice(0, len)];
         const segments = [];
         let segment = [];
@@ -777,11 +777,7 @@
         const startAngle = Math.atan2(first.y - globeY, first.x - globeX);
         const endAngle = Math.atan2(last.y - globeY, last.x - globeX);
         const arc = Math.atan2(Math.sin(startAngle - endAngle), Math.cos(startAngle - endAngle));
-        const steps = Math.max(1, Math.ceil(Math.abs(arc) * globeRadius / 8));
-        for (let step = 1; step <= steps; step += 1) {
-          const angle = endAngle + arc * step / steps;
-          landPath.lineTo(globeX + Math.cos(angle) * globeRadius, globeY + Math.sin(angle) * globeRadius);
-        }
+        landPath.arc(globeX, globeY, globeRadius, endAngle, endAngle + arc, arc < 0);
         landPath.closePath();
       };
 
@@ -803,7 +799,14 @@
           pathForRing(ring).forEach((segment) => traceClippedRing(segment, globeX, globeY));
         }));
       };
-      traceLand();
+      // Zoom and native viewport changes only transform the same projected coastline.
+      const cached = this.landPathCache;
+      if (cached && cached.lon === this.centerLon && cached.lat === this.centerLat && cached.polygons === this.landPolygons) {
+        landPath.addPath(cached.path, new DOMMatrix().translate(cx, cy).scale(scale / cached.scale).translate(-cached.cx, -cached.cy));
+      } else {
+        traceLand();
+        this.landPathCache = { path: landPath, lon: this.centerLon, lat: this.centerLat, polygons: this.landPolygons, scale, cx, cy };
+      }
       context.save();
       const isLight = document.documentElement.dataset.theme === "light";
       const relief = this.options.landDepth === false && !isLight ? 0 : (isLight ? 1.5 : clamp(globeRadius * .014, 2, 5));
@@ -837,15 +840,10 @@
     drawBorders(colors) {
       const context = this.context;
       this.drawLand(colors);
-      // Keep the same topology while the camera moves. Decimating every second
-      // point during pan/zoom made country outlines visibly change shape.
-      const pointStep = 1;
       const trace = (points, lift) => {
-        context.beginPath();
         let drawing = false;
         let previous = null;
-        points.forEach((border, index) => {
-          if (pointStep > 1 && index % pointStep) return;
+        points.forEach((border) => {
           const projected = this.projectVector(border.vector, lift);
           const jump = previous && Math.hypot(projected.x - previous.x, projected.y - previous.y) > this.radius * this.zoom * .24;
           if (projected.z <= .012 || jump) {
@@ -869,10 +867,9 @@
         context.globalAlpha = alpha;
         context.shadowColor = shadowColor || "transparent";
         context.shadowBlur = shadowBlur || 0;
-        lines.forEach((line) => {
-          trace(line.points || line, 1.002);
-          context.stroke();
-        });
+        context.beginPath();
+        lines.forEach((line) => trace(line.points || line, 1.002));
+        context.stroke();
         context.restore();
       };
       const borderAlpha = colors.borderAlpha || (this.variant === "observatory" ? .38 : .28);
@@ -1124,6 +1121,11 @@
       const placement = alternatives[placementIndex];
       const left = clamp(point.x + placement.x - (placement.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
       const top = clamp(point.y + placement.y - height / 2, 8, this.height - height - 8);
+      // Keep the cached anchor stable; crowded pins remain available without overlapping text.
+      if (occupied.some(label => left < label.left + label.width + 4 && left + width + 4 > label.left && top < label.top + label.height + 4 && top + height + 4 > label.top)) {
+        context.restore();
+        return;
+      }
       const endX = clamp(point.x, left + 5, left + width - 5);
       const endY = clamp(point.y, top + 5, top + height - 5);
       context.beginPath();
@@ -1167,9 +1169,10 @@
 
     drawLabels(colors) {
       const occupied = [];
-      if (this.userLocation) this.drawLabel("user", colors, occupied);
+      if (this.hovered) this.drawLabel(this.hovered, colors, occupied);
+      if (this.userLocation && this.hovered !== "user") this.drawLabel("user", colors, occupied);
       LOCATION_ORDER.forEach((key) => {
-        if (this.availableLocationKeys.has(key)) this.drawLabel(key, colors, occupied);
+        if (this.availableLocationKeys.has(key) && this.hovered !== key) this.drawLabel(key, colors, occupied);
       });
     }
 

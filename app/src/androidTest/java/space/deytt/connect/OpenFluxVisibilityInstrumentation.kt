@@ -834,6 +834,16 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 "zoom=${readAtlasCurrentZoom(webView)} expectedRadiusZoom=$expectedExpandedRadius actualRadiusZoom=$actualExpandedRadius " +
                 "relativeError=$scaleError; $expandedBounds; $expandedDiagnostics"
         }
+        val canvasResolution = runAtlasScript(webView, """
+            (function(){var a=window.deyttMapAtlas,c=a.canvas,s=a.staticCanvas,cap=Math.min(a.pixelRatio,2);
+              var sw=Math.round(a.width*cap),sh=Math.round(a.height*cap),lw=Math.round(a.width*a.pixelRatio),lh=Math.round(a.height*a.pixelRatio);
+              return 'static='+s.width+'x'+s.height+';expectedStatic='+sw+'x'+sh+';staticMatch='+(s.width===sw&&s.height===sh)+
+                ';live='+c.width+'x'+c.height+';expectedLive='+lw+'x'+lh+';liveMatch='+(c.width===lw&&c.height===lh);})()
+        """.trimIndent())
+        check(canvasResolution.contains("staticMatch=true") && canvasResolution.contains("liveMatch=true")) {
+            "Static/live canvas resolutions do not match their pixel-ratio contracts: $canvasResolution"
+        }
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_canvas_resolution=$canvasResolution")
         val labelsAfterExpand = readAtlasLabelLayout(webView)
         val placementsAfterExpand = labelPlacementIndices(labelsAfterExpand)
         val commonLabels = placementsBeforeExpand.keys.intersect(placementsAfterExpand.keys)
@@ -844,6 +854,8 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         check(changedPlacements.isEmpty()) {
             "Size-only expansion changed placement indices for common labels $changedPlacements: before=$labelsBeforeExpand after=$labelsAfterExpand"
         }
+        val pathCacheSetup = runAtlasScript(webView, "(function(){var a=window.deyttMapAtlas;window.__qaLandPath=a.landPathCache&&a.landPathCache.path;return String(!!window.__qaLandPath);})()")
+        check(pathCacheSetup == "true") { "Expanded atlas did not retain a coastline path cache: $pathCacheSetup" }
         android.util.Log.i("OpenFluxVisibilityQA", "globe_expanded_viewport=$expandedBounds;scaleError=$scaleError;labels=$labelsAfterExpand;$expandedDiagnostics")
         saveQaScreenshot("globe-expanded", screenshots, results)
 
@@ -858,6 +870,10 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             check(labels == labelBaseline) {
                 "Label placement/scale changed after zoom settled at $target: before=$labelBaseline after=$labels; $settled"
             }
+            val pathReused = runAtlasScript(webView, "String(window.deyttMapAtlas.landPathCache.path===window.__qaLandPath)")
+            check(pathReused == "true") {
+                "Same-orientation zoom rebuilt the coastline path cache at $target: reused=$pathReused; $settled"
+            }
         }
         val idleBefore = readAtlasRenderCount(webView)
         Thread.sleep(750)
@@ -866,6 +882,50 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             "Settled atlas continued redrawing while idle: renderCount=$idleBefore->$idleAfter; ${readAtlasPinchDiagnostics(webView)}"
         }
         android.util.Log.i("OpenFluxVisibilityQA", "globe_zoom_labels=$labelBaseline;idle_render_count=$idleBefore->$idleAfter")
+        val crowdedLabelProbe = runAtlasScript(webView, """
+            (function(){
+              var a=window.deyttMapAtlas;
+              if(!a)return 'missing-atlas';
+              var snapshot={context:a.context,width:a.width,height:a.height,radius:a.radius,route:a.route,connected:a.connected,
+                autoExitCountry:a.autoExitCountry,autoExitRouteKey:a.autoExitRouteKey,availableLocationKeys:a.availableLocationKeys,
+                annotationFilter:a.annotationFilter,userLocation:a.userLocation,hovered:a.hovered,centerLon:a.centerLon,centerLat:a.centerLat,
+                targetLon:a.targetLon,targetLat:a.targetLat,zoom:a.zoom,targetZoom:a.targetZoom,currentBasis:a.currentBasis,
+                projectedNodes:a.projectedNodes,labelPlacements:a.labelPlacements,drawLabel:a.drawLabel};
+              var drawn=[];
+              try{
+                var probe=document.createElement('canvas');probe.width=320;probe.height=220;
+                a.context=probe.getContext('2d');a.width=320;a.height=220;a.radius=220*.405;
+                a.route='auto';a.connected=false;a.autoExitCountry=null;a.autoExitRouteKey=null;
+                a.availableLocationKeys=new Set(['nl','de','fi','ru','it']);a.annotationFilter=null;a.userLocation=null;a.hovered='de';
+                a.centerLon=a.targetLon=15;a.centerLat=a.targetLat=50;a.zoom=a.targetZoom=.82;a.currentBasis=a.basis();
+                a.projectedNodes={};a.labelPlacements=new Map();
+                a.drawLabel=function(key,colors,occupied){var before=occupied.length;snapshot.drawLabel.call(this,key,colors,occupied);if(occupied.length>before){
+                  var r=occupied[occupied.length-1];drawn.push({key:key,left:r.left,top:r.top,width:r.width,height:r.height});}};
+                var colors=a.colors();a.drawNodes(colors);a.drawLabels(colors);
+                var overlapCount=0;for(var i=0;i<drawn.length;i++)for(var j=i+1;j<drawn.length;j++){
+                  var x=drawn[i],y=drawn[j];if(x.left<y.left+y.width&&x.left+x.width>y.left&&x.top<y.top+y.height&&x.top+x.height>y.top)overlapCount++;}
+                var visible=Object.keys(a.projectedNodes).filter(function(k){return a.projectedNodes[k].z>.03;}).length;
+                return 'visible='+visible+';drawn='+drawn.map(function(x){return x.key;}).join(',')+';overlaps='+overlapCount+';hoverFirst='+(drawn.length?drawn[0].key:'none');
+              }finally{Object.assign(a,snapshot);}
+            })()
+        """.trimIndent())
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_crowded_auto_labels=$crowdedLabelProbe")
+        check(crowdedLabelProbe.contains("visible=5") &&
+            crowdedLabelProbe.substringAfter("drawn=").substringBefore(';').isNotBlank() &&
+            crowdedLabelProbe.contains("overlaps=0") && crowdedLabelProbe.contains("hoverFirst=de")) {
+            "Crowded all-location Auto labels overlapped or ignored hover priority: $crowdedLabelProbe"
+        }
+        runAtlasScript(webView, "(function(){var a=window.deyttMapAtlas;a.centerLon+=9;a.targetLon=a.centerLon;a.staticDirty=true;a.start();return 'scheduled';})()")
+        val cacheDeadline = SystemClock.elapsedRealtime() + 10_000L
+        var invalidation = "pending"
+        while (SystemClock.elapsedRealtime() < cacheDeadline && invalidation != "rebuilt=true;orientation=true") {
+            invalidation = runAtlasScript(webView, "(function(){var a=window.deyttMapAtlas;return 'rebuilt='+(a.landPathCache.path!==window.__qaLandPath)+';orientation='+(a.landPathCache.lon===a.centerLon);})()")
+            if (invalidation != "rebuilt=true;orientation=true") Thread.sleep(50)
+        }
+        check(invalidation == "rebuilt=true;orientation=true") {
+            "Orientation change did not invalidate and rebuild the coastline cache: $invalidation; ${readAtlasPinchDiagnostics(webView)}"
+        }
+        android.util.Log.i("OpenFluxVisibilityQA", "globe_orientation_cache=$invalidation")
         saveQaScreenshot("globe-zoom3", screenshots, results)
 
         runOnMainSync { webView.evaluateJavascript("window.deyttMapAtlas.targetZoom=32;window.deyttMapAtlas.start()", null) }
