@@ -10,18 +10,18 @@ class RouteProbePresentationTest {
     @Test
     fun speedStateKeepsTheHttpsResponseTimeThatWasAlreadyMeasured() {
         assertEquals(
-            "Отклик: 500 мс · Скорость: замер…",
+            "Отклик: 500 мс · Скорость: —",
             RouteProbePresentation.speedProgress("500 мс", english = false),
         )
         assertEquals(
-            "Response: 500 ms · Speed: sampling…",
+            "Response: 500 ms · Speed: —",
             RouteProbePresentation.speedProgress("500 ms", english = true),
         )
     }
 
     @Test
     fun speedStateCanStartBeforeResponseTimeHasArrived() {
-        assertEquals("Отклик: — · Скорость: замер…", RouteProbePresentation.speedProgress(null, english = false))
+        assertEquals("Отклик: — · Скорость: —", RouteProbePresentation.speedProgress(null, english = false))
     }
 
     @Test

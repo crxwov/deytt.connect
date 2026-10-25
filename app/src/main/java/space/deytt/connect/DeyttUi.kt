@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Canvas
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Paint
@@ -273,27 +274,37 @@ object DeyttUi {
         trailing: String = "›",
         interactive: Boolean = true,
         emphasis: Boolean = false,
+        avatar: Bitmap? = null,
     ): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = dp(54)
-        setPadding(if (emphasis) dp(12) else dp(2), dp(3), if (emphasis) dp(10) else dp(2), dp(3))
+        minimumHeight = dp(72)
+        setPadding(dp(10), dp(10), dp(10), dp(10))
         background = if (interactive) glassRowBackground(emphasis, 15f) else ColorDrawable(Color.TRANSPARENT)
         if (leading.isNotBlank()) {
-            val icon = when (leading) {
-                "AWG_MARK" -> awgMark(emphasis)
-                "ROUTE_AUTO" -> routeAutoMark(emphasis)
-                "ROUTE_RU_DE" -> routePairMark(emphasis)
-                "↻" -> android.widget.ImageView(this@row).apply {
-                    setImageResource(R.drawable.ic_sync)
-                    imageTintList = ColorStateList.valueOf(SKY)
+            val icon = if (avatar != null) {
+                ImageView(this@row).apply {
+                    setImageBitmap(avatar)
+                    scaleType = ImageView.ScaleType.CENTER_CROP
                     background = glassRowBackground(emphasis, 12f)
-                    setPadding(dp(8), dp(8), dp(8), dp(8))
-                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    clipToOutline = true
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
-                "PAYMENTS_ICON" -> android.widget.ImageView(this@row).apply {
-                    setImageResource(R.drawable.ic_payments)
+            } else when (leading) {
+                "AWG_MARK" -> awgMark(emphasis)
+                "ROUTE_RU_DE" -> routePairMark(emphasis)
+                "SUBSCRIPTION_ICON" -> actionIcon(R.drawable.ic_cloud_download, emphasis)
+                "ROUTE_AUTO" -> actionIcon(R.drawable.ic_route, emphasis)
+                "PAYMENTS_ICON" -> actionIcon(R.drawable.ic_credit_card, emphasis)
+                "LANGUAGE_ICON" -> actionIcon(R.drawable.ic_languages, emphasis)
+                "TELEGRAM_ICON" -> actionIcon(R.drawable.ic_send, emphasis)
+                "SPLIT_ICON" -> actionIcon(R.drawable.ic_split, emphasis)
+                "ROUTE_CHECK_ICON" -> actionIcon(R.drawable.ic_activity, emphasis)
+                "VPN_PERMISSION_ICON" -> actionIcon(R.drawable.ic_shield_check, emphasis)
+                "BOT_ICON" -> actionIcon(R.drawable.ic_bot, emphasis)
+                "ACCOUNT_ICON" -> actionIcon(R.drawable.ic_user_round, emphasis)
+                "↻" -> android.widget.ImageView(this@row).apply {
+                    setImageResource(R.drawable.ic_sync)
                     imageTintList = ColorStateList.valueOf(SKY)
                     background = glassRowBackground(emphasis, 12f)
                     setPadding(dp(8), dp(8), dp(8), dp(8))
@@ -314,7 +325,7 @@ object DeyttUi {
                 }
                 }
             }
-            addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(10) })
+            addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(12) })
         }
         addView(LinearLayout(this@row).apply {
             orientation = LinearLayout.VERTICAL
@@ -360,6 +371,15 @@ object DeyttUi {
         if (interactive) pressFeedback(this, .99f)
     }
 
+    private fun Activity.actionIcon(resource: Int, emphasis: Boolean) = ImageView(this).apply {
+        setImageResource(resource)
+        imageTintList = ColorStateList.valueOf(SKY)
+        background = glassRowBackground(emphasis, 12f)
+        setPadding(dp(12), dp(12), dp(12), dp(12))
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+    }
+
     private fun Activity.glassRowBackground(emphasis: Boolean, radius: Float): Drawable =
         GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,
@@ -396,15 +416,6 @@ object DeyttUi {
             addView(text("🇩🇪", 14f, TEXT).apply { gravity = Gravity.CENTER },
                 FrameLayout.LayoutParams(dp(25), dp(26), Gravity.CENTER_VERTICAL or Gravity.END))
         }
-    }
-
-    private fun Activity.routeAutoMark(emphasis: Boolean): ImageView = ImageView(this).apply {
-        setImageResource(R.drawable.ic_route_auto)
-        imageTintList = ColorStateList.valueOf(SKY)
-        scaleType = ImageView.ScaleType.FIT_CENTER
-        setPadding(dp(8), dp(8), dp(8), dp(8))
-        background = glassRowBackground(emphasis, 12f)
-        contentDescription = uiCopy("Автоподбор: Нидерланды, Германия, Финляндия, Россия")
     }
 
     private class AmneziaMarkView(context: Context) : View(context) {

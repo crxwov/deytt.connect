@@ -1,6 +1,12 @@
-<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/ic_sync">
-    <target
-        android:name="sync"
-        android:animation="@animator/rotate_sync" />
+<?xml version='1.0' encoding='utf-8'?>
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@drawable/ic_startup_mark">
+    <target android:name="terminal" android:animation="@animator/startup_terminal" />
+    <target android:name="dot" android:animation="@animator/startup_dot" />
+    <target android:name="slash" android:animation="@animator/startup_slash" />
+    <target android:name="letter" android:animation="@animator/startup_letter" />
+    <target android:name="cursor" android:animation="@animator/startup_cursor" />
+    <target android:name="dot_shape" android:animation="@animator/startup_dot_alpha" />
+    <target android:name="slash_shape" android:animation="@animator/startup_slash_alpha" />
+    <target android:name="letter_shape" android:animation="@animator/startup_letter_alpha" />
+    <target android:name="cursor_shape" android:animation="@animator/startup_cursor_alpha" />
 </animated-vector>

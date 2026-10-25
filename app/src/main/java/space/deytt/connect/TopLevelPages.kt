@@ -126,14 +126,14 @@ internal class PrimaryPages(private val host: MainActivity) {
     private data class ProbeRouteRow(
         val route: DeyttRoute,
         val status: TextView,
-        val progress: DiagnosticProgressView,
+        val progress: InlineMetricProgress,
     )
     private data class CountryProbeState(
         val code: String,
         val routes: List<DeyttRoute>,
         val rows: Map<String, ProbeRouteRow>,
         val summary: TextView,
-        val summaryProgress: DiagnosticProgressView,
+        val summaryProgress: InlineMetricProgress,
         val samples: MutableMap<String, RouteProbeSample> = mutableMapOf(),
         val pingTraces: MutableMap<String, MutableList<Long>> = mutableMapOf(),
         val errors: MutableMap<String, String> = mutableMapOf(),
@@ -274,14 +274,14 @@ internal class PrimaryPages(private val host: MainActivity) {
         root.addView(host.row(
             copy("Обновить подписку", "Refresh subscription"),
             copy("Загрузить доступные маршруты", "Load available routes"),
-            "↻",
+            "SUBSCRIPTION_ICON",
         ).apply { setOnClickListener { host.openSetup() } })
         root.addView(spacer(14, host))
 
         root.addView(host.sectionLabel("быстрый выбор"))
         val quickGroup = routeGroup()
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { route ->
-            appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", "выбрать", selectedId == route.id)
+            appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", "выбрать", emphasis = selectedId == route.id)
                 .apply { setOnClickListener { host.selectRoute(route) } })
         }
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { route ->
@@ -290,7 +290,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 copy("Россия → Германия · двойной маршрут", "Russia → Germany · double route"),
                 "ROUTE_RU_DE",
                 "выбрать",
-                selectedId == route.id,
+                emphasis = selectedId == route.id,
             ).apply { setOnClickListener { host.selectRoute(route) } })
         }
         if (quickGroup.childCount > 0) root.addView(quickGroup)
@@ -326,19 +326,18 @@ internal class PrimaryPages(private val host: MainActivity) {
                 maxLines = 2
                 setPadding(0, host.dp(8), 0, host.dp(8))
             }
-            val summaryProgress = DiagnosticProgressView(host)
+            val summaryProgress = InlineMetricProgress(summary)
             detail.addView(LinearLayout(host).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(host.dp(54), host.dp(2), host.dp(16), host.dp(2))
+                setPadding(host.dp(70), host.dp(2), host.dp(16), host.dp(2))
                 addView(summary, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                addView(summaryProgress, LinearLayout.LayoutParams(host.dp(20), host.dp(20)))
             })
             val rowById = linkedMapOf<String, ProbeRouteRow>()
             countryRoutes.forEachIndexed { index, route ->
                 if (index > 0) detail.addView(View(host).apply { setBackgroundColor(LINE) },
                     LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(1)).apply {
-                        leftMargin = host.dp(54)
+                        leftMargin = host.dp(70)
                         rightMargin = host.dp(16)
                     })
                 val isAwg = route.engine == TunnelEngine.AMNEZIAWG
@@ -355,7 +354,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                     setPadding(0, host.dp(4), 0, host.dp(8))
                     if (isCachedBest) setTypeface(null, android.graphics.Typeface.BOLD)
                 }
-                val progress = DiagnosticProgressView(host)
+                val progress = InlineMetricProgress(metric)
                 val item = host.row(rowTitle, rowSubtitle, if (isAwg) "AWG_MARK" else protocolMark(route.protocol), "",
                     emphasis = route.id == selectedId)
                 val protocolDrawable = when (route.protocol) {
@@ -376,15 +375,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 }
                 val metricsColumn = item.getChildAt(1) as LinearLayout
                 metric.setPadding(0, host.dp(6), 0, host.dp(3))
-                val metricLine = LinearLayout(host).apply {
-                    orientation = LinearLayout.HORIZONTAL
-                    gravity = Gravity.CENTER_VERTICAL
-                    addView(metric, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-                    addView(progress, LinearLayout.LayoutParams(host.dp(18), host.dp(18)).apply {
-                        marginStart = host.dp(4)
-                    })
-                }
-                metricsColumn.addView(metricLine)
+                metricsColumn.addView(metric)
                 if (route.id != selectedId) item.background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
                 item.setOnClickListener { host.selectRoute(route) }
                 val probeRow = ProbeRouteRow(route, metric, progress)
@@ -473,7 +464,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         country.samples.clear()
         country.pingTraces.clear()
         country.errors.clear()
-        country.summary.text = copy("Отклик маршрутов:", "Route response:")
+        country.summary.text = copy("Отклик: —", "Response: —")
         country.summary.contentDescription = country.summary.text
         country.summaryProgress.setLoading(true)
         if (VpnService.prepare(host) != null) {
@@ -482,7 +473,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             country.summaryProgress.setLoading(false)
             if (host.requestRouteProbePermission { startCountryProbe(country) }) return
             country.isChecking = true
-            country.summary.text = copy("Отклик маршрутов:", "Route response:")
+            country.summary.text = copy("Отклик: —", "Response: —")
             country.summaryProgress.setLoading(true)
         }
         val config = SubscriptionStore(host).readCurrent() ?: run {
@@ -499,7 +490,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 row.status.text = copy("Проверка после подключения", "Measure after connecting")
                 return@forEach
             }
-            row.status.text = copy("Отклик:", "Response:")
+            row.status.text = sampleLabel(RouteProbeSample(row.route.id, null, null))
             row.status.setTextColor(DeyttUi.SKY)
             row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
             row.progress.setLoading(true)
@@ -600,7 +591,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                             english,
                             reportedSpeed,
                         )
-                        row.progress.setLoading(reportedSpeed == null)
+                        row.progress.setLoading(true)
                     }
                     "waiting_download" -> {
                         row.status.text = sampleLabel(sample) + copy(" · скорость в очереди", " · speed queued")
@@ -694,7 +685,8 @@ internal class PrimaryPages(private val host: MainActivity) {
         awgMeasurementRunning = true
         activeAwgCountry = country
         rows.forEach {
-            it.status.text = copy("В очереди · временный VPN только для приложения", "Queued · temporary app-only VPN")
+            it.status.text = sampleLabel(RouteProbeSample(it.route.id, null, null))
+            it.status.contentDescription = copy("В очереди · временный VPN только для приложения", "Queued · temporary app-only VPN")
             it.progress.setLoading(true)
         }
         host.requestAwgMeasurements(rows.map { it.route }, onComplete = {
@@ -702,10 +694,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             activeAwgCountry = null
             rows.forEach { row ->
                 row.progress.setLoading(false)
-                val pendingStatus = row.status.text.toString() in setOf(
-                    copy("В очереди · временный VPN только для приложения", "Queued · temporary app-only VPN"),
-                    copy("Подключаем AmneziaWG…", "Connecting AmneziaWG…"),
-                )
+                val pendingStatus = row.status.text.toString() == sampleLabel(RouteProbeSample(row.route.id, null, null))
                 if (!country.cancelled && row.route.id !in country.samples && pendingStatus) {
                     row.status.text = copy("Проверка недоступна · нажмите для повтора", "Measurement unavailable · tap to retry")
                 }
@@ -718,7 +707,8 @@ internal class PrimaryPages(private val host: MainActivity) {
             }
         }, onRouteStarting = { route ->
             country.rows[route.id]?.let { row ->
-                row.status.text = copy("Подключаем AmneziaWG…", "Connecting AmneziaWG…")
+                row.status.text = sampleLabel(RouteProbeSample(row.route.id, null, null))
+                row.status.contentDescription = copy("Подключаем AmneziaWG…", "Connecting AmneziaWG…")
                 row.progress.setLoading(true)
             }
         }, measure = { route, finished ->
@@ -773,7 +763,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         val summaryLabel = summary?.let(::latencySummaryLabel)
         country.summary.text = when {
             country.isChecking && summaryLabel != null -> summaryLabel + copy(" · проверка идёт", " · check in progress")
-            country.isChecking -> copy("Проверяем все маршруты · подождите", "Checking all routes · please wait")
+            country.isChecking -> copy("Отклик: — · проверяем маршруты", "Response: — · checking routes")
             summaryLabel != null -> summaryLabel + copy(" · готово", " · complete")
             country.cancelled -> copy("Проверка отменена · откройте страну снова", "Check cancelled · reopen the country")
             else -> copy("Нет результата · откройте страну для повтора", "No result · reopen the country to retry")
@@ -804,12 +794,13 @@ internal class PrimaryPages(private val host: MainActivity) {
         if (VpnService.prepare(host) != null && host.requestRouteProbePermission { startAwgProbe(row) }) return
         awgMeasurementRunning = true
         row.progress.setLoading(true)
-        row.status.text = copy("Подключаем для проверки…", "Connecting to measure…")
+        row.status.text = sampleLabel(RouteProbeSample(row.route.id, null, null))
+        row.status.contentDescription = copy("Подключаем для проверки…", "Connecting to measure…")
         host.requestAwgMeasurement(row.route, onComplete = { successful ->
             awgMeasurementRunning = false
             row.progress.setLoading(false)
             if (!successful && RouteQualityStore.read(host, row.route.id) == null &&
-                row.status.text.toString() == copy("Подключаем для проверки…", "Connecting to measure…")
+                row.status.text.toString() == sampleLabel(RouteProbeSample(row.route.id, null, null))
             ) row.status.text = copy("Проверка недоступна · повторите", "Measurement unavailable · retry")
             launchNextCountry()
         }) { finished -> measureAwgRow(row, null, finished) }
@@ -869,7 +860,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                                 english,
                                 bytesPerSecond,
                             )
-                            row.progress.setLoading(false)
+                            row.progress.setLoading(true)
                             if (country != null) {
                                 country.samples[row.route.id] = RouteProbeSample(row.route.id, latency, bytesPerSecond)
                                 updateCountryLatencySummary(country)
@@ -1463,13 +1454,32 @@ internal class PrimaryPages(private val host: MainActivity) {
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
+    private var settingsTelegramIcon: ImageView? = null
+
+    fun updateTelegramAvatar(avatar: android.graphics.Bitmap?) {
+        settingsTelegramIcon?.apply {
+            clipToOutline = true
+            if (avatar != null) {
+                setImageBitmap(avatar)
+                imageTintList = null
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setPadding(0, 0, 0, 0)
+            } else {
+                setImageResource(if (TelegramSessionStore.read(host) != null) R.drawable.ic_user_round else R.drawable.ic_send)
+                imageTintList = ColorStateList.valueOf(SKY)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                setPadding(host.dp(12), host.dp(12), host.dp(12), host.dp(12))
+            }
+        }
+    }
+
     private fun settingsPage(): View {
         val root = host.screen(withBackdrop = true)
         root.addView(host.header("", "Настройки"))
         root.addView(spacer(12, host))
         root.addView(host.sectionLabel(copy("язык и аккаунт", "language and account")))
         val accountGroup = routeGroup()
-        appendToGroup(accountGroup, host.row(copy("Язык приложения", "App language"), AppLanguage.label(host), "Aa", "›").apply {
+        appendToGroup(accountGroup, host.row(copy("Язык приложения", "App language"), AppLanguage.label(host), "LANGUAGE_ICON", "›").apply {
             setOnClickListener {
                 val codes = listOf(AppLanguage.RU, AppLanguage.EN)
                 AppDialog.Builder(host).setTitle(copy("Язык приложения", "App language"))
@@ -1486,8 +1496,12 @@ internal class PrimaryPages(private val host: MainActivity) {
         appendToGroup(accountGroup, host.row(
             if (linked) copy("Telegram подключён", "Telegram connected") else copy("Войти через Telegram", "Sign in with Telegram"),
             if (linked) copy("Управление аккаунтом", "Manage account") else copy("Подписка и устройства", "Subscription and devices"),
-            if (linked) "✓" else "↗", "›", emphasis = linked,
-        ).apply { setOnClickListener { if (TelegramSessionStore.read(host) == null) showTelegramPairing() else showLinkedTelegramAccount() } })
+            if (linked) "ACCOUNT_ICON" else "TELEGRAM_ICON", "›", emphasis = linked,
+            avatar = TelegramIdentityCache.avatar.takeIf { linked },
+        ).apply {
+            settingsTelegramIcon = getChildAt(0) as ImageView
+            setOnClickListener { if (TelegramSessionStore.read(host) == null) showTelegramPairing() else showLinkedTelegramAccount() }
+        })
 
         root.addView(accountGroup)
         root.addView(spacer(16, host))
@@ -1504,7 +1518,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         val splitRow = host.row(
             copy("Раздельное туннелирование", "Split tunneling"),
-            splitTunnelSummary(), "↗", "›",
+            splitTunnelSummary(), "SPLIT_ICON", "›",
         )
         val splitSummaryView = (splitRow.getChildAt(1) as? LinearLayout)?.getChildAt(1) as? TextView
         splitRow.setOnClickListener {
@@ -1515,7 +1529,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         }
         appendToGroup(connectionGroup, splitRow)
         val probeSummary = { copy("HTTP ${RouteProbePreferences.method(host).title} · быстрая проверка, загрузка 1 с", "HTTP ${RouteProbePreferences.method(host).title} · fast check, 1 s download") }
-        appendToGroup(connectionGroup, host.row(copy("Проверка маршрута", "Route check"), probeSummary(), "↻", "›").apply {
+        appendToGroup(connectionGroup, host.row(copy("Проверка маршрута", "Route check"), probeSummary(), "ROUTE_CHECK_ICON", "›").apply {
             val summary = (getChildAt(1) as? LinearLayout)?.getChildAt(1) as? TextView
             setOnClickListener {
                 val methods = RouteProbeMethod.values()
@@ -1528,10 +1542,10 @@ internal class PrimaryPages(private val host: MainActivity) {
                     }.setNegativeButton(host.uiCopy("Отмена"), null).show()
             }
         })
-        appendToGroup(connectionGroup, host.row(copy("Разрешения VPN", "VPN permissions"), copy("Системные настройки Android", "Android system settings"), "↗", "›").apply {
+        appendToGroup(connectionGroup, host.row(copy("Разрешения VPN", "VPN permissions"), copy("Системные настройки Android", "Android system settings"), "VPN_PERMISSION_ICON", "›").apply {
             setOnClickListener { runCatching { host.startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) } }
         })
-        appendToGroup(connectionGroup, host.row(copy("Бот DEYTT", "DEYTT bot"), copy("Другие действия в Telegram", "More actions in Telegram"), "↗", "›").apply {
+        appendToGroup(connectionGroup, host.row(copy("Бот DEYTT", "DEYTT bot"), copy("Другие действия в Telegram", "More actions in Telegram"), "BOT_ICON", "›").apply {
             setOnClickListener { openUrl("https://t.me/deyttbot") }
         })
         root.addView(connectionGroup)

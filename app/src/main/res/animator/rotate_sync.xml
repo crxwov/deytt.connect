@@ -1,9 +1,0 @@
-<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
-    android:duration="@integer/sync_rotation_duration_ms"
-    android:interpolator="@android:interpolator/linear"
-    android:propertyName="rotation"
-    android:repeatCount="infinite"
-    android:repeatMode="restart"
-    android:valueFrom="0"
-    android:valueTo="360"
-    android:valueType="floatType" />

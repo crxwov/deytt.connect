@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<objectAnimator xmlns:android="http://schemas.android.com/apk/res/android"
+    android:startOffset="680"
+    android:duration="650"
+    android:repeatCount="-1"
+    android:interpolator="@android:interpolator/linear">
+    <propertyValuesHolder android:propertyName="fillAlpha" android:valueType="floatType">
+        <keyframe android:fraction="0" android:value="1" />
+        <keyframe android:fraction="0.499" android:value="1" />
+        <keyframe android:fraction="0.5" android:value="0" />
+        <keyframe android:fraction="1" android:value="0" />
+    </propertyValuesHolder>
+</objectAnimator>

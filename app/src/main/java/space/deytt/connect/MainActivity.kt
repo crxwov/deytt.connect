@@ -315,6 +315,7 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        StartupAnimationView.configureSystemSplash(this)
         if (openIncomingSubscription(intent)) {
             finish()
             return
@@ -332,18 +333,9 @@ class MainActivity : Activity() {
         // Location approval is remembered, location data itself is not.
         IpNetworkLocationStore(this).clear()
         currentNetworkLocation = OriginLocationMemory.location
-        val startupStartedAt = SystemClock.elapsedRealtime()
-        if (savedInstanceState == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val splashDuration = resources.getInteger(R.integer.sync_rotation_duration_ms).toLong()
-            splashScreen.setOnExitAnimationListener { splashView ->
-                val remaining = (splashDuration - (SystemClock.elapsedRealtime() - startupStartedAt)).coerceAtLeast(0L)
-                if (remaining == 0L) splashView.remove()
-                else Handler(Looper.getMainLooper()).postDelayed({ splashView.remove() }, remaining)
-            }
-        }
         buildScreen()
-        if (savedInstanceState == null) {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) showStartupAnimation()
+        if (savedInstanceState == null && Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            showStartupAnimation()
         }
         window.decorView.post { showNetworkLocationConsentIfNeeded() }
         requestNotificationPermissionIfNeeded()
@@ -481,6 +473,7 @@ class MainActivity : Activity() {
                 animate().alpha(1f).setDuration(190L).start()
             }
         }
+        if (::primaryPages.isInitialized) primaryPages.updateTelegramAvatar(avatar)
     }
 
     internal fun updateTelegramUsername(username: String?) {
@@ -767,59 +760,9 @@ class MainActivity : Activity() {
     }
 
     private fun showStartupAnimation() {
-        val splash = FrameLayout(this).apply {
-            tag = "startup-splash"
-            setBackgroundColor(Color.BLACK)
-            isClickable = false
-            isFocusable = false
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        }
-        val logo = displayText("", 58f, Color.WHITE).apply {
-            tag = "startup-mark"
-            letterSpacing = -.02f
-        }
-        val cursor = View(this).apply {
-            setBackgroundColor(Color.WHITE)
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }
-        splash.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(logo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(cursor, LinearLayout.LayoutParams(dp(3), dp(40)).apply { leftMargin = dp(4) })
-        }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-        globeStage.addView(splash, FrameLayout.LayoutParams(-1, -1))
-
-        if (isReducedMotionEnabled()) {
-            logo.text = "./d"
-            splash.postDelayed({ splash.animate().alpha(0f).setDuration(180L).withEndAction { globeStage.removeView(splash) } }, 240L)
-            return
-        }
-        val blink = ValueAnimator.ofFloat(1f, .18f).apply {
-            duration = 325L
-            repeatMode = ValueAnimator.REVERSE
-            repeatCount = ValueAnimator.INFINITE
-            addUpdateListener { cursor.alpha = it.animatedValue as Float }
-            start()
-        }
-        fun type(value: String) {
-            logo.text = value
-            logo.alpha = .3f
-            logo.translationY = dp(3).toFloat()
-            logo.rotation = if (value.endsWith('/')) 1.5f else -1f
-            logo.animate().alpha(1f).translationY(0f).rotation(0f).setDuration(120L).start()
-        }
-        splash.postDelayed({ type(".") }, 140L)
-        splash.postDelayed({ type("./") }, 320L)
-        splash.postDelayed({ type("./d") }, 500L)
-        splash.postDelayed({
-            logo.letterSpacing = -.065f
-            blink.cancel()
-            cursor.animate().alpha(0f).setDuration(120L).start()
-            splash.animate().alpha(0f).setStartDelay(220L).setDuration(340L).withEndAction {
-                globeStage.removeView(splash)
-            }.start()
-        }, 680L)
+        val startup = StartupAnimationView(this, isReducedMotionEnabled())
+        globeStage.addView(startup, FrameLayout.LayoutParams(-1, -1))
+        startup.post(startup::start)
     }
 
     private fun buildHomePage(): View {

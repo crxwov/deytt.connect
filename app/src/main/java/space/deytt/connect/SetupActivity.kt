@@ -45,6 +45,7 @@ class SetupActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        StartupAnimationView.configureSystemSplash(this)
         val updating = SubscriptionStore(this).readCurrent() != null
         val sessionToken = TelegramSessionStore.read(this)
         val incomingUrl = intent.getStringExtra(EXTRA_SUBSCRIPTION_URL)
