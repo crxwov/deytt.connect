@@ -277,13 +277,29 @@ object DeyttUi {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         minimumHeight = dp(54)
-        setPadding(if (emphasis) dp(12) else dp(2), dp(5), if (emphasis) dp(10) else dp(2), dp(5))
+        setPadding(if (emphasis) dp(12) else dp(2), dp(3), if (emphasis) dp(10) else dp(2), dp(3))
         background = if (interactive) glassRowBackground(emphasis, 15f) else ColorDrawable(Color.TRANSPARENT)
         if (leading.isNotBlank()) {
             val icon = when (leading) {
                 "AWG_MARK" -> awgMark(emphasis)
                 "ROUTE_AUTO" -> routeAutoMark(emphasis)
                 "ROUTE_RU_DE" -> routePairMark(emphasis)
+                "↻" -> android.widget.ImageView(this@row).apply {
+                    setImageResource(R.drawable.ic_sync)
+                    imageTintList = ColorStateList.valueOf(SKY)
+                    background = glassRowBackground(emphasis, 12f)
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }
+                "PAYMENTS_ICON" -> android.widget.ImageView(this@row).apply {
+                    setImageResource(R.drawable.ic_payments)
+                    imageTintList = ColorStateList.valueOf(SKY)
+                    background = glassRowBackground(emphasis, 12f)
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
+                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                }
                 else -> {
                 val isCountryFlag = leading.any { it.code in 0xD800..0xDBFF }
                 text(leading, if (isCountryFlag) 20f else 11f, if (isCountryFlag) TEXT else SKY,
@@ -298,7 +314,7 @@ object DeyttUi {
                 }
                 }
             }
-            addView(icon, LinearLayout.LayoutParams(dp(34), dp(34)).apply { marginEnd = dp(10) })
+            addView(icon, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(10) })
         }
         addView(LinearLayout(this@row).apply {
             orientation = LinearLayout.VERTICAL
@@ -382,20 +398,13 @@ object DeyttUi {
         }
     }
 
-    private fun Activity.routeAutoMark(emphasis: Boolean): FrameLayout = FrameLayout(this).apply {
-        background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 12f,
-            if (emphasis) 0xFF3F5985.toInt() else LINE)
+    private fun Activity.routeAutoMark(emphasis: Boolean): ImageView = ImageView(this).apply {
+        setImageResource(R.drawable.ic_route_auto)
+        imageTintList = ColorStateList.valueOf(SKY)
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        setPadding(dp(8), dp(8), dp(8), dp(8))
+        background = glassRowBackground(emphasis, 12f)
         contentDescription = uiCopy("Автоподбор: Нидерланды, Германия, Финляндия, Россия")
-        listOf("🇳🇱", "🇩🇪", "🇫🇮", "🇷🇺").forEachIndexed { index, flag ->
-            val placementGravity = when (index) {
-                0 -> Gravity.TOP or Gravity.START
-                1 -> Gravity.TOP or Gravity.END
-                2 -> Gravity.BOTTOM or Gravity.START
-                else -> Gravity.BOTTOM or Gravity.END
-            }
-            addView(text(flag, 10f, TEXT).apply { this.gravity = Gravity.CENTER },
-                FrameLayout.LayoutParams(dp(20), dp(20), placementGravity))
-        }
     }
 
     private class AmneziaMarkView(context: Context) : View(context) {

@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:name="sync"
+        android:pivotX="12"
+        android:pivotY="12">
+        <path
+            android:fillColor="#7BE1F8"
+            android:pathData="M12,6V3L8,7l4,4V8a5,5 0,1 1,-4.58,3H5.26A7,7 0,1 0,12,6zM18.74,13A7,7 0,0 0,12,6v2a5,5 0,0 1,4.58,3h-2.58l4,4 4,-4z" />
+    </group>
+</vector>

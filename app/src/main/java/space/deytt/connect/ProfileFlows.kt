@@ -141,7 +141,8 @@ internal class ProfileFlows(
         }
         card.addView(actionStatus)
         root.addView(card)
-        root.addView(host.row("Тарифы и оплата", "Сумму подтвердит сервер перед оформлением", "₽", "открыть").apply {
+        root.addView(spacer(8, host))
+        root.addView(host.row("Тарифы и оплата", "Сумму подтвердит сервер перед оформлением", "PAYMENTS_ICON", emphasis = true).apply {
             setOnClickListener { showPlanPicker() }
         })
 

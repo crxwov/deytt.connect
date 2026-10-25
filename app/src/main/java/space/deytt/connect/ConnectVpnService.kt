@@ -1354,22 +1354,21 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             if (options.getDNSMode().getValue() != Libbox.DNSModeDisabled) {
                 stringIterator(options.getDNSServerAddress()).forEach(builder::addDnsServer)
             }
-            stringIterator(options.getIncludePackage()).forEach { packageName ->
-                builder.addAllowedApplication(packageName)
-            }
-            stringIterator(options.getExcludePackage()).forEach { packageName ->
+            val splitStore = UserSplitTunnelStore(this)
+            val appFilter = SplitTunnelProfile.androidAppFilter(
+                stringIterator(options.getIncludePackage()).toList(),
+                stringIterator(options.getExcludePackage()).toList(),
+                splitStore.readPackages(),
+                splitStore.readMode(),
+            )
+            if (appFilter.allowed != null) {
+                check(appFilter.allowed.isNotEmpty()) { "VPN app allow list is empty" }
+                appFilter.allowed.forEach(builder::addAllowedApplication)
+            } else appFilter.disallowed.forEach { packageName ->
                 try {
                     builder.addDisallowedApplication(packageName)
                 } catch (e: Throwable) {
                     Log.w(TAG, "Failed to exclude package $packageName", e)
-                }
-            }
-            val splitStore = UserSplitTunnelStore(this)
-            if (splitStore.readMode() != UserSplitTunnelStore.MODE_VPN_ONLY) splitStore.readPackages().forEach { packageName ->
-                try {
-                    builder.addDisallowedApplication(packageName)
-                } catch (e: Throwable) {
-                    Log.w(TAG, "Failed to exclude custom package $packageName", e)
                 }
             }
         }

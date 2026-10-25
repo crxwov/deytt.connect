@@ -1,0 +1,7 @@
+<resources>
+    <style name="AppTheme.Starting" parent="@style/AppTheme">
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_startup_animation</item>
+        <item name="android:windowSplashScreenBackground">#080B12</item>
+        <item name="android:windowSplashScreenAnimationDuration">@integer/sync_rotation_duration_ms</item>
+    </style>
+</resources>

@@ -18,6 +18,26 @@ class SplitTunnelProfileTest {
       ]}
     }"""
 
+    @Test fun androidAppFilterKeepsAllowedAndBypassedPackagesInOneList() {
+        val bypass = SplitTunnelProfile.androidAppFilter(
+            providerAllowed = listOf("browser", "chat", "mail"),
+            providerDisallowed = listOf("chat"),
+            selectedPackages = listOf("browser", "video"),
+            mode = UserSplitTunnelStore.MODE_BYPASS,
+        )
+        assertEquals(setOf("mail"), bypass.allowed)
+        assertTrue(bypass.disallowed.isEmpty())
+
+        val vpnOnly = SplitTunnelProfile.androidAppFilter(
+            providerAllowed = listOf("browser"),
+            providerDisallowed = listOf("browser"),
+            selectedPackages = listOf("video"),
+            mode = UserSplitTunnelStore.MODE_VPN_ONLY,
+        )
+        assertEquals(setOf("video"), vpnOnly.allowed)
+        assertTrue(vpnOnly.disallowed.isEmpty())
+    }
+
     @Test fun bypassDnsMatchesTrafficAndPreservesSelectedTransport() {
         val root = JSONObject(SplitTunnelProfile.apply(config))
         assertEquals("selected", root.getJSONObject("route").getString("final"))

@@ -275,14 +275,13 @@ internal class PrimaryPages(private val host: MainActivity) {
             copy("Обновить подписку", "Refresh subscription"),
             copy("Загрузить доступные маршруты", "Load available routes"),
             "↻",
-            copy("обновить", "refresh"),
         ).apply { setOnClickListener { host.openSetup() } })
         root.addView(spacer(14, host))
 
         root.addView(host.sectionLabel("быстрый выбор"))
         val quickGroup = routeGroup()
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { route ->
-            appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "✦", "выбрать", selectedId == route.id)
+            appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", "выбрать", selectedId == route.id)
                 .apply { setOnClickListener { host.selectRoute(route) } })
         }
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { route ->
@@ -315,6 +314,9 @@ internal class PrimaryPages(private val host: MainActivity) {
             val detail = LinearLayout(host).apply {
                 orientation = LinearLayout.VERTICAL
                 visibility = View.GONE
+                background = host.rounded(SURFACE_2, 14f, LINE)
+                clipToOutline = true
+                setPadding(host.dp(8), host.dp(8), host.dp(8), host.dp(8))
             }
             val summary = host.text(
                 cachedLatencySummary(cachedSamples) ?: copy("Отклик: —", "Response: —"),
@@ -329,7 +331,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(host.dp(54), host.dp(2), host.dp(16), host.dp(2))
-                addView(summary, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(summary, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(summaryProgress, LinearLayout.LayoutParams(host.dp(20), host.dp(20)))
             })
             val rowById = linkedMapOf<String, ProbeRouteRow>()
@@ -374,11 +376,16 @@ internal class PrimaryPages(private val host: MainActivity) {
                 }
                 val metricsColumn = item.getChildAt(1) as LinearLayout
                 metric.setPadding(0, host.dp(6), 0, host.dp(3))
-                metricsColumn.addView(metric)
-                item.addView(progress, LinearLayout.LayoutParams(host.dp(20), host.dp(20)).apply {
-                    marginStart = host.dp(8)
-                    marginEnd = host.dp(10)
-                })
+                val metricLine = LinearLayout(host).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(metric, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                    addView(progress, LinearLayout.LayoutParams(host.dp(18), host.dp(18)).apply {
+                        marginStart = host.dp(4)
+                    })
+                }
+                metricsColumn.addView(metricLine)
+                if (route.id != selectedId) item.background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
                 item.setOnClickListener { host.selectRoute(route) }
                 val probeRow = ProbeRouteRow(route, metric, progress)
                 if (isAwg) {
@@ -466,7 +473,7 @@ internal class PrimaryPages(private val host: MainActivity) {
         country.samples.clear()
         country.pingTraces.clear()
         country.errors.clear()
-        country.summary.text = copy("Проверяем все маршруты · подождите", "Checking all routes · please wait")
+        country.summary.text = copy("Отклик маршрутов:", "Route response:")
         country.summary.contentDescription = country.summary.text
         country.summaryProgress.setLoading(true)
         if (VpnService.prepare(host) != null) {
@@ -475,7 +482,7 @@ internal class PrimaryPages(private val host: MainActivity) {
             country.summaryProgress.setLoading(false)
             if (host.requestRouteProbePermission { startCountryProbe(country) }) return
             country.isChecking = true
-            country.summary.text = copy("Проверяем все маршруты · подождите", "Checking all routes · please wait")
+            country.summary.text = copy("Отклик маршрутов:", "Route response:")
             country.summaryProgress.setLoading(true)
         }
         val config = SubscriptionStore(host).readCurrent() ?: run {
@@ -492,7 +499,7 @@ internal class PrimaryPages(private val host: MainActivity) {
                 row.status.text = copy("Проверка после подключения", "Measure after connecting")
                 return@forEach
             }
-            row.status.text = copy("Отклик: —", "Response: —")
+            row.status.text = copy("Отклик:", "Response:")
             row.status.setTextColor(DeyttUi.SKY)
             row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
             row.progress.setLoading(true)

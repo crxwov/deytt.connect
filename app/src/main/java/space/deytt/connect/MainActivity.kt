@@ -332,8 +332,19 @@ class MainActivity : Activity() {
         // Location approval is remembered, location data itself is not.
         IpNetworkLocationStore(this).clear()
         currentNetworkLocation = OriginLocationMemory.location
+        val startupStartedAt = SystemClock.elapsedRealtime()
+        if (savedInstanceState == null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val splashDuration = resources.getInteger(R.integer.sync_rotation_duration_ms).toLong()
+            splashScreen.setOnExitAnimationListener { splashView ->
+                val remaining = (splashDuration - (SystemClock.elapsedRealtime() - startupStartedAt)).coerceAtLeast(0L)
+                if (remaining == 0L) splashView.remove()
+                else Handler(Looper.getMainLooper()).postDelayed({ splashView.remove() }, remaining)
+            }
+        }
         buildScreen()
-        if (savedInstanceState == null) showStartupAnimation()
+        if (savedInstanceState == null) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) showStartupAnimation()
+        }
         window.decorView.post { showNetworkLocationConsentIfNeeded() }
         requestNotificationPermissionIfNeeded()
     }

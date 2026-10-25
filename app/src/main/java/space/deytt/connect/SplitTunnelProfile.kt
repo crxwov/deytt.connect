@@ -9,6 +9,26 @@ object SplitTunnelProfile {
     const val OPENFLUX_OUTBOUND = "deytt-openflux"
     private val domainKeys = listOf("domain", "domain_suffix", "domain_regex", "domain_keyword")
 
+    data class AndroidAppFilter(val allowed: Set<String>?, val disallowed: Set<String>)
+
+    fun androidAppFilter(
+        providerAllowed: Collection<String>,
+        providerDisallowed: Collection<String>,
+        selectedPackages: Collection<String>,
+        mode: String,
+    ): AndroidAppFilter {
+        val allowed = providerAllowed.map(String::trim).filter(String::isNotEmpty).toSet()
+        val disallowed = providerDisallowed.map(String::trim).filter(String::isNotEmpty).toSet()
+        val selected = selectedPackages.map(String::trim).filter(String::isNotEmpty).toSet()
+        val vpnOnly = mode == UserSplitTunnelStore.MODE_VPN_ONLY
+
+        return when {
+            vpnOnly && selected.isNotEmpty() -> AndroidAppFilter((allowed - disallowed) + selected, emptySet())
+            allowed.isNotEmpty() -> AndroidAppFilter(allowed - disallowed - if (vpnOnly) emptySet() else selected, emptySet())
+            else -> AndroidAppFilter(null, disallowed + if (vpnOnly) emptySet() else selected)
+        }
+    }
+
     fun bypassSites(config: String): List<String> {
         val rules = JSONObject(apply(config)).getJSONObject("dns").getJSONArray("rules")
         val suffixes = rules.getJSONObject(0).getJSONArray("domain_suffix")
