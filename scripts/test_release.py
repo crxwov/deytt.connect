@@ -5,6 +5,7 @@ import io
 from pathlib import Path
 import tempfile
 import unittest
+import zipfile
 from unittest import mock
 
 
@@ -18,6 +19,33 @@ APPROVED = release.POLICY["certificate_sha256"]
 
 
 class ReleaseSigningContractTests(unittest.TestCase):
+    def test_inspect_rejects_corrupt_zip_payload(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            apk = Path(temporary) / "corrupt.apk"
+            with zipfile.ZipFile(apk, "w", compression=zipfile.ZIP_STORED) as archive:
+                archive.writestr("classes.dex", b"payload")
+            data = bytearray(apk.read_bytes())
+            data[30 + len("classes.dex")] ^= 1
+            apk.write_bytes(data)
+            badging = "package: name='space.deytt.connect' versionCode='85' versionName='0.11.55'\nsdkVersion:'24'\ntargetSdkVersion:'35'"
+            with mock.patch.object(release, "tool", return_value="aapt"), \
+                    mock.patch.object(release, "run", return_value=badging):
+                with self.assertRaisesRegex(ValueError, "CRC check"):
+                    release.inspect_apk(apk)
+
+    def test_inspect_rejects_duplicate_zip_entries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            apk = Path(temporary) / "duplicate.apk"
+            with zipfile.ZipFile(apk, "w") as archive:
+                archive.writestr("classes.dex", b"first")
+                with self.assertWarns(UserWarning):
+                    archive.writestr("classes.dex", b"second")
+            badging = "package: name='space.deytt.connect' versionCode='85' versionName='0.11.55'\nsdkVersion:'24'\ntargetSdkVersion:'35'"
+            with mock.patch.object(release, "tool", return_value="aapt"), \
+                    mock.patch.object(release, "run", return_value=badging):
+                with self.assertRaisesRegex(ValueError, "duplicate ZIP"):
+                    release.inspect_apk(apk)
+
     def test_keytool_checks_fixed_alias_and_uses_password_file_reference(self):
         with mock.patch.object(release, "keytool", return_value="keytool"), \
                 mock.patch.object(release, "run", return_value="\r\n  SHA256: " + ":".join(

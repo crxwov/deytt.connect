@@ -91,6 +91,10 @@ def inspect_apk(apk, qa=False, expected_version=None, expected_version_code=None
         raise ValueError("unexpected permissions: " + ", ".join(sorted(permissions - allowed_permissions)))
     with zipfile.ZipFile(apk) as archive:
         names = archive.namelist()
+        if len(names) != len(set(names)):
+            raise ValueError("apk contains duplicate ZIP entries")
+        if archive.testzip() is not None:
+            raise ValueError("apk ZIP entry failed its CRC check")
         if any(Path(name).name in {"libwg.so", "libwg-quick.so"} for name in names):
             raise ValueError("unused root-management native tools must not ship")
         if not any(name.endswith("/libwg-go.so") for name in names):
