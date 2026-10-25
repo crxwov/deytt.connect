@@ -8,17 +8,20 @@ const source = fs.readFileSync(
   "utf8",
 );
 
-async function runCase(setOverviewBeforeAtlasExists) {
+async function runCase(setOverviewBeforeAtlasExists, native) {
   let resolveAtlas;
+  let createOptions;
   const root = { classList: { toggle() {} }, querySelector() { return null; } };
   const window = {
     location: { search: "" },
     DeyttAtlas: {
-      create() {
+      create(root, options) {
+        createOptions = options;
         return new Promise((resolve) => { resolveAtlas = resolve; });
       },
     },
   };
+  if (native) window.DeyttAtlasBridge = {};
   const document = {
     documentElement: { dataset: {} },
     querySelector() { return root; },
@@ -48,13 +51,19 @@ async function runCase(setOverviewBeforeAtlasExists) {
 
   assert.equal(window.deyttMapOverviewMode, true);
   assert.equal(atlas.overviewMode, true);
-  assert.equal(atlas.targetZoom, 1.1);
+  assert.equal(atlas.targetZoom, native ? 1.28 : 1.1);
+  assert.equal(createOptions.initialZoom, native ? 1.28 : 1.1);
+  atlas.targetZoom = 4;
+  window.deyttResetMapView();
+  assert.equal(atlas.targetZoom, native ? 1.28 : 1.1);
 }
 
 (async () => {
-  await runCase(true);
-  await runCase(false);
-  process.stdout.write("atlas overview initialization race: 2 cases passed\n");
+  for (const native of [false, true]) {
+    await runCase(true, native);
+    await runCase(false, native);
+  }
+  process.stdout.write("atlas native/web initialization and reset: 4 cases passed\n");
 })().catch((error) => {
   process.stderr.write(`${error.stack || error}\n`);
   process.exitCode = 1;

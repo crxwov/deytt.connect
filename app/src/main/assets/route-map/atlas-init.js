@@ -16,6 +16,7 @@
     if (window.deyttMapAtlas) window.deyttMapAtlas.setViewportAnchor(x, y, width, height);
   };
   const windowsProfile = new URLSearchParams(window.location.search).get("profile") === "windows";
+  const initialZoom = window.DeyttAtlasBridge ? 1.28 : 1.1;
   const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
   if (windowsProfile) document.documentElement.dataset.atlasProfile = "windows";
   function updateInteractionHint() {
@@ -54,7 +55,7 @@
     if (!atlas) return;
     atlas.targetLon = 15;
     atlas.targetLat = 50;
-    atlas.targetZoom = 1.1;
+    atlas.targetZoom = initialZoom;
     atlas.velocityLon = 0;
     atlas.staticDirty = true;
     atlas.start();
@@ -136,6 +137,7 @@
   };
 
   window.DeyttAtlas.create(root, {
+    initialZoom: initialZoom,
     variant: "showcase",
     route: "auto",
     topologyUrl: "world-land.json",

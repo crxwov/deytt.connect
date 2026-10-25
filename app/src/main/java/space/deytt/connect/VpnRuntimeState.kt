@@ -24,6 +24,13 @@ data class VpnSnapshot(
 enum class VpnControlAction { START, STOP }
 
 object VpnControlDecision {
+    fun shouldReconnectOnSelection(
+        connectionRequested: Boolean,
+        libboxRunning: Boolean,
+        awgRunning: Boolean,
+        diagnosticWasConnected: Boolean? = null,
+    ): Boolean = diagnosticWasConnected ?: (connectionRequested || libboxRunning || awgRunning)
+
     fun canResumeQueuedStart(
         requestedRouteId: String,
         selectedRouteId: String,

@@ -55,7 +55,7 @@ body {
 }
 
 .network-atlas.is-backdrop-stage {
-  filter: blur(16px) brightness(.4);
+  opacity: .4;
   pointer-events: none;
 }
 

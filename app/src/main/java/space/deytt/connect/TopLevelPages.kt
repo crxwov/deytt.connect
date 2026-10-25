@@ -382,13 +382,6 @@ internal class PrimaryPages(private val host: MainActivity) {
                 item.setOnClickListener { host.selectRoute(route) }
                 val probeRow = ProbeRouteRow(route, metric, dots)
                 if (isAwg) {
-                    item.setOnClickListener {
-                        AppDialog.Builder(host)
-                            .setTitle(host.uiCopy(rowTitle))
-                            .setItems(arrayOf(copy("Выбрать маршрут", "Select route"), copy("Подключить и проверить", "Connect and measure"))) { _, action ->
-                                if (action == 0) host.selectRoute(route) else startAwgProbe(probeRow)
-                            }.show()
-                    }
                     metric.text = cached?.let { sampleLabel(it, isCachedBest) }
                         ?: copy("Отклик: — · Скорость: —", "Response: — · Speed: —")
                     metric.setOnClickListener { startAwgProbe(probeRow) }

@@ -490,25 +490,17 @@ class ProtocolActivity : Activity() {
     }
 
     private fun select(route: DeyttRoute) {
-        if (ConnectVpnService.isRunning() || AwgTunnelController.isRunning()) {
-            fun resumeSelection() {
-                selecting = false
-                chooseButton?.isEnabled = true
-            }
-            val confirmation = AppDialog.Builder(this)
-                .setTitle("Сменить VPN-выход?")
-                .setMessage("Текущее соединение остановится. После выбора запустите подключение снова, чтобы применить новый маршрут.")
-                .setNegativeButton("Оставить подключение") { _, _ -> resumeSelection() }
-                .setPositiveButton("Остановить и сменить") { _, _ -> applySelection(route) }
-                .create()
-            confirmation.setOnCancelListener { resumeSelection() }
-            confirmation.show()
+        if (SelectedRouteStore(this).read().id == route.id) {
+            openHome()
             return
         }
         applySelection(route)
     }
 
     private fun applySelection(route: DeyttRoute) {
+        val config = if (route.engine == TunnelEngine.LIBBOX) SubscriptionStore(this).readCurrent() ?: return else null
+        val reconnect = VpnControlDecision.shouldReconnectOnSelection(false,
+            ConnectVpnService.isRunning(), AwgTunnelController.isRunning())
         if (RouteProbeClient.isRunning(this)) {
             runCatching { RouteProbeClient.cancel(this) }
             pendingProbeRequestId = null
@@ -517,11 +509,31 @@ class ProtocolActivity : Activity() {
             startService(Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_STOP))
         }
         AwgTunnelController.stop(this)
-        if (route.engine == TunnelEngine.LIBBOX) {
-            val config = SubscriptionStore(this).readCurrent() ?: return
+        if (config != null) {
             SubscriptionStore(this).saveValidated(ProfileRoutes.select(config, route.configTag))
         }
         SelectedRouteStore(this).save(route)
+        if (reconnect) reconnectSelection(route.id) else openHome()
+    }
+
+    private fun reconnectSelection(routeId: String, attempt: Int = 0) {
+        if (isFinishing || isDestroyed || SelectedRouteStore(this).read().id != routeId) return
+        if (ConnectVpnService.isRunning() || AwgTunnelController.isRunning() ||
+            AwgTunnelController.isStopping() || RouteProbeClient.isRunning(this)) {
+            if (attempt < 300) {
+                window.decorView.postDelayed({ reconnectSelection(routeId, attempt + 1) }, 50L)
+            } else {
+                VpnStateStore(this).write(VpnPhase.ERROR, "Не удалось завершить предыдущее соединение", "Подключитесь снова")
+                openHome()
+            }
+            return
+        }
+        val intent = Intent(this, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
+        openHome()
+    }
+
+    private fun openHome() {
         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP))
         finish()
     }
