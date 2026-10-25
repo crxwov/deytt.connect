@@ -2,6 +2,32 @@ name: Android 16 APK install smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      target_tag:
+        description: Release tag to clean-install and upgrade to
+        required: true
+        type: string
+        default: v0.11.57
+      target_sha256:
+        description: Expected SHA-256 of the target universal APK
+        required: true
+        type: string
+        default: f66106390052e489b8149e61227928f11fd278ff72dd7accc5215c3285aca937
+      baseline_tag:
+        description: Release tag to install before the target upgrade
+        required: true
+        type: string
+        default: v0.11.56
+      baseline_sha256:
+        description: Expected SHA-256 of the baseline universal APK
+        required: true
+        type: string
+        default: 82e79c66021d89a2e604f8b413ec4888b0daf062e84bcfc0cd3d494d74ea7591
+      target_version_code:
+        description: Expected Android versionCode of the target APK
+        required: true
+        type: string
+        default: "87"
 
 permissions:
   contents: read
@@ -11,6 +37,31 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
+      - name: Validate dispatch inputs
+        id: validate
+        shell: bash
+        env:
+          TARGET_TAG_INPUT: ${{ inputs.target_tag }}
+          TARGET_SHA256_INPUT: ${{ inputs.target_sha256 }}
+          BASELINE_TAG_INPUT: ${{ inputs.baseline_tag }}
+          BASELINE_SHA256_INPUT: ${{ inputs.baseline_sha256 }}
+          TARGET_VERSION_CODE_INPUT: ${{ inputs.target_version_code }}
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_TAG_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid target release tag" >&2; exit 1; }
+          [[ "$BASELINE_TAG_INPUT" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid baseline release tag" >&2; exit 1; }
+          [[ "$TARGET_SHA256_INPUT" =~ ^[0-9a-fA-F]{64}$ ]] || { echo "Invalid target SHA-256" >&2; exit 1; }
+          [[ "$BASELINE_SHA256_INPUT" =~ ^[0-9a-fA-F]{64}$ ]] || { echo "Invalid baseline SHA-256" >&2; exit 1; }
+          [[ "$TARGET_VERSION_CODE_INPUT" =~ ^[1-9][0-9]{0,8}$ ]] || { echo "Invalid target versionCode" >&2; exit 1; }
+          [[ "$TARGET_TAG_INPUT" != "$BASELINE_TAG_INPUT" ]] || { echo "Target and baseline tags must differ" >&2; exit 1; }
+          {
+            echo "target_tag=$TARGET_TAG_INPUT"
+            echo "target_sha256=$TARGET_SHA256_INPUT"
+            echo "baseline_tag=$BASELINE_TAG_INPUT"
+            echo "baseline_sha256=$BASELINE_SHA256_INPUT"
+            echo "target_version_code=$TARGET_VERSION_CODE_INPUT"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Create evidence directory
         run: mkdir -p "$RUNNER_TEMP/android-api36-smoke/apks" "$RUNNER_TEMP/android-api36-smoke/logs"
 
@@ -43,6 +94,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TARGET_TAG: ${{ steps.validate.outputs.target_tag }}
+          TARGET_SHA256: ${{ steps.validate.outputs.target_sha256 }}
+          BASELINE_TAG: ${{ steps.validate.outputs.baseline_tag }}
+          BASELINE_SHA256: ${{ steps.validate.outputs.baseline_sha256 }}
+          TARGET_VERSION_CODE: ${{ steps.validate.outputs.target_version_code }}
         run: |
           set -euo pipefail
           repo="$GITHUB_REPOSITORY"
@@ -50,10 +106,10 @@ jobs:
           logs="$RUNNER_TEMP/android-api36-smoke/logs"
 
           download_release_apk() {
-            local tag="$1" expected_sha="$2" require_draft="$3" require_prerelease="$4" metadata="$logs/$1-release.json"
+            local tag="$1" expected_sha="$2" metadata="$logs/$1-release.json"
             gh api "repos/$repo/releases/tags/$tag" > "$metadata"
-            jq -e --arg tag "$tag" --arg draft "$require_draft" --arg prerelease "$require_prerelease" \
-              '.tag_name == $tag and ((.draft | tostring) == $draft) and ($prerelease == "any" or ((.prerelease | tostring) == $prerelease)) and any(.assets[]; .name == "app-universal-release.apk" and .state == "uploaded")' \
+            jq -e --arg tag "$tag" \
+              '.tag_name == $tag and (.draft == false) and any(.assets[]; .name == "app-universal-release.apk" and .state == "uploaded")' \
               "$metadata" >/dev/null
             gh release download "$tag" --repo "$repo" --pattern app-universal-release.apk --dir "$dir"
             local apk="$dir/app-universal-release.apk"
@@ -62,22 +118,27 @@ jobs:
             sha256sum "$dir/$tag-app-universal-release.apk" | tee -a "$logs/apk-sha256.txt"
           }
 
-          download_release_apk v0.11.10 1879aa08d73803069440f5d439a979bc30f813d6da50645569095430ae815ca8 false any
-          download_release_apk v0.11.49 e9a7d9b23da0b462257c57d864fa7cca1eb0e15fd9b749f2a4cd05c7c880a3d1 false any
-          download_release_apk v0.11.50 dd44aa6acba5c4c0b8360bdc77b9f52aed23dfd4c7d786ce21e3cf47d4c83cc9 false true
+          download_release_apk "$BASELINE_TAG" "$BASELINE_SHA256"
+          download_release_apk "$TARGET_TAG" "$TARGET_SHA256"
 
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
-          for tag in v0.11.10 v0.11.49 v0.11.50; do
+          target_version="${TARGET_TAG#v}"
+          for tag in "$BASELINE_TAG" "$TARGET_TAG"; do
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs \
+              --min-sdk-version 36 --max-sdk-version 36 "$dir/$tag-app-universal-release.apk" \
+              > "$logs/$tag-signature.txt"
+            grep -Fq 'Signer #1 certificate SHA-256 digest: bb39b663e555c7ed7b725c543ed73ea2602432b003591b2e1370f0359c4c4333' "$logs/$tag-signature.txt"
             "$aapt" dump badging "$dir/$tag-app-universal-release.apk" | sed -n '1p' | tee "$logs/$tag-badging.txt"
+            grep -Fq "name='space.deytt.connect'" "$logs/$tag-badging.txt"
           done
-          grep -Fq "versionName='0.11.10'" "$logs/v0.11.10-badging.txt"
-          grep -Fq "versionName='0.11.49'" "$logs/v0.11.49-badging.txt"
-          grep -Fq "versionName='0.11.50'" "$logs/v0.11.50-badging.txt"
-          grep -Fq "name='space.deytt.connect'" "$logs/v0.11.10-badging.txt"
-          grep -Fq "name='space.deytt.connect'" "$logs/v0.11.49-badging.txt"
-          grep -Fq "versionCode='79'" "$logs/v0.11.49-badging.txt"
-          grep -Fq "versionCode='80'" "$logs/v0.11.50-badging.txt"
-          grep -Fq "name='space.deytt.connect'" "$logs/v0.11.50-badging.txt"
+          grep -Fq "versionName='${BASELINE_TAG#v}'" "$logs/$BASELINE_TAG-badging.txt"
+          grep -Fq "versionName='$target_version'" "$logs/$TARGET_TAG-badging.txt"
+          grep -Fq "versionCode='$TARGET_VERSION_CODE'" "$logs/$TARGET_TAG-badging.txt"
+          baseline_version_code="$(sed -nE "s/.*versionCode='([0-9]+)'.*/\1/p" "$logs/$BASELINE_TAG-badging.txt")"
+          [[ "$baseline_version_code" =~ ^[0-9]+$ && "$TARGET_VERSION_CODE" -gt "$baseline_version_code" ]] || {
+            echo "Target versionCode must be greater than baseline versionCode" >&2
+            exit 1
+          }
 
       - name: Start disposable API 36 emulator
         shell: bash
@@ -116,34 +177,20 @@ jobs:
 
       - name: Test fresh install and in-place upgrades
         shell: bash
+        env:
+          TARGET_TAG: ${{ steps.validate.outputs.target_tag }}
+          BASELINE_TAG: ${{ steps.validate.outputs.baseline_tag }}
+          TARGET_VERSION_CODE: ${{ steps.validate.outputs.target_version_code }}
         run: |
           set -euo pipefail
           dir="$RUNNER_TEMP/android-api36-smoke/apks"
           logs="$RUNNER_TEMP/android-api36-smoke/logs"
           package=space.deytt.connect
-          baseline="$dir/v0.11.10-app-universal-release.apk"
-
-          record_diagnostic() {
-            local label="$1" apk="$2" update="$3" output="$logs/$1-install.txt"
-            adb uninstall "$package" >/dev/null 2>&1 || true
-            if [[ "$update" == true ]]; then
-              adb install "$baseline" > "$logs/$label-baseline-install.txt" 2>&1
-              if ! adb install -r "$apk" > "$output" 2>&1; then
-                printf '%s: INSTALL FAILED (diagnostic only)\n' "$label" | tee -a "$logs/summary.txt"
-                return 0
-              fi
-            elif ! adb install "$apk" > "$output" 2>&1; then
-              printf '%s: FRESH INSTALL FAILED (diagnostic only)\n' "$label" | tee -a "$logs/summary.txt"
-              return 0
-            fi
-            printf '%s: INSTALL OK (diagnostic only)\n' "$label" | tee -a "$logs/summary.txt"
-            if ! launch_and_capture "$label"; then
-              printf '%s: COLD LAUNCH FAILED (diagnostic only)\n' "$label" | tee -a "$logs/summary.txt"
-            fi
-          }
+          baseline="$dir/$BASELINE_TAG-app-universal-release.apk"
+          target="$dir/$TARGET_TAG-app-universal-release.apk"
 
           launch_and_capture() {
-            local label="$1"
+            local label="$1" expected_version_code="$2"
             local activity="$logs/$label-activity.txt" crash="$logs/$label-android-runtime.txt"
             adb logcat -c
             adb shell am force-stop "$package"
@@ -157,7 +204,7 @@ jobs:
             if grep -Eq 'FATAL EXCEPTION|Process: space\.deytt\.connect' "$crash"; then
               return 1
             fi
-            if ! grep -Eq 'versionCode=80([[:space:]]|$)' "$logs/$label-package.txt" && [[ "$label" == *0.11.50* ]]; then
+            if ! grep -Eq "versionCode=$expected_version_code([[:space:]]|$)" "$logs/$label-package.txt"; then
               return 1
             fi
             if ! grep -E 'mResumedActivity|topResumedActivity' "$logs/$label-activities.txt" | grep -F "$package" >/dev/null; then
@@ -166,19 +213,26 @@ jobs:
             printf '%s: COLD LAUNCH OK\n' "$label" | tee -a "$logs/summary.txt"
           }
 
-          record_diagnostic fresh-v0.11.49 "$dir/v0.11.49-app-universal-release.apk" false
-          record_diagnostic upgrade-v0.11.10-to-v0.11.49 "$dir/v0.11.49-app-universal-release.apk" true
+          adb uninstall "$package" > "$logs/fresh-target-uninstall.txt" 2>&1 || true
+          adb install "$target" > "$logs/fresh-$TARGET_TAG-install.txt" 2>&1
+          if ! grep -Eq "versionCode=$TARGET_VERSION_CODE([[:space:]]|$)" <(adb shell dumpsys package "$package"); then
+            echo "Fresh install did not install target versionCode $TARGET_VERSION_CODE" >&2
+            exit 1
+          fi
+          launch_and_capture "fresh-$TARGET_TAG" "$TARGET_VERSION_CODE"
+          printf 'Fresh install and cold launch passed for %s (versionCode %s)\n' \
+            "$TARGET_TAG" "$TARGET_VERSION_CODE" | tee -a "$logs/summary.txt"
 
           adb uninstall "$package" >/dev/null 2>&1 || true
-          adb install "$baseline" > "$logs/upgrade-v0.11.10-to-v0.11.50-baseline.txt" 2>&1
-          adb install -r "$dir/v0.11.50-app-universal-release.apk" > "$logs/upgrade-v0.11.10-to-v0.11.50-install.txt" 2>&1
-          grep -Eq 'versionCode=80([[:space:]]|$)' <(adb shell dumpsys package "$package")
-          launch_and_capture upgrade-v0.11.10-to-v0.11.50
-
-          adb uninstall "$package" >/dev/null 2>&1 || true
-          adb install "$dir/v0.11.50-app-universal-release.apk" > "$logs/fresh-v0.11.50-install.txt" 2>&1
-          grep -Eq 'versionCode=80([[:space:]]|$)' <(adb shell dumpsys package "$package")
-          launch_and_capture fresh-v0.11.50
+          adb install "$baseline" > "$logs/upgrade-$BASELINE_TAG-to-$TARGET_TAG-baseline-install.txt" 2>&1
+          adb install -r "$target" > "$logs/upgrade-$BASELINE_TAG-to-$TARGET_TAG-install.txt" 2>&1
+          if ! grep -Eq "versionCode=$TARGET_VERSION_CODE([[:space:]]|$)" <(adb shell dumpsys package "$package"); then
+            echo "In-place upgrade did not install target versionCode $TARGET_VERSION_CODE" >&2
+            exit 1
+          fi
+          launch_and_capture "upgrade-$BASELINE_TAG-to-$TARGET_TAG" "$TARGET_VERSION_CODE"
+          printf 'In-place upgrade and cold launch passed for %s -> %s (versionCode %s)\n' \
+            "$BASELINE_TAG" "$TARGET_TAG" "$TARGET_VERSION_CODE" | tee -a "$logs/summary.txt"
 
       - name: Print bounded emulator diagnostics
         if: always()
@@ -206,3 +260,12 @@ jobs:
             printf '\n--- emulator.log (last 120 lines) ---\n'
             tail -n 120 "$logs/emulator.log"
           fi
+
+      - name: Upload API 36 install evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-api36-install-${{ github.run_id }}
+          path: ${{ runner.temp }}/android-api36-smoke
+          if-no-files-found: warn
+          retention-days: 14
