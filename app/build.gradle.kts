@@ -13,15 +13,17 @@ android {
     }
 
     defaultConfig {
-        applicationId = if (providers.gradleProperty("isolatedQa").orNull == "true") "space.deytt.connect.qa" else "space.deytt.connect"
+        applicationId = if (providers.gradleProperty("isolatedQa").orNull == "true") {
+            providers.gradleProperty("qaApplicationId").orNull ?: "space.deytt.connect.qa"
+        } else "space.deytt.connect"
         minSdk = 24
         targetSdk = 35
         // One APK covers supported phones and emulators without ABI-specific downloads.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        } else 101
-        versionName = "0.11.71"
+        } else 102
+        versionName = "0.11.72"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }

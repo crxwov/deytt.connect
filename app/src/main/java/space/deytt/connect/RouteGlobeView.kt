@@ -52,6 +52,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private val atlas: WebView
     private var viewportAnchor: Rect? = null
     var onMapNodeTapped: ((String) -> Unit)? = null
+    var onTrafficTapped: ((String) -> Unit)? = null
 
     private val nodeTapBridge = object {
         @JavascriptInterface
@@ -59,6 +60,12 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             val node = code.lowercase()
             if (node !in setOf("nl", "de", "fi", "ru", "it", "user")) return
             post { onMapNodeTapped?.invoke(node) }
+        }
+
+        @JavascriptInterface
+        fun onTrafficTap(flow: String) {
+            if (flow !in setOf("upload", "download", "control")) return
+            post { onTrafficTapped?.invoke(flow) }
         }
 
     }
@@ -237,6 +244,12 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (overviewModeActive == active) return
         overviewModeActive = active
         applyOverviewMode()
+    }
+
+    fun selectTrafficFlow(flow: String?) {
+        if (!pageLoaded || (flow != null && flow !in setOf("upload", "download", "control"))) return
+        val value = flow?.let(org.json.JSONObject::quote) ?: "null"
+        atlas.evaluateJavascript("window.deyttSelectTrafficFlow && window.deyttSelectTrafficFlow($value)", null)
     }
 
     internal fun setReducedMotion(enabled: Boolean) {

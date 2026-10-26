@@ -84,6 +84,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         private const val NOTIFICATION_ID = 42
         private const val TAG = "deytt-connect"
         private const val MAX_CARRIER_DNS_SERVERS = 4
+        private const val MAX_PARALLEL_LATENCY_PROBES = 6
         private val FALLBACK_CARRIER_DNS = arrayOf("1.1.1.1", "8.8.8.8")
         private const val CANARY_TIMEOUT_MILLIS = 6_000
         private const val CANARY_BUDGET_MILLIS = 36_000L
@@ -159,6 +160,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         }
     }
     @Volatile private var probeWorkers: ExecutorService? = null
+    @Volatile private var routeProbeCancellation: RouteProbeCancellation? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val networkBridge by lazy {
         AndroidNetworkBridge(this) { network ->
@@ -230,18 +232,14 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_CANCEL_ROUTE_PROBE) {
-            if (routeProbeOnly) cancelRouteProbe(startId)
-            else if (!started) {
-                intent.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID)?.let { requestId ->
-                    sendRouteProbeResult(requestId, "", null, null, complete = true, stage = "cancelled")
-                }
-                stopSelf(startId)
-            }
+            val requestId = intent.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID)
+            if (routeProbeOnly && requestId == activeRouteProbeRequestId) cancelRouteProbe()
+            else if (!started) stopSelf(startId)
             return START_NOT_STICKY
         }
         if (intent?.action == ACTION_STOP) {
             if (routeProbeOnly) {
-                cancelRouteProbe(startId)
+                cancelRouteProbe()
                 return START_NOT_STICKY
             }
             operation.incrementAndGet()
@@ -274,14 +272,13 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     override fun onDestroy() {
         operation.incrementAndGet()
-        if (this is RouteProbeVpnService || routeProbeOnly) {
-            closeRouteProbeCore()
-            activeRouteProbeRequestId?.let { requestId ->
-                sendRouteProbeResult(requestId, "", null, null, complete = true, stage = "cancelled")
-            }
+        val probing = this is RouteProbeVpnService || routeProbeOnly
+        if (probing) {
+            routeProbeCancellation?.cancel()
+            probeWorkers?.shutdownNow()
         } else stopTunnel()
         probeWorkers?.shutdownNow()
-        executor.shutdownNow()
+        if (probing) executor.shutdown() else executor.shutdownNow()
         openFluxExecutor.shutdownNow()
         openFluxLeaseExecutor.shutdownNow()
         canaryTimeoutExecutor.shutdownNow()
@@ -320,13 +317,18 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         routeProbeOnly = true
         routeProbeRunning = true
         activeRouteProbeRequestId = requestId
+        val cancellation = RouteProbeCancellation()
+        routeProbeCancellation = cancellation
         val operationId = operation.incrementAndGet()
         try {
             startForegroundCompat("Проверяем маршрут через прокси…")
             reportRouteProbeStage(requestId, "accepted", requestStartedAt)
-            executor.execute { runRouteProbe(requestId, config, routeTags, method, token, operationId, startId, requestStartedAt) }
+            executor.execute { runRouteProbe(requestId, config, routeTags, method, token, operationId, startId, requestStartedAt, cancellation) }
         } catch (error: Throwable) {
-            sendRouteProbeResult(requestId, "", null, "Не удалось запустить проверку", complete = true)
+            if (activeRouteProbeRequestId == requestId) {
+                sendRouteProbeResult(requestId, "", null, "Не удалось запустить проверку", complete = true)
+            }
+            cancellation.cancel()
             closeRouteProbeCore()
             started = false
             routeProbeOnly = false
@@ -345,6 +347,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         operationId: Long,
         startId: Int,
         requestStartedAt: Long,
+        cancellation: RouteProbeCancellation,
     ) {
         var stage = "profile validation"
         try {
@@ -377,7 +380,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             )
             reportRouteProbeStage(requestId, "startup_batch_routes_ready", requestStartedAt)
             val latencies = linkedMapOf<String, Long>()
-            val workers = Executors.newFixedThreadPool(minOf(3, sessions.size))
+            val workers = Executors.newFixedThreadPool(minOf(MAX_PARALLEL_LATENCY_PROBES, sessions.size))
             probeWorkers = workers
             val completed = ExecutorCompletionService<Pair<String, Long?>>(workers)
             sessions.forEach { (tag, session) ->
@@ -387,7 +390,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                         val elapsed = probeElapsed(requestStartedAt)
                         Log.i(TAG, "route_probe stage=latency_attempt elapsed_ms=$elapsed")
                         sendRouteProbeResult(requestId, tag, null, null, stage = "latency", elapsedMillis = elapsed)
-                        val latency = RouteProxyProbe.measureProxy(session, method) { sampleIndex, sample ->
+                        val latency = RouteProxyProbe.measureProxy(session, method, cancellation = cancellation) { sampleIndex, sample ->
                             if (operation.get() == operationId && routeProbeOnly) {
                                 if (sample != null) {
                                     sendRouteProbeResult(
@@ -427,9 +430,14 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 })
             }
             repeat(sessions.size) {
-                if (operation.get() != operationId || !routeProbeOnly) return@repeat
-                val result = completed.poll((RouteProxyProbe.TIMEOUT_MILLIS + 1_000).toLong(), TimeUnit.MILLISECONDS)
-                    ?: throw java.net.SocketTimeoutException("Diagnostic batch timed out")
+                val resultDeadline = android.os.SystemClock.elapsedRealtime() + RouteProxyProbe.TIMEOUT_MILLIS + 1_000L
+                var result: java.util.concurrent.Future<Pair<String, Long?>>? = null
+                while (result == null) {
+                    if (operation.get() != operationId || !routeProbeOnly) return
+                    val remaining = resultDeadline - android.os.SystemClock.elapsedRealtime()
+                    if (remaining <= 0L) throw java.net.SocketTimeoutException("Diagnostic batch timed out")
+                    result = completed.poll(minOf(remaining, 200L), TimeUnit.MILLISECONDS)
+                }
                 val (tag, latency) = result.get()
                 if (latency != null) latencies[tag] = latency
             }
@@ -441,7 +449,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 if (operation.get() != operationId || !routeProbeOnly) return@forEach
                 try {
                     sendRouteProbeResult(requestId, tag, latency, null, stage = "download")
-                    val speed = RouteProxyProbe.measureDownload(sessions.getValue(tag), token) { bytesPerSecond ->
+                    val speed = RouteProxyProbe.measureDownload(sessions.getValue(tag), token, cancellation = cancellation) { bytesPerSecond ->
                         if (operation.get() == operationId && routeProbeOnly) {
                             sendRouteProbeResult(
                                 requestId,
@@ -464,39 +472,38 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 }
             }
         } catch (error: Throwable) {
-            Log.w(TAG, "Route proxy probe failed at $stage (${probeFailureKind(error)}): ${error.message}", error)
-            val detail = error.message?.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
-            val message = if (stage == "batch routes setup" || stage == "command server start" || stage == "libbox setup")
-                "Сбой запуска ядра$detail" else routeProbeError(error)
-            routeTags.forEach { tag ->
-                sendRouteProbeResult(requestId, tag, null, message)
+            if (operation.get() == operationId) {
+                Log.w(TAG, "Route proxy probe failed at $stage (${probeFailureKind(error)}): ${error.message}", error)
+                val detail = error.message?.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
+                val message = if (stage == "batch routes setup" || stage == "command server start" || stage == "libbox setup")
+                    "Сбой запуска ядра$detail" else routeProbeError(error)
+                routeTags.forEach { tag -> sendRouteProbeResult(requestId, tag, null, message) }
             }
         } finally {
             probeWorkers?.shutdownNow()
             probeWorkers = null
+            cancellation.cancel()
             closeRouteProbeCore()
-            started = false
-            routeProbeOnly = false
-            routeProbeRunning = false
-            stopForegroundCompat()
-            stopSelf(startId)
-            sendRouteProbeResult(requestId, "", null, null, complete = true)
+            if (activeRouteProbeRequestId == requestId) {
+                started = false
+                routeProbeOnly = false
+                routeProbeRunning = false
+                routeProbeCancellation = null
+                stopForegroundCompat()
+                stopSelf()
+                sendRouteProbeResult(
+                    requestId, "", null, null, complete = true,
+                    stage = if (operation.get() != operationId) "cancelled" else null,
+                )
+            }
         }
     }
 
-    private fun cancelRouteProbe(startId: Int) {
-        val requestId = activeRouteProbeRequestId
+    private fun cancelRouteProbe() {
         operation.incrementAndGet()
-        routeProbeRunning = false
+        routeProbeCancellation?.cancel()
         probeWorkers?.shutdownNow()
-        closeRouteProbeCore()
-        started = false
-        routeProbeOnly = false
-        stopForegroundCompat()
-        if (startId > 0) stopSelf(startId) else stopSelf()
-        if (!requestId.isNullOrBlank()) {
-            sendRouteProbeResult(requestId, "", null, null, complete = true, stage = "cancelled")
-        }
+        // The run worker owns tunnel teardown and the final cancellation acknowledgement.
     }
 
     @Synchronized
@@ -1284,7 +1291,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     override fun onRevoke() {
         operation.incrementAndGet()
-        if (routeProbeOnly) cancelRouteProbe(0) else stopTunnel()
+        if (routeProbeOnly) cancelRouteProbe() else stopTunnel()
         super.onRevoke()
     }
 

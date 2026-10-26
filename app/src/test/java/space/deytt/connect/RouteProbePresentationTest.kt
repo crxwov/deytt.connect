@@ -8,6 +8,26 @@ import org.junit.Test
 
 class RouteProbePresentationTest {
     @Test
+    fun firstSpeedFailureRetriesPromptlyWhileSuccessfulSessionsLimitDownloadTraffic() {
+        assertEquals(5_000L, HomeMetricPresentation.speedRefreshDelayMillis(hasSample = false, failed = true))
+        assertEquals(60_000L, HomeMetricPresentation.speedRefreshDelayMillis(hasSample = true, failed = true))
+        assertEquals(60_000L, HomeMetricPresentation.speedRefreshDelayMillis(hasSample = true, failed = false))
+    }
+
+    @Test
+    fun refreshAndFailureKeepTheSuccessfulCurrentConnectionValues() {
+        assertEquals("42 мс", HomeMetricPresentation.latencyLabel(42L, false, false, false))
+        assertEquals("42 мс", HomeMetricPresentation.latencyLabel(42L, false, true, false))
+        assertEquals("20.0 Mbps", HomeMetricPresentation.speedLabel(2_500_000L, false, false, false, true))
+        assertEquals("20.0 Mbps", HomeMetricPresentation.speedLabel(2_500_000L, false, false, true, true))
+        assertEquals("—", HomeMetricPresentation.latencyLabel(null, false, false, true))
+        assertEquals("нет ответа", HomeMetricPresentation.latencyLabel(null, false, true, false))
+        assertEquals("недоступна", HomeMetricPresentation.speedLabel(null, false, false, true, false))
+        assertEquals("vpn bypassed", HomeMetricPresentation.speedLabel(2_500_000L, true, false, false, true))
+        assertEquals("sign in", HomeMetricPresentation.speedLabel(2_500_000L, false, true, false, true))
+    }
+
+    @Test
     fun speedStateKeepsTheHttpsResponseTimeThatWasAlreadyMeasured() {
         assertEquals(
             "Отклик: 500 мс · Скорость: —",

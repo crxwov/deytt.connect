@@ -15,10 +15,31 @@ internal data class HomeRouteMetricKey(
 )
 
 internal object HomeMetricPresentation {
+    private const val SPEED_REFRESH_MILLIS = 60_000L
+    private const val FIRST_SPEED_RETRY_MILLIS = 5_000L
+
+    fun speedRefreshDelayMillis(hasSample: Boolean, failed: Boolean): Long =
+        if (!hasSample && failed) FIRST_SPEED_RETRY_MILLIS else SPEED_REFRESH_MILLIS
+
     fun speedNeedsLogin(connected: Boolean, key: HomeRouteMetricKey?): Boolean =
         connected && key != null && key.sessionToken.isNullOrBlank()
 
     fun bypassLabel(english: Boolean): String = if (english) "vpn bypassed" else "в обход vpn"
+
+    fun latencyLabel(milliseconds: Long?, bypassed: Boolean, failed: Boolean, english: Boolean): String = when {
+        bypassed -> bypassLabel(english)
+        milliseconds != null -> if (english) "$milliseconds ms" else "$milliseconds мс"
+        failed -> if (english) "no response" else "нет ответа"
+        else -> "—"
+    }
+
+    fun speedLabel(bytesPerSecond: Long?, bypassed: Boolean, needsLogin: Boolean, failed: Boolean, english: Boolean): String = when {
+        bypassed -> bypassLabel(english)
+        needsLogin -> if (english) "sign in" else "войдите"
+        bytesPerSecond != null -> String.format(Locale.US, if (english) "%.1f Mbps" else "%.1f Мбит/с", bytesPerSecond * 8.0 / 1_000_000.0)
+        failed -> if (english) "unavailable" else "недоступна"
+        else -> "—"
+    }
 
     fun ownsRequest(requestGeneration: Int, currentGeneration: Int): Boolean = requestGeneration == currentGeneration
 

@@ -328,6 +328,10 @@
       this.cameraMoving = false;
       this.trafficActive = false;
       this.trafficStartedAt = 0;
+      this.selectedTrafficFlow = null;
+      this.routeHitSegments = [];
+      this.pointerDown = null;
+      this.suppressNextClick = false;
       this.projectedNodes = {};
       this.routeSegments = [];
       this.bind();
@@ -368,6 +372,8 @@
         }
         this.gesturePointers.add(event.pointerId);
         if (!this.gestureStartedInsideGlobe) return;
+        this.pointerDown = { x: event.clientX, y: event.clientY };
+        this.suppressNextClick = false;
         this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         this.dragging = true;
         this.velocityLon = 0;
@@ -396,6 +402,8 @@
           return;
         }
         if (this.dragging) {
+          if (this.pointerDown && Math.hypot(event.clientX - this.pointerDown.x, event.clientY - this.pointerDown.y) > 6)
+            this.suppressNextClick = true;
           const dx = event.clientX - this.lastPointer.x;
           const dy = event.clientY - this.lastPointer.y;
           // Use the intended zoom level so drag speed stays consistent while a
@@ -423,6 +431,7 @@
       const release = (event) => {
         if (!this.gesturePointers.has(event.pointerId)) return;
         this.gesturePointers.delete(event.pointerId);
+        if (event.type === "pointercancel") this.suppressNextClick = false;
         if (!this.gestureStartedInsideGlobe) {
           if (this.gesturePointers.size === 0) this.gestureStartedInsideGlobe = false;
           return;
@@ -445,13 +454,17 @@
         if (!this.dragging) this.setHovered(null);
       });
       this.canvas.addEventListener("click", (event) => {
+        if (this.suppressNextClick) { this.suppressNextClick = false; return; }
         const box = this.canvas.getBoundingClientRect();
         const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
-        // Touch clears hover during pointerup, so resolve the tap from its
-        // coordinates instead of relying on the last mouse-hovered node.
         this.updateHover(pointer);
         if (this.hovered && typeof window.deyttMapNodeTapped === "function") {
           window.deyttMapNodeTapped(this.hovered);
+          return;
+        }
+        const flow = this.findTrafficLineAt(pointer, 14);
+        if (flow) {
+          try { window.DeyttAtlasBridge?.onTrafficTap?.(flow); } catch (_) { /* Native view may be closing. */ }
           return;
         }
         if (!this.selectOnTap || !this.hovered || this.hovered === "user") return;
@@ -893,84 +906,55 @@
       strokeLines(activeLines, colors.borderHot, this.width < 520 ? .82 : 1.05, .72);
     }
 
-    drawArc(fromKey, toKey, colors, emphasized, flowDirection) {
-      const context = this.context;
-      const from = fromKey === "user" ? vector(this.userLocation.lat, this.userLocation.lon) : vector(LOCATIONS[fromKey].lat, LOCATIONS[fromKey].lon);
-      const to = vector(LOCATIONS[toKey].lat, LOCATIONS[toKey].lon);
-      const segments = 48;
-      const baseLift = fromKey === "user" ? .16 : .11;
-      const points = [];
-      for (let index = 0; index <= segments; index += 1) {
-        const amount = index / segments;
-        points.push(this.projectVector(slerp(from, to, amount), 1 + Math.sin(amount * Math.PI) * baseLift));
-      }
-      for (let index = 1; index < points.length; index += 1) {
-        const start = points[index - 1];
-        const end = points[index];
-        if (start.z > -.02 && end.z > -.02) this.routeSegments.push({
-          left: Math.min(start.x, end.x),
-          top: Math.min(start.y, end.y),
-          right: Math.max(start.x, end.x),
-          bottom: Math.max(start.y, end.y)
-        });
-      }
-      const visible = points.filter((point) => point.z > -.02);
-      if (visible.length < 2) return;
-      const routeColor = colors.route;
-      const routeHotColor = colors.routeHot;
-      const gradient = context.createLinearGradient(visible[0].x, visible[0].y, visible[visible.length - 1].x, visible[visible.length - 1].y);
-      gradient.addColorStop(0, routeColor);
-      gradient.addColorStop(.54, routeHotColor);
-      gradient.addColorStop(1, routeColor);
-      const trace = (points) => {
-        context.beginPath();
-        let drawing = false;
-        points.forEach((point) => {
-          if (point.z <= -.02) { drawing = false; return; }
-          if (!drawing) context.moveTo(point.x, point.y);
-          else context.lineTo(point.x, point.y);
-          drawing = true;
-        });
-      };
-      trace(points);
-      context.strokeStyle = routeColor;
-      context.lineWidth = emphasized ? 7 : 5;
-      context.globalAlpha = emphasized ? .12 : .07;
-      context.shadowColor = routeHotColor;
-      context.shadowBlur = emphasized ? 16 : 7;
-      context.stroke();
-      trace(points);
-      context.strokeStyle = gradient;
-      context.lineWidth = emphasized ? 2.1 : 1.4;
-      context.globalAlpha = emphasized ? .92 : .7;
-      context.shadowBlur = emphasized ? 8 : 4;
-      context.stroke();
-      context.shadowBlur = 0;
-      context.globalAlpha = 1;
-    }
-
     drawRoutes(colors, time) {
-      const activeRoute = this.activeRouteDefinition();
-      (activeRoute ? activeRoute.links : []).forEach((link) => {
-        if (link.every((key) => this.availableLocationKeys.has(key))) {
-          this.drawArc(link[0], link[1], colors, true);
-        }
-      });
-      const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
-      if (this.userLocation && firstHop) {
-        this.drawArc("user", firstHop, colors, true);
-      }
-      if (this.trafficActive) this.drawTraffic(colors, time || performance.now());
+      this.routeHitSegments = [];
+      const links = this.routeLinks();
+      this.drawTrafficLines(links);
+      if (this.trafficActive) this.drawTraffic(links, time || performance.now());
     }
 
-    drawTraffic(colors, time) {
+    routeLinks() {
       const activeRoute = this.activeRouteDefinition();
-      if (!activeRoute) return;
-      const links = activeRoute.links.filter((link) =>
+      const links = (activeRoute ? activeRoute.links : []).filter((link) =>
         link.every((key) => this.availableLocationKeys.has(key))
       );
       const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
       if (this.userLocation && firstHop) links.unshift(["user", firstHop]);
+      return links;
+    }
+
+    drawTrafficLines(links) {
+      const context = this.context;
+      const dark = document.documentElement.dataset.theme === "dark";
+      this.trafficStreams().filter(stream => this.selectedTrafficFlow == null || stream.id === this.selectedTrafficFlow).forEach(stream => {
+        const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
+        directed.forEach(([fromKey, toKey]) => {
+          const points = [];
+          for (let i = 0; i <= 80; i++) points.push(this.projectLanePoint(fromKey, toKey, i / 80, stream.lane));
+          const emphasized = this.selectedTrafficFlow === stream.id;
+          context.save(); context.beginPath();
+          points.forEach((point, i) => { if (point.z <= -.02) return; if (!i || points[i - 1].z <= -.02) context.moveTo(point.x, point.y); else context.lineTo(point.x, point.y); });
+          context.lineCap = context.lineJoin = "round";
+          context.strokeStyle = stream.color; context.globalAlpha = emphasized ? .24 : dark ? .18 : .13;
+          context.lineWidth = emphasized ? 7 : 5.8; context.shadowBlur = 0; context.stroke();
+          const sheen = context.createLinearGradient(points[0].x, points[0].y, points[80].x, points[80].y);
+          sheen.addColorStop(0, stream.color); sheen.addColorStop(.22, stream.color); sheen.addColorStop(.5, stream.bright);
+          sheen.addColorStop(.78, stream.color); sheen.addColorStop(1, stream.color);
+          context.strokeStyle = sheen; context.globalAlpha = 1; context.lineWidth = emphasized ? 3.1 : 2.3; context.stroke();
+          if (emphasized) { context.globalAlpha = .9; context.strokeStyle = "#FFFFFF"; context.lineWidth = .75; context.shadowBlur = 0; context.stroke(); }
+          context.restore();
+          for (let i = 1; i < points.length; i++) {
+            const a = points[i - 1], b = points[i];
+            if (a.z <= -.02 || b.z <= -.02) continue;
+            this.routeHitSegments.push({ stream: stream.id, a, b });
+            this.routeSegments.push({ left: Math.min(a.x, b.x), top: Math.min(a.y, b.y),
+              right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) });
+          }
+        });
+      });
+    }
+
+    drawTraffic(links, time) {
 
       if (!links.length) {
         // Without the location opt-in there is no truthful origin point for a
@@ -979,54 +963,96 @@
         if (!exit) return;
         const point = this.projectLocation(LOCATIONS[exit], 1.018);
         if (point.z <= .015) return;
-        const phase = this.reducedMotion.matches ? .5 : ((time - this.trafficStartedAt) % 1_800) / 1_800;
         const context = this.context;
-        context.save();
-        context.globalAlpha = (1 - phase) * .38;
-        context.beginPath();
-        context.arc(point.x, point.y, 7 + phase * 9, 0, TAU);
-        context.strokeStyle = colors.routeHot;
-        context.lineWidth = 1.5;
-        context.shadowColor = colors.routeHot;
-        context.shadowBlur = 8;
-        context.stroke();
-        context.restore();
+        this.trafficStreams().forEach((stream, index) => {
+          if (this.selectedTrafficFlow != null && stream.id !== this.selectedTrafficFlow) return;
+          const phase = this.reducedMotion.matches ? .5 : ((time - this.trafficStartedAt) / (stream.duration * 2) + stream.phase) % 1;
+          const orbit = 9 + index * 5;
+          context.save(); context.globalAlpha = .22; context.beginPath(); context.arc(point.x, point.y, orbit, 0, TAU);
+          context.strokeStyle = stream.color; context.lineWidth = 1; context.stroke(); context.restore();
+          for (let packet = 0; packet < (this.reducedMotion.matches ? 1 : 4); packet++) {
+            const angle = (phase + packet / 4) * TAU;
+            this.drawTrafficDot(point.x + Math.cos(angle) * orbit, point.y + Math.sin(angle) * orbit, stream, packet === 0, .82);
+          }
+        });
         return;
       }
 
-      const linkDuration = 1800;
-      const routeDuration = linkDuration * links.length;
       const elapsed = Math.max(0, time - this.trafficStartedAt);
-      const packetCount = this.reducedMotion.matches ? 1 : 4;
-      for (let packet = 0; packet < packetCount; packet += 1) {
-        const routePosition = this.reducedMotion.matches
-          ? links.length * .52
-          : (((elapsed / routeDuration + packet / packetCount) % 1) * links.length);
-        const linkIndex = Math.min(links.length - 1, Math.floor(routePosition));
-        const progress = routePosition - linkIndex;
-        const [fromKey, toKey] = links[linkIndex];
-        const fromLocation = fromKey === "user" ? this.userLocation : LOCATIONS[fromKey];
-        const from = vector(fromLocation.lat, fromLocation.lon);
-        const to = vector(LOCATIONS[toKey].lat, LOCATIONS[toKey].lon);
-        const lift = fromKey === "user" ? .16 : .11;
-        for (let tail = 2; tail >= 0; tail -= 1) {
-          const amount = progress - tail * .055;
-          if (amount < 0 || amount > 1) continue;
-          const point = this.projectVector(slerp(from, to, amount), 1 + Math.sin(amount * Math.PI) * lift);
+      this.trafficStreams().filter(stream => this.selectedTrafficFlow == null || stream.id === this.selectedTrafficFlow).forEach(stream => {
+        const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
+        const count = this.reducedMotion.matches ? 1 : 5;
+        for (let packet = 0; packet < count; packet++) {
+          const position = this.reducedMotion.matches ? directed.length * .52 : ((elapsed / (stream.duration * directed.length) + packet / count + stream.phase) % 1) * directed.length;
+          const linkIndex = Math.min(directed.length - 1, Math.floor(position)), amount = position - linkIndex;
+          const [fromKey, toKey] = directed[linkIndex], point = this.projectLanePoint(fromKey, toKey, amount, stream.lane);
           if (point.z <= -.02) continue;
-          const context = this.context;
-          context.save();
-          context.globalAlpha = (tail === 0 ? .95 : .58 - tail * .14) *
-            (this.reducedMotion.matches ? .82 : 1);
-          context.beginPath();
-          context.arc(point.x, point.y, tail === 0 ? 2.8 : 1.8 - tail * .25, 0, TAU);
-          context.fillStyle = tail === 0 ? colors.routeHot : colors.route;
-          context.shadowColor = colors.routeHot;
-          context.shadowBlur = tail === 0 ? 10 : 5;
-          context.fill();
-          context.restore();
+          if (!this.reducedMotion.matches && packet === 0) this.drawTrafficTrail(directed, position, stream);
+          this.drawTrafficDot(point.x, point.y, stream, packet % 4 === 0, 1, .86 + (packet % 3) * .14);
         }
+      });
+    }
+
+    trafficStreams() {
+      return document.documentElement.dataset.theme === "dark" ? [
+        { id: "upload", color: "#FF7798", bright: "#FFE2EA", lane: .07, duration: 3400, phase: 0 },
+        { id: "download", color: "#FFCE55", bright: "#FFF4CB", lane: .17, duration: 3000, phase: .34, reverse: true },
+        { id: "control", color: "#AF8CFF", bright: "#EFE5FF", lane: .27, duration: 3800, phase: .68 }
+      ] : [
+        { id: "upload", color: "#FF5278", bright: "#FFCDDD", lane: .07, duration: 3400, phase: 0 },
+        { id: "download", color: "#F6AD11", bright: "#FFE9A6", lane: .17, duration: 3000, phase: .34, reverse: true },
+        { id: "control", color: "#824BFF", bright: "#D9C5FF", lane: .27, duration: 3800, phase: .68 }
+      ];
+    }
+
+    projectLanePoint(fromKey, toKey, amount, lane) {
+      const fromLocation = fromKey === "user" ? this.userLocation : LOCATIONS[fromKey];
+      const toLocation = toKey === "user" ? this.userLocation : LOCATIONS[toKey];
+      if (!fromLocation || !toLocation) return { x: 0, y: 0, z: -1 };
+      const from = vector(fromLocation.lat, fromLocation.lon), to = vector(toLocation.lat, toLocation.lon);
+      const start = this.projectVector(from, 1.008), end = this.projectVector(to, 1.008);
+      const point = this.projectVector(slerp(from, to, amount), 1.008);
+      return { x: point.x, y: point.y - Math.sin(amount * Math.PI) * Math.hypot(end.x - start.x, end.y - start.y) * lane, z: point.z };
+    }
+
+    drawTrafficTrail(links, position, stream) {
+      const points = [];
+      for (let step = 10; step >= 0; step--) {
+        const sample = position - .13 * step / 10;
+        if (sample < 0 || sample >= links.length) continue;
+        const index = Math.floor(sample), [from, to] = links[index];
+        points.push(this.projectLanePoint(from, to, sample - index, stream.lane));
       }
+      const context = this.context; context.save(); context.lineCap = context.lineJoin = "round"; context.shadowColor = stream.color; context.shadowBlur = 2;
+      for (let i = 1; i < points.length; i++) { const a = points[i-1], b = points[i]; if (a.z <= -.02 || b.z <= -.02) continue; const intensity = i / (points.length - 1); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.globalAlpha = intensity * .72; context.strokeStyle = intensity > .7 ? stream.bright : stream.color; context.lineWidth = .45 + intensity * .95; context.stroke(); }
+      context.restore();
+    }
+
+    drawTrafficDot(x, y, stream, head, alpha = 1, size = 1) {
+      this.trafficSprites ||= new Map();
+      const key = stream.color + "|" + stream.bright + "|" + head;
+      let sprite = this.trafficSprites.get(key);
+      if (!sprite) {
+        sprite = document.createElement("canvas"); sprite.width = sprite.height = 48;
+        const paint = sprite.getContext("2d"); paint.scale(2, 2); const radius = head ? 2.25 : 1.72;
+        const halo = paint.createRadialGradient(12, 12, .6, 12, 12, 5.7); halo.addColorStop(0, stream.color + "58"); halo.addColorStop(1, stream.color + "00"); paint.fillStyle = halo; paint.fillRect(4, 4, 16, 16);
+        const sphere = paint.createRadialGradient(11, 10.8, .1, 12, 12, radius); sphere.addColorStop(0, "#FFFFFF"); sphere.addColorStop(.32, stream.bright); sphere.addColorStop(1, stream.color);
+        paint.beginPath(); paint.arc(12, 12, radius, 0, TAU); paint.fillStyle = sphere; paint.shadowColor = stream.color; paint.shadowBlur = head ? 3 : 1.5; paint.fill();
+        if (head) { paint.beginPath(); paint.arc(11.3, 10.9, .5, 0, TAU); paint.fillStyle = "#FFFFFF"; paint.fill(); }
+        this.trafficSprites.set(key, sprite);
+      }
+      this.context.globalAlpha = alpha; this.context.drawImage(sprite, x - 12 * size, y - 12 * size, 24 * size, 24 * size); this.context.globalAlpha = 1;
+    }
+
+    findTrafficLineAt(pointer, tolerance) {
+      let closest = tolerance, flow = null;
+      this.routeHitSegments.forEach(segment => { const dx = segment.b.x - segment.a.x, dy = segment.b.y - segment.a.y; const t = clamp(((pointer.x - segment.a.x) * dx + (pointer.y - segment.a.y) * dy) / Math.max(.001, dx * dx + dy * dy), 0, 1); const distance = Math.hypot(pointer.x - segment.a.x - dx * t, pointer.y - segment.a.y - dy * t); if (distance < closest) { closest = distance; flow = segment.stream; } });
+      return flow;
+    }
+
+    selectTrafficFlow(flow) {
+      this.selectedTrafficFlow = ["upload", "download", "control"].includes(flow) ? flow : null;
+      this.start();
     }
 
     activeRouteNodeKeys() {

@@ -102,6 +102,9 @@
     window.deyttMapTrafficActive = Boolean(active);
     if (window.deyttMapAtlas) window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
   };
+  window.deyttSelectTrafficFlow = function (flow) {
+    if (window.deyttMapAtlas) window.deyttMapAtlas.selectTrafficFlow(flow);
+  };
   window.deyttSetMapBackdropStage = function (active) {
     root.classList.toggle("is-backdrop-stage", Boolean(active));
   };

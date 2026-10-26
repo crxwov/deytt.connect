@@ -65,11 +65,11 @@ data class RouteProbeSession(
 /** Runs a bounded GET/HEAD check through a loopback-only sing-box HTTP proxy. */
 object RouteProxyProbe {
     const val TIMEOUT_MILLIS = 8_000
-    const val QUICK_DOWNLOAD_MILLIS = 3_000
+    const val QUICK_DOWNLOAD_MILLIS = 2_000
     const val LATENCY_SAMPLE_COUNT = 3
     private const val DOWNLOAD_PROGRESS_INTERVAL_MILLIS = 250L
     private const val MAX_DOWNLOAD_BYTES = 32L * 1024 * 1024
-    private const val SYSTEM_DOWNLOAD_CONNECT_TIMEOUT_MILLIS = 3_500
+    private const val DOWNLOAD_CONNECT_TIMEOUT_MILLIS = 3_500
     private const val SYSTEM_DOWNLOAD_DEADLINE_MILLIS = 8_000L
     private val systemVpnProbeExecutor = ThreadPoolExecutor(
         0,
@@ -181,18 +181,21 @@ object RouteProxyProbe {
         session: RouteProbeSession,
         method: RouteProbeMethod,
         timeoutMillis: Int = TIMEOUT_MILLIS,
+        cancellation: RouteProbeCancellation? = null,
         onSample: (index: Int, milliseconds: Long?) -> Unit = { _, _ -> },
     ): Long {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis
         val samples = ArrayList<Long>(LATENCY_SAMPLE_COUNT)
         var lastFailure: Exception? = null
         for (index in 1..LATENCY_SAMPLE_COUNT) {
+            cancellation?.check()
             if (SystemClock.elapsedRealtime() >= deadline) break
             try {
-                val sample = measureProxySample(session, method, deadline)
+                val sample = measureProxySample(session, method, deadline, cancellation)
                 samples += sample
                 onSample(index, sample)
             } catch (failure: Exception) {
+                cancellation?.check()
                 if (Thread.currentThread().isInterrupted) throw failure
                 lastFailure = failure
                 onSample(index, null)
@@ -206,10 +209,13 @@ object RouteProxyProbe {
         session: RouteProbeSession,
         method: RouteProbeMethod,
         deadline: Long,
+        cancellation: RouteProbeCancellation?,
     ): Long {
         val proxySocket = Socket()
+        cancellation?.track(proxySocket)
         var tlsSocket: SSLSocket? = null
         try {
+            cancellation?.check()
             proxySocket.connect(InetSocketAddress("127.0.0.1", session.port), remainingTimeout(deadline))
             val authorization = Base64.encodeToString(
                 "${session.username}:${session.password}".toByteArray(Charsets.UTF_8),
@@ -231,6 +237,8 @@ object RouteProxyProbe {
             val tls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
                 .createSocket(proxySocket, PROBE_HOST, PROBE_PORT, true) as SSLSocket
             tlsSocket = tls
+            cancellation?.track(tls)
+            cancellation?.check()
             tls.soTimeout = remainingTimeout(deadline)
             tls.startHandshake()
             val hostnameVerified = HttpsURLConnection.getDefaultHostnameVerifier().verify(PROBE_HOST, tls.session)
@@ -239,6 +247,8 @@ object RouteProxyProbe {
         } finally {
             runCatching { tlsSocket?.close() }
             runCatching { proxySocket.close() }
+            tlsSocket?.let { cancellation?.release(it) }
+            cancellation?.release(proxySocket)
         }
     }
 
@@ -272,13 +282,16 @@ object RouteProxyProbe {
         token: String,
         sampleMillis: Int = QUICK_DOWNLOAD_MILLIS,
         maximumBytes: Long = MAX_DOWNLOAD_BYTES,
+        cancellation: RouteProbeCancellation? = null,
         onProgress: (bytesPerSecond: Long) -> Unit = {},
     ): Long {
         require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
         require(sampleMillis in 1_000..5_000)
-        val connectDeadline = SystemClock.elapsedRealtime() + 8_000L
-        val socket = openTlsTunnel(session, DOWNLOAD_HOST, connectDeadline)
+        val connectDeadline = SystemClock.elapsedRealtime() + DOWNLOAD_CONNECT_TIMEOUT_MILLIS
+        cancellation?.check()
+        val socket = openTlsTunnel(session, DOWNLOAD_HOST, connectDeadline, cancellation)
         try {
+            cancellation?.check()
             socket.soTimeout = remainingTimeout(connectDeadline)
             socket.outputStream.apply {
                 val request = "GET $DOWNLOAD_PATH HTTP/1.1\r\n" +
@@ -309,18 +322,20 @@ object RouteProxyProbe {
                 }
             }
             val received = if (transferEncoding.contains("chunked", ignoreCase = true)) {
-                countChunkedBody(socket, body, sampleDeadline, maximumBytes, reportBytes)
+                countChunkedBody(socket, body, sampleDeadline, maximumBytes, reportBytes, cancellation)
             } else {
                 countBody(
                     socket, body, sampleDeadline, minOf(contentLength ?: maximumBytes, maximumBytes), reportBytes,
-                    expectedLength = contentLength,
+                    expectedLength = contentLength, cancellation = cancellation,
                 )
             }
+            cancellation?.check()
             check(received > 0L) { "Сервер скорости не передал данные" }
             val elapsed = (SystemClock.elapsedRealtime() - sampleStarted).coerceAtLeast(1L)
             return (received * 1_000L / elapsed).also(onProgress)
         } finally {
             runCatching { socket.close() }
+            cancellation?.release(socket)
         }
     }
 
@@ -352,9 +367,17 @@ object RouteProxyProbe {
         throw IOException("Слишком много HTTP-заголовков")
     }
 
-    private fun openTlsTunnel(session: RouteProbeSession, host: String, deadline: Long): SSLSocket {
+    private fun openTlsTunnel(
+        session: RouteProbeSession,
+        host: String,
+        deadline: Long,
+        cancellation: RouteProbeCancellation? = null,
+    ): SSLSocket {
         val proxySocket = Socket()
+        cancellation?.track(proxySocket)
+        var tlsSocket: SSLSocket? = null
         try {
+            cancellation?.check()
             proxySocket.connect(InetSocketAddress("127.0.0.1", session.port), remainingTimeout(deadline))
             val authorization = Base64.encodeToString(
                 "${session.username}:${session.password}".toByteArray(Charsets.UTF_8),
@@ -369,6 +392,9 @@ object RouteProxyProbe {
             if (status != HTTP_OK) throw IOException("Локальный прокси ответил HTTP $status")
             val tls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
                 .createSocket(proxySocket, host, 443, true) as SSLSocket
+            tlsSocket = tls
+            cancellation?.track(tls)
+            cancellation?.check()
             tls.soTimeout = remainingTimeout(deadline)
             tls.startHandshake()
             if (!HttpsURLConnection.getDefaultHostnameVerifier().verify(host, tls.session)) {
@@ -377,7 +403,10 @@ object RouteProxyProbe {
             }
             return tls
         } catch (error: Throwable) {
+            runCatching { tlsSocket?.close() }
+            tlsSocket?.let { cancellation?.release(it) }
             runCatching { proxySocket.close() }
+            cancellation?.release(proxySocket)
             throw error
         }
     }
@@ -388,10 +417,12 @@ object RouteProxyProbe {
         deadline: Long,
         maximumBytes: Long,
         onBytesRead: (Long) -> Unit = {},
+        cancellation: RouteProbeCancellation? = null,
     ): Long {
         var total = 0L
         val buffer = ByteArray(8 * 1024)
         while (total < maximumBytes) {
+            cancellation?.check()
             val line = try {
                 readHttpLine(socket, input, deadline).substringBefore(';').trim()
             } catch (timeout: SocketTimeoutException) {
@@ -437,10 +468,12 @@ object RouteProxyProbe {
         maximumBytes: Long,
         onBytesRead: (Long) -> Unit = {},
         expectedLength: Long? = null,
+        cancellation: RouteProbeCancellation? = null,
     ): Long {
         var total = 0L
         val buffer = ByteArray(8 * 1024)
         while (total < maximumBytes) {
+            cancellation?.check()
             val remainingTime = deadline - SystemClock.elapsedRealtime()
             if (remainingTime <= 0L) {
                 if (total > 0L) break
@@ -610,8 +643,8 @@ object RouteProxyProbe {
             .openConnection(Proxy.NO_PROXY) as HttpsURLConnection
         activeConnection.set(connection)
         try {
-            connection.connectTimeout = SYSTEM_DOWNLOAD_CONNECT_TIMEOUT_MILLIS
-            connection.readTimeout = SYSTEM_DOWNLOAD_CONNECT_TIMEOUT_MILLIS
+            connection.connectTimeout = DOWNLOAD_CONNECT_TIMEOUT_MILLIS
+            connection.readTimeout = DOWNLOAD_CONNECT_TIMEOUT_MILLIS
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("X-TG-App-Token", token)
             connection.setRequestProperty("Accept-Encoding", "identity")
@@ -799,8 +832,8 @@ object RouteProbeClient {
         if (activeRequestId == requestId) activeRequestId = null
     }
 
-    fun cancel(context: Context) {
-        val requestId = activeRequestId ?: return
+    fun cancel(context: Context, requestId: String? = activeRequestId) {
+        if (requestId == null || activeRequestId != requestId) return
         context.startService(Intent(context, RouteProbeVpnService::class.java)
             .setAction(ConnectVpnService.ACTION_CANCEL_ROUTE_PROBE)
             .putExtra(EXTRA_REQUEST_ID, requestId))

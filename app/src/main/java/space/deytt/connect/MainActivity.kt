@@ -108,12 +108,12 @@ class MainActivity : Activity() {
     private var lastRouteLatency: Pair<HomeRouteMetricKey, Long>? = null
     private var pendingRouteProbeAuthorization: (() -> Unit)? = null
     private var selectedRouteLatencyInFlight = false
+    private var selectedRouteLatencyFuture: java.util.concurrent.Future<*>? = null
     @Volatile private var homeSpeedForeground = false
     @Volatile private var homeSpeedOnHome = true
     @Volatile private var homeSpeedGeneration = 0
     private var homeSpeedFuture: java.util.concurrent.Future<*>? = null
     private var homeSpeedConnectedRouteId: String? = null
-    private var homeSpeedConnectedAt = 0L
     private var homeConnectionGeneration = 0L
     private var homeSpeedAttemptAt = 0L
     private var homeSpeedInFlight = false
@@ -121,7 +121,6 @@ class MainActivity : Activity() {
     private var homeSpeedErrorKey: HomeRouteMetricKey? = null
     private var homeSpeedBypassedKey: HomeRouteMetricKey? = null
     private var homeSpeedSample: Pair<HomeRouteMetricKey, Long>? = null
-    private var homeSpeedSampleAt = 0L
     private val locationExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val accountExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val subscriptionExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -178,7 +177,7 @@ class MainActivity : Activity() {
                     clearHomeMetricSamples()
                     homeSpeedAttemptAt = 0L
                     if (::downloadText.isInitialized) updateQualityStrip()
-                    if (renderedPhase == VpnPhase.CONNECTED) selectedRouteLatencyHandler.postDelayed({ measureHomeRouteDownload() }, 1_800L)
+                    if (renderedPhase == VpnPhase.CONNECTED) scheduleHomeMeasurements()
                 }
                 return
             }
@@ -386,7 +385,7 @@ class MainActivity : Activity() {
         cancelHomeRouteDownload()
         homeConnectQueued = false
         homeConnectGeneration++
-        latencyGeneration++
+        cancelSelectedRouteLatency()
         restoreAwgMeasurement?.invoke()
         runCatching { unregisterReceiver(statusReceiver) }
         runCatching { unregisterReceiver(routeProbeReceiver) }
@@ -591,6 +590,7 @@ class MainActivity : Activity() {
             setOverviewMode(true)
             setConnected(ConnectVpnService.isRunning() || AwgTunnelController.isRunning())
             onMapNodeTapped = ::showMapRoutePicker
+            onTrafficTapped = ::showTrafficExplanation
             focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
             setAvailableLocations(availableMapLocations())
             setUserLocation(currentNetworkLocation)
@@ -868,29 +868,16 @@ class MainActivity : Activity() {
     }
 
     private fun rebuildRouteRow() {
-        latencyGeneration++
         val selected = SelectedRouteStore(this).read()
         if (::globe.isInitialized) globe.focus(selected.id, animate = false)
         updateRouteFlow(selected)
         updateQualityStrip()
-        if (::latencyText.isInitialized) {
-            val metricKey = currentHomeRouteMetricKey(selected.id)
-            val cachedLatency = lastRouteLatency?.takeIf {
-                renderedPhase == VpnPhase.CONNECTED && it.first == metricKey
-            }?.second
-            latencyText.text = cachedLatency?.let(::formatLatency) ?: "—"
-            latencyText.isEnabled = true
-            latencyText.alpha = 1f
-            latencyText.textSize = 23f
-            latencyText.setTextColor(DeyttUi.MUTED)
-            latencyText.contentDescription = uiCopy("Проверить задержку через выход ${selected.title}: два HTTPS-запроса HEAD или GET, тайм-аут 10 секунд")
-        }
     }
 
     private fun toggleTunnel() {
         if (homeConnectQueued) return
         val connectGeneration = ++homeConnectGeneration
-        latencyGeneration++
+        cancelSelectedRouteLatency()
         val saved = VpnStateStore(this).read()
         val decision = VpnControlDecision.decide(
             saved.phase,
@@ -1205,6 +1192,42 @@ class MainActivity : Activity() {
             })
         }
         advance(0)
+    }
+
+    private fun showHomeMetricExplanation(speed: Boolean) {
+        val english = AppLanguage.current(this) == AppLanguage.EN
+        val title = if (speed) {
+            if (english) "speed" else "скорость"
+        } else if (english) "ping" else "ping / задержка"
+        val message = if (speed) {
+            if (english) "How much data your connection can download per second. A higher Mbps value means faster downloads and higher video quality. It depends on your network and the VPN server.\n\nRefresh measurement runs a short download through your current connection. The last successful result stays visible until the next result arrives; reconnecting clears it."
+            else "Сколько данных соединение может скачать за секунду. Чем больше Мбит/с, тем быстрее скачиваются файлы и загружается видео. Значение зависит от вашей сети и VPN-сервера.\n\n«Обновить замеры» запускает короткую загрузку через текущее подключение. Последний успешный результат остаётся до нового замера; при переподключении он сбрасывается."
+        } else {
+            if (english) "How long a small request takes to get a reply through your VPN, in milliseconds. A lower value means pages and messages respond sooner.\n\nThe first reply appears immediately, then several replies refine the result. Refresh measurement runs a new check. The last successful result stays visible during the same connection."
+            else "Сколько миллисекунд нужно небольшому запросу, чтобы получить ответ через VPN. Чем меньше задержка, тем быстрее откликаются страницы и сообщения.\n\nПервый ответ показывается сразу, затем результат уточняется по нескольким ответам. «Обновить замеры» запускает новую проверку. Последний успешный результат сохраняется в пределах текущего подключения."
+        }
+        AppDialog.Builder(this).setTitle(title).setMessage(message)
+            .setPositiveButton(if (english) "got it" else "понятно", null).show()
+    }
+
+    private fun showTrafficExplanation(flow: String) {
+        if (isFinishing || isDestroyed) return
+        val english = AppLanguage.current(this) == AppLanguage.EN
+        val (title, message) = when (flow) {
+            "upload" -> if (english) "outbound data" to "Requests and data travel from your device to the exit node: opening a page, sending a message or uploading a file."
+                else "исходящие данные" to "Запросы и данные идут от устройства к выходному узлу: открытие страницы, отправка сообщения или загрузка файла на сервер."
+            "download" -> if (english) "return traffic" to "Responses travel back to your device: page content, incoming messages and downloaded files."
+                else "ответный трафик" to "Ответы возвращаются к устройству: содержимое страниц, входящие сообщения и скачиваемые файлы."
+            "control" -> if (english) "service traffic" to "Small service exchanges keep a connection working. DNS resolves names; other control messages coordinate the tunnel."
+                else "служебный трафик" to "Небольшие служебные обмены поддерживают соединение. DNS определяет адрес по имени, остальные сообщения согласуют работу туннеля."
+            else -> return
+        }
+        val note = if (english) "The moving points illustrate traffic direction; packet contents are not captured."
+            else "Движущиеся точки показывают направление потока. Содержимое пакетов не считывается."
+        globe.selectTrafficFlow(flow)
+        AppDialog.Builder(this).setTitle(title).setMessage("$message\n\n$note")
+            .setPositiveButton(if (english) "show all traffic lines" else "показать все линии", null)
+            .show().setOnDismissListener { globe.selectTrafficFlow(null) }
     }
 
     private fun showMapRoutePicker(node: String) {
@@ -1704,10 +1727,10 @@ class MainActivity : Activity() {
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
             gravity = Gravity.START
-            setOnClickListener { measureSelectedRoute() }
+            setOnClickListener { showHomeMetricExplanation(speed = false) }
         }
         pingValueProgress = InlineMetricProgress(latencyText)
-        addView(metric(uiCopy("Задержка"), latencyText, "home-latency", onClick = ::measureSelectedRoute), LinearLayout.LayoutParams(0, -2, 1f))
+        addView(metric(uiCopy("Задержка"), latencyText, "home-latency") { showHomeMetricExplanation(speed = false) }, LinearLayout.LayoutParams(0, -2, 1f))
         addView(View(this@MainActivity).apply { setBackgroundColor(DeyttUi.LINE) },
             LinearLayout.LayoutParams(dp(1), dp(56)))
         downloadText = text("—", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
@@ -1716,7 +1739,7 @@ class MainActivity : Activity() {
         }
         speedValueProgress = InlineMetricProgress(downloadText)
         addView(metric("Скорость", downloadText, "home-speed") {
-            selectTab(if (TelegramSessionStore.read(this@MainActivity) == null) 2 else 1)
+            showHomeMetricExplanation(speed = true)
         }, LinearLayout.LayoutParams(0, -2, 1f))
     }
 
@@ -1734,40 +1757,19 @@ class MainActivity : Activity() {
         }
         val metricKey = currentHomeRouteMetricKey(selected.id)
         val speedNeedsLogin = HomeMetricPresentation.speedNeedsLogin(connected, metricKey)
-        val recentSpeedSample = homeSpeedSample?.takeIf {
-            SystemClock.elapsedRealtime() - homeSpeedSampleAt in 0..(15 * 60_000L)
-        }
-        val recentSpeed = HomeMetricPresentation.value(connected, metricKey, recentSpeedSample?.first, recentSpeedSample?.second)
+        val recentSpeed = HomeMetricPresentation.value(connected, metricKey, homeSpeedSample?.first, homeSpeedSample?.second)
         val speedError = HomeMetricPresentation.value(connected, metricKey, homeSpeedErrorKey, homeSpeedError)
         val speedBypassed = HomeMetricPresentation.isCurrent(connected, metricKey, homeSpeedBypassedKey)
-        val mbps = recentSpeed?.times(8.0)?.div(1_000_000.0)
         val en = AppLanguage.current(this) == AppLanguage.EN
         val latency = HomeMetricPresentation.value(connected, metricKey, lastRouteLatency?.first, lastRouteLatency?.second)
             ?.takeIf(RouteProbeStatistics::isValidLatencyMillis)
         val pingError = HomeMetricPresentation.isCurrent(connected, metricKey, homePingErrorKey)
         val pingBypassed = HomeMetricPresentation.isCurrent(connected, metricKey, homePingBypassedKey)
-        downloadText.text = when {
-            speedBypassed -> HomeMetricPresentation.bypassLabel(en)
-            speedNeedsLogin -> if (en) "sign in" else "войдите"
-            homeSpeedInFlight && mbps != null -> String.format(
-                java.util.Locale.US,
-                if (en) "↓ %.1f Mbps…" else "↓ %.1f Мбит/с…",
-                mbps,
-            )
-            homeSpeedInFlight -> "—"
-            speedError != null -> if (en) "unavailable" else "недоступна"
-            mbps == null -> "—"
-            else -> String.format(java.util.Locale.US, if (en) "%.1f Mbps" else "%.1f Мбит/с", mbps)
-        }
-        latencyText.text = when {
-            pingBypassed -> HomeMetricPresentation.bypassLabel(en)
-            pingError -> if (en) "no response" else "нет ответа"
-            latency != null -> formatLatency(latency)
-            else -> "—"
-        }
+        downloadText.text = HomeMetricPresentation.speedLabel(recentSpeed, speedBypassed, speedNeedsLogin, speedError != null, en)
+        latencyText.text = HomeMetricPresentation.latencyLabel(latency, pingBypassed, pingError, en)
         latencyText.setTextColor(when {
             pingBypassed -> DeyttUi.AMBER
-            pingError -> DeyttUi.CORAL
+            pingError && latency == null -> DeyttUi.CORAL
             connected && (selectedRouteLatencyInFlight || pendingRouteProbeId != null) -> DeyttUi.SKY
             latency != null -> DeyttUi.MINT
             else -> DeyttUi.MUTED
@@ -1775,17 +1777,21 @@ class MainActivity : Activity() {
         val sampleSeconds = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS / 1_000
         downloadText.contentDescription = when {
             speedBypassed -> uiCopy("Скорость не измеряется: приложение исключено из VPN текущими настройками обхода")
-            speedNeedsLogin -> if (en) "Sign in to Telegram to measure speed. Tap to open your profile."
-                else "Для замера скорости войдите через Telegram. Нажмите, чтобы открыть профиль."
+            speedNeedsLogin -> if (en) "Sign in to Telegram to measure speed. Tap for an explanation."
+                else "Для замера скорости войдите через Telegram. Нажмите для объяснения."
+            recentSpeed != null -> if (en) "Download speed: ${downloadText.text}. Tap for an explanation."
+                else "Скорость загрузки: ${downloadText.text}. Нажмите для объяснения."
             speedError != null -> uiCopy(speedError)
-            connected -> uiCopy("Скорость загрузки, проба $sampleSeconds с. Нажмите для проверки маршрутов.")
+            connected -> if (en) "Download speed, $sampleSeconds second sample. Tap for an explanation."
+                else "Скорость загрузки, проба $sampleSeconds с. Нажмите для объяснения."
             else -> uiCopy("Скорость проверяется после подключения")
         }
         latencyText.contentDescription = when {
             pingBypassed -> uiCopy("HTTPS-отклик не проходит через VPN при текущих настройках обхода")
+            latency != null -> if (en) "Ping: $latency milliseconds. Tap for an explanation."
+                else "Задержка: $latency миллисекунд. Нажмите для объяснения."
             pingError -> uiCopy("Отклик: нет ответа через выбранный маршрут")
-            latency != null -> uiCopy("Время HTTPS-ответа через выбранный маршрут: ${latency} миллисекунд")
-            connected -> uiCopy("Проверить время HTTPS-ответа через выбранный маршрут")
+            connected -> if (en) "Measuring ping. Tap for an explanation." else "Замер задержки. Нажмите для объяснения."
             else -> uiCopy("Отклик проверяется после подключения")
         }
         pingValueProgress.setLoading(connected && latencyText.text.toString() == "—")
@@ -1819,22 +1825,39 @@ class MainActivity : Activity() {
     }
 
     private fun clearHomeMetricSamples() {
+        cancelSelectedRouteLatency()
         homePingSamples.clear()
         lastRouteLatency = null
         homePingErrorKey = null
         homePingBypassedKey = null
         homeSpeedSample = null
-        homeSpeedSampleAt = 0L
         homeSpeedError = null
         homeSpeedErrorKey = null
         homeSpeedBypassedKey = null
     }
 
     private fun cancelHomeRouteDownload() {
+        if (homeSpeedInFlight) homeSpeedAttemptAt = 0L
         homeSpeedGeneration++
         homeSpeedFuture?.cancel(true)
         homeSpeedFuture = null
         homeSpeedInFlight = false
+    }
+
+    private fun cancelSelectedRouteLatency() {
+        latencyGeneration++
+        selectedRouteLatencyFuture?.cancel(true)
+        selectedRouteLatencyFuture = null
+        selectedRouteLatencyInFlight = false
+    }
+
+    private fun scheduleHomeMeasurements() {
+        selectedRouteLatencyHandler.post {
+            if (homeSpeedForeground && homeSpeedOnHome) {
+                measureSelectedRoute()
+                measureHomeRouteDownload()
+            }
+        }
     }
 
     /** One bounded real throughput sample after connection, then at most once a minute on Home. */
@@ -1845,14 +1868,17 @@ class MainActivity : Activity() {
         val selected = SelectedRouteStore(this).read()
         if (selected.id != homeSpeedConnectedRouteId) return
         val now = SystemClock.elapsedRealtime()
-        if (now - homeSpeedConnectedAt < 1_500L || (homeSpeedAttemptAt > 0L && now - homeSpeedAttemptAt < 60_000L)) return
         val token = TelegramSessionStore.read(this) ?: return
         val config = SubscriptionStore(this).readCurrent() ?: return
         val route = RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)).firstOrNull { it.id == selected.id } ?: return
         val metricKey = currentHomeRouteMetricKey(selected.id) ?: return
+        val retryDelay = HomeMetricPresentation.speedRefreshDelayMillis(
+            hasSample = homeSpeedSample?.first == metricKey,
+            failed = homeSpeedErrorKey == metricKey && homeSpeedError != null,
+        )
+        if (homeSpeedAttemptAt > 0L && now - homeSpeedAttemptAt < retryDelay) return
         if (route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)) {
             homeSpeedSample = null
-            homeSpeedSampleAt = 0L
             homeSpeedError = null
             homeSpeedErrorKey = null
             homeSpeedBypassedKey = metricKey
@@ -1898,7 +1924,6 @@ class MainActivity : Activity() {
                         !isHomeApplicationRoutedByTunnel(config)
                     ) {
                         homeSpeedSample = null
-                        homeSpeedSampleAt = 0L
                         homeSpeedError = null
                         homeSpeedErrorKey = null
                         homeSpeedBypassedKey = metricKey
@@ -1910,7 +1935,6 @@ class MainActivity : Activity() {
                     homeSpeedError = null
                     homeSpeedErrorKey = null
                     homeSpeedSample = metricKey to speed
-                    homeSpeedSampleAt = SystemClock.elapsedRealtime()
                     val latency = lastRouteLatency?.takeIf { it.first == metricKey }?.second
                     if (latency != null) RouteQualityStore.write(this, RouteProbeSample(selected.id, latency, speed))
                 } ?: run {
@@ -2139,17 +2163,16 @@ class MainActivity : Activity() {
         }
         if (previousPhase != currentPhase) {
             cancelHomeRouteDownload()
+            clearHomeMetricSamples()
             if (currentPhase == VpnPhase.CONNECTED) {
                 homeConnectionGeneration++
-                clearHomeMetricSamples()
                 pendingRouteProbeId = null
                 pendingRouteProbeMetricKey = null
                 pendingRouteProbeHasOutcome = false
                 selectedRouteLatencyInFlight = false
                 homeSpeedConnectedRouteId = SelectedRouteStore(this).read().id
-                homeSpeedConnectedAt = SystemClock.elapsedRealtime()
                 homeSpeedAttemptAt = 0L
-                selectedRouteLatencyHandler.postDelayed({ measureHomeRouteDownload() }, 1_800L)
+                scheduleHomeMeasurements()
             } else homeSpeedConnectedRouteId = null
             if (!temporaryAwgMeasurement &&
                 (currentPhase == VpnPhase.CONNECTED || currentPhase == VpnPhase.IDLE || currentPhase == VpnPhase.ERROR)
@@ -2262,8 +2285,6 @@ class MainActivity : Activity() {
         homePingErrorKey = null
         homePingBypassedKey = null
         latencyText.text = previousLatency?.let(::formatLatency) ?: "—"
-        latencyText.isEnabled = false
-        latencyText.alpha = .65f
         updateQualityStrip()
         if (tunnelActive) {
             val appBypassed = route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)
@@ -2293,13 +2314,28 @@ class MainActivity : Activity() {
             }
             selectedRouteLatencyInFlight = true
             updateQualityStrip()
-            LatencyExecutor.pool.execute {
+            selectedRouteLatencyFuture = LatencyExecutor.pool.submit {
                 val elapsed = runCatching {
-                    RouteProxyProbe.measureThroughSystemVpn(method)
+                    RouteProxyProbe.measureThroughSystemVpn(method) { _, sample ->
+                        if (sample != null && RouteProbeStatistics.isValidLatencyMillis(sample)) runOnUiThread {
+                            if (!HomeMetricPresentation.ownsRequest(generation, latencyGeneration) ||
+                                isFinishing || isDestroyed || renderedPhase != VpnPhase.CONNECTED ||
+                                currentHomeRouteMetricKey(selected.id) != metricKey ||
+                                (route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config))
+                            ) return@runOnUiThread
+                            homePingSamples += sample
+                            // The first reply is useful immediately; refresh keeps the last complete sample.
+                            if (lastRouteLatency?.first != metricKey) {
+                                lastRouteLatency = metricKey to sample
+                                updateQualityStrip()
+                            }
+                        }
+                    }
                 }.getOrNull()
                 runOnUiThread {
                     if (!HomeMetricPresentation.ownsRequest(generation, latencyGeneration)) return@runOnUiThread
                     selectedRouteLatencyInFlight = false
+                    selectedRouteLatencyFuture = null
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     if (currentHomeRouteMetricKey(selected.id) != metricKey) {
                         latencyText.isEnabled = true

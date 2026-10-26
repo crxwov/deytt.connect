@@ -191,6 +191,20 @@ internal class PrimaryPages(
     private val updateExecutor = Executors.newSingleThreadExecutor()
     private val pairingExecutor = Executors.newSingleThreadExecutor()
     private val updateHandler = Handler(Looper.getMainLooper())
+    private val nextCountryCheck = object : Runnable {
+        override fun run() {
+            if (closed || host.isDestroyed || !diagnosticForeground) return
+            if (RouteProbeClient.isRunning(host) || routeProbeStates.isNotEmpty() || awgMeasurementRunning) {
+                if (pendingCountries.isNotEmpty()) updateHandler.postDelayed(this, 100L)
+                return
+            }
+            val next = pendingCountries.values.firstOrNull()
+            if (next != null) {
+                pendingCountries.remove(next.code)
+                startCountryProbe(next)
+            } else onRouteDiagnosticsIdle()
+        }
+    }
     private val profileFlows = ProfileFlows(host, ::showTelegramPairing, ::showLinkedTelegramAccount)
     private var latestRelease: ReleaseInfo? = null
     private var downloadedUpdate: File? = null
@@ -243,6 +257,7 @@ internal class PrimaryPages(
         closed = true
         awgCompletion?.also { awgCompletion = null }?.invoke(false)
         updateHandler.removeCallbacks(updateCycle)
+        updateHandler.removeCallbacks(nextCountryCheck)
         updateExecutor.shutdownNow()
         pairingExecutor.shutdownNow()
         diagnosticExecutor.shutdownNow()
@@ -271,6 +286,7 @@ internal class PrimaryPages(
         activeAwgCountry?.let { cancelCountryProbe(it) }
         if (awgMeasurementRunning) host.cancelAwgMeasurement()
         updateHandler.removeCallbacks(updateCycle)
+        updateHandler.removeCallbacks(nextCountryCheck)
     }
 
     fun cancelRouteDiagnosticsForSelection() {
@@ -483,11 +499,14 @@ internal class PrimaryPages(
     private fun startCountryProbe(country: CountryProbeState) {
         if (country.routes.isEmpty() || closed || !diagnosticForeground) return
         if (routeProbeStates.values.any { it === country } || activeAwgCountry === country) {
-            if (country.cancelled) pendingCountries[country.code] = country
+            if (country.cancelled) {
+                pendingCountries[country.code] = country
+                launchNextCountry()
+            }
             return
         }
         country.cancelled = false
-        if (RouteProbeClient.isRunning(host) || awgMeasurementRunning) {
+        if (RouteProbeClient.isRunning(host) || routeProbeStates.isNotEmpty() || awgMeasurementRunning) {
             pendingCountries[country.code] = country
             country.isChecking = false
             country.summary.text = copy("В очереди · дождитесь предыдущей проверки", "Queued · waiting for the current check")
@@ -496,6 +515,7 @@ internal class PrimaryPages(
                 it.progress.setLoading(false)
                 it.status.text = copy("В очереди…", "Queued…")
             }
+            launchNextCountry()
             return
         }
         country.isChecking = true
@@ -510,7 +530,7 @@ internal class PrimaryPages(
             country.isChecking = false
             country.summary.text = copy("Разрешите проверку маршрутов в Android", "Allow route checks in Android")
             country.summaryProgress.setLoading(false)
-            if (host.requestRouteProbePermission { startCountryProbe(country) }) return
+            if (host.requestRouteProbePermission { if (!country.cancelled) startCountryProbe(country) }) return
             country.isChecking = true
             country.summary.text = copy("Отклик: —", "Response: —")
             country.summaryProgress.setLoading(true)
@@ -568,7 +588,8 @@ internal class PrimaryPages(
                 country.cancelled = true
                 country.rows.values.filter { it.route.engine == TunnelEngine.LIBBOX }.forEach { row ->
                     row.progress.setLoading(false)
-                    if (row.route.id !in country.samples) {
+                    val sample = country.samples[row.route.id]
+                    if (sample?.latencyMillis == null && sample?.downloadBytesPerSecond == null) {
                         row.status.text = copy("Проверка отменена · откройте страну снова", "Measurement cancelled · reopen country")
                     }
                 }
@@ -771,21 +792,19 @@ internal class PrimaryPages(
         country.summaryProgress.setLoading(false)
         country.rows.values.forEach {
             it.progress.setLoading(false)
-            if (it.route.id !in country.samples) it.status.text = copy("Проверка отменена · откройте страну снова", "Measurement cancelled · reopen country")
+            val sample = country.samples[it.route.id]
+            if (sample?.latencyMillis == null && sample?.downloadBytesPerSecond == null) {
+                it.status.text = copy("Проверка отменена · откройте страну снова", "Measurement cancelled · reopen country")
+            }
         }
-        if (routeProbeStates.values.any { it === country }) RouteProbeClient.cancel(host)
+        routeProbeStates.entries.firstOrNull { it.value === country }?.key?.let { RouteProbeClient.cancel(host, it) }
         if (activeAwgCountry === country) host.cancelAwgMeasurement()
+        launchNextCountry()
     }
 
     private fun launchNextCountry() {
-        updateHandler.postDelayed({
-            if (closed || host.isDestroyed || RouteProbeClient.isRunning(host) || awgMeasurementRunning) return@postDelayed
-            val next = if (diagnosticForeground) pendingCountries.values.firstOrNull() else null
-            if (next != null) {
-                pendingCountries.remove(next.code)
-                startCountryProbe(next)
-            } else if (pendingCountries.isEmpty()) onRouteDiagnosticsIdle()
-        }, 200)
+        updateHandler.removeCallbacks(nextCountryCheck)
+        updateHandler.post(nextCountryCheck)
     }
 
     private fun copy(ru: String, en: String): String = if (AppLanguage.current(host) == AppLanguage.EN) en else ru
