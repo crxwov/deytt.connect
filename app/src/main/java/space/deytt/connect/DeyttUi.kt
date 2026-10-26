@@ -269,17 +269,17 @@ object DeyttUi {
         val isPrimary = Color.alpha(topColor) > 0x80 && (topColor != SURFACE && topColor != SURFACE_2 && topColor != SHEET_SURFACE)
         val strokeColors = if (isPrimary) {
             intArrayOf(
-                0xDBFFFFFF.toInt(),
-                0x75FFFFFF.toInt(),
-                0x4578B8F8.toInt(),
-                0x60FFFFFF.toInt(),
+                0x50FFFFFF.toInt(),
+                0x22FFFFFF.toInt(),
+                0x1078B8F8.toInt(),
+                0x1AFFFFFF.toInt(),
             )
         } else {
             intArrayOf(
-                0x98FFFFFF.toInt(),
-                0x42FFFFFF.toInt(),
-                0x2582B4E8.toInt(),
-                0x45FFFFFF.toInt(),
+                0x2CFFFFFF.toInt(),
+                0x12FFFFFF.toInt(),
+                0x0C82B4E8.toInt(),
+                0x12FFFFFF.toInt(),
             )
         }
         return LiquidGlassDrawable(
@@ -287,10 +287,10 @@ object DeyttUi {
             cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
             fillColors = if (topColor == bottomColor) intArrayOf(topColor) else intArrayOf(topColor, bottomColor),
             strokeColors = strokeColors,
-            strokeWidthPx = 1.4f,
+            strokeWidthPx = if (isPrimary) 0.95f else 0.85f,
             hasGloss = true,
-            glossAlpha = if (isPrimary) 0x3A else 0x2A,
-            innerLip = true,
+            glossAlpha = if (isPrimary) 0x1E else 0x12,
+            innerLip = false,
         )
     }
 
@@ -433,15 +433,15 @@ object DeyttUi {
                     0x451E334D.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0xB8FFFFFF.toInt(),
-                    0x5584BCF4.toInt(),
-                    0x356AAAF0.toInt(),
-                    0x55FFFFFF.toInt(),
+                    0x38FFFFFF.toInt(),
+                    0x1A84BCF4.toInt(),
+                    0x106AAAF0.toInt(),
+                    0x16FFFFFF.toInt(),
                 ),
-                strokeWidthPx = 1.25f,
+                strokeWidthPx = 0.85f,
                 hasGloss = true,
-                glossAlpha = 0x28,
-                innerLip = true,
+                glossAlpha = 0x14,
+                innerLip = false,
             )
         } else {
             LiquidGlassDrawable(
@@ -452,15 +452,15 @@ object DeyttUi {
                     0x22142232.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x75FFFFFF.toInt(),
-                    0x32FFFFFF.toInt(),
-                    0x1880B0E0.toInt(),
-                    0x28FFFFFF.toInt(),
+                    0x24FFFFFF.toInt(),
+                    0x10FFFFFF.toInt(),
+                    0x0A80B0E0.toInt(),
+                    0x10FFFFFF.toInt(),
                 ),
-                strokeWidthPx = 1.15f,
+                strokeWidthPx = 0.8f,
                 hasGloss = true,
-                glossAlpha = 0x1E,
-                innerLip = true,
+                glossAlpha = 0x0C,
+                innerLip = false,
             )
         }
     }
@@ -587,15 +587,15 @@ object DeyttUi {
                     0xB809111C.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x85FFFFFF.toInt(),
-                    0x38FFFFFF.toInt(),
-                    0x2070A0D0.toInt(),
-                    0x30FFFFFF.toInt(),
+                    0x2AFFFFFF.toInt(),
+                    0x12FFFFFF.toInt(),
+                    0x0A70A0D0.toInt(),
+                    0x10FFFFFF.toInt(),
                 ),
-                strokeWidthPx = 1.35f,
+                strokeWidthPx = 0.8f,
                 hasGloss = true,
-                glossAlpha = 0x1C,
-                innerLip = true,
+                glossAlpha = 0x0E,
+                innerLip = false,
             )
             SURFACE_2 -> LiquidGlassDrawable(
                 density = density,
@@ -606,15 +606,15 @@ object DeyttUi {
                     0xA80E1A27.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x90FFFFFF.toInt(),
-                    0x40FFFFFF.toInt(),
-                    0x2278B0E0.toInt(),
-                    0x35FFFFFF.toInt(),
+                    0x2EFFFFFF.toInt(),
+                    0x14FFFFFF.toInt(),
+                    0x0C78B0E0.toInt(),
+                    0x12FFFFFF.toInt(),
                 ),
-                strokeWidthPx = 1.25f,
+                strokeWidthPx = 0.8f,
                 hasGloss = true,
-                glossAlpha = 0x22,
-                innerLip = true,
+                glossAlpha = 0x10,
+                innerLip = false,
             )
             SELECTED -> LiquidGlassDrawable(
                 density = density,
@@ -624,15 +624,15 @@ object DeyttUi {
                     0xB8162E48.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0xC5FFFFFF.toInt(),
-                    0x657CB8F2.toInt(),
-                    0x4062A4E8.toInt(),
-                    0x60FFFFFF.toInt(),
+                    0x40FFFFFF.toInt(),
+                    0x1C7CB8F2.toInt(),
+                    0x1262A4E8.toInt(),
+                    0x1AFFFFFF.toInt(),
                 ),
-                strokeWidthPx = 1.35f,
+                strokeWidthPx = 0.85f,
                 hasGloss = true,
-                glossAlpha = 0x30,
-                innerLip = true,
+                glossAlpha = 0x14,
+                innerLip = false,
             )
             MAP_SURFACE -> LiquidGlassDrawable(
                 density = density,
@@ -642,14 +642,14 @@ object DeyttUi {
                     0xE8080E16.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x55FFFFFF.toInt(),
                     0x20FFFFFF.toInt(),
-                    0x125588B0.toInt(),
-                    0x25FFFFFF.toInt(),
+                    0x0CFFFFFF.toInt(),
+                    0x085588B0.toInt(),
+                    0x0EFFFFFF.toInt(),
                 ),
-                strokeWidthPx = 1.2f,
+                strokeWidthPx = 0.75f,
                 hasGloss = false,
-                innerLip = true,
+                innerLip = false,
             )
             else -> {
                 val alpha = Color.alpha(fill)
@@ -661,15 +661,15 @@ object DeyttUi {
                         cornerRadiusPx = rPx,
                         fillColors = intArrayOf(topColor, bottomColor),
                         strokeColors = intArrayOf(
-                            0x88FFFFFF.toInt(),
-                            0x35FFFFFF.toInt(),
-                            0x20FFFFFF.toInt(),
-                            0x35FFFFFF.toInt(),
+                            0x28FFFFFF.toInt(),
+                            0x10FFFFFF.toInt(),
+                            0x0AFFFFFF.toInt(),
+                            0x10FFFFFF.toInt(),
                         ),
-                        strokeWidthPx = 1.2f,
+                        strokeWidthPx = 0.8f,
                         hasGloss = true,
-                        glossAlpha = 0x22,
-                        innerLip = true,
+                        glossAlpha = 0x10,
+                        innerLip = false,
                     )
                 } else {
                     GradientDrawable().apply {
@@ -1414,16 +1414,16 @@ class LiquidGlassDrawable(
     private var cornerRadiusPx: Float,
     private var fillColors: IntArray,
     private var strokeColors: IntArray = intArrayOf(
-        0xB8FFFFFF.toInt(),
-        0x50FFFFFF.toInt(),
-        0x3060A5FA.toInt(),
-        0x55FFFFFF.toInt(),
+        0x32FFFFFF.toInt(),
+        0x14FFFFFF.toInt(),
+        0x0C60A5FA.toInt(),
+        0x14FFFFFF.toInt(),
     ),
     private var strokePositions: FloatArray = floatArrayOf(0f, 0.35f, 0.7f, 1f),
-    private var strokeWidthPx: Float = 1.35f,
+    private var strokeWidthPx: Float = 0.85f,
     private var hasGloss: Boolean = true,
-    private var glossAlpha: Int = 0x30,
-    private var innerLip: Boolean = true,
+    private var glossAlpha: Int = 0x14,
+    private var innerLip: Boolean = false,
 ) : Drawable() {
     private val boundsRect = RectF()
     private val strokeRect = RectF()
@@ -1459,17 +1459,19 @@ class LiquidGlassDrawable(
 
         boundsRect.set(left, top, left + w, top + h)
 
-        val sw = strokeWidthPx * density
+        val sw = (strokeWidthPx * density).coerceAtLeast(1f)
         strokePaint.strokeWidth = sw
         val halfSw = sw / 2f
         strokeRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + h - halfSw)
 
-        val lipW = 0.9f * density
-        innerLipPaint.strokeWidth = lipW
-        val lipOffset = sw + lipW / 2f
-        innerLipRect.set(left + lipOffset, top + lipOffset, left + w - lipOffset, top + h - lipOffset)
+        if (innerLip) {
+            val lipW = (0.5f * density).coerceAtLeast(0.75f)
+            innerLipPaint.strokeWidth = lipW
+            val lipOffset = sw + lipW / 2f
+            innerLipRect.set(left + lipOffset, top + lipOffset, left + w - lipOffset, top + h - lipOffset)
+        }
 
-        glossRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + (h * 0.48f))
+        glossRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + (h * 0.40f))
 
         rebuildShaders()
     }
@@ -1497,12 +1499,14 @@ class LiquidGlassDrawable(
             strokeColors, strokePositions, Shader.TileMode.CLAMP
         )
 
-        innerLipPaint.shader = LinearGradient(
-            0f, top, 0f, bottom,
-            intArrayOf(0x28FFFFFF, 0x06FFFFFF, 0x1F000000),
-            floatArrayOf(0f, 0.4f, 1f),
-            Shader.TileMode.CLAMP
-        )
+        if (innerLip) {
+            innerLipPaint.shader = LinearGradient(
+                0f, top, 0f, bottom,
+                intArrayOf(0x14FFFFFF, 0x04FFFFFF, 0x10000000),
+                floatArrayOf(0f, 0.4f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
 
         glossPaint.shader = LinearGradient(
             0f, top, 0f, glossRect.bottom,
