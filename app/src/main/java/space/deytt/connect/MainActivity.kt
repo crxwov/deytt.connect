@@ -67,7 +67,8 @@ class MainActivity : Activity() {
     private lateinit var homeDestinationFlag: TextView
     private lateinit var action: TextView
     private lateinit var latencyText: TextView
-    private lateinit var qualityDots: DiagnosticDotsView
+    private lateinit var pingValueProgress: InlineMetricProgress
+    private lateinit var speedValueProgress: InlineMetricProgress
     private lateinit var routeTitleText: TextView
     private lateinit var downloadText: TextView
     private val homePingSamples = mutableListOf<Long>()
@@ -1672,8 +1673,7 @@ class MainActivity : Activity() {
         orientation = LinearLayout.HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         setPadding(0, dp(12), 0, dp(12))
-        qualityDots = DiagnosticDotsView(this@MainActivity)
-        fun metric(label: String, value: TextView, tagName: String, showQuality: Boolean = false, onClick: () -> Unit) = LinearLayout(this@MainActivity).apply {
+        fun metric(label: String, value: TextView, tagName: String, onClick: () -> Unit) = LinearLayout(this@MainActivity).apply {
             tag = tagName
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.START or Gravity.CENTER_VERTICAL
@@ -1684,7 +1684,6 @@ class MainActivity : Activity() {
             addView(LinearLayout(this@MainActivity).apply {
                 gravity = Gravity.CENTER_VERTICAL
                 addView(text(label, 11f, DeyttUi.MUTED), LinearLayout.LayoutParams(0, -2, 1f))
-                if (showQuality) addView(qualityDots, LinearLayout.LayoutParams(dp(20), dp(18)))
             })
             value.minHeight = dp(38)
             value.gravity = Gravity.START or Gravity.CENTER_VERTICAL
@@ -1703,6 +1702,7 @@ class MainActivity : Activity() {
             gravity = Gravity.START
             setOnClickListener { measureSelectedRoute() }
         }
+        pingValueProgress = InlineMetricProgress(latencyText)
         addView(metric(uiCopy("Задержка"), latencyText, "home-latency", onClick = ::measureSelectedRoute), LinearLayout.LayoutParams(0, -2, 1f))
         addView(View(this@MainActivity).apply { setBackgroundColor(DeyttUi.LINE) },
             LinearLayout.LayoutParams(dp(1), dp(56)))
@@ -1710,7 +1710,8 @@ class MainActivity : Activity() {
             maxLines = 2
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
-        addView(metric("Скорость", downloadText, "home-speed", showQuality = true) {
+        speedValueProgress = InlineMetricProgress(downloadText)
+        addView(metric("Скорость", downloadText, "home-speed") {
             selectTab(if (TelegramSessionStore.read(this@MainActivity) == null) 2 else 1)
         }, LinearLayout.LayoutParams(0, -2, 1f))
     }
@@ -1749,7 +1750,7 @@ class MainActivity : Activity() {
                 if (en) "↓ %.1f Mbps…" else "↓ %.1f Мбит/с…",
                 mbps,
             )
-            homeSpeedInFlight -> if (en) "sampling…" else "замер…"
+            homeSpeedInFlight -> "—"
             speedError != null -> if (en) "unavailable" else "недоступна"
             mbps == null -> "—"
             else -> String.format(java.util.Locale.US, if (en) "%.1f Mbps" else "%.1f Мбит/с", mbps)
@@ -1783,9 +1784,10 @@ class MainActivity : Activity() {
             connected -> uiCopy("Проверить время HTTPS-ответа через выбранный маршрут")
             else -> uiCopy("Отклик проверяется после подключения")
         }
-        qualityDots.setLoading(
-            connected && (selectedRouteLatencyInFlight || pendingRouteProbeId != null || homeSpeedInFlight),
+        pingValueProgress.setLoading(
+            connected && latencyText.text.toString() == "—" && (selectedRouteLatencyInFlight || pendingRouteProbeId != null),
         )
+        speedValueProgress.setLoading(connected && downloadText.text.toString() == "—" && homeSpeedInFlight)
     }
 
     private fun currentHomeRouteMetricKey(routeId: String): HomeRouteMetricKey? {
