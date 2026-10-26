@@ -14,8 +14,8 @@
 ## скачать
 
 <p align="center">
-  <a href="https://github.com/crxwov/deytt.connect/releases"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme-material/android-dark.svg"><img src="assets/readme-material/android-light.svg" width="380" alt="Android 7+: скачать универсальный APK и SHA-256 из релизов"></picture></a>
-  <a href="https://github.com/crxwov/deytt.connect/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme-material/windows-dark.svg"><img src="assets/readme-material/windows-light.svg" width="380" alt="Windows 10 1809+, x64: скачать MSI и SHA-256 из релиза"></picture></a>
+  <a href="https://github.com/crxwov/deytt.connect/releases"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme-material/android-dark.svg"><img src="assets/readme-material/android-light.svg" width="400" alt="Android 7+: скачать универсальный APK и SHA-256 из релизов"></picture></a>
+  <a href="https://github.com/crxwov/deytt.connect/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme-material/windows-dark.svg"><img src="assets/readme-material/windows-light.svg" width="400" alt="Windows 10 1809+, x64: скачать MSI и SHA-256 из релиза"></picture></a>
 </p>
 
 Для Android выбирайте релиз с <code>app-universal-release.apk</code> и его <code>.sha256</code>. Приложения нет в Google Play. Windows MSI и приложение не подписаны DEYTT.
