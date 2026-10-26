@@ -816,7 +816,7 @@ internal class ProfileFlows(
         val root = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(14))
-            background = host.rounded(SURFACE, 24f, LINE)
+            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
         root.addView(host.mono("DEYTT · SUPPORT", 9f, MUTED, 650))
         root.addView(host.text("Поддержка", 21f, TEXT, Typeface.BOLD).apply { setPadding(0, host.dp(8), 0, host.dp(4)) })
@@ -1015,7 +1015,13 @@ internal class ProfileFlows(
     }
 
     private fun showSheet(dialog: Dialog, content: View) {
-        dialog.setContentView(content)
+        val container = FrameLayout(host).apply {
+            setPadding(host.dp(14), 0, host.dp(14), host.dp(20))
+            addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            setOnClickListener { dialog.dismiss() }
+        }
+        content.setOnClickListener { /* prevent dismissal on clicking inside content */ }
+        dialog.setContentView(container)
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
@@ -1025,7 +1031,6 @@ internal class ProfileFlows(
             DeyttUi.blurBehind(this, host.dp(20))
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             setGravity(Gravity.BOTTOM)
-            decorView.setPadding(host.dp(14), 0, host.dp(14), host.dp(18))
         }
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)

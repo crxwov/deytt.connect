@@ -23,6 +23,7 @@ import space.deytt.connect.AppLanguage.uiCopy
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.glassButtonBackground
+import space.deytt.connect.DeyttUi.liquidGlassButton
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.present
@@ -213,16 +214,16 @@ class ProtocolActivity : Activity() {
                     chooseAction.setTextColor(Color.WHITE)
                     chooseAction.elevation = dp(2).toFloat()
                 } else {
-                    chooseAction.background = rounded(DeyttUi.SURFACE_2, 16f, DeyttUi.LINE)
+                    chooseAction.background = liquidGlassButton(secondary = true, radius = 24f)
                     chooseAction.setTextColor(DeyttUi.MUTED)
-                    chooseAction.elevation = 0f
+                    chooseAction.elevation = dp(1).toFloat()
                 }
             }
             styleChooseAction(chosenRoute != null)
 
             val routeList = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                background = rounded(DeyttUi.SURFACE, 20f, DeyttUi.LINE)
+                background = rounded(DeyttUi.SHEET_SURFACE, 20f)
             }
 
             fun renderChoice(choice: DeyttRoute?) {

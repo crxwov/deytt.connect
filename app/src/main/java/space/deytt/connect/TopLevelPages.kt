@@ -51,10 +51,14 @@ import space.deytt.connect.DeyttUi.TEXT
 import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
+import space.deytt.connect.DeyttUi.glassButtonBackground
 import space.deytt.connect.DeyttUi.header
+import space.deytt.connect.DeyttUi.liquidGlassButton
 import space.deytt.connect.DeyttUi.mapPanel
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.note
+import space.deytt.connect.DeyttUi.pressFeedback
+import space.deytt.connect.DeyttUi.ripple
 import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
@@ -1007,7 +1011,7 @@ internal class PrimaryPages(
         val sheet = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(18))
-            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f, LINE)
+            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
 
         sheet.addView(host.mono(copy("./c · РАЗДЕЛЬНОЕ ТУННЕЛИРОВАНИЕ", "./c · SPLIT TUNNELING"), 9f, MUTED, 650))
@@ -1018,23 +1022,31 @@ internal class PrimaryPages(
         sheet.addView(modeDescription)
 
         val presetName = host.text("", 12f, SKY, android.graphics.Typeface.BOLD).apply {
-            setPadding(host.dp(10), host.dp(10), host.dp(10), host.dp(10))
-            background = host.rounded(SURFACE_2, 12f, LINE)
+            setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
+            background = host.liquidGlassButton(secondary = true, radius = 14f)
+            foreground = host.ripple(14f)
+            host.pressFeedback(this, .985f)
             isClickable = true
         }
         val modeButton = host.text("", 12f, SKY, android.graphics.Typeface.BOLD).apply {
-            setPadding(host.dp(10), host.dp(10), host.dp(10), host.dp(10))
-            background = host.rounded(SURFACE_2, 12f, LINE)
+            setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
+            background = host.liquidGlassButton(secondary = true, radius = 14f)
+            foreground = host.ripple(14f)
+            host.pressFeedback(this, .985f)
             isClickable = true
         }
         val addPreset = host.text("+", 16f, SKY, android.graphics.Typeface.BOLD).apply {
-            setPadding(host.dp(12), host.dp(8), host.dp(12), host.dp(8))
-            background = host.rounded(SURFACE_2, 12f, LINE)
+            setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(8))
+            background = host.liquidGlassButton(secondary = true, radius = 14f)
+            foreground = host.ripple(14f)
+            host.pressFeedback(this, .985f)
             isClickable = true
         }
         val deletePreset = host.text("✕", 14f, DeyttUi.CORAL, android.graphics.Typeface.BOLD).apply {
-            setPadding(host.dp(12), host.dp(8), host.dp(12), host.dp(8))
-            background = host.rounded(SURFACE_2, 12f, LINE)
+            setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(8))
+            background = host.liquidGlassButton(secondary = true, radius = 14f)
+            foreground = host.ripple(14f)
+            host.pressFeedback(this, .985f)
             isClickable = true
         }
         val presetRow = LinearLayout(host).apply {
@@ -1135,8 +1147,11 @@ internal class PrimaryPages(
                 gravity = Gravity.CENTER_VERTICAL
                 addView(host.sectionLabel(if (vpnOnly) copy("сайты через vpn", "sites through vpn") else copy("сайты без vpn", "bypass sites")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 val addBtn = host.text("+ " + copy("Добавить", "Add"), 12f, SKY, android.graphics.Typeface.BOLD).apply {
-                    setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
-                    background = host.rounded(0x1F8494FF.toInt(), 12f, 0x3F8494FF.toInt())
+                    setPadding(host.dp(12), host.dp(6), host.dp(12), host.dp(6))
+                    background = host.glassButtonBackground(0x303B82F6.toInt(), 0x181D4ED8.toInt(), 12f)
+                    foreground = host.ripple(12f)
+                    host.pressFeedback(this, .985f)
+                    isClickable = true
                     setOnClickListener {
                         val input = EditText(host).apply {
                             hint = "notion.so " + copy("или", "or") + " *.domain.com"
@@ -1228,8 +1243,11 @@ internal class PrimaryPages(
                 gravity = Gravity.CENTER_VERTICAL
                 addView(host.sectionLabel(if (vpnOnly) copy("приложения через vpn", "apps through vpn") else copy("приложения без vpn", "bypass apps")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 val addBtn = host.text("+ " + copy("Добавить", "Add"), 12f, SKY, android.graphics.Typeface.BOLD).apply {
-                    setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
-                    background = host.rounded(0x1F8494FF.toInt(), 12f, 0x3F8494FF.toInt())
+                    setPadding(host.dp(12), host.dp(6), host.dp(12), host.dp(6))
+                    background = host.glassButtonBackground(0x303B82F6.toInt(), 0x181D4ED8.toInt(), 12f)
+                    foreground = host.ripple(12f)
+                    host.pressFeedback(this, .985f)
+                    isClickable = true
                     setOnClickListener {
                         showAppPickerSheet(vpnOnly) { selectedPkg ->
                             store.addPackage(selectedPkg)
@@ -1367,7 +1385,7 @@ internal class PrimaryPages(
         val sheet = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(18))
-            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f, LINE)
+            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
 
         sheet.addView(host.mono("./c · ВЫБОР ПРИЛОЖЕНИЯ", 9f, MUTED, 650))
@@ -1513,7 +1531,13 @@ internal class PrimaryPages(
     }
 
     private fun showSheet(dialog: Dialog, content: View) {
-        dialog.setContentView(content)
+        val container = FrameLayout(host).apply {
+            setPadding(host.dp(14), 0, host.dp(14), host.dp(20))
+            addView(content, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            setOnClickListener { dialog.dismiss() }
+        }
+        content.setOnClickListener { /* prevent dismissal on clicking inside content */ }
+        dialog.setContentView(container)
         dialog.setCanceledOnTouchOutside(true)
         dialog.show()
         dialog.window?.apply {
@@ -1522,7 +1546,6 @@ internal class PrimaryPages(
             DeyttUi.blurBehind(this, host.dp(20))
             setGravity(Gravity.BOTTOM)
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-            decorView.setPadding(host.dp(14), 0, host.dp(14), host.dp(18))
         }
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
@@ -1827,7 +1850,7 @@ internal class PrimaryPages(
         val sheet = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(22), host.dp(20), host.dp(22), host.dp(18))
-            background = host.rounded(SURFACE, 24f, LINE)
+            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
         sheet.addView(host.mono("./c · АККАУНТ", 9f, MUTED, 650))
         val title = host.text("Добавить приложение", 21f, TEXT, android.graphics.Typeface.BOLD).apply {
@@ -2051,7 +2074,7 @@ internal class PrimaryPages(
         val sheet = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(22), host.dp(20), host.dp(22), host.dp(18))
-            background = host.rounded(SURFACE, 24f, LINE)
+            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
         sheet.addView(host.mono("./c · TELEGRAM", 9f, MUTED, 650))
         sheet.addView(host.text(copy("Аккаунт подключён", "Account connected"), 20f, TEXT, android.graphics.Typeface.BOLD).apply {
@@ -2085,7 +2108,7 @@ internal class PrimaryPages(
         val sheet = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(22), host.dp(20), host.dp(22), host.dp(18))
-            background = host.rounded(SURFACE, 24f, LINE)
+            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
         sheet.addView(host.mono("./c · СЕССИЯ", 9f, MUTED, 650))
         sheet.addView(host.text("Отключить Telegram?", 20f, TEXT, android.graphics.Typeface.BOLD).apply {

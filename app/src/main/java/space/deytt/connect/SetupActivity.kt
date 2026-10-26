@@ -14,6 +14,7 @@ import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -582,7 +583,13 @@ class SetupActivity : Activity() {
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(sheet, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
-        dialog.setContentView(scroll)
+        val container = FrameLayout(this).apply {
+            setPadding(dp(14), 0, dp(14), dp(20))
+            addView(scroll, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            setOnClickListener { dialog.dismiss() }
+        }
+        sheet.setOnClickListener { /* prevent dismiss */ }
+        dialog.setContentView(container)
         dialog.show()
         dialog.window?.apply {
             setBackgroundDrawableResource(android.R.color.transparent)

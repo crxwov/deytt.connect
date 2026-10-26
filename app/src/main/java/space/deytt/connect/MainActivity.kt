@@ -1286,7 +1286,7 @@ class MainActivity : Activity() {
             tag = "traffic-explanation"
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(20), dp(20), dp(18))
-            background = rounded(DeyttUi.SHEET_SURFACE, 24f, DeyttUi.LINE)
+            background = rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
         panel.addView(View(this).apply { background = rounded(accent, 2f, accent) },
             LinearLayout.LayoutParams(dp(28), dp(3)).apply { bottomMargin = dp(12) })
@@ -1302,17 +1302,22 @@ class MainActivity : Activity() {
             background = rounded((accent and 0x00FFFFFF) or 0x20000000, 22f, (accent and 0x00FFFFFF) or 0x55000000)
             setOnClickListener { dialog.dismiss() }
         }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(18) })
-        dialog.setContentView(ScrollView(this).apply {
-            overScrollMode = View.OVER_SCROLL_NEVER
-            addView(panel)
-        })
+        val container = FrameLayout(this).apply {
+            setPadding(dp(14), 0, dp(14), dp(20))
+            addView(ScrollView(this@MainActivity).apply {
+                overScrollMode = View.OVER_SCROLL_NEVER
+                addView(panel)
+            }, FrameLayout.LayoutParams(minOf(resources.displayMetrics.widthPixels - dp(28), dp(390)), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+            setOnClickListener { dialog.dismiss() }
+        }
+        panel.setOnClickListener { /* prevent dismiss */ }
+        dialog.setContentView(container)
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
             setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             setDimAmount(.38f)
             setGravity(Gravity.BOTTOM)
             setWindowAnimations(0)
-            attributes = attributes.apply { y = dp(12) }
             DeyttUi.blurBehind(this, dp(24))
         }
         currentTrafficExplanation = dialog
@@ -1334,7 +1339,7 @@ class MainActivity : Activity() {
             }
         }
         dialog.show()
-        dialog.window?.setLayout(minOf(resources.displayMetrics.widthPixels - dp(24), dp(390)), -2)
+        dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     private fun showMapRoutePicker(node: String) {
@@ -1492,7 +1497,13 @@ class MainActivity : Activity() {
 
         val dialog = Dialog(this)
         currentMapRouteSheet = dialog
-        dialog.setContentView(panel)
+        val container = FrameLayout(this).apply {
+            setPadding(dp(14), 0, dp(14), dp(20))
+            addView(panel, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            setOnClickListener { dialog.dismiss() }
+        }
+        panel.setOnClickListener { /* prevent dismiss */ }
+        dialog.setContentView(container)
         dialog.setCanceledOnTouchOutside(true)
         dialog.show()
         dialog.window?.apply {
@@ -1618,7 +1629,7 @@ class MainActivity : Activity() {
         val sheet = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(20), dp(22), dp(18))
-            background = rounded(DeyttUi.SURFACE, 24f, DeyttUi.LINE)
+            background = rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
         sheet.addView(mono("КАРТА · ПРИВАТНОСТЬ", 9f, DeyttUi.MUTED, 700))
         sheet.addView(text("Показывать ваш примерный регион?", 20f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
@@ -1645,7 +1656,16 @@ class MainActivity : Activity() {
                 setNetworkLocationEnabled(false)
             }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        dialog.setContentView(sheet)
+        val container = FrameLayout(this).apply {
+            setPadding(dp(14), 0, dp(14), dp(20))
+            addView(sheet, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            setOnClickListener {
+                setNetworkLocationEnabled(false)
+                dialog.dismiss()
+            }
+        }
+        sheet.setOnClickListener { /* prevent dismiss */ }
+        dialog.setContentView(container)
         dialog.setOnCancelListener { setNetworkLocationEnabled(false) }
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
@@ -1655,8 +1675,6 @@ class MainActivity : Activity() {
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
             DeyttUi.blurBehind(this, dp(24))
             setGravity(Gravity.BOTTOM)
-            decorView.setPadding(dp(14), 0, dp(14), dp(20))
-            DeyttUi.blurBehind(this, dp(24))
         }
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -2532,7 +2550,7 @@ class MainActivity : Activity() {
         val sheet = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(20), dp(20), dp(18))
-            background = rounded(DeyttUi.SURFACE, 24f, DeyttUi.LINE)
+            background = rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
         sheet.addView(mono(localized("ДИАГНОСТИКА · РАЗОВОЕ РАЗРЕШЕНИЕ", "DIAGNOSTICS · ONE-TIME PERMISSION"), 9f, DeyttUi.MUTED, 650))
         sheet.addView(text(localized("Разрешить проверку маршрутов?", "Allow route diagnostics?"), 19f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
@@ -2562,7 +2580,16 @@ class MainActivity : Activity() {
                 dialog.dismiss()
             }
         }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-        dialog.setContentView(sheet)
+        val container = FrameLayout(this).apply {
+            setPadding(dp(14), 0, dp(14), dp(20))
+            addView(sheet, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM))
+            setOnClickListener {
+                pendingRouteProbeAuthorization = null
+                dialog.dismiss()
+            }
+        }
+        sheet.setOnClickListener { /* prevent dismiss */ }
+        dialog.setContentView(container)
         dialog.setOnCancelListener { pendingRouteProbeAuthorization = null }
         dialog.setCanceledOnTouchOutside(true)
         dialog.window?.apply {
@@ -2570,7 +2597,6 @@ class MainActivity : Activity() {
             setDimAmount(.62f)
             addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setGravity(Gravity.BOTTOM)
-            decorView.setPadding(dp(14), 0, dp(14), dp(20))
             DeyttUi.blurBehind(this, dp(24))
         }
         dialog.show()
