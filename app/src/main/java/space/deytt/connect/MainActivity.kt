@@ -1145,13 +1145,13 @@ class MainActivity : Activity() {
                     if (AwgTunnelController.isRunning() || AwgTunnelController.isStopping() ||
                         ConnectVpnService.isRunning() || RouteProbeClient.isRunning(app) || isSystemTunnelActive()) {
                         transportGoneAt = 0L
-                        if (SystemClock.elapsedRealtime() - waitStarted < 15_000L) handler.postDelayed(this, 100L)
+                        if (SystemClock.elapsedRealtime() - waitStarted < 15_000L) handler.postDelayed(this, 30L)
                         else restorationFailed()
                         return
                     }
                     if (transportGoneAt == 0L) transportGoneAt = SystemClock.elapsedRealtime()
-                    if (SystemClock.elapsedRealtime() - transportGoneAt < 300L) {
-                        handler.postDelayed(this, 100L)
+                    if (SystemClock.elapsedRealtime() - transportGoneAt < 150L) {
+                        handler.postDelayed(this, 30L)
                         return
                     }
                     if (!wasConnected) {
@@ -1167,7 +1167,7 @@ class MainActivity : Activity() {
                         ContextCompat.startForegroundService(app,
                             Intent(app, ConnectVpnService::class.java).setAction(ConnectVpnService.ACTION_START))
                     }.onFailure { restorationFailed() }
-                    if (!completionSent) handler.postDelayed(this, 100L)
+                    if (!completionSent) handler.postDelayed(this, 30L)
                 }
             }
             handler.post(finish)
@@ -1232,11 +1232,11 @@ class MainActivity : Activity() {
                                     isFinishing || isDestroyed -> restore()
                                     state.phase == VpnPhase.ERROR || SystemClock.elapsedRealtime() - began > 30_000L -> failed()
                                     state.phase == VpnPhase.CONNECTED && AwgTunnelController.isRunning() -> measureReady()
-                                    else -> handler.postDelayed(this, 100L)
+                                    else -> handler.postDelayed(this, 30L)
                                 }
                             }
                         }
-                        handler.postDelayed(check, 100L)
+                        handler.postDelayed(check, 30L)
                     }
                 }
             })
@@ -2203,7 +2203,7 @@ class MainActivity : Activity() {
         }
         window.decorView.postDelayed({
             awaitEnginesStopped(action, attempt + 1, waitForDiagnostics, onFailure, isCurrent)
-        }, 50L)
+        }, 30L)
     }
 
     private fun renderStoredState() {

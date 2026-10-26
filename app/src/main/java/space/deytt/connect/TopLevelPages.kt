@@ -924,7 +924,7 @@ internal class PrimaryPages(
                         android.util.Log.w("DeyttAwgProbe", "Latency probe failed (${it.javaClass.simpleName})")
                     }
                 val english = AppLanguage.current(host) == AppLanguage.EN
-                val speed = RouteProxyProbe.measureSystemDownload(token, current, onProgress = { bytesPerSecond ->
+                val speed = RouteProxyProbe.measureSystemDownload(token, current, sampleMillis = 1_000, onProgress = { bytesPerSecond ->
                     val latency = measuredLatency
                     host.runOnUiThread {
                         if (current()) {

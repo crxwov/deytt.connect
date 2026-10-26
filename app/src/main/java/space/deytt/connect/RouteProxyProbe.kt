@@ -257,13 +257,18 @@ object RouteProxyProbe {
         socket: SSLSocket,
         method: RouteProbeMethod,
         deadline: Long,
+        keepAlive: Boolean = false,
     ): Long {
         val request = buildString {
             append(method.wireValue).append(' ').append(PROBE_PATH).append(" HTTP/1.1\r\n")
             append("Host: ").append(PROBE_HOST).append("\r\n")
             append("User-Agent: deytt-connect/1\r\n")
             append("Cache-Control: no-cache\r\n")
-            append("Connection: close\r\n\r\n")
+            if (keepAlive) {
+                append("Connection: keep-alive\r\n\r\n")
+            } else {
+                append("Connection: close\r\n\r\n")
+            }
         }.toByteArray(Charsets.US_ASCII)
         socket.soTimeout = remainingTimeout(deadline)
         val started = SystemClock.elapsedRealtime()
@@ -558,36 +563,54 @@ object RouteProxyProbe {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis
         val samples = ArrayList<Long>(LATENCY_SAMPLE_COUNT)
         var lastFailure: Exception? = null
-        for (index in 1..LATENCY_SAMPLE_COUNT) {
-            if (SystemClock.elapsedRealtime() >= deadline) break
-            val socket = Socket()
-            var tlsSocket: SSLSocket? = null
-            activeConnection.set(socket)
-            try {
-                socket.connect(InetSocketAddress(PROBE_HOST, PROBE_PORT), remainingTimeout(deadline))
-                socket.soTimeout = remainingTimeout(deadline)
-                val tls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
-                    .createSocket(socket, PROBE_HOST, PROBE_PORT, true) as SSLSocket
-                tlsSocket = tls
-                activeConnection.set(tls)
-                tls.soTimeout = remainingTimeout(deadline)
-                tls.startHandshake()
-                val hostnameVerified = HttpsURLConnection.getDefaultHostnameVerifier()
-                    .verify(PROBE_HOST, tls.session)
-                if (!hostnameVerified) throw SSLPeerUnverifiedException("TLS hostname verification failed")
-                val sample = measureProbeHttpRoundTrip(tls, method, deadline)
-                samples += sample
-                onSample(index, sample)
-            } catch (failure: Exception) {
-                if (Thread.currentThread().isInterrupted) throw failure
-                lastFailure = failure
-                onSample(index, null)
-            } finally {
-                runCatching { tlsSocket?.close() }
-                runCatching { socket.close() }
-                activeConnection.compareAndSet(tlsSocket, null)
-                activeConnection.compareAndSet(socket, null)
+        var currentSocket: Socket? = null
+        var currentTlsSocket: SSLSocket? = null
+
+        fun closeCurrentConnection() {
+            runCatching { currentTlsSocket?.close() }
+            runCatching { currentSocket?.close() }
+            activeConnection.compareAndSet(currentTlsSocket, null)
+            activeConnection.compareAndSet(currentSocket, null)
+            currentTlsSocket = null
+            currentSocket = null
+        }
+
+        try {
+            for (index in 1..LATENCY_SAMPLE_COUNT) {
+                if (SystemClock.elapsedRealtime() >= deadline) break
+                try {
+                    var tls = currentTlsSocket
+                    if (tls == null || tls.isClosed || !tls.isConnected) {
+                        closeCurrentConnection()
+                        val socket = Socket()
+                        currentSocket = socket
+                        activeConnection.set(socket)
+                        socket.connect(InetSocketAddress(PROBE_HOST, PROBE_PORT), remainingTimeout(deadline))
+                        socket.soTimeout = remainingTimeout(deadline)
+                        val newTls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                            .createSocket(socket, PROBE_HOST, PROBE_PORT, true) as SSLSocket
+                        currentTlsSocket = newTls
+                        tls = newTls
+                        activeConnection.set(newTls)
+                        newTls.soTimeout = remainingTimeout(deadline)
+                        newTls.startHandshake()
+                        val hostnameVerified = HttpsURLConnection.getDefaultHostnameVerifier()
+                            .verify(PROBE_HOST, newTls.session)
+                        if (!hostnameVerified) throw SSLPeerUnverifiedException("TLS hostname verification failed")
+                    }
+                    val isLast = index == LATENCY_SAMPLE_COUNT
+                    val sample = measureProbeHttpRoundTrip(tls, method, deadline, keepAlive = !isLast)
+                    samples += sample
+                    onSample(index, sample)
+                } catch (failure: Exception) {
+                    if (Thread.currentThread().isInterrupted) throw failure
+                    lastFailure = failure
+                    closeCurrentConnection()
+                    onSample(index, null)
+                }
             }
+        } finally {
+            closeCurrentConnection()
         }
         return RouteProbeStatistics.medianLatencyMillis(samples)
             ?: throw (lastFailure ?: SocketTimeoutException("Проверка маршрута превысила $timeoutMillis мс"))
