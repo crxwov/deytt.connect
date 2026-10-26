@@ -132,6 +132,7 @@ class MainActivity : Activity() {
     private val mapTrafficHandler = Handler(Looper.getMainLooper())
     private val mapTrafficWindow = TrafficActivityWindow(MAP_TRAFFIC_GRACE_MS)
     private var mapTrafficActive = false
+    private var currentTrafficExplanation: Dialog? = null
     private val mapTrafficTick = object : Runnable {
         override fun run() {
             if (!homeSpeedForeground || isFinishing || isDestroyed) return
@@ -379,6 +380,7 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         homeSpeedForeground = false
+        currentTrafficExplanation?.dismiss()
         mapTrafficHandler.removeCallbacks(mapTrafficTick)
         mapTrafficWindow.reset()
         setMapTrafficActive(false)
@@ -1224,10 +1226,66 @@ class MainActivity : Activity() {
         }
         val note = if (english) "The moving points illustrate traffic direction; packet contents are not captured."
             else "Движущиеся точки показывают направление потока. Содержимое пакетов не считывается."
+        val accent = when (flow) {
+            "upload" -> 0xFFFF7798.toInt()
+            "download" -> 0xFFFFCE55.toInt()
+            else -> 0xFFAF8CFF.toInt()
+        }
+        currentTrafficExplanation?.dismiss()
+        val dialog = Dialog(this)
+        dialog.requestWindowFeature(android.view.Window.FEATURE_NO_TITLE)
+        val panel = LinearLayout(this).apply {
+            tag = "traffic-explanation"
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(20), dp(20), dp(18))
+            background = rounded(DeyttUi.SHEET_SURFACE, 24f, DeyttUi.LINE)
+        }
+        panel.addView(View(this).apply { background = rounded(accent, 2f, accent) },
+            LinearLayout.LayoutParams(dp(28), dp(3)).apply { bottomMargin = dp(12) })
+        panel.addView(text(title, 20f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            ViewCompat.setAccessibilityHeading(this, true)
+        })
+        panel.addView(text(message, 13f, DeyttUi.MUTED).apply { setLineSpacing(dp(2).toFloat(), 1f) },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(10) })
+        panel.addView(text(note, 11f, DeyttUi.MUTED).apply { setLineSpacing(dp(2).toFloat(), 1f) },
+            LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(14) })
+        panel.addView(button(if (english) "show all traffic lines" else "показать все линии", secondary = true).apply {
+            setTextColor(accent)
+            background = rounded((accent and 0x00FFFFFF) or 0x20000000, 22f, (accent and 0x00FFFFFF) or 0x55000000)
+            setOnClickListener { dialog.dismiss() }
+        }, LinearLayout.LayoutParams(-1, dp(46)).apply { topMargin = dp(18) })
+        dialog.setContentView(ScrollView(this).apply {
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(panel)
+        })
+        dialog.setCanceledOnTouchOutside(true)
+        dialog.window?.apply {
+            setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+            setDimAmount(.38f)
+            setGravity(Gravity.BOTTOM)
+            setWindowAnimations(0)
+            attributes = attributes.apply { y = dp(12) }
+        }
+        currentTrafficExplanation = dialog
+        setMapTrafficActive(false)
+        if (::globeStage.isInitialized) DeyttUi.setStarfieldMotion(globeStage, active = false)
+        if (::pingValueProgress.isInitialized) pingValueProgress.setPaused(true)
+        if (::speedValueProgress.isInitialized) speedValueProgress.setPaused(true)
         globe.selectTrafficFlow(flow)
-        AppDialog.Builder(this).setTitle(title).setMessage("$message\n\n$note")
-            .setPositiveButton(if (english) "show all traffic lines" else "показать все линии", null)
-            .show().setOnDismissListener { globe.selectTrafficFlow(null) }
+        dialog.setOnDismissListener {
+            if (currentTrafficExplanation === dialog) {
+                currentTrafficExplanation = null
+                globe.selectTrafficFlow(null)
+                if (::pingValueProgress.isInitialized) pingValueProgress.setPaused(false)
+                if (::speedValueProgress.isInitialized) speedValueProgress.setPaused(false)
+                if (homeSpeedForeground && !isFinishing && !isDestroyed) {
+                    updatePrimaryPageMotion()
+                    sampleMapTraffic()
+                }
+            }
+        }
+        dialog.show()
+        dialog.window?.setLayout(minOf(resources.displayMetrics.widthPixels - dp(24), dp(390)), -2)
     }
 
     private fun showMapRoutePicker(node: String) {
@@ -1418,7 +1476,7 @@ class MainActivity : Activity() {
         pageMotionEnabled = !reduced
         if (::globe.isInitialized) globe.setReducedMotion(reduced)
         if (::globeStage.isInitialized) {
-            DeyttUi.setStarfieldMotion(globeStage, active = !isFinishing, reducedMotion = reduced)
+            DeyttUi.setStarfieldMotion(globeStage, active = !isFinishing && currentTrafficExplanation == null, reducedMotion = reduced)
         }
         pager.requestTransform()
     }
@@ -2122,7 +2180,7 @@ class MainActivity : Activity() {
     }
 
     private fun sampleMapTraffic() {
-        val connectedOnHome = homeSpeedForeground &&
+        val connectedOnHome = homeSpeedForeground && currentTrafficExplanation == null &&
             ::pager.isInitialized && pager.currentItem == 0 &&
             renderedPhase == VpnPhase.CONNECTED && isSystemTunnelActive()
         val active = if (connectedOnHome) {

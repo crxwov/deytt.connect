@@ -54,6 +54,79 @@ const server = http.createServer((req, res) => {
       fs.mkdirSync(path.dirname(screenshot), { recursive: true });
       await page.screenshot({ path: screenshot });
     }
+    const timingBefore = await page.evaluate(async () => {
+      const atlas = window.deyttMapAtlas;
+      window.deyttSetMapViewportAnchor(8, 20, 416, 500);
+      window.deyttSetMapUserLocation(54.7351, 55.9587, { city: "ufa", country: "ru" });
+      window.deyttSetMapRoute("ru-de");
+      window.deyttSetMapTrafficActive(true);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      while (atlas.cameraMoving || atlas.staticDirty) await new Promise(resolve => requestAnimationFrame(resolve));
+      await new Promise(resolve => setTimeout(resolve, 250));
+      const beforeStaticRenderCount = atlas.staticRenderCount;
+      const renderPasses = { routes: 0, nodes: 0, labels: 0, packets: 0 };
+      const originals = {};
+      for (const [name, counter] of [["drawRoutes", "routes"], ["drawNodes", "nodes"], ["drawLabels", "labels"], ["drawTraffic", "packets"]]) {
+        const original = atlas[name];
+        originals[name] = original;
+        atlas[name] = function (...args) { renderPasses[counter]++; return original.apply(this, args); };
+      }
+      const beforeOverlayBuildCount = atlas.overlayCacheBuildCount;
+      atlas.overlayCacheSignature = "";
+      atlas.start();
+      const originalRender = atlas.render;
+      const rendered = [];
+      atlas.render = function (time) { const count = this.renderCount; const result = originalRender.call(this, time); if (this.renderCount !== count) rendered.push(time); return result; };
+      const raf = [];
+      let remaining = 90;
+      await new Promise(resolve => {
+        const tick = time => { raf.push(time); if (--remaining) requestAnimationFrame(tick); else resolve(); };
+        requestAnimationFrame(tick);
+      });
+      atlas.render = originalRender;
+      for (const name of Object.keys(originals)) atlas[name] = originals[name];
+      const overlayBuilds = atlas.overlayCacheBuildCount - beforeOverlayBuildCount;
+      const staticRedraws = atlas.staticRenderCount - beforeStaticRenderCount;
+      const summarize = values => {
+        const intervals = values.slice(1).map((time, i) => time - values[i]);
+        return { count: values.length, meanMs: +(intervals.reduce((a, b) => a + b, 0) / intervals.length).toFixed(2), minMs: +Math.min(...intervals).toFixed(2), maxMs: +Math.max(...intervals).toFixed(2), sameFrame: intervals.filter(value => value === 0).length };
+      };
+      const cachedControlSegment = atlas.routeHitSegments.find(segment => segment.stream === "control");
+      const cachedHit = cachedControlSegment && atlas.findTrafficLineAt({ x: (cachedControlSegment.a.x + cachedControlSegment.b.x) / 2, y: (cachedControlSegment.a.y + cachedControlSegment.b.y) / 2 }, 2);
+      window.deyttSetMapTrafficActive(false);
+      await new Promise(resolve => setTimeout(resolve, 120));
+      const idleCount = atlas.renderCount;
+      await new Promise(resolve => setTimeout(resolve, 120));
+      const idleFrames = atlas.renderCount - idleCount;
+      window.deyttSetMapReducedMotion(true);
+      window.deyttSetMapTrafficActive(true);
+      await new Promise(resolve => setTimeout(resolve, 120));
+      const reducedCount = atlas.renderCount;
+      await new Promise(resolve => setTimeout(resolve, 120));
+      const reducedFrames = atlas.renderCount - reducedCount;
+      window.deyttSetMapTrafficActive(false);
+      await new Promise(resolve => setTimeout(resolve, 80));
+      const previousHidden = Object.getOwnPropertyDescriptor(document, "hidden");
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      const hiddenCount = atlas.renderCount;
+      atlas.start();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      const hiddenFrames = atlas.renderCount - hiddenCount;
+      if (previousHidden) Object.defineProperty(document, "hidden", previousHidden);
+      else delete document.hidden;
+      window.deyttSetMapReducedMotion(false);
+      return { raf: summarize(raf), render: summarize(rendered), staticRedraws, overlayBuilds, hitSegments: atlas.routeHitSegments.length, cachedHit, renderPasses, idleFrames, reducedFrames, hiddenFrames, cameraMoving: atlas.cameraMoving, velocityLon: atlas.velocityLon, renderCount: atlas.renderCount };
+    });
+    console.log(`Browser traffic pacing: ${JSON.stringify(timingBefore)}`);
+    assert.ok(timingBefore.render.count >= timingBefore.raf.count * .85, "active packets draw without intentional skipped display frames");
+    assert.ok(timingBefore.staticRedraws <= 1, "settled packet animation reuses cached static geography");
+    assert.equal(timingBefore.overlayBuilds, 1, "stable overlays are rasterized once across the packet sample");
+    assert.deepEqual(timingBefore.renderPasses, { routes: 1, nodes: 1, labels: 1, packets: timingBefore.render.count }, "static overlays build once while packets follow each rendered frame");
+    assert.equal(timingBefore.hitSegments, 480, "cached route geometry retains all three hit lanes");
+    assert.equal(timingBefore.cachedHit, "control", "cached hit geometry continues to identify its stream");
+    assert.equal(timingBefore.idleFrames, 0, "idle atlas stops drawing after traffic ends");
+    assert.equal(timingBefore.reducedFrames, 0, "reduced motion draws only its static traffic frame");
+    assert.equal(timingBefore.hiddenFrames, 0, "hidden document does not schedule atlas frames");
     const result = await page.evaluate(() => {
       const atlas = window.deyttMapAtlas;
       window.deyttSetMapViewportAnchor(8, 20, 416, 500);
@@ -168,6 +241,69 @@ const server = http.createServer((req, res) => {
     assert.deepEqual(result.reduced, { trails: 0, dots: 3 }, "reduced motion uses one static dot per flow and no trails");
     assert.deepEqual(result.tapped, ["control"], "tap selects the stream hit and calls native bridge with its id");
     assert.equal(result.panSuppressed, true, "drag-suppressed click does not call native flow bridge");
+    const shortLinkTap = await page.evaluate(() => {
+      const atlas = window.deyttMapAtlas, canvas = atlas.canvas, box = canvas.getBoundingClientRect();
+      const oldNodes = atlas.projectedNodes, oldSegments = atlas.routeHitSegments, oldNodeTap = window.deyttMapNodeTapped;
+      const nodes = [];
+      window.qaTrafficTaps.length = 0;
+      window.deyttMapNodeTapped = key => nodes.push(key);
+      try {
+        atlas.projectedNodes = { fi: { x: 120, y: 120, z: 1 }, user: { x: 168, y: 120, z: 1 } };
+        atlas.routeHitSegments = [{ stream: "control", a: { x: 124, y: 108 }, b: { x: 164, y: 108 } }];
+        for (const [x, y] of [[144, 108], [120, 120], [120, 141]]) {
+          canvas.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: box.left + x, clientY: box.top + y }));
+        }
+        return { flows: [...window.qaTrafficTaps], nodes };
+      } finally {
+        atlas.projectedNodes = oldNodes; atlas.routeHitSegments = oldSegments;
+        window.deyttMapNodeTapped = oldNodeTap; atlas.setHovered(null);
+      }
+    });
+    assert.deepEqual(shortLinkTap, { flows: ["control"], nodes: ["fi", "fi"] }, "short traffic lines take taps outside the node center; node centers and off-line touch padding still open the node");
+    await page.waitForFunction(() => !window.deyttMapAtlas.cameraMoving && Math.abs(window.deyttMapAtlas.velocityLon) < .001, { timeout: 3000 });
+
+    const cacheInvalidations = await page.evaluate(async () => {
+      const atlas = window.deyttMapAtlas;
+      delete atlas.activeRouteDefinition;
+      delete atlas.activeRouteNodeKeys;
+      window.deyttSetMapTrafficActive(false);
+      const check = async (mutate) => {
+        const before = atlas.overlayCacheBuildCount;
+        mutate();
+        await new Promise(resolve => {
+          const deadline = performance.now() + 2500;
+          const poll = () => {
+            const settled = !atlas.staticDirty && Math.abs(atlas.targetLon - atlas.centerLon) < .01 &&
+              Math.abs(atlas.targetLat - atlas.centerLat) < .01 && Math.abs(atlas.targetZoom - atlas.zoom) < .002 &&
+              Math.abs(atlas.velocityLon) < .001;
+            if ((settled && atlas.overlayCacheBuildCount > before) || performance.now() >= deadline) resolve();
+            else requestAnimationFrame(poll);
+          };
+          poll();
+        });
+        return atlas.overlayCacheBuildCount - before;
+      };
+      const theme = document.documentElement.dataset.theme || "dark";
+      const result = {};
+      result.theme = await check(() => { document.documentElement.dataset.theme = theme === "dark" ? "light" : "dark"; });
+      result.hover = await check(() => atlas.setHovered(atlas.hovered === "de" ? "ru" : "de"));
+      result.route = await check(() => atlas.setRoute(atlas.route === "de" ? "ru-de" : "de", false));
+      result.flow = await check(() => atlas.selectTrafficFlow("download"));
+      result.annotation = await check(() => atlas.setAnnotationFilter(["ru"]));
+      document.documentElement.dataset.theme = theme;
+      atlas.setHovered(null);
+      atlas.selectTrafficFlow(null);
+      atlas.setAnnotationFilter(null);
+      return result;
+    });
+    assert.deepEqual(cacheInvalidations, { theme: 1, hover: 1, route: 1, flow: 1, annotation: 1 }, "theme, hover, route, flow and annotation changes rebuild stable overlays");
+    const beforeResizeBuild = await page.evaluate(() => window.deyttMapAtlas.overlayCacheBuildCount);
+    await page.setViewportSize({ width: 460, height: 650 });
+    await page.waitForTimeout(100);
+    const resizeBuilds = await page.evaluate(count => window.deyttMapAtlas.overlayCacheBuildCount - count, beforeResizeBuild);
+    assert.ok(resizeBuilds > 0, "viewport resize rebuilds stable overlays");
+    await page.setViewportSize({ width: 432, height: 650 });
+    await page.waitForTimeout(80);
     console.log("Android traffic renderer parity and regression checks passed (installed desktop reference).");
   } finally { await browser.close(); server.close(); }
 })().catch(error => { console.error(error); server.close(); process.exitCode = 1; });

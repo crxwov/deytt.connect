@@ -61,6 +61,8 @@ class CountryProbeQueueInstrumentation : Instrumentation() {
         val config = stallServer.configure(TEST_CONFIG)
         try {
             check(targetContext.packageName.endsWith(".qa")) { "Isolated QA package required" }
+            targetContext.getSharedPreferences("profile_settings", Context.MODE_PRIVATE).edit()
+                .putBoolean("network_location_enabled", false).commit()
             check(VpnService.prepare(targetContext) == null) { "VPN permission must already be granted to the isolated QA package" }
             ProfileValidator.validate(config)
             AppLanguage.set(targetContext, AppLanguage.RU)
@@ -107,7 +109,38 @@ class CountryProbeQueueInstrumentation : Instrumentation() {
 
             runOnMainSync { deHeader.performClick() }
             check(secondCancelled.await(8, TimeUnit.SECONDS)) { "Collapsed Germany probe did not acknowledge cancellation" }
-            result.putString("result", "PASS: Germany stayed visibly queued, started after Netherlands cancellation ACK without a busy overlap, and canceled row stayed stable")
+            val home = activity as MainActivity
+            val primaryField = MainActivity::class.java.getDeclaredField("primaryPages").apply { isAccessible = true }
+            val primaryPages = primaryField.get(home) as PrimaryPages
+            runOnMainSync {
+                primaryPages.stopForegroundUpdates()
+                RouteQualityStore.write(targetContext, RouteProbeSample("route:NL:VLESS", 42L, 1_000_000L))
+                RouteQualityStore.write(targetContext, RouteProbeSample("route:DE:VLESS", 56L, 1_000_000L))
+                nlHeader = findCountryHeader(home, "нидерланды")
+                deHeader = findCountryHeader(home, "германия")
+                nlHeader.performClick()
+                deHeader.performClick()
+            }
+            val adapterField = MainActivity::class.java.getDeclaredField("pageAdapter").apply { isAccessible = true }
+            val adapter = adapterField.get(home) as TopLevelViewPagerAdapter
+            runOnMainSync { adapter.refresh(1) }
+            waitForIdleSync()
+            runOnMainSync {
+                nlHeader = findCountryHeader(home, "нидерланды")
+                deHeader = findCountryHeader(home, "германия")
+                nlDetails = (nlHeader.parent as ViewGroup).getChildAt(1)
+                deDetails = (deHeader.parent as ViewGroup).getChildAt(1)
+                check(nlDetails.visibility == View.VISIBLE && deDetails.visibility == View.VISIBLE) {
+                    "Manual route refresh collapsed an expanded country"
+                }
+            }
+            check(awaitText(nlDetails, "42 мс", 1_000L) && awaitText(deDetails, "56 мс", 1_000L)) {
+                "Cached route results were not visible after route-page refresh"
+            }
+            synchronized(acceptedAt) {
+                check(acceptedAt.keys == setOf(first, second)) { "Route-page refresh started an unexpected probe" }
+            }
+            result.putString("result", "PASS: queued probes canceled on explicit collapse; a manual route refresh preserved both expanded countries and cached results without restarting probes")
             result.putLong("queue_delay_ms", (acceptedAt[second] ?: 0L) - (cancelledAt[first] ?: 0L))
             finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) {
@@ -122,6 +155,7 @@ class CountryProbeQueueInstrumentation : Instrumentation() {
             targetContext.getSharedPreferences("selected_route", Context.MODE_PRIVATE).edit().clear().commit()
             targetContext.getSharedPreferences(ConnectVpnService.STATE_PREFS, Context.MODE_PRIVATE).edit().clear().commit()
             targetContext.getSharedPreferences("profile_settings", Context.MODE_PRIVATE).edit().remove("app_language").commit()
+            targetContext.getSharedPreferences("route_quality", Context.MODE_PRIVATE).edit().clear().commit()
         }
     }
 

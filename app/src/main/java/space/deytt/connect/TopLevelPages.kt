@@ -188,6 +188,8 @@ internal class PrimaryPages(
     private var updateBannerProgress: ProgressBar? = null
     private var updateDownloadInFlight = false
     private var closed = false
+    private val expandedCountryCodes = mutableSetOf<String>()
+    private var routeScrollY = 0
     private val updateExecutor = Executors.newSingleThreadExecutor()
     private val pairingExecutor = Executors.newSingleThreadExecutor()
     private val updateHandler = Handler(Looper.getMainLooper())
@@ -313,6 +315,8 @@ internal class PrimaryPages(
         val profiles = AwgProfileStore(host).profiles()
         val routes = config?.let { RouteCatalog.from(it, profiles, OpenFluxProfileStore(host).profiles(host)) }.orEmpty()
         val selectedId = SelectedRouteStore(host).read().id
+        val countryGroups = RouteCatalog.countryGroups(routes)
+        expandedCountryCodes.retainAll(countryGroups.mapTo(mutableSetOf()) { it.first })
         val root = host.screen(withBackdrop = true)
         root.addView(host.header("", "Маршруты"))
         root.addView(spacer(8, host))
@@ -352,7 +356,7 @@ internal class PrimaryPages(
 
         root.addView(spacer(24, host))
         root.addView(host.sectionLabel(copy("Страны", "Countries")))
-        RouteCatalog.countryGroups(routes).forEach { (code, countryRoutes) ->
+        countryGroups.forEach { (code, countryRoutes) ->
             val networkRoutes = countryRoutes.filter { it.engine == TunnelEngine.LIBBOX }
                 .sortedBy { routeProtocolOrder(it.protocol) }
             val awgRoutes = countryRoutes.filter { it.engine == TunnelEngine.AMNEZIAWG }
@@ -368,7 +372,7 @@ internal class PrimaryPages(
             }.distinct().joinToString(" · ")
             val detail = LinearLayout(host).apply {
                 orientation = LinearLayout.VERTICAL
-                visibility = View.GONE
+                visibility = if (code in expandedCountryCodes) View.VISIBLE else View.GONE
                 background = host.rounded(SURFACE_2, 22f, LINE)
                 clipToOutline = true
                 setPadding(host.dp(8), host.dp(8), host.dp(8), host.dp(8))
@@ -451,9 +455,11 @@ internal class PrimaryPages(
                 emphasis = countryRoutes.any { it.id == selectedId },
             ).apply {
                 contentDescription = host.uiCopy("Раскрыть выходы ${first.country}; откроется проверка HTTP маршрутов")
+                findViewWithTag<android.widget.ImageView>("country-chevron")?.rotation = if (code in expandedCountryCodes) 270f else 90f
                 setOnClickListener {
                     val expanded = detail.visibility != View.VISIBLE
                     detail.visibility = if (expanded) View.VISIBLE else View.GONE
+                    if (expanded) expandedCountryCodes.add(code) else expandedCountryCodes.remove(code)
                     findViewWithTag<android.widget.ImageView>("country-chevron")?.rotation = if (expanded) 270f else 90f
                     if (expanded) startCountryProbe(countryState)
                     else cancelCountryProbe(countryState)
@@ -469,7 +475,10 @@ internal class PrimaryPages(
             root.addView(host.note("Пока нет маршрутов. Обновите подписку по ссылке, с которой открывали приложение.", AMBER))
         }
         root.addView(spacer(18, host))
-        return scrollPage(root)
+        return scrollPage(root).apply {
+            setOnScrollChangeListener { _, _, scrollY, _, _ -> routeScrollY = scrollY }
+            post { scrollTo(0, routeScrollY) }
+        }
     }
 
     private fun routeProtocolOrder(protocol: RouteProtocol): Int = when (protocol) {

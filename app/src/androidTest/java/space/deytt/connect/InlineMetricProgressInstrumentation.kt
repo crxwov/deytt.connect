@@ -17,7 +17,12 @@ import android.widget.FrameLayout
 
 /** Exercises real Android span/layout behavior without account or VPN data. */
 class InlineMetricProgressInstrumentation : Instrumentation() {
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); start() }
+    private var captureNormalStartup = false
+    override fun onCreate(arguments: Bundle?) {
+        captureNormalStartup = arguments?.getString("captureNormalStartup") == "true"
+        super.onCreate(arguments)
+        start()
+    }
 
     override fun onStart() {
         val result = Bundle()
@@ -77,8 +82,9 @@ class InlineMetricProgressInstrumentation : Instrumentation() {
                 scale("0")
                 checkVisibleAnimation()
             } finally { scale(originalScale) }
-            captureColdMainStartupFrames()
-            result.putString("result", "PASS: inline slots, updates, wrapping, visible frames with animations ON/OFF, completion; cold MainActivity frames captured")
+            // Legacy startup snapshots target the normal app; span checks stay isolated by default.
+            if (captureNormalStartup) captureColdMainStartupFrames()
+            result.putString("result", "PASS: inline slots, updates, wrapping, visible frames with animations ON/OFF, modal pause, hidden/visible resume, completion")
             finish(Activity.RESULT_OK, result)
         } catch (error: Throwable) {
             result.putString("error", error.toString())
@@ -129,6 +135,30 @@ class InlineMetricProgressInstrumentation : Instrumentation() {
             }
             first.recycle()
             check(changed) { "Attached loading indicators must change pixels on a hardware-rendered window" }
+            runOnMainSync { progress.setPaused(true) }
+            Thread.sleep(100)
+            val paused = capture()
+            Thread.sleep(180)
+            val stillPaused = capture()
+            check(paused.sameAs(stillPaused)) { "Modal panels must pause the covered loading animation" }
+            paused.recycle()
+            stillPaused.recycle()
+            runOnMainSync { progress.setPaused(false); label.visibility = View.GONE }
+            Thread.sleep(100)
+            var queuedWhileHidden = true
+            runOnMainSync {
+                queuedWhileHidden = InlineMetricProgress::class.java.getDeclaredField("framePosted").apply { isAccessible = true }
+                    .getBoolean(progress)
+                label.visibility = View.VISIBLE
+            }
+            check(!queuedWhileHidden) { "Hidden metric rows must not keep posting frame callbacks" }
+            Thread.sleep(150)
+            val resumed = capture()
+            Thread.sleep(110)
+            val nextResumed = capture()
+            check(!resumed.sameAs(nextResumed)) { "Visible loading animation must resume after a collapsed parent reopens" }
+            resumed.recycle()
+            nextResumed.recycle()
             runOnMainSync { progress.setLoading(false) }
             waitForIdleSync()
             Thread.sleep(100)

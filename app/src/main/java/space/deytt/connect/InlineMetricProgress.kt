@@ -2,23 +2,40 @@ package space.deytt.connect
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.graphics.Rect
 import android.os.SystemClock
 import android.text.Editable
 import android.text.Spannable
 import android.text.TextWatcher
 import android.text.style.ReplacementSpan
 import android.view.View
+import android.view.ViewTreeObserver
 import android.widget.TextView
 
 /** Keeps each pending metric in its own text slot, including wrapped lines. */
 internal class InlineMetricProgress(private val label: TextView) {
     private var loading = false
+    private var paused = false
+    private var hasSlots = false
+    private var framePosted = false
+    private var visibilityObserver: ViewTreeObserver? = null
     private val startedAt = SystemClock.uptimeMillis()
+    private val spinnerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+    }
+    private val fontMetrics = Paint.FontMetrics()
+    private val visibleRect = Rect()
+    private val layoutChanged = ViewTreeObserver.OnGlobalLayoutListener { updateAnimation() }
+    private val focusChanged = ViewTreeObserver.OnWindowFocusChangeListener { updateAnimation() }
+    private val scrollChanged = ViewTreeObserver.OnScrollChangedListener { updateAnimation() }
     // Essential progress uses opacity only and remains visible when decorative motion is disabled.
     private val frame = object : Runnable {
         override fun run() {
+            framePosted = false
+            if (!canAnimate()) return
             label.invalidate()
-            label.postDelayed(this, 1_000L / 16)
+            updateAnimation()
         }
     }
 
@@ -32,32 +49,66 @@ internal class InlineMetricProgress(private val label: TextView) {
             override fun afterTextChanged(text: Editable?) { updateSpans() }
         })
         label.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(view: View) { updateAnimation() }
-            override fun onViewDetachedFromWindow(view: View) { label.removeCallbacks(frame) }
+            override fun onViewAttachedToWindow(view: View) { observeVisibility(); updateAnimation() }
+            override fun onViewDetachedFromWindow(view: View) {
+                visibilityObserver?.takeIf { it.isAlive }?.apply {
+                    removeOnGlobalLayoutListener(layoutChanged)
+                    removeOnWindowFocusChangeListener(focusChanged)
+                    removeOnScrollChangedListener(scrollChanged)
+                }
+                visibilityObserver = null
+                label.removeCallbacks(frame)
+                framePosted = false
+            }
         })
+        if (label.isAttachedToWindow) observeVisibility()
     }
 
     fun setLoading(value: Boolean) {
+        if (loading == value) { updateAnimation(); return }
         loading = value
         updateSpans()
     }
 
+    fun setPaused(value: Boolean) {
+        paused = value
+        updateAnimation()
+    }
+
+    private fun observeVisibility() {
+        if (visibilityObserver != null) return
+        visibilityObserver = label.viewTreeObserver.also {
+            it.addOnGlobalLayoutListener(layoutChanged)
+            it.addOnWindowFocusChangeListener(focusChanged)
+            it.addOnScrollChangedListener(scrollChanged)
+        }
+    }
+
     private fun updateSpans() {
         val text = label.text as? Spannable ?: return
-        text.getSpans(0, text.length, LoadingSpan::class.java).forEach(text::removeSpan)
-        if (loading) text.indices.filter { text[it] == '—' }.forEach { index ->
+        val previous = text.getSpans(0, text.length, LoadingSpan::class.java)
+        previous.forEach(text::removeSpan)
+        hasSlots = false
+        if (loading) for (index in text.indices) if (text[index] == '—') {
             text.setSpan(LoadingSpan(), index, index + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            hasSlots = true
         }
-        label.requestLayout()
+        if (previous.isNotEmpty() || hasSlots) label.requestLayout()
         label.invalidate()
         updateAnimation()
     }
 
     private fun updateAnimation() {
-        val hasSlots = (label.text as? Spannable)?.getSpans(0, label.length(), LoadingSpan::class.java)?.isNotEmpty() == true
-        label.removeCallbacks(frame)
-        if (loading && hasSlots && label.isAttachedToWindow) label.postOnAnimation(frame)
+        if (canAnimate()) {
+            if (!framePosted) { framePosted = true; label.postOnAnimation(frame) }
+        } else {
+            label.removeCallbacks(frame)
+            framePosted = false
+        }
     }
+
+    private fun canAnimate(): Boolean = loading && hasSlots && !paused &&
+        label.isAttachedToWindow && label.isShown && label.windowVisibility == View.VISIBLE && label.getGlobalVisibleRect(visibleRect)
 
     private inner class LoadingSpan : ReplacementSpan() {
         private fun size(paint: Paint): Float = paint.textSize * 1.2f
@@ -67,17 +118,12 @@ internal class InlineMetricProgress(private val label: TextView) {
 
         override fun draw(canvas: Canvas, text: CharSequence?, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
             val diameter = size(paint)
-            val metrics = paint.fontMetrics
-            val spinnerPaint = Paint(paint).apply {
-                color = DeyttUi.TEXT
-                isAntiAlias = true
-                style = Paint.Style.STROKE
-                strokeCap = Paint.Cap.ROUND
-                strokeWidth = diameter * .065f
-            }
+            paint.getFontMetrics(fontMetrics)
+            spinnerPaint.color = DeyttUi.TEXT
+            spinnerPaint.strokeWidth = diameter * .065f
             val phase = ((SystemClock.uptimeMillis() - startedAt) % 1_000L) / 1_000f * 16f
             canvas.save()
-            canvas.translate(x + diameter / 2f, y + (metrics.ascent + metrics.descent) / 2f)
+            canvas.translate(x + diameter / 2f, y + (fontMetrics.ascent + fontMetrics.descent) / 2f)
             repeat(16) { spoke ->
                 val age = (phase - spoke + 16f) % 16f
                 spinnerPaint.alpha = (paint.alpha * (.12f + .76f * (1f - age / 16f))).toInt()

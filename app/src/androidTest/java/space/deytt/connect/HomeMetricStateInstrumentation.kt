@@ -18,6 +18,8 @@ class HomeMetricStateInstrumentation : Instrumentation() {
         var activity: Activity? = null
         try {
             check(targetContext.packageName.endsWith(".qa")) { "Isolated QA package required" }
+            targetContext.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE).edit()
+                .putBoolean("network_location_enabled", false).commit()
             ProfileValidator.validate(TEST_CONFIG)
             AppLanguage.set(targetContext, AppLanguage.RU)
             TelegramSessionStore.clear(targetContext)
@@ -129,6 +131,18 @@ class HomeMetricStateInstrumentation : Instrumentation() {
                 runOnMainSync { atlas.evaluateJavascript("window.DeyttAtlasBridge.onTrafficTap('$flow')", null) }
                 check(awaitDialogHas(title, 5_000L)) { "WebView $flow tap did not open its native Russian title" }
                 check(awaitDialogHas(explanation, 1_000L)) { "WebView $flow tap did not open its native explanation" }
+                runOnMainSync {
+                    val sheet = field(main, "currentTrafficExplanation") as android.app.Dialog
+                    check((sheet.window!!.attributes.flags and android.view.WindowManager.LayoutParams.FLAG_BLUR_BEHIND) == 0) {
+                        "Traffic explanation must not blur a live animated window"
+                    }
+                    check(field(field(main, "pingValueProgress")!!, "paused") == true &&
+                        field(field(main, "speedValueProgress")!!, "paused") == true) { "Covered metrics must pause their animation" }
+                }
+                val image = checkNotNull(uiAutomation.takeScreenshot())
+                val pictures = java.io.File(targetContext.externalMediaDirs.first(), "additional_test_output/traffic-sheets").apply { mkdirs() }
+                java.io.File(pictures, "$flow.png").outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                image.recycle()
                 val trafficDialog = uiAutomation.rootInActiveWindow ?: error("$flow explanation dialog missing")
                 val dismiss = trafficDialog.findAccessibilityNodeInfosByText("показать все линии").firstOrNull()
                 check(dismiss?.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK) == true) {
@@ -136,6 +150,11 @@ class HomeMetricStateInstrumentation : Instrumentation() {
                 }
                 trafficDialog.recycle()
                 waitForIdleSync()
+                runOnMainSync {
+                    check(field(main, "currentTrafficExplanation") == null) { "Dismissed sheet must release its animation pause" }
+                    check(field(field(main, "pingValueProgress")!!, "paused") == false &&
+                        field(field(main, "speedValueProgress")!!, "paused") == false)
+                }
             }
             runOnMainSync {
                 val key = call(main, "currentHomeRouteMetricKey", route.id)

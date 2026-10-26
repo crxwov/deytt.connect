@@ -10,6 +10,7 @@
   const ANDROID_GEOGRAPHY_PIXEL_RATIO_CAP = 2;
   const ZOOM_EASE_MS = 120;
   const PAN_EASE_MS = 120;
+  const NODE_TAP_CORE_RADIUS = 12;
   const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
   const CONNECTED_LABEL_SIDE_PENALTY = 10000;
   const LABEL_OFFSETS = {
@@ -322,6 +323,13 @@
       this.pixelRatio = 1;
       this.staticCanvas = document.createElement("canvas");
       this.staticContext = this.staticCanvas.getContext("2d");
+      this.routeOverlayCanvas = document.createElement("canvas");
+      this.routeOverlayContext = this.routeOverlayCanvas.getContext("2d");
+      this.foregroundOverlayCanvas = document.createElement("canvas");
+      this.foregroundOverlayContext = this.foregroundOverlayCanvas.getContext("2d");
+      this.overlayCacheSignature = "";
+      this.overlayCacheBuildCount = 0;
+      this.cachedRouteLinks = [];
       this.staticDirty = true;
       this.renderCount = 0;
       this.staticRenderCount = 0;
@@ -458,13 +466,15 @@
         const box = this.canvas.getBoundingClientRect();
         const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
         this.updateHover(pointer);
-        if (this.hovered && typeof window.deyttMapNodeTapped === "function") {
-          window.deyttMapNodeTapped(this.hovered);
+        const flow = this.findTrafficLineAt(pointer, 14);
+        const node = this.projectedNodes[this.hovered];
+        // Short links can lie entirely inside the nodes' generous touch padding.
+        if (flow && (!node || Math.hypot(pointer.x - node.x, pointer.y - node.y) > NODE_TAP_CORE_RADIUS)) {
+          try { window.DeyttAtlasBridge?.onTrafficTap?.(flow); } catch (_) { /* Native view may be closing. */ }
           return;
         }
-        const flow = this.findTrafficLineAt(pointer, 14);
-        if (flow) {
-          try { window.DeyttAtlasBridge?.onTrafficTap?.(flow); } catch (_) { /* Native view may be closing. */ }
+        if (this.hovered && typeof window.deyttMapNodeTapped === "function") {
+          window.deyttMapNodeTapped(this.hovered);
           return;
         }
         if (!this.selectOnTap || !this.hovered || this.hovered === "user") return;
@@ -534,6 +544,12 @@
       this.staticCanvas.width = Math.round(this.width * geographyRatio);
       this.staticCanvas.height = Math.round(this.height * geographyRatio);
       this.staticContext.setTransform(geographyRatio, 0, 0, geographyRatio, 0, 0);
+      [this.routeOverlayCanvas, this.foregroundOverlayCanvas].forEach((canvas) => {
+        canvas.width = this.canvas.width;
+        canvas.height = this.canvas.height;
+      });
+      this.routeOverlayContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+      this.foregroundOverlayContext.setTransform(ratio, 0, 0, ratio, 0, 0);
       const anchor = this.viewportAnchor;
       this.centerX = anchor ? anchor.x + anchor.width / 2 : this.width / 2;
       this.centerY = anchor ? anchor.y + anchor.height / 2 : this.height / 2;
@@ -906,11 +922,12 @@
       strokeLines(activeLines, colors.borderHot, this.width < 520 ? .82 : 1.05, .72);
     }
 
-    drawRoutes(colors, time) {
+    drawRoutes(colors, time, drawPackets = true) {
       this.routeHitSegments = [];
       const links = this.routeLinks();
       this.drawTrafficLines(links);
-      if (this.trafficActive) this.drawTraffic(links, time || performance.now());
+      if (drawPackets && this.trafficActive) this.drawTraffic(links, time || performance.now());
+      return links;
     }
 
     routeLinks() {
@@ -1263,20 +1280,48 @@
       this.staticRenderCount += 1;
     }
 
+    overlaySignature(colors) {
+      const root = document.documentElement;
+      return JSON.stringify([
+        this.staticRenderCount, this.width, this.height, this.pixelRatio,
+        this.centerLon, this.centerLat, this.zoom, this.centerX, this.centerY, this.radius,
+        root.dataset.theme, root.dataset.atlasPalette, root.dataset.atlasBackdrop,
+        this.root.classList.contains("is-backdrop-stage"), colors,
+        this.variant, this.showcaseFocused, this.overviewMode, this.connected, this.hovered,
+        this.route, this.autoExitCountry, this.autoExitRouteKey,
+        Array.from(this.availableLocationKeys).sort(), this.userLocation, this.language,
+        this.annotationFilter && Array.from(this.annotationFilter).sort(), this.selectedTrafficFlow,
+        this.options.labelScale, this.options.labelFontFamily
+      ]);
+    }
+
+    renderOverlayCache(colors, time) {
+      const liveContext = this.context;
+      try {
+        this.context = this.routeOverlayContext;
+        this.context.clearRect(0, 0, this.width, this.height);
+        this.routeSegments = [];
+        this.cachedRouteLinks = this.drawRoutes(colors, time, false);
+
+        this.context = this.foregroundOverlayContext;
+        this.context.clearRect(0, 0, this.width, this.height);
+        this.drawNodes(colors);
+        this.drawLabels(colors);
+      } finally {
+        this.context = liveContext;
+      }
+      this.overlayCacheSignature = this.overlaySignature(colors);
+      this.overlayCacheBuildCount += 1;
+    }
+
     render(time) {
       this.frame = 0;
       if (!this.visible || document.hidden || !this.width) return;
       if (window.DeyttAtlasBridge && !this.viewportAnchor) return;
       const cameraMoving = this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
-      // The atlas only animates while the user pans or zooms. Once the camera
-      // settles, static routes and labels stay still and consume no frame loop.
-      const frameInterval = !cameraMoving && this.trafficActive && !this.reducedMotion.matches ? 33 : 0;
+      // Static geography and route overlays stay cached; only packets change each frame.
       const elapsed = this.lastFrame ? time - this.lastFrame : 16;
-      if (frameInterval > 0 && elapsed < frameInterval && !this.dragging) {
-        this.start();
-        return;
-      }
       const delta = Math.min(48, elapsed);
       this.lastFrame = time;
       const previousLon = this.centerLon;
@@ -1303,15 +1348,25 @@
       if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 || Math.abs(this.zoom - previousZoom) > .0001) {
         this.staticDirty = true;
       }
+      const cameraSettled = !this.dragging && Math.abs(this.targetLon - this.centerLon) <= .01 &&
+        Math.abs(this.targetLat - this.centerLat) <= .01 && Math.abs(this.targetZoom - this.zoom) <= .002 && Math.abs(this.velocityLon) <= .001;
       this.currentBasis = this.basis();
       this.context.clearRect(0, 0, this.width, this.height);
       const colors = this.colors();
       if (this.staticDirty) this.renderStatic(colors);
       this.context.drawImage(this.staticCanvas, 0, 0, this.width, this.height);
-      this.routeSegments = [];
-      this.drawRoutes(colors, time);
-      this.drawNodes(colors);
-      this.drawLabels(colors);
+      if (!cameraSettled) {
+        this.routeSegments = [];
+        this.drawRoutes(colors, time);
+        this.drawNodes(colors);
+        this.drawLabels(colors);
+      } else {
+        const signature = this.overlaySignature(colors);
+        if (signature !== this.overlayCacheSignature) this.renderOverlayCache(colors, time);
+        this.context.drawImage(this.routeOverlayCanvas, 0, 0, this.width, this.height);
+        if (this.trafficActive) this.drawTraffic(this.cachedRouteLinks, time || performance.now());
+        this.context.drawImage(this.foregroundOverlayCanvas, 0, 0, this.width, this.height);
+      }
       this.renderCount += 1;
       if (Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || (this.trafficActive && !this.reducedMotion.matches)) this.start();
     }
@@ -1336,9 +1391,7 @@
       if (this.hovered === key) return;
       this.hovered = key;
       this.canvas.style.cursor = key ? "pointer" : this.dragging ? "grabbing" : "grab";
-      // Hover affects only live route labels and nodes. Redrawing the cached
-      // sphere and geography here caused needless high-DPI work and visible
-      // softness while the pointer crossed country markers.
+      // Hover invalidates only the foreground overlay, not the high-DPI geography.
       if (this.tooltip) this.tooltip.hidden = true;
       this.start();
     }
