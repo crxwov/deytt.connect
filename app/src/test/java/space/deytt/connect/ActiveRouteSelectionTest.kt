@@ -32,4 +32,11 @@ class ActiveRouteSelectionTest {
         assertNull(ActiveRouteSelection.configuredAutoRoute(automatic, "route:DE:HYSTERIA2", routes, connected = false))
         assertNull(ActiveRouteSelection.configuredAutoRoute(manual, "route:DE:HYSTERIA2", routes, connected = true))
     }
+
+    @Test
+    fun formatsAutoRouteAsCountryProtocolAndTransport() {
+        val vless = activeRoute.copy(countryCode = "NL", protocol = RouteProtocol.VLESS)
+        assertEquals("nl./vless+ws", ActiveRouteSelection.autoRouteLabel(vless))
+        assertEquals("de./hysteria2+quic", ActiveRouteSelection.autoRouteLabel(activeRoute))
+    }
 }

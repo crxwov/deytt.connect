@@ -1416,7 +1416,7 @@ class MainActivity : Activity() {
             renderedPhase == VpnPhase.CONNECTED,
         )
         if (activeAutoRoute != null) {
-            return "${activeAutoRoute.flag} ./${activeAutoRoute.countryCode.lowercase(java.util.Locale.ROOT)}"
+            return "${activeAutoRoute.flag} ${ActiveRouteSelection.autoRouteLabel(activeAutoRoute)}"
         }
         val route = routes.firstOrNull { it.id == selected.id }
         if (route == null) return uiCopy(selected.title)
@@ -1722,9 +1722,8 @@ class MainActivity : Activity() {
         val routes = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrNull() }.orEmpty()
         val route = routes.firstOrNull { it.id == selected.id }
         val connected = renderedPhase == VpnPhase.CONNECTED
-        val activeAutoRoute = ActiveRouteSelection.configuredAutoRoute(selected, currentAutoOutboundTag, routes, connected)
         if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
-            RouteProtocol.AUTO -> activeAutoRoute?.let { uiCopy(it.protocol.title).replace(" ", "") } ?: "auto"
+            RouteProtocol.AUTO -> "auto"
             RouteProtocol.RU_DE -> "ru → de"
             else -> route?.let { "${it.countryCode.lowercase()}./${uiCopy(it.protocol.title).replace(" ", "")}" } ?: uiCopy(selected.title)
         }

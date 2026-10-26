@@ -20,6 +20,16 @@ data class ActiveRouteSelection(
             return routes.firstOrNull { it.configTag == tag && it.protocol != RouteProtocol.AUTO }
         }
 
+        fun autoRouteLabel(route: DeyttRoute): String {
+            val protocol = route.protocol.title.lowercase(java.util.Locale.ROOT).replace(" ", "")
+            val transport = when (route.protocol) {
+                RouteProtocol.VLESS, RouteProtocol.TROJAN -> "+ws"
+                RouteProtocol.HYSTERIA2 -> "+quic"
+                else -> ""
+            }
+            return "${route.countryCode.lowercase(java.util.Locale.ROOT)}./$protocol$transport"
+        }
+
         fun fromOutboundTag(tag: String): ActiveRouteSelection? {
             val normalized = tag.trim()
             if (normalized.startsWith("route:RU-DE:", ignoreCase = true)) {
