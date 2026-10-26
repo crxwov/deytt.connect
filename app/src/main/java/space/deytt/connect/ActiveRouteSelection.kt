@@ -24,7 +24,6 @@ data class ActiveRouteSelection(
             val protocol = route.protocol.title.lowercase(java.util.Locale.ROOT).replace(" ", "")
             val transport = when (route.protocol) {
                 RouteProtocol.VLESS, RouteProtocol.TROJAN -> "+ws"
-                RouteProtocol.HYSTERIA2 -> "+quic"
                 else -> ""
             }
             return "${route.countryCode.lowercase(java.util.Locale.ROOT)}./$protocol$transport"

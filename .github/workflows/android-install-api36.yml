@@ -7,27 +7,27 @@ on:
         description: Release tag to clean-install and upgrade to
         required: true
         type: string
-        default: v0.11.70
+        default: v0.11.71
       target_sha256:
         description: Expected SHA-256 of the target universal APK
         required: true
         type: string
-        default: f1d35b7d34e497e6d124d339914f7b532430b18684a5446c4dde6a2133d9a9d5
+        default: cd4279ae97e79c586abc81cf99791488c7f8a99bc2dfd0c24b4c7017208d32d1
       baseline_tag:
         description: Release tag to install before the target upgrade
         required: true
         type: string
-        default: v0.11.69
+        default: v0.11.70
       baseline_sha256:
         description: Expected SHA-256 of the baseline universal APK
         required: true
         type: string
-        default: 566e0fe297e113e95ea8b09e5bc67b47abeeb5cf041ae05cfd25da8146e18505
+        default: f1d35b7d34e497e6d124d339914f7b532430b18684a5446c4dde6a2133d9a9d5
       target_version_code:
         description: Expected Android versionCode of the target APK
         required: true
         type: string
-        default: "100"
+        default: "101"
 
 permissions:
   contents: read

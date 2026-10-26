@@ -693,15 +693,12 @@ class MainActivity : Activity() {
             override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
                 navigationBar.setPageOffset(position, positionOffset)
                 val progress = (position + positionOffset).coerceIn(0f, 1f)
-                globe.setBackdropProgress(if (isReducedMotionEnabled()) if (progress >= .5f) 1f else 0f else progress)
+                globe.setBackdropProgress(if (pageMotionEnabled) progress else if (progress >= .5f) 1f else 0f)
             }
 
             override fun onPageSelected(position: Int) {
-                syncGlobeHost(position)
-                updatePrimaryPageMotion()
                 homeSpeedOnHome = position == 0
-                if (position == 0) { updateQualityStrip(); measureHomeRouteDownload() }
-                else cancelHomeRouteDownload()
+                if (position != 0) cancelHomeRouteDownload()
                 if (pager.scrollState == ViewPager2.SCROLL_STATE_IDLE) confirmSelection()
             }
 
@@ -710,6 +707,13 @@ class MainActivity : Activity() {
                     confirmSelection()
                     syncGlobeHost(pager.currentItem)
                     updateHomeMapAnchor()
+                    // Profile reads and metric layout must wait for the pager's final frame.
+                    pager.postOnAnimation {
+                        if (pager.scrollState == ViewPager2.SCROLL_STATE_IDLE && pager.currentItem == 0) {
+                            updateQualityStrip()
+                            measureHomeRouteDownload()
+                        }
+                    }
                 }
             }
         })
@@ -1836,6 +1840,7 @@ class MainActivity : Activity() {
     /** One bounded real throughput sample after connection, then at most once a minute on Home. */
     private fun measureHomeRouteDownload() {
         if (!homeSpeedForeground || !homeSpeedOnHome || isFinishing || isDestroyed || homeSpeedInFlight) return
+        if (::pager.isInitialized && pager.scrollState != ViewPager2.SCROLL_STATE_IDLE) return
         if (renderedPhase != VpnPhase.CONNECTED || homeConnectQueued || temporaryAwgMeasurement || RouteProbeClient.isRunning(this)) return
         val selected = SelectedRouteStore(this).read()
         if (selected.id != homeSpeedConnectedRouteId) return

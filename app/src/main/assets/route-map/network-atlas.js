@@ -11,6 +11,7 @@
   const ZOOM_EASE_MS = 120;
   const PAN_EASE_MS = 120;
   const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
+  const CONNECTED_LABEL_SIDE_PENALTY = 10000;
   const LABEL_OFFSETS = {
     nl: { x: -24, y: -42, align: "right" },
     de: { x: -24, y: 54, align: "right" },
@@ -1106,6 +1107,7 @@
       const titleWidth = context.measureText(title).width;
       context.font = metaFont;
       const width = Math.max(titleWidth, context.measureText(meta).width) + inset * 2;
+      const preferredSide = this.connected && window.DeyttAtlasBridge ? (key === "user" ? 1 : -1) : 0;
       // Prefer nearby labels; score all alternatives instead of falling back
       // to (8,8), which detached crowded user labels from their actual pin.
       const alternatives = [offset,
@@ -1134,7 +1136,10 @@
           segment.top < candidateTop + height + 4 && segment.bottom > candidateTop - 4), 0);
         const dx = point.x - clamp(point.x, candidateLeft, candidateLeft + width);
         const dy = point.y - clamp(point.y, candidateTop, candidateTop + height);
+        const oppositeSide = preferredSide > 0 ? candidateLeft < point.x + 5 :
+          preferredSide < 0 && candidateLeft + width > point.x - 5;
         const score = (coversPin ? 1e9 : 0) + (overlapsLabel ? 1e8 : 0) + routeCrossings * 1e5 +
+          (oppositeSide ? CONNECTED_LABEL_SIDE_PENALTY : 0) +
           dx * dx + dy * dy + (candidate.y > 0 ? 900 : 0) - (previousPlacement === index ? 30 : 0);
         if (score < bestScore) { bestScore = score; placementIndex = index; }
       }

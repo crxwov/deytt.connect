@@ -37,6 +37,6 @@ class ActiveRouteSelectionTest {
     fun formatsAutoRouteAsCountryProtocolAndTransport() {
         val vless = activeRoute.copy(countryCode = "NL", protocol = RouteProtocol.VLESS)
         assertEquals("nl./vless+ws", ActiveRouteSelection.autoRouteLabel(vless))
-        assertEquals("de./hysteria2+quic", ActiveRouteSelection.autoRouteLabel(activeRoute))
+        assertEquals("de./hysteria2", ActiveRouteSelection.autoRouteLabel(activeRoute))
     }
 }

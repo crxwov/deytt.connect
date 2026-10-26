@@ -21,6 +21,7 @@ import android.widget.FrameLayout
 import java.io.ByteArrayInputStream
 import org.json.JSONObject
 import org.json.JSONArray
+import kotlin.math.roundToInt
 
 /** Offline Android host for the same interactive network atlas used on deytt.space. */
 class RouteGlobeView(context: Context) : FrameLayout(context) {
@@ -31,7 +32,17 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var pageLoaded = false
     private var backdropStageActive = false
     private var backdropProgress = 0f
-    private var backdropBlurApplied = false
+    private var backdropBlurLevel = 0
+    private var lastBackdropProgressSentAt = 0L
+    // Prepare immutable effects before dragging instead of allocating one for every frame.
+    private val backdropBlurEffects = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        Array<RenderEffect?>(BACKDROP_BLUR_STEPS + 1) { level ->
+            if (level == 0) null else {
+                val radius = resources.displayMetrics.density * BACKDROP_BLUR_DP * level / BACKDROP_BLUR_STEPS
+                RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
+            }
+        }
+    } else emptyArray()
     private var overviewModeActive = false
     private var connected = false
     private var gestureStartedInsideGlobe = false
@@ -208,18 +219,17 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         backdropProgress = next
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             alpha = 1f - .6f * next
-            val shouldBlur = next == 1f
-            if (shouldBlur != backdropBlurApplied) {
-                backdropBlurApplied = shouldBlur
-                if (shouldBlur) {
-                    val radius = resources.displayMetrics.density * 18f
-                    setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP))
-                } else {
-                    setRenderEffect(null)
-                }
+            val level = (next * BACKDROP_BLUR_STEPS).roundToInt()
+            if (level != backdropBlurLevel) {
+                backdropBlurLevel = level
+                setRenderEffect(backdropBlurEffects[level])
             }
-        } else if (pageLoaded && (next == 0f || next == 1f)) {
-            applyBackdropProgress()
+        } else if (pageLoaded) {
+            val now = SystemClock.uptimeMillis()
+            if (next == 0f || next == 1f || now - lastBackdropProgressSentAt >= 32L) {
+                lastBackdropProgressSentAt = now
+                applyBackdropProgress()
+            }
         }
     }
 
@@ -438,6 +448,8 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
     companion object {
         private const val ASSET_HOST = "appassets.androidplatform.net"
+        private const val BACKDROP_BLUR_STEPS = 64
+        private const val BACKDROP_BLUR_DP = 18f
 
         internal fun parentInterceptPolicy(actionMasked: Int, gestureStartedInsideGlobe: Boolean): Boolean? = when {
             actionMasked == MotionEvent.ACTION_DOWN ||
