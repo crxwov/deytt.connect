@@ -348,13 +348,7 @@ class SetupActivity : Activity() {
         val sheet = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(20), dp(22), dp(20))
-            background = android.graphics.drawable.GradientDrawable(
-                android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
-                intArrayOf(0xFF1B293B.toInt(), 0xFF111A29.toInt()),
-            ).apply {
-                cornerRadius = dp(24).toFloat()
-                setStroke(dp(1), DeyttUi.LINE)
-            }
+            background = rounded(DeyttUi.SHEET_SURFACE, 24f)
         }
         val title = text("Добавить приложение", 21f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
             setPadding(0, dp(4), 0, dp(6))
@@ -596,7 +590,7 @@ class SetupActivity : Activity() {
             setGravity(Gravity.BOTTOM)
             setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            attributes = attributes.apply { dimAmount = .58f }
+            attributes = attributes.apply { dimAmount = .58f }; DeyttUi.blurBehind(this, dp(24))
         }
     }
 

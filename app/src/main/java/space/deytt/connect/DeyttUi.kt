@@ -9,9 +9,14 @@ import android.graphics.Canvas
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ColorFilter
+import android.graphics.LinearGradient
+import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PixelFormat
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -71,7 +76,7 @@ object DeyttUi {
         }
     }
 
-    private enum class FontFamily(val asset: String, val fallback: String) {
+    internal enum class FontFamily(val asset: String, val fallback: String) {
         INTER_TIGHT("fonts/inter-tight-variable.ttf", "sans-serif"),
         UNBOUNDED("fonts/unbounded-variable.ttf", "sans-serif-black"),
         JETBRAINS_MONO("fonts/jetbrains-mono-variable.ttf", "sans-serif-monospace"),
@@ -79,6 +84,19 @@ object DeyttUi {
 
     private val typefaceCache = mutableMapOf<String, Typeface>()
     private val pressInterpolator = PathInterpolator(.23f, 1f, .32f, 1f)
+
+    internal fun Activity.typeface(family: FontFamily, weight: Int): Typeface =
+        typefaceCache.getOrPut("${family.name}-$weight") {
+            val fallbackStyle = if (weight >= 600) Typeface.BOLD else Typeface.NORMAL
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                runCatching {
+                    Typeface.Builder(assets, family.asset)
+                        .setWeight(weight)
+                        .setFontVariationSettings("'wght' $weight")
+                        .build()
+                }.getOrElse { Typeface.create(family.fallback, fallbackStyle) }
+            } else Typeface.create(family.fallback, fallbackStyle)
+        }
 
     fun Activity.prefersReducedMotion(): Boolean =
         (this as? MainActivity)?.isReducedMotionEnabled()
@@ -213,19 +231,6 @@ object DeyttUi {
     fun Activity.mono(value: String, size: Float, color: Int = MUTED, weight: Int = 560): TextView =
         text(value, size, color).apply { typeface = typeface(FontFamily.JETBRAINS_MONO, weight) }
 
-    private fun Activity.typeface(family: FontFamily, weight: Int): Typeface =
-        typefaceCache.getOrPut("${family.name}-$weight") {
-            val fallbackStyle = if (weight >= 600) Typeface.BOLD else Typeface.NORMAL
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                runCatching {
-                    Typeface.Builder(assets, family.asset)
-                        .setWeight(weight)
-                        .setFontVariationSettings("'wght' $weight")
-                        .build()
-                }.getOrElse { Typeface.create(family.fallback, fallbackStyle) }
-            } else Typeface.create(family.fallback, fallbackStyle)
-        }
-
     fun Activity.mapPanel(map: RouteGlobeView): FrameLayout = FrameLayout(this).apply {
         background = rounded(MAP_SURFACE, 24f, MAP_LINE)
         clipToOutline = true
@@ -237,10 +242,10 @@ object DeyttUi {
             typeface = typeface(FontFamily.INTER_TIGHT, if (secondary) 560 else 620)
             gravity = Gravity.CENTER
             minHeight = dp(48)
-            setPadding(dp(16), dp(8), dp(16), dp(8))
-            background = if (secondary) glassRowBackground(false, 24f)
+            setPadding(dp(18), dp(10), dp(18), dp(10))
+            background = if (secondary) liquidGlassButton(secondary = true, radius = 24f)
                 else glassButtonBackground(0xD9269CF2.toInt(), 0xC01066CD.toInt(), 24f)
-            elevation = if (secondary) 0f else dp(2).toFloat()
+            elevation = if (secondary) dp(1).toFloat() else dp(3).toFloat()
             isClickable = true
             isFocusable = true
             contentDescription = uiCopy(label)
@@ -248,11 +253,46 @@ object DeyttUi {
             pressFeedback(this, .985f)
         }
 
-    fun Activity.glassButtonBackground(topColor: Int, bottomColor: Int, radius: Float = 24f): Drawable =
-        GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(topColor, bottomColor)).apply {
-            cornerRadius = dp(radius.roundToInt()).toFloat()
-            setStroke(dp(1), 0x70FFFFFF)
+    fun Activity.liquidGlassButton(
+        secondary: Boolean,
+        radius: Float = 24f,
+        primaryTop: Int = 0xEA2494F8.toInt(),
+        primaryBottom: Int = 0xD21060C8.toInt(),
+    ): Drawable = glassButtonBackground(
+        if (secondary) 0x40364C68.toInt() else primaryTop,
+        if (secondary) 0x22121E2E.toInt() else primaryBottom,
+        radius
+    )
+
+    fun Activity.glassButtonBackground(topColor: Int, bottomColor: Int, radius: Float = 24f): Drawable {
+        val density = resources.displayMetrics.density
+        val isPrimary = Color.alpha(topColor) > 0x80 && (topColor != SURFACE && topColor != SURFACE_2 && topColor != SHEET_SURFACE)
+        val strokeColors = if (isPrimary) {
+            intArrayOf(
+                0xDBFFFFFF.toInt(),
+                0x75FFFFFF.toInt(),
+                0x4578B8F8.toInt(),
+                0x60FFFFFF.toInt(),
+            )
+        } else {
+            intArrayOf(
+                0x98FFFFFF.toInt(),
+                0x42FFFFFF.toInt(),
+                0x2582B4E8.toInt(),
+                0x45FFFFFF.toInt(),
+            )
         }
+        return LiquidGlassDrawable(
+            density = density,
+            cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
+            fillColors = if (topColor == bottomColor) intArrayOf(topColor) else intArrayOf(topColor, bottomColor),
+            strokeColors = strokeColors,
+            strokeWidthPx = 1.4f,
+            hasGloss = true,
+            glossAlpha = if (isPrimary) 0x3A else 0x2A,
+            innerLip = true,
+        )
+    }
 
     fun Activity.actionLabel(label: String = "пинг"): TextView =
         mono(label, 8.5f, SKY, 650).apply {
@@ -260,10 +300,12 @@ object DeyttUi {
             minHeight = dp(48)
             minWidth = dp(54)
             setPadding(dp(7), dp(7), dp(7), dp(7))
-            background = glassRowBackground(false, 11f)
+            background = glassRowBackground(false, 12f)
+            elevation = dp(1).toFloat()
             isClickable = true
             isFocusable = true
             contentDescription = uiCopy("Проверить задержку")
+            foreground = ripple(12f)
             pressFeedback(this, .99f)
         }
 
@@ -380,15 +422,48 @@ object DeyttUi {
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
-    private fun Activity.glassRowBackground(emphasis: Boolean, radius: Float): Drawable =
-        GradientDrawable(
-            GradientDrawable.Orientation.TOP_BOTTOM,
-            if (emphasis) intArrayOf(0xC82B4562.toInt(), 0xA31B2C43.toInt())
-            else intArrayOf(0x9D223247.toInt(), 0x78131D2B.toInt()),
-        ).apply {
-            cornerRadius = dp(radius.roundToInt()).toFloat()
-            setStroke(dp(1), if (emphasis) 0x855F91B6.toInt() else 0x4AFFFFFF)
+    internal fun Activity.glassRowBackground(emphasis: Boolean, radius: Float): Drawable {
+        val density = resources.displayMetrics.density
+        return if (emphasis) {
+            LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
+                fillColors = intArrayOf(
+                    0x68325078.toInt(),
+                    0x451E334D.toInt(),
+                ),
+                strokeColors = intArrayOf(
+                    0xB8FFFFFF.toInt(),
+                    0x5584BCF4.toInt(),
+                    0x356AAAF0.toInt(),
+                    0x55FFFFFF.toInt(),
+                ),
+                strokeWidthPx = 1.25f,
+                hasGloss = true,
+                glossAlpha = 0x28,
+                innerLip = true,
+            )
+        } else {
+            LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
+                fillColors = intArrayOf(
+                    0x38283C54.toInt(),
+                    0x22142232.toInt(),
+                ),
+                strokeColors = intArrayOf(
+                    0x75FFFFFF.toInt(),
+                    0x32FFFFFF.toInt(),
+                    0x1880B0E0.toInt(),
+                    0x28FFFFFF.toInt(),
+                ),
+                strokeWidthPx = 1.15f,
+                hasGloss = true,
+                glossAlpha = 0x1E,
+                innerLip = true,
+            )
         }
+    }
 
     private fun Activity.awgMark(emphasis: Boolean): FrameLayout {
         val context = this
@@ -493,34 +568,127 @@ object DeyttUi {
     }
 
     fun Activity.note(value: String, accent: Int = MUTED): TextView = text(value, 13f, accent).apply {
-        setPadding(dp(14), dp(13), dp(14), dp(13))
+        setPadding(dp(14), dp(12), dp(14), dp(12))
         setLineSpacing(dp(3).toFloat(), 1f)
-        background = rounded(SURFACE_2, 14f, LINE)
+        background = rounded(SURFACE_2, 16f, LINE)
+        elevation = dp(1).toFloat()
     }
 
-    fun Activity.rounded(fill: Int, radius: Float, stroke: Int = fill): GradientDrawable = GradientDrawable().apply {
-        when (fill) {
-            SURFACE -> {
-                orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                setColors(intArrayOf(0xD01B2B40.toInt(), 0xAE0C1624.toInt()))
+    fun Activity.rounded(fill: Int, radius: Float, stroke: Int = fill): Drawable {
+        val density = resources.displayMetrics.density
+        val rPx = dp(radius.roundToInt()).toFloat()
+        return when (fill) {
+            SURFACE, SHEET_SURFACE -> LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = rPx,
+                fillColors = intArrayOf(
+                    0xE01C2B40.toInt(),
+                    0xCC111D2D.toInt(),
+                    0xB809111C.toInt(),
+                ),
+                strokeColors = intArrayOf(
+                    0x85FFFFFF.toInt(),
+                    0x38FFFFFF.toInt(),
+                    0x2070A0D0.toInt(),
+                    0x30FFFFFF.toInt(),
+                ),
+                strokeWidthPx = 1.35f,
+                hasGloss = true,
+                glossAlpha = 0x1C,
+                innerLip = true,
+            )
+            SURFACE_2 -> LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = rPx,
+                fillColors = intArrayOf(
+                    0xDC263B54.toInt(),
+                    0xC0172639.toInt(),
+                    0xA80E1A27.toInt(),
+                ),
+                strokeColors = intArrayOf(
+                    0x90FFFFFF.toInt(),
+                    0x40FFFFFF.toInt(),
+                    0x2278B0E0.toInt(),
+                    0x35FFFFFF.toInt(),
+                ),
+                strokeWidthPx = 1.25f,
+                hasGloss = true,
+                glossAlpha = 0x22,
+                innerLip = true,
+            )
+            SELECTED -> LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = rPx,
+                fillColors = intArrayOf(
+                    0xE0284A6E.toInt(),
+                    0xB8162E48.toInt(),
+                ),
+                strokeColors = intArrayOf(
+                    0xC5FFFFFF.toInt(),
+                    0x657CB8F2.toInt(),
+                    0x4062A4E8.toInt(),
+                    0x60FFFFFF.toInt(),
+                ),
+                strokeWidthPx = 1.35f,
+                hasGloss = true,
+                glossAlpha = 0x30,
+                innerLip = true,
+            )
+            MAP_SURFACE -> LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = rPx,
+                fillColors = intArrayOf(
+                    0xF00D1520.toInt(),
+                    0xE8080E16.toInt(),
+                ),
+                strokeColors = intArrayOf(
+                    0x55FFFFFF.toInt(),
+                    0x20FFFFFF.toInt(),
+                    0x125588B0.toInt(),
+                    0x25FFFFFF.toInt(),
+                ),
+                strokeWidthPx = 1.2f,
+                hasGloss = false,
+                innerLip = true,
+            )
+            else -> {
+                val alpha = Color.alpha(fill)
+                if (alpha in 1..254 || (fill and 0x00FFFFFF) != 0) {
+                    val topColor = fill
+                    val bottomColor = ((alpha * 0.72f).toInt() shl 24) or (fill and 0x00FFFFFF)
+                    LiquidGlassDrawable(
+                        density = density,
+                        cornerRadiusPx = rPx,
+                        fillColors = intArrayOf(topColor, bottomColor),
+                        strokeColors = intArrayOf(
+                            0x88FFFFFF.toInt(),
+                            0x35FFFFFF.toInt(),
+                            0x20FFFFFF.toInt(),
+                            0x35FFFFFF.toInt(),
+                        ),
+                        strokeWidthPx = 1.2f,
+                        hasGloss = true,
+                        glossAlpha = 0x22,
+                        innerLip = true,
+                    )
+                } else {
+                    GradientDrawable().apply {
+                        setColor(fill)
+                        cornerRadius = rPx
+                        if (stroke != fill) setStroke(dp(1), stroke)
+                    }
+                }
             }
-            SURFACE_2 -> {
-                orientation = GradientDrawable.Orientation.TOP_BOTTOM
-                setColors(intArrayOf(0xD624354B.toInt(), 0xB8162436.toInt()))
-            }
-            else -> setColor(fill)
         }
-        cornerRadius = dp(radius.toInt()).toFloat()
-        val edge = if (fill == SURFACE || fill == SURFACE_2) {
-            (minOf(Color.alpha(stroke), 0x80) shl 24) or (stroke and 0x00FFFFFF)
-        } else stroke
-        setStroke(dp(1), edge)
     }
 
-    private fun Activity.ripple(radius: Float): RippleDrawable = RippleDrawable(
+    internal fun Activity.ripple(radius: Float): RippleDrawable = RippleDrawable(
         ColorStateList.valueOf(0x3B8EA2FF),
         null,
-        rounded(Color.WHITE, radius, Color.WHITE),
+        GradientDrawable().apply {
+            setColor(Color.WHITE)
+            cornerRadius = dp(radius.roundToInt()).toFloat()
+        },
     )
 
     fun Activity.dp(value: Int): Int = (value * resources.displayMetrics.density).toInt()
@@ -1239,4 +1407,175 @@ private enum class NavGlyph { HOME, MAP, PROFILE, SETTINGS }
             }
         }
     }
+}
+
+class LiquidGlassDrawable(
+    private val density: Float,
+    private var cornerRadiusPx: Float,
+    private var fillColors: IntArray,
+    private var strokeColors: IntArray = intArrayOf(
+        0xB8FFFFFF.toInt(),
+        0x50FFFFFF.toInt(),
+        0x3060A5FA.toInt(),
+        0x55FFFFFF.toInt(),
+    ),
+    private var strokePositions: FloatArray = floatArrayOf(0f, 0.35f, 0.7f, 1f),
+    private var strokeWidthPx: Float = 1.35f,
+    private var hasGloss: Boolean = true,
+    private var glossAlpha: Int = 0x30,
+    private var innerLip: Boolean = true,
+) : Drawable() {
+    private val boundsRect = RectF()
+    private val strokeRect = RectF()
+    private val innerLipRect = RectF()
+    private val glossRect = RectF()
+
+    private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+    private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val innerLipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+    private val glossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+
+    private var currentAlpha = 255
+    private var currentColorFilter: ColorFilter? = null
+
+    fun setFillColors(colors: IntArray) {
+        fillColors = colors
+        rebuildShaders()
+        invalidateSelf()
+    }
+
+    fun setCornerRadius(radiusPx: Float) {
+        cornerRadiusPx = radiusPx
+        invalidateSelf()
+    }
+
+    override fun onBoundsChange(bounds: Rect) {
+        super.onBoundsChange(bounds)
+        if (bounds.isEmpty) return
+        val w = bounds.width().toFloat()
+        val h = bounds.height().toFloat()
+        val left = bounds.left.toFloat()
+        val top = bounds.top.toFloat()
+
+        boundsRect.set(left, top, left + w, top + h)
+
+        val sw = strokeWidthPx * density
+        strokePaint.strokeWidth = sw
+        val halfSw = sw / 2f
+        strokeRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + h - halfSw)
+
+        val lipW = 0.9f * density
+        innerLipPaint.strokeWidth = lipW
+        val lipOffset = sw + lipW / 2f
+        innerLipRect.set(left + lipOffset, top + lipOffset, left + w - lipOffset, top + h - lipOffset)
+
+        glossRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + (h * 0.48f))
+
+        rebuildShaders()
+    }
+
+    private fun rebuildShaders() {
+        if (boundsRect.isEmpty) return
+        val top = boundsRect.top
+        val bottom = boundsRect.bottom
+        val left = boundsRect.left
+        val right = boundsRect.right
+
+        if (fillColors.size >= 2) {
+            fillPaint.shader = LinearGradient(
+                0f, top, 0f, bottom,
+                fillColors, null, Shader.TileMode.CLAMP
+            )
+        } else if (fillColors.isNotEmpty()) {
+            fillPaint.shader = null
+            fillPaint.color = fillColors[0]
+        }
+
+        strokePaint.shader = LinearGradient(
+            left + (right - left) * 0.2f, top,
+            right - (right - left) * 0.2f, bottom,
+            strokeColors, strokePositions, Shader.TileMode.CLAMP
+        )
+
+        innerLipPaint.shader = LinearGradient(
+            0f, top, 0f, bottom,
+            intArrayOf(0x28FFFFFF, 0x06FFFFFF, 0x1F000000),
+            floatArrayOf(0f, 0.4f, 1f),
+            Shader.TileMode.CLAMP
+        )
+
+        glossPaint.shader = LinearGradient(
+            0f, top, 0f, glossRect.bottom,
+            intArrayOf(
+                (glossAlpha shl 24) or 0x00FFFFFF,
+                0x00FFFFFF
+            ),
+            floatArrayOf(0f, 1f),
+            Shader.TileMode.CLAMP
+        )
+    }
+
+    override fun draw(canvas: Canvas) {
+        if (boundsRect.isEmpty) return
+
+        val maxRadius = minOf(boundsRect.width(), boundsRect.height()) / 2f
+        val r = cornerRadiusPx.coerceIn(0f, maxRadius)
+
+        // 1. Draw liquid glass body
+        fillPaint.alpha = currentAlpha
+        fillPaint.colorFilter = currentColorFilter
+        canvas.drawRoundRect(boundsRect, r, r, fillPaint)
+
+        // 2. Draw curved lens specular gloss (top highlight sheen)
+        if (hasGloss && glossRect.height() > 4f) {
+            val saveCount = canvas.save()
+            canvas.clipRect(glossRect)
+            glossPaint.alpha = currentAlpha
+            canvas.drawRoundRect(boundsRect, r, r, glossPaint)
+            canvas.restoreToCount(saveCount)
+        }
+
+        // 3. Draw inner refraction lip (3D glass edge bevel)
+        if (innerLip && innerLipRect.width() > 0 && innerLipRect.height() > 0) {
+            val innerR = (r - strokePaint.strokeWidth).coerceAtLeast(0f)
+            innerLipPaint.alpha = currentAlpha
+            canvas.drawRoundRect(innerLipRect, innerR, innerR, innerLipPaint)
+        }
+
+        // 4. Draw outer specular rim (crisp refractive border)
+        val strokeR = (r - strokePaint.strokeWidth / 2f).coerceAtLeast(0f)
+        strokePaint.alpha = currentAlpha
+        strokePaint.colorFilter = currentColorFilter
+        canvas.drawRoundRect(strokeRect, strokeR, strokeR, strokePaint)
+    }
+
+    override fun getOutline(outline: Outline) {
+        if (boundsRect.isEmpty) {
+            super.getOutline(outline)
+            return
+        }
+        val maxRadius = minOf(boundsRect.width(), boundsRect.height()) / 2f
+        val r = cornerRadiusPx.coerceIn(0f, maxRadius)
+        outline.setRoundRect(
+            boundsRect.left.toInt(),
+            boundsRect.top.toInt(),
+            boundsRect.right.toInt(),
+            boundsRect.bottom.toInt(),
+            r
+        )
+        outline.alpha = 0.85f
+    }
+
+    override fun setAlpha(alpha: Int) {
+        currentAlpha = alpha.coerceIn(0, 255)
+        invalidateSelf()
+    }
+
+    override fun setColorFilter(colorFilter: ColorFilter?) {
+        currentColorFilter = colorFilter
+        invalidateSelf()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }

@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import space.deytt.connect.AppLanguage.uiCopy
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.button
+import space.deytt.connect.DeyttUi.glassButtonBackground
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.present
@@ -208,10 +209,7 @@ class ProtocolActivity : Activity() {
                 chooseAction.isEnabled = enabled
                 chooseAction.alpha = 1f
                 if (enabled) {
-                    chooseAction.background = GradientDrawable(
-                        GradientDrawable.Orientation.TL_BR,
-                        intArrayOf(DeyttUi.BLUE, DeyttUi.BLUE_DEEP),
-                    ).apply { cornerRadius = dp(16).toFloat() }
+                    chooseAction.background = glassButtonBackground(DeyttUi.BLUE, DeyttUi.BLUE_DEEP, 24f)
                     chooseAction.setTextColor(Color.WHITE)
                     chooseAction.elevation = dp(2).toFloat()
                 } else {

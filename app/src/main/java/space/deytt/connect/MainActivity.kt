@@ -1313,6 +1313,7 @@ class MainActivity : Activity() {
             setGravity(Gravity.BOTTOM)
             setWindowAnimations(0)
             attributes = attributes.apply { y = dp(12) }
+            DeyttUi.blurBehind(this, dp(24))
         }
         currentTrafficExplanation = dialog
         setMapTrafficActive(false)
@@ -1499,6 +1500,7 @@ class MainActivity : Activity() {
             setDimAmount(.55f)
             setGravity(Gravity.BOTTOM)
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            DeyttUi.blurBehind(this, dp(24))
         }
         val reducedMotion = getSharedPreferences("profile_settings", MODE_PRIVATE).getBoolean("reduced_motion", false)
         if (!reducedMotion && (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled())) {
@@ -1651,8 +1653,10 @@ class MainActivity : Activity() {
             setDimAmount(.62f)
             addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            DeyttUi.blurBehind(this, dp(24))
             setGravity(Gravity.BOTTOM)
             decorView.setPadding(dp(14), 0, dp(14), dp(20))
+            DeyttUi.blurBehind(this, dp(24))
         }
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -2307,7 +2311,7 @@ class MainActivity : Activity() {
             VpnPhase.ERROR -> 0xD9D95E78.toInt() to 0xC0833449.toInt()
             VpnPhase.IDLE -> 0xD9269CF2.toInt() to 0xC01066CD.toInt()
         }
-        action.background = glassButtonBackground(colors.first, colors.second, 16f)
+        action.background = glassButtonBackground(colors.first, colors.second, 28f)
         action.isEnabled = currentPhase != VpnPhase.STOPPING && !homeConnectQueued
         action.alpha = if (action.isEnabled) 1f else .66f
         if (::downloadText.isInitialized) updateQualityStrip()
@@ -2567,6 +2571,7 @@ class MainActivity : Activity() {
             addFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setGravity(Gravity.BOTTOM)
             decorView.setPadding(dp(14), 0, dp(14), dp(20))
+            DeyttUi.blurBehind(this, dp(24))
         }
         dialog.show()
         dialog.window?.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)

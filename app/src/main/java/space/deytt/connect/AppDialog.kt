@@ -4,12 +4,15 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.DialogInterface
 import android.graphics.Color
-import android.graphics.Typeface
-import android.graphics.drawable.GradientDrawable
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import space.deytt.connect.DeyttUi.dp
+import space.deytt.connect.DeyttUi.glassButtonBackground
+import space.deytt.connect.DeyttUi.liquidGlassButton
+import space.deytt.connect.DeyttUi.ripple
+import space.deytt.connect.DeyttUi.rounded
+import space.deytt.connect.DeyttUi.typeface
 
 /** App-owned confirmations share the same surfaces and readable actions as our pages. */
 object AppDialog {
@@ -17,19 +20,15 @@ object AppDialog {
         override fun create(): AlertDialog = super.create().also { dialog ->
             dialog.setOnShowListener {
                 dialog.window?.apply {
-                    setBackgroundDrawable(GradientDrawable().apply {
-                        setColor(DeyttUi.SHEET_SURFACE)
-                        cornerRadius = host.dp(26).toFloat()
-                        setStroke(host.dp(1), DeyttUi.LINE)
-                    })
+                    setBackgroundDrawable(host.rounded(DeyttUi.SHEET_SURFACE, 26f))
                     setLayout(minOf(host.resources.displayMetrics.widthPixels - host.dp(32), host.dp(390)), ViewGroup.LayoutParams.WRAP_CONTENT)
                     decorView.clipToOutline = true
                     setDimAmount(.65f)
-                    DeyttUi.blurBehind(this, host.dp(20))
+                    DeyttUi.blurBehind(this, host.dp(24))
                 }
                 fun styleText(view: View) {
                     if (view is TextView) {
-                        view.typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+                        view.typeface = host.typeface(DeyttUi.FontFamily.INTER_TIGHT, 400)
                         view.setTextColor(DeyttUi.TEXT)
                         view.setLineSpacing(host.dp(2).toFloat(), 1f)
                     }
@@ -45,12 +44,18 @@ object AppDialog {
                         isAllCaps = false
                         textSize = 14f
                         minHeight = host.dp(48)
-                        setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(8))
-                        setTextColor(if (which == DialogInterface.BUTTON_POSITIVE) DeyttUi.SKY else DeyttUi.MUTED)
-                        background = GradientDrawable().apply {
-                            setColor(if (which == DialogInterface.BUTTON_POSITIVE) DeyttUi.SKY_SURFACE else Color.TRANSPARENT)
-                            cornerRadius = host.dp(16).toFloat()
+                        setPadding(host.dp(18), host.dp(10), host.dp(18), host.dp(10))
+                        typeface = host.typeface(DeyttUi.FontFamily.INTER_TIGHT, 620)
+                        if (which == DialogInterface.BUTTON_POSITIVE) {
+                            setTextColor(Color.WHITE)
+                            background = host.glassButtonBackground(DeyttUi.BLUE, DeyttUi.BLUE_DEEP, 20f)
+                            elevation = host.dp(2).toFloat()
+                        } else {
+                            setTextColor(DeyttUi.TEXT)
+                            background = host.liquidGlassButton(secondary = true, radius = 20f)
+                            elevation = host.dp(1).toFloat()
                         }
+                        foreground = host.ripple(20f)
                     }
                 }
             }
