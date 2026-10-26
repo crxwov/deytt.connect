@@ -121,6 +121,9 @@ class MainActivity : Activity() {
     private var homeSpeedErrorKey: HomeRouteMetricKey? = null
     private var homeSpeedBypassedKey: HomeRouteMetricKey? = null
     private var homeSpeedSample: Pair<HomeRouteMetricKey, Long>? = null
+    private var cachedRouteCatalog: List<DeyttRoute>? = null
+    private var cachedSubscriptionContent: String? = null
+    private var cachedSelectedRoute: SelectedRoute? = null
     private val locationExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val accountExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private val subscriptionExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
@@ -548,6 +551,7 @@ class MainActivity : Activity() {
                 subscriptionRefreshInFlight = false
                 if (isFinishing || isDestroyed || result.isFailure) return@runOnUiThread
 
+                invalidateRouteCatalogCache()
                 val routes = runCatching {
                     val config = SubscriptionStore(this).readCurrent() ?: return@runCatching emptyList()
                     RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
@@ -613,7 +617,7 @@ class MainActivity : Activity() {
         }
         pager = ViewPager2(this).apply {
             orientation = ViewPager2.ORIENTATION_HORIZONTAL
-            offscreenPageLimit = 1
+            offscreenPageLimit = 3
             isUserInputEnabled = true
             adapter = pageAdapter
             setPageTransformer { page, position ->
@@ -671,14 +675,17 @@ class MainActivity : Activity() {
             val bottom = insets.getInsets(
                 WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout(),
             ).bottom
-            (statusInset.layoutParams as LinearLayout.LayoutParams).apply {
-                height = status
-                statusInset.layoutParams = this
+            val statusParams = statusInset.layoutParams as LinearLayout.LayoutParams
+            if (statusParams.height != status) {
+                statusParams.height = status
+                statusInset.layoutParams = statusParams
             }
-            dock.setPadding(dp(12), 0, dp(12), dp(8) + bottom)
-            (dock.layoutParams as LinearLayout.LayoutParams).apply {
-                height = dp(82) + bottom
-                dock.layoutParams = this
+            val targetDockHeight = dp(82) + bottom
+            val dockParams = dock.layoutParams as LinearLayout.LayoutParams
+            if (dockParams.height != targetDockHeight) {
+                dock.setPadding(dp(12), 0, dp(12), dp(8) + bottom)
+                dockParams.height = targetDockHeight
+                dock.layoutParams = dockParams
             }
             insets
         }
@@ -700,15 +707,23 @@ class MainActivity : Activity() {
 
             override fun onPageSelected(position: Int) {
                 homeSpeedOnHome = position == 0
-                if (position != 0) cancelHomeRouteDownload()
+                if (position != 0) {
+                    cancelHomeRouteDownload()
+                    setMapTrafficActive(false)
+                } else {
+                    sampleMapTraffic()
+                }
                 if (pager.scrollState == ViewPager2.SCROLL_STATE_IDLE) confirmSelection()
             }
 
             override fun onPageScrollStateChanged(state: Int) {
-                if (state == ViewPager2.SCROLL_STATE_IDLE) {
+                if (state == ViewPager2.SCROLL_STATE_DRAGGING || state == ViewPager2.SCROLL_STATE_SETTLING) {
+                    if (::globeStage.isInitialized) DeyttUi.setStarfieldMotion(globeStage, active = false)
+                } else if (state == ViewPager2.SCROLL_STATE_IDLE) {
                     confirmSelection()
                     syncGlobeHost(pager.currentItem)
                     updateHomeMapAnchor()
+                    if (::globeStage.isInitialized) updatePrimaryPageMotion()
                     // Profile reads and metric layout must wait for the pager's final frame.
                     pager.postOnAnimation {
                         if (pager.scrollState == ViewPager2.SCROLL_STATE_IDLE && pager.currentItem == 0) {
@@ -869,8 +884,39 @@ class MainActivity : Activity() {
         return root
     }
 
-    private fun rebuildRouteRow() {
+    internal fun getCachedRouteCatalog(): List<DeyttRoute> {
+        cachedRouteCatalog?.let { return it }
+        val config = getCachedSubscriptionContent() ?: return emptyList()
+        val routes = runCatching {
+            RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
+        }.getOrNull().orEmpty()
+        cachedRouteCatalog = routes
+        return routes
+    }
+
+    internal fun getCachedSubscriptionContent(): String? {
+        cachedSubscriptionContent?.let { return it }
+        val content = SubscriptionStore(this).readCurrent()
+        cachedSubscriptionContent = content
+        return content
+    }
+
+    internal fun getCachedSelectedRoute(): SelectedRoute {
+        cachedSelectedRoute?.let { return it }
         val selected = SelectedRouteStore(this).read()
+        cachedSelectedRoute = selected
+        return selected
+    }
+
+    internal fun invalidateRouteCatalogCache() {
+        cachedRouteCatalog = null
+        cachedSubscriptionContent = null
+        cachedSelectedRoute = null
+    }
+
+    private fun rebuildRouteRow() {
+        cachedSelectedRoute = null
+        val selected = getCachedSelectedRoute()
         if (::globe.isInitialized) globe.focus(selected.id, animate = false)
         updateRouteFlow(selected)
         updateQualityStrip()
@@ -984,8 +1030,10 @@ class MainActivity : Activity() {
         AwgTunnelController.stop(this)
         if (config != null) {
             SubscriptionStore(this).saveValidated(ProfileRoutes.select(config, route.configTag))
+            invalidateRouteCatalogCache()
         }
         SelectedRouteStore(this).save(route)
+        cachedSelectedRoute = null
         if (navigateHome) pageAdapter.refresh(1)
         rebuildRouteRow()
         renderStoredState()
@@ -1803,9 +1851,8 @@ class MainActivity : Activity() {
 
     private fun updateQualityStrip() {
         if (!::downloadText.isInitialized) return
-        val selected = SelectedRouteStore(this).read()
-        val config = SubscriptionStore(this).readCurrent()
-        val routes = config?.let { runCatching { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }.getOrNull() }.orEmpty()
+        val selected = getCachedSelectedRoute()
+        val routes = getCachedRouteCatalog()
         val route = routes.firstOrNull { it.id == selected.id }
         val connected = renderedPhase == VpnPhase.CONNECTED
         if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
@@ -1857,11 +1904,7 @@ class MainActivity : Activity() {
     }
 
     private fun currentHomeRouteMetricKey(routeId: String): HomeRouteMetricKey? {
-        val config = SubscriptionStore(this).readCurrent() ?: return null
-        val route = runCatching {
-            RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
-                .firstOrNull { it.id == routeId }
-        }.getOrNull() ?: return null
+        val route = getCachedRouteCatalog().firstOrNull { it.id == routeId } ?: return null
         return HomeRouteMetricKey(
             routeId = route.id,
             sessionToken = TelegramSessionStore.read(this),
@@ -1923,12 +1966,12 @@ class MainActivity : Activity() {
         if (!homeSpeedForeground || !homeSpeedOnHome || isFinishing || isDestroyed || homeSpeedInFlight) return
         if (::pager.isInitialized && pager.scrollState != ViewPager2.SCROLL_STATE_IDLE) return
         if (renderedPhase != VpnPhase.CONNECTED || homeConnectQueued || temporaryAwgMeasurement || RouteProbeClient.isRunning(this)) return
-        val selected = SelectedRouteStore(this).read()
+        val selected = getCachedSelectedRoute()
         if (selected.id != homeSpeedConnectedRouteId) return
         val now = SystemClock.elapsedRealtime()
         val token = TelegramSessionStore.read(this) ?: return
-        val config = SubscriptionStore(this).readCurrent() ?: return
-        val route = RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)).firstOrNull { it.id == selected.id } ?: return
+        val config = getCachedSubscriptionContent() ?: return
+        val route = getCachedRouteCatalog().firstOrNull { it.id == selected.id } ?: return
         val metricKey = currentHomeRouteMetricKey(selected.id) ?: return
         val retryDelay = HomeMetricPresentation.speedRefreshDelayMillis(
             hasSample = homeSpeedSample?.first == metricKey,
@@ -2331,10 +2374,9 @@ class MainActivity : Activity() {
         }
         val generation = ++latencyGeneration
         homePingSamples.clear()
-        val selected = SelectedRouteStore(this).read()
-        val config = SubscriptionStore(this).readCurrent() ?: return
-        val route = RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
-            .firstOrNull { it.id == selected.id } ?: return
+        val selected = getCachedSelectedRoute()
+        val config = getCachedSubscriptionContent() ?: return
+        val route = getCachedRouteCatalog().firstOrNull { it.id == selected.id } ?: return
         val metricKey = currentHomeRouteMetricKey(selected.id) ?: return
         val method = RouteProbePreferences.method(this)
         val previousLatency = lastRouteLatency?.takeIf {

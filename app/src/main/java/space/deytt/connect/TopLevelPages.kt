@@ -311,10 +311,8 @@ internal class PrimaryPages(
     }
 
     private fun routePage(): View {
-        val config = SubscriptionStore(host).readCurrent()
-        val profiles = AwgProfileStore(host).profiles()
-        val routes = config?.let { RouteCatalog.from(it, profiles, OpenFluxProfileStore(host).profiles(host)) }.orEmpty()
-        val selectedId = SelectedRouteStore(host).read().id
+        val routes = host.getCachedRouteCatalog()
+        val selectedId = host.getCachedSelectedRoute().id
         val countryGroups = RouteCatalog.countryGroups(routes)
         expandedCountryCodes.retainAll(countryGroups.mapTo(mutableSetOf()) { it.first })
         val root = host.screen(withBackdrop = true)

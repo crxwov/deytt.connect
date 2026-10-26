@@ -541,6 +541,7 @@ object DeyttUi {
             val shell: FrameLayout,
             val title: TextView,
             val item: LinearLayout,
+            val glyphView: NavGlyphView,
         )
 
         private val entries = mutableListOf<Entry>()
@@ -575,9 +576,9 @@ object DeyttUi {
                     gravity = Gravity.CENTER
                     setPadding(0, activity.dp(4), 0, 0)
                 }
+                val glyphView = NavGlyphView(activity, glyphs[index], if (index == initialPage) SKY else MUTED)
                 val shell = FrameLayout(activity).apply {
-                    addView(NavGlyphView(activity, glyphs[index], MUTED),
-                        LayoutParams(activity.dp(20), activity.dp(20), Gravity.CENTER))
+                    addView(glyphView, LayoutParams(activity.dp(20), activity.dp(20), Gravity.CENTER))
                 }
                 val item = LinearLayout(activity).apply {
                     orientation = LinearLayout.VERTICAL
@@ -591,7 +592,7 @@ object DeyttUi {
                     addView(shell, LinearLayout.LayoutParams(activity.dp(34), activity.dp(28)))
                     addView(title)
                 }
-                entries += Entry(label, glyphs[index], shell, title, item)
+                entries += Entry(label, glyphs[index], shell, title, item, glyphView)
                 row.addView(item, LinearLayout.LayoutParams(0, activity.dp(50), 1f))
             }
             addView(row, LayoutParams(LayoutParams.MATCH_PARENT, activity.dp(66), Gravity.TOP))
@@ -621,11 +622,7 @@ object DeyttUi {
                 val selected = position == selectedPage
                 entry.item.isSelected = selected
                 entry.item.contentDescription = if (selected) "${entry.label}, ${activity.uiCopy("выбран")}" else entry.label
-                entry.item.background = ColorDrawable(Color.TRANSPARENT)
-                entry.shell.removeAllViews()
-                entry.shell.background = ColorDrawable(Color.TRANSPARENT)
-                entry.shell.addView(NavGlyphView(activity, entry.glyph, if (selected) SKY else MUTED),
-                    LayoutParams(activity.dp(20), activity.dp(20), Gravity.CENTER))
+                entry.glyphView.setColor(if (selected) SKY else MUTED)
                 entry.title.setTextColor(if (selected) TEXT else MUTED)
                 entry.title.setTypeface(null, if (selected) Typeface.BOLD else Typeface.NORMAL)
             }
@@ -1082,7 +1079,7 @@ private class NetworkAtmosphereDrawable(context: Context, private val referenceH
         override fun run() {
             if (motionEnabled) {
                 invalidateSelf()
-                scheduleSelf(this, SystemClock.uptimeMillis() + 16L)
+                scheduleSelf(this, SystemClock.uptimeMillis() + 32L)
             }
         }
     }
@@ -1092,7 +1089,7 @@ private class NetworkAtmosphereDrawable(context: Context, private val referenceH
         val shouldRun = enabled && systemAllowsMotion
         if (motionEnabled == shouldRun) return
         motionEnabled = shouldRun
-        if (shouldRun) scheduleSelf(tick, SystemClock.uptimeMillis() + 16L) else unscheduleSelf(tick)
+        if (shouldRun) scheduleSelf(tick, SystemClock.uptimeMillis() + 32L) else unscheduleSelf(tick)
         invalidateSelf()
     }
 
@@ -1178,6 +1175,13 @@ private enum class NavGlyph { HOME, MAP, PROFILE, SETTINGS }
         }
         private val path = Path()
         private val density = resources.displayMetrics.density
+
+        fun setColor(color: Int) {
+            if (paint.color != color) {
+                paint.color = color
+                invalidate()
+            }
+        }
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)

@@ -461,7 +461,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
     companion object {
         private const val ASSET_HOST = "appassets.androidplatform.net"
-        private const val BACKDROP_BLUR_STEPS = 64
+        private const val BACKDROP_BLUR_STEPS = 16
         private const val BACKDROP_BLUR_DP = 18f
 
         internal fun parentInterceptPolicy(actionMasked: Int, gestureStartedInsideGlobe: Boolean): Boolean? = when {
