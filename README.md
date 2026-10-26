@@ -1,54 +1,65 @@
 <div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/readme-material/hero-dark.svg">
-    <img src="assets/readme-material/hero-light.svg" width="100%" alt="deytt./connect — маршруты вашей подписки на Android и Windows">
-  </picture>
-  <p>
-    <a href="#скачать">скачать ./connect</a>
-    &nbsp;·&nbsp; <a href="#подключение">как подключить</a>
-    &nbsp;·&nbsp; <a href="https://t.me/deyttbot">поддержка</a>
-    &nbsp;·&nbsp; <a href="https://deytt.space/info/">условия и конфиденциальность</a>
-  </p>
+  <img src="assets/deytt-connect-banner.png" alt="deytt./connect для Android и Windows" width="100%">
 </div>
 
-## скачать
+<p align="center"><sub>Клиент для выбора маршрута и подключения на Android и Windows</sub></p>
 
-<p align="center">
-  <a href="https://github.com/crxwov/deytt.connect/releases"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme-material/android-dark.svg"><img src="assets/readme-material/android-light.svg" width="400" alt="Android 7+: скачать универсальный APK и SHA-256 из релизов"></picture></a>
-  <a href="https://github.com/crxwov/deytt.connect/releases/latest"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme-material/windows-dark.svg"><img src="assets/readme-material/windows-light.svg" width="400" alt="Windows 10 1809+, x64: скачать MSI и SHA-256 из релиза"></picture></a>
-</p>
+## 📥 Скачать
 
-Для Android выбирайте релиз с <code>app-universal-release.apk</code> и его <code>.sha256</code>. Приложения нет в Google Play. Windows MSI и приложение не подписаны DEYTT.
+Выберите версию для своего устройства.
+
+<table width="100%" align="center">
+  <tbody>
+    <tr>
+      <td width="50%" align="center" valign="top">
+        <h3>Android</h3>
+        <p><sub>Android 7+ &nbsp;·&nbsp; универсальный APK</sub></p>
+        <a href="https://github.com/crxwov/deytt.connect/releases/latest"><img src="assets/download-android.svg" width="240" alt="Скачать APK для Android"></a>
+        <p><sub>SHA-256 — в релизе<br>приложения нет в Google Play</sub></p>
+      </td>
+      <td width="50%" align="center" valign="top">
+        <h3>Windows</h3>
+        <p><sub>Windows 10 (1809+) &nbsp;·&nbsp; x64 &nbsp;·&nbsp; v0.8.40</sub></p>
+        <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40"><img src="assets/download-windows-outline.svg" width="240" alt="Скачать Windows-клиент"></a>
+        <p><sub><a href="https://github.com/crxwov/deytt.connect/releases/download/v0.8.40/deytt-connect-0.8.40-portable.zip">ZIP без установки</a> &nbsp;·&nbsp; <a href="https://github.com/crxwov/deytt.connect/releases/tag/v0.8.40">SHA-256 и описание релиза</a><br>файлы не подписаны</sub></p>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 > [!NOTE]
-> Вход — через [Telegram-бота](https://t.me/deyttbot). Телефон и компьютер занимают разные слоты аккаунта.
+> Для входа используйте [Telegram-бота](https://t.me/deyttbot). Телефон и компьютер занимают разные слоты аккаунта.
 
-## подключение
+## 🚀 Подключение
 
 1. Установите приложение и войдите через Telegram.
-2. Выберите «Авто» или нужный маршрут подписки.
-3. Нажмите **«Подключить»**. На Android подтвердите системный запрос VPN.
+2. Выберите «Авто» или нужный маршрут.
+3. Нажмите **«Подключить»** и подтвердите запрос на подключение VPN.
 
 > [!TIP]
-> Начните с «Авто», если ещё не выбрали маршрут.
+> Не знаете, какой маршрут выбрать? Начните с «Авто».
 
-**Android.** Откройте скачанный APK в системном установщике. Если телефон запросит разрешение на установку, подтвердите его. Перед обновлением сверьте SHA-256 из того же релиза.
+### 📱 Android
 
-**Windows.** Запустите MSI и подтвердите права администратора для установки VPN-службы. Если WebView2 отсутствует, MSI установит его из подписанного установщика Microsoft; для загрузки нужен интернет. Если в выбранном релизе есть ZIP, распакуйте его и откройте <code>deyttconnect.exe</code>.
+Скачайте [APK из последнего релиза](https://github.com/crxwov/deytt.connect/releases/latest) и установите его. Если телефон попросит разрешение, подтвердите установку.
 
-## маршруты и протоколы
+### 🪟 Windows
 
-<code>VLESS</code> &nbsp;·&nbsp; <code>Trojan</code> &nbsp;·&nbsp; <code>Hysteria 2</code> &nbsp;·&nbsp; <code>AmneziaWG 3.1</code>
+- **MSI:** запустите установщик. Если на компьютере нет [WebView2](https://developer.microsoft.com/microsoft-edge/webview2/), MSI может скачать его.
+- **ZIP:** распакуйте архив и откройте `deyttconnect.exe`.
+- При установке VPN-службы подтвердите запрос прав администратора Windows.
 
-Выбирайте автоматический маршрут или отдельный регион, проверяйте доступность, задержку и скорость. Набор протоколов и маршрутов зависит от платформы и активной подписки.
+## 🧩 Протоколы
 
-## поддержка
+`VLESS` &nbsp;·&nbsp; `Trojan` &nbsp;·&nbsp; `Hysteria 2` &nbsp;·&nbsp; `AmneziaWG 3.1`
+
+Доступность зависит от платформы и маршрута. [Условия и конфиденциальность](https://deytt.space/info/).
+
+## 💬 Поддержка
 
 [Telegram-бот](https://t.me/deyttbot) &nbsp;·&nbsp; [сообщить об ошибке](https://github.com/crxwov/deytt.connect/issues) &nbsp;·&nbsp; [сообщить об уязвимости](https://github.com/crxwov/deytt.connect/security/advisories/new) &nbsp;·&nbsp; [политика безопасности](SECURITY.md)
 
-В сообщении об ошибке укажите версию клиента, операционную систему и шаги воспроизведения.
-
 > [!WARNING]
-> GitHub Issues видны всем. Не публикуйте коды входа, ссылки подписки, VPN-ключи, конфигурации, IP-адреса или данные аккаунта.
+> Сообщения об ошибках видны всем. Не публикуйте там коды входа, ссылки на подписку, VPN-ключи, конфигурации, IP-адреса или данные аккаунта.
 
-<p align="center"><sub><a href="LICENSE">GNU GPL-3.0-or-later</a> &nbsp;·&nbsp; <a href="THIRD-PARTY-NOTICES.md">сторонние компоненты</a><br>шрифты карточек: <a href="assets/readme-material/OFL-GoogleSansFlex.txt">Google Sans Flex</a> и <a href="assets/readme-material/OFL-RobotoFlex.txt">Roboto Flex</a> · SIL OFL 1.1</sub></p>
+<p align="center"><sub>📄 <a href="LICENSE">GNU GPL-3.0-or-later</a> &nbsp;·&nbsp; <a href="THIRD-PARTY-NOTICES.md">уведомления о сторонних материалах</a></sub></p>
