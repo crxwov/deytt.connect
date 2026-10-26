@@ -31,7 +31,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var pageLoaded = false
     private var backdropStageActive = false
     private var backdropProgress = 0f
-    private var lastBackdropProgressSentAt = 0L
+    private var backdropBlurApplied = false
     private var overviewModeActive = false
     private var connected = false
     private var gestureStartedInsideGlobe = false
@@ -204,20 +204,22 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
 
     internal fun setBackdropProgress(progress: Float) {
         val next = progress.coerceIn(0f, 1f)
-        if (kotlin.math.abs(next - backdropProgress) < .008f) return
+        if (next == backdropProgress || (kotlin.math.abs(next - backdropProgress) < .008f && next != 0f && next != 1f)) return
         backdropProgress = next
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             alpha = 1f - .6f * next
-            val radius = resources.displayMetrics.density * 18f * next
-            setRenderEffect(if (next <= 0f) null else RenderEffect.createBlurEffect(
-                radius, radius, Shader.TileMode.CLAMP,
-            ))
-        } else if (pageLoaded) {
-            val now = SystemClock.uptimeMillis()
-            if (next == 0f || next == 1f || now - lastBackdropProgressSentAt >= 32L) {
-                lastBackdropProgressSentAt = now
-                applyBackdropProgress()
+            val shouldBlur = next == 1f
+            if (shouldBlur != backdropBlurApplied) {
+                backdropBlurApplied = shouldBlur
+                if (shouldBlur) {
+                    val radius = resources.displayMetrics.density * 18f
+                    setRenderEffect(RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP))
+                } else {
+                    setRenderEffect(null)
+                }
             }
+        } else if (pageLoaded && (next == 0f || next == 1f)) {
+            applyBackdropProgress()
         }
     }
 

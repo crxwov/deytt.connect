@@ -1784,10 +1784,8 @@ class MainActivity : Activity() {
             connected -> uiCopy("Проверить время HTTPS-ответа через выбранный маршрут")
             else -> uiCopy("Отклик проверяется после подключения")
         }
-        pingValueProgress.setLoading(
-            connected && latencyText.text.toString() == "—" && (selectedRouteLatencyInFlight || pendingRouteProbeId != null),
-        )
-        speedValueProgress.setLoading(connected && downloadText.text.toString() == "—" && homeSpeedInFlight)
+        pingValueProgress.setLoading(connected && latencyText.text.toString() == "—")
+        speedValueProgress.setLoading(connected && downloadText.text.toString() == "—")
     }
 
     private fun currentHomeRouteMetricKey(routeId: String): HomeRouteMetricKey? {
