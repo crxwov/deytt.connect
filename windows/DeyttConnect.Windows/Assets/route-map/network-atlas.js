@@ -718,26 +718,15 @@
     colors() {
       const windowsHome = document.documentElement.dataset.atlasProfile === "windows";
       const observatory = this.variant === "observatory";
-      if (windowsHome) {
-        const dark = document.documentElement.dataset.theme !== "light";
-        return dark ? {
-          sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
-          sphereEdge: "rgba(141,161,185,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
-          grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
-          landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
-          border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
-          download: "#FFBD32", downloadHot: "#FFE08A", upload: "#39E8BD", uploadHot: "#90F4DA",
-          node: "#F2F5FC", nodeCore: "#39E8BD", label: "#F2F5FC", labelMuted: "#98A6BF", labelBg: "rgba(17,26,41,.94)"
-        } : {
-          sphereLight: "#D2E5F8", sphereMid: "#BFDBF4", sphereShade: "#A9CFEF",
-          sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
-          grid: null, land: "#1299DC", landDim: "#0D86C7", landHot: "#22A6ED", landAlpha: 1,
-          landHighlight: "#22A6ED", landRelief: "rgba(18,55,95,.22)", landLow: "#0974AC",
-          border: "#BAE6FD", borderAlpha: .60, borderWidth: .8, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
-          download: "#D99000", downloadHot: "#FFC857", upload: "#10A889", uploadHot: "#79D6C1",
-          node: "#FFFFFF", nodeCore: "#123A67", label: "#111823", labelMuted: "#5C6B82", labelBg: "rgba(246,247,251,.96)"
-        };
-      }
+      if (windowsHome) return {
+        sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
+        sphereEdge: "rgba(141,161,185,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+        grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
+        landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
+        border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
+        download: "#FFBD32", downloadHot: "#FFE08A", upload: "#39E8BD", uploadHot: "#90F4DA",
+        node: "#F2F5FC", nodeCore: "#39E8BD", label: "#F2F5FC", labelMuted: "#98A6BF", labelBg: "rgba(17,26,41,.94)"
+      };
       if (observatory) return {
         sphereLight: "#101832", sphereMid: "#0a1122", sphereShade: "#060a15", sphereEdge: "rgba(129,226,255,.42)", atmosphere: "rgba(99,126,255,.20)", atmosphereSoft: "rgba(99,126,255,.1)", rimLight: "rgba(129,226,255,.4)",
         grid: null, land: "rgba(196,212,248,.28)", landDim: "rgba(150,166,212,.30)", landHot: "#7fe0ff",

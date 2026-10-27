@@ -71,7 +71,7 @@ try {
   };
   await cdp('Runtime.enable'); await cdp('Page.enable');
   await cdp('Emulation.setDeviceMetricsOverride',{width:1280,height:820,deviceScaleFactor:1,mobile:false});
-  await cdp('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/`});
+  await cdp('Page.navigate',{url:`http://127.0.0.1:${server.address().port}/?profile=windows`});
   await waitFor('Boolean(window.deyttMapAtlas && window.deyttSetProfileData)');
   await evaluate(`window.qaMessages=[];window.invokeCSharpAction=value=>window.qaMessages.push(value);window.deyttSetMapReducedMotion(true);window.deyttSetMapLocations(['nl','de','fi','ru','it']);window.deyttSetMapUserLocation(54.7388,55.9721,{city:'уфа',country:'RU'});`);
   await evaluate(`const flags=document.createElement('div');flags.id='qa-flags';flags.innerHTML=['NL','DE','RU','FI','IT','NL','DE'].map(code=>window.getFlagSvg(code)).join('');document.body.append(flags);`);
@@ -164,6 +164,9 @@ try {
   for(const language of ['ru','en']) for(const theme of ['dark','light']) for(const [width,height,scale] of [[1280,820,1],[760,720,1.5],[520,720,2]]){
     await cdp('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:scale,mobile:false});
     await evaluate(`window.deyttSetMapLanguage(${JSON.stringify(language)});window.deyttSetMapTheme(${JSON.stringify(theme)});`);
+    const globeTheme=await evaluate(`({theme:document.documentElement.dataset.theme,sphereLight:window.deyttMapAtlas.colors().sphereLight})`);
+    assert.equal(globeTheme.theme,theme,'globe palette does not change the UI theme');
+    assert.equal(globeTheme.sphereLight,'#34465B',`Windows globe stays dark in ${theme} theme`);
     await send(fixture);await evaluate(`window.deyttSwitchStage('profile')`);await delay(350);
     assert.equal(await evaluate(`document.getElementById('profile-main-quota').querySelector('[data-quota-title]').textContent`), language==='en'?'main subscription':'основная подписка');
     assert.notEqual(await evaluate(`getComputedStyle(document.getElementById('btn-renew-tg')).display`),'none','renew action remains visible');
@@ -178,7 +181,10 @@ try {
   await cdp('Emulation.setDeviceMetricsOverride',{width:1280,height:820,deviceScaleFactor:1.25,mobile:false});
   await evaluate(`window.deyttSwitchStage('routes')`);await delay(100);await screenshot('routes-flags-125');
   await cdp('Emulation.setDeviceMetricsOverride',{width:1280,height:820,deviceScaleFactor:2,mobile:false});
-  await evaluate(`window.deyttSwitchStage('home');window.deyttSetMapRoute('ru-de');window.deyttSetMapActiveAutoRoute('ru-de');window.deyttSetMapTrafficActive(true)`);await delay(300);await screenshot('map-connected-200');
+  for(const theme of ['dark','light']){
+    await evaluate(`window.deyttSwitchStage('home');window.deyttSetMapRoute('ru-de');window.deyttSetMapActiveAutoRoute('ru-de');window.deyttSetMapTrafficActive(true);window.deyttSetMapTheme(${JSON.stringify(theme)})`);await delay(300);
+    await screenshot(`map-connected-${theme}-200`);
+  }
   assert.equal(exceptions.length,0,'no browser runtime exceptions: '+JSON.stringify(exceptions));
   fs.writeFileSync(path.join(output,'results.json'),JSON.stringify({checks,exceptions,passed:true},null,2));
   console.log(JSON.stringify({passed:true,checks,output},null,2));

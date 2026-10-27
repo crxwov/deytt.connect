@@ -581,7 +581,7 @@
       }
     };
     atlas.colors = function () {
-      const dark = document.documentElement.dataset.theme !== "light";
+      const dark = windowsProfile || document.documentElement.dataset.theme !== "light";
       return dark ? {
         sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
         sphereEdge: "rgba(80,100,130,.22)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
