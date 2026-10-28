@@ -35,7 +35,6 @@ internal sealed class EngineController
     private CancellationTokenSource? _verification;
     private CancellationTokenSource? _probeCancellation;
     private TunnelHealthMonitorLifetime? _healthMonitor;
-    private ActiveRouteTelemetry? _activeRouteTelemetry;
     private string? _profilePath;
     private string? _routeTag;
     private ServiceSnapshot _snapshot = new("disconnected", "VPN выключен");
@@ -100,7 +99,6 @@ internal sealed class EngineController
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return SetError("Не найдено ядро VPN. Переустановите приложение.");
-            (runtimeProfile, _activeRouteTelemetry) = ActiveRouteTelemetry.Create(runtimeProfile, routeTag);
             _profilePath = WritePrivateProfile(runtimeProfile);
 
             using (var check = StartEngine(enginePath, "check", _profilePath, out var checkError,
@@ -456,8 +454,6 @@ internal sealed class EngineController
                     _healthMonitor?.Dispose();
                     _healthMonitor = new TunnelHealthMonitorLifetime();
                     _ = MonitorTunnelHealthAsync(process, routeTag, tunAddresses, _healthMonitor.Token);
-                    if (_activeRouteTelemetry is { } telemetry)
-                        _ = MonitorActiveRouteAsync(process, telemetry, _healthMonitor.Token);
                 }
             }
             finally
@@ -574,42 +570,6 @@ internal sealed class EngineController
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         finally { NetworkChange.NetworkAddressChanged -= OnNetworkChanged; }
-    }
-
-    private async Task MonitorActiveRouteAsync(Process process, ActiveRouteTelemetry telemetry,
-        CancellationToken cancellationToken)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
-        try
-        {
-            do
-            {
-                string? route = null;
-                try
-                {
-                    route = await telemetry.ReadActiveRouteTagAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
-                catch (OperationCanceledException) { }
-                catch (Exception error) when (error is HttpRequestException or IOException or
-                    System.Text.Json.JsonException or InvalidDataException or ObjectDisposedException)
-                {
-                    // Missing/invalid telemetry clears the optional route instead of retaining a stale location.
-                }
-                await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    if (!ReferenceEquals(_engine, process) || !ReferenceEquals(_activeRouteTelemetry, telemetry) ||
-                        process.HasExited)
-                        return;
-                    var snapshot = Snapshot;
-                    if (snapshot.State is "connected" or "health_checking" or "degraded")
-                        SetSnapshot(snapshot with { ActiveRouteTag = route });
-                }
-                finally { _gate.Release(); }
-            } while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
     }
 
     private static async Task<WindowsTunnelCanaryInterface> WaitForTunInterfaceAsync(Process process,
@@ -1696,8 +1656,6 @@ internal sealed class EngineController
         _healthMonitor?.Stop();
         _healthMonitor?.Dispose();
         _healthMonitor = null;
-        _activeRouteTelemetry?.Dispose();
-        _activeRouteTelemetry = null;
         SetSnapshot(Snapshot with { ActiveRouteTag = null });
         _verification?.Cancel();
         _verification?.Dispose();
