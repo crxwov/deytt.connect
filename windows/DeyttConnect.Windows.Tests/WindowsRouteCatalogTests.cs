@@ -16,6 +16,7 @@ public sealed class WindowsRouteCatalogTests
               "outbounds": [
                 {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:DE:VLESS"]},
                 {"type":"vless","tag":"route:DE:VLESS"},
+                {"type":"tuic","tag":"route:DE:TUIC"},
                 {"type":"vless","tag":"route:IT:VLESS"},
                 {"type":"direct","tag":"direct"}
               ],
@@ -26,10 +27,11 @@ public sealed class WindowsRouteCatalogTests
         using var profile = JsonDocument.Parse(source);
         var routes = WindowsRouteCatalog.Parse(profile.RootElement);
 
-        Assert.Equal(new[] { "auto", "route:DE:VLESS", "route:IT:VLESS" }, routes.Select(route => route.Id));
+        Assert.Equal(new[] { "auto", "route:DE:VLESS", "route:DE:TUIC", "route:IT:VLESS" }, routes.Select(route => route.Id));
         var italy = Assert.Single(routes, route => route.CountryCode == "IT");
         Assert.Equal("италия", italy.CountryName);
         Assert.Equal("🇮🇹", italy.Flag);
+        Assert.Equal("TUIC", Assert.Single(routes, route => route.Id == "route:DE:TUIC").ProtocolName);
     }
 
     [Fact]
@@ -41,7 +43,7 @@ public sealed class WindowsRouteCatalogTests
             new JsonObject { ["type"] = "selector", ["tag"] = "route:RU-DE:CHAIN" },
         };
         foreach (var country in new[] { "NL", "RU", "DE", "FI", "IT" })
-        foreach (var protocol in new[] { "VLESS", "TROJAN", "HYSTERIA2" })
+        foreach (var protocol in new[] { "VLESS", "TROJAN", "HYSTERIA2", "TUIC" })
             outbounds.Add(new JsonObject { ["type"] = "selector", ["tag"] = $"route:{country}:{protocol}" });
 
         var source = new JsonObject
@@ -64,7 +66,7 @@ public sealed class WindowsRouteCatalogTests
         using var profile = JsonDocument.Parse(source);
         var routes = WindowsRouteCatalog.Parse(profile.RootElement);
 
-        Assert.Equal(17, routes.Count);
+        Assert.Equal(22, routes.Count);
     }
 
     [Fact]

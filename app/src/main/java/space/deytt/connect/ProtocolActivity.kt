@@ -247,11 +247,13 @@ class ProtocolActivity : Activity() {
                 val accent = when (route.protocol) {
                     RouteProtocol.TROJAN -> DeyttUi.MINT
                     RouteProtocol.HYSTERIA2 -> DeyttUi.SKY
+                    RouteProtocol.TUIC -> DeyttUi.SKY
                     else -> DeyttUi.BLUE
                 }
                 val badgeFill = when (route.protocol) {
                     RouteProtocol.TROJAN -> DeyttUi.MINT_SURFACE
                     RouteProtocol.HYSTERIA2 -> DeyttUi.SKY_SURFACE
+                    RouteProtocol.TUIC -> DeyttUi.SKY_SURFACE
                     else -> DeyttUi.BLUE_SURFACE
                 }
                 val item = LinearLayout(this).apply {

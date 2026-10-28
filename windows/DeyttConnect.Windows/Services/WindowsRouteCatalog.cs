@@ -31,6 +31,7 @@ public static class WindowsRouteCatalog
         ("VLESS", "VLESS"),
         ("TROJAN", "Trojan"),
         ("HYSTERIA2", "Hysteria 2"),
+        ("TUIC", "TUIC"),
     ];
 
     private static readonly Regex RegionPrefix = new("^(NL|DE|RU|FI|IT)(?:$|[-_\\s])",

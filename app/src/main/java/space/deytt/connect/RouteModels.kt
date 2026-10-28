@@ -12,6 +12,7 @@ enum class RouteProtocol(val title: String, val detail: String) {
     VLESS("vless", "websocket + tls"),
     TROJAN("trojan", "websocket + tls"),
     HYSTERIA2("hysteria 2", "быстрый quic-маршрут"),
+    TUIC("tuic", "оптимизированный quic-маршрут"),
     AWG15("amneziawg 1.5", "маскировка трафика"),
     AWG31("amneziawg 3.1", "новая маскировка трафика"),
     OPENFLUX("обход · германия", "через cups → германию");
@@ -23,6 +24,7 @@ enum class RouteProtocol(val title: String, val detail: String) {
             VLESS -> "vless"
             TROJAN -> "trojan"
             HYSTERIA2 -> "hysteria"
+            TUIC -> "tuic"
             AWG15 -> "awg 1.5"
             AWG31 -> "awg 3.1"
             OPENFLUX -> "openflux"
@@ -100,6 +102,7 @@ class SelectedRouteStore(context: Context) {
                         "VLESS" -> RouteProtocol.VLESS
                         "TROJAN" -> RouteProtocol.TROJAN
                         "HYSTERIA2" -> RouteProtocol.HYSTERIA2
+                        "TUIC" -> RouteProtocol.TUIC
                         else -> protocol
                     }
                 }
@@ -193,6 +196,7 @@ object RouteCatalog {
                     "VLESS" -> RouteProtocol.VLESS
                     "TROJAN" -> RouteProtocol.TROJAN
                     "HYSTERIA2" -> RouteProtocol.HYSTERIA2
+                    "TUIC" -> RouteProtocol.TUIC
                     else -> continue
                 }
                 routes += DeyttRoute(tag, parts[1], presentation.second, presentation.first, protocol, TunnelEngine.LIBBOX, tag)

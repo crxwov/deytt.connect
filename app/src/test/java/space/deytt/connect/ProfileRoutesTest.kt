@@ -14,6 +14,7 @@ class ProfileRoutesTest {
             {"type": "vless", "tag": "route:DE:VLESS"},
             {"type": "trojan", "tag": "route:DE:TROJAN"},
             {"type": "hysteria2", "tag": "route:DE:HYSTERIA2"},
+            {"type": "tuic", "tag": "route:DE:TUIC"},
             {"type": "trojan", "tag": "route:RU-DE:CHAIN", "server": "chain.example.com", "server_port": 443},
             {"type": "hysteria2", "tag": "nl • обход 1"},
             {"type": "hysteria2", "tag": "Авито прокси"},
@@ -54,6 +55,13 @@ class ProfileRoutesTest {
     }
 
     @Test
+    fun selectsTuicLeafRoute() {
+        val selected = ProfileRoutes.select(config, "route:DE:TUIC")
+
+        assertEquals("route:DE:TUIC", ProfileRoutes.selected(selected))
+    }
+
+    @Test
     fun exposesEveryFirstPartyProtocolWithoutInternalNames() {
         val routes = RouteCatalog.from(
             config,
@@ -69,6 +77,7 @@ class ProfileRoutesTest {
                 RouteProtocol.VLESS,
                 RouteProtocol.TROJAN,
                 RouteProtocol.HYSTERIA2,
+                RouteProtocol.TUIC,
                 RouteProtocol.RU_DE,
                 RouteProtocol.AWG15,
                 RouteProtocol.AWG31,

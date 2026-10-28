@@ -52,6 +52,19 @@ internal static class DeyttTheme
         };
     }
 
+    public static TextBlock RawTextBlock(
+        string value,
+        double size = 16,
+        Color? color = null,
+        FontWeight? weight = null,
+        FontFamily? family = null,
+        bool wrap = true)
+    {
+        var block = TextBlock(value, size, color, weight, family, wrap);
+        block.Text = value;
+        return block;
+    }
+
     public static Border Card(
         Control child,
         Color? fill = null,

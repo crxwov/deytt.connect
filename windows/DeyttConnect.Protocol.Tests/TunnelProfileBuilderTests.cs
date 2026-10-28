@@ -13,7 +13,7 @@ public sealed class TunnelProfileBuilderTests
     [InlineData("selector")]
     public void AutomaticSelectionUsesOnlyEuropeanSingleCountryServers(string type)
     {
-        var profile = JsonNode.Parse(Profile("route:NL:VLESS", "route:DE:TROJAN", "route:FI:HYSTERIA2",
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS", "route:DE:TROJAN", "route:DE:TUIC", "route:FI:HYSTERIA2",
             "route:IT:VLESS", "route:RU:VLESS", "route:RU-DE:CHAIN"))!.AsObject();
         var automatic = profile["outbounds"]![0]!.AsObject();
         automatic["type"] = type;
@@ -22,7 +22,7 @@ public sealed class TunnelProfileBuilderTests
         var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), AutoTag))!;
         var selector = runtime["outbounds"]!.AsArray().OfType<JsonObject>()
             .Single(outbound => outbound["tag"]!.GetValue<string>() == AutoTag);
-        Assert.Equal(new[] { "route:NL:VLESS", "route:DE:TROJAN", "route:FI:HYSTERIA2", "route:IT:VLESS" },
+        Assert.Equal(new[] { "route:NL:VLESS", "route:DE:TROJAN", "route:DE:TUIC", "route:FI:HYSTERIA2", "route:IT:VLESS" },
             selector["outbounds"]!.AsArray().Select(tag => tag!.GetValue<string>()));
         Assert.False(selector.ContainsKey("default"));
         Assert.DoesNotContain("route:RU", selector["outbounds"]!.ToJsonString());
@@ -90,7 +90,11 @@ public sealed class TunnelProfileBuilderTests
             new JsonObject { ["type"] = "urltest", ["tag"] = AutoTag },
         };
         foreach (var tag in routeTags)
-            outbounds.Add(new JsonObject { ["type"] = "vless", ["tag"] = tag });
+            outbounds.Add(new JsonObject
+            {
+                ["type"] = tag.EndsWith(":TUIC", StringComparison.Ordinal) ? "tuic" : "vless",
+                ["tag"] = tag,
+            });
 
         return new JsonObject
         {
@@ -194,6 +198,14 @@ public sealed class TunnelProfileBuilderTests
         var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:IT:VLESS"), "route:IT:VLESS"))!;
 
         Assert.Equal("route:IT:VLESS", runtime["route"]!["final"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void BuildAcceptsTuicRouteWhenAdvertisedBySubscription()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:DE:TUIC"), "route:DE:TUIC"))!;
+
+        Assert.Equal("route:DE:TUIC", runtime["route"]!["final"]!.GetValue<string>());
     }
 
     [Fact]

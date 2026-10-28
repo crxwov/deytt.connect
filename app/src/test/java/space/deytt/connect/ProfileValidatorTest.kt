@@ -14,6 +14,26 @@ class ProfileValidatorTest {
     }
 
     @Test
+    fun acceptsTuicRouteInAutomaticSelection() {
+        val profile = validProfile()
+        profile.getJSONArray("outbounds").getJSONObject(0).getJSONArray("outbounds").put("route:NL:TUIC")
+        profile.getJSONArray("outbounds").put(JSONObject()
+            .put("type", "tuic")
+            .put("tag", "route:NL:TUIC")
+            .put("server", "edge.example.invalid")
+            .put("server_port", 18444)
+            .put("uuid", "00000000-0000-0000-0000-000000000002")
+            .put("password", "test-only")
+            .put("congestion_control", "bbr")
+            .put("udp_relay_mode", "native")
+            .put("tls", JSONObject().put("enabled", true).put("server_name", "edge.example.invalid")))
+
+        val summary = SubscriptionClient.validateDownloadedProfile(profile.toString())
+
+        assertTrue(summary.protocols.contains("tuic"))
+    }
+
+    @Test
     fun rejectsUiIncompatibleMissingAutoBeforeCommit() {
         val profile = validProfile()
         profile.getJSONArray("outbounds").getJSONObject(0).put("tag", "ordinary-selector")

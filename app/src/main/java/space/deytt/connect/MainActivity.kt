@@ -1369,7 +1369,7 @@ class MainActivity : Activity() {
             it.countryCode == countryCode && (
                 it.engine == TunnelEngine.AMNEZIAWG || it.engine == TunnelEngine.OPENFLUX ||
                     it.engine == TunnelEngine.LIBBOX &&
-                    it.protocol in setOf(RouteProtocol.VLESS, RouteProtocol.TROJAN, RouteProtocol.HYSTERIA2)
+                    it.protocol in setOf(RouteProtocol.VLESS, RouteProtocol.TROJAN, RouteProtocol.HYSTERIA2, RouteProtocol.TUIC)
                 )
         }
         val doubleRoute = routes.firstOrNull {
@@ -1430,6 +1430,7 @@ class MainActivity : Activity() {
                 RouteProtocol.AUTO -> mapCopy("Выбрать доступный выход автоматически", "Select an available exit automatically")
                 RouteProtocol.RU_DE -> mapCopy("Двойной маршрут · Санкт-Петербург → Франкфурт", "Double route · Saint Petersburg → Frankfurt")
                 RouteProtocol.HYSTERIA2 -> mapCopy("быстрый quic-маршрут", "fast quic route")
+                RouteProtocol.TUIC -> mapCopy("оптимизированный quic-маршрут", "optimized quic route")
                 else -> uiCopy(route.protocol.detail)
             }
             val row = LinearLayout(this).apply {

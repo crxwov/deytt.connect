@@ -1026,8 +1026,9 @@ public partial class MainWindow : Window
         "VLESS" => 0,
         "TROJAN" => 1,
         "HYSTERIA2" => 2,
-        "AWG15" or "AWG31" => 3,
-        _ => 4,
+        "TUIC" => 3,
+        "AWG15" or "AWG31" => 4,
+        _ => 5,
     };
 
     private enum RouteQualityGrade { Unrated, Good, Medium, Poor }
@@ -1103,6 +1104,7 @@ public partial class MainWindow : Window
             "VLESS" => DeyttTheme.Sky,
             "TROJAN" => DeyttTheme.Blue,
             "HYSTERIA2" => DeyttTheme.Mint,
+            "TUIC" => DeyttTheme.Sky,
             "AWG15" or "AWG31" => DeyttTheme.Amber,
             _ => DeyttTheme.Muted,
         };
@@ -1127,6 +1129,7 @@ public partial class MainWindow : Window
         {
             "VLESS" or "TROJAN" => "WebSocket + TLS",
             "HYSTERIA2" => "QUIC · UDP",
+            "TUIC" => "QUIC · UDP · BBR",
             "AWG15" or "AWG31" => AwgProtocolTitle(route.Protocol),
             _ => route.ProtocolName,
         };

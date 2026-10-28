@@ -487,6 +487,7 @@ internal class PrimaryPages(
         RouteProtocol.VLESS -> 0
         RouteProtocol.TROJAN -> 1
         RouteProtocol.HYSTERIA2 -> 2
+        RouteProtocol.TUIC -> 3
         else -> 3
     }
 
@@ -494,6 +495,7 @@ internal class PrimaryPages(
         RouteProtocol.VLESS -> "VL"
         RouteProtocol.TROJAN -> "◇"
         RouteProtocol.HYSTERIA2 -> "H2"
+        RouteProtocol.TUIC -> "TU"
         RouteProtocol.RU_DE -> "RU→DE"
         RouteProtocol.OPENFLUX -> "DE"
         else -> "·"

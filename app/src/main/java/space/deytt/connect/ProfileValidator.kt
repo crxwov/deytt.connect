@@ -10,7 +10,7 @@ data class ProfileSummary(
 )
 
 object ProfileValidator {
-    private val networkProtocols = setOf("hysteria2", "vless", "trojan", "wireguard", "shadowsocks")
+    private val networkProtocols = setOf("hysteria2", "tuic", "vless", "trojan", "wireguard", "shadowsocks")
     private val nonNetworkTypes = setOf("urltest", "selector", "direct", "block", "dns")
     private val legacyTunFields = setOf(
         "inet4_address",

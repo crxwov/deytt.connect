@@ -17,7 +17,7 @@ public sealed class WindowsSubscriptionProfileNormalizerTests
             new JsonObject { ["type"] = "selector", ["tag"] = "route:RU-DE:CHAIN" },
         };
         foreach (var country in new[] { "NL", "RU", "DE", "FI" })
-        foreach (var protocol in new[] { "VLESS", "TROJAN", "HYSTERIA2" })
+        foreach (var protocol in new[] { "VLESS", "TROJAN", "HYSTERIA2", "TUIC" })
             outbounds.Add(new JsonObject
             {
                 ["type"] = protocol.ToLowerInvariant(),
@@ -44,7 +44,7 @@ public sealed class WindowsSubscriptionProfileNormalizerTests
         var tun = profile.RootElement.GetProperty("inbounds")[0];
         Assert.Equal("tun", tun.GetProperty("type").GetString());
         Assert.Equal("172.19.0.1/30", tun.GetProperty("address")[0].GetString());
-        Assert.Equal(14, WindowsRouteCatalog.Parse(profile.RootElement).Count);
+        Assert.Equal(18, WindowsRouteCatalog.Parse(profile.RootElement).Count);
     }
 
     [Fact]

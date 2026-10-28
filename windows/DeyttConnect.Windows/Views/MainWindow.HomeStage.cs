@@ -252,6 +252,7 @@ public partial class MainWindow
     {
         "VLESS" or "TROJAN" => "WebSocket · TLS",
         "HYSTERIA2" => Copy("QUIC · UDP", "QUIC · UDP"),
+        "TUIC" => Copy("QUIC · BBR", "QUIC · BBR"),
         "AWG15" or "AWG31" => AwgProtocolTitle(route?.Protocol),
         _ => route?.ProtocolName ?? Copy("Автоматически", "Automatic"),
     };
@@ -301,6 +302,7 @@ public partial class MainWindow
         "VLESS" => "./vless+ws",
         "TROJAN" => "./trojan+ws",
         "HYSTERIA2" => "./hysteria2",
+        "TUIC" => "./tuic",
         "AWG15" => "./amnezia1.5",
         "AWG31" => "./amnezia3.1",
         "CHAIN" => "./lte ru+de",

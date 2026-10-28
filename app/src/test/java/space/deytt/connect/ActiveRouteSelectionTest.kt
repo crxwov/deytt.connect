@@ -16,6 +16,7 @@ class ActiveRouteSelectionTest {
     @Test
     fun mapsOnlyKnownFirstPartyOutboundTagsToRoutes() {
         assertEquals(ActiveRouteSelection("DE", "de", "route:DE:VLESS"), ActiveRouteSelection.fromOutboundTag("route:DE:VLESS"))
+        assertEquals(ActiveRouteSelection("NL", "nl", "route:NL:TUIC"), ActiveRouteSelection.fromOutboundTag("route:NL:TUIC"))
         assertEquals(ActiveRouteSelection("NL", "nl", "route:NL"), ActiveRouteSelection.fromOutboundTag("route:NL"))
         assertEquals(ActiveRouteSelection("FI", "fi", "route:FI:TROJAN"), ActiveRouteSelection.fromOutboundTag("route:FI:TROJAN"))
         assertEquals(ActiveRouteSelection("RU", "ru", "route:RU:HYSTERIA2"), ActiveRouteSelection.fromOutboundTag("route:RU:HYSTERIA2"))
@@ -38,5 +39,6 @@ class ActiveRouteSelectionTest {
         val vless = activeRoute.copy(countryCode = "NL", protocol = RouteProtocol.VLESS)
         assertEquals("nl./vless+ws", ActiveRouteSelection.autoRouteLabel(vless))
         assertEquals("de./hysteria2", ActiveRouteSelection.autoRouteLabel(activeRoute))
+        assertEquals("nl./tuic", ActiveRouteSelection.autoRouteLabel(activeRoute.copy(countryCode = "NL", protocol = RouteProtocol.TUIC)))
     }
 }
