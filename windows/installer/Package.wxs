@@ -1,13 +1,13 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Id="DEYTT.Connect.Windows"
-           Name="deytt connect"
+           Name="deytt./connect"
            Manufacturer="deytt"
            Language="1049"
            Version="$(var.ProductVersion)"
            Scope="perMachine">
     <Icon Id="DeyttConnectProductIcon.exe" SourceFile="$(var.PackageStageDir)/DeyttConnect.Windows.exe" />
     <Property Id="ARPPRODUCTICON" Value="DeyttConnectProductIcon.exe" />
-    <MajorUpgrade Schedule="afterInstallInitialize" IgnoreLanguage="yes" DowngradeErrorMessage="на компьютере уже установлена более новая версия deytt connect." />
+    <MajorUpgrade Schedule="afterInstallInitialize" IgnoreLanguage="yes" AllowSameVersionUpgrades="yes" DowngradeErrorMessage="на компьютере уже установлена более новая версия deytt./connect." />
     <MediaTemplate EmbedCab="yes" />
 
     <Property Id="ALLOWEDUSERSID" Secure="yes">
