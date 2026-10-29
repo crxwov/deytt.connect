@@ -347,9 +347,9 @@ internal class PrimaryPages(
         }
         routes.firstOrNull { it.protocol == RouteProtocol.LTE }?.let { route ->
             appendToGroup(quickGroup, host.row(
-                "🇩🇪 de • lte",
+                "🇪🇺 lte • белые списки",
                 copy("Белые списки LTE · до 6 ГБ в месяц", "Whitelist LTE · up to 6 GB per month"),
-                "🇩🇪",
+                "🇪🇺",
                 "выбрать",
                 emphasis = selectedId == route.id,
             ).apply { setOnClickListener { host.selectRoute(route) } })

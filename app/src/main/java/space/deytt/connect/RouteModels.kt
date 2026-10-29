@@ -63,7 +63,7 @@ class SelectedRouteStore(context: Context) {
             putString("id", route.id)
             putString("title", when (route.protocol) {
                 RouteProtocol.AUTO -> route.protocol.title
-                RouteProtocol.LTE -> "${route.flag} de • lte"
+                RouteProtocol.LTE -> "${route.flag} lte • белые списки"
                 else -> "${route.flag} ${route.country}"
             })
             putString(
@@ -200,7 +200,7 @@ object RouteCatalog {
                 if (parts.size != 3 || parts[0] != "route") continue
                 if (parts[2] == "LTE") {
                     if (tag == CdnLteProfile.ROUTE_TAG && CdnLteProfile.hasValidMetadata(config)) {
-                        routes += DeyttRoute(tag, "DE", "lte", "🇩🇪", RouteProtocol.LTE, TunnelEngine.LIBBOX, tag)
+                        routes += DeyttRoute(tag, "EU", "lte • белые списки", "🇪🇺", RouteProtocol.LTE, TunnelEngine.LIBBOX, tag)
                     }
                     continue
                 }

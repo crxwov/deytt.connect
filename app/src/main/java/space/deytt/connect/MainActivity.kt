@@ -1420,7 +1420,7 @@ class MainActivity : Activity() {
             val selected = route.id == selectedId
             val title = when (route.protocol) {
                 RouteProtocol.AUTO -> mapCopy("автоподбор", "auto-select")
-                RouteProtocol.LTE -> "de • lte"
+                RouteProtocol.LTE -> "lte • белые списки"
                 else -> route.protocol.title
             }
             val detail = when (route.protocol) {
@@ -1876,7 +1876,7 @@ class MainActivity : Activity() {
         val connected = renderedPhase == VpnPhase.CONNECTED
         if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
             RouteProtocol.AUTO -> "auto"
-            RouteProtocol.LTE -> "de • lte"
+            RouteProtocol.LTE -> "lte • белые списки"
             else -> route?.let { "${it.countryCode.lowercase()}./${uiCopy(it.protocol.title).replace(" ", "")}" } ?: uiCopy(selected.title)
         }
         val metricKey = currentHomeRouteMetricKey(selected.id)

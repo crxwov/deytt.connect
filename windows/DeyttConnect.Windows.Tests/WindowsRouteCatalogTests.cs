@@ -130,9 +130,9 @@ public sealed class WindowsRouteCatalogTests
         using var profile = JsonDocument.Parse(attached);
         var routes = WindowsRouteCatalog.Parse(profile.RootElement);
         var lte = Assert.Single(routes, r => r.Protocol == "LTE");
-        Assert.Equal("de • lte", lte.ProtocolName);
-        Assert.Equal("🇩🇪", lte.Flag);
-        Assert.Equal("DE", lte.CountryCode);
+        Assert.Equal("lte • белые списки", lte.ProtocolName);
+        Assert.Equal("🇪🇺", lte.Flag);
+        Assert.Equal("EU", lte.CountryCode);
     }
 
     [Fact]
