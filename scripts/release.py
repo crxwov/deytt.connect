@@ -138,7 +138,9 @@ def sign(args):
             raise ValueError("signing credentials are unavailable")
     check_keystore_certificate(args.keystore, args.password_file)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".sign-", dir=args.output.parent) as temporary:
+    with tempfile.TemporaryDirectory(prefix=".sign-") as temporary:
+        safe_input = Path(temporary) / "input.apk"
+        shutil.copy2(args.apk, safe_input)
         output = Path(temporary) / args.output.name
         command = [
             tool("apksigner"), "sign", "--out", str(output),
@@ -146,9 +148,9 @@ def sign(args):
         ]
         command += ["--ks", str(args.keystore), "--ks-key-alias", RELEASE_KEY_ALIAS,
                     "--ks-pass", "file:" + str(args.password_file)]
-        run(*command, str(args.apk))
+        run(*command, str(safe_input))
         digest = verify(output, args.qa, args.expected_version, args.expected_version_code)
-        output.replace(args.output)
+        shutil.copy2(output, args.output)
     args.output.with_suffix(".apk.sha256").write_text(f"{digest}  {args.output.name}\n")
     print(f"SHA-256: {digest}")
 
