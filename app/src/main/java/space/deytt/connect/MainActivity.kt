@@ -1420,12 +1420,12 @@ class MainActivity : Activity() {
             val selected = route.id == selectedId
             val title = when (route.protocol) {
                 RouteProtocol.AUTO -> mapCopy("автоподбор", "auto-select")
-                RouteProtocol.LTE -> "lte"
+                RouteProtocol.LTE -> "de • lte"
                 else -> route.protocol.title
             }
             val detail = when (route.protocol) {
                 RouteProtocol.AUTO -> mapCopy("Выбрать доступный выход автоматически", "Select an available exit automatically")
-                RouteProtocol.LTE -> mapCopy("Белые списки через CDN · лимит 6 ГБ в месяц пока не включён", "Whitelist via CDN · 6 GB monthly cap is not enabled yet")
+                RouteProtocol.LTE -> mapCopy("Белые списки LTE · лимит 6 ГБ в месяц", "Whitelist LTE · 6 GB monthly limit")
                 RouteProtocol.HYSTERIA2 -> mapCopy("быстрый quic-маршрут", "fast quic route")
                 RouteProtocol.TUIC -> mapCopy("оптимизированный quic-маршрут", "optimized quic route")
                 else -> uiCopy(route.protocol.detail)
@@ -1876,7 +1876,7 @@ class MainActivity : Activity() {
         val connected = renderedPhase == VpnPhase.CONNECTED
         if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
             RouteProtocol.AUTO -> "auto"
-            RouteProtocol.LTE -> "lte"
+            RouteProtocol.LTE -> "de • lte"
             else -> route?.let { "${it.countryCode.lowercase()}./${uiCopy(it.protocol.title).replace(" ", "")}" } ?: uiCopy(selected.title)
         }
         val metricKey = currentHomeRouteMetricKey(selected.id)

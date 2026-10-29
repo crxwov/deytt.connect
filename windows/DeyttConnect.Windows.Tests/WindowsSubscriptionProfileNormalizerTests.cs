@@ -44,7 +44,7 @@ public sealed class WindowsSubscriptionProfileNormalizerTests
         var tun = profile.RootElement.GetProperty("inbounds")[0];
         Assert.Equal("tun", tun.GetProperty("type").GetString());
         Assert.Equal("172.19.0.1/30", tun.GetProperty("address")[0].GetString());
-        Assert.Equal(18, WindowsRouteCatalog.Parse(profile.RootElement).Count);
+        Assert.Equal(17, WindowsRouteCatalog.Parse(profile.RootElement).Count);
     }
 
     [Fact]

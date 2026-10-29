@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using DeyttConnect.Windows.Services;
+using DeyttConnect.Protocol;
 using Xunit;
 
 namespace DeyttConnect.Windows.Tests;
@@ -66,7 +67,72 @@ public sealed class WindowsRouteCatalogTests
         using var profile = JsonDocument.Parse(source);
         var routes = WindowsRouteCatalog.Parse(profile.RootElement);
 
-        Assert.Equal(22, routes.Count);
+        Assert.Equal(21, routes.Count);
+    }
+
+    [Fact]
+    public void LteRouteParsedWithCorrectMiddleDotAndFlag()
+    {
+        const string baseProfile = """
+            {
+              "inbounds": [{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
+              "outbounds": [
+                {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:DE:VLESS"]},
+                {"type":"vless","tag":"route:DE:VLESS"}
+              ],
+              "route": {"final":"🇪🇺 автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}
+            }
+            """;
+
+        const string metadataJson = """
+            {
+              "version": 1,
+              "outbound": {
+                "tag": "route:DE:LTE",
+                "protocol": "vless",
+                "settings": {
+                  "vnext": [{
+                    "address": "front.deytt.space",
+                    "port": 443,
+                    "users": [{"id":"00000000-0000-4000-8000-000000000000","encryption":"none"}]
+                  }]
+                },
+                "streamSettings": {
+                  "network": "xhttp",
+                  "security": "tls",
+                  "tlsSettings": {
+                    "serverName": "front.deytt.space",
+                    "alpn": ["h2", "http/1.1"],
+                    "fingerprint": "chrome"
+                  },
+                  "xhttpSettings": {
+                    "path": "/api/v2/cdn-lte-stream/",
+                    "mode": "packet-up",
+                    "extra": {
+                      "uplinkHTTPMethod": "GET",
+                      "uplinkDataPlacement": "header",
+                      "uplinkDataKey": "data",
+                      "noSSEHeader": true,
+                      "scMaxEachPostBytes": 4096,
+                      "scMinPostsIntervalMs": 30,
+                      "serverMaxHeaderBytes": 32768
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        var attached = CdnLteProfile.Attach(
+            baseProfile,
+            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(metadataJson)));
+
+        using var profile = JsonDocument.Parse(attached);
+        var routes = WindowsRouteCatalog.Parse(profile.RootElement);
+        var lte = Assert.Single(routes, r => r.Protocol == "LTE");
+        Assert.Equal("de • lte", lte.ProtocolName);
+        Assert.Equal("🇩🇪", lte.Flag);
+        Assert.Equal("DE", lte.CountryCode);
     }
 
     [Fact]

@@ -13,7 +13,7 @@ enum class RouteProtocol(val title: String, val detail: String) {
     TROJAN("trojan", "websocket + tls"),
     HYSTERIA2("hysteria 2", "быстрый quic-маршрут"),
     TUIC("tuic", "оптимизированный quic-маршрут"),
-    LTE("lte", "обход белых списков через CDN"),
+    LTE("lte", "обход белых списков"),
     AWG15("amneziawg 1.5", "маскировка трафика"),
     AWG31("amneziawg 3.1", "новая маскировка трафика"),
     OPENFLUX("обход · германия", "через cups → германию");
@@ -63,14 +63,14 @@ class SelectedRouteStore(context: Context) {
             putString("id", route.id)
             putString("title", when (route.protocol) {
                 RouteProtocol.AUTO -> route.protocol.title
-                RouteProtocol.LTE -> "${route.flag} lte"
+                RouteProtocol.LTE -> "${route.flag} de • lte"
                 else -> "${route.flag} ${route.country}"
             })
             putString(
                 "subtitle",
                 when (route.protocol) {
                     RouteProtocol.AUTO -> "лучший доступный маршрут"
-                    RouteProtocol.LTE -> "обход белых списков через CDN"
+                    RouteProtocol.LTE -> "обход белых списков"
                     else -> route.protocol.title
                 },
             )
@@ -200,7 +200,7 @@ object RouteCatalog {
                 if (parts.size != 3 || parts[0] != "route") continue
                 if (parts[2] == "LTE") {
                     if (tag == CdnLteProfile.ROUTE_TAG && CdnLteProfile.hasValidMetadata(config)) {
-                        routes += DeyttRoute(tag, "DE", "lte", "🇪🇺", RouteProtocol.LTE, TunnelEngine.LIBBOX, tag)
+                        routes += DeyttRoute(tag, "DE", "lte", "🇩🇪", RouteProtocol.LTE, TunnelEngine.LIBBOX, tag)
                     }
                     continue
                 }

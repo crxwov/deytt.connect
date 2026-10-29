@@ -94,7 +94,7 @@ public static class WindowsRouteCatalog
         if (outboundTags.Contains(CdnLteProfile.RouteTag) &&
             CdnLteProfile.HasValidMetadata(profile.GetRawText()))
             routes.Add(new WindowsRoute(CdnLteProfile.RouteTag, CdnLteProfile.RouteTag,
-                "DE", "Германия", "🇪🇺", "LTE", "lte"));
+                "DE", "Германия", "🇩🇪", "LTE", "de • lte"));
 
         foreach (var country in Countries)
         foreach (var protocol in Protocols)

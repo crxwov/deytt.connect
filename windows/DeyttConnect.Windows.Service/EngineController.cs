@@ -1556,7 +1556,7 @@ internal sealed class EngineController
             if (!ReferenceEquals(_xray, process))
                 return;
             StopCore();
-            SetError("CDN LTE-маршрут отключился. Повторите подключение.");
+            SetError("LTE-маршрут отключился. Повторите подключение.");
         }
         finally
         {

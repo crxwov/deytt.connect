@@ -34,9 +34,9 @@ object ProfileRoutes {
             when {
                 tag == CdnLteProfile.ROUTE_TAG && CdnLteProfile.hasValidMetadata(config) -> result += RouteOption(
                     tag = tag,
-                    label = "lte",
-                    flag = "🇪🇺",
-                    detail = "обход белых списков через CDN",
+                    label = "de • lte",
+                    flag = "🇩🇪",
+                    detail = "обход белых списков",
                 )
                 tag.contains("автоподбор", ignoreCase = true) -> result += RouteOption(
                     tag = tag,

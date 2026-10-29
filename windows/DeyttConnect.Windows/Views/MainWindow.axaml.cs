@@ -1132,7 +1132,7 @@ public partial class MainWindow : Window
             "VLESS" or "TROJAN" => "WebSocket + TLS",
             "HYSTERIA2" => "QUIC · UDP",
             "TUIC" => "QUIC · UDP · BBR",
-            "LTE" => Copy("Белые списки через CDN · лимит 6 ГБ/мес не включён", "Whitelist via CDN · 6 GB/month cap not enabled"),
+            "LTE" => Copy("Белые списки LTE · лимит 6 ГБ в месяц", "Whitelist LTE · 6 GB monthly limit"),
             "AWG15" or "AWG31" => AwgProtocolTitle(route.Protocol),
             _ => route.ProtocolName,
         };
