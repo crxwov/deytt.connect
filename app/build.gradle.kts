@@ -3,6 +3,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val libXrayAndroidAar = rootProject.file(".toolchain/libxray-v26.10.21/android/libxray-android/libXray.aar")
+if (!libXrayAndroidAar.isFile) {
+    throw GradleException("Pinned libXray AAR is missing. Run scripts/fetch-libxray.sh android first.")
+}
+
 android {
     namespace = "space.deytt.connect"
     compileSdk = 35
@@ -62,6 +67,7 @@ android {
 dependencies {
     // GPL-3.0-or-later shared sing-box engine, pinned for reproducible builds.
     implementation("com.github.singbox-android:libbox:1.14.1")
+    implementation(files(libXrayAndroidAar))
     implementation(project(":awg-tunnel"))
     implementation(project(":openflux-tunnel"))
     implementation("androidx.core:core-ktx:1.15.0")

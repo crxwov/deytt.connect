@@ -666,6 +666,13 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             } else null
             val openFluxUsername = UUID.randomUUID().toString()
             val openFluxPassword = UUID.randomUUID().toString()
+            val cdnLteSocksPort = if (selected.configTag == CdnLteProfile.ROUTE_TAG) {
+                val port = CdnLteProfile.allocateSocksPort()
+                ensureCurrent(operationId)
+                CdnLteXrayController.start(this, CdnLteProfile.buildXrayConfig(config, port))
+                ensureCurrent(operationId)
+                port
+            } else null
             if (openFluxProfile != null) {
                 ensureCurrent(operationId)
                 if (OpenFluxProfileStore.owner(this) != openFluxOwner) throw OpenFluxRouteException("Аккаунт изменён")
@@ -706,7 +713,10 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                     val selectedConfig = if (selected.configTag.isNotBlank()) {
                         ProfileRoutes.select(config, selected.configTag)
                     } else config
-                    SplitTunnelProfile.apply(selectedConfig, customDomains, customPackages, splitMode)
+                    val routedConfig = cdnLteSocksPort?.let {
+                        CdnLteProfile.useSocksPort(selectedConfig, it)
+                    } ?: selectedConfig
+                    SplitTunnelProfile.apply(routedConfig, customDomains, customPackages, splitMode)
                 }
                 val runtimeConfig = runtimeConfig(routed)
                 ProfileValidator.validate(runtimeConfig)
@@ -1088,6 +1098,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     @Synchronized
     private fun fail(message: String) {
+        CdnLteXrayController.stop(this)
         runCatching { activeCanary?.disconnect() }
         activeCanary = null
         closeCommandClient()
@@ -1118,6 +1129,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     @Synchronized
     private fun stopTunnel() {
+        CdnLteXrayController.stop(this)
         runCatching { activeCanary?.disconnect() }
         activeCanary = null
         if (!started && commandServer == null && tunnel == null && awgProxy == null && openFluxProxy == null) {

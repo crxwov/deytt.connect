@@ -6,10 +6,10 @@ import subprocess
 
 
 def prepare(go_executable: str, destination: Path, patch: Path) -> None:
-    version = subprocess.check_output([go_executable, "version"], text=True).strip()
+    version = subprocess.check_output([go_executable, "version"], encoding="utf-8").strip()
     if not version.startswith("go version go1.25.14 windows/"):
         raise ValueError("AWG Windows builds require the reviewed Go 1.25.14 SDK")
-    sdk = Path(subprocess.check_output([go_executable, "env", "GOROOT"], text=True).strip())
+    sdk = Path(subprocess.check_output([go_executable, "env", "GOROOT"], encoding="utf-8").strip())
     marker = destination / ".deytt-boottime"
     import hashlib
     identity = hashlib.sha256(patch.read_bytes()).hexdigest()

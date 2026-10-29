@@ -18,7 +18,6 @@ object ProfileRoutes {
         "RU" to Pair("🇷🇺", "россия"),
         "FI" to Pair("🇫🇮", "финляндия"),
         "IT" to Pair("🇮🇹", "италия"),
-        "RU-DE" to Pair("🇷🇺→🇩🇪", "ru → de"),
     )
 
     fun selected(config: String): String = parse(config)
@@ -33,6 +32,12 @@ object ProfileRoutes {
             val outbound = source.optJSONObject(index) ?: continue
             val tag = outbound.optString("tag").trim()
             when {
+                tag == CdnLteProfile.ROUTE_TAG && CdnLteProfile.hasValidMetadata(config) -> result += RouteOption(
+                    tag = tag,
+                    label = "lte",
+                    flag = "🇪🇺",
+                    detail = "обход белых списков через CDN",
+                )
                 tag.contains("автоподбор", ignoreCase = true) -> result += RouteOption(
                     tag = tag,
                     label = "автоподбор",

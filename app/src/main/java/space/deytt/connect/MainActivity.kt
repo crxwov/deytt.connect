@@ -1369,13 +1369,10 @@ class MainActivity : Activity() {
             it.countryCode == countryCode && (
                 it.engine == TunnelEngine.AMNEZIAWG || it.engine == TunnelEngine.OPENFLUX ||
                     it.engine == TunnelEngine.LIBBOX &&
-                    it.protocol in setOf(RouteProtocol.VLESS, RouteProtocol.TROJAN, RouteProtocol.HYSTERIA2, RouteProtocol.TUIC)
+                    it.protocol in setOf(RouteProtocol.VLESS, RouteProtocol.TROJAN, RouteProtocol.HYSTERIA2, RouteProtocol.TUIC, RouteProtocol.LTE)
                 )
         }
-        val doubleRoute = routes.firstOrNull {
-            it.engine == TunnelEngine.LIBBOX && it.protocol == RouteProtocol.RU_DE
-        }.takeIf { countryCode == "RU" || countryCode == "DE" }
-        val choices = listOfNotNull(automatic) + countryRoutes + listOfNotNull(doubleRoute)
+        val choices = listOfNotNull(automatic) + countryRoutes
         val countryName = when (countryCode) {
             "NL" -> mapCopy("нидерланды", "netherlands")
             "DE" -> mapCopy("германия", "germany")
@@ -1423,12 +1420,12 @@ class MainActivity : Activity() {
             val selected = route.id == selectedId
             val title = when (route.protocol) {
                 RouteProtocol.AUTO -> mapCopy("автоподбор", "auto-select")
-                RouteProtocol.RU_DE -> mapCopy("lte + белые списки · ru → de", "lte + whitelist · ru → de")
+                RouteProtocol.LTE -> "lte"
                 else -> route.protocol.title
             }
             val detail = when (route.protocol) {
                 RouteProtocol.AUTO -> mapCopy("Выбрать доступный выход автоматически", "Select an available exit automatically")
-                RouteProtocol.RU_DE -> mapCopy("Двойной маршрут · Санкт-Петербург → Франкфурт", "Double route · Saint Petersburg → Frankfurt")
+                RouteProtocol.LTE -> mapCopy("Белые списки через CDN · лимит 6 ГБ в месяц пока не включён", "Whitelist via CDN · 6 GB monthly cap is not enabled yet")
                 RouteProtocol.HYSTERIA2 -> mapCopy("быстрый quic-маршрут", "fast quic route")
                 RouteProtocol.TUIC -> mapCopy("оптимизированный quic-маршрут", "optimized quic route")
                 else -> uiCopy(route.protocol.detail)
@@ -1570,13 +1567,13 @@ class MainActivity : Activity() {
         if (route == null) return uiCopy(selected.title)
         val city = when (route.countryCode) {
             "NL" -> "Амстердам"
-            "DE", "RU-DE" -> "Франкфурт"
+            "DE" -> "Франкфурт"
             "RU" -> "Санкт-Петербург"
             "FI" -> "Хельсинки"
             "IT" -> "Милан"
             else -> return uiCopy(selected.title)
         }
-        return (if (route.countryCode == "RU-DE") "🇩🇪" else route.flag) + " " + uiCopy(city)
+        return route.flag + " " + uiCopy(city)
     }
 
     private fun updateRouteFlow(selected: SelectedRoute) {
@@ -1691,7 +1688,6 @@ class MainActivity : Activity() {
                 "FI" -> listOf("fi")
                 "RU" -> listOf("ru")
                 "IT" -> listOf("it")
-                "RU-DE" -> listOf("ru", "de")
                 else -> emptyList()
             }
         }.toSet()
@@ -1880,7 +1876,7 @@ class MainActivity : Activity() {
         val connected = renderedPhase == VpnPhase.CONNECTED
         if (::routeTitleText.isInitialized) routeTitleText.text = when (route?.protocol) {
             RouteProtocol.AUTO -> "auto"
-            RouteProtocol.RU_DE -> "ru → de"
+            RouteProtocol.LTE -> "lte"
             else -> route?.let { "${it.countryCode.lowercase()}./${uiCopy(it.protocol.title).replace(" ", "")}" } ?: uiCopy(selected.title)
         }
         val metricKey = currentHomeRouteMetricKey(selected.id)

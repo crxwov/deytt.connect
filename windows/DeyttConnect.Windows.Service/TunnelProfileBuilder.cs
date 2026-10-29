@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Security.Cryptography;
 using System.Text;
+using DeyttConnect.Protocol;
 using DeyttConnect.Shared;
 
 namespace DeyttConnect.Windows.Service;
@@ -72,8 +73,16 @@ internal static class TunnelProfileBuilder
         string? upstreamInterface = null,
         IReadOnlyList<string>? customBypassDomains = null,
         IReadOnlyList<string>? customBypassProcesses = null,
-        string? splitTunnelMode = null)
+        string? splitTunnelMode = null,
+        int? cdnLteSocksPort = null)
     {
+        if (selectedTag == CdnLteProfile.RouteTag)
+        {
+            if (cdnLteSocksPort is not int port || !CdnLteProfile.HasValidMetadata(profileJson))
+                throw new InvalidDataException("CDN LTE route metadata or local Xray port is unavailable.");
+            profileJson = CdnLteProfile.UseSocksPort(profileJson, port);
+        }
+
         JsonObject root;
         try
         {
@@ -142,7 +151,6 @@ internal static class TunnelProfileBuilder
         }
 
         var autoTag = tags.FirstOrDefault(tag => tag.Contains("автоподбор", StringComparison.OrdinalIgnoreCase));
-        const string chainTag = "route:RU-DE:CHAIN";
         if (autoTag is null)
             throw new InvalidDataException("Subscription has no supported automatic route.");
 
@@ -172,7 +180,7 @@ internal static class TunnelProfileBuilder
         {
             if (IsAwgRoute(selectedTag))
                 throw new InvalidDataException("The selected AmneziaWG profile is unavailable.");
-            if (selectedTag != autoTag && selectedTag != chainTag &&
+            if (selectedTag != autoTag && selectedTag != CdnLteProfile.RouteTag &&
                 !Countries.Any(country => Protocols.Any(protocol =>
                     selectedTag == $"route:{country.Code}:{protocol}")))
                 throw new InvalidDataException("Selected route is not supported.");
@@ -217,6 +225,7 @@ internal static class TunnelProfileBuilder
                 route["rules"] = rules;
             rules.Add(CreateAwgResolveRule((JsonObject)endpointArray![0]!));
         }
+        root.Remove("deytt");
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
     }
 

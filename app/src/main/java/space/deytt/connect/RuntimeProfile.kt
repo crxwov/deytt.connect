@@ -12,6 +12,7 @@ object RuntimeProfile {
         } catch (error: Exception) {
             throw IllegalArgumentException("Сохранённый профиль повреждён", error)
         }
+        root.remove("deytt")
         val experimental = root.optJSONObject("experimental") ?: JSONObject().also {
             root.put("experimental", it)
         }

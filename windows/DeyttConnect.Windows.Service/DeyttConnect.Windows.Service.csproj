@@ -14,5 +14,11 @@
   <ItemGroup>
     <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
     <Compile Include="..\DeyttConnect.Shared\WindowsAwgProfileParser.cs" Link="Shared\WindowsAwgProfileParser.cs" />
+    <Content Include="..\..\.toolchain\libxray-v26.10.21\windows\xray.exe"
+             Link="xray.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <Target Name="RequirePinnedXray" BeforeTargets="PrepareForBuild">
+    <Error Condition="!Exists('..\..\.toolchain\libxray-v26.10.21\windows\xray.exe')"
+           Text="Pinned xray.exe is missing. Run scripts/fetch-libxray.sh windows first." />
+  </Target>
 </Project>

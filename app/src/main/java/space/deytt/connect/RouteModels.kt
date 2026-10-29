@@ -13,6 +13,7 @@ enum class RouteProtocol(val title: String, val detail: String) {
     TROJAN("trojan", "websocket + tls"),
     HYSTERIA2("hysteria 2", "быстрый quic-маршрут"),
     TUIC("tuic", "оптимизированный quic-маршрут"),
+    LTE("lte", "обход белых списков через CDN"),
     AWG15("amneziawg 1.5", "маскировка трафика"),
     AWG31("amneziawg 3.1", "новая маскировка трафика"),
     OPENFLUX("обход · германия", "через cups → германию");
@@ -25,6 +26,7 @@ enum class RouteProtocol(val title: String, val detail: String) {
             TROJAN -> "trojan"
             HYSTERIA2 -> "hysteria"
             TUIC -> "tuic"
+            LTE -> "lte"
             AWG15 -> "awg 1.5"
             AWG31 -> "awg 3.1"
             OPENFLUX -> "openflux"
@@ -59,10 +61,18 @@ class SelectedRouteStore(context: Context) {
     fun save(route: DeyttRoute) {
         prefs.edit {
             putString("id", route.id)
-            putString("title", if (route.protocol == RouteProtocol.AUTO) route.protocol.title else "${route.flag} ${route.country}")
+            putString("title", when (route.protocol) {
+                RouteProtocol.AUTO -> route.protocol.title
+                RouteProtocol.LTE -> "${route.flag} lte"
+                else -> "${route.flag} ${route.country}"
+            })
             putString(
                 "subtitle",
-                if (route.protocol == RouteProtocol.AUTO) "лучший доступный маршрут" else route.protocol.title,
+                when (route.protocol) {
+                    RouteProtocol.AUTO -> "лучший доступный маршрут"
+                    RouteProtocol.LTE -> "обход белых списков через CDN"
+                    else -> route.protocol.title
+                },
             )
             putString("engine", route.engine.name)
             putString("tag", route.configTag)
@@ -140,7 +150,6 @@ object RouteCatalog {
         "RU" to ("🇷🇺" to "россия"),
         "FI" to ("🇫🇮" to "финляндия"),
         "IT" to ("🇮🇹" to "италия"),
-        "RU-DE" to ("🇷🇺→🇩🇪" to "ru → de"),
     )
 
     fun flag(code: String): String = when (code.trim().uppercase()) {
@@ -149,7 +158,6 @@ object RouteCatalog {
         "RU" -> "🇷🇺"
         "FI" -> "🇫🇮"
         "IT" -> "🇮🇹"
-        "RU-DE" -> "🇷🇺→🇩🇪"
         "AUTO" -> "✦"
         else -> "🌐"
     }
@@ -165,7 +173,7 @@ object RouteCatalog {
     /** Derive visible countries from the same supported catalog used to parse routes. */
     fun countryGroups(routes: List<DeyttRoute>): List<Pair<String, List<DeyttRoute>>> {
         val grouped = routes.groupBy { it.countryCode }
-        return (countries.keys.filter { it != "RU-DE" } + "AWG_UNKNOWN").mapNotNull { code ->
+        return (countries.keys + "AWG_UNKNOWN").mapNotNull { code ->
             grouped[code]?.distinctBy { it.id }?.takeIf { it.isNotEmpty() }?.let { code to it }
         }
     }
@@ -190,9 +198,14 @@ object RouteCatalog {
                 val tag = outbounds.optJSONObject(index)?.optString("tag").orEmpty()
                 val parts = tag.split(':')
                 if (parts.size != 3 || parts[0] != "route") continue
+                if (parts[2] == "LTE") {
+                    if (tag == CdnLteProfile.ROUTE_TAG && CdnLteProfile.hasValidMetadata(config)) {
+                        routes += DeyttRoute(tag, "DE", "lte", "🇪🇺", RouteProtocol.LTE, TunnelEngine.LIBBOX, tag)
+                    }
+                    continue
+                }
                 val presentation = countries[parts[1]] ?: continue
                 val protocol = when (parts[2]) {
-                    "CHAIN" -> RouteProtocol.RU_DE
                     "VLESS" -> RouteProtocol.VLESS
                     "TROJAN" -> RouteProtocol.TROJAN
                     "HYSTERIA2" -> RouteProtocol.HYSTERIA2

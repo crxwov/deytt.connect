@@ -1438,7 +1438,6 @@ public sealed class SetupWindow : UserControl
         return route.CountryCode switch
         {
             "AUTO" => "Automatic selection",
-            "RU-DE" => "LTE + allowlists",
             "NL" => "Netherlands",
             "RU" => "Russia",
             "DE" => "Germany",

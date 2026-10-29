@@ -18,6 +18,7 @@ if [[ -e "$artifact_dir" ]]; then
   echo "Refusing to overwrite an existing package directory: $artifact_dir" >&2
   exit 1
 fi
+bash "$repo_root/scripts/fetch-libxray.sh" windows
 mkdir -p "$stage_dir"
 mkdir -p "$temp_dir/app" "$temp_dir/service"
 

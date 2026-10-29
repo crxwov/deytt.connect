@@ -345,11 +345,11 @@ internal class PrimaryPages(
             appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", "выбрать", emphasis = selectedId == route.id)
                 .apply { setOnClickListener { host.selectRoute(route) } })
         }
-        routes.firstOrNull { it.protocol == RouteProtocol.RU_DE }?.let { route ->
+        routes.firstOrNull { it.protocol == RouteProtocol.LTE }?.let { route ->
             appendToGroup(quickGroup, host.row(
-                copy("LTE + белые списки", "LTE + whitelist"),
-                copy("Россия → Германия · двойной маршрут", "Russia → Germany · double route"),
-                "ROUTE_RU_DE",
+                "🇪🇺 lte",
+                copy("Белые списки через CDN · до 6 ГБ в месяц", "Whitelist via CDN · up to 6 GB per month"),
+                "🇪🇺",
                 "выбрать",
                 emphasis = selectedId == route.id,
             ).apply { setOnClickListener { host.selectRoute(route) } })
@@ -496,7 +496,7 @@ internal class PrimaryPages(
         RouteProtocol.TROJAN -> "◇"
         RouteProtocol.HYSTERIA2 -> "H2"
         RouteProtocol.TUIC -> "TU"
-        RouteProtocol.RU_DE -> "RU→DE"
+        RouteProtocol.LTE -> "LTE"
         RouteProtocol.OPENFLUX -> "DE"
         else -> "·"
     }

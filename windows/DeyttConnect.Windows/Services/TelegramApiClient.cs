@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using DeyttConnect.Protocol;
 using DeyttConnect.Shared;
 
 namespace DeyttConnect.Windows.Services;
@@ -175,6 +176,7 @@ public sealed class TelegramApiClient
         using var requestTimeout = CancellationTokenSource.CreateLinkedTokenSource(subscriptionToken);
         requestTimeout.CancelAfter(EssentialRequestTimeout);
         byte[] payload;
+        string? cdnLteMetadata = null;
         progress?.Report("profile");
         try
         {
@@ -186,6 +188,8 @@ public sealed class TelegramApiClient
                 throw new TelegramApiException("device_blocked", HttpStatusCode.Forbidden);
             if (!response.IsSuccessStatusCode)
                 throw new TelegramApiException(ReadErrorCode(payload), response.StatusCode);
+            if (response.Headers.TryGetValues("X-Deytt-Cdn-Lte", out var lteValues))
+                cdnLteMetadata = lteValues.SingleOrDefault();
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -200,6 +204,7 @@ public sealed class TelegramApiClient
             var profileJson = new UTF8Encoding(false, true).GetString(payload);
             profileStage = "normalize";
             profileJson = WindowsSubscriptionProfileNormalizer.AddTunForEmptyInbounds(profileJson);
+            profileJson = CdnLteProfile.Attach(profileJson, cdnLteMetadata);
             using var normalizedProfile = JsonDocument.Parse(profileJson);
             progress?.Report("optional");
             profileStage = "awg";

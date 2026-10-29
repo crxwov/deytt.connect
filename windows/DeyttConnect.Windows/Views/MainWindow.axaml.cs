@@ -1023,12 +1023,13 @@ public partial class MainWindow : Window
 
     private static int RouteProtocolSortOrder(WindowsRoute route) => route.Protocol switch
     {
-        "VLESS" => 0,
-        "TROJAN" => 1,
-        "HYSTERIA2" => 2,
-        "TUIC" => 3,
-        "AWG15" or "AWG31" => 4,
-        _ => 5,
+        "LTE" => 0,
+        "VLESS" => 1,
+        "TROJAN" => 2,
+        "HYSTERIA2" => 3,
+        "TUIC" => 4,
+        "AWG15" or "AWG31" => 5,
+        _ => 6,
     };
 
     private enum RouteQualityGrade { Unrated, Good, Medium, Poor }
@@ -1105,6 +1106,7 @@ public partial class MainWindow : Window
             "TROJAN" => DeyttTheme.Blue,
             "HYSTERIA2" => DeyttTheme.Mint,
             "TUIC" => DeyttTheme.Sky,
+            "LTE" => DeyttTheme.Mint,
             "AWG15" or "AWG31" => DeyttTheme.Amber,
             _ => DeyttTheme.Muted,
         };
@@ -1130,6 +1132,7 @@ public partial class MainWindow : Window
             "VLESS" or "TROJAN" => "WebSocket + TLS",
             "HYSTERIA2" => "QUIC · UDP",
             "TUIC" => "QUIC · UDP · BBR",
+            "LTE" => Copy("Белые списки через CDN · лимит 6 ГБ/мес не включён", "Whitelist via CDN · 6 GB/month cap not enabled"),
             "AWG15" or "AWG31" => AwgProtocolTitle(route.Protocol),
             _ => route.ProtocolName,
         };
@@ -1301,9 +1304,9 @@ public partial class MainWindow : Window
         var selected = _selectedRoute == route.Id;
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 60 };
         Control icon;
-        if (route.CountryCode == "RU-DE")
+        if (route.Protocol == "LTE")
         {
-            icon = RouteFlagVisual.Create("RU-DE", 48, 30);
+            icon = RouteFlagVisual.Create("EU", 48, 30);
         }
         else
         {
@@ -1961,7 +1964,6 @@ public partial class MainWindow : Window
         "FI" => Copy("Финляндия", "Finland"),
         "IT" => Copy("италия", "italy"),
         "AWG_UNKNOWN" => Copy("Другие регионы", "Other regions"),
-        "RU-DE" => Copy("LTE + белые списки", "LTE + whitelist"),
         _ => route.CountryName,
     };
 

@@ -77,6 +77,10 @@
             </intent-filter>
         </service>
         <service
+            android:name=".CdnLteXrayService"
+            android:process=":xray"
+            android:exported="false" />
+        <service
             android:name=".RouteProbeVpnService"
             android:process=":routeprobe"
             android:exported="false"

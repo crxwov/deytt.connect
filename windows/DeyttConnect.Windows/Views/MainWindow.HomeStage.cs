@@ -50,7 +50,6 @@ public partial class MainWindow
                     "FI" => new[] { "fi" },
                     "RU" => new[] { "ru" },
                     "IT" => new[] { "it" },
-                    "RU-DE" => new[] { "ru", "de" },
                     _ => Array.Empty<string>(),
                 })
                 .Distinct(StringComparer.Ordinal)
@@ -173,7 +172,7 @@ public partial class MainWindow
             DeyttTheme.JetBrainsMono, wrap: false));
         var routeName = displayedRoute?.CountryCode switch
         {
-            "RU-DE" => Copy("LTE · RU+DE", "LTE · RU+DE"),
+            "DE" when displayedRoute?.Protocol == "LTE" => "lte",
             "AUTO" => Copy("Автоподбор", "Automatic route"),
             _ => displayedRoute?.CountryName ?? RouteTitle(),
         };
@@ -202,18 +201,11 @@ public partial class MainWindow
         var destination = route?.CountryCode == "AUTO"
             ? ("AUTO", Copy("Выход", "Exit"), Copy("выберется автоматически", "selected automatically"))
             : GetHomeDestinationParts(route);
-        var points = route?.CountryCode == "RU-DE"
-            ? new[]
-            {
-                (Copy("СЕТЬ", "NETWORK"), origin.Code, origin.Name, origin.Hint),
-                (Copy("УЗЕЛ", "HOP"), "RU", Copy("Россия", "Russia"), Copy("узел маршрута", "route node")),
-                (Copy("ВЫХОД", "EXIT"), destination.Item1, destination.Item2, destination.Item3),
-            }
-            : new[]
-            {
-                (Copy("СЕТЬ", "NETWORK"), origin.Code, origin.Name, origin.Hint),
-                (Copy("ВЫХОД", "EXIT"), destination.Item1, destination.Item2, destination.Item3),
-            };
+        var points = new[]
+        {
+            (Copy("СЕТЬ", "NETWORK"), origin.Code, origin.Name, origin.Hint),
+            (Copy("ВЫХОД", "EXIT"), destination.Item1, destination.Item2, destination.Item3),
+        };
         var columns = new List<string>();
         for (var index = 0; index < points.Length; index++)
         {
@@ -282,7 +274,6 @@ public partial class MainWindow
     {
         var code = route?.CountryCode switch
         {
-            "RU-DE" => "DE",
             "NL" => "NL",
             "DE" => "DE",
             "FI" => "FI",
@@ -305,7 +296,7 @@ public partial class MainWindow
         "TUIC" => "./tuic",
         "AWG15" => "./amnezia1.5",
         "AWG31" => "./amnezia3.1",
-        "CHAIN" => "./lte ru+de",
+        "LTE" => "./lte",
         _ => "./auto",
     };
 

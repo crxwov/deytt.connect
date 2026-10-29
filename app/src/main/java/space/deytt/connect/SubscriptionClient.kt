@@ -82,7 +82,11 @@ object SubscriptionClient {
         val url = withFormat(baseUrl, "singbox")
         onStage("download")
         val response = request(url, "application/json", required = true, transport = transport)!!
-        val content = response.body
+        val content = try {
+            CdnLteProfile.attach(response.body, response.cdnLteMetadata)
+        } catch (error: Exception) {
+            throw SubscriptionPayloadException()
+        }
         onStage("validate")
         val summary = validateDownloadedProfile(content)
         val metadata = SubscriptionMetadata.parse(response.profileTitle, response.userInfo)
@@ -143,6 +147,12 @@ object SubscriptionClient {
             } catch (error: IOException) {
                 throw SubscriptionStorageException()
             }
+            val routes = RouteCatalog.from(content, profiles, openFluxProfiles)
+            val availableRouteIds = routes.mapTo(mutableSetOf()) { it.id } + openFluxProfiles.map { it.id }
+            if (SelectedRouteStore(context).read().id !in availableRouteIds) {
+                routes.firstOrNull { it.protocol == RouteProtocol.AUTO }
+                    ?.let { SelectedRouteStore(context).save(it) }
+            }
             if (runCatching { SubscriptionMetadataStore(context).save(metadata) }.isFailure) {
                 warnings += "Маршруты сохранены, но сведения о тарифе не обновились. Повторите обновление позже."
             }
@@ -188,6 +198,7 @@ object SubscriptionClient {
         val profileTitle: String?,
         val userInfo: String?,
         val awgServers: String?,
+        val cdnLteMetadata: String?,
     )
 
     internal enum class AwgFetchState { AVAILABLE, NOT_AVAILABLE, PARTIAL_FAILURE, TRANSIENT_FAILURE }
@@ -272,6 +283,7 @@ object SubscriptionClient {
         val profileTitle: String? = null,
         val userInfo: String? = null,
         val awgServers: String? = null,
+        val cdnLteMetadata: String? = null,
         val retryAfterMillis: Long? = null,
     )
 
@@ -372,6 +384,7 @@ object SubscriptionClient {
             profileTitle = response.profileTitle,
             userInfo = response.userInfo,
             awgServers = response.awgServers,
+            cdnLteMetadata = response.cdnLteMetadata,
         )
     }
 
@@ -416,6 +429,7 @@ object SubscriptionClient {
                 profileTitle = connection.getHeaderField("Profile-Title"),
                 userInfo = connection.getHeaderField("Subscription-Userinfo"),
                 awgServers = connection.getHeaderField("X-Deytt-Awg-Servers"),
+                cdnLteMetadata = connection.getHeaderField("X-Deytt-Cdn-Lte"),
                 retryAfterMillis = parseRetryAfter(connection.getHeaderField("Retry-After")),
             )
         }

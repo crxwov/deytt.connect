@@ -1,6 +1,7 @@
 using System.Text.Json;
 using DeyttConnect.Shared;
 using System.Text.RegularExpressions;
+using DeyttConnect.Protocol;
 
 namespace DeyttConnect.Windows.Services;
 
@@ -83,7 +84,6 @@ public static class WindowsRouteCatalog
 
         var autoTag = outboundItems.Select(item => ReadString(item, "tag"))
             .FirstOrDefault(tag => tag?.Contains("автоподбор", StringComparison.OrdinalIgnoreCase) == true);
-        var chainTag = "route:RU-DE:CHAIN";
         if (autoTag is null)
             throw new InvalidDataException("The subscription is missing the automatic route.");
 
@@ -91,8 +91,10 @@ public static class WindowsRouteCatalog
         {
             new("auto", autoTag, "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
         };
-        if (outboundTags.Contains(chainTag))
-            routes.Add(new WindowsRoute("ru-de", chainTag, "RU-DE", "LTE + белые списки", "🇷🇺→🇩🇪", "CHAIN", "RU → DE"));
+        if (outboundTags.Contains(CdnLteProfile.RouteTag) &&
+            CdnLteProfile.HasValidMetadata(profile.GetRawText()))
+            routes.Add(new WindowsRoute(CdnLteProfile.RouteTag, CdnLteProfile.RouteTag,
+                "DE", "Германия", "🇪🇺", "LTE", "lte"));
 
         foreach (var country in Countries)
         foreach (var protocol in Protocols)

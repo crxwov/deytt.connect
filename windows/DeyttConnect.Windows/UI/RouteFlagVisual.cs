@@ -15,9 +15,9 @@ internal static class RouteFlagVisual
             "NL" => HorizontalStripes(width, height, "#C93D4B", "#F7F7F4", "#31579A"),
             "DE" => HorizontalStripes(width, height, "#17191E", "#C83C4A", "#F0C66B"),
             "RU" => HorizontalStripes(width, height, "#F7F7F4", "#477CC0", "#C83C4A"),
+            "EU" => EuropeanFlag(width, height),
             "FI" => FinnishFlag(width, height),
             "IT" => VerticalStripes(width, height, "#168B4B", "#F7F7F4", "#D0474D"),
-            "RU-DE" => DoubleFlag(width, height),
             _ => Fallback(code, width, height),
         };
 
@@ -85,23 +85,14 @@ internal static class RouteFlagVisual
         return columns;
     }
 
-    private static Control DoubleFlag(double width, double height)
+    private static Control EuropeanFlag(double width, double height) => new TextBlock
     {
-        var pair = new StackPanel
-        {
-            Orientation = Avalonia.Layout.Orientation.Horizontal,
-            Spacing = 2,
-            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
-        pair.Children.Add(Frame(HorizontalStripes(width * 0.36, height * 0.58,
-            "#F7F7F4", "#477CC0", "#C83C4A"), width * 0.36, height * 0.58));
-        pair.Children.Add(DeyttTheme.TextBlock("→", 8, DeyttTheme.Muted,
-            FontWeight.SemiBold, wrap: false));
-        pair.Children.Add(Frame(HorizontalStripes(width * 0.36, height * 0.58,
-            "#17191E", "#C83C4A", "#F0C66B"), width * 0.36, height * 0.58));
-        return pair;
-    }
+        Text = "🇪🇺",
+        FontSize = height * 0.78,
+        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        TextAlignment = TextAlignment.Center,
+    };
 
     private static Control Fallback(string code, double width, double height)
     {
@@ -145,7 +136,7 @@ internal static class RouteFlagVisual
         "RU" => "флаг россии",
         "FI" => "флаг финляндии",
         "IT" => "флаг италии",
-        "RU-DE" => "флаги россии и германии",
+        "EU" => "флаг европы",
         "AUTO" => "автоматический выбор маршрута",
         "IP" => "регион, определённый по ip",
         _ => "регион не указан",

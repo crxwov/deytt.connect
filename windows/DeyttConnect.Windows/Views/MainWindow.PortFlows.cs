@@ -256,24 +256,22 @@ public partial class MainWindow
 
         var countryRoutes = _routes.Where(route =>
                 route.CountryCode == countryCode &&
-                route.Protocol is "VLESS" or "TROJAN" or "HYSTERIA2" or "TUIC" or "AWG15" or "AWG31")
+                route.Protocol is "VLESS" or "TROJAN" or "HYSTERIA2" or "TUIC" or "LTE" or "AWG15" or "AWG31")
             .OrderBy(route => route.Protocol switch
             {
-                "VLESS" => 0,
-                "TROJAN" => 1,
-                "HYSTERIA2" => 2,
-                "TUIC" => 3,
-                "AWG15" or "AWG31" => 4,
-                _ => 4,
+                "LTE" => 0,
+                "VLESS" => 1,
+                "TROJAN" => 2,
+                "HYSTERIA2" => 3,
+                "TUIC" => 4,
+                "AWG15" or "AWG31" => 5,
+                _ => 5,
             })
             .ToArray();
         var choices = new List<WindowsRoute>();
         if (_routes.FirstOrDefault(route => route.Protocol == "AUTO") is { } automatic)
             choices.Add(automatic);
         choices.AddRange(countryRoutes);
-        if ((countryCode is "RU" or "DE") &&
-            _routes.FirstOrDefault(route => route.Protocol == "RU-DE") is { } chain)
-            choices.Add(chain);
 
         var countryName = countryRoutes.FirstOrDefault()?.CountryName ?? countryCode switch
         {
@@ -311,7 +309,7 @@ public partial class MainWindow
             var detail = route.Protocol switch
             {
                 "AUTO" => Copy("Выбрать доступный выход автоматически", "Select an available exit automatically"),
-                "RU-DE" => Copy("Двойной маршрут · Санкт-Петербург → Франкфурт", "Double route · Saint Petersburg → Frankfurt"),
+                "LTE" => Copy("Белые списки через CDN · лимит 6 ГБ/мес не включён", "Whitelist via CDN · 6 GB/month cap not enabled"),
                 "VLESS" or "TROJAN" => Copy("WebSocket + TLS", "WebSocket + TLS"),
                 "HYSTERIA2" => Copy("Быстрый QUIC-маршрут", "Fast QUIC route"),
                 "TUIC" => Copy("Оптимизированный QUIC-маршрут", "Optimized QUIC route"),
@@ -322,7 +320,7 @@ public partial class MainWindow
             var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
             labels.Children.Add(DeyttTheme.TextBlock(
                 route.Protocol == "AUTO" ? Copy("Автоподбор", "Auto-select") :
-                route.Protocol == "RU-DE" ? Copy("LTE + белые списки · RU → DE", "LTE + whitelist · RU → DE") :
+                route.Protocol == "LTE" ? "lte" :
                 route.ProtocolName,
                 15, DeyttTheme.Text, FontWeight.SemiBold));
             labels.Children.Add(DeyttTheme.TextBlock(detail, 11, DeyttTheme.Muted));

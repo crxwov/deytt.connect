@@ -334,7 +334,6 @@ object DeyttUi {
                 }
             } else when (leading) {
                 "AWG_MARK" -> awgMark(emphasis)
-                "ROUTE_RU_DE" -> routePairMark(emphasis)
                 "SUBSCRIPTION_ICON" -> actionIcon(R.drawable.ic_cloud_download, emphasis)
                 "ROUTE_AUTO" -> actionIcon(R.drawable.ic_route, emphasis)
                 "PAYMENTS_ICON" -> actionIcon(R.drawable.ic_credit_card, emphasis)
