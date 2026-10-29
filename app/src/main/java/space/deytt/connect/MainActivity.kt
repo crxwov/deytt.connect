@@ -1425,7 +1425,7 @@ class MainActivity : Activity() {
             }
             val detail = when (route.protocol) {
                 RouteProtocol.AUTO -> mapCopy("Выбрать доступный выход автоматически", "Select an available exit automatically")
-                RouteProtocol.LTE -> mapCopy("Белые списки LTE · лимит 6 ГБ в месяц", "Whitelist LTE · 6 GB monthly limit")
+                RouteProtocol.LTE -> mapCopy("Белые списки LTE · лимит 10 ГБ в месяц", "Whitelist LTE · 10 GB monthly limit")
                 RouteProtocol.HYSTERIA2 -> mapCopy("быстрый quic-маршрут", "fast quic route")
                 RouteProtocol.TUIC -> mapCopy("оптимизированный quic-маршрут", "optimized quic route")
                 else -> uiCopy(route.protocol.detail)

@@ -309,7 +309,7 @@ public partial class MainWindow
             var detail = route.Protocol switch
             {
                 "AUTO" => Copy("Выбрать доступный выход автоматически", "Select an available exit automatically"),
-                "LTE" => Copy("Белые списки LTE · лимит 6 ГБ в месяц", "Whitelist LTE · 6 GB monthly limit"),
+                "LTE" => Copy("Белые списки LTE · лимит 10 ГБ в месяц", "Whitelist LTE · 10 GB monthly limit"),
                 "VLESS" or "TROJAN" => Copy("WebSocket + TLS", "WebSocket + TLS"),
                 "HYSTERIA2" => Copy("Быстрый QUIC-маршрут", "Fast QUIC route"),
                 "TUIC" => Copy("Оптимизированный QUIC-маршрут", "Optimized QUIC route"),
