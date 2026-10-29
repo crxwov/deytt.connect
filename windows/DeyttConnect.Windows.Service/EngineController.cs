@@ -35,11 +35,14 @@ internal sealed class EngineController
     private readonly SemaphoreSlim _healthRecheck = new(0, 1);
     private Process? _engine;
     private EngineProcessLifetime? _engineLifetime;
+    private Process? _xray;
+    private EngineProcessLifetime? _xrayLifetime;
     private CancellationTokenSource? _verification;
     private CancellationTokenSource? _probeCancellation;
     private TunnelHealthMonitorLifetime? _healthMonitor;
     private ActiveRouteTelemetry? _activeRouteTelemetry;
     private string? _profilePath;
+    private string? _xrayProfilePath;
     private string? _routeTag;
     private IReadOnlyList<string>? _tunAddresses;
     private IReadOnlyDictionary<string, IPAddress[]>? _canaryAddresses;
@@ -148,9 +151,11 @@ internal sealed class EngineController
 
             SetSnapshot(new ServiceSnapshot("starting", "Подготовка VPN…", routeTag));
 
+            var lteSocksPort = routeTag == CdnLteProfile.RouteTag ? AllocateLoopbackPort() : (int?)null;
             // A full TUN must bootstrap on the physical network; binding it to Happ creates a routing loop.
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
-                null, customBypassDomains, customBypassProcesses, splitTunnelMode);
+                null, customBypassDomains, customBypassProcesses, splitTunnelMode,
+                cdnLteSocksPort: lteSocksPort);
             preflight = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             // Start independent DNS bootstrap while AWG hosts and the profile are prepared.
             canaryTask = ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync, preflight.Token);
@@ -204,6 +209,16 @@ internal sealed class EngineController
                     StopCore();
                     return SetError($"Ядро: {SummarizeEngineDiagnostic(diagnostic)}");
                 }
+            }
+
+            if (lteSocksPort is int socksPort)
+            {
+                var dialer = FindXrayDialer(null);
+                var xrayConfig = CdnLteProfile.BuildXrayConfig(profile, socksPort);
+                _xrayProfilePath = WritePrivateProfile(xrayConfig);
+                var xray = StartOwnedXray(_xrayProfilePath, dialer.InterfaceName, dialer.DnsEndpoint);
+                await WaitForXraySocksAsync(xray, socksPort, cancellationToken).ConfigureAwait(false);
+                _ = MonitorXrayAsync(xray);
             }
 
             // Resolve before TUN changes routing; this lookup overlaps profile validation.
@@ -1083,6 +1098,7 @@ internal sealed class EngineController
 
         _tunStartupCollisionRetries++;
         StopOwnedEngineProcess();
+        StopOwnedXrayProcess();
         try
         {
             // Windows can release the previous Wintun device name slightly after
@@ -2132,6 +2148,7 @@ internal sealed class EngineController
         _verification = null;
 
         StopOwnedEngineProcess();
+        StopOwnedXrayProcess();
 
         if (_profilePath is { } path)
         {
@@ -2139,11 +2156,163 @@ internal sealed class EngineController
             catch { }
             _profilePath = null;
         }
+        if (_xrayProfilePath is { } xrayPath)
+        {
+            try { File.Delete(xrayPath); }
+            catch { }
+            _xrayProfilePath = null;
+        }
         _routeTag = null;
         _tunAddresses = null;
         _canaryAddresses = null;
         _serverAddresses = new Dictionary<string, IPAddress>(StringComparer.Ordinal);
         _tunStartupCollisionRetries = 0;
+    }
+
+    private static int AllocateLoopbackPort()
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+
+    private static (string InterfaceName, string DnsEndpoint) FindXrayDialer(string? preferredInterface)
+    {
+        var interfaces = NetworkInterface.GetAllNetworkInterfaces()
+            .Where(item => item.OperationalStatus == OperationalStatus.Up &&
+                           item.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                           !IsOwnedTunInterface(item.Name))
+            .ToArray();
+        var selected = preferredInterface is not null
+            ? interfaces.FirstOrDefault(item => string.Equals(item.Name, preferredInterface,
+                StringComparison.OrdinalIgnoreCase))
+            : interfaces.FirstOrDefault(item => item.GetIPProperties().GatewayAddresses.Any(gateway =>
+                !IsAnyAddress(gateway.Address)))
+              ?? throw new InvalidOperationException("Не найдена сеть для LTE Xray.");
+        if (selected is null)
+            throw new InvalidOperationException("Не найдена сеть для LTE Xray.");
+
+        var dns = selected.GetIPProperties().DnsAddresses.FirstOrDefault(address =>
+            !IsAnyAddress(address) && !IPAddress.IsLoopback(address));
+        if (dns is null)
+            throw new InvalidOperationException("У сети LTE Xray не найден DNS-сервер.");
+        var host = dns.AddressFamily == AddressFamily.InterNetworkV6 ? $"[{dns}]" : dns.ToString();
+        return (selected.Name, $"{host}:53");
+    }
+
+    private static bool IsAnyAddress(IPAddress address) =>
+        address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any);
+
+    private Process StartOwnedXray(string profilePath, string interfaceName, string dnsEndpoint)
+    {
+        var xrayPath = Path.Combine(AppContext.BaseDirectory, "xray.exe");
+        if (!File.Exists(xrayPath))
+            throw new FileNotFoundException("Не найден компонент CDN Xray. Переустановите Connect.", xrayPath);
+        var process = StartXrayProcess(xrayPath, profilePath, interfaceName, dnsEndpoint);
+        try
+        {
+            _xrayLifetime = EngineProcessLifetime.Attach(process);
+            _xray = process;
+            return process;
+        }
+        catch
+        {
+            TryKill(process);
+            process.Dispose();
+            throw;
+        }
+    }
+
+    private static Process StartXrayProcess(string xrayPath, string profilePath, string interfaceName,
+        string dnsEndpoint)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = xrayPath,
+            WorkingDirectory = AppContext.BaseDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        start.ArgumentList.Add("run");
+        start.ArgumentList.Add("-dns");
+        start.ArgumentList.Add(dnsEndpoint);
+        start.ArgumentList.Add("-interface");
+        start.ArgumentList.Add(interfaceName);
+        start.ArgumentList.Add("-config");
+        start.ArgumentList.Add(profilePath);
+        var process = Process.Start(start) ?? throw new InvalidOperationException("Xray did not start.");
+        process.OutputDataReceived += static (_, _) => { };
+        process.ErrorDataReceived += static (_, _) => { };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        return process;
+    }
+
+    private async Task WaitForXraySocksAsync(Process process, int port, CancellationToken cancellationToken)
+    {
+        var deadline = System.Diagnostics.Stopwatch.StartNew();
+        while (deadline.Elapsed < TimeSpan.FromSeconds(15))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (process.HasExited)
+                throw new InvalidDataException("CDN Xray завершился при запуске.");
+            using var socket = new TcpClient(AddressFamily.InterNetwork);
+            try
+            {
+                await socket.ConnectAsync(IPAddress.Loopback, port, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (SocketException)
+            {
+                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        throw new TimeoutException("CDN Xray не открыл локальный SOCKS-порт.");
+    }
+
+    private async Task MonitorXrayAsync(Process process)
+    {
+        try { await process.WaitForExitAsync().ConfigureAwait(false); }
+        catch { return; }
+        await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            if (!ReferenceEquals(_xray, process))
+                return;
+            StopCore();
+            SetError("LTE-маршрут отключился. Повторите подключение.");
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private void StopOwnedXrayProcess()
+    {
+        var process = _xray;
+        _xray = null;
+        _xrayLifetime?.Dispose();
+        _xrayLifetime = null;
+        if (process is null)
+            return;
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                process.WaitForExit(5_000);
+            }
+        }
+        catch
+        {
+            // Continue clearing service state and private profile data.
+        }
+        process.Dispose();
     }
 
     private void StopOwnedEngineProcess()

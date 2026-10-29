@@ -1,3 +1,4 @@
+using DeyttConnect.Protocol;
 using System.Text.Json;
 using DeyttConnect.Shared;
 using System.Text.RegularExpressions;
@@ -91,8 +92,10 @@ public static class WindowsRouteCatalog
         {
             new("auto", autoTag, "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
         };
-        if (outboundTags.Contains(chainTag))
-            routes.Add(new WindowsRoute("ru-de", chainTag, "RU-DE", "LTE + белые списки", "🇷🇺→🇩🇪", "CHAIN", "RU → DE"));
+        if (outboundTags.Contains(CdnLteProfile.RouteTag) &&
+            CdnLteProfile.HasValidMetadata(profile.GetRawText()))
+            routes.Add(new WindowsRoute(CdnLteProfile.RouteTag, CdnLteProfile.RouteTag,
+                "EU", "Европа", "🇪🇺", "LTE", "lte • белые списки"));
 
         foreach (var country in Countries)
         foreach (var protocol in Protocols)

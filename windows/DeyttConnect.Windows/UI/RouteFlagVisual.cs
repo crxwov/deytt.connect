@@ -17,6 +17,7 @@ internal static class RouteFlagVisual
             "RU" => HorizontalStripes(width, height, "#F7F7F4", "#477CC0", "#C83C4A"),
             "FI" => FinnishFlag(width, height),
             "IT" => VerticalStripes(width, height, "#168B4B", "#F7F7F4", "#D0474D"),
+            "EU" => EuropeanFlag(width, height),
             "RU-DE" => DoubleFlag(width, height),
             _ => Fallback(code, width, height),
         };
@@ -85,6 +86,15 @@ internal static class RouteFlagVisual
         return columns;
     }
 
+    private static Control EuropeanFlag(double width, double height) => new TextBlock
+    {
+        Text = "🇪🇺",
+        FontSize = height * 0.78,
+        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        TextAlignment = TextAlignment.Center,
+    };
+
     private static Control DoubleFlag(double width, double height)
     {
         var flagWidth = Math.Max(2, (width - 12) / 2);
@@ -152,6 +162,7 @@ internal static class RouteFlagVisual
         "RU" => "флаг россии",
         "FI" => "флаг финляндии",
         "IT" => "флаг италии",
+        "EU" => "флаг европы",
         "RU-DE" => "флаги россии и германии",
         "AUTO" => "автоматический выбор маршрута",
         "IP" => "регион, определённый по ip",

@@ -284,10 +284,11 @@ public partial class MainWindow
                 route.Protocol is "VLESS" or "TROJAN" or "HYSTERIA2" or "TUIC" or "AWG31")
             .OrderBy(route => route.Protocol switch
             {
-                "VLESS" => 0,
-                "TROJAN" => 1,
-                "HYSTERIA2" => 2,
-                "TUIC" => 3,
+                "LTE" => 0,
+                "VLESS" => 1,
+                "TROJAN" => 2,
+                "HYSTERIA2" => 3,
+                "TUIC" => 4,
                 "AWG31" => 4,
                 _ => 4,
             })
@@ -336,6 +337,7 @@ public partial class MainWindow
             var detail = route.Protocol switch
             {
                 "AUTO" => Copy("Выбрать доступный выход автоматически", "Select an available exit automatically"),
+                "LTE" => Copy("Белые списки LTE · лимит 10 ГБ в месяц", "Whitelist LTE · 10 GB monthly limit"),
                 "RU-DE" => Copy("Двойной маршрут · Санкт-Петербург → Франкфурт", "Double route · Saint Petersburg → Frankfurt"),
                 "VLESS" or "TROJAN" => Copy("WebSocket + TLS", "WebSocket + TLS"),
                 "HYSTERIA2" => Copy("Быстрый QUIC-маршрут", "Fast QUIC route"),
@@ -347,6 +349,7 @@ public partial class MainWindow
             var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
             labels.Children.Add(DeyttTheme.TextBlock(
                 route.Protocol == "AUTO" ? Copy("Автоподбор", "Auto-select") :
+                route.Protocol == "LTE" ? "lte • белые списки" :
                 route.Protocol == "RU-DE" ? Copy("LTE + белые списки · RU → DE", "LTE + whitelist · RU → DE") :
                 route.ProtocolName,
                 15, DeyttTheme.Text, FontWeight.SemiBold));

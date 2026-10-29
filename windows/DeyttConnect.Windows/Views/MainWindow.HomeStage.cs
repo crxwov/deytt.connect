@@ -341,6 +341,7 @@ public partial class MainWindow
         var details = new StackPanel { Spacing = _compactLayout ? 18 : 24 };
         var routeName = displayedRoute?.CountryCode switch
         {
+            "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
             "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
             "AUTO" or null => Copy("автоподбор", "auto-select"),
             _ => RouteCountryName(displayedRoute),
@@ -473,6 +474,7 @@ public partial class MainWindow
         "HYSTERIA2" => "./hysteria2",
         "TUIC" => "./tuic",
         "AWG31" => "./amnezia3.1",
+        "LTE" => "./lte",
         "CHAIN" => "./lte ru+de",
         _ => "./auto",
     };
@@ -662,6 +664,7 @@ public partial class MainWindow
         var automatic = _selectedRoute == "auto";
         var country = automatic ? Copy("автоподбор", "auto-select") : displayedRoute?.CountryCode switch
         {
+            "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
             "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
             "AUTO" or null => Copy("автоподбор", "auto-select"),
             _ => RouteCountryName(displayedRoute).ToLowerInvariant(),

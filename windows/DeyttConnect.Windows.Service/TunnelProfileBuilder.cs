@@ -1,3 +1,4 @@
+using DeyttConnect.Protocol;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Security.Cryptography;
@@ -72,8 +73,16 @@ internal static class TunnelProfileBuilder
         string? upstreamInterface = null,
         IReadOnlyList<string>? customBypassDomains = null,
         IReadOnlyList<string>? customBypassProcesses = null,
-        string? splitTunnelMode = null, bool pruneUnusedDependencies = true)
+        string? splitTunnelMode = null, bool pruneUnusedDependencies = true,
+        int? cdnLteSocksPort = null)
     {
+        if (selectedTag == CdnLteProfile.RouteTag)
+        {
+            if (cdnLteSocksPort is not int port || !CdnLteProfile.HasValidMetadata(profileJson))
+                throw new InvalidDataException("CDN LTE route metadata or local Xray port is unavailable.");
+            profileJson = CdnLteProfile.UseSocksPort(profileJson, port);
+        }
+
         JsonObject root;
         try
         {
@@ -184,7 +193,7 @@ internal static class TunnelProfileBuilder
         {
             if (IsAwgRoute(selectedTag))
                 throw new InvalidDataException("The selected AmneziaWG profile is unavailable.");
-            if (selectedTag != autoTag && selectedTag != chainTag &&
+            if (selectedTag != autoTag && selectedTag != chainTag && selectedTag != CdnLteProfile.RouteTag &&
                 !Countries.Any(country => Protocols.Any(protocol =>
                     selectedTag == $"route:{country.Code}:{protocol}")))
                 throw new InvalidDataException("Selected route is not supported.");
@@ -232,6 +241,7 @@ internal static class TunnelProfileBuilder
         // The core starts unused endpoints too; their bootstrap failures must not abort the selected route.
         if (pruneUnusedDependencies)
             PruneRouteDependencies(root, [engineTag]);
+        root.Remove("deytt");
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
     }
 
@@ -313,6 +323,7 @@ internal static class TunnelProfileBuilder
 
         PruneProbeDependencies(root, endpoints);
 
+        root.Remove("deytt");
         return root.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
     }
 

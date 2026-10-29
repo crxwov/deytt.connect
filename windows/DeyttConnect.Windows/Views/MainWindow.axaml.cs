@@ -1601,7 +1601,8 @@ public partial class MainWindow : Window
 
     private static int RouteProtocolSortOrder(WindowsRoute route) => route.Protocol switch
     {
-        "VLESS" => 0,
+        "LTE" => 0,
+        "VLESS" => 1,
         "TROJAN" => 1,
         "HYSTERIA2" => 2,
         "TUIC" => 3,
@@ -1716,6 +1717,7 @@ public partial class MainWindow : Window
             "VLESS" or "TROJAN" => "WebSocket + TLS",
             "HYSTERIA2" => "QUIC · UDP",
             "TUIC" => "QUIC · UDP · BBR",
+            "LTE" => Copy("Белые списки LTE · лимит 10 ГБ в месяц", "Whitelist LTE · 10 GB monthly limit"),
             "AWG31" => route.ProfileName ?? "UDP · AmneziaWG",
             _ => route.ProtocolName,
         };
@@ -1970,7 +1972,11 @@ public partial class MainWindow : Window
             ColumnSpacing = 12,
         };
         Control icon;
-        if (route.CountryCode == "RU-DE")
+        if (route.Protocol == "LTE")
+        {
+            icon = RouteFlagVisual.Create("EU", 48, 30);
+        }
+        else if (route.CountryCode == "RU-DE")
         {
             icon = new NavigationIcon(NavigationIconKind.Routes, selected: true);
         }
@@ -2811,6 +2817,7 @@ public partial class MainWindow : Window
         "DE" => Copy("Германия", "Germany"),
         "FI" => Copy("Финляндия", "Finland"),
         "IT" => Copy("италия", "italy"),
+        "EU" => Copy("Европа", "Europe"),
         "AWG_UNKNOWN" => Copy("Другие регионы", "Other regions"),
         "RU-DE" => Copy("lte белые списки", "lte allowlist"),
         _ => route.CountryName,
