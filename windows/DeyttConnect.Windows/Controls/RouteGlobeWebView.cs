@@ -42,7 +42,7 @@ public sealed class RouteGlobeWebView : ContentControl
 {
     private const string AssetHost = "deytt-atlas.example";
     private static readonly Uri AtlasUri = new($"https://{AssetHost}/index.html");
-    private static readonly Uri WindowsAtlasUri = new($"https://{AssetHost}/index.html?profile=windows");
+    private static readonly Uri WindowsAtlasUri = new($"https://{AssetHost}/index.html?profile=windows&v={typeof(RouteGlobeWebView).Assembly.GetName().Version}");
     private const int MaximumAutomaticRetries = 2;
     private readonly bool _disableNativeInitialization;
     private static readonly string[] RequiredAtlasAssets =

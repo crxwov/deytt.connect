@@ -147,7 +147,7 @@ internal sealed class ActiveRouteTelemetry : IDisposable
                 explicitRoute ??= tag;
             if (outbound.Type is not ("selector" or "urltest"))
             {
-                if (outbound.Type is not ("vless" or "trojan" or "hysteria2" or "wireguard" or "awg"))
+                if (outbound.Type is not ("vless" or "trojan" or "hysteria2" or "tuic" or "wireguard" or "awg"))
                     return null;
                 if (explicitRoute is not null)
                     return explicitRoute;
@@ -181,7 +181,7 @@ internal sealed class ActiveRouteTelemetry : IDisposable
             if (!visited.Add(tag) || !outbounds.TryGetValue(tag, out var outbound))
                 return null;
             if (outbound.Type is not ("selector" or "urltest"))
-                return outbound.Type is "vless" or "trojan" or "hysteria2" or "wireguard" or "awg"
+                return outbound.Type is "vless" or "trojan" or "hysteria2" or "tuic" or "wireguard" or "awg"
                     ? tag : null;
             if (!proxies.TryGetProperty(tag, out var group) || group.ValueKind != JsonValueKind.Object ||
                 !group.TryGetProperty("now", out var now) || now.ValueKind != JsonValueKind.String ||
@@ -209,7 +209,7 @@ internal sealed class ActiveRouteTelemetry : IDisposable
         var parts = tag.Split(':');
         return parts.Length == 3 && parts[0] == "route" &&
             parts[1] is "NL" or "DE" or "RU" or "FI" or "IT" &&
-            parts[2] is "VLESS" or "TROJAN" or "HYSTERIA2";
+            parts[2] is "VLESS" or "TROJAN" or "HYSTERIA2" or "TUIC";
     }
 
     private static Dictionary<string, Outbound> ReadOutbounds(JsonElement root)

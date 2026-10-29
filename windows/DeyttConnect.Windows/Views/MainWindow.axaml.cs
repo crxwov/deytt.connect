@@ -407,6 +407,8 @@ public partial class MainWindow : Window
         }
 
         ShowPageInHost(tab, page);
+        if (previousTab != tab && tab == MainTab.Routes && _sessionToken is not null)
+            _ = RefreshSignedInAccountAsync();
         EnsureInitialNetherlandsRouteProbe();
         if (previousTab != tab)
             _pageEntranceCancellation?.Cancel();
@@ -1366,6 +1368,18 @@ public partial class MainWindow : Window
             }, DeyttTheme.Surface2, DeyttTheme.Line, 18, new Thickness(16)));
         }
         AddSection(routeColumn, Copy("СТРАНЫ", "COUNTRIES"));
+        if (_routes.Count > 0)
+        {
+            var refreshRoutes = DeyttTheme.PrimaryButton(Copy("Обновить список", "Refresh routes"),
+                () => _ = RefreshSignedInAccountAsync());
+            refreshRoutes.Width = 210;
+            refreshRoutes.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+            refreshRoutes.IsEnabled = hasSession && !_profileRefreshInProgress;
+            if (refreshRoutes.Child is Button refreshButton)
+                AutomationProperties.SetAutomationId(refreshButton, "RefreshRoutes");
+            routeColumn.Children.Add(refreshRoutes);
+            routeColumn.Children.Add(DeyttTheme.Spacer(8));
+        }
 
         if (_routes.Count == 0 && _sessionToken is null)
         {
@@ -1590,8 +1604,9 @@ public partial class MainWindow : Window
         "VLESS" => 0,
         "TROJAN" => 1,
         "HYSTERIA2" => 2,
-        "AWG31" => 3,
-        _ => 4,
+        "TUIC" => 3,
+        "AWG31" => 4,
+        _ => 5,
     };
 
     private enum RouteQualityGrade { Unrated, Good, Medium, Poor }
@@ -1700,6 +1715,7 @@ public partial class MainWindow : Window
         {
             "VLESS" or "TROJAN" => "WebSocket + TLS",
             "HYSTERIA2" => "QUIC · UDP",
+            "TUIC" => "QUIC · UDP · BBR",
             "AWG31" => route.ProfileName ?? "UDP · AmneziaWG",
             _ => route.ProtocolName,
         };

@@ -10,14 +10,16 @@ public sealed class ActiveRouteTelemetryTests
 {
     private const string Profile = """
         {"route":{"final":"auto"},"outbounds":[
-        {"type":"urltest","tag":"auto","outbounds":["route:NL:VLESS","route:DE:TROJAN"]},
+        {"type":"urltest","tag":"auto","outbounds":["route:NL:VLESS","route:DE:TROJAN","route:DE:TUIC"]},
         {"type":"vless","tag":"route:NL:VLESS"},
-        {"type":"trojan","tag":"route:DE:TROJAN"}]}
+        {"type":"trojan","tag":"route:DE:TROJAN"},
+        {"type":"tuic","tag":"route:DE:TUIC"}]}
         """;
 
     [Theory]
     [InlineData("route:NL:VLESS", "route:NL:VLESS")]
     [InlineData("route:DE:TROJAN", "route:DE:TROJAN")]
+    [InlineData("route:DE:TUIC", "route:DE:TUIC")]
     [InlineData("route:FI:VLESS", null)]
     [InlineData("direct", null)]
     [InlineData("", null)]

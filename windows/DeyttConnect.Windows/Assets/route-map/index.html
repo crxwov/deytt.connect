@@ -1266,6 +1266,10 @@
       background: rgba(116, 216, 232, 0.12);
       border-color: rgba(116, 216, 232, 0.28);
     }
+    .proto-logo.tuic {
+      background: rgba(165, 180, 252, 0.12);
+      border-color: rgba(165, 180, 252, 0.28);
+    }
     .proto-logo.awg {
       background: rgba(57, 232, 189, 0.12);
       border-color: rgba(57, 232, 189, 0.28);
@@ -2138,6 +2142,18 @@
                   </div>
                 </div>
 
+                <div class="proto-row" data-route-key="nl-tuic" data-route-tag="route:NL:TUIC" hidden style="display:none">
+                  <div class="proto-left">
+                    <div class="proto-logo tuic" title="tuic">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" aria-hidden="true"><path d="M13 2 5 14h6l-1 8 9-13h-6z"/></svg>
+                    </div>
+                    <span class="proto-name">tuic</span>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry"><span class="ping-dot"></span><span class="proto-latency">—</span> мс <span class="proto-speed"></span></div>
+                    <button class="route-action-btn btn-select-route" data-action-route="nl-tuic">выбрать</button>
+                  </div>
+                </div>
                 <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="nl-awg" data-route-tag="awg31:nl">
                   <div class="proto-left">
@@ -2227,6 +2243,18 @@
                   </div>
                 </div>
 
+                <div class="proto-row" data-route-key="de-tuic" data-route-tag="route:DE:TUIC" hidden style="display:none">
+                  <div class="proto-left">
+                    <div class="proto-logo tuic" title="tuic">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="#a5b4fc" stroke-width="1.8" aria-hidden="true"><path d="M13 2 5 14h6l-1 8 9-13h-6z"/></svg>
+                    </div>
+                    <span class="proto-name">tuic</span>
+                  </div>
+                  <div class="proto-right">
+                    <div class="proto-telemetry"><span class="ping-dot"></span><span class="proto-latency">—</span> мс <span class="proto-speed"></span></div>
+                    <button class="route-action-btn btn-select-route" data-action-route="de-tuic">выбрать</button>
+                  </div>
+                </div>
                 <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="de-awg" data-route-tag="awg31:de">
                   <div class="proto-left">
@@ -3205,6 +3233,7 @@
       const protocol = String(route.protocol || route.protocolName || "").toLowerCase();
       if (protocol.includes("awg") || protocol.includes("amnezia")) return "awg";
       if (protocol.includes("hysteria") || protocol.includes("hy2")) return "hy2";
+      if (protocol.includes("tuic")) return "tuic";
       if (protocol.includes("trojan")) return "trojan";
       if (protocol.includes("vless")) return "vless";
       return "";
@@ -3279,10 +3308,12 @@
       "nl-vless": { flag: "🇳🇱", country: "нидерланды", city: "vless+ws" },
       "nl-hy2": { flag: "🇳🇱", country: "нидерланды", city: "hysteriav2" },
       "nl-trojan": { flag: "🇳🇱", country: "нидерланды", city: "trojan" },
+      "nl-tuic": { flag: "🇳🇱", country: "нидерланды", city: "tuic" },
       "nl-awg": { flag: "🇳🇱", country: "нидерланды", city: "amneziawg3.1" },
       "de-vless": { flag: "🇩🇪", country: "германия", city: "vless+ws" },
       "de-hy2": { flag: "🇩🇪", country: "германия", city: "hysteriav2" },
       "de-trojan": { flag: "🇩🇪", country: "германия", city: "trojan" },
+      "de-tuic": { flag: "🇩🇪", country: "германия", city: "tuic" },
       "de-awg": { flag: "🇩🇪", country: "германия", city: "amneziawg3.1" },
       "ru-vless": { flag: "🇷🇺", country: "россия", city: "vless+ws" },
       "ru-hy2": { flag: "🇷🇺", country: "россия", city: "hysteriav2" },
@@ -3308,7 +3339,7 @@
       const countryName = route?.countryName || data.country;
       const routeName = route?.protocolName || data.city;
       const routeCountryCode = String(route?.countryCode || (key === "ru-de" ? "RU-DE" : key.split("-")[0]) || "").toUpperCase();
-      const hasRouteProtocol = route ? Boolean(routeProtocolKey(route)) : /^(nl|de|ru|fi|it)-(vless|hy2|trojan|awg)$/.test(key);
+      const hasRouteProtocol = route ? Boolean(routeProtocolKey(route)) : /^(nl|de|ru|fi|it)-(vless|hy2|trojan|tuic|awg)$/.test(key);
       const compactProtocol = hasRouteProtocol ? data.city : "";
 
       function setSelectedFlag(element) {

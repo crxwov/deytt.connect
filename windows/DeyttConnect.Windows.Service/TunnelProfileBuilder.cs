@@ -17,7 +17,7 @@ internal static class TunnelProfileBuilder
         ("IT", "Италия"),
     ];
 
-    private static readonly string[] Protocols = ["VLESS", "TROJAN", "HYSTERIA2"];
+    private static readonly string[] Protocols = ["VLESS", "TROJAN", "HYSTERIA2", "TUIC"];
     private static readonly HashSet<string> DomainOnlyKeys =
         ["domain", "domain_suffix", "domain_keyword", "domain_regex"];
 
@@ -34,7 +34,7 @@ internal static class TunnelProfileBuilder
         string[] countries = ["NL", "DE", "FI", "IT"];
         var candidates = countries.SelectMany(country => Protocols.Select(protocol => $"route:{country}:{protocol}"))
             .Where(tag => byTag.TryGetValue(tag, out var outbound) &&
-                          ReadString(outbound, "type") is "vless" or "trojan" or "hysteria2" &&
+                          ReadString(outbound, "type") is "vless" or "trojan" or "hysteria2" or "tuic" &&
                           string.IsNullOrEmpty(ReadString(outbound, "detour")))
             .ToArray();
         if (candidates.Length == 0)
@@ -133,6 +133,12 @@ internal static class TunnelProfileBuilder
                 throw new InvalidDataException("Subscription has invalid outbound tags.");
 
             SanitizeHysteriaOutbound(outbound);
+            if (ReadString(outbound, "type") == "tuic")
+            {
+                // shortcut: the pinned Windows core rejects shared QUIC packet-size fields; pass them through after an engine upgrade.
+                outbound.Remove("initial_packet_size");
+                outbound.Remove("disable_path_mtu_discovery");
+            }
         }
 
         var usedTags = new HashSet<string>(tags, StringComparer.Ordinal);
