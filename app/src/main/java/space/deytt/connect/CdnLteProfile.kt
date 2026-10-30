@@ -62,14 +62,23 @@ internal object CdnLteProfile {
     fun buildXrayConfig(profile: String, socksPort: Int): String {
         require(socksPort in 1..65535)
         val outbound = readOutbound(profile)
+        val resolvedIp = runCatching {
+            java.net.InetAddress.getByName(HOST).hostAddress
+        }.getOrNull() ?: "188.72.103.4"
+        outbound.getJSONObject("settings").getJSONArray("vnext").getJSONObject(0)
+            .put("address", resolvedIp)
         return JSONObject()
             .put("log", JSONObject().put("loglevel", "warning"))
+            .put("dns", JSONObject().put("servers", JSONArray()
+                .put("77.88.8.8")
+                .put("8.8.8.8")
+                .put("localhost")))
             .put("inbounds", JSONArray().put(
                 JSONObject()
                     .put("listen", "127.0.0.1")
                     .put("port", socksPort)
                     .put("protocol", "socks")
-                    .put("settings", JSONObject().put("auth", "noauth").put("udp", false)),
+                    .put("settings", JSONObject().put("auth", "noauth").put("udp", true)),
             ))
             .put("outbounds", JSONArray().put(outbound))
             .toString()
@@ -85,6 +94,49 @@ internal object CdnLteProfile {
             ?: throw IllegalArgumentException("В профиле отсутствует локальный LTE-маршрут")
         require(socks.optString("type") == "socks" && socks.optString("server") == "127.0.0.1")
         socks.put("server_port", socksPort)
+
+        // Ensure Xray's upstream connection to the Yandex Cloud CDN distribution
+        // and its DNS queries are routed directly, avoiding circular routing inside sing-box TUN.
+        val routeObj = root.optJSONObject("route")
+        val rules = routeObj?.optJSONArray("rules")
+        if (rules != null) {
+            val directIps = JSONArray()
+                .put("188.72.103.0/24")
+                .put("77.88.8.8/32")
+                .put("8.8.8.8/32")
+                .put("1.1.1.1/32")
+            runCatching {
+                java.net.InetAddress.getAllByName(HOST).forEach { addr ->
+                    addr.hostAddress?.let { directIps.put("$it/32") }
+                }
+            }
+            val directRule = JSONObject()
+                .put("domain", JSONArray().put("front.deytt.space"))
+                .put("domain_suffix", JSONArray().put(".yccdn.ru").put(".deytt.space"))
+                .put("ip_cidr", directIps)
+                .put("outbound", "direct")
+            val updatedRules = JSONArray().put(directRule)
+            for (i in 0 until rules.length()) {
+                updatedRules.put(rules.get(i))
+            }
+            routeObj.put("rules", updatedRules)
+        }
+
+        val dnsObj = root.optJSONObject("dns")
+        val dnsRules = dnsObj?.optJSONArray("rules")
+        if (dnsRules != null) {
+            val localDnsRule = JSONObject()
+                .put("domain", JSONArray().put("front.deytt.space"))
+                .put("domain_suffix", JSONArray().put(".yccdn.ru").put(".deytt.space"))
+                .put("action", "route")
+                .put("server", "local-dns")
+            val updatedDnsRules = JSONArray().put(localDnsRule)
+            for (i in 0 until dnsRules.length()) {
+                updatedDnsRules.put(dnsRules.get(i))
+            }
+            dnsObj.put("rules", updatedDnsRules)
+        }
+
         return root.toString()
     }
 
