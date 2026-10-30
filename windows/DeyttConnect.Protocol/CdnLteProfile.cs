@@ -86,16 +86,34 @@ public static class CdnLteProfile
     {
         if (socksPort is < 1 or > 65535)
             throw new InvalidDataException("CDN LTE SOCKS port is invalid.");
-        var outbound = ReadOutbound(profile).DeepClone();
+        var outbound = ReadOutbound(profile).DeepClone() as JsonObject ?? throw new InvalidDataException("Invalid outbound");
+        string resolvedIp = "188.72.103.4";
+        try
+        {
+            var addresses = System.Net.Dns.GetHostAddresses(Host);
+            if (addresses.Length > 0)
+                resolvedIp = addresses[0].ToString();
+        }
+        catch { }
+
+        if (outbound["settings"] is JsonObject settings &&
+            settings["vnext"] is JsonArray vnext &&
+            vnext.Count > 0 &&
+            vnext[0] is JsonObject serverObj)
+        {
+            serverObj["address"] = resolvedIp;
+        }
+
         return new JsonObject
         {
             ["log"] = new JsonObject { ["loglevel"] = "warning" },
+            ["dns"] = new JsonObject { ["servers"] = new JsonArray("77.88.8.8", "8.8.8.8", "localhost") },
             ["inbounds"] = new JsonArray(new JsonObject
             {
                 ["listen"] = "127.0.0.1",
                 ["port"] = socksPort,
                 ["protocol"] = "socks",
-                ["settings"] = new JsonObject { ["auth"] = "noauth", ["udp"] = false },
+                ["settings"] = new JsonObject { ["auth"] = "noauth", ["udp"] = true },
             }),
             ["outbounds"] = new JsonArray(outbound),
         }.ToJsonString();
@@ -112,6 +130,41 @@ public static class CdnLteProfile
         if (ReadString(outbound, "type") != "socks" || ReadString(outbound, "server") != "127.0.0.1")
             throw new InvalidDataException("CDN LTE local outbound is invalid.");
         outbound["server_port"] = socksPort;
+
+        if (root["route"] is JsonObject routeObj && routeObj["rules"] is JsonArray rules)
+        {
+            var directIps = new JsonArray("188.72.103.0/24", "77.88.8.8/32", "8.8.8.8/32", "1.1.1.1/32");
+            try
+            {
+                foreach (var addr in System.Net.Dns.GetHostAddresses(Host))
+                {
+                    directIps.Add($"{addr}/32");
+                }
+            }
+            catch { }
+
+            var directRule = new JsonObject
+            {
+                ["domain"] = new JsonArray("front.deytt.space"),
+                ["domain_suffix"] = new JsonArray(".yccdn.ru", ".deytt.space"),
+                ["ip_cidr"] = directIps,
+                ["outbound"] = "direct",
+            };
+            rules.Insert(0, directRule);
+        }
+
+        if (root["dns"] is JsonObject dnsObj && dnsObj["rules"] is JsonArray dnsRules)
+        {
+            var localDnsRule = new JsonObject
+            {
+                ["domain"] = new JsonArray("front.deytt.space"),
+                ["domain_suffix"] = new JsonArray(".yccdn.ru", ".deytt.space"),
+                ["action"] = "route",
+                ["server"] = "local-dns",
+            };
+            dnsRules.Insert(0, localDnsRule);
+        }
+
         return root.ToJsonString();
     }
 
