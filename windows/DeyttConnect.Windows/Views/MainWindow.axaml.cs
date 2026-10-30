@@ -244,6 +244,15 @@ public partial class MainWindow : Window
         _startupFlowStarted = true;
         UpdateResponsiveLayout();
 
+        try
+        {
+            await Task.WhenAny(SplashOverlay.WaitForCompletionAsync(), Task.Delay(2000));
+        }
+        catch
+        {
+            // Ignore splash wait failure
+        }
+
         if (OperatingSystem.IsWindows())
             await ShowStartupExternalVpnNoticeAsync();
 
@@ -284,7 +293,6 @@ public partial class MainWindow : Window
         _homeMapInitializationAllowed = true;
         if (OperatingSystem.IsWindows() && IsVisible && _activeTab == MainTab.Home)
             ShowTab(MainTab.Home);
-        SplashOverlay.Start(_reduceMotion);
     }
 
     private void ConfigureNavigation()
@@ -2908,7 +2916,6 @@ public partial class MainWindow : Window
         _selectedRoute = route.Id;
         SavePreferences();
         ShowTab(MainTab.Home);
-        SplashOverlay.Start(_reduceMotion);
         if (!IsVisible || WindowState == Avalonia.Controls.WindowState.Minimized)
             ShowFromTray();
     }

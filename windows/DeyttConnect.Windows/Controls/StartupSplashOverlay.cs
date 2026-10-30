@@ -54,7 +54,21 @@ public sealed class StartupSplashOverlay : Control
         {
             Interval = TimeSpan.FromMilliseconds(16),
         };
-        _timer.Tick += (_, _) => InvalidateVisual();
+        _timer.Tick += OnTimerTick;
+    }
+
+    private void OnTimerTick(object? sender, EventArgs e)
+    {
+        if (_finished) return;
+
+        if (_stopwatch.ElapsedMilliseconds >= TotalDurationMs)
+        {
+            Finish();
+        }
+        else
+        {
+            InvalidateVisual();
+        }
     }
 
     public Task WaitForCompletionAsync() => _completion.Task;
@@ -62,7 +76,10 @@ public sealed class StartupSplashOverlay : Control
     public void Start(bool reduceMotion = false)
     {
         _reduceMotion = reduceMotion;
+        if (_finished) return;
         if (_stopwatch.IsRunning) return;
+        IsVisible = true;
+        IsHitTestVisible = true;
         _stopwatch.Restart();
         _timer.Start();
         InvalidateVisual();
@@ -81,17 +98,23 @@ public sealed class StartupSplashOverlay : Control
     {
         base.OnDetachedFromVisualTree(e);
         _timer.Stop();
+        _stopwatch.Stop();
+        _completion.TrySetResult();
     }
 
-    private void Finish()
+    public void Finish()
     {
         if (_finished) return;
         _finished = true;
         _timer.Stop();
         _stopwatch.Stop();
-        IsVisible = false;
-        IsHitTestVisible = false;
-        _completion.TrySetResult();
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            IsVisible = false;
+            IsHitTestVisible = false;
+            _completion.TrySetResult();
+        }, DispatcherPriority.Normal);
     }
 
     private static double EvaluateCubicBezier(double x1, double y1, double x2, double y2, double t)
@@ -125,7 +148,7 @@ public sealed class StartupSplashOverlay : Control
         long elapsed = _stopwatch.ElapsedMilliseconds;
         if (elapsed >= TotalDurationMs)
         {
-            Finish();
+            // Do not mutate visual state during render pass; OnTimerTick handles Finish
             return;
         }
 
