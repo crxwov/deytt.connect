@@ -128,6 +128,7 @@ public partial class MainWindow : Window
                 UpdateWindowControlState();
         };
         ShowTab(MainTab.Home);
+        SplashOverlay.Start(_reduceMotion);
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         PageScroll.SizeChanged += (_, _) =>
         {
@@ -283,6 +284,7 @@ public partial class MainWindow : Window
         _homeMapInitializationAllowed = true;
         if (OperatingSystem.IsWindows() && IsVisible && _activeTab == MainTab.Home)
             ShowTab(MainTab.Home);
+        SplashOverlay.Start(_reduceMotion);
     }
 
     private void ConfigureNavigation()
@@ -1305,7 +1307,7 @@ public partial class MainWindow : Window
         };
 
         var autoRoute = _routes.FirstOrDefault(route => route.Id == "auto");
-        var chainRoute = _routes.FirstOrDefault(route => route.Id == "ru-de");
+        var chainRoute = _routes.FirstOrDefault(route => route.Protocol == "LTE" || route.Id == DeyttConnect.Protocol.CdnLteProfile.RouteTag || route.Id == "ru-de");
         if (autoRoute is not null || chainRoute is not null)
         {
             var quick = new StackPanel { Spacing = 0, Margin = new Thickness(0, 0, 0, 14) };
@@ -2906,6 +2908,7 @@ public partial class MainWindow : Window
         _selectedRoute = route.Id;
         SavePreferences();
         ShowTab(MainTab.Home);
+        SplashOverlay.Start(_reduceMotion);
         if (!IsVisible || WindowState == Avalonia.Controls.WindowState.Minimized)
             ShowFromTray();
     }

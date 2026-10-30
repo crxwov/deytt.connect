@@ -33,8 +33,8 @@ public partial class MainWindow
         var layout = BuildActiveVpnNoticeContent(detected, stoppableServices.Length > 0 || happDetected,
             !happDetected &&
             (stoppableServices.Length == 0 || detected.Any(item => item.RunningServiceNames.Count == 0)));
-        var result = await ShowContentInShellAsync(Copy("Активные VPN-службы", "Active VPN services"),
-            layout.Content, 560, modal =>
+        var result = await ShowContentInShellAsync(Copy("обнаружен сторонний vpn", "active vpn services"),
+            layout.Content, 520, modal =>
             {
                 modal.InitialFocusTarget = layout.ContinueButton;
                 layout.ContinueButton.Click += (_, _) => modal.Close(false);
@@ -94,18 +94,18 @@ public partial class MainWindow
     {
         var happDetected = detected.Any(item => item.Name == "Happ");
         var content = new StackPanel { Spacing = 14 };
-        content.Children.Add(DeyttTheme.SectionLabel(Copy("СЕТЬ · ДРУГОЙ VPN", "NETWORK · OTHER VPN")));
+        content.Children.Add(DeyttTheme.SectionLabel(Copy("СЕТЬ · СТОРОННИЙ VPN", "NETWORK · OTHER VPN")));
         content.Children.Add(DeyttTheme.TextBlock(
-            Copy("В Windows работают другие VPN-службы или сетевые туннели. Они могут менять внешний IP и мешать проверке маршрутов DEYTT.",
+            Copy("В Windows активны другие VPN-службы или туннели. Они могут перехватывать трафик и мешать стабильному подключению к узлам DEYTT.",
                 "Other VPN services or tunnel adapters are active in Windows. They can change your public IP and interfere with DEYTT route checks."),
-            14, DeyttTheme.Muted));
+            13, DeyttTheme.Muted));
 
         var services = new StackPanel { Spacing = 8 };
         foreach (var item in detected)
         {
             var detail = string.Join(" · ", item.Signals);
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("12,*"), ColumnSpacing = 11 };
-            row.Children.Add(new Border
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("14,*"), ColumnSpacing = 12 };
+            var statusDot = new Border
             {
                 Width = 8,
                 Height = 8,
@@ -113,54 +113,71 @@ public partial class MainWindow
                 Background = DeyttTheme.Brush(DeyttTheme.Amber),
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center,
-            });
-            var text = new StackPanel { Spacing = 3 };
-            text.Children.Add(DeyttTheme.TextBlock(item.Name, 14, DeyttTheme.Text, FontWeight.SemiBold));
-            text.Children.Add(DeyttTheme.TextBlock(detail, 11, DeyttTheme.Muted));
+                BoxShadow = new BoxShadows(new BoxShadow
+                {
+                    Color = Color.FromArgb(120, 245, 158, 11),
+                    Blur = 8,
+                }),
+            };
+            row.Children.Add(statusDot);
+            var text = new StackPanel { Spacing = 2 };
+            text.Children.Add(DeyttTheme.TextBlock(item.Name.ToLowerInvariant(), 14, DeyttTheme.Text, FontWeight.SemiBold));
+            text.Children.Add(DeyttTheme.TextBlock(detail.ToLowerInvariant(), 12, DeyttTheme.Muted));
             Grid.SetColumn(text, 1);
             row.Children.Add(text);
-            services.Children.Add(DeyttTheme.Card(row, DeyttTheme.Surface, DeyttTheme.Line, 13,
-                new Thickness(13, 10)));
+            services.Children.Add(DeyttTheme.DialogPanel(row, radius: 14, padding: new Thickness(14, 11)));
         }
         content.Children.Add(services);
         content.Children.Add(DeyttTheme.TextBlock(
-            Copy("DEYTT ничего не отключает без вашего выбора. Windows попросит подтвердить остановку службы; подключение при этом может измениться. Примерный регион на карте включается отдельно.",
-                "DEYTT will not disconnect anything without your choice. Windows will ask you to confirm before a service stops; your connection may change. Approximate map location is enabled separately."),
+            Copy("DEYTT не отключает службы без вашего выбора. Вы можете продолжить с текущим подключением или закрыть сторонний VPN.",
+                "DEYTT will not disconnect anything without your choice. You can continue or close the conflicting VPN."),
             12, DeyttTheme.Muted));
 
-        var continueSurface = DeyttTheme.PrimaryButton(
-            Copy("Продолжить с текущим подключением", "Continue with current connection"), static () => { });
-        continueSurface.Height = 48;
-        continueSurface.CornerRadius = new CornerRadius(14);
+        var continueSurface = DeyttTheme.DialogPrimaryButton(
+            DeyttTheme.TextBlock(Copy("Продолжить с текущим подключением", "Continue with current connection"), 14, Colors.White, FontWeight.SemiBold), static () => { });
+        continueSurface.Height = 46;
         var continueButton = continueSurface.Child as Button
             ?? throw new InvalidOperationException("The primary button did not contain a Button control.");
         AutomationProperties.SetAutomationId(continueButton, "ExternalVpnContinue");
         AutomationProperties.SetName(continueButton,
             Copy("Продолжить с текущим подключением", "Continue with current connection"));
-        var actions = new StackPanel { Spacing = 2, Children = { continueSurface } };
+        var actions = new StackPanel { Spacing = 10, Children = { continueSurface } };
 
         Button? stopButton = null;
         if (includeStopButton)
         {
             var stopLabel = happDetected
                 ? Copy("Закрыть Happ", "Close Happ")
-                : Copy("Остановить VPN-службы", "Stop VPN services");
-            stopButton = DeyttTheme.Action(
-                DeyttTheme.TextBlock(stopLabel, 13, DeyttTheme.Coral, FontWeight.SemiBold), static () => { });
+                : Copy("Остановить сторонние службы", "Stop VPN services");
+            var stopText = DeyttTheme.TextBlock(stopLabel, 14, DeyttTheme.Coral, FontWeight.SemiBold);
+            stopText.HorizontalAlignment = HorizontalAlignment.Center;
+            stopButton = DeyttTheme.Action(stopText, static () => { });
             stopButton.Height = 44;
             stopButton.HorizontalAlignment = HorizontalAlignment.Stretch;
             stopButton.HorizontalContentAlignment = HorizontalAlignment.Center;
             stopButton.Padding = new Thickness(12, 8);
             AutomationProperties.SetAutomationId(stopButton, "ExternalVpnStop");
             AutomationProperties.SetName(stopButton, stopLabel);
-            actions.Children.Add(stopButton);
+
+            var stopCard = new Border
+            {
+                Height = 44,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                CornerRadius = new CornerRadius(14),
+                Background = DeyttTheme.Brush(Color.FromArgb(20, 255, 107, 107)),
+                BorderBrush = DeyttTheme.Brush(Color.FromArgb(50, 255, 107, 107)),
+                BorderThickness = new Thickness(1),
+                Child = stopButton,
+            };
+            actions.Children.Add(stopCard);
         }
         if (includeWindowsSettingsButton)
         {
-            var openVpnSettings = DeyttTheme.Action(
-                DeyttTheme.TextBlock(Copy("Параметры VPN Windows", "Windows VPN settings"),
-                    13, DeyttTheme.Sky, FontWeight.SemiBold), static () => { });
-            openVpnSettings.Height = 44;
+            var settingsText = DeyttTheme.TextBlock(Copy("Параметры VPN Windows", "Windows VPN settings"),
+                13, DeyttTheme.Sky, FontWeight.SemiBold);
+            settingsText.HorizontalAlignment = HorizontalAlignment.Center;
+            var openVpnSettings = DeyttTheme.Action(settingsText, static () => { });
+            openVpnSettings.Height = 40;
             openVpnSettings.HorizontalAlignment = HorizontalAlignment.Stretch;
             openVpnSettings.HorizontalContentAlignment = HorizontalAlignment.Center;
             openVpnSettings.Padding = new Thickness(12, 8);

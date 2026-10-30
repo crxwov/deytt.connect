@@ -84,7 +84,6 @@ public static class WindowsRouteCatalog
 
         var autoTag = outboundItems.Select(item => ReadString(item, "tag"))
             .FirstOrDefault(tag => tag?.Contains("автоподбор", StringComparison.OrdinalIgnoreCase) == true);
-        var chainTag = "route:RU-DE:CHAIN";
         if (autoTag is null)
             throw new InvalidDataException("The subscription is missing the automatic route.");
 

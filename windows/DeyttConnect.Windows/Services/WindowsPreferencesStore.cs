@@ -89,7 +89,7 @@ public static class WindowsPreferencesStore
         ProductFolder,
         PreferencesFileName);
 
-    internal static bool IsKnownRoute(string route) => route is "auto" or "ru-de" ||
+    internal static bool IsKnownRoute(string route) => route is "auto" or "ru-de" or "route:DE:LTE" ||
         System.Text.RegularExpressions.Regex.IsMatch(route,
             "^route:(NL|RU|DE|FI|IT):(VLESS|TROJAN|HYSTERIA2|TUIC)$",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant) ||

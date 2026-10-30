@@ -3243,7 +3243,7 @@
       const direct = routes.find(route => String(route.id || "").toLowerCase() === value || String(route.tag || "").toLowerCase() === value);
       if (direct) return direct;
       if (value === "auto") return routes.find(route => route.countryCode === "AUTO");
-      if (value === "ru-de") return routes.find(route => route.id === "ru-de" || route.countryCode === "RU-DE");
+      if (value === "ru-de" || value === "lte" || value === "route:de:lte") return routes.find(route => route.protocol === "LTE" || route.id === "route:DE:LTE" || route.tag === "route:DE:LTE" || route.id === "ru-de" || route.countryCode === "RU-DE" || route.countryCode === "EU");
       const [country, protocol] = value.split("-");
       return routes.find(route => {
         if (String(route.countryCode || "").toLowerCase() !== country) return false;
@@ -3293,13 +3293,14 @@
       });
       const selected = routes.find(route => route.isSelected === true);
       if (selected) activeRouteKey = selected.countryCode === "AUTO" ? "auto" :
-        selected.countryCode === "RU-DE" ? "ru-de" : `${String(selected.countryCode).toLowerCase()}-${routeProtocolKey(selected)}`;
+        (selected.protocol === "LTE" || selected.countryCode === "RU-DE" || selected.countryCode === "EU" || selected.id === "route:DE:LTE") ? "ru-de" : `${String(selected.countryCode).toLowerCase()}-${routeProtocolKey(selected)}`;
     };
 
     // Routes Selection & Syncing with Globe (Authentic Routes from WindowsRouteCatalog)
     const routeDetails = {
       auto: { flag: "✦", country: "", city: "автоподбор" },
-      "ru-de": { flag: "🇷🇺→🇩🇪", country: "россия → германия", city: "lte · белые списки" },
+      "ru-de": { flag: "🇪🇺", country: "европа", city: "lte • белые списки" },
+      "lte": { flag: "🇪🇺", country: "европа", city: "lte • белые списки" },
       nl: { flag: "🇳🇱", country: "нидерланды", city: "амстердам" },
       de: { flag: "🇩🇪", country: "германия", city: "франкфурт-на-майне" },
       fi: { flag: "🇫🇮", country: "финляндия", city: "хельсинки" },
@@ -3344,7 +3345,7 @@
 
       function setSelectedFlag(element) {
         if (!element) return;
-        const code = /^(NL|DE|RU|FI|IT|RU-DE)$/.test(routeCountryCode) ? routeCountryCode : "";
+        const code = /^(NL|DE|RU|FI|IT|RU-DE|EU)$/.test(routeCountryCode) ? routeCountryCode : "";
         element.dataset.country = code;
         element.classList.toggle("is-generic", !code);
         element.innerHTML = code ? getFlagSvg(code, 22, 15) : "✦";
