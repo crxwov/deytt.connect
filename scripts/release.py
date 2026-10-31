@@ -144,7 +144,11 @@ def sign(args):
         output = Path(temporary) / args.output.name
         command = [
             tool("apksigner"), "sign", "--out", str(output),
-            "--debuggable-apk-permitted", "false", "--v4-signing-enabled", "false",
+            "--v1-signing-enabled", "true",
+            "--v2-signing-enabled", "true",
+            "--v3-signing-enabled", "true",
+            "--v4-signing-enabled", "false",
+            "--debuggable-apk-permitted", "false",
         ]
         command += ["--ks", str(args.keystore), "--ks-key-alias", RELEASE_KEY_ALIAS,
                     "--ks-pass", "file:" + str(args.password_file)]

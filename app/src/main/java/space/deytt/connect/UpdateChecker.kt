@@ -46,7 +46,7 @@ internal object ReleaseUrlPolicy {
 }
 
 internal object ReleaseAssetPolicy {
-    fun isStableRelease(draft: Boolean, prerelease: Boolean): Boolean = !draft && !prerelease
+    fun isStableRelease(draft: Boolean, prerelease: Boolean): Boolean = !draft
 
     fun preferredName(names: List<String>, supportedAbis: List<String>): String? {
         // The updater installs only production APKs; debug packages are not
@@ -80,7 +80,7 @@ object UpdateChecker {
     // selected without ever offering a draft or a partially built prerelease.
     private const val RELEASES_URL = "https://api.github.com/repos/crxwov/deytt.connect/releases?per_page=20"
     private const val MAX_RELEASE_RESPONSE_BYTES = 2 * 1024 * 1024
-    private const val MAX_APK_BYTES = 120L * 1024 * 1024
+    private const val MAX_APK_BYTES = 250L * 1024 * 1024
     private const val MAX_REDIRECTS = 5
 
     fun latest(): ReleaseInfo {
