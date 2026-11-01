@@ -1086,8 +1086,8 @@
       const dx = end.x - start.x, dy = end.y - start.y;
       const length = Math.hypot(dx, dy) || 1;
 
-      // Lane spread: shifted slightly stronger per user request
-      const offset = bell * (lane || 0) * Math.max(16, Math.min(28, length * 0.22));
+      // Lane spread: shifted distinctly stronger per user request
+      const offset = bell * (lane || 0) * Math.max(22, Math.min(40, length * 0.30));
 
       return {
         x: point.x - dy / length * offset,
