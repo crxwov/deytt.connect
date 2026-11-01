@@ -600,12 +600,16 @@
 
     projectVector(point, lift) {
       const basis = this.currentBasis;
-      const scale = this.radius * this.zoom * (lift || 1);
+      const l = lift || 1;
+      const forward = dot(point, basis.forward);
+      // Perspective displacement towards the camera for elevated 3D arcs
+      const persp = l > 1.02 && forward > 0 ? (1 + forward * (l - 1) * 0.16) : 1;
+      const scale = this.radius * this.zoom * l * persp;
       return {
         x: this.centerX + dot(point, basis.east) * scale,
         y: this.centerY - dot(point, basis.north) * scale,
-        z: dot(point, basis.forward),
-        lift: lift || 1
+        z: forward,
+        lift: l
       };
     }
 
@@ -981,13 +985,31 @@
             else context.lineTo(point.x, point.y);
           });
           context.lineCap = context.lineJoin = "round";
-          context.strokeStyle = "rgba(4, 8, 18, 0.45)";
-          context.lineWidth = emphasized ? 2.6 : 1.5;
+          context.strokeStyle = "rgba(2, 6, 16, 0.65)";
+          context.lineWidth = emphasized ? 3.4 : 2.2;
           context.shadowBlur = 0;
           context.stroke();
           context.restore();
 
-          // 2. Draw 3D Elevated Glowing Beam high above the surface
+          // 2. Draw 3D vertical laser tethers linking ground shadow on the continent to the floating arc in space
+          if (!stream.lane || stream.lane === 0) {
+            context.save();
+            context.beginPath();
+            for (let i = 8; i <= 72; i += 12) {
+              const gp = groundPoints[i];
+              const ap = points[i];
+              if (gp && ap && gp.z > 0.02 && ap.z > 0.02) {
+                context.moveTo(gp.x, gp.y);
+                context.lineTo(ap.x, ap.y);
+              }
+            }
+            context.strokeStyle = "rgba(120, 190, 255, 0.32)";
+            context.lineWidth = 1.0;
+            context.stroke();
+            context.restore();
+          }
+
+          // 3. Draw 3D Elevated Glowing Beam high above the surface
           context.save();
           context.beginPath();
           points.forEach((point, i) => {
@@ -997,8 +1019,8 @@
           });
           context.lineCap = context.lineJoin = "round";
           context.strokeStyle = stream.color;
-          context.globalAlpha = emphasized ? .36 : dark ? .24 : .18;
-          context.lineWidth = emphasized ? 4.8 : 2.6;
+          context.globalAlpha = emphasized ? .45 : dark ? .32 : .24;
+          context.lineWidth = emphasized ? 5.6 : 3.4;
           context.shadowBlur = 0;
           context.stroke();
 
@@ -1010,13 +1032,13 @@
           sheen.addColorStop(1, stream.color);
           context.strokeStyle = sheen;
           context.globalAlpha = 1;
-          context.lineWidth = emphasized ? 2.6 : 1.4;
+          context.lineWidth = emphasized ? 3.0 : 1.7;
           context.stroke();
 
           if (emphasized) {
-            context.globalAlpha = .92;
+            context.globalAlpha = .95;
             context.strokeStyle = "#FFFFFF";
-            context.lineWidth = .85;
+            context.lineWidth = 1.0;
             context.shadowBlur = 0;
             context.stroke();
           }
@@ -1100,14 +1122,20 @@
       }
       const bell = Math.sin(amount * Math.PI);
       const base = slerp(from, to, amount);
-      const laneOffset = bell * (lane * 0.026);
+
+      // Broad lateral spread so traffic lanes are widely separated and never merge
+      const laneSpread = (0.055 + bell * 0.085) * lane;
       const unitPoint = normalize({
-        x: base.x + normal.x * laneOffset,
-        y: base.y + normal.y * laneOffset,
-        z: base.z + normal.z * laneOffset
+        x: base.x + normal.x * laneSpread,
+        y: base.y + normal.y * laneSpread,
+        z: base.z + normal.z * laneSpread
       });
-      const peakAltitude = 0.048 + Math.min(0.12, omega * 0.16);
-      const lift = ground ? 1.002 : (1.008 + bell * peakAltitude);
+
+      // Elevated grand orbital arch high above the surface of the globe
+      const peakAltitude = 0.18 + Math.min(0.24, omega * 0.30);
+      const laneAltitudeFactor = lane === 0 ? 1.16 : 0.90;
+      const baseLift = 1.04;
+      const lift = ground ? 1.003 : (baseLift + Math.pow(bell, 0.72) * peakAltitude * laneAltitudeFactor);
       const projected = this.projectVector(unitPoint, lift);
       projected.lift = lift;
       projected.bell = bell;
