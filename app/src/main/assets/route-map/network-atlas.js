@@ -965,30 +965,12 @@
         const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
         directed.forEach(([fromKey, toKey]) => {
           const points = [];
-          const groundPoints = [];
           for (let i = 0; i <= 80; i++) {
-            const t = i / 80;
-            points.push(this.projectLanePoint(fromKey, toKey, t, stream.lane, false));
-            groundPoints.push(this.projectLanePoint(fromKey, toKey, t, stream.lane, true));
+            points.push(this.projectLanePoint(fromKey, toKey, i / 80, stream.lane));
           }
           const emphasized = this.selectedTrafficFlow === stream.id;
 
-          // 1. Draw subtle ground shadow on the globe sphere surface
-          context.save();
-          context.beginPath();
-          groundPoints.forEach((point, i) => {
-            if (point.z <= -.02) return;
-            if (!i || groundPoints[i - 1].z <= -.02) context.moveTo(point.x, point.y);
-            else context.lineTo(point.x, point.y);
-          });
-          context.lineCap = context.lineJoin = "round";
-          context.strokeStyle = "rgba(4, 10, 24, 0.38)";
-          context.lineWidth = emphasized ? 2.2 : 1.4;
-          context.shadowBlur = 0;
-          context.stroke();
-          context.restore();
-
-          // 2. Draw 3D Elevated Glowing Beam with crisp core
+          // Elevated Glowing 3D Traffic Beam
           context.save();
           context.beginPath();
           points.forEach((point, i) => {
@@ -998,8 +980,8 @@
           });
           context.lineCap = context.lineJoin = "round";
           context.strokeStyle = stream.color;
-          context.globalAlpha = emphasized ? .35 : dark ? .22 : .15;
-          context.lineWidth = emphasized ? 3.6 : 2.2;
+          context.globalAlpha = emphasized ? .32 : dark ? .20 : .14;
+          context.lineWidth = emphasized ? 3.8 : 2.4;
           context.shadowBlur = 0;
           context.stroke();
 
@@ -1010,14 +992,14 @@
           sheen.addColorStop(.78, stream.color);
           sheen.addColorStop(1, stream.color);
           context.strokeStyle = sheen;
-          context.globalAlpha = 0.95;
-          context.lineWidth = emphasized ? 1.6 : 1.1;
+          context.globalAlpha = 1;
+          context.lineWidth = emphasized ? 2.0 : 1.3;
           context.stroke();
 
           if (emphasized) {
             context.globalAlpha = .90;
             context.strokeStyle = "#FFFFFF";
-            context.lineWidth = 0.6;
+            context.lineWidth = 0.7;
             context.shadowBlur = 0;
             context.stroke();
           }
@@ -1092,35 +1074,28 @@
       if (!fromLocation || !toLocation) return { x: 0, y: 0, z: -1, lift: 1 };
       const from = vector(fromLocation.lat, fromLocation.lon), to = vector(toLocation.lat, toLocation.lon);
       const omega = Math.acos(clamp(dot(from, to), -1, 1));
-      let normal = cross(from, to);
-      const normLen = Math.hypot(normal.x, normal.y, normal.z);
-      if (normLen > 0.0001) {
-        normal = { x: normal.x / normLen, y: normal.y / normLen, z: normal.z / normLen };
-      } else {
-        normal = { x: 0, y: 1, z: 0 };
-      }
       const bell = Math.sin(amount * Math.PI);
-      const base = slerp(from, to, amount);
 
-      // Tight parallel bundle: lanes stay together as a bundle, but slightly shifted for crisp 3D separation
-      const laneSpread = (0.009 + bell * 0.004) * (lane || 0);
-      const unitPoint = normalize({
-        x: base.x + normal.x * laneSpread,
-        y: base.y + normal.y * laneSpread,
-        z: base.z + normal.z * laneSpread
-      });
+      // Elevated 3D arch above the globe ("чуть их выше уведи")
+      const peakAltitude = 0.052 + Math.min(0.08, omega * 0.11);
+      const lift = ground ? 1.004 : (1.018 + bell * peakAltitude);
 
-      // 3D Arc elevation:
-      // Smooth natural arc over the surface.
-      // Center lane (0) is slightly higher in altitude than flank lanes, giving 3D depth layering without an oval
-      const peakAltitude = 0.046 + Math.min(0.08, omega * 0.12);
-      const altitudeShift = (lane === 0 ? 0.005 : -0.003);
-      const baseLift = 1.012;
-      const lift = ground ? 1.002 : (baseLift + bell * peakAltitude + altitudeShift);
-      const projected = this.projectVector(unitPoint, lift);
-      projected.lift = lift;
-      projected.bell = bell;
-      return projected;
+      const start = this.projectVector(from, lift);
+      const end = this.projectVector(to, lift);
+      const point = this.projectVector(slerp(from, to, amount), lift);
+      const dx = end.x - start.x, dy = end.y - start.y;
+      const length = Math.hypot(dx, dy) || 1;
+
+      // Lane spread: shifted slightly stronger per user request
+      const offset = bell * (lane || 0) * Math.max(16, Math.min(28, length * 0.22));
+
+      return {
+        x: point.x - dy / length * offset,
+        y: point.y + dx / length * offset,
+        z: point.z,
+        lift: lift,
+        bell: bell
+      };
     }
 
     drawTrafficTrail(links, position, stream) {
