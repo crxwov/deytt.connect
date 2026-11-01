@@ -1077,8 +1077,8 @@
       const bell = Math.sin(amount * Math.PI);
 
       // Elevated 3D arch above the globe ("чуть их выше уведи")
-      const peakAltitude = 0.052 + Math.min(0.08, omega * 0.11);
-      const lift = ground ? 1.004 : (1.018 + bell * peakAltitude);
+      const peakAltitude = 0.075 + Math.min(0.10, omega * 0.14);
+      const lift = ground ? 1.004 : (1.025 + bell * peakAltitude);
 
       const start = this.projectVector(from, lift);
       const end = this.projectVector(to, lift);
@@ -1086,8 +1086,8 @@
       const dx = end.x - start.x, dy = end.y - start.y;
       const length = Math.hypot(dx, dy) || 1;
 
-      // Lane spread: shifted distinctly stronger per user request
-      const offset = bell * (lane || 0) * Math.max(22, Math.min(40, length * 0.30));
+      // Keep lanes relatively together, slight shift for 3D depth, not an oval
+      const offset = bell * (lane || 0) * Math.min(7, Math.max(4, length * 0.045));
 
       return {
         x: point.x - dy / length * offset,
