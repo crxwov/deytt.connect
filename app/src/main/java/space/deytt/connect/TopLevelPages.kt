@@ -1,6 +1,7 @@
 package space.deytt.connect
 
 import android.app.Dialog
+import android.animation.ValueAnimator
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Canvas
@@ -47,19 +48,24 @@ import space.deytt.connect.DeyttUi.LINE
 import space.deytt.connect.DeyttUi.MUTED
 import space.deytt.connect.DeyttUi.SURFACE
 import space.deytt.connect.DeyttUi.SURFACE_2
+import space.deytt.connect.DeyttUi.SELECTED
+import space.deytt.connect.DeyttUi.SELECTED_LINE
 import space.deytt.connect.DeyttUi.TEXT
 import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.glassButtonBackground
+import space.deytt.connect.DeyttUi.glassRowBackground
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.liquidGlassButton
 import space.deytt.connect.DeyttUi.mapPanel
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.note
 import space.deytt.connect.DeyttUi.pressFeedback
+import space.deytt.connect.DeyttUi.prefersReducedMotion
 import space.deytt.connect.DeyttUi.ripple
 import space.deytt.connect.DeyttUi.rounded
+import space.deytt.connect.DeyttUi.routePairMark
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.sectionLabel
@@ -165,6 +171,7 @@ internal class PrimaryPages(
         val route: DeyttRoute,
         val status: TextView,
         val progress: InlineMetricProgress,
+        val surface: View,
     )
     private data class CountryProbeState(
         val code: String,
@@ -345,14 +352,9 @@ internal class PrimaryPages(
             appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", "выбрать", emphasis = selectedId == route.id)
                 .apply { setOnClickListener { host.selectRoute(route) } })
         }
-        routes.firstOrNull { it.protocol == RouteProtocol.LTE }?.let { route ->
-            appendToGroup(quickGroup, host.row(
-                "🇪🇺 lte • белые списки",
-                copy("Белые списки LTE · до 10 ГБ в месяц", "Whitelist LTE · up to 10 GB per month"),
-                "🇪🇺",
-                "выбрать",
-                emphasis = selectedId == route.id,
-            ).apply { setOnClickListener { host.selectRoute(route) } })
+        routes.firstOrNull { it.protocol == RouteProtocol.RU_DE || it.protocol == RouteProtocol.LTE }?.let { route ->
+            appendToGroup(quickGroup, buildLteWhitelistRow(route, selectedId == route.id))
+        }
         }
         if (quickGroup.childCount > 0) root.addView(quickGroup)
 
@@ -364,7 +366,7 @@ internal class PrimaryPages(
             val awgRoutes = countryRoutes.filter { it.engine == TunnelEngine.AMNEZIAWG }
             val first = countryRoutes.first()
             val cachedSamples = countryRoutes.mapNotNull { route -> RouteQualityStore.read(host, route.id) }
-            val cachedBestRouteId = RouteProbeScoring.bestRouteId(cachedSamples)
+            val cachedGrades = RouteProbeScoring.gradeByLatency(cachedSamples)
             val protocolSummary = countryRoutes.map { route ->
                 when (route.engine) {
                     TunnelEngine.LIBBOX -> route.protocol.title
@@ -372,12 +374,15 @@ internal class PrimaryPages(
                     TunnelEngine.OPENFLUX -> route.protocol.title
                 }
             }.distinct().joinToString(" · ")
+            val headerDivider = View(host).apply {
+                setBackgroundColor(LINE)
+                visibility = if (code in expandedCountryCodes) View.VISIBLE else View.GONE
+            }
             val detail = LinearLayout(host).apply {
                 orientation = LinearLayout.VERTICAL
                 visibility = if (code in expandedCountryCodes) View.VISIBLE else View.GONE
-                background = host.rounded(SURFACE_2, 22f, LINE)
-                clipToOutline = true
-                setPadding(host.dp(8), host.dp(8), host.dp(8), host.dp(8))
+                setBackgroundColor(Color.TRANSPARENT)
+                setPadding(0, 0, 0, 0)
             }
             val summary = host.text(
                 cachedLatencySummary(cachedSamples) ?: copy("Отклик: —", "Response: —"),
@@ -388,12 +393,7 @@ internal class PrimaryPages(
                 setPadding(0, host.dp(8), 0, host.dp(8))
             }
             val summaryProgress = InlineMetricProgress(summary)
-            detail.addView(LinearLayout(host).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(host.dp(58), host.dp(2), host.dp(16), host.dp(2))
-                addView(summary, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            })
+            summary.visibility = View.GONE
             val rowById = linkedMapOf<String, ProbeRouteRow>()
             countryRoutes.forEachIndexed { index, route ->
                 if (index > 0) detail.addView(View(host).apply { setBackgroundColor(LINE) },
@@ -405,22 +405,31 @@ internal class PrimaryPages(
                 val rowTitle = if (isAwg) route.profileName ?: route.protocol.title else route.protocol.title
                 val rowSubtitle = if (isAwg) "${route.shortMark()} · ${route.protocol.title}" else route.protocol.detail
                 val cached = RouteQualityStore.read(host, route.id)
-                val isCachedBest = route.id == cachedBestRouteId
+                val grade = cachedGrades[route.id] ?: RouteGrade.UNRATED
                 val metric = host.text(
-                    cached?.let { sampleLabel(it, isCachedBest) } ?: copy("Отклик: — · Скорость: —", "Response: — · Speed: —"),
+                    cached?.let { sampleLabel(it, grade == RouteGrade.GOOD, grade == RouteGrade.POOR) }
+                        ?: copy("Отклик: — · Скорость: —", "Response: — · Speed: —"),
                     11f,
-                    if (isCachedBest) DeyttUi.MINT else MUTED,
+                    gradeColor(grade),
                 ).apply {
                     maxLines = 2
                     setPadding(0, host.dp(4), 0, host.dp(8))
-                    if (isCachedBest) setTypeface(null, android.graphics.Typeface.BOLD)
+                    if (grade == RouteGrade.GOOD || grade == RouteGrade.POOR) setTypeface(null, android.graphics.Typeface.BOLD)
                 }
                 val progress = InlineMetricProgress(metric)
-                val item = host.row(rowTitle, rowSubtitle, if (isAwg) "AWG_MARK" else protocolMark(route.protocol), "",
+                val leading = when {
+                    isAwg && route.protocol == RouteProtocol.AWG31 -> "AWG31_MARK"
+                    isAwg -> "AWG_MARK"
+                    else -> protocolMark(route.protocol)
+                }
+                val item = host.row(rowTitle, rowSubtitle, leading, "",
                     emphasis = route.id == selectedId)
+                item.background = routeRankBackground(grade, route.id == selectedId)
                 val protocolDrawable = when (route.protocol) {
                     RouteProtocol.VLESS -> R.drawable.ic_xray
+                    RouteProtocol.TROJAN -> R.drawable.ic_trojan
                     RouteProtocol.HYSTERIA2 -> R.drawable.ic_hysteria
+                    RouteProtocol.TUIC -> R.drawable.ic_tuic
                     else -> null
                 }
                 protocolDrawable?.let { resource ->
@@ -437,11 +446,10 @@ internal class PrimaryPages(
                 val metricsColumn = item.getChildAt(1) as LinearLayout
                 metric.setPadding(0, host.dp(4), 0, host.dp(2))
                 metricsColumn.addView(metric)
-                if (route.id != selectedId) item.background = android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
                 item.setOnClickListener { host.selectRoute(route) }
-                val probeRow = ProbeRouteRow(route, metric, progress)
+                val probeRow = ProbeRouteRow(route, metric, progress, item)
                 if (isAwg) {
-                    metric.text = cached?.let { sampleLabel(it, isCachedBest) }
+                    metric.text = cached?.let { sampleLabel(it, grade == RouteGrade.GOOD, grade == RouteGrade.POOR) }
                         ?: copy("Отклик: — · Скорость: —", "Response: — · Speed: —")
                     metric.setOnClickListener { startAwgProbe(probeRow) }
                 }
@@ -457,10 +465,12 @@ internal class PrimaryPages(
                 emphasis = countryRoutes.any { it.id == selectedId },
             ).apply {
                 contentDescription = host.uiCopy("Раскрыть выходы ${first.country}; откроется проверка HTTP маршрутов")
+                background = ColorDrawable(Color.TRANSPARENT)
                 findViewWithTag<android.widget.ImageView>("country-chevron")?.rotation = if (code in expandedCountryCodes) 270f else 90f
                 setOnClickListener {
                     val expanded = detail.visibility != View.VISIBLE
                     detail.visibility = if (expanded) View.VISIBLE else View.GONE
+                    headerDivider.visibility = if (expanded) View.VISIBLE else View.GONE
                     if (expanded) expandedCountryCodes.add(code) else expandedCountryCodes.remove(code)
                     findViewWithTag<android.widget.ImageView>("country-chevron")?.rotation = if (expanded) 270f else 90f
                     if (expanded) startCountryProbe(countryState)
@@ -468,7 +478,14 @@ internal class PrimaryPages(
                 }
             }
             val countryGroup = routeGroup()
+            countryGroup.background = host.rounded(
+                if (countryRoutes.any { it.id == selectedId }) SELECTED else SURFACE_2,
+                22f,
+                if (countryRoutes.any { it.id == selectedId }) SELECTED_LINE else LINE,
+            )
+            countryGroup.clipToOutline = true
             countryGroup.addView(countryHeader)
+            countryGroup.addView(headerDivider)
             countryGroup.addView(detail)
             root.addView(countryGroup)
             root.addView(spacer(8, host))
@@ -663,24 +680,29 @@ internal class PrimaryPages(
                         row.progress.setLoading(true)
                     }
                     "download" -> {
-                        row.status.text = RouteProbePresentation.speedProgress(latency?.let(::formatLatency), english)
+                        animateProbeText(row, RouteProbePresentation.speedProgress(latency?.let(::formatLatency), english))
                         row.progress.setLoading(true)
                     }
                     "download_progress" -> {
-                        row.status.text = RouteProbePresentation.speedProgress(
+                        animateProbeText(row, RouteProbePresentation.speedProgress(
                             latency?.let(::formatLatency),
                             english,
                             reportedSpeed,
-                        )
+                        ))
                         row.progress.setLoading(true)
                     }
                     "waiting_download" -> {
-                        row.status.text = sampleLabel(sample) + copy(" · скорость в очереди", " · speed queued")
+                        row.status.text = sampleLabel(sample)
                         row.progress.setLoading(true)
                     }
                     "complete", "failed" -> {
                         row.progress.setLoading(false)
-                        row.status.text = sampleLabel(sample)
+                        val grades = RouteProbeScoring.gradeByLatency(country.samples.values.toList())
+                        val grade = grades[row.route.id] ?: RouteGrade.UNRATED
+                        animateProbeText(
+                            row,
+                            sampleLabel(sample, grade == RouteGrade.GOOD, grade == RouteGrade.POOR),
+                        )
                         if (speed == null) {
                             val reason = country.errors[row.route.id]?.let {
                                 RouteProbePresentation.failureMessage(it, english)
@@ -822,10 +844,128 @@ internal class PrimaryPages(
 
     private fun copy(ru: String, en: String): String = if (AppLanguage.current(host) == AppLanguage.EN) en else ru
 
-    private fun sampleLabel(sample: RouteProbeSample, isBest: Boolean = false): String =
+    private fun sampleLabel(sample: RouteProbeSample, isBest: Boolean = false, isWorst: Boolean = false): String =
         copy("Отклик: ", "Response: ") + (sample.latencyMillis?.let(::formatLatency) ?: "—") +
             "  ·  " + copy("Скорость: ", "Speed: ") + (sample.downloadBytesPerSecond?.takeIf { it > 0L }?.let(::formatSpeed) ?: "—") +
-            if (isBest) copy(" · лучший выбор", " · best choice") else ""
+            when {
+                isBest -> copy(" · лучший", " · best")
+                isWorst -> copy(" · худший", " · slowest")
+                else -> ""
+            }
+
+    private fun buildLteWhitelistRow(route: DeyttRoute, selected: Boolean): View {
+        val root = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = host.dp(64)
+            setPadding(host.dp(16), host.dp(10), host.dp(16), host.dp(10))
+            background = if (selected) host.glassRowBackground(true, 22f) else ColorDrawable(Color.TRANSPARENT)
+            isClickable = true
+            isFocusable = true
+            foreground = host.ripple(22f)
+            host.pressFeedback(this, .985f)
+            setOnClickListener { host.selectRoute(route) }
+        }
+        val leadingMark = host.routePairMark(selected)
+        root.addView(leadingMark, LinearLayout.LayoutParams(host.dp(40), host.dp(40)).apply { marginEnd = host.dp(12) })
+
+        val middle = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            val title = host.text(copy("LTE · белые списки", "LTE · whitelist"), 15f, TEXT, android.graphics.Typeface.BOLD)
+            addView(title)
+
+            val barTrack = FrameLayout(host).apply {
+                background = host.rounded(0x28FFFFFF, 3f, Color.TRANSPARENT)
+                val fill = View(host).apply {
+                    val gd = GradientDrawable(
+                        GradientDrawable.Orientation.LEFT_RIGHT,
+                        intArrayOf(0xFF38BDF8.toInt(), 0xFF10B981.toInt())
+                    )
+                    gd.cornerRadius = host.dp(3).toFloat()
+                    background = gd
+                }
+                addView(fill, FrameLayout.LayoutParams(host.dp(18), ViewGroup.LayoutParams.MATCH_PARENT))
+            }
+            addView(barTrack, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(4)).apply {
+                topMargin = host.dp(5)
+                bottomMargin = host.dp(4)
+                marginEnd = host.dp(16)
+            })
+
+            val sub = host.text(copy("0 / 10 ГБ · обновляется 1 числа", "0 / 10 GB · renews on the 1st"), 11f, MUTED)
+            addView(sub)
+        }
+        root.addView(middle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        val action = host.actionLabel(if (selected) copy("выбрано", "selected") else copy("выбрать", "select")).apply {
+            isClickable = false
+            isFocusable = false
+        }
+        root.addView(action)
+        return root
+    }
+
+    private fun routeRankBackground(grade: RouteGrade, selected: Boolean): Drawable {
+        val density = host.resources.displayMetrics.density
+        if (selected) {
+            return LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = 0f,
+                fillColors = intArrayOf(0x3525384E, 0x20152230),
+                strokeColors = intArrayOf(0x55FFFFFF.toInt(), 0x2A78B4E8.toInt(), 0x4860A5FA.toInt(), 0x20FFFFFF.toInt()),
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 1.0f,
+                hasGloss = false,
+                innerLip = false,
+            )
+        }
+        return when (grade) {
+            RouteGrade.GOOD -> LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = 0f,
+                fillColors = intArrayOf(0x281F3E34, 0x1812241E),
+                strokeColors = intArrayOf(0x65F0FFF8.toInt(), 0x3034D399.toInt(), 0x6010B981.toInt(), 0x22FFFFFF.toInt()),
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 0.9f,
+                hasGloss = false,
+                innerLip = false,
+            )
+            RouteGrade.POOR -> LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = 0f,
+                fillColors = intArrayOf(0x283E2824, 0x18241412),
+                strokeColors = intArrayOf(0x65FFF1F2.toInt(), 0x30F43F5E.toInt(), 0x60FB7185.toInt(), 0x22FFFFFF.toInt()),
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 0.9f,
+                hasGloss = false,
+                innerLip = false,
+            )
+            else -> ColorDrawable(Color.TRANSPARENT)
+        }
+    }
+
+    private fun animateProbeText(row: ProbeRouteRow, value: String) {
+        val view = row.status
+        if (view.text.toString() == value) return
+        if (host.prefersReducedMotion() ||
+            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled())
+        ) {
+            view.text = value
+            return
+        }
+        view.animate().cancel()
+        view.animate()
+            .alpha(0.25f)
+            .setDuration(90L)
+            .withEndAction {
+                view.text = value
+                view.animate()
+                    .alpha(1f)
+                    .setDuration(120L)
+                    .start()
+            }
+            .start()
+    }
 
     private fun cachedLatencySummary(samples: List<RouteProbeSample>): String? =
         RouteProbeStatistics.latencySummary(samples.mapNotNull { it.latencyMillis })?.let(::latencySummaryLabel)
@@ -850,10 +990,16 @@ internal class PrimaryPages(
         country.summary.contentDescription = country.summary.text
         country.summaryProgress.setLoading(country.isChecking)
         val grades = RouteProbeScoring.gradeByLatency(country.samples.values.toList())
+        val selectedRouteId = SelectedRouteStore(host).read().id
         country.rows.values.forEach { row ->
+            val grade = grades[row.route.id] ?: RouteGrade.UNRATED
             if (country.samples[row.route.id]?.latencyMillis != null) {
-                row.status.setTextColor(gradeColor(grades[row.route.id] ?: RouteGrade.UNRATED))
+                row.status.setTextColor(gradeColor(grade))
             }
+            row.surface.background = routeRankBackground(
+                grade,
+                selectedRouteId == row.route.id,
+            )
         }
     }
 
@@ -1013,43 +1159,55 @@ internal class PrimaryPages(
         val sheet = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(18))
-            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f)
+            background = host.rounded(0xF40D1420.toInt(), 24f, 0x3060A5FA.toInt())
         }
 
         sheet.addView(host.mono(copy("./c · РАЗДЕЛЬНОЕ ТУННЕЛИРОВАНИЕ", "./c · SPLIT TUNNELING"), 9f, MUTED, 650))
         sheet.addView(host.text(copy("Раздельное туннелирование", "Split tunneling"), 20f, TEXT, android.graphics.Typeface.BOLD).apply {
             setPadding(0, host.dp(6), 0, host.dp(4))
         })
-        val modeDescription = host.text("", 12f, MUTED).apply { setLineSpacing(host.dp(2).toFloat(), 1f) }
+        val modeDescription = host.text("", 12f, TEXT).apply {
+            setLineSpacing(host.dp(2).toFloat(), 1f)
+            setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
+            background = host.rounded(0x45162438, 14f, 0x22FFFFFF)
+        }
         sheet.addView(modeDescription)
 
-        val presetName = host.text("", 12f, SKY, android.graphics.Typeface.BOLD).apply {
+        sheet.addView(host.text(copy("НАБОР ПРИЛОЖЕНИЙ", "APP PRESET"), 10f, MUTED, android.graphics.Typeface.BOLD).apply {
+            setPadding(0, host.dp(14), 0, host.dp(6))
+            letterSpacing = .06f
+        })
+        val presetName = host.text("", 12f, TEXT, android.graphics.Typeface.BOLD).apply {
+            minimumHeight = host.dp(44)
             setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
-            background = host.liquidGlassButton(secondary = true, radius = 14f)
+            background = host.rounded(0x551E324E, 14f, 0x5060A5FA.toInt())
             foreground = host.ripple(14f)
             host.pressFeedback(this, .985f)
             isClickable = true
         }
-        val modeButton = host.text("", 12f, SKY, android.graphics.Typeface.BOLD).apply {
+        val modeButton = host.text("", 12f, TEXT, android.graphics.Typeface.BOLD).apply {
+            minimumHeight = host.dp(44)
             setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
-            background = host.liquidGlassButton(secondary = true, radius = 14f)
+            background = host.rounded(0x551E324E, 14f, 0x5060A5FA.toInt())
             foreground = host.ripple(14f)
             host.pressFeedback(this, .985f)
             isClickable = true
         }
         val addPreset = host.text("+", 16f, SKY, android.graphics.Typeface.BOLD).apply {
             setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(8))
-            background = host.liquidGlassButton(secondary = true, radius = 14f)
+            background = host.rounded(0x551E324E, 14f, 0x5060A5FA.toInt())
             foreground = host.ripple(14f)
             host.pressFeedback(this, .985f)
             isClickable = true
+            contentDescription = copy("Создать набор приложений", "Create an app preset")
         }
         val deletePreset = host.text("✕", 14f, DeyttUi.CORAL, android.graphics.Typeface.BOLD).apply {
             setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(8))
-            background = host.liquidGlassButton(secondary = true, radius = 14f)
+            background = host.rounded(0x50381E24, 14f, 0x45F43F5E.toInt())
             foreground = host.ripple(14f)
             host.pressFeedback(this, .985f)
             isClickable = true
+            contentDescription = copy("Удалить набор приложений", "Delete app preset")
         }
         val presetRow = LinearLayout(host).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -1066,9 +1224,11 @@ internal class PrimaryPages(
         fun updatePresetControls() {
             val active = store.activePreset()
             val vpnOnly = active.mode == UserSplitTunnelStore.MODE_VPN_ONLY
-            presetName.text = (if (active.id == "default") copy(active.name, "Main") else active.name) + "  ▾"
+            val name = if (active.id == "default") copy(active.name, "Main") else active.name
+            presetName.text = copy("Набор: ", "Set: ") + name + "  ▾"
+            presetName.contentDescription = copy("Выбран набор $name. Изменить", "Selected set $name. Change")
             deletePreset.visibility = if (active.id == "default") View.GONE else View.VISIBLE
-            modeButton.text = copy(
+            modeButton.text = copy("Режим: ", "Mode: ") + copy(
                 if (vpnOnly) "VPN только для списка" else "Обход VPN для списка",
                 if (vpnOnly) "VPN only for list" else "Bypass VPN for list"
             ) + "  ▾"
@@ -1080,7 +1240,7 @@ internal class PrimaryPages(
 
         presetName.setOnClickListener {
             val presets = store.readPresets()
-            AppDialog.Builder(host).setTitle(copy("Выберите пресет", "Choose a preset"))
+            AppDialog.Builder(host).setTitle(copy("Набор приложений", "App preset"))
                 .setItems(presets.map { if (it.id == "default") copy(it.name, "Main") else it.name }.toTypedArray()) { _, index ->
                     store.selectPreset(presets[index].id)
                     updatePresetControls()
@@ -1093,7 +1253,7 @@ internal class PrimaryPages(
                 hint = copy("Например, Работа", "For example, Work")
                 filters = arrayOf(InputFilter.LengthFilter(32))
             }
-            AppDialog.Builder(host).setTitle(copy("Новый пресет", "New preset")).setView(input)
+            AppDialog.Builder(host).setTitle(copy("Создать набор приложений", "Create app preset")).setView(input)
                 .setNegativeButton(host.uiCopy("Отмена"), null)
                 .setPositiveButton(host.uiCopy("Создать")) { _, _ ->
                     if (store.createPreset(input.text.toString())) {
@@ -1465,7 +1625,7 @@ internal class PrimaryPages(
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
                     setPadding(host.dp(10), host.dp(8), host.dp(10), host.dp(8))
-                    background = host.rounded(SURFACE_2, 12f, LINE)
+                    background = host.glassRowBackground(false, 12f)
                     if (app.icon != null) {
                         val iv = ImageView(host).apply {
                             setImageDrawable(app.icon)

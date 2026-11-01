@@ -1631,12 +1631,25 @@ public partial class MainWindow : Window
         else
         {
             foreach (var session in _sessions)
-                content.Children.Add(SettingsEntry("D", session.Label,
+            {
+                var desktop = session.DeviceOs?.Contains("windows", StringComparison.OrdinalIgnoreCase) == true ||
+                    session.DeviceOs?.Contains("desktop", StringComparison.OrdinalIgnoreCase) == true ||
+                    session.DeviceOs?.Contains("mac", StringComparison.OrdinalIgnoreCase) == true ||
+                    session.DeviceOs?.Contains("linux", StringComparison.OrdinalIgnoreCase) == true;
+                var platform = string.Join(" · ", new[] { session.DeviceModel, session.DeviceOs }
+                    .Where(value => !string.IsNullOrWhiteSpace(value)));
+                var subtitle = string.Join(" · ", new[]
+                {
+                    platform,
                     session.Current
                         ? Copy("Это устройство · текущий сеанс", "This device · current session")
                         : $"{Copy("Вход", "Signed in")}: {FormatLastSeen(session.CreatedAt)}",
-                    session.Current ? Copy("текущий", "current") : Copy("управлять", "manage"),
+                }.Where(value => !string.IsNullOrWhiteSpace(value)));
+                content.Children.Add(SettingsEntry(desktop ? "▣" : "▯", platform.Length > 0 ? platform : session.Label,
+                    subtitle, session.Current ? Copy("текущий", "current") : Copy("управлять", "manage"),
                     () => _ = ManageSessionAsync(session)));
+                content.Children.Add(DeyttTheme.Spacer(7));
+            }
         }
         content.Children.Add(SettingsEntry("+", Copy("Обновить список", "Refresh list"),
             Copy("Заново загрузить устройства и доступ", "Reload devices and access"), "↻", () =>
@@ -3033,7 +3046,8 @@ public partial class MainWindow : Window
         {
             var sessions = await _telegramApi.GetSessionsAsync(token, cancellationToken);
             _sessionLoadIssue = null;
-            return sessions;
+            return sessions.Where(session =>
+                string.Equals(session.Client, "deytt-connect", StringComparison.OrdinalIgnoreCase)).ToArray();
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {

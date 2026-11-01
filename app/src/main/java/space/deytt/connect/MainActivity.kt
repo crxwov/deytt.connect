@@ -42,7 +42,7 @@ import androidx.core.widget.doAfterTextChanged
 import androidx.viewpager2.widget.ViewPager2
 import space.deytt.connect.AppLanguage.uiCopy
 import space.deytt.connect.DeyttUi.button
-import space.deytt.connect.DeyttUi.glassButtonBackground
+import space.deytt.connect.DeyttUi.connectionGlassBackground
 import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.brandHeader
 import space.deytt.connect.DeyttUi.dp
@@ -842,7 +842,10 @@ class MainActivity : Activity() {
         }, LinearLayout.LayoutParams(0, -2, 1f))
         root.addView(routeHeading)
         root.addView(spacer(12, this))
-        action = button("Подключить").apply { setOnClickListener { toggleTunnel() } }
+        action = button("Подключить").apply {
+            background = connectionGlassBackground(VpnPhase.IDLE)
+            setOnClickListener { toggleTunnel() }
+        }
         action.apply {
             tag = "connection-action"
             maxLines = 1
@@ -1560,20 +1563,17 @@ class MainActivity : Activity() {
             routes,
             renderedPhase == VpnPhase.CONNECTED,
         )
-        if (activeAutoRoute != null) {
-            return "${activeAutoRoute.flag} ${ActiveRouteSelection.autoRouteLabel(activeAutoRoute)}"
-        }
-        val route = routes.firstOrNull { it.id == selected.id }
+        val route = activeAutoRoute ?: routes.firstOrNull { it.id == selected.id }
         if (route == null) return uiCopy(selected.title)
-        val city = when (route.countryCode) {
-            "NL" -> "Амстердам"
-            "DE" -> "Франкфурт"
-            "RU" -> "Санкт-Петербург"
-            "FI" -> "Хельсинки"
-            "IT" -> "Милан"
+        val (city, country) = when (route.countryCode) {
+            "NL" -> "Амстердам" to "Нидерланды"
+            "DE", "RU-DE" -> "Франкфурт" to "Германия"
+            "RU" -> "Санкт-Петербург" to "Россия"
+            "FI" -> "Хельсинки" to "Финляндия"
+            "IT" -> "Милан" to "Италия"
             else -> return uiCopy(selected.title)
         }
-        return route.flag + " " + uiCopy(city)
+        return (if (route.countryCode == "RU-DE") "🇩🇪" else route.flag) + " " + uiCopy(city) + ", " + uiCopy(country)
     }
 
     private fun updateRouteFlow(selected: SelectedRoute) {
@@ -2319,14 +2319,7 @@ class MainActivity : Activity() {
             VpnPhase.CONNECTED -> uiCopy(actionLabel) + ". " + uiCopy("Отключить")
             else -> uiCopy(actionLabel) + if (!errorDetail.isNullOrBlank()) ". ${uiCopy(errorDetail)}" else ""
         }
-        val colors = when (currentPhase) {
-            VpnPhase.CONNECTED -> 0xD82AAE86.toInt() to 0xC015765C.toInt()
-            VpnPhase.STARTING, VpnPhase.CHECKING -> 0xD92BA5D6.toInt() to 0xC0156A9A.toInt()
-            VpnPhase.STOPPING -> 0xB65B6D83.toInt() to 0x9D303E51.toInt()
-            VpnPhase.ERROR -> 0xD9D95E78.toInt() to 0xC0833449.toInt()
-            VpnPhase.IDLE -> 0xD9269CF2.toInt() to 0xC01066CD.toInt()
-        }
-        action.background = glassButtonBackground(colors.first, colors.second, 28f)
+        action.background = connectionGlassBackground(currentPhase)
         action.isEnabled = currentPhase != VpnPhase.STOPPING && !homeConnectQueued
         action.alpha = if (action.isEnabled) 1f else .66f
         if (::downloadText.isInitialized) updateQualityStrip()

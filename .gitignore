@@ -22,4 +22,7 @@ output/
 windows/**/bin/
 windows/**/obj/
 windows/artifacts/
+windows/qa/
 app/src/main/jniLibs/
+.codebase-memory/
+.tmp-dotnet-sdk*/

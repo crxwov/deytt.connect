@@ -39,6 +39,7 @@ import space.deytt.connect.DeyttUi.TEXT
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
+import space.deytt.connect.DeyttUi.glassRowBackground
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.note
 import space.deytt.connect.DeyttUi.pressFeedback
@@ -66,6 +67,16 @@ internal class ProfileFlows(
     private var identityFallback: TextView? = null
     private var subscriptionText: TextView? = null
     private var usageText: TextView? = null
+    private var quotaUsageBar: FrameLayout? = null
+    private var quotaUsageFill: View? = null
+    private var quotaUsageAnimator: ValueAnimator? = null
+    private var historyPeak: TextView? = null
+    private var historyChart: LinearLayout? = null
+    private var historyAxis: LinearLayout? = null
+    private var historyRows: LinearLayout? = null
+    private var historyEmpty: TextView? = null
+    private var historyNote: TextView? = null
+    private var paymentAction: View? = null
     private var deviceSummaryText: TextView? = null
     private var happDevices: LinearLayout? = null
     private var paymentStatusText: TextView? = null
@@ -82,6 +93,7 @@ internal class ProfileFlows(
     fun close() {
         closed = true
         refreshGeneration++
+        quotaUsageAnimator?.cancel()
         closeSupport?.invoke()
         closeSupport = null
         executor.shutdownNow()
@@ -117,7 +129,7 @@ internal class ProfileFlows(
         val card = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(14), host.dp(13), host.dp(14), host.dp(13))
-            background = host.rounded(SURFACE, 20f, LINE)
+            background = host.glassRowBackground(false, 20f)
         }
         subscriptionText = host.text(
             if (token == null) "Подключите Telegram, чтобы загрузить тариф и срок действия."
@@ -127,8 +139,24 @@ internal class ProfileFlows(
             if (token == null) Typeface.NORMAL else Typeface.BOLD,
         ).apply { maxLines = 2 }
         usageText = host.text("", 12f, MUTED).apply { setPadding(0, host.dp(6), 0, 0) }
+        val quotaBar = FrameLayout(host).apply {
+            visibility = View.GONE
+            background = host.rounded(0x402A3D51, 4f)
+            clipToOutline = true
+        }
+        quotaUsageBar = quotaBar
+        val quotaFill = View(host).apply {
+            background = host.rounded(0xFF70C9FF.toInt(), 4f)
+            pivotX = 0f
+            scaleX = 0f
+        }
+        quotaUsageFill = quotaFill
+        quotaBar.addView(quotaFill, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(5), Gravity.START or Gravity.CENTER_VERTICAL))
         card.addView(subscriptionText)
         card.addView(usageText)
+        card.addView(quotaBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(5)).apply {
+            topMargin = host.dp(9)
+        })
         paymentStatusText = host.text("", 12f, AMBER).apply {
             visibility = View.GONE
             setPadding(0, host.dp(8), 0, 0)
@@ -141,10 +169,18 @@ internal class ProfileFlows(
         }
         card.addView(actionStatus)
         root.addView(card)
+        root.addView(spacer(10, host))
+        root.addView(trafficHistoryGroup())
         root.addView(spacer(8, host))
-        root.addView(host.row("Тарифы и оплата", "Сумму подтвердит сервер перед оформлением", "PAYMENTS_ICON", emphasis = true).apply {
+        paymentAction = host.row(
+            copy("Выбрать тариф", "Choose a plan"),
+            copy("Тарифы и способы оплаты", "Plans and payment methods"),
+            "PAYMENTS_ICON",
+            emphasis = true,
+        ).apply {
             setOnClickListener { showPlanPicker() }
-        })
+        }
+        root.addView(paymentAction)
 
         root.addView(spacer(12, host))
         val devicesGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
@@ -173,18 +209,29 @@ internal class ProfileFlows(
         ))
 
         root.addView(accordion(copy("Устройства и сессии", "Devices and sessions"), copy("Подключения и управление доступом", "Connections and access"), devicesGroup))
+        root.addView(spacer(10, host))
+        root.addView(host.row(
+            copy("Поддержка", "Support"),
+            copy("Написать команде в приложении", "Message the team in the app"),
+            "BOT_ICON",
+            copy("написать", "chat"),
+            emphasis = true,
+        ).apply { setOnClickListener { showSupportChat() } })
         root.addView(spacer(8, host))
         val helpGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
-        helpGroup.addView(host.row("Поддержка", "Диалог с командой DEYTT", "↗", "открыть").apply {
-            setOnClickListener { showSupportChoices() }
-        })
+        helpGroup.addView(host.row(
+            copy("Поддержка в Telegram", "Telegram support"),
+            copy("Открыть запасной канал", "Open the external channel"),
+            "TELEGRAM_ICON",
+            "↗",
+        ).apply { setOnClickListener { openHttps(supportUrl) } })
         helpGroup.addView(host.row("Условия использования", copy("Читать в приложении", "Read in the app"), "↗", "открыть").apply {
             setOnClickListener { openDocument("terms") }
         })
         helpGroup.addView(host.row("Политика конфиденциальности", copy("Читать в приложении", "Read in the app"), "↗", "открыть").apply {
             setOnClickListener { openDocument("privacy") }
         })
-        root.addView(accordion(copy("Помощь и документы", "Help and documents"), copy("Поддержка, условия и конфиденциальность", "Support, terms and privacy"), helpGroup))
+        root.addView(accordion(copy("Документы и другие каналы", "Documents and other channels"), copy("Условия, конфиденциальность, Telegram", "Terms, privacy, Telegram"), helpGroup))
         root.addView(spacer(20, host))
 
         if (token != null) refreshProfile()
@@ -198,12 +245,150 @@ internal class ProfileFlows(
         }
     }
 
+    private fun trafficHistoryGroup(): View {
+        val content = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
+        val historyEmptyView = host.text(
+            copy(
+                "История начнёт собираться после обновления сервера. Прошлые дни восстановить нельзя.",
+                "History starts after the server is updated. Earlier days cannot be recovered.",
+            ),
+            12f,
+            MUTED,
+        ).apply { setPadding(0, host.dp(6), 0, host.dp(5)) }
+        historyEmpty = historyEmptyView
+        val historyPeakView = host.text("", 13f, TEXT, Typeface.BOLD).apply {
+            visibility = View.GONE
+            setPadding(0, host.dp(6), 0, host.dp(10))
+        }
+        historyPeak = historyPeakView
+        val historyChartView = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.BOTTOM
+            visibility = View.GONE
+        }
+        historyChart = historyChartView
+        val historyAxisView = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            visibility = View.GONE
+            addView(host.text("", 10f, MUTED), LinearLayout.LayoutParams(0, -2, 1f))
+            addView(host.text("", 10f, MUTED).apply { gravity = Gravity.END })
+        }
+        historyAxis = historyAxisView
+        val historyRowsView = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            setPadding(0, host.dp(8), 0, 0)
+        }
+        historyRows = historyRowsView
+        val historyNoteView = host.text(
+            copy(
+                "Общий VPN-расход; первый день может быть неполным. Отдельный счётчик LTE сервер пока не передаёт.",
+                "Total VPN usage; the first day may be partial. The server does not report LTE whitelist usage separately.",
+            ),
+            11f,
+            MUTED,
+        ).apply {
+            visibility = View.GONE
+            setPadding(0, host.dp(10), 0, 0)
+        }
+        historyNote = historyNoteView
+        content.addView(historyEmptyView)
+        content.addView(historyPeakView)
+        content.addView(historyChartView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(64)))
+        content.addView(historyAxisView)
+        content.addView(historyRowsView)
+        content.addView(historyNoteView)
+        return accordion(
+            copy("Расход по дням", "Daily usage"),
+            copy("История за последние 30 дней", "History for the last 30 days"),
+            content,
+        )
+    }
+
+    private fun renderTrafficHistory(subscription: JSONObject) {
+        val chart = historyChart ?: return
+        val rows = historyRows ?: return
+        val days = subscription.optJSONArray("traffic_daily_history")
+        val entries = (0 until (days?.length() ?: 0)).mapNotNull { index ->
+            val item = days?.optJSONObject(index) ?: return@mapNotNull null
+            val date = item.optString("date")
+            val bytes = item.optLong("bytes", -1L)
+            if (!date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) || bytes < 0L) null
+            else date to bytes
+        }.sortedBy { it.first }.takeLast(30)
+        val empty = entries.isEmpty()
+        historyEmpty?.visibility = if (empty) View.VISIBLE else View.GONE
+        historyPeak?.visibility = if (empty) View.GONE else View.VISIBLE
+        historyAxis?.visibility = if (empty) View.GONE else View.VISIBLE
+        chart.visibility = if (empty) View.GONE else View.VISIBLE
+        rows.visibility = if (empty) View.GONE else View.VISIBLE
+        historyNote?.visibility = if (empty) View.GONE else View.VISIBLE
+        if (empty) return
+
+        val peak = entries.maxBy { it.second }
+        historyPeak?.text = copy("Пик за день: ", "Daily peak: ") +
+            "${formatBytes(peak.second)} · ${displayDate("${peak.first}T00:00:00", false)}"
+        chart.removeAllViews()
+        val maxBytes = entries.maxOf { it.second }.coerceAtLeast(1L)
+        entries.forEachIndexed { index, (date, bytes) ->
+            val track = FrameLayout(host).apply {
+                background = host.rounded(0x392D455E, 3f)
+                clipToOutline = true
+            }
+            val fill = View(host).apply {
+                background = host.rounded(
+                    if (bytes == peak.second && peak.second > 0L) DeyttUi.MINT else DeyttUi.SKY,
+                    3f,
+                )
+            }
+            val height = (host.dp(56) * bytes.toDouble() / maxBytes).toInt().coerceAtLeast(host.dp(2))
+            track.addView(fill, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height, Gravity.BOTTOM))
+            chart.addView(FrameLayout(host).apply {
+                addView(track, FrameLayout.LayoutParams(host.dp(5), host.dp(58), Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+                contentDescription = "${displayDate("${date}T00:00:00", false)} · ${formatBytes(bytes)}"
+                post {
+                    if (!host.prefersReducedMotion() &&
+                        (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled())
+                    ) {
+                        track.pivotY = track.height.toFloat()
+                        track.scaleY = .35f
+                        track.animate().scaleY(1f).setStartDelay(index * 2L).setDuration(170L).start()
+                    }
+                }
+            }, LinearLayout.LayoutParams(0, host.dp(62), 1f))
+        }
+        historyAxis?.let { labels ->
+            (labels.getChildAt(0) as? TextView)?.text = entries.first().first.substring(5)
+            (labels.getChildAt(1) as? TextView)?.text = entries.last().first.substring(5)
+            labels.visibility = View.VISIBLE
+        }
+
+        rows.removeAllViews()
+        entries.asReversed().forEach { (date, bytes) ->
+            val isPeak = bytes == peak.second && peak.second > 0L
+            val row = LinearLayout(host).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = host.dp(38)
+                setPadding(host.dp(8), host.dp(4), host.dp(8), host.dp(4))
+                if (isPeak) background = host.glassRowBackground(true, 12f)
+                contentDescription = "${displayDate("${date}T00:00:00", false)} · ${formatBytes(bytes)}"
+            }
+            row.addView(host.text(displayDate("${date}T00:00:00", false), 12f, if (isPeak) DeyttUi.MINT else TEXT))
+            row.addView(host.text(formatBytes(bytes), 12f, if (isPeak) DeyttUi.MINT else MUTED).apply {
+                gravity = Gravity.END
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            rows.addView(row)
+            rows.addView(View(host).apply { setBackgroundColor(LINE) }, LinearLayout.LayoutParams(-1, host.dp(1)))
+        }
+    }
+
     private fun identityCard(token: String?): View {
         TelegramIdentityCache.bind(token)
         val card = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(16), host.dp(16), host.dp(16), host.dp(14))
-            background = host.rounded(SURFACE, 20f, LINE)
+            background = host.glassRowBackground(false, 20f)
             isClickable = true
             isFocusable = true
             setOnClickListener { if (TelegramSessionStore.read(host) == null) onPairAccount() else onManageAccount() }
@@ -266,7 +451,7 @@ internal class ProfileFlows(
     private fun accordion(title: String, subtitle: String, content: LinearLayout): View {
         val group = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
-            background = host.rounded(SURFACE, 18f, LINE)
+            background = host.glassRowBackground(false, 18f)
             clipToOutline = true
         }
         content.visibility = View.GONE
@@ -278,7 +463,7 @@ internal class ProfileFlows(
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = host.dp(60)
             setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(8))
-            background = host.rounded(SURFACE_2, 16f, LINE)
+            background = ColorDrawable(Color.TRANSPARENT)
             isClickable = true
             isFocusable = true
             host.pressFeedback(this, .99f)
@@ -412,6 +597,19 @@ internal class ProfileFlows(
                     usageText?.text = if (limit > 0L) {
                         host.uiCopy("Использовано ${formatBytes(traffic.quotaUsedBytes)} из ${formatBytes(limit)}") + "\n" + copy("Всего передано", "Total transferred") + " ${formatBytes(used)}"
                     } else host.uiCopy("Передано ${formatBytes(used)} · без установленного лимита")
+                    renderQuotaUsage(traffic.quotaUsedBytes, limit)
+                    renderTrafficHistory(subscription)
+                    val paymentLabels = (paymentAction as? ViewGroup)?.getChildAt(1) as? LinearLayout
+                    (paymentLabels?.getChildAt(0) as? TextView)?.text = when {
+                        !subscription.optBoolean("paid_active") -> copy("Выбрать тариф", "Choose a plan")
+                        subscription.optBoolean("unlimited_time") -> copy("Управление тарифом", "Manage plan")
+                        else -> copy("Продлить подписку", "Renew subscription")
+                    }
+                    (paymentLabels?.getChildAt(1) as? TextView)?.text = when {
+                        !subscription.optBoolean("paid_active") -> copy("Тарифы и способы оплаты", "Plans and payment methods")
+                        subscription.optBoolean("unlimited_time") -> copy("Для изменения условий напишите в поддержку", "Contact support to change your plan")
+                        else -> copy("Продление или дополнительное устройство", "Renew or add a device")
+                    }
                     val awgCount = devices?.optInt("awg", 0)?.coerceAtLeast(0) ?: 0
                     val happCount = devices?.optInt("happ_devices", 0)?.coerceAtLeast(0) ?: 0
                     deviceSummaryText?.text = host.uiCopy("AmneziaWG: $awgCount · Happ: $happCount")
@@ -431,6 +629,41 @@ internal class ProfileFlows(
         }
     }
 
+    private fun renderQuotaUsage(usedBytes: Long, limitBytes: Long) {
+        val bar = quotaUsageBar ?: return
+        val fill = quotaUsageFill ?: return
+        if (limitBytes <= 0L) {
+            bar.visibility = View.GONE
+            quotaUsageAnimator?.cancel()
+            fill.scaleX = 0f
+            return
+        }
+        bar.visibility = View.VISIBLE
+        val fraction = (usedBytes.toDouble() / limitBytes).coerceIn(0.0, 1.0)
+        bar.contentDescription = copy(
+            "Использовано ${(fraction * 100).toInt()}% лимита",
+            "${(fraction * 100).toInt()}% of the quota used",
+        )
+        bar.post {
+            if (bar.width <= 0 || host.isFinishing || host.isDestroyed) return@post
+            val target = fraction.toFloat()
+            quotaUsageAnimator?.cancel()
+            if (host.prefersReducedMotion() ||
+                (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled())
+            ) {
+                fill.scaleX = target
+                return@post
+            }
+            quotaUsageAnimator = ValueAnimator.ofFloat(fill.scaleX, target).apply {
+                duration = 230L
+                addUpdateListener { value ->
+                    fill.scaleX = value.animatedValue as Float
+                }
+                start()
+            }
+        }
+    }
+
     private fun renderHappDevices(devices: JSONArray?) {
         val container = happDevices ?: return
         container.removeAllViews()
@@ -445,7 +678,10 @@ internal class ProfileFlows(
             val id = device.optLong("id").takeIf { it > 0L }
             val state = if (blocked) copy("Обновления заблокированы", "Updates blocked") else copy("Доступ разрешён", "Access allowed")
             val detail = listOf(state, os).filter(String::isNotBlank).joinToString(" · ")
-            container.addView(host.row(model, detail, "H", "›").apply {
+            val deviceIcon = if (platform.contains("windows", true) || platform.contains("desktop", true) ||
+                platform.contains("mac", true) || platform.contains("linux", true)
+            ) "DEVICE_DESKTOP" else "DEVICE_PHONE"
+            container.addView(host.row(model, detail, deviceIcon, "›").apply {
                 setOnClickListener {
                     val information = buildList {
                         add("Happ · $os")
@@ -460,6 +696,8 @@ internal class ProfileFlows(
                     ) { _, _ -> confirmHappDeviceChange(id, model, !blocked) }
                     dialog.show()
                 }
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                bottomMargin = host.dp(7)
             })
         }
         if (container.childCount == 0) {
@@ -536,21 +774,47 @@ internal class ProfileFlows(
     private fun refreshSessions(generation: Int, token: String) {
         if (!isCurrent(token)) return
         executeFor(token) {
-            runCatching { TelegramPairingClient.sessions(token).optJSONArray("sessions") ?: JSONArray() }
+            runCatching {
+                val response = TelegramPairingClient.sessions(token).optJSONArray("sessions") ?: JSONArray()
+                JSONArray().apply {
+                    for (index in 0 until response.length()) {
+                        val session = response.optJSONObject(index) ?: continue
+                        val client = session.optString("client").ifBlank {
+                            if (session.optString("label") == "deytt./connect") "deytt-connect" else "telegram"
+                        }
+                        if (client == "deytt-connect") put(session)
+                    }
+                }
+            }
                 .onSuccess { sessions -> host.runOnUiThread {
                     if (generation != refreshGeneration || !isCurrent(token)) return@runOnUiThread
                     val container = appSessions ?: return@runOnUiThread
                     container.removeAllViews()
                     container.addView(host.sectionLabel(copy("сессии приложения", "app sessions")))
+                    if (sessions.length() == 0) {
+                        container.addView(host.note(
+                            copy("Активных сессий приложения нет.", "There are no active app sessions."),
+                            MUTED,
+                        ))
+                    }
                     for (index in 0 until sessions.length()) {
                         val session = sessions.optJSONObject(index) ?: continue
                         val current = session.optBoolean("current")
-                        val label = session.optString("label").ifBlank { "deytt.connect" }
+                        val os = session.optString("device_os").takeIf { it.isNotBlank() && it != "null" }
+                        val model = session.optString("device_model").takeIf { it.isNotBlank() && it != "null" }
+                        val label = model ?: session.optString("label").ifBlank { "deytt.connect" }
+                        val deviceDescription = listOfNotNull(os, if (current) copy("Это устройство", "This device") else displayDate(session.optString("created_at")))
+                            .filter(String::isNotBlank).joinToString(" · ")
+                        val deviceIcon = if (os?.contains("windows", ignoreCase = true) == true ||
+                            os?.contains("desktop", ignoreCase = true) == true ||
+                            os?.contains("mac", ignoreCase = true) == true ||
+                            os?.contains("linux", ignoreCase = true) == true
+                        ) "DEVICE_DESKTOP" else "DEVICE_PHONE"
                         val id = session.optString("id")
-                        container.addView(host.row(label, if (current) copy("Это устройство", "This device") else displayDate(session.optString("created_at")), "↗", "›").apply {
+                        container.addView(host.row(label, deviceDescription, deviceIcon, "›").apply {
                             setOnClickListener {
                                 val builder = AppDialog.Builder(host).setTitle(label)
-                                    .setMessage(copy("Вход", "Signed in") + ": " + displayDate(session.optString("created_at")) + "\n" +
+                                    .setMessage(listOfNotNull(os, copy("Вход", "Signed in") + ": " + displayDate(session.optString("created_at"))).joinToString("\n") + "\n" +
                                         copy("Действует до", "Valid until") + ": " + displayDate(session.optString("expires_at")))
                                     .setNegativeButton(host.uiCopy("Закрыть"), null)
                                 if (!current && id.isNotBlank()) builder.setPositiveButton(copy("Завершить сессию", "End session")) { _, _ ->
@@ -561,11 +825,13 @@ internal class ProfileFlows(
                                 }
                                 builder.show()
                             }
+                        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                            bottomMargin = host.dp(7)
                         })
                     }
                 } }.onFailure { host.runOnUiThread {
                     if (generation != refreshGeneration || !isCurrent(token)) return@runOnUiThread
-                    appSessions?.apply {
+        appSessions?.apply {
                         removeAllViews()
                         addView(host.row(copy("Сессии не загружены", "Sessions unavailable"), copy("Нажмите, чтобы повторить", "Tap to retry"), "↻", "").apply {
                             setOnClickListener { refreshSessions(generation, token) }
@@ -619,13 +885,6 @@ internal class ProfileFlows(
                 if (kind == "custom") showDurationPicker(token, picker.value)
                 else requestQuote(token, kind, null, null, extra = picker.value)
             }.show()
-    }
-
-    private fun showSupportChoices() {
-        AppDialog.Builder(host).setTitle(host.uiCopy("Поддержка"))
-            .setItems(arrayOf(copy("Написать в приложении", "Chat in the app"), copy("Открыть Telegram", "Open Telegram"))) { _, index ->
-                if (index == 0) showSupportChat() else openHttps(supportUrl)
-            }.setNegativeButton(host.uiCopy("Отмена"), null).show()
     }
 
     private fun showResetChoices() {
@@ -687,14 +946,14 @@ internal class ProfileFlows(
                 if (active && unlimitedTime) {
                     AppDialog.Builder(host).setTitle(copy("Бессрочная подписка", "Lifetime subscription"))
                         .setMessage(copy("Продлевать срок не нужно. Для изменения условий напишите в поддержку.", "No renewal is needed. Contact support to change your plan."))
-                        .setNeutralButton(host.uiCopy("Поддержка")) { _, _ -> showSupportChoices() }
+                        .setNeutralButton(host.uiCopy("Поддержка")) { _, _ -> showSupportChat() }
                         .setPositiveButton(host.uiCopy("Закрыть"), null).show()
                     return@runOnUiThread
                 }
                 if (active && unlimitedDevices) {
                     AppDialog.Builder(host).setTitle(copy("План без лимита устройств", "Unlimited device plan"))
                         .setMessage(copy("У вас индивидуальные условия без лимита устройств. Поддержка поможет продлить этот план, сохранив все его возможности.", "Your plan has individual terms with unlimited devices. Support can renew it while preserving all of its benefits."))
-                        .setNeutralButton(host.uiCopy("Поддержка")) { _, _ -> showSupportChoices() }
+                        .setNeutralButton(host.uiCopy("Поддержка")) { _, _ -> showSupportChat() }
                         .setPositiveButton(host.uiCopy("Закрыть"), null).show()
                     return@runOnUiThread
                 }
@@ -816,7 +1075,7 @@ internal class ProfileFlows(
         val root = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(14))
-            background = host.rounded(DeyttUi.SHEET_SURFACE, 24f)
+            background = host.glassRowBackground(true, 24f)
         }
         root.addView(host.mono("DEYTT · SUPPORT", 9f, MUTED, 650))
         root.addView(host.text("Поддержка", 21f, TEXT, Typeface.BOLD).apply { setPadding(0, host.dp(8), 0, host.dp(4)) })
@@ -839,7 +1098,7 @@ internal class ProfileFlows(
             maxLines = 4
             filters = arrayOf(InputFilter.LengthFilter(4000))
             setPadding(host.dp(12), host.dp(8), host.dp(12), host.dp(8))
-            background = host.rounded(SURFACE_2, 14f, LINE)
+            background = host.glassRowBackground(false, 14f)
         }
         root.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = host.dp(10)
@@ -879,7 +1138,7 @@ internal class ProfileFlows(
                 val bubble = LinearLayout(host).apply {
                     orientation = LinearLayout.VERTICAL
                     setPadding(host.dp(12), host.dp(9), host.dp(12), host.dp(9))
-                    background = host.rounded(if (fromSupport) SURFACE_2 else SURFACE, 14f, LINE)
+                    background = host.glassRowBackground(!fromSupport, 14f)
                 }
                 bubble.addView(host.mono(if (fromSupport) "DEYTT" else copy("ВЫ", "YOU"), 8f, MUTED, 600))
                 bubble.addView(host.text("", 13f, TEXT).apply {

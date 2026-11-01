@@ -385,12 +385,16 @@ public sealed class TelegramApiClient
             if (item.ValueKind != JsonValueKind.Object || string.IsNullOrWhiteSpace(id) ||
                 id.Length > 128 || id.Any(char.IsControl))
                 continue;
+            var label = SafeLabel(ReadString(item, "label"), "deytt.connect");
             sessions.Add(new TelegramAppSession(
                 id,
-                SafeLabel(ReadString(item, "label"), "deytt.connect"),
+                label,
                 ReadBoolean(item, "current") ?? false,
                 ReadString(item, "created_at"),
-                ReadString(item, "expires_at")));
+                ReadString(item, "expires_at"),
+                ReadString(item, "client") ?? (label == "deytt./connect" ? "deytt-connect" : "telegram"),
+                ReadString(item, "device_os"),
+                ReadString(item, "device_model")));
         }
         return sessions;
     }
@@ -928,7 +932,9 @@ public sealed record VerifiedPairing(string Token, TelegramAccount Account);
 public sealed record TelegramTariff(string Code, string Name, int Devices, int Months, int Rubles);
 public sealed record TelegramQuote(string Name, int Devices, int Months, int Rubles, int Stars);
 public sealed record TelegramCheckout(string PaymentUrl, string? ExternalId);
-public sealed record TelegramAppSession(string Id, string Label, bool Current, string? CreatedAt, string? ExpiresAt);
+public sealed record TelegramAppSession(
+    string Id, string Label, bool Current, string? CreatedAt, string? ExpiresAt,
+    string Client = "telegram", string? DeviceOs = null, string? DeviceModel = null);
 public sealed record TelegramHappDevice(long Id, bool Blocked, string Os, string Model, string? LastSeen)
 {
     public string? OsVersion { get; init; }

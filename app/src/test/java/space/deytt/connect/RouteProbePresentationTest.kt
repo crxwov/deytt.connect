@@ -60,7 +60,7 @@ class RouteProbePresentationTest {
     @Test
     fun speedProgressShowsLiveThroughputWithoutDroppingLatency() {
         assertEquals(
-            "Response: 500 ms · Speed: ↓ 8.0 Mbps · measuring…",
+            "Response: 500 ms · Speed: ↓ 8.0 Mbps",
             RouteProbePresentation.speedProgress("500 ms", english = true, bytesPerSecond = 1_000_000L),
         )
     }

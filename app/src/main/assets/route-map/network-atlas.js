@@ -34,7 +34,7 @@
     de: { code: "de", city: "Франкфурт-на-Майне", country: "Германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
     fi: { code: "fi", city: "Хельсинки", country: "Финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
     ru: { code: "ru", city: "Санкт-Петербург", country: "Россия", countryId: "643", lat: 59.9311, lon: 30.3609 },
-    it: { code: "it", city: "выход", country: "Италия", countryId: "380", lat: 42.5, lon: 12.5 }
+    it: { code: "it", city: "Милан", country: "Италия", countryId: "380", lat: 45.4642, lon: 9.19 }
   };
   const COUNTRY_EXIT_KEYS = { NL: "nl", DE: "de", FI: "fi", RU: "ru", IT: "it" };
   const ROUTES = {
@@ -44,7 +44,7 @@
       nodes: ["nl", "de", "fi", "ru", "it"],
       links: [],
       steps: [["вы", "устройство"], ["auto", "проверка точек"], ["nl / de / fi / ru / it", "доступные выходы"], ["web", "интернет"]],
-      description: "общий адрес выбирает доступный выход из амстердама, франкфурта, хельсинки, санкт-петербурга или италии по состоянию сети."
+      description: "общий адрес выбирает доступный выход из амстердама, франкфурта, хельсинки, санкт-петербурга или милана по состоянию сети."
     },
     nl: {
       title: "нидерланды",
@@ -78,8 +78,8 @@
       title: "италия",
       eyebrow: "прямой маршрут",
       nodes: ["it"], links: [],
-      steps: [["вы", "устройство"], ["it", "точка в италии"], ["web", "интернет"]],
-      description: "соединение входит в сеть и выходит в интернет через точку в италии."
+      steps: [["вы", "устройство"], ["it", "милан · италия"], ["web", "интернет"]],
+      description: "соединение входит в сеть и выходит в интернет через милан, италия."
     },
     "ru-de": {
       title: "россия + германия",
@@ -96,6 +96,7 @@
     "франкфурт-на-майне": "Frankfurt am Main",
     "германия": "Germany",
     "хельсинки": "Helsinki",
+    "милан": "Milan",
     "финляндия": "Finland",
     "италия": "Italy",
     "выход": "Exit",
@@ -117,7 +118,7 @@
       title: "Auto-select",
       eyebrow: "available exits",
       steps: [["you", "device"], ["auto", "checking nodes"], ["nl / de / fi / ru / it", "available exits"], ["web", "internet"]],
-      description: "The shared entry chooses an available exit in Amsterdam, Frankfurt, Helsinki, Saint Petersburg, or Italy based on network conditions."
+      description: "The shared entry chooses an available exit in Amsterdam, Frankfurt, Helsinki, Saint Petersburg, or Milan based on network conditions."
     },
     nl: {
       title: "Netherlands",
@@ -146,8 +147,8 @@
     it: {
       title: "Italy",
       eyebrow: "direct route",
-      steps: [["you", "device"], ["it", "exit in Italy"], ["web", "internet"]],
-      description: "Traffic enters the network and reaches the internet through an exit in Italy."
+      steps: [["you", "device"], ["it", "Milan · Italy"], ["web", "internet"]],
+      description: "Traffic enters the network and reaches the internet through Milan, Italy."
     },
     "ru-de": {
       title: "Russia + Germany",
@@ -278,6 +279,10 @@
       this.options = options || {};
       this.wheelZoomOnly = Boolean(this.options.wheelZoomOnly);
       this.variant = this.options.variant || "home";
+      this.idleMotionTimer = 0;
+      this.idleFrameTimer = 0;
+      this.idleMotionStart = 0;
+      this.idleMotionOffset = 0;
       this.selectOnTap = this.options.selectOnTap !== false;
       this.root.dataset.atlasVariant = this.variant;
       this.route = "auto";
@@ -375,6 +380,7 @@
 
     bind() {
       this.canvas.addEventListener("pointerdown", (event) => {
+        this.resetIdleMotion();
         if (this.gesturePointers.size === 0) {
           this.gestureStartedInsideGlobe = this.isInsideVisibleGlobe(event.clientX, event.clientY);
         }
@@ -428,6 +434,7 @@
       });
       this.canvas.addEventListener("wheel", (event) => {
         if (!this.isInsideVisibleGlobe(event.clientX, event.clientY)) return;
+        this.resetIdleMotion();
         event.preventDefault();
         const delta = event.deltaMode === 1 ? event.deltaY * 18 : event.deltaY;
         // Normalize large mouse-wheel bursts so the camera never jumps between frames.
@@ -500,6 +507,7 @@
       new ResizeObserver(() => this.resize()).observe(this.canvas);
       new IntersectionObserver((entries) => {
         this.visible = entries[0].isIntersecting;
+        this.resetIdleMotion();
         if (this.visible) this.start();
       }, { rootMargin: "180px 0px" }).observe(this.canvas);
       new MutationObserver(() => {
@@ -508,9 +516,11 @@
       }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
       this.reducedMotion.addEventListener("change", () => {
         this.staticDirty = true;
+        this.resetIdleMotion();
         this.start();
       });
       document.addEventListener("visibilitychange", () => {
+        this.resetIdleMotion();
         if (document.hidden && this.frame) {
           cancelAnimationFrame(this.frame);
           this.frame = 0;
@@ -572,8 +582,8 @@
     }
 
     basis() {
-      const phi = this.centerLat * DEG;
-      const lambda = this.centerLon * DEG;
+      const phi = (this.centerLat + (this.idleMotionLatOffset || 0)) * DEG;
+      const lambda = (this.centerLon + this.idleMotionOffset) * DEG;
       return {
         east: { x: -Math.sin(lambda), y: 0, z: Math.cos(lambda) },
         north: { x: -Math.sin(phi) * Math.cos(lambda), y: Math.cos(phi), z: -Math.sin(phi) * Math.sin(lambda) },
@@ -953,11 +963,11 @@
           points.forEach((point, i) => { if (point.z <= -.02) return; if (!i || points[i - 1].z <= -.02) context.moveTo(point.x, point.y); else context.lineTo(point.x, point.y); });
           context.lineCap = context.lineJoin = "round";
           context.strokeStyle = stream.color; context.globalAlpha = emphasized ? .24 : dark ? .18 : .13;
-          context.lineWidth = emphasized ? 7 : 5.8; context.shadowBlur = 0; context.stroke();
+          context.lineWidth = emphasized ? 4.2 : 2.0; context.shadowBlur = 0; context.stroke();
           const sheen = context.createLinearGradient(points[0].x, points[0].y, points[80].x, points[80].y);
           sheen.addColorStop(0, stream.color); sheen.addColorStop(.22, stream.color); sheen.addColorStop(.5, stream.bright);
           sheen.addColorStop(.78, stream.color); sheen.addColorStop(1, stream.color);
-          context.strokeStyle = sheen; context.globalAlpha = 1; context.lineWidth = emphasized ? 3.1 : 2.3; context.stroke();
+          context.strokeStyle = sheen; context.globalAlpha = 1; context.lineWidth = emphasized ? 2.4 : 1.3; context.stroke();
           if (emphasized) { context.globalAlpha = .9; context.strokeStyle = "#FFFFFF"; context.lineWidth = .75; context.shadowBlur = 0; context.stroke(); }
           context.restore();
           for (let i = 1; i < points.length; i++) {
@@ -1012,13 +1022,13 @@
 
     trafficStreams() {
       return document.documentElement.dataset.theme === "dark" ? [
-        { id: "upload", color: "#FF7798", bright: "#FFE2EA", lane: .07, duration: 3400, phase: 0 },
-        { id: "download", color: "#FFCE55", bright: "#FFF4CB", lane: .17, duration: 3000, phase: .34, reverse: true },
-        { id: "control", color: "#AF8CFF", bright: "#EFE5FF", lane: .27, duration: 3800, phase: .68 }
+        { id: "upload", color: "#FF7798", bright: "#FFE2EA", lane: -1, duration: 3400, phase: 0 },
+        { id: "download", color: "#FFCE55", bright: "#FFF4CB", lane: 0, duration: 3000, phase: .34, reverse: true },
+        { id: "control", color: "#AF8CFF", bright: "#EFE5FF", lane: 1, duration: 3800, phase: .68 }
       ] : [
-        { id: "upload", color: "#FF5278", bright: "#FFCDDD", lane: .07, duration: 3400, phase: 0 },
-        { id: "download", color: "#F6AD11", bright: "#FFE9A6", lane: .17, duration: 3000, phase: .34, reverse: true },
-        { id: "control", color: "#824BFF", bright: "#D9C5FF", lane: .27, duration: 3800, phase: .68 }
+        { id: "upload", color: "#FF5278", bright: "#FFCDDD", lane: -1, duration: 3400, phase: 0 },
+        { id: "download", color: "#F6AD11", bright: "#FFE9A6", lane: 0, duration: 3000, phase: .34, reverse: true },
+        { id: "control", color: "#824BFF", bright: "#D9C5FF", lane: 1, duration: 3800, phase: .68 }
       ];
     }
 
@@ -1029,7 +1039,10 @@
       const from = vector(fromLocation.lat, fromLocation.lon), to = vector(toLocation.lat, toLocation.lon);
       const start = this.projectVector(from, 1.008), end = this.projectVector(to, 1.008);
       const point = this.projectVector(slerp(from, to, amount), 1.008);
-      return { x: point.x, y: point.y - Math.sin(amount * Math.PI) * Math.hypot(end.x - start.x, end.y - start.y) * lane, z: point.z };
+      const dx = end.x - start.x, dy = end.y - start.y;
+      const length = Math.hypot(dx, dy) || 1;
+      const offset = Math.sin(amount * Math.PI) * lane * Math.max(14, Math.min(26, length * .22));
+      return { x: point.x - dy / length * offset, y: point.y + dx / length * offset, z: point.z };
     }
 
     drawTrafficTrail(links, position, stream) {
@@ -1318,7 +1331,14 @@
       this.frame = 0;
       if (!this.visible || document.hidden || !this.width) return;
       if (window.DeyttAtlasBridge && !this.viewportAnchor) return;
-      const cameraMoving = this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
+      const idleActive = this.idleMotionStart > 0 && this.variant === "home" && !this.reducedMotion.matches;
+      const idleCycle = idleActive ? ((time - this.idleMotionStart) / 8000) * TAU : 0;
+      const nextIdleOffset = idleActive ? Math.sin(idleCycle) * 5.8 : 0;
+      const nextIdleLatOffset = idleActive ? Math.cos(idleCycle) * 2.2 : 0;
+      if (Math.abs(nextIdleOffset - this.idleMotionOffset) > .001 || Math.abs(nextIdleLatOffset - (this.idleMotionLatOffset || 0)) > .001) this.staticDirty = true;
+      this.idleMotionOffset = nextIdleOffset;
+      this.idleMotionLatOffset = nextIdleLatOffset;
+      const cameraMoving = idleActive || this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
       // Static geography and route overlays stay cached; only packets change each frame.
       const elapsed = this.lastFrame ? time - this.lastFrame : 16;
@@ -1348,7 +1368,7 @@
       if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 || Math.abs(this.zoom - previousZoom) > .0001) {
         this.staticDirty = true;
       }
-      const cameraSettled = !this.dragging && Math.abs(this.targetLon - this.centerLon) <= .01 &&
+      const cameraSettled = !idleActive && !this.dragging && Math.abs(this.targetLon - this.centerLon) <= .01 &&
         Math.abs(this.targetLat - this.centerLat) <= .01 && Math.abs(this.targetZoom - this.zoom) <= .002 && Math.abs(this.velocityLon) <= .001;
       this.currentBasis = this.basis();
       this.context.clearRect(0, 0, this.width, this.height);
@@ -1368,7 +1388,41 @@
         this.context.drawImage(this.foregroundOverlayCanvas, 0, 0, this.width, this.height);
       }
       this.renderCount += 1;
-      if (Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || (this.trafficActive && !this.reducedMotion.matches)) this.start();
+      const cameraNeedsFrames = Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001;
+      if (cameraNeedsFrames || (idleActive && this.trafficActive)) this.start();
+      else if (idleActive && !this.idleFrameTimer) {
+        this.idleFrameTimer = window.setTimeout(() => {
+          this.idleFrameTimer = 0;
+          this.start();
+        }, 40);
+      } else if (this.trafficActive && !this.reducedMotion.matches) this.start();
+    }
+
+    resetIdleMotion() {
+      if (this.idleMotionTimer) window.clearTimeout(this.idleMotionTimer);
+      if (this.idleFrameTimer) window.clearTimeout(this.idleFrameTimer);
+      this.idleMotionTimer = 0;
+      this.idleFrameTimer = 0;
+      if (this.idleMotionOffset) {
+        this.centerLon += this.idleMotionOffset;
+        this.targetLon += this.idleMotionOffset;
+        this.idleMotionOffset = 0;
+        this.staticDirty = true;
+      }
+      if (this.idleMotionLatOffset) {
+        this.centerLat += this.idleMotionLatOffset;
+        this.targetLat += this.idleMotionLatOffset;
+        this.idleMotionLatOffset = 0;
+        this.staticDirty = true;
+      }
+      this.idleMotionStart = 0;
+      if (this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
+      this.idleMotionTimer = window.setTimeout(() => {
+        this.idleMotionTimer = 0;
+        if (this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
+        this.idleMotionStart = performance.now();
+        this.start();
+      }, 30000);
     }
 
     start() {
@@ -1398,6 +1452,7 @@
 
     setRoute(key, announce) {
       if (!ROUTES[key]) return;
+      this.resetIdleMotion();
       if (this.variant === "showcase" && announce !== false) this.showcaseFocused = true;
       const routeChanged = !this.routeInitialized || this.route !== key;
       this.route = key;

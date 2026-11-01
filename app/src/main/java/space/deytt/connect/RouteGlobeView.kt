@@ -403,15 +403,26 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             else -> "показаны точки Амстердам, Франкфурт, Хельсинки и Санкт-Петербург"
         }
         val origin = networkLocation?.let { " Точка входа — ${it.placeLabel}, приблизительно по IP; адрес IP не сохраняется." }.orEmpty()
-        val egress = if (route == "auto" && egressCountryCode != null) " Примерно по IP выбран выход в ${countryName(egressCountryCode!!)}." else ""
-        return "Карта сети DEYTT; $destination.$origin$egress Нажмите точку, чтобы выбрать выход и протокол. Поворот и масштаб — жестами двумя пальцами. Горизонтальный свайп переключает вкладку."
+        val egress = if (route == "auto" && egressCountryCode != null) {
+            if (AppLanguage.current(context) == AppLanguage.EN) {
+                " Selected exit in ${countryName(egressCountryCode!!)} approximately by IP."
+            } else {
+                " Примерно по IP выбран выход в ${countryName(egressCountryCode!!)}."
+            }
+        } else ""
+        return if (AppLanguage.current(context) == AppLanguage.EN) {
+            "DEYTT network map; $destination.$origin$egress Tap a node to select an exit and protocol. Two-finger drag to rotate and zoom."
+        } else {
+            "Карта сети DEYTT; $destination.$origin$egress Нажмите точку, чтобы выбрать выход и протокол. Поворот и масштаб — жестами двумя пальцами. Горизонтальный свайп переключает вкладку."
+        }
     }
 
-    private fun countryName(code: String): String = when (code) {
-        "NL" -> "Нидерландах"
-        "DE" -> "Германии"
-        "FI" -> "Финляндии"
-        "RU" -> "России"
+    private fun countryName(code: String): String = when (code.uppercase()) {
+        "NL" -> if (AppLanguage.current(context) == AppLanguage.EN) "Netherlands" else "Нидерландах"
+        "DE" -> if (AppLanguage.current(context) == AppLanguage.EN) "Germany" else "Германии"
+        "FI" -> if (AppLanguage.current(context) == AppLanguage.EN) "Finland" else "Финляндии"
+        "RU" -> if (AppLanguage.current(context) == AppLanguage.EN) "Russia" else "России"
+        "IT" -> if (AppLanguage.current(context) == AppLanguage.EN) "Italy" else "Италии"
         else -> code
     }
 

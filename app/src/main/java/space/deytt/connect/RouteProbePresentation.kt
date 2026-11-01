@@ -62,9 +62,9 @@ internal object RouteProbePresentation {
         val separator = " · "
         val liveRate = bytesPerSecond?.takeIf { it > 0L }?.let { formatSpeed(it, english) }
         return when {
-            english && liveRate != null -> measuredResponse + separator + "Speed: ↓ $liveRate · measuring…"
+            english && liveRate != null -> measuredResponse + separator + "Speed: ↓ $liveRate"
             english -> measuredResponse + separator + "Speed: —"
-            liveRate != null -> measuredResponse + separator + "Скорость: ↓ $liveRate · замер…"
+            liveRate != null -> measuredResponse + separator + "Скорость: ↓ $liveRate"
             else -> measuredResponse + separator + "Скорость: —"
         }
     }

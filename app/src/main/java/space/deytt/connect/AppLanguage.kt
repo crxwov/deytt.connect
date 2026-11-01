@@ -120,6 +120,14 @@ internal object AppLanguage {
             "Последний замер загрузки. Нажмите, чтобы проверить маршруты." to "Last download test. Tap to compare routes.",
             "Войти через Telegram" to "Sign in with Telegram",
             "Быстрый QUIC-маршрут" to "QUIC transport",
+            "Ошибка соединения · повторить" to "Connection error · retry",
+            "ошибка соединения · повторить" to "connection error · retry",
+            "Отключаем…" to "Disconnecting…",
+            "отключаем…" to "disconnecting…",
+            "Выход Италии" to "Milan, Italy",
+            "выход Италии" to "Milan, Italy",
+            "Выход Италия" to "Milan, Italy",
+            "выход Италия" to "Milan, Italy",
             "Сброс ключей отключит выбранные подключения. Завершение сессии приложения отключает только доступ к аккаунту." to "Key reset disconnects the selected connections. Ending an app session only revokes account access."
         )
         (additions[value] ?: additions.entries.firstOrNull { it.key.equals(value, ignoreCase = true) }?.value)?.let {
@@ -681,10 +689,28 @@ internal object AppLanguage {
         "Санкт-Петербург" to "Saint Petersburg",
         "Хельсинки" to "Helsinki",
         "Амстердам" to "Amsterdam",
+        "Милан" to "Milan",
         "Германия" to "Germany",
         "Россия" to "Russia",
         "Финляндия" to "Finland",
         "Нидерланды" to "Netherlands",
+        "Италия" to "Italy",
+        "франкфурт" to "frankfurt",
+        "санкт-петербург" to "saint petersburg",
+        "хельсинки" to "helsinki",
+        "амстердам" to "amsterdam",
+        "милан" to "milan",
+        "германия" to "germany",
+        "россия" to "russia",
+        "финляндия" to "finland",
+        "нидерланды" to "netherlands",
+        "италия" to "italy",
+        "выход в италии" to "exit in italy",
+        "выход в германии" to "exit in germany",
+        "выход в нидерландах" to "exit in netherlands",
+        "выход в финляндии" to "exit in finland",
+        "выход в россии" to "exit in russia",
+        "оптимизированный quic-маршрут" to "optimized quic transport",
     )
 
     private val normalizedTranslations by lazy {

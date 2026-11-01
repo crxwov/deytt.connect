@@ -244,8 +244,8 @@ object DeyttUi {
             minHeight = dp(48)
             setPadding(dp(18), dp(10), dp(18), dp(10))
             background = if (secondary) liquidGlassButton(secondary = true, radius = 24f)
-                else glassButtonBackground(0xD9269CF2.toInt(), 0xC01066CD.toInt(), 24f)
-            elevation = if (secondary) dp(1).toFloat() else dp(3).toFloat()
+                else connectionGlassBackground(VpnPhase.IDLE)
+            elevation = dp(1).toFloat()
             isClickable = true
             isFocusable = true
             contentDescription = uiCopy(label)
@@ -256,13 +256,44 @@ object DeyttUi {
     fun Activity.liquidGlassButton(
         secondary: Boolean,
         radius: Float = 24f,
-        primaryTop: Int = 0xEA2494F8.toInt(),
-        primaryBottom: Int = 0xD21060C8.toInt(),
-    ): Drawable = glassButtonBackground(
-        if (secondary) 0x40364C68.toInt() else primaryTop,
-        if (secondary) 0x22121E2E.toInt() else primaryBottom,
-        radius
-    )
+        primaryTop: Int = 0x402D425A.toInt(),
+        primaryBottom: Int = 0x22131F2E.toInt(),
+    ): Drawable = if (secondary) {
+        glassButtonBackground(0x40364C68.toInt(), 0x22121E2E.toInt(), radius)
+    } else {
+        connectionGlassBackground(VpnPhase.IDLE)
+    }
+
+    fun Activity.connectionGlassBackground(phase: VpnPhase): Drawable {
+        val (fill, stroke) = when (phase) {
+            VpnPhase.CONNECTED -> intArrayOf(0x351F3A30.toInt(), 0x2010201A.toInt()) to intArrayOf(
+                0x85F6FFFC.toInt(), 0x5534D399.toInt(), 0x9510B981.toInt(), 0x35FFFFFF.toInt(),
+            )
+            VpnPhase.STARTING, VpnPhase.CHECKING -> intArrayOf(0x402D425A.toInt(), 0x22131F2E.toInt()) to intArrayOf(
+                0x80F4FBFF.toInt(), 0x6078C9F0.toInt(), 0x9560A5FA.toInt(), 0x35FFFFFF.toInt(),
+            )
+            VpnPhase.STOPPING -> intArrayOf(0x352B394B.toInt(), 0x20131C29.toInt()) to intArrayOf(
+                0x50FFFFFF.toInt(), 0x303C5268.toInt(), 0x2552627A.toInt(), 0x28FFFFFF.toInt(),
+            )
+            VpnPhase.ERROR -> intArrayOf(0x38352630.toInt(), 0x221E141C.toInt()) to intArrayOf(
+                0x80FFF1F2.toInt(), 0x55F43F5E.toInt(), 0x90FB7185.toInt(), 0x30FFFFFF.toInt(),
+            )
+            VpnPhase.IDLE -> intArrayOf(0x402D425A.toInt(), 0x22131F2E.toInt()) to intArrayOf(
+                0x80F0F9FF.toInt(), 0x5060A5FA.toInt(), 0x9038BDF8.toInt(), 0x35FFFFFF.toInt(),
+            )
+        }
+        return LiquidGlassDrawable(
+            density = resources.displayMetrics.density,
+            cornerRadiusPx = dp(28).toFloat(),
+            fillColors = fill,
+            strokeColors = stroke,
+            strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+            strokeWidthPx = 1.25f,
+            hasGloss = true,
+            glossAlpha = 0x16,
+            innerLip = true,
+        )
+    }
 
     fun Activity.glassButtonBackground(topColor: Int, bottomColor: Int, radius: Float = 24f): Drawable {
         val density = resources.displayMetrics.density
@@ -334,6 +365,8 @@ object DeyttUi {
                 }
             } else when (leading) {
                 "AWG_MARK" -> awgMark(emphasis)
+                "AWG31_MARK" -> awgMark(emphasis, version31 = true)
+                "ROUTE_RU_DE" -> routePairMark(emphasis)
                 "SUBSCRIPTION_ICON" -> actionIcon(R.drawable.ic_cloud_download, emphasis)
                 "ROUTE_AUTO" -> actionIcon(R.drawable.ic_route, emphasis)
                 "PAYMENTS_ICON" -> actionIcon(R.drawable.ic_credit_card, emphasis)
@@ -344,6 +377,8 @@ object DeyttUi {
                 "VPN_PERMISSION_ICON" -> actionIcon(R.drawable.ic_shield_check, emphasis)
                 "BOT_ICON" -> actionIcon(R.drawable.ic_bot, emphasis)
                 "ACCOUNT_ICON" -> actionIcon(R.drawable.ic_user_round, emphasis)
+                "DEVICE_DESKTOP" -> actionIcon(R.drawable.ic_monitor, emphasis)
+                "DEVICE_PHONE" -> actionIcon(R.drawable.ic_smartphone, emphasis)
                 "↻" -> android.widget.ImageView(this@row).apply {
                     setImageResource(R.drawable.ic_sync)
                     imageTintList = ColorStateList.valueOf(SKY)
@@ -464,22 +499,31 @@ object DeyttUi {
         }
     }
 
-    private fun Activity.awgMark(emphasis: Boolean): FrameLayout {
+    private fun Activity.awgMark(emphasis: Boolean, version31: Boolean = false): FrameLayout {
         val context = this
         return FrameLayout(context).apply {
-            background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 16f,
+            background = if (version31) LiquidGlassDrawable(
+                density = resources.displayMetrics.density,
+                cornerRadiusPx = dp(16).toFloat(),
+                fillColors = intArrayOf(0x3A42335F, 0x241B2032),
+                strokeColors = intArrayOf(0x58F6F0FF, 0x368D7BE0, 0x5E9B80F0, 0x26FFFFFF),
+                strokeWidthPx = .9f,
+                hasGloss = true,
+                glossAlpha = 0x10,
+                innerLip = false,
+            ) else rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 16f,
                 if (emphasis) 0xFF3F5985.toInt() else LINE)
-            contentDescription = uiCopy("Значок AmneziaWG")
+            contentDescription = uiCopy(if (version31) "AmneziaWG 3.1" else "Значок AmneziaWG 1.5")
             addView(ImageView(context).apply {
                 setImageResource(R.drawable.ic_amneziawg)
-                imageTintList = ColorStateList.valueOf(DeyttUi.TEXT)
+                imageTintList = ColorStateList.valueOf(if (version31) 0xFFC6ACFF.toInt() else DeyttUi.TEXT)
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                contentDescription = uiCopy("Оригинальный знак AmneziaWG")
+                contentDescription = uiCopy(if (version31) "Знак AmneziaWG 3.1" else "Оригинальный знак AmneziaWG")
             }, FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER))
         }
     }
 
-    private fun Activity.routePairMark(emphasis: Boolean): FrameLayout {
+    internal fun Activity.routePairMark(emphasis: Boolean): FrameLayout {
         val context = this
         return FrameLayout(context).apply {
             background = rounded(if (emphasis) 0xFF253654.toInt() else SURFACE_2, 16f,
@@ -653,21 +697,29 @@ object DeyttUi {
             else -> {
                 val alpha = Color.alpha(fill)
                 if (alpha in 1..254 || (fill and 0x00FFFFFF) != 0) {
-                    val topColor = fill
-                    val bottomColor = ((alpha * 0.72f).toInt() shl 24) or (fill and 0x00FFFFFF)
+                    val strokeColors = if (stroke != fill) {
+                        intArrayOf(
+                            0x55FFFFFF.toInt(),
+                            0x2C82B4E8.toInt(),
+                            0x4B60A5FA.toInt(),
+                            0x22FFFFFF.toInt(),
+                        )
+                    } else {
+                        intArrayOf(
+                            0x28FFFFFF.toInt(),
+                            0x12FFFFFF.toInt(),
+                            0x0C78A8D0.toInt(),
+                            0x14FFFFFF.toInt(),
+                        )
+                    }
                     LiquidGlassDrawable(
                         density = density,
                         cornerRadiusPx = rPx,
-                        fillColors = intArrayOf(topColor, bottomColor),
-                        strokeColors = intArrayOf(
-                            0x28FFFFFF.toInt(),
-                            0x10FFFFFF.toInt(),
-                            0x0AFFFFFF.toInt(),
-                            0x10FFFFFF.toInt(),
-                        ),
-                        strokeWidthPx = 0.8f,
-                        hasGloss = true,
-                        glossAlpha = 0x10,
+                        fillColors = intArrayOf(fill),
+                        strokeColors = strokeColors,
+                        strokeWidthPx = 0.85f,
+                        hasGloss = false,
+                        glossAlpha = 0x08,
                         innerLip = false,
                     )
                 } else {
@@ -715,14 +767,14 @@ object DeyttUi {
         private var selectedPage = -1
         private var pagePosition = initialPage.coerceIn(0, 3).toFloat()
         private val selection = View(activity).apply {
-            background = activity.rounded(SELECTED, 20f, SELECTED_LINE)
+            background = activity.glassRowBackground(true, 20f)
             isClickable = false
             isFocusable = false
             importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         }
 
         init {
-            background = activity.rounded(SURFACE, 28f, LINE)
+            background = activity.glassRowBackground(false, 28f)
             clipToOutline = true
             elevation = activity.dp(8).toFloat()
             contentDescription = activity.uiCopy("Основная навигация")
