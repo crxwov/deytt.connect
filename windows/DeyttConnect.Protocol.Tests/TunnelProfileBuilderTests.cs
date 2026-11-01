@@ -22,7 +22,7 @@ public sealed class TunnelProfileBuilderTests
         var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), AutoTag))!;
         var selector = runtime["outbounds"]!.AsArray().OfType<JsonObject>()
             .Single(outbound => outbound["tag"]!.GetValue<string>() == AutoTag);
-        Assert.Equal(new[] { "route:NL:VLESS", "route:DE:TROJAN", "route:DE:TUIC", "route:FI:HYSTERIA2", "route:IT:VLESS" },
+        Assert.Equal(new[] { "route:NL:VLESS", "route:DE:VLESS", "route:DE:TROJAN", "route:DE:TUIC", "route:FI:HYSTERIA2", "route:IT:VLESS" },
             selector["outbounds"]!.AsArray().Select(tag => tag!.GetValue<string>()));
         Assert.False(selector.ContainsKey("default"));
         Assert.DoesNotContain("route:RU", selector["outbounds"]!.ToJsonString());
@@ -33,7 +33,12 @@ public sealed class TunnelProfileBuilderTests
     {
         var profile = JsonNode.Parse(Profile("route:NL:VLESS", "route:RU:VLESS"))!.AsObject();
         profile["outbounds"]![1]!["detour"] = "route:RU:VLESS";
-        Assert.Throws<InvalidDataException>(() => TunnelProfileBuilder.Build(profile.ToJsonString(), AutoTag));
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), AutoTag))!;
+        var automatic = runtime["outbounds"]!.AsArray().OfType<JsonObject>()
+            .Single(outbound => outbound["tag"]!.GetValue<string>() == AutoTag);
+        Assert.Equal(new[] { "route:DE:VLESS" }, automatic["outbounds"]!.AsArray()
+            .Select(tag => tag!.GetValue<string>()));
+        Assert.DoesNotContain("route:RU", automatic["outbounds"]!.ToJsonString());
         Assert.Throws<InvalidDataException>(() => TunnelProfileBuilder.Build(Profile("route:RU:VLESS"), AutoTag));
     }
 
@@ -42,6 +47,69 @@ public sealed class TunnelProfileBuilderTests
     {
         var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:RU:VLESS"), "route:RU:VLESS"))!;
         Assert.Equal("route:RU:VLESS", runtime["route"]!["final"]!.GetValue<string>());
+        Assert.DoesNotContain(runtime["route"]!["rules"]!.AsArray(), rule =>
+            rule?["outbound"]?.GetValue<string>() == "route:DE");
+    }
+
+    [Fact]
+    public void RussiaToGermanyChainUsesGermanGoogleEgress()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:RU-DE:CHAIN"), "route:RU-DE:CHAIN"))!;
+        Assert.Equal("route:RU-DE:CHAIN", runtime["route"]!["final"]!.GetValue<string>());
+        Assert.Contains(runtime["route"]!["rules"]!.AsArray(), rule =>
+            rule?["outbound"]?.GetValue<string>() == "route:DE");
+    }
+
+    [Theory]
+    [InlineData("NL", "VLESS")]
+    [InlineData("NL", "TROJAN")]
+    [InlineData("NL", "HYSTERIA2")]
+    [InlineData("NL", "TUIC")]
+    [InlineData("DE", "VLESS")]
+    [InlineData("DE", "TROJAN")]
+    [InlineData("DE", "HYSTERIA2")]
+    [InlineData("DE", "TUIC")]
+    [InlineData("FI", "VLESS")]
+    [InlineData("FI", "TROJAN")]
+    [InlineData("FI", "HYSTERIA2")]
+    [InlineData("FI", "TUIC")]
+    [InlineData("IT", "VLESS")]
+    [InlineData("IT", "TROJAN")]
+    [InlineData("IT", "HYSTERIA2")]
+    [InlineData("IT", "TUIC")]
+    public void SupportedCountryRoutesSendGoogleDomainsThroughGermany(string country, string protocol)
+    {
+        var route = $"route:{country}:{protocol}";
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile(route), route))!;
+        Assert.Equal(route, runtime["route"]!["final"]!.GetValue<string>());
+        var google = Assert.Single(runtime["route"]!["rules"]!.AsArray().OfType<JsonObject>(), rule =>
+            rule["outbound"]?.GetValue<string>() == "route:DE");
+        Assert.Contains("google.com", google["domain_suffix"]!.ToJsonString());
+        Assert.Contains("google.dev", google["domain_suffix"]!.ToJsonString());
+    }
+
+    [Theory]
+    [InlineData("awg15")]
+    [InlineData("awg31")]
+    public void AmneziaRoutesSendGoogleDomainsThroughGermany(string routeTag)
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:NL:VLESS"), routeTag, LegacyAwgProfile))!;
+        Assert.Contains(runtime["route"]!["rules"]!.AsArray().OfType<JsonObject>(), rule =>
+            rule["outbound"]?.GetValue<string>() == "route:DE");
+        Assert.Contains(runtime["outbounds"]!.AsArray().OfType<JsonObject>(), outbound =>
+            outbound["tag"]?.GetValue<string>() == "route:DE");
+    }
+
+    [Fact]
+    public void SupportedRouteRequiresGermanGoogleSelector()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        var outbounds = profile["outbounds"]!.AsArray();
+        for (var index = outbounds.Count - 1; index >= 0; index--)
+            if (outbounds[index]?["tag"]?.GetValue<string>().StartsWith("route:DE", StringComparison.Ordinal) == true)
+                outbounds.RemoveAt(index);
+
+        Assert.Throws<InvalidDataException>(() => TunnelProfileBuilder.Build(profile.ToJsonString(), "route:NL:VLESS"));
     }
     [Theory]
     [InlineData(true, "trace")]
@@ -85,15 +153,33 @@ public sealed class TunnelProfileBuilderTests
 
     private static string Profile(params string[] routeTags)
     {
+        var availableTags = routeTags.ToList();
+        var hasSupportedRoute = availableTags.Any(tag =>
+            tag.StartsWith("route:", StringComparison.Ordinal) &&
+            tag != "route:RU" && !tag.StartsWith("route:RU:", StringComparison.Ordinal));
+        if (hasSupportedRoute && !availableTags.Contains("route:DE:VLESS", StringComparer.Ordinal))
+            availableTags.Add("route:DE:VLESS");
+
         var outbounds = new JsonArray
         {
             new JsonObject { ["type"] = "urltest", ["tag"] = AutoTag },
         };
-        foreach (var tag in routeTags)
+        foreach (var tag in availableTags)
             outbounds.Add(new JsonObject
             {
-                ["type"] = tag.EndsWith(":TUIC", StringComparison.Ordinal) ? "tuic" : "vless",
+                ["type"] = tag.EndsWith(":TUIC", StringComparison.Ordinal) ? "tuic" :
+                    tag.EndsWith(":TROJAN", StringComparison.Ordinal) ? "trojan" :
+                    tag.EndsWith(":HYSTERIA2", StringComparison.Ordinal) ? "hysteria2" : "vless",
                 ["tag"] = tag,
+            });
+        var germanyTags = availableTags.Where(tag => tag.StartsWith("route:DE:", StringComparison.Ordinal)).ToArray();
+        if (germanyTags.Length > 0)
+            outbounds.Add(new JsonObject
+            {
+                ["type"] = "selector",
+                ["tag"] = "route:DE",
+                ["outbounds"] = new JsonArray(germanyTags.Select(tag => (JsonNode?)JsonValue.Create(tag)).ToArray()),
+                ["default"] = germanyTags[0],
             });
 
         return new JsonObject
@@ -218,6 +304,8 @@ public sealed class TunnelProfileBuilderTests
               ],
               "outbounds": [
                 {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:FI:VLESS","route:FI:TROJAN","route:FI:HYSTERIA2"],"url":"https://probe.invalid/"},
+                {"type":"selector","tag":"route:DE","outbounds":["route:DE:VLESS"],"default":"route:DE:VLESS"},
+                {"type":"vless","tag":"route:DE:VLESS","server":"127.0.0.1","server_port":9,"uuid":"00000000-0000-0000-0000-000000000010"},
                 {"type":"selector","tag":"route:FI","outbounds":["route:FI:VLESS","route:FI:TROJAN","route:FI:HYSTERIA2"],"default":"route:FI:VLESS"},
                 {"type":"vless","tag":"route:FI:VLESS","server":"127.0.0.1","server_port":9,"uuid":"00000000-0000-0000-0000-000000000001","detour":"probe-hop"},
                 {"type":"trojan","tag":"route:FI:TROJAN","server":"127.0.0.1","server_port":9,"password":"test"},
@@ -435,12 +523,42 @@ public sealed class TunnelProfileBuilderTests
         Assert.Contains("targetsub.org", allVpnSuffixes);
         Assert.Contains("targetdomain.com", allVpnSuffixes);
 
+        var googleRule = Assert.Single(rules.OfType<JsonObject>(), rule =>
+            rule["outbound"]?.GetValue<string>() == "route:DE");
+        var googleProcesses = googleRule["process_name"]!.AsArray()
+            .Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Contains("game.exe", googleProcesses);
+        Assert.Contains("customapp.exe", googleProcesses);
+
         // DNS should have final local-dns and route custom domains to remote-dns
         Assert.Equal("local-dns", runtime["dns"]!["final"]!.GetValue<string>());
         var dnsRules = runtime["dns"]!["rules"]!.AsArray();
         var customDnsRule = dnsRules.OfType<JsonObject>().FirstOrDefault(r => r["action"]?.GetValue<string>() == "route");
         Assert.NotNull(customDnsRule);
         Assert.Equal("remote-dns", customDnsRule["server"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void VpnOnlyWithoutSelectedAppsOrGoogleDomainsDoesNotAddGermanGoogleRoute()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(
+            Profile("route:NL:VLESS"), "route:NL:VLESS", splitTunnelMode: "vpn_only"))!;
+        Assert.DoesNotContain(runtime["route"]!["rules"]!.AsArray(), rule =>
+            rule?["outbound"]?.GetValue<string>() == "route:DE");
+    }
+
+    [Fact]
+    public void VpnOnlySelectedGoogleDomainUsesGermanyWithoutRoutingEveryGoogleDomain()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(
+            Profile("route:NL:VLESS"), "route:NL:VLESS",
+            customBypassDomains: new[] { "gemini.google.com" }, splitTunnelMode: "vpn_only"))!;
+        var rules = runtime["route"]!["rules"]!.AsArray().OfType<JsonObject>()
+            .Where(rule => rule["outbound"]?.GetValue<string>() == "route:DE").ToArray();
+        Assert.Contains(rules, rule => rule["domain_suffix"]?.ToJsonString().Contains("gemini.google.com") == true);
+        Assert.DoesNotContain(rules, rule =>
+            rule["domain_suffix"] is JsonArray suffixes &&
+            suffixes.Any(value => value?.GetValue<string>() == "google.com"));
     }
 
     [Fact]

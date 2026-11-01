@@ -18,7 +18,9 @@ class SplitTunnelInstrumentation : Instrumentation() {
             check(targetContext.packageName.endsWith(".qa"))
             val source = """{
               "inbounds":[{"type":"tun","address":["172.19.0.1/30"],"auto_route":true}],
-              "outbounds":[{"type":"direct","tag":"direct"},{"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":12345}],
+              "outbounds":[{"type":"direct","tag":"direct"},{"type":"socks","tag":"proxy","server":"127.0.0.1","server_port":12345},
+                {"type":"selector","tag":"route:DE","outbounds":["route:DE:VLESS"],"default":"route:DE:VLESS"},
+                {"type":"vless","tag":"route:DE:VLESS","server":"127.0.0.1","server_port":9,"uuid":"00000000-0000-0000-0000-000000000001"}],
               "dns":{"servers":[{"type":"local","tag":"local-dns"},{"type":"https","tag":"remote-dns","server":"1.1.1.1","detour":"proxy"}],"final":"remote-dns"},
               "route":{"final":"proxy","rules":[{"action":"sniff"},{"protocol":"dns","action":"hijack-dns"},{"domain_suffix":["yandex.net","vk.com"],"outbound":"direct"}]}
             }"""

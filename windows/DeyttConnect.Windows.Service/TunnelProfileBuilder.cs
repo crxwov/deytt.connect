@@ -19,6 +19,14 @@ internal static class TunnelProfileBuilder
     ];
 
     private static readonly string[] Protocols = ["VLESS", "TROJAN", "HYSTERIA2", "TUIC"];
+    private const string GoogleOutbound = "route:DE";
+    private const string RussiaGermanyChainTag = "route:RU-DE:CHAIN";
+    private static readonly string[] GoogleDomains =
+    [
+        "google.com", "googleapis.com", "gstatic.com", "googleusercontent.com", "ggpht.com",
+        "google.dev", "googletagmanager.com", "google-analytics.com", "g.co", "goo.gle",
+        "deepmind.google", "ai.google", "about.google", "googlemail.com", "googleadservices.com", "recaptcha.net",
+    ];
     private static readonly HashSet<string> DomainOnlyKeys =
         ["domain", "domain_suffix", "domain_keyword", "domain_regex"];
 
@@ -181,6 +189,7 @@ internal static class TunnelProfileBuilder
             if (IsAwgRoute(selectedTag))
                 throw new InvalidDataException("The selected AmneziaWG profile is unavailable.");
             if (selectedTag != autoTag && selectedTag != CdnLteProfile.RouteTag &&
+                selectedTag != RussiaGermanyChainTag &&
                 !Countries.Any(country => Protocols.Any(protocol =>
                     selectedTag == $"route:{country.Code}:{protocol}")))
                 throw new InvalidDataException("Selected route is not supported.");
@@ -192,6 +201,11 @@ internal static class TunnelProfileBuilder
         }
 
         var isVpnOnly = string.Equals(splitTunnelMode, "vpn_only", StringComparison.OrdinalIgnoreCase);
+        var googleViaGermany = !IsRussianRoute(selectedTag) && (!isVpnOnly ||
+            customBypassProcesses?.Any(process => !string.IsNullOrWhiteSpace(process)) == true ||
+            customBypassDomains?.Any(IsGoogleDomain) == true);
+        if (googleViaGermany)
+            EnsureGoogleOutbound(outboundArray);
 
         if (!tags.Contains("direct"))
         {
@@ -217,7 +231,8 @@ internal static class TunnelProfileBuilder
             }
         }
 
-        ApplyDomainBypass(root, route, customBypassDomains, customBypassProcesses, isVpnOnly, engineTag);
+        ApplyDomainBypass(root, route, customBypassDomains, customBypassProcesses, isVpnOnly, engineTag,
+            googleViaGermany);
         if (awgConfig is not null)
         {
             var rules = route["rules"] as JsonArray ?? new JsonArray();
@@ -466,6 +481,27 @@ internal static class TunnelProfileBuilder
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-".AsSpan()) < 0;
     }
 
+    private static bool IsRussianRoute(string routeTag) =>
+        routeTag.Equals("route:RU", StringComparison.OrdinalIgnoreCase) ||
+        routeTag.StartsWith("route:RU:", StringComparison.OrdinalIgnoreCase);
+
+    private static void EnsureGoogleOutbound(JsonArray outbounds)
+    {
+        var group = outbounds.OfType<JsonObject>()
+            .SingleOrDefault(outbound => ReadString(outbound, "tag") == GoogleOutbound);
+        if (group is null || ReadString(group, "type") != "selector" || group["outbounds"] is not JsonArray members ||
+            members.Count == 0)
+            throw new InvalidDataException("Subscription has no German Google route.");
+
+        var tags = members.Select(node => node is JsonValue value && value.TryGetValue<string>(out var tag)
+                ? tag
+                : throw new InvalidDataException("German Google route has an invalid member."))
+            .ToArray();
+        if (tags.Distinct(StringComparer.Ordinal).Count() != tags.Length ||
+            tags.Any(tag => !outbounds.OfType<JsonObject>().Any(outbound => ReadString(outbound, "tag") == tag)))
+            throw new InvalidDataException("German Google route references an unavailable transport.");
+    }
+
     internal static string AwgEndpointTag(string routeTag)
     {
         if (!IsAwgRoute(routeTag))
@@ -478,7 +514,8 @@ internal static class TunnelProfileBuilder
         IReadOnlyList<string>? customBypassDomains,
         IReadOnlyList<string>? customBypassProcesses,
         bool isVpnOnly,
-        string engineTag)
+        string engineTag,
+        bool googleViaGermany)
     {
         var routeRules = route["rules"] as JsonArray
                          ?? throw new InvalidDataException("Subscription route rules are invalid.");
@@ -581,6 +618,35 @@ internal static class TunnelProfileBuilder
             customRuleNodes.Add(new JsonObject { ["domain"] = ToJsonArray(exact), ["outbound"] = "direct" });
         }
 
+        var googleRules = new List<JsonObject>();
+        if (googleViaGermany)
+        {
+            if (!isVpnOnly)
+                googleRules.Add(GoogleRouteRule());
+            else
+            {
+                var processNames = processRules.SelectMany(rule =>
+                        (rule["process_name"] as JsonArray)!.Select(name => name!.GetValue<string>()))
+                    .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+                if (processNames.Length > 0)
+                    googleRules.Add(GoogleRouteRule(processNames));
+
+                var selectedGoogleSuffixes = customSuffixes.Where(IsGoogleDomain).ToArray();
+                if (selectedGoogleSuffixes.Length > 0)
+                    googleRules.Add(new JsonObject
+                    {
+                        ["domain_suffix"] = ToJsonArray(selectedGoogleSuffixes), ["outbound"] = GoogleOutbound,
+                    });
+
+                var selectedGoogleExact = customExact.Where(IsGoogleDomain).ToArray();
+                if (selectedGoogleExact.Length > 0)
+                    googleRules.Add(new JsonObject
+                    {
+                        ["domain"] = ToJsonArray(selectedGoogleExact), ["outbound"] = GoogleOutbound,
+                    });
+            }
+        }
+
         var merged = new JsonArray();
         var inserted = false;
         var hasIpv6Rule = routeRules.OfType<JsonObject>().Any(r => r["ip_version"]?.GetValue<int>() == 6);
@@ -589,6 +655,8 @@ internal static class TunnelProfileBuilder
             if (!inserted && rule is JsonObject obj &&
                 ReadString(obj, "action") is not ("sniff" or "hijack-dns"))
             {
+                foreach (var googleRule in googleRules)
+                    merged.Add(googleRule.DeepClone());
                 if (!hasIpv6Rule)
                     merged.Add(ipv6Reject.DeepClone());
                 foreach (var node in customRuleNodes)
@@ -599,6 +667,8 @@ internal static class TunnelProfileBuilder
         }
         if (!inserted)
         {
+            foreach (var googleRule in googleRules)
+                merged.Add(googleRule.DeepClone());
             if (!hasIpv6Rule)
                 merged.Add(ipv6Reject.DeepClone());
             foreach (var node in customRuleNodes)
@@ -694,6 +764,29 @@ internal static class TunnelProfileBuilder
         foreach (var value in values.Order(StringComparer.OrdinalIgnoreCase))
             array.Add(value);
         return array;
+    }
+
+    private static bool IsGoogleDomain(string domain)
+    {
+        var normalized = domain.Trim();
+        if (normalized.StartsWith("*.", StringComparison.Ordinal))
+            normalized = normalized[2..];
+        else
+            normalized = normalized.TrimStart('.');
+        return GoogleDomains.Any(root => normalized.Equals(root, StringComparison.OrdinalIgnoreCase) ||
+            normalized.EndsWith("." + root, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static JsonObject GoogleRouteRule(IEnumerable<string>? processNames = null)
+    {
+        var rule = new JsonObject
+        {
+            ["domain_suffix"] = ToJsonArray(GoogleDomains),
+            ["outbound"] = GoogleOutbound,
+        };
+        if (processNames is not null)
+            rule["process_name"] = ToJsonArray(processNames);
+        return rule;
     }
 
     private static void SanitizeHysteriaOutbound(JsonObject outbound)

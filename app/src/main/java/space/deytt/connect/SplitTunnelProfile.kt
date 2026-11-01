@@ -7,6 +7,12 @@ import org.json.JSONObject
 object SplitTunnelProfile {
     const val AWG_OUTBOUND = "deytt-awg"
     const val OPENFLUX_OUTBOUND = "deytt-openflux"
+    private const val GOOGLE_OUTBOUND = "route:DE"
+    private val googleDomains = listOf(
+        "google.com", "googleapis.com", "gstatic.com", "googleusercontent.com", "ggpht.com",
+        "google.dev", "googletagmanager.com", "google-analytics.com", "g.co", "goo.gle",
+        "deepmind.google", "ai.google", "about.google", "googlemail.com", "googleadservices.com", "recaptcha.net",
+    )
     private val domainKeys = listOf("domain", "domain_suffix", "domain_regex", "domain_keyword")
 
     data class AndroidAppFilter(val allowed: Set<String>?, val disallowed: Set<String>)
@@ -48,6 +54,8 @@ object SplitTunnelProfile {
         val rules = route.getJSONArray("rules")
         val vpnOnly = mode == UserSplitTunnelStore.MODE_VPN_ONLY
         val selectedOutbound = proxyOutbound ?: route.optString("final")
+        val googleViaGermany = !isRussianRoute(selectedOutbound)
+        if (googleViaGermany) germanyRouteOutbounds(root)
         // These are the additional explicit rules in the provider's Happ profile.
         val suffixes = linkedSetOf("ru", "su", "рф", "xn--p1ai")
         val exact = linkedSetOf("cp.cloudflare.com")
@@ -80,6 +88,10 @@ object SplitTunnelProfile {
             rule != null && rule.optInt("ip_version") == 6 && rule.optString("action") == "reject"
         }
         val added = JSONArray()
+        if (googleViaGermany) {
+            added.put(JSONObject().put("domain_suffix", JSONArray(googleDomains)).put("outbound", GOOGLE_OUTBOUND))
+        }
+        added
             .put(JSONObject().put("domain_suffix", JSONArray(suffixes)).put("outbound", "direct"))
             .put(JSONObject().put("domain", JSONArray(exact)).put("outbound", "direct"))
         val customRules = JSONArray()
@@ -235,18 +247,25 @@ object SplitTunnelProfile {
     ): String {
         require(port in 1..65535 && username.isNotBlank() && password.isNotBlank())
         val root = JSONObject(apply(config, customDomains, customPackages, mode, outbound))
-        root.put("outbounds", JSONArray()
+        val routeRules = root.getJSONObject("route").getJSONArray("rules")
+        val googleOutbounds = if ((0 until routeRules.length()).any {
+                routeRules.optJSONObject(it)?.optString("outbound") == GOOGLE_OUTBOUND
+            }) germanyRouteOutbounds(root) else emptyList()
+        val outbounds = JSONArray()
             .put(JSONObject().put("type", "direct").put("tag", "direct"))
             .put(JSONObject().put("type", "socks").put("tag", outbound)
                 .put("server", "127.0.0.1").put("server_port", port).put("version", "5")
-                .put("username", username).put("password", password)))
+                .put("username", username).put("password", password))
+        googleOutbounds.forEach(outbounds::put)
+        root.put("outbounds", outbounds)
         root.remove("endpoints")
         val route = root.getJSONObject("route")
         val original = route.getJSONArray("rules")
         val rules = JSONArray()
         for (i in 0 until original.length()) {
             val rule = original.getJSONObject(i)
-            if (rule.optString("action") in listOf("sniff", "hijack-dns") || rule.optString("outbound") in listOf("direct", outbound)) rules.put(rule)
+            if (rule.optString("action") in listOf("sniff", "hijack-dns") ||
+                rule.optString("outbound") in listOf("direct", outbound, GOOGLE_OUTBOUND)) rules.put(rule)
         }
         route.put("rules", rules).put("final", if (mode == UserSplitTunnelStore.MODE_VPN_ONLY) "direct" else outbound)
         val servers = root.getJSONObject("dns").getJSONArray("servers")
@@ -255,5 +274,29 @@ object SplitTunnelProfile {
             if (server.optString("tag") != "local-dns") server.put("detour", outbound)
         }
         return root.toString()
+    }
+
+    private fun isRussianRoute(tag: String): Boolean =
+        tag.equals("route:RU", ignoreCase = true) || tag.startsWith("route:RU:", ignoreCase = true)
+
+    private fun germanyRouteOutbounds(root: JSONObject): List<JSONObject> {
+        val source = root.optJSONArray("outbounds")
+            ?: throw IllegalArgumentException("Подписка не содержит немецкий маршрут для Google")
+        val group = (0 until source.length()).mapNotNull(source::optJSONObject)
+            .singleOrNull { it.optString("tag") == GOOGLE_OUTBOUND }
+        require(group?.optString("type") == "selector") {
+            "Подписка не содержит немецкий маршрут для Google"
+        }
+        val members = group!!.optJSONArray("outbounds")
+        require(members != null && members.length() > 0) {
+            "Подписка не содержит транспортов немецкого маршрута для Google"
+        }
+        val tags = (0 until members!!.length()).map { members.getString(it) }
+        require(tags.distinct().size == tags.size) { "Немецкий маршрут Google содержит повторяющиеся транспорты" }
+        val required = tags.toSet() + GOOGLE_OUTBOUND
+        val retained = (0 until source.length()).mapNotNull(source::optJSONObject)
+            .filter { it.optString("tag") in required }
+        require(retained.size == required.size) { "Немецкий маршрут Google ссылается на отсутствующий транспорт" }
+        return retained
     }
 }

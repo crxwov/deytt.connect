@@ -7,7 +7,9 @@ import org.junit.Test
 class SplitTunnelProfileTest {
     private val config = """{
       "inbounds":[{"type":"tun","address":["172.19.0.1/30"]}],
-      "outbounds":[{"type":"direct","tag":"direct"},{"type":"vless","tag":"selected"}],
+      "outbounds":[{"type":"direct","tag":"direct"},{"type":"vless","tag":"selected"},
+        {"type":"selector","tag":"route:DE","outbounds":["route:DE:VLESS"],"default":"route:DE:VLESS"},
+        {"type":"vless","tag":"route:DE:VLESS"}],
       "dns":{"servers":[{"type":"local","tag":"local-dns"},{"type":"https","tag":"remote-dns","detour":"selected"}],"final":"remote-dns"},
       "route":{"final":"selected","rules":[
         {"action":"sniff"},{"protocol":"dns","action":"hijack-dns"},
@@ -44,7 +46,10 @@ class SplitTunnelProfileTest {
         val rules = root.getJSONObject("route").getJSONArray("rules")
         assertEquals("sniff", rules.getJSONObject(0).getString("action"))
         assertEquals("hijack-dns", rules.getJSONObject(1).getString("action"))
-        val suffixes = rules.getJSONObject(2).getJSONArray("domain_suffix")
+        val google = rules.getJSONObject(2)
+        assertEquals("route:DE", google.getString("outbound"))
+        assertTrue(google.getJSONArray("domain_suffix").toString().contains("google.com"))
+        val suffixes = rules.getJSONObject(3).getJSONArray("domain_suffix")
         val domains = (0 until suffixes.length()).map(suffixes::getString).toSet()
         assertEquals(setOf("ru", "su", "рф", "xn--p1ai", "yandex.net", "vk.com", "st.ozone.ru"), domains)
         assertEquals(listOf("*.ru", "*.su", "*.рф", "*.xn--p1ai"), SplitTunnelProfile.bypassSites(config))
@@ -55,7 +60,7 @@ class SplitTunnelProfileTest {
         assertEquals(suffixes.toString(), dns.getJSONArray("rules").getJSONObject(0).getJSONArray("domain_suffix").toString())
         assertEquals("local-dns", dns.getJSONArray("rules").getJSONObject(0).getString("server"))
         assertTrue(dns.getBoolean("reverse_mapping"))
-        assertEquals("cp.cloudflare.com", rules.getJSONObject(3).getJSONArray("domain").getString(0))
+        assertEquals("cp.cloudflare.com", rules.getJSONObject(4).getJSONArray("domain").getString(0))
     }
 
     @Test fun applyEnforcesIpv6ProtectionMixedStackAndIpv4OnlyDns() {
@@ -82,10 +87,42 @@ class SplitTunnelProfileTest {
         assertTrue(foundReject)
     }
 
-    @Test fun awgUsesSameExceptionsAndNoOtherVpnTransport() {
+    @Test fun russianRouteKeepsGoogleOnTheSelectedRoute() {
+        val russian = config.replace("\"final\":\"selected\"", "\"final\":\"route:RU\"")
+        val rules = JSONObject(SplitTunnelProfile.apply(russian)).getJSONObject("route").getJSONArray("rules")
+        assertFalse((0 until rules.length()).any { rules.getJSONObject(it).optString("outbound") == "route:DE" })
+    }
+
+    @Test fun russianToGermanyRouteUsesGermanGoogleEgress() {
+        val chain = config.replace("\"final\":\"selected\"", "\"final\":\"route:RU-DE:CHAIN\"")
+        val rules = JSONObject(SplitTunnelProfile.apply(chain)).getJSONObject("route").getJSONArray("rules")
+        assertTrue((0 until rules.length()).any { rules.getJSONObject(it).optString("outbound") == "route:DE" })
+    }
+
+    @Test fun supportedRouteRequiresGermanGoogleOutbound() {
+        val incomplete = JSONObject(config)
+        incomplete.getJSONArray("outbounds").remove(2)
+        incomplete.getJSONArray("outbounds").remove(2)
+        assertThrows(IllegalArgumentException::class.java) { SplitTunnelProfile.apply(incomplete.toString()) }
+    }
+
+    @Test fun everySupportedCountryAndTransportRoutesGoogleThroughGermany() {
+        for (country in listOf("NL", "DE", "FI", "IT")) {
+            for (protocol in listOf("VLESS", "TROJAN", "HYSTERIA2", "TUIC")) {
+                val profile = config.replace("\"final\":\"selected\"", "\"final\":\"route:$country:$protocol\"")
+                val rules = JSONObject(SplitTunnelProfile.apply(profile)).getJSONObject("route").getJSONArray("rules")
+                assertTrue("$country/$protocol must use Germany for Google", (0 until rules.length()).any {
+                    rules.getJSONObject(it).optString("outbound") == "route:DE"
+                })
+            }
+        }
+    }
+
+    @Test fun awgRoutesGoogleThroughGermanyAndPreservesTheSelectedTransport() {
         val root = JSONObject(SplitTunnelProfile.forAwg(config, 23456, "random-user", "random-password"))
         val outbounds = root.getJSONArray("outbounds")
-        assertEquals(2, outbounds.length())
+        assertEquals(listOf("direct", SplitTunnelProfile.AWG_OUTBOUND, "route:DE", "route:DE:VLESS"),
+            (0 until outbounds.length()).map { outbounds.getJSONObject(it).getString("tag") })
         val socks = outbounds.getJSONObject(1)
         assertEquals("socks", socks.getString("type"))
         assertEquals("127.0.0.1", socks.getString("server"))
@@ -93,9 +130,14 @@ class SplitTunnelProfileTest {
         assertEquals("random-password", socks.getString("password"))
         assertEquals(SplitTunnelProfile.AWG_OUTBOUND, root.getJSONObject("route").getString("final"))
         val rules = root.getJSONObject("route").getJSONArray("rules")
+        assertTrue((0 until rules.length()).any { index ->
+            rules.getJSONObject(index).optString("outbound") == "route:DE" &&
+                rules.getJSONObject(index).optJSONArray("domain_suffix")?.toString()?.contains("google.com") == true
+        })
         for (i in 0 until rules.length()) {
             val rule = rules.getJSONObject(i)
-            if (rule.has("outbound")) assertEquals("direct", rule.getString("outbound"))
+            if (rule.has("outbound") && rule.optString("outbound") != "route:DE")
+                assertEquals("direct", rule.getString("outbound"))
         }
         assertEquals(SplitTunnelProfile.AWG_OUTBOUND,
             root.getJSONObject("dns").getJSONArray("servers").getJSONObject(1).getString("detour"))
@@ -123,6 +165,7 @@ class SplitTunnelProfileTest {
         assertEquals("https", remote.getString("type"))
         assertEquals(SplitTunnelProfile.OPENFLUX_OUTBOUND, remote.getString("detour"))
         assertEquals("local-dns", dns.getJSONArray("rules").getJSONObject(0).getString("server"))
+        assertTrue((0 until rules.length()).any { index -> rules.getJSONObject(index).optString("outbound") == "route:DE" })
         assertFalse(root.has("endpoints"))
         val runtime = JSONObject(RuntimeProfile.withPrivateCacheFile(root.toString(), "/private/test/cache.db"))
         assertEquals("remote-dns", runtime.getJSONObject("route").getString("default_domain_resolver"))
