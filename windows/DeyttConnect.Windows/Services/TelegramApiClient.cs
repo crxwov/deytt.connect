@@ -436,12 +436,24 @@ public sealed class TelegramApiClient
             if (item.ValueKind != JsonValueKind.Object || string.IsNullOrWhiteSpace(id) ||
                 id.Length > 128 || id.Any(char.IsControl))
                 continue;
+            var client = ReadString(item, "client");
+            var label = SafeLabel(ReadString(item, "label"), "deytt.connect");
+            if (string.Equals(client, "telegram", StringComparison.OrdinalIgnoreCase) ||
+                label.Contains("Telegram Mini App", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            var deviceOs = ReadString(item, "device_os");
+            var deviceModel = ReadString(item, "device_model");
             sessions.Add(new TelegramAppSession(
                 id,
-                SafeLabel(ReadString(item, "label"), "deytt.connect"),
+                label,
                 ReadBoolean(item, "current") ?? false,
                 ReadString(item, "created_at"),
-                ReadString(item, "expires_at")));
+                ReadString(item, "expires_at"),
+                client,
+                deviceOs,
+                deviceModel));
         }
         return sessions;
     }
@@ -1021,7 +1033,7 @@ public sealed record VerifiedPairing(string Token, TelegramAccount Account);
 public sealed record TelegramTariff(string Code, string Name, int Devices, int Months, int Rubles);
 public sealed record TelegramQuote(string Name, int Devices, int Months, int Rubles, int Stars);
 public sealed record TelegramCheckout(string PaymentUrl, string? ExternalId);
-public sealed record TelegramAppSession(string Id, string Label, bool Current, string? CreatedAt, string? ExpiresAt);
+public sealed record TelegramAppSession(string Id, string Label, bool Current, string? CreatedAt, string? ExpiresAt, string? Client = null, string? DeviceOs = null, string? DeviceModel = null);
 public sealed record TelegramHappDevice(long Id, bool Blocked, string Os, string Model, string? LastSeen)
 {
     public string? OsVersion { get; init; }

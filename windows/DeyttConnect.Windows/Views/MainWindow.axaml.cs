@@ -2411,12 +2411,18 @@ public partial class MainWindow : Window
         else
         {
             foreach (var session in _sessions)
-                content.Children.Add(SettingsEntry("D", session.Label,
+            {
+                var osLower = (session.DeviceOs ?? "").ToLowerInvariant();
+                var labelLower = session.Label.ToLowerInvariant();
+                var isDesktop = osLower.Contains("win") || osLower.Contains("mac") || osLower.Contains("linux") || labelLower.Contains("windows") || labelLower.Contains("desktop");
+                var icon = isDesktop ? "💻" : "📱";
+                content.Children.Add(SettingsEntry(icon, session.Label,
                     session.Current
                         ? Copy("Это устройство · текущий сеанс", "This device · current session")
                         : $"{Copy("Вход", "Signed in")}: {FormatLastSeen(session.CreatedAt)}",
                     session.Current ? Copy("текущий", "current") : Copy("управлять", "manage"),
                     () => _ = ManageSessionAsync(session), preserveCase: true));
+            }
         }
         content.Children.Add(SettingsEntry("+", Copy("Обновить список", "Refresh list"),
             Copy("Заново загрузить устройства и доступ", "Reload devices and access"), "↻", () =>
@@ -4751,6 +4757,10 @@ public partial class MainWindow : Window
             ? Copy("Это текущий сеанс на этом устройстве.", "This is the current session on this device.")
             : Copy("Этот сеанс можно завершить. VPN-ключи останутся действительными.",
                 "You can end this session. VPN keys will remain valid.");
+        if (!string.IsNullOrWhiteSpace(session.DeviceOs))
+            detail += $"\n{Copy("ОС", "OS")}: {session.DeviceOs}";
+        if (!string.IsNullOrWhiteSpace(session.DeviceModel))
+            detail += $"\n{Copy("Устройство", "Device")}: {session.DeviceModel}";
         detail += $"\n{Copy("Вход", "Signed in")}: {FormatLastSeen(session.CreatedAt)}";
         if (!string.IsNullOrWhiteSpace(session.ExpiresAt))
             detail += $"\n{Copy("Действует до", "Valid until")}: {FormatLastSeen(session.ExpiresAt)}";
