@@ -3,7 +3,10 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val libXrayAndroidAar = rootProject.file(".toolchain/libxray-v26.10.21/android/libxray-android/libXray.aar")
+val libXrayAndroidAar = listOf(
+    rootProject.file(".toolchain/libxray-v26.10.21/android/libxray-android/libXray.aar"),
+    rootProject.file("../.toolchain/libxray-v26.10.21/android/libxray-android/libXray.aar"),
+).firstOrNull { it.isFile } ?: rootProject.file(".toolchain/libxray-v26.10.21/android/libxray-android/libXray.aar")
 if (!libXrayAndroidAar.isFile) {
     throw GradleException("Pinned libXray AAR is missing. Run scripts/fetch-libxray.sh android first.")
 }
@@ -27,10 +30,8 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
-            providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        } else 115
-        versionName = "0.11.85"
+        } else 116
+        versionName = "0.11.86"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }

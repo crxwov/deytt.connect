@@ -39,6 +39,7 @@ import space.deytt.connect.DeyttUi.TEXT
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
+import space.deytt.connect.DeyttUi.glassCardBackground
 import space.deytt.connect.DeyttUi.glassRowBackground
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.note
@@ -129,7 +130,7 @@ internal class ProfileFlows(
         val card = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(14), host.dp(13), host.dp(14), host.dp(13))
-            background = host.glassRowBackground(false, 20f)
+            background = host.glassCardBackground(false, 22f)
         }
         subscriptionText = host.text(
             if (token == null) "Подключите Telegram, чтобы загрузить тариф и срок действия."
@@ -388,7 +389,7 @@ internal class ProfileFlows(
         val card = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(16), host.dp(16), host.dp(16), host.dp(14))
-            background = host.glassRowBackground(false, 20f)
+            background = host.glassCardBackground(false, 22f)
             isClickable = true
             isFocusable = true
             setOnClickListener { if (TelegramSessionStore.read(host) == null) onPairAccount() else onManageAccount() }
@@ -451,7 +452,7 @@ internal class ProfileFlows(
     private fun accordion(title: String, subtitle: String, content: LinearLayout): View {
         val group = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
-            background = host.glassRowBackground(false, 18f)
+            background = host.glassCardBackground(false, 20f)
             clipToOutline = true
         }
         content.visibility = View.GONE

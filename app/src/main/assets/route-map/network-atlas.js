@@ -178,6 +178,13 @@
     const length = Math.hypot(point.x, point.y, point.z) || 1;
     return { x: point.x / length, y: point.y / length, z: point.z / length };
   }
+  function cross(a, b) {
+    return {
+      x: a.y * b.z - a.z * b.y,
+      y: a.z * b.x - a.x * b.z,
+      z: a.x * b.y - a.y * b.x
+    };
+  }
   function locationFromVector(point) {
     return { lat: Math.asin(clamp(point.y, -1, 1)) / DEG, lon: Math.atan2(point.z, point.x) / DEG };
   }
@@ -957,19 +964,64 @@
         const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
         directed.forEach(([fromKey, toKey]) => {
           const points = [];
-          for (let i = 0; i <= 80; i++) points.push(this.projectLanePoint(fromKey, toKey, i / 80, stream.lane));
+          const groundPoints = [];
+          for (let i = 0; i <= 80; i++) {
+            const t = i / 80;
+            points.push(this.projectLanePoint(fromKey, toKey, t, stream.lane, false));
+            groundPoints.push(this.projectLanePoint(fromKey, toKey, t, stream.lane, true));
+          }
           const emphasized = this.selectedTrafficFlow === stream.id;
-          context.save(); context.beginPath();
-          points.forEach((point, i) => { if (point.z <= -.02) return; if (!i || points[i - 1].z <= -.02) context.moveTo(point.x, point.y); else context.lineTo(point.x, point.y); });
+
+          // 1. Draw 3D Ground Shadow on the globe sphere surface
+          context.save();
+          context.beginPath();
+          groundPoints.forEach((point, i) => {
+            if (point.z <= -.02) return;
+            if (!i || groundPoints[i - 1].z <= -.02) context.moveTo(point.x, point.y);
+            else context.lineTo(point.x, point.y);
+          });
           context.lineCap = context.lineJoin = "round";
-          context.strokeStyle = stream.color; context.globalAlpha = emphasized ? .24 : dark ? .18 : .13;
-          context.lineWidth = emphasized ? 4.2 : 2.0; context.shadowBlur = 0; context.stroke();
-          const sheen = context.createLinearGradient(points[0].x, points[0].y, points[80].x, points[80].y);
-          sheen.addColorStop(0, stream.color); sheen.addColorStop(.22, stream.color); sheen.addColorStop(.5, stream.bright);
-          sheen.addColorStop(.78, stream.color); sheen.addColorStop(1, stream.color);
-          context.strokeStyle = sheen; context.globalAlpha = 1; context.lineWidth = emphasized ? 2.4 : 1.3; context.stroke();
-          if (emphasized) { context.globalAlpha = .9; context.strokeStyle = "#FFFFFF"; context.lineWidth = .75; context.shadowBlur = 0; context.stroke(); }
+          context.strokeStyle = "rgba(4, 8, 18, 0.45)";
+          context.lineWidth = emphasized ? 2.6 : 1.5;
+          context.shadowBlur = 0;
+          context.stroke();
           context.restore();
+
+          // 2. Draw 3D Elevated Glowing Beam high above the surface
+          context.save();
+          context.beginPath();
+          points.forEach((point, i) => {
+            if (point.z <= -.02) return;
+            if (!i || points[i - 1].z <= -.02) context.moveTo(point.x, point.y);
+            else context.lineTo(point.x, point.y);
+          });
+          context.lineCap = context.lineJoin = "round";
+          context.strokeStyle = stream.color;
+          context.globalAlpha = emphasized ? .36 : dark ? .24 : .18;
+          context.lineWidth = emphasized ? 4.8 : 2.6;
+          context.shadowBlur = 0;
+          context.stroke();
+
+          const sheen = context.createLinearGradient(points[0].x, points[0].y, points[80].x, points[80].y);
+          sheen.addColorStop(0, stream.color);
+          sheen.addColorStop(.22, stream.color);
+          sheen.addColorStop(.5, stream.bright);
+          sheen.addColorStop(.78, stream.color);
+          sheen.addColorStop(1, stream.color);
+          context.strokeStyle = sheen;
+          context.globalAlpha = 1;
+          context.lineWidth = emphasized ? 2.6 : 1.4;
+          context.stroke();
+
+          if (emphasized) {
+            context.globalAlpha = .92;
+            context.strokeStyle = "#FFFFFF";
+            context.lineWidth = .85;
+            context.shadowBlur = 0;
+            context.stroke();
+          }
+          context.restore();
+
           for (let i = 1; i < points.length; i++) {
             const a = points[i - 1], b = points[i];
             if (a.z <= -.02 || b.z <= -.02) continue;
@@ -1015,7 +1067,8 @@
           const [fromKey, toKey] = directed[linkIndex], point = this.projectLanePoint(fromKey, toKey, amount, stream.lane);
           if (point.z <= -.02) continue;
           if (!this.reducedMotion.matches && packet === 0) this.drawTrafficTrail(directed, position, stream);
-          this.drawTrafficDot(point.x, point.y, stream, packet % 4 === 0, 1, .86 + (packet % 3) * .14);
+          const liftScale = Math.max(0.85, Math.min(1.45, 0.85 + ((point.lift || 1) - 1.0) * 4.0));
+          this.drawTrafficDot(point.x, point.y, stream, packet % 4 === 0, 1, (.86 + (packet % 3) * .14) * liftScale);
         }
       });
     }
@@ -1032,17 +1085,33 @@
       ];
     }
 
-    projectLanePoint(fromKey, toKey, amount, lane) {
+    projectLanePoint(fromKey, toKey, amount, lane, ground = false) {
       const fromLocation = fromKey === "user" ? this.userLocation : LOCATIONS[fromKey];
       const toLocation = toKey === "user" ? this.userLocation : LOCATIONS[toKey];
-      if (!fromLocation || !toLocation) return { x: 0, y: 0, z: -1 };
+      if (!fromLocation || !toLocation) return { x: 0, y: 0, z: -1, lift: 1 };
       const from = vector(fromLocation.lat, fromLocation.lon), to = vector(toLocation.lat, toLocation.lon);
-      const start = this.projectVector(from, 1.008), end = this.projectVector(to, 1.008);
-      const point = this.projectVector(slerp(from, to, amount), 1.008);
-      const dx = end.x - start.x, dy = end.y - start.y;
-      const length = Math.hypot(dx, dy) || 1;
-      const offset = Math.sin(amount * Math.PI) * lane * Math.max(14, Math.min(26, length * .22));
-      return { x: point.x - dy / length * offset, y: point.y + dx / length * offset, z: point.z };
+      const omega = Math.acos(clamp(dot(from, to), -1, 1));
+      let normal = cross(from, to);
+      const normLen = Math.hypot(normal.x, normal.y, normal.z);
+      if (normLen > 0.0001) {
+        normal = { x: normal.x / normLen, y: normal.y / normLen, z: normal.z / normLen };
+      } else {
+        normal = { x: 0, y: 1, z: 0 };
+      }
+      const bell = Math.sin(amount * Math.PI);
+      const base = slerp(from, to, amount);
+      const laneOffset = bell * (lane * 0.026);
+      const unitPoint = normalize({
+        x: base.x + normal.x * laneOffset,
+        y: base.y + normal.y * laneOffset,
+        z: base.z + normal.z * laneOffset
+      });
+      const peakAltitude = 0.048 + Math.min(0.12, omega * 0.16);
+      const lift = ground ? 1.002 : (1.008 + bell * peakAltitude);
+      const projected = this.projectVector(unitPoint, lift);
+      projected.lift = lift;
+      projected.bell = bell;
+      return projected;
     }
 
     drawTrafficTrail(links, position, stream) {

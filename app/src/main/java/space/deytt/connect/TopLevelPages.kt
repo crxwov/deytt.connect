@@ -48,6 +48,7 @@ import space.deytt.connect.DeyttUi.LINE
 import space.deytt.connect.DeyttUi.MUTED
 import space.deytt.connect.DeyttUi.SURFACE
 import space.deytt.connect.DeyttUi.SURFACE_2
+import space.deytt.connect.DeyttUi.glassCardBackground
 import space.deytt.connect.DeyttUi.SELECTED
 import space.deytt.connect.DeyttUi.SELECTED_LINE
 import space.deytt.connect.DeyttUi.TEXT
@@ -355,7 +356,6 @@ internal class PrimaryPages(
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE || it.protocol == RouteProtocol.LTE }?.let { route ->
             appendToGroup(quickGroup, buildLteWhitelistRow(route, selectedId == route.id))
         }
-        }
         if (quickGroup.childCount > 0) root.addView(quickGroup)
 
         root.addView(spacer(24, host))
@@ -368,10 +368,14 @@ internal class PrimaryPages(
             val cachedSamples = countryRoutes.mapNotNull { route -> RouteQualityStore.read(host, route.id) }
             val cachedGrades = RouteProbeScoring.gradeByLatency(cachedSamples)
             val protocolSummary = countryRoutes.map { route ->
-                when (route.engine) {
-                    TunnelEngine.LIBBOX -> route.protocol.title
-                    TunnelEngine.AMNEZIAWG -> route.protocol.title
-                    TunnelEngine.OPENFLUX -> route.protocol.title
+                when (route.protocol) {
+                    RouteProtocol.AWG15 -> "awg1.5"
+                    RouteProtocol.AWG31 -> "awg3.1"
+                    else -> when (route.engine) {
+                        TunnelEngine.LIBBOX -> route.protocol.title
+                        TunnelEngine.AMNEZIAWG -> route.protocol.title
+                        TunnelEngine.OPENFLUX -> route.protocol.title
+                    }
                 }
             }.distinct().joinToString(" · ")
             val headerDivider = View(host).apply {
@@ -478,11 +482,8 @@ internal class PrimaryPages(
                 }
             }
             val countryGroup = routeGroup()
-            countryGroup.background = host.rounded(
-                if (countryRoutes.any { it.id == selectedId }) SELECTED else SURFACE_2,
-                22f,
-                if (countryRoutes.any { it.id == selectedId }) SELECTED_LINE else LINE,
-            )
+            val countrySelected = countryRoutes.any { it.id == selectedId }
+            countryGroup.background = host.glassCardBackground(countrySelected, 22f)
             countryGroup.clipToOutline = true
             countryGroup.addView(countryHeader)
             countryGroup.addView(headerDivider)
@@ -853,6 +854,42 @@ internal class PrimaryPages(
                 else -> ""
             }
 
+    private fun lteRenewalText(): String {
+        val cal = java.util.Calendar.getInstance()
+        cal.add(java.util.Calendar.MONTH, 1)
+        val ruMonth = when (cal.get(java.util.Calendar.MONTH)) {
+            java.util.Calendar.JANUARY -> "января"
+            java.util.Calendar.FEBRUARY -> "февраля"
+            java.util.Calendar.MARCH -> "марта"
+            java.util.Calendar.APRIL -> "апреля"
+            java.util.Calendar.MAY -> "мая"
+            java.util.Calendar.JUNE -> "июня"
+            java.util.Calendar.JULY -> "июля"
+            java.util.Calendar.AUGUST -> "августа"
+            java.util.Calendar.SEPTEMBER -> "сентября"
+            java.util.Calendar.OCTOBER -> "октября"
+            java.util.Calendar.NOVEMBER -> "ноября"
+            java.util.Calendar.DECEMBER -> "декабря"
+            else -> "числа"
+        }
+        val enMonth = when (cal.get(java.util.Calendar.MONTH)) {
+            java.util.Calendar.JANUARY -> "Jan 1"
+            java.util.Calendar.FEBRUARY -> "Feb 1"
+            java.util.Calendar.MARCH -> "Mar 1"
+            java.util.Calendar.APRIL -> "Apr 1"
+            java.util.Calendar.MAY -> "May 1"
+            java.util.Calendar.JUNE -> "Jun 1"
+            java.util.Calendar.JULY -> "Jul 1"
+            java.util.Calendar.AUGUST -> "Aug 1"
+            java.util.Calendar.SEPTEMBER -> "Sep 1"
+            java.util.Calendar.OCTOBER -> "Oct 1"
+            java.util.Calendar.NOVEMBER -> "Nov 1"
+            java.util.Calendar.DECEMBER -> "Dec 1"
+            else -> "the 1st"
+        }
+        return copy("0 / 10 ГБ · до 1 $ruMonth", "0 / 10 GB · until $enMonth")
+    }
+
     private fun buildLteWhitelistRow(route: DeyttRoute, selected: Boolean): View {
         val root = LinearLayout(host).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -892,7 +929,7 @@ internal class PrimaryPages(
                 marginEnd = host.dp(16)
             })
 
-            val sub = host.text(copy("0 / 10 ГБ · обновляется 1 числа", "0 / 10 GB · renews on the 1st"), 11f, MUTED)
+            val sub = host.text(lteRenewalText(), 11f, MUTED)
             addView(sub)
         }
         root.addView(middle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))

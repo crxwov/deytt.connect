@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.LinearGradient
+import android.graphics.Matrix
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
@@ -17,6 +18,7 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
+import android.graphics.SweepGradient
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -32,6 +34,7 @@ import android.view.ViewGroup
 import android.view.VelocityTracker
 import android.view.Window
 import android.view.WindowManager
+import android.view.animation.LinearInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -282,16 +285,87 @@ object DeyttUi {
                 0x80F0F9FF.toInt(), 0x5060A5FA.toInt(), 0x9038BDF8.toInt(), 0x35FFFFFF.toInt(),
             )
         }
+
+        // Continually flowing chromatic iridescent aura for connect button and border
+        val (shimmerStroke, shimmerFill) = when (phase) {
+            VpnPhase.CONNECTED -> intArrayOf(
+                0xDEFFFFFF.toInt(),
+                0xD534D399.toInt(),
+                0xC010B981.toInt(),
+                0xC82DD4BF.toInt(),
+                0xD038BDF8.toInt(),
+                0xB860A5FA.toInt(),
+                0xC010B981.toInt(),
+                0xD534D399.toInt(),
+                0xDEFFFFFF.toInt(),
+            ) to intArrayOf(
+                0x441F3C30.toInt(),
+                0x2810221A.toInt(),
+                0x3C163638.toInt(),
+                0x240F1E16.toInt(),
+                0x441F3C30.toInt(),
+            )
+            VpnPhase.STARTING, VpnPhase.CHECKING -> intArrayOf(
+                0xE0FFFFFF.toInt(),
+                0xD038BDF8.toInt(),
+                0xC060A5FA.toInt(),
+                0xB5818CF8.toInt(),
+                0xC538BDF8.toInt(),
+                0xD593C5FD.toInt(),
+                0xE0FFFFFF.toInt(),
+            ) to intArrayOf(
+                0x45253A54.toInt(),
+                0x28162438.toInt(),
+                0x3E204058.toInt(),
+                0x26142232.toInt(),
+                0x45253A54.toInt(),
+            )
+            VpnPhase.ERROR -> intArrayOf(
+                0xE0FFFFFF.toInt(),
+                0xD5F43F5E.toInt(),
+                0xC0FB7185.toInt(),
+                0xB8F59E0B.toInt(),
+                0xC5F43F5E.toInt(),
+                0xE0FFFFFF.toInt(),
+            ) to intArrayOf(
+                0x4438202A.toInt(),
+                0x28201018.toInt(),
+                0x3C321820.toInt(),
+                0x4438202A.toInt(),
+            )
+            VpnPhase.STOPPING -> null to null
+            VpnPhase.IDLE -> intArrayOf(
+                0xD8FFFFFF.toInt(),
+                0xC538BDF8.toInt(),
+                0xB5818CF8.toInt(),
+                0xC5C084FC.toInt(),
+                0xB8F472B6.toInt(),
+                0xC0FBBF24.toInt(),
+                0xB534D399.toInt(),
+                0xC538BDF8.toInt(),
+                0xD8FFFFFF.toInt(),
+            ) to intArrayOf(
+                0x45253A54.toInt(),
+                0x2E162438.toInt(),
+                0x3E302046.toInt(),
+                0x26142232.toInt(),
+                0x45253A54.toInt(),
+            )
+        }
+
         return LiquidGlassDrawable(
             density = resources.displayMetrics.density,
             cornerRadiusPx = dp(28).toFloat(),
             fillColors = fill,
             strokeColors = stroke,
             strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-            strokeWidthPx = 1.25f,
+            strokeWidthPx = 1.35f,
             hasGloss = true,
-            glossAlpha = 0x16,
+            glossAlpha = 0x1A,
             innerLip = true,
+            animatedShimmer = shimmerStroke != null,
+            shimmerStrokeColors = shimmerStroke,
+            shimmerFillColors = shimmerFill,
         )
     }
 
@@ -463,38 +537,89 @@ object DeyttUi {
                 density = density,
                 cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
                 fillColors = intArrayOf(
-                    0x68325078.toInt(),
-                    0x451E334D.toInt(),
+                    0x552C4A70.toInt(),
+                    0x381B3048.toInt(),
+                    0x24102032.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x38FFFFFF.toInt(),
-                    0x1A84BCF4.toInt(),
-                    0x106AAAF0.toInt(),
-                    0x16FFFFFF.toInt(),
+                    0x50FFFFFF.toInt(),
+                    0x2884BCF4.toInt(),
+                    0x186AAAF0.toInt(),
+                    0x24FFFFFF.toInt(),
                 ),
-                strokeWidthPx = 0.85f,
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 1.15f,
                 hasGloss = true,
-                glossAlpha = 0x14,
-                innerLip = false,
+                glossAlpha = 0x18,
+                innerLip = true,
             )
         } else {
             LiquidGlassDrawable(
                 density = density,
                 cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
                 fillColors = intArrayOf(
-                    0x38283C54.toInt(),
-                    0x22142232.toInt(),
+                    0x3822364C.toInt(),
+                    0x2213202E.toInt(),
+                    0x160B121C.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x24FFFFFF.toInt(),
-                    0x10FFFFFF.toInt(),
-                    0x0A80B0E0.toInt(),
-                    0x10FFFFFF.toInt(),
+                    0x30FFFFFF.toInt(),
+                    0x1480B2E0.toInt(),
+                    0x0C6090C8.toInt(),
+                    0x16FFFFFF.toInt(),
                 ),
-                strokeWidthPx = 0.8f,
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 1.0f,
                 hasGloss = true,
-                glossAlpha = 0x0C,
-                innerLip = false,
+                glossAlpha = 0x12,
+                innerLip = true,
+            )
+        }
+    }
+
+    fun Activity.glassCardBackground(emphasis: Boolean = false, radius: Float = 22f): Drawable {
+        val density = resources.displayMetrics.density
+        return if (emphasis) {
+            LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
+                fillColors = intArrayOf(
+                    0x552C4A70.toInt(),
+                    0x381B3048.toInt(),
+                    0x24102032.toInt(),
+                ),
+                strokeColors = intArrayOf(
+                    0x55FFFFFF.toInt(),
+                    0x2A88C0F8.toInt(),
+                    0x1E6AAAF0.toInt(),
+                    0x28FFFFFF.toInt(),
+                ),
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 1.2f,
+                hasGloss = true,
+                glossAlpha = 0x1A,
+                innerLip = true,
+            )
+        } else {
+            LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
+                fillColors = intArrayOf(
+                    0x42263C54.toInt(),
+                    0x28162536.toInt(),
+                    0x1B0E1724.toInt(),
+                ),
+                strokeColors = intArrayOf(
+                    0x3EFFFFFF.toInt(),
+                    0x1C88BCE8.toInt(),
+                    0x12669CD4.toInt(),
+                    0x1CFFFFFF.toInt(),
+                ),
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 1.1f,
+                hasGloss = true,
+                glossAlpha = 0x14,
+                innerLip = true,
             )
         }
     }
@@ -625,74 +750,80 @@ object DeyttUi {
                 density = density,
                 cornerRadiusPx = rPx,
                 fillColors = intArrayOf(
-                    0xE01C2B40.toInt(),
-                    0xCC111D2D.toInt(),
-                    0xB809111C.toInt(),
+                    0x3E24364D.toInt(),
+                    0x26142232.toInt(),
+                    0x1A0D1520.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x2AFFFFFF.toInt(),
-                    0x12FFFFFF.toInt(),
-                    0x0A70A0D0.toInt(),
-                    0x10FFFFFF.toInt(),
+                    0x38FFFFFF.toInt(),
+                    0x1888BAE8.toInt(),
+                    0x106AA0D8.toInt(),
+                    0x1AFFFFFF.toInt(),
                 ),
-                strokeWidthPx = 0.8f,
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 1.1f,
                 hasGloss = true,
-                glossAlpha = 0x0E,
-                innerLip = false,
+                glossAlpha = 0x14,
+                innerLip = true,
             )
             SURFACE_2 -> LiquidGlassDrawable(
                 density = density,
                 cornerRadiusPx = rPx,
                 fillColors = intArrayOf(
-                    0xDC263B54.toInt(),
-                    0xC0172639.toInt(),
-                    0xA80E1A27.toInt(),
+                    0x48283E58.toInt(),
+                    0x2C18273A.toInt(),
+                    0x1E0E1926.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x2EFFFFFF.toInt(),
-                    0x14FFFFFF.toInt(),
-                    0x0C78B0E0.toInt(),
-                    0x12FFFFFF.toInt(),
+                    0x40FFFFFF.toInt(),
+                    0x1C90C2F0.toInt(),
+                    0x1270A8E0.toInt(),
+                    0x1EFFFFFF.toInt(),
                 ),
-                strokeWidthPx = 0.8f,
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 1.15f,
                 hasGloss = true,
-                glossAlpha = 0x10,
-                innerLip = false,
+                glossAlpha = 0x16,
+                innerLip = true,
             )
             SELECTED -> LiquidGlassDrawable(
                 density = density,
                 cornerRadiusPx = rPx,
                 fillColors = intArrayOf(
-                    0xE0284A6E.toInt(),
-                    0xB8162E48.toInt(),
+                    0x552C4A70.toInt(),
+                    0x381B3048.toInt(),
+                    0x24102032.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x40FFFFFF.toInt(),
-                    0x1C7CB8F2.toInt(),
-                    0x1262A4E8.toInt(),
-                    0x1AFFFFFF.toInt(),
+                    0x55FFFFFF.toInt(),
+                    0x2A88C0F8.toInt(),
+                    0x1E6AAAF0.toInt(),
+                    0x28FFFFFF.toInt(),
                 ),
-                strokeWidthPx = 0.85f,
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 1.2f,
                 hasGloss = true,
-                glossAlpha = 0x14,
-                innerLip = false,
+                glossAlpha = 0x1A,
+                innerLip = true,
             )
             MAP_SURFACE -> LiquidGlassDrawable(
                 density = density,
                 cornerRadiusPx = rPx,
                 fillColors = intArrayOf(
-                    0xF00D1520.toInt(),
-                    0xE8080E16.toInt(),
+                    0x40101826.toInt(),
+                    0x2A09101A.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x20FFFFFF.toInt(),
-                    0x0CFFFFFF.toInt(),
-                    0x085588B0.toInt(),
-                    0x0EFFFFFF.toInt(),
+                    0x2CFFFFFF.toInt(),
+                    0x1470A0D0.toInt(),
+                    0x0C5080B0.toInt(),
+                    0x14FFFFFF.toInt(),
                 ),
-                strokeWidthPx = 0.75f,
-                hasGloss = false,
-                innerLip = false,
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 1.0f,
+                hasGloss = true,
+                glossAlpha = 0x10,
+                innerLip = true,
             )
             else -> {
                 val alpha = Color.alpha(fill)
@@ -1475,6 +1606,9 @@ class LiquidGlassDrawable(
     private var hasGloss: Boolean = true,
     private var glossAlpha: Int = 0x14,
     private var innerLip: Boolean = false,
+    private var animatedShimmer: Boolean = false,
+    private var shimmerStrokeColors: IntArray? = null,
+    private var shimmerFillColors: IntArray? = null,
 ) : Drawable() {
     private val boundsRect = RectF()
     private val strokeRect = RectF()
@@ -1488,6 +1622,15 @@ class LiquidGlassDrawable(
 
     private var currentAlpha = 255
     private var currentColorFilter: ColorFilter? = null
+    private var isVisibleState = true
+
+    // Continuous chromatic shimmer animation
+    private var shimmerPhase = 0f
+    private var shimmerAnimator: ValueAnimator? = null
+    private val shimmerStrokeMatrix = Matrix()
+    private val shimmerFillMatrix = Matrix()
+    private var shimmerStrokeShader: SweepGradient? = null
+    private var shimmerFillShader: SweepGradient? = null
 
     fun setFillColors(colors: IntArray) {
         fillColors = colors
@@ -1500,9 +1643,44 @@ class LiquidGlassDrawable(
         invalidateSelf()
     }
 
+    fun startShimmer() {
+        if (!animatedShimmer) return
+        if (shimmerAnimator?.isRunning == true) return
+        shimmerAnimator?.cancel()
+        shimmerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 5500L
+            repeatCount = ValueAnimator.INFINITE
+            interpolator = LinearInterpolator()
+            addUpdateListener { animator ->
+                shimmerPhase = animator.animatedValue as Float
+                invalidateSelf()
+            }
+            start()
+        }
+    }
+
+    fun stopShimmer() {
+        shimmerAnimator?.cancel()
+        shimmerAnimator = null
+    }
+
+    override fun setVisible(visible: Boolean, restart: Boolean): Boolean {
+        isVisibleState = visible
+        val changed = super.setVisible(visible, restart)
+        if (visible) {
+            if (animatedShimmer) startShimmer()
+        } else {
+            stopShimmer()
+        }
+        return changed
+    }
+
     override fun onBoundsChange(bounds: Rect) {
         super.onBoundsChange(bounds)
-        if (bounds.isEmpty) return
+        if (bounds.isEmpty) {
+            stopShimmer()
+            return
+        }
         val w = bounds.width().toFloat()
         val h = bounds.height().toFloat()
         val left = bounds.left.toFloat()
@@ -1525,6 +1703,9 @@ class LiquidGlassDrawable(
         glossRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + (h * 0.40f))
 
         rebuildShaders()
+        if (animatedShimmer && isVisibleState) {
+            startShimmer()
+        }
     }
 
     private fun rebuildShaders() {
@@ -1533,27 +1714,40 @@ class LiquidGlassDrawable(
         val bottom = boundsRect.bottom
         val left = boundsRect.left
         val right = boundsRect.right
+        val cx = boundsRect.centerX()
+        val cy = boundsRect.centerY()
 
-        if (fillColors.size >= 2) {
+        if (animatedShimmer && shimmerFillColors != null && shimmerFillColors!!.size >= 2) {
+            shimmerFillShader = SweepGradient(cx, cy, shimmerFillColors!!, null)
+            fillPaint.shader = shimmerFillShader
+        } else if (fillColors.size >= 2) {
+            shimmerFillShader = null
             fillPaint.shader = LinearGradient(
                 0f, top, 0f, bottom,
                 fillColors, null, Shader.TileMode.CLAMP
             )
         } else if (fillColors.isNotEmpty()) {
+            shimmerFillShader = null
             fillPaint.shader = null
             fillPaint.color = fillColors[0]
         }
 
-        strokePaint.shader = LinearGradient(
-            left + (right - left) * 0.2f, top,
-            right - (right - left) * 0.2f, bottom,
-            strokeColors, strokePositions, Shader.TileMode.CLAMP
-        )
+        if (animatedShimmer && shimmerStrokeColors != null && shimmerStrokeColors!!.isNotEmpty()) {
+            shimmerStrokeShader = SweepGradient(cx, cy, shimmerStrokeColors!!, null)
+            strokePaint.shader = shimmerStrokeShader
+        } else {
+            shimmerStrokeShader = null
+            strokePaint.shader = LinearGradient(
+                left + (right - left) * 0.2f, top,
+                right - (right - left) * 0.2f, bottom,
+                strokeColors, strokePositions, Shader.TileMode.CLAMP
+            )
+        }
 
         if (innerLip) {
             innerLipPaint.shader = LinearGradient(
                 0f, top, 0f, bottom,
-                intArrayOf(0x14FFFFFF, 0x04FFFFFF, 0x10000000),
+                intArrayOf(0x18FFFFFF, 0x05FFFFFF, 0x12000000),
                 floatArrayOf(0f, 0.4f, 1f),
                 Shader.TileMode.CLAMP
             )
@@ -1575,6 +1769,22 @@ class LiquidGlassDrawable(
 
         val maxRadius = minOf(boundsRect.width(), boundsRect.height()) / 2f
         val r = cornerRadiusPx.coerceIn(0f, maxRadius)
+
+        // Rotate animated shimmer gradients if active
+        if (animatedShimmer) {
+            val cx = boundsRect.centerX()
+            val cy = boundsRect.centerY()
+            shimmerStrokeShader?.let { shader ->
+                shimmerStrokeMatrix.reset()
+                shimmerStrokeMatrix.postRotate(shimmerPhase * 360f, cx, cy)
+                shader.setLocalMatrix(shimmerStrokeMatrix)
+            }
+            shimmerFillShader?.let { shader ->
+                shimmerFillMatrix.reset()
+                shimmerFillMatrix.postRotate(-shimmerPhase * 360f * 0.6f, cx, cy)
+                shader.setLocalMatrix(shimmerFillMatrix)
+            }
+        }
 
         // 1. Draw liquid glass body
         fillPaint.alpha = currentAlpha
