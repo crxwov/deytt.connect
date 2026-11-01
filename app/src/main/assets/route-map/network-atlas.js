@@ -601,14 +601,11 @@
     projectVector(point, lift) {
       const basis = this.currentBasis;
       const l = lift || 1;
-      const forward = dot(point, basis.forward);
-      // Perspective displacement towards the camera for elevated 3D arcs
-      const persp = l > 1.02 && forward > 0 ? (1 + forward * (l - 1) * 0.16) : 1;
-      const scale = this.radius * this.zoom * l * persp;
+      const scale = this.radius * this.zoom * l;
       return {
         x: this.centerX + dot(point, basis.east) * scale,
         y: this.centerY - dot(point, basis.north) * scale,
-        z: forward,
+        z: dot(point, basis.forward),
         lift: l
       };
     }
@@ -976,7 +973,7 @@
           }
           const emphasized = this.selectedTrafficFlow === stream.id;
 
-          // 1. Draw 3D Ground Shadow on the globe sphere surface
+          // 1. Draw subtle ground shadow on the globe sphere surface
           context.save();
           context.beginPath();
           groundPoints.forEach((point, i) => {
@@ -985,31 +982,13 @@
             else context.lineTo(point.x, point.y);
           });
           context.lineCap = context.lineJoin = "round";
-          context.strokeStyle = "rgba(2, 6, 16, 0.65)";
-          context.lineWidth = emphasized ? 3.4 : 2.2;
+          context.strokeStyle = "rgba(4, 10, 24, 0.38)";
+          context.lineWidth = emphasized ? 2.2 : 1.4;
           context.shadowBlur = 0;
           context.stroke();
           context.restore();
 
-          // 2. Draw 3D vertical laser tethers linking ground shadow on the continent to the floating arc in space
-          if (!stream.lane || stream.lane === 0) {
-            context.save();
-            context.beginPath();
-            for (let i = 8; i <= 72; i += 12) {
-              const gp = groundPoints[i];
-              const ap = points[i];
-              if (gp && ap && gp.z > 0.02 && ap.z > 0.02) {
-                context.moveTo(gp.x, gp.y);
-                context.lineTo(ap.x, ap.y);
-              }
-            }
-            context.strokeStyle = "rgba(120, 190, 255, 0.32)";
-            context.lineWidth = 1.0;
-            context.stroke();
-            context.restore();
-          }
-
-          // 3. Draw 3D Elevated Glowing Beam high above the surface
+          // 2. Draw 3D Elevated Glowing Beam with crisp core
           context.save();
           context.beginPath();
           points.forEach((point, i) => {
@@ -1019,8 +998,8 @@
           });
           context.lineCap = context.lineJoin = "round";
           context.strokeStyle = stream.color;
-          context.globalAlpha = emphasized ? .45 : dark ? .32 : .24;
-          context.lineWidth = emphasized ? 5.6 : 3.4;
+          context.globalAlpha = emphasized ? .35 : dark ? .22 : .15;
+          context.lineWidth = emphasized ? 3.6 : 2.2;
           context.shadowBlur = 0;
           context.stroke();
 
@@ -1031,14 +1010,14 @@
           sheen.addColorStop(.78, stream.color);
           sheen.addColorStop(1, stream.color);
           context.strokeStyle = sheen;
-          context.globalAlpha = 1;
-          context.lineWidth = emphasized ? 3.0 : 1.7;
+          context.globalAlpha = 0.95;
+          context.lineWidth = emphasized ? 1.6 : 1.1;
           context.stroke();
 
           if (emphasized) {
-            context.globalAlpha = .95;
+            context.globalAlpha = .90;
             context.strokeStyle = "#FFFFFF";
-            context.lineWidth = 1.0;
+            context.lineWidth = 0.6;
             context.shadowBlur = 0;
             context.stroke();
           }
@@ -1123,19 +1102,21 @@
       const bell = Math.sin(amount * Math.PI);
       const base = slerp(from, to, amount);
 
-      // Broad lateral spread so traffic lanes are widely separated and never merge
-      const laneSpread = (0.055 + bell * 0.085) * lane;
+      // Tight parallel bundle: lanes stay together as a bundle, but slightly shifted for crisp 3D separation
+      const laneSpread = (0.009 + bell * 0.004) * (lane || 0);
       const unitPoint = normalize({
         x: base.x + normal.x * laneSpread,
         y: base.y + normal.y * laneSpread,
         z: base.z + normal.z * laneSpread
       });
 
-      // Elevated grand orbital arch high above the surface of the globe
-      const peakAltitude = 0.18 + Math.min(0.24, omega * 0.30);
-      const laneAltitudeFactor = lane === 0 ? 1.16 : 0.90;
-      const baseLift = 1.04;
-      const lift = ground ? 1.003 : (baseLift + Math.pow(bell, 0.72) * peakAltitude * laneAltitudeFactor);
+      // 3D Arc elevation:
+      // Smooth natural arc over the surface.
+      // Center lane (0) is slightly higher in altitude than flank lanes, giving 3D depth layering without an oval
+      const peakAltitude = 0.046 + Math.min(0.08, omega * 0.12);
+      const altitudeShift = (lane === 0 ? 0.005 : -0.003);
+      const baseLift = 1.012;
+      const lift = ground ? 1.002 : (baseLift + bell * peakAltitude + altitudeShift);
       const projected = this.projectVector(unitPoint, lift);
       projected.lift = lift;
       projected.bell = bell;
