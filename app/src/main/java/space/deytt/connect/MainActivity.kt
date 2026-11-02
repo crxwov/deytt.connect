@@ -583,6 +583,77 @@ class MainActivity : Activity() {
         }
     }
 
+    internal fun refreshSubscriptionManually(onComplete: ((Boolean, String) -> Unit)? = null) {
+        if (isFinishing || isDestroyed) return
+        if (subscriptionRefreshInFlight) {
+            onComplete?.invoke(false, uiCopy("Обновление уже выполняется…"))
+            return
+        }
+        val url = SubscriptionClient.getSavedSubscriptionUrl(this)?.trim()?.takeIf(String::isNotEmpty)
+        val token = TelegramSessionStore.read(this)
+        if (url == null && token == null) {
+            openSetup()
+            return
+        }
+
+        subscriptionRefreshInFlight = true
+        subscriptionRefreshLastStartedAt = SystemClock.elapsedRealtime()
+
+        subscriptionExecutor.execute {
+            val targetUrl = url ?: runCatching {
+                TelegramPairingClient.subscriptionUrl(token!!)
+            }.getOrNull()
+
+            if (targetUrl.isNullOrBlank()) {
+                runOnUiThread {
+                    subscriptionRefreshInFlight = false
+                    onComplete?.invoke(false, uiCopy("Активная подписка не найдена"))
+                }
+                return@execute
+            }
+
+            if (url == null) {
+                SubscriptionClient.saveSubscriptionUrl(this@MainActivity, targetUrl)
+            }
+
+            val result = runCatching {
+                SubscriptionClient.import(this@MainActivity, targetUrl, beforeCommit = {
+                    if (SubscriptionClient.getSavedSubscriptionUrl(this@MainActivity) != targetUrl) {
+                        throw SubscriptionCancelledException()
+                    }
+                })
+            }
+
+            runOnUiThread {
+                subscriptionRefreshInFlight = false
+                if (isFinishing || isDestroyed) return@runOnUiThread
+
+                if (result.isFailure) {
+                    val err = result.exceptionOrNull()
+                    val msg = SubscriptionRetryPolicy.safeFailureSummary(err ?: java.io.IOException())
+                    onComplete?.invoke(false, uiCopy("Не удалось обновить: $msg"))
+                    return@runOnUiThread
+                }
+
+                invalidateRouteCatalogCache()
+                val routes = runCatching {
+                    val config = SubscriptionStore(this).readCurrent() ?: return@runCatching emptyList()
+                    RouteCatalog.from(config, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this))
+                }.getOrNull() ?: emptyList()
+
+                if (routes.none { it.id == SelectedRouteStore(this).read().id }) {
+                    routes.firstOrNull()?.let { SelectedRouteStore(this).save(it) }
+                }
+                if (::action.isInitialized) rebuildRouteRow()
+                if (::pageAdapter.isInitialized) {
+                    pageAdapter.refresh(1)
+                    pageAdapter.refresh(2)
+                }
+                onComplete?.invoke(true, uiCopy("Маршруты обновлены (${routes.size})"))
+            }
+        }
+    }
+
     private fun decodeTelegramAvatar(bytes: ByteArray): Bitmap? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)

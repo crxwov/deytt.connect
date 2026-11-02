@@ -130,6 +130,19 @@ internal class ProfileFlows(
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(14), host.dp(13), host.dp(14), host.dp(13))
             background = host.glassRowBackground(false, 20f)
+            if (token != null) {
+                isClickable = true
+                isFocusable = true
+                with(DeyttUi) {
+                    foreground = host.ripple(20f)
+                    host.pressFeedback(this@apply, .99f)
+                }
+                setOnClickListener {
+                    subscriptionText?.text = host.uiCopy("обновляем подписку…")
+                    refreshProfile()
+                    host.refreshSubscriptionManually()
+                }
+            }
         }
         subscriptionText = host.text(
             if (token == null) "подключите telegram, чтобы загрузить тариф и срок действия."

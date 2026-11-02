@@ -11,9 +11,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
-import java.security.DigestInputStream
 import java.security.MessageDigest
 import org.json.JSONArray
+import org.json.JSONObject
 
 data class ReleaseInfo(
     val tag: String,
@@ -24,33 +24,46 @@ data class ReleaseInfo(
 )
 
 internal object ReleaseUrlPolicy {
-    private const val RELEASE_PATH = "/crxwov/deytt.connect/releases/"
+    private const val GITHUB_RELEASE_PATH = "/crxwov/deytt.connect/releases/"
+    private const val SERVER_RELEASE_PATH = "/connect/releases/"
 
-    fun isOfficialPage(raw: String): Boolean = officialPath(raw)?.let {
-        it.matches(Regex("${Regex.escape(RELEASE_PATH)}tag/[A-Za-z0-9._-]+"))
-    } ?: false
-
-    fun isOfficialAsset(raw: String): Boolean = officialPath(raw)?.let {
-        it.matches(Regex("${Regex.escape(RELEASE_PATH)}download/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\\.apk"))
-    } ?: false
-
-    private fun officialPath(raw: String): String? = runCatching {
+    fun isOfficialPage(raw: String): Boolean = runCatching {
         val url = URL(raw)
-        url.path.takeIf {
-            url.protocol.equals("https", ignoreCase = true) &&
-                url.host.equals("github.com", ignoreCase = true) &&
-                url.userInfo == null && (url.port == -1 || url.port == 443) &&
-                url.query == null && url.ref == null
+        if (!url.protocol.equals("https", ignoreCase = true) || url.userInfo != null ||
+            (url.port != -1 && url.port != 443) || url.query != null || url.ref != null) return false
+        val host = url.host.lowercase()
+        val path = url.path
+        if (host == "deytt.space" || host == "ru.deytt.space") {
+            return path == "/download/" || path == "/download" || path == "/connect/" || path.startsWith(SERVER_RELEASE_PATH)
         }
-    }.getOrNull()
+        if (host == "github.com") {
+            return path.matches(Regex("${Regex.escape(GITHUB_RELEASE_PATH)}tag/[A-Za-z0-9._-]+"))
+        }
+        false
+    }.getOrDefault(false)
+
+    fun isOfficialAsset(raw: String): Boolean = runCatching {
+        val url = URL(raw)
+        if (!url.protocol.equals("https", ignoreCase = true) || url.userInfo != null ||
+            (url.port != -1 && url.port != 443) || url.query != null || url.ref != null) return false
+        val host = url.host.lowercase()
+        val path = url.path
+        if (host == "deytt.space" || host == "ru.deytt.space") {
+            return path.matches(Regex("${Regex.escape(SERVER_RELEASE_PATH)}[A-Za-z0-9._-]+\\.apk")) ||
+                path.matches(Regex("/connect/[A-Za-z0-9._-]+\\.apk"))
+        }
+        if (host == "github.com" || host.endsWith(".githubusercontent.com")) {
+            return path.matches(Regex("${Regex.escape(GITHUB_RELEASE_PATH)}download/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+\\.apk")) ||
+                path.matches(Regex("/github-production-release-asset-[A-Za-z0-9]+/.*\\.apk"))
+        }
+        false
+    }.getOrDefault(false)
 }
 
 internal object ReleaseAssetPolicy {
     fun isStableRelease(draft: Boolean, prerelease: Boolean): Boolean = !draft
 
     fun preferredName(names: List<String>, supportedAbis: List<String>): String? {
-        // The updater installs only production APKs; debug packages are not
-        // valid candidates for a production release, even in a debug build.
         for (abi in supportedAbis + "universal") {
             val name = "app-$abi-release.apk"
             if (name in names) return name
@@ -60,8 +73,6 @@ internal object ReleaseAssetPolicy {
 }
 
 internal object UpdateSignaturePolicy {
-    // Histories must come exclusively from Android's verified SigningInfo, never
-    // release metadata. Multi-signer packages require the entire current set.
     fun accepts(
         installedSigners: Set<String>,
         candidateSigners: Set<String>,
@@ -76,15 +87,54 @@ internal object UpdateSignaturePolicy {
 }
 
 object UpdateChecker {
-    // Inspect recent stable releases in order so ABI-specific assets can be
-    // selected without ever offering a draft or a partially built prerelease.
-    private const val RELEASES_URL = "https://api.github.com/repos/crxwov/deytt.connect/releases?per_page=20"
+    private const val SERVER_UPDATE_URL = "https://deytt.space/connect/releases/update.json"
+    private const val GITHUB_RELEASES_URL = "https://api.github.com/repos/crxwov/deytt.connect/releases?per_page=20"
     private const val MAX_RELEASE_RESPONSE_BYTES = 2 * 1024 * 1024
     private const val MAX_APK_BYTES = 250L * 1024 * 1024
     private const val MAX_REDIRECTS = 5
 
     fun latest(): ReleaseInfo {
-        val connection = (URL(RELEASES_URL).openConnection() as HttpURLConnection).apply {
+        // 1. Try dedicated fast server mirror first (no rate-limits, no DPI drops)
+        val fromServer = runCatching { fetchServerRelease() }.getOrNull()
+        if (fromServer != null) return fromServer
+
+        // 2. Fall back to GitHub releases
+        return fetchGitHubRelease()
+    }
+
+    private fun fetchServerRelease(): ReleaseInfo {
+        val connection = (URL(SERVER_UPDATE_URL).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 6_000
+            readTimeout = 6_000
+            instanceFollowRedirects = false
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
+        }
+        return try {
+            check(connection.responseCode in 200..299) { "Server release check returned HTTP ${connection.responseCode}" }
+            val raw = connection.inputStream.use { readLimited(it, MAX_RELEASE_RESPONSE_BYTES) }.toString(Charsets.UTF_8)
+            val json = JSONObject(raw)
+            val tag = json.optString("tag").ifBlank { json.optString("version") }.ifBlank { "unknown" }
+            val pageUrl = json.optString("page_url").ifBlank { "https://deytt.space/download/" }
+            val apkUrl = json.optString("apk_url").takeIf(ReleaseUrlPolicy::isOfficialAsset)
+                ?: error("Server returned untrusted or missing APK URL")
+            val size = json.optLong("apk_size", 0L).takeIf { it in 1..MAX_APK_BYTES }
+            val digest = json.optString("apk_sha256").takeIf(String::isNotBlank)
+                ?: json.optString("apk_digest").takeIf(String::isNotBlank)
+            ReleaseInfo(
+                tag = tag,
+                pageUrl = pageUrl,
+                apkUrl = apkUrl,
+                apkSize = size,
+                apkDigest = digest,
+            )
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun fetchGitHubRelease(): ReleaseInfo {
+        val connection = (URL(GITHUB_RELEASES_URL).openConnection() as HttpURLConnection).apply {
             connectTimeout = 8_000
             readTimeout = 8_000
             instanceFollowRedirects = false
@@ -133,38 +183,54 @@ object UpdateChecker {
 
     fun downloadAndVerify(context: Context, release: ReleaseInfo, onProgress: (Int) -> Unit = {}): File {
         val asset = release.apkUrl ?: error("Release has no APK asset")
-        check(ReleaseUrlPolicy.isOfficialAsset(asset)) { "APK URL is not an official GitHub asset" }
+        check(ReleaseUrlPolicy.isOfficialAsset(asset)) { "APK URL is not an official asset" }
         val cache = File(context.cacheDir, "updates")
         check(cache.exists() || cache.mkdirs()) { "Cannot create update cache" }
         val safeTag = release.tag.replace(Regex("[^A-Za-z0-9._-]"), "_").take(80).ifBlank { "release" }
         val partial = File(cache, "deytt-connect-$safeTag.apk.part")
         val output = File(cache, "deytt-connect-$safeTag.apk")
-        partial.delete()
 
-        val connection = openAssetConnection(URL(asset))
-        try {
-            val length = connection.getHeaderFieldLong("Content-Length", -1L)
-            check(length <= MAX_APK_BYTES) { "APK exceeds the download limit" }
-            if (length > 0 && release.apkSize != null) check(length == release.apkSize) { "APK size does not match GitHub metadata" }
+        var received = if (partial.exists()) partial.length() else 0L
+        val totalLength = release.apkSize ?: -1L
+        if (totalLength > 0 && received >= totalLength) {
+            partial.delete()
+            received = 0L
+        }
 
-            val digest = MessageDigest.getInstance("SHA-256")
-            var received = 0L
-            var reportedProgress = -1
-            val deadline = android.os.SystemClock.elapsedRealtime() + 10 * 60_000L
-            connection.inputStream.use { raw ->
-                DigestInputStream(raw, digest).use { input ->
-                    FileOutputStream(partial).use { file ->
-                        val buffer = ByteArray(32 * 1024)
+        var attempts = 0
+        val maxDownloadAttempts = 4
+        var reportedProgress = -1
+
+        while (attempts < maxDownloadAttempts) {
+            attempts++
+            var connection: HttpURLConnection? = null
+            try {
+                connection = openAssetConnection(URL(asset), received)
+                val status = connection.responseCode
+                val isRangeResponse = (status == 206)
+                if (received > 0L && !isRangeResponse && status == 200) {
+                    partial.delete()
+                    received = 0L
+                }
+                val streamLength = connection.getHeaderFieldLong("Content-Length", -1L)
+                val expectedTotal = if (isRangeResponse && streamLength > 0) received + streamLength
+                    else if (streamLength > 0) streamLength else totalLength
+
+                val deadline = android.os.SystemClock.elapsedRealtime() + 15 * 60_000L
+                val outputStream = FileOutputStream(partial, received > 0L)
+                outputStream.use { file ->
+                    connection.inputStream.use { raw ->
+                        val buffer = ByteArray(64 * 1024)
                         while (true) {
                             check(!Thread.currentThread().isInterrupted) { "APK download cancelled" }
                             check(android.os.SystemClock.elapsedRealtime() < deadline) { "APK download timed out" }
-                            val count = input.read(buffer)
+                            val count = raw.read(buffer)
                             if (count < 0) break
+                            file.write(buffer, 0, count)
                             received += count
                             check(received <= MAX_APK_BYTES) { "APK exceeds the download limit" }
-                            file.write(buffer, 0, count)
-                            if (length > 0) {
-                                val progress = ((received * 100L) / length).toInt().coerceIn(0, 100)
+                            if (expectedTotal > 0) {
+                                val progress = ((received * 100L) / expectedTotal).toInt().coerceIn(0, 100)
                                 if (progress != reportedProgress) {
                                     reportedProgress = progress
                                     onProgress(progress)
@@ -173,30 +239,63 @@ object UpdateChecker {
                         }
                     }
                 }
+
+                if (totalLength > 0 && received < totalLength) {
+                    continue
+                }
+                break
+            } catch (failure: Throwable) {
+                if (Thread.currentThread().isInterrupted || attempts >= maxDownloadAttempts) {
+                    partial.delete()
+                    throw failure
+                }
+                received = if (partial.exists()) partial.length() else 0L
+                try {
+                    Thread.sleep(1000L * attempts)
+                } catch (e: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    partial.delete()
+                    throw failure
+                }
+            } finally {
+                connection?.disconnect()
             }
-            check(received > 0 && (length < 0 || received == length)) { "APK download is incomplete" }
-            release.apkSize?.let { check(received == it) { "APK size does not match GitHub metadata" } }
-            release.apkDigest?.let { expected ->
-                val expectedHex = expected.removePrefix("sha256:").lowercase()
-                check(Regex("[0-9a-f]{64}").matches(expectedHex)) { "Invalid GitHub APK digest" }
-                check(hex(digest.digest()) == expectedHex) { "APK digest does not match GitHub metadata" }
-            }
-            verifyInstalledPackageSignature(context, partial)
-            if (output.exists()) check(output.delete()) { "Cannot replace cached APK" }
-            check(partial.renameTo(output)) { "Cannot finalize APK download" }
-            onProgress(100)
-            return output
-        } catch (failure: Throwable) {
-            partial.delete()
-            throw failure
-        } finally {
-            connection.disconnect()
         }
+
+        check(received > 0 && (totalLength < 0 || received == totalLength)) {
+            partial.delete()
+            "APK download is incomplete (received $received bytes, expected $totalLength)"
+        }
+
+        // Verify SHA-256 digest
+        val digest = MessageDigest.getInstance("SHA-256")
+        partial.inputStream().use { stream ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                val n = stream.read(buf)
+                if (n <= 0) break
+                digest.update(buf, 0, n)
+            }
+        }
+        val fileHex = hex(digest.digest())
+        release.apkDigest?.let { expected ->
+            val expectedHex = expected.removePrefix("sha256:").lowercase()
+            check(Regex("[0-9a-f]{64}").matches(expectedHex)) { "Invalid APK digest format" }
+            check(fileHex == expectedHex) {
+                partial.delete()
+                "APK digest does not match metadata"
+            }
+        }
+
+        verifyInstalledPackageSignature(context, partial)
+        if (output.exists()) check(output.delete()) { "Cannot replace cached APK" }
+        check(partial.renameTo(output)) { "Cannot finalize APK download" }
+        onProgress(100)
+        return output
     }
 
     fun launchInstaller(context: Context, apk: File) {
         require(apk.isFile && apk.extension.equals("apk", ignoreCase = true))
-        // Permission dialogs can delay installation; validate the cached file again.
         verifyInstalledPackageSignature(context, apk)
         val uri = FileProvider.getUriForFile(
             context,
@@ -209,37 +308,40 @@ object UpdateChecker {
         context.startActivity(intent)
     }
 
-    private fun openAssetConnection(initial: URL): HttpURLConnection {
+    private fun openAssetConnection(initial: URL, startByte: Long = 0L): HttpURLConnection {
         var url = initial
         repeat(MAX_REDIRECTS + 1) { attempt ->
-            check(isAllowedAssetHost(url)) { "GitHub redirected the APK to an untrusted host" }
+            check(isAllowedAssetHost(url)) { "APK redirected to an untrusted host" }
             val connection = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15_000
-                readTimeout = 10_000
+                connectTimeout = 20_000
+                readTimeout = 60_000
                 instanceFollowRedirects = false
                 setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
                 setRequestProperty("Accept", "application/octet-stream")
+                if (startByte > 0L) {
+                    setRequestProperty("Range", "bytes=$startByte-")
+                }
             }
             val status = connection.responseCode
             if (status in 200..299) return connection
             if (status in 300..399 && attempt < MAX_REDIRECTS) {
                 val location = connection.getHeaderField("Location")
                 connection.disconnect()
-                check(!location.isNullOrBlank()) { "GitHub APK redirect is missing its location" }
+                check(!location.isNullOrBlank()) { "APK redirect is missing its location" }
                 url = URL(url, location)
             } else {
                 connection.disconnect()
-                error("GitHub APK download failed")
+                error("APK download failed with HTTP $status")
             }
         }
-        error("Too many GitHub APK redirects")
+        error("Too many APK redirects")
     }
 
     private fun isAllowedAssetHost(url: URL): Boolean {
         val host = url.host.lowercase()
         return url.protocol.equals("https", ignoreCase = true) && url.userInfo == null &&
             (url.port == -1 || url.port == 443) &&
-            (host == "github.com" || host.endsWith(".githubusercontent.com"))
+            (host == "deytt.space" || host == "ru.deytt.space" || host == "github.com" || host.endsWith(".githubusercontent.com"))
     }
 
     internal fun verifyInstalledPackageSignature(
@@ -303,7 +405,7 @@ object UpdateChecker {
         while (true) {
             val count = input.read(buffer)
             if (count < 0) break
-            check(output.size() + count <= maximum) { "GitHub release response exceeds the size limit" }
+            check(output.size() + count <= maximum) { "Release response exceeds the size limit" }
             output.write(buffer, 0, count)
         }
         return output.toByteArray()

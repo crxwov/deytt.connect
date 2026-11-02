@@ -341,11 +341,33 @@ internal class PrimaryPages(
         )
             .apply { setPadding(0, 0, 0, host.dp(18)) })
 
-        root.addView(host.row(
+        var subscriptionRefreshing = false
+        val subscriptionRow = host.row(
             copy("Обновить подписку", "Refresh subscription"),
             copy("Загрузить доступные маршруты", "Load available routes"),
             "SUBSCRIPTION_ICON",
-        ).apply { setOnClickListener { host.openSetup() } })
+        ).apply {
+            setOnClickListener {
+                if (subscriptionRefreshing) return@setOnClickListener
+                val url = SubscriptionClient.getSavedSubscriptionUrl(host)
+                val token = TelegramSessionStore.read(host)
+                if (url == null && token == null) {
+                    host.openSetup()
+                    return@setOnClickListener
+                }
+                subscriptionRefreshing = true
+                val labels = (this as? ViewGroup)?.getChildAt(1) as? LinearLayout
+                val subtitleView = labels?.getChildAt(1) as? TextView
+                subtitleView?.text = host.uiCopy(copy("Обновляем подписку и маршруты…", "Refreshing subscription and routes…"))
+                subtitleView?.setTextColor(DeyttUi.SKY)
+                host.refreshSubscriptionManually { success, message ->
+                    subscriptionRefreshing = false
+                    subtitleView?.text = message
+                    subtitleView?.setTextColor(if (success) DeyttUi.MINT else DeyttUi.CORAL)
+                }
+            }
+        }
+        root.addView(subscriptionRow)
         root.addView(spacer(14, host))
 
         root.addView(host.sectionLabel("быстрый выбор"))

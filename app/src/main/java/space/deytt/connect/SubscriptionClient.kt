@@ -33,7 +33,7 @@ object SubscriptionClient {
         onStage: (String) -> Unit = {},
     ): ImportedSubscription {
         val headers = SubscriptionRequestIdentity.headers(context)
-        val coreBudget = SubscriptionRequestBudget(60_000)
+        val coreBudget = SubscriptionRequestBudget(25_000)
         var awg15Budget: SubscriptionRequestBudget? = null
         var awg31Budget: SubscriptionRequestBudget? = null
         var otherOptionalBudget: SubscriptionRequestBudget? = null
@@ -41,17 +41,17 @@ object SubscriptionClient {
         try {
             return import(context, rawUrl, SubscriptionHttpTransport { url, accept ->
                 val budget = if (url.contains("format=openflux")) {
-                    openFluxBudget ?: SubscriptionRequestBudget(60_000).also { openFluxBudget = it }
+                    openFluxBudget ?: SubscriptionRequestBudget(8_000).also { openFluxBudget = it }
                 } else if (accept == "application/json") coreBudget else {
                     // Give each generation its own bounded deadline. A slow or
                     // unavailable legacy endpoint must not consume the 3.1
                     // endpoint's entire optional-fetch window (or vice versa).
                     when {
                         url.contains("format=amneziawg31") ->
-                            awg31Budget ?: SubscriptionRequestBudget(10_000).also { awg31Budget = it }
+                            awg31Budget ?: SubscriptionRequestBudget(6_000).also { awg31Budget = it }
                         url.contains("format=amneziawg") ->
-                            awg15Budget ?: SubscriptionRequestBudget(10_000).also { awg15Budget = it }
-                        else -> otherOptionalBudget ?: SubscriptionRequestBudget(20_000).also {
+                            awg15Budget ?: SubscriptionRequestBudget(6_000).also { awg15Budget = it }
+                        else -> otherOptionalBudget ?: SubscriptionRequestBudget(8_000).also {
                             otherOptionalBudget = it
                         }
                     }
@@ -224,7 +224,7 @@ object SubscriptionClient {
         val baseUrl = getSavedSubscriptionUrl(context)?.let(::normalizeBaseUrl) ?: return emptyList()
         val headers = SubscriptionRequestIdentity.headers(context)
         val owner = OpenFluxProfileStore.ownerKey(baseUrl, headers["X-TG-App-Token"])
-        val budget = SubscriptionRequestBudget(60_000)
+        val budget = SubscriptionRequestBudget(12_000)
         val result = fetchOpenFluxProfiles(baseUrl, SubscriptionHttpTransport { url, accept ->
             requestUrlConnection(url, accept, headers, budget)
         })
@@ -394,11 +394,11 @@ object SubscriptionClient {
         budget.check()
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "GET"
-            connectTimeout = minOf(10_000, budget.remainingMillis())
+            connectTimeout = minOf(6_000, budget.remainingMillis())
             // First carrier provisioning can take ~45 seconds. Its optional
             // endpoint has a separate total deadline and must receive that window.
             readTimeout = if (url.contains("format=openflux")) budget.remainingMillis()
-                else minOf(12_000, budget.remainingMillis())
+                else minOf(8_000, budget.remainingMillis())
             useCaches = false
             // A subscription URL is a bearer token. Do not let the HTTP stack
             // silently forward it to an untrusted host.
@@ -406,7 +406,7 @@ object SubscriptionClient {
             headers.forEach { (name, value) -> setRequestProperty(name, value) }
             setRequestProperty("Accept", accept)
             setRequestProperty("Cache-Control", "no-cache")
-            setRequestProperty("Connection", "close")
+            setRequestProperty("Connection", "keep-alive")
             setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
         }
 

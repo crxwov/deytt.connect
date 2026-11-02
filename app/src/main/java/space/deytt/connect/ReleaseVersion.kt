@@ -13,7 +13,10 @@ object ReleaseVersion {
     private data class Parsed(val numbers: List<Int>, val qualifier: String?)
 
     private fun parse(raw: String): Parsed? {
-        val normalized = raw.trim().removePrefix("v")
+        val normalized = raw.trim()
+            .removePrefix("connect./")
+            .removePrefix("connect/")
+            .removePrefix("v")
         val pieces = normalized.split('-', limit = 2)
         val numbers = pieces.first().split('.').map { it.toIntOrNull() ?: return null }
         if (numbers.size !in 1..3) return null
