@@ -1075,9 +1075,11 @@
       const omega = Math.acos(clamp(dot(from, to), -1, 1));
       const bell = Math.sin(amount * Math.PI);
 
-      // Elevated 3D arch above the globe ("чуть их выше уведи")
+      // Elevated 3D arch above the globe
       const peakAltitude = 0.075 + Math.min(0.10, omega * 0.14);
-      const lift = ground ? 1.004 : (1.025 + bell * peakAltitude);
+      // Tiered 3D altitude: control (lane=1) floats higher, download (0) mid, upload (-1) lower
+      const laneLiftOffset = (lane || 0) * bell * 0.012;
+      const lift = ground ? 1.004 : (1.025 + bell * peakAltitude + laneLiftOffset);
 
       const start = this.projectVector(from, lift);
       const end = this.projectVector(to, lift);
@@ -1085,8 +1087,8 @@
       const dx = end.x - start.x, dy = end.y - start.y;
       const length = Math.hypot(dx, dy) || 1;
 
-      // Balanced 3D multi-lane separation (~10px), cohesive bundle elevated without spreading too far
-      const offset = bell * (lane || 0) * Math.min(10.5, Math.max(7, length * 0.062));
+      // 3D multi-lane separation matching reference (~16px), elegant ribbon
+      const offset = bell * (lane || 0) * Math.max(15, Math.min(18, length * 0.10));
 
       return {
         x: point.x - dy / length * offset,
@@ -1674,7 +1676,7 @@
     connectionAnimationActive(time) {
       const now = time || performance.now();
       if (this.connectionPhase === "STARTING" || this.connectionPhase === "CHECKING") return true;
-      if (this.connectionBurstAt && (now - this.connectionBurstAt < 1000)) return true;
+      if (this.connectionBurstAt && (now - this.connectionBurstAt < 800)) return true;
       return false;
     }
 
@@ -1686,31 +1688,22 @@
       const userLoc = this.userLocation;
       const userPt = userLoc ? this.projectLocation(userLoc, 1.008) : null;
 
-      // 1. Connection Burst shockwave on successful connect
-      if (this.connectionBurstAt && (time - this.connectionBurstAt < 1000)) {
-        const burstT = (time - this.connectionBurstAt) / 1000;
+      // 1. Gentle, minimalist connection ripple on successful connect
+      if (this.connectionBurstAt && (time - this.connectionBurstAt < 800)) {
+        const burstT = (time - this.connectionBurstAt) / 800;
         const burstTargetKey = this.connectionTargetRoute || this.activeRouteNodeKeys()[0] || "de";
         const burstLoc = LOCATIONS[burstTargetKey];
         if (burstLoc) {
-          const pt = this.projectLocation(burstLoc, 1.012);
+          const pt = this.projectLocation(burstLoc, 1.010);
           if (pt.z > 0.015) {
             context.save();
-            const ringR = 6 + burstT * 44;
-            const ringAlpha = (1 - burstT) * 0.85;
+            const ringR = 5 + burstT * 22;
+            const ringAlpha = (1 - burstT) * 0.6;
             context.beginPath();
             context.arc(pt.x, pt.y, ringR, 0, TAU);
-            context.strokeStyle = "rgba(0, 245, 200, " + ringAlpha.toFixed(2) + ")";
-            context.lineWidth = Math.max(1, (1 - burstT) * 3.5);
+            context.strokeStyle = "rgba(0, 245, 180, " + ringAlpha.toFixed(2) + ")";
+            context.lineWidth = Math.max(1, (1 - burstT) * 1.8);
             context.stroke();
-
-            // Inner flash
-            if (burstT < 0.35) {
-              const flashAlpha = (1 - burstT / 0.35) * 0.7;
-              context.beginPath();
-              context.arc(pt.x, pt.y, 8 + burstT * 20, 0, TAU);
-              context.fillStyle = "rgba(255, 255, 255, " + flashAlpha.toFixed(2) + ")";
-              context.fill();
-            }
             context.restore();
           }
         }
@@ -1722,7 +1715,7 @@
 
       if (isAuto) {
         // ============================================
-        // AUTO MODE CONNECTION ANIMATION (Автоподбор)
+        // MINIMALIST AUTO MODE (Автоподбор)
         // ============================================
         const candidateKeys = Array.from(this.availableLocationKeys).filter(k => k !== "user" && LOCATIONS[k]);
         if (!candidateKeys.length) candidateKeys.push("nl", "de", "fi", "ru", "it");
@@ -1730,178 +1723,117 @@
         const winnerKey = this.connectionTargetRoute || (phase === "CHECKING" ? candidateKeys[1 % candidateKeys.length] : null);
 
         if (!winnerKey || phase === "STARTING") {
-          // Stage A: Scanning / probing candidates (радар автоподбора)
-          const sweepCycle = 380; // ms per node
-          const currentIndex = Math.floor(elapsed / sweepCycle) % candidateKeys.length;
+          // Subtle, calm cycle across candidates: one node softly breathes at a time
+          const cycleMs = 700;
+          const currentIndex = Math.floor(elapsed / cycleMs) % candidateKeys.length;
           const currentKey = candidateKeys[currentIndex];
-          const nodeProgress = (elapsed % sweepCycle) / sweepCycle;
+          const nodeProgress = (elapsed % cycleMs) / cycleMs;
 
-          // Radiate radar ripples from candidate nodes
+          // Candidate nodes: subtle dots, current one has gentle ripple
           candidateKeys.forEach((key, idx) => {
             const loc = LOCATIONS[key];
             if (!loc) return;
             const pt = this.projectLocation(loc, 1.008);
             if (pt.z <= 0.015) return;
 
-            const isCurrent = idx === currentIndex;
-            const rippleR = isCurrent ? 5 + nodeProgress * 22 : 4 + ((elapsed * 0.003 + idx * 0.7) % 1) * 14;
-            const rippleA = isCurrent ? (1 - nodeProgress) * 0.75 : 0.22;
-
-            context.beginPath();
-            context.arc(pt.x, pt.y, rippleR, 0, TAU);
-            context.strokeStyle = isCurrent ? "rgba(0, 220, 255, " + rippleA.toFixed(2) + ")" : "rgba(80, 150, 255, " + rippleA.toFixed(2) + ")";
-            context.lineWidth = isCurrent ? 2 : 1;
-            context.stroke();
+            if (idx === currentIndex) {
+              const ringR = 4 + nodeProgress * 12;
+              const ringA = (1 - nodeProgress) * 0.45;
+              context.beginPath();
+              context.arc(pt.x, pt.y, ringR, 0, TAU);
+              context.strokeStyle = "rgba(0, 212, 255, " + ringA.toFixed(2) + ")";
+              context.lineWidth = 1.2;
+              context.stroke();
+            }
           });
 
-          // Fast laser probe pulse from user to the currently evaluated candidate
+          // Single delicate probe particle traveling from user to currently evaluated candidate
           if (userLoc && LOCATIONS[currentKey]) {
             const probePt = this.projectLanePoint("user", currentKey, nodeProgress, 0);
             if (probePt.z > -0.02) {
-              // Glowing probe bead
               context.beginPath();
-              context.arc(probePt.x, probePt.y, 3.2, 0, TAU);
-              context.fillStyle = "#FFFFFF";
+              context.arc(probePt.x, probePt.y, 2.2, 0, TAU);
+              context.fillStyle = "#00D4FF";
               context.shadowColor = "#00D4FF";
-              context.shadowBlur = 8;
+              context.shadowBlur = 4;
               context.fill();
-
-              // Trailing laser spark
-              if (nodeProgress > 0.08) {
-                const tailPt = this.projectLanePoint("user", currentKey, Math.max(0, nodeProgress - 0.12), 0);
-                context.beginPath();
-                context.moveTo(tailPt.x, tailPt.y);
-                context.lineTo(probePt.x, probePt.y);
-                context.strokeStyle = "rgba(0, 212, 255, 0.85)";
-                context.lineWidth = 1.8;
-                context.stroke();
-              }
             }
           }
         } else {
-          // Stage B: Winner selected / CHECKING ("Выбор точки" & Lock-on)
+          // Winner selected / CHECKING: chosen node breathes softly, one calm check pulse
           const targetLoc = LOCATIONS[winnerKey];
           if (targetLoc) {
             const pt = this.projectLocation(targetLoc, 1.010);
             if (pt.z > 0.015) {
-              // High-tech target reticle around winner
-              const angle = (time * 0.003) % TAU;
-              const lockR = 15;
+              const breathe = 0.5 + 0.5 * Math.sin(elapsed * 0.005);
               context.beginPath();
-              context.arc(pt.x, pt.y, lockR, angle, angle + 1.2);
-              context.arc(pt.x, pt.y, lockR, angle + Math.PI, angle + Math.PI + 1.2);
-              context.strokeStyle = "#00F0FF";
-              context.lineWidth = 2.2;
-              context.shadowColor = "#00F0FF";
-              context.shadowBlur = 6;
-              context.stroke();
-
-              // Expanding confirmation pulse
-              const pulseProg = (elapsed % 700) / 700;
-              context.beginPath();
-              context.arc(pt.x, pt.y, 6 + pulseProg * 26, 0, TAU);
-              context.strokeStyle = "rgba(0, 245, 180, " + ((1 - pulseProg) * 0.75).toFixed(2) + ")";
-              context.lineWidth = 1.8;
+              context.arc(pt.x, pt.y, 5 + breathe * 5, 0, TAU);
+              context.strokeStyle = "rgba(0, 245, 180, " + (0.3 + breathe * 0.35).toFixed(2) + ")";
+              context.lineWidth = 1.4;
               context.stroke();
             }
 
-            // High-speed ping verification pulses between User and Winner Node
             if (userLoc) {
-              const pingT1 = (elapsed % 600) / 600;
-              const pingT2 = ((elapsed + 300) % 600) / 600;
-              [pingT1, 1 - pingT2].forEach((t, i) => {
-                const pt = this.projectLanePoint("user", winnerKey, t, 0);
-                if (pt.z > -0.02) {
-                  context.beginPath();
-                  context.arc(pt.x, pt.y, 2.8, 0, TAU);
-                  context.fillStyle = i === 0 ? "#FFD043" : "#00F5FF";
-                  context.shadowColor = i === 0 ? "#FFD043" : "#00F5FF";
-                  context.shadowBlur = 7;
-                  context.fill();
-                }
-              });
+              const pingT = (elapsed % 750) / 750;
+              const pingPt = this.projectLanePoint("user", winnerKey, pingT, 0);
+              if (pingPt.z > -0.02) {
+                context.beginPath();
+                context.arc(pingPt.x, pingPt.y, 2.2, 0, TAU);
+                context.fillStyle = "#00F5A0";
+                context.shadowColor = "#00F5A0";
+                context.shadowBlur = 4;
+                context.fill();
+              }
             }
           }
         }
       } else {
         // ============================================
-        // NORMAL DIRECT ROUTE CONNECTION ANIMATION
+        // MINIMALIST DIRECT ROUTE CONNECTION
         // ============================================
         const targetKey = this.connectionTargetRoute || this.activeRouteNodeKeys()[0] || this.route;
         const targetLoc = LOCATIONS[targetKey];
 
-        // Endpoint Sonar Ripples on both User and Target
+        // Soft, calm breathing glow at the target node
         if (targetLoc) {
           const pt = this.projectLocation(targetLoc, 1.010);
           if (pt.z > 0.015) {
-            const rippleProg = (elapsed % 800) / 800;
+            const breathe = 0.5 + 0.5 * Math.sin(elapsed * 0.004);
             context.beginPath();
-            context.arc(pt.x, pt.y, 5 + rippleProg * 26, 0, TAU);
-            context.strokeStyle = "rgba(0, 210, 255, " + ((1 - rippleProg) * 0.72).toFixed(2) + ")";
-            context.lineWidth = 1.8;
+            context.arc(pt.x, pt.y, 5 + breathe * 5, 0, TAU);
+            context.strokeStyle = phase === "CHECKING"
+              ? "rgba(0, 245, 180, " + (0.3 + breathe * 0.35).toFixed(2) + ")"
+              : "rgba(0, 212, 255, " + (0.3 + breathe * 0.35).toFixed(2) + ")";
+            context.lineWidth = 1.3;
             context.stroke();
-
-            if (phase === "CHECKING") {
-              // Orbital verification radar arc around target
-              const angle = (time * 0.004) % TAU;
-              context.beginPath();
-              context.arc(pt.x, pt.y, 14, angle, angle + 1.6);
-              context.strokeStyle = "#FFCE55";
-              context.lineWidth = 2.0;
-              context.shadowColor = "#FFCE55";
-              context.shadowBlur = 6;
-              context.stroke();
-            }
           }
         }
 
-        if (userPt && userPt.z > 0.015) {
-          const rippleProg = ((elapsed + 400) % 800) / 800;
-          context.beginPath();
-          context.arc(userPt.x, userPt.y, 5 + rippleProg * 22, 0, TAU);
-          context.strokeStyle = "rgba(117, 216, 255, " + ((1 - rippleProg) * 0.65).toFixed(2) + ")";
-          context.lineWidth = 1.6;
-          context.stroke();
-        }
-
+        // Single clean traveling pulse along the route
         if (userLoc && targetLoc) {
           if (phase === "STARTING") {
-            // Tunnel setup beam: energetic negotiation pulse establishing the link
-            const beamT = (elapsed % 850) / 850;
-            const beamPt = this.projectLanePoint("user", targetKey, beamT, 0);
-            if (beamPt.z > -0.02) {
-              // Glowing core
+            const t = (elapsed % 900) / 900;
+            const pt = this.projectLanePoint("user", targetKey, t, 0);
+            if (pt.z > -0.02) {
               context.beginPath();
-              context.arc(beamPt.x, beamPt.y, 3.6, 0, TAU);
-              context.fillStyle = "#FFFFFF";
+              context.arc(pt.x, pt.y, 2.4, 0, TAU);
+              context.fillStyle = "#00D4FF";
               context.shadowColor = "#00D4FF";
-              context.shadowBlur = 9;
+              context.shadowBlur = 4;
               context.fill();
-
-              // Trailing circuit sparks
-              for (let s = 1; s <= 4; s++) {
-                const sparkT = beamT - s * 0.035;
-                if (sparkT > 0) {
-                  const sp = this.projectLanePoint("user", targetKey, sparkT, 0);
-                  context.beginPath();
-                  context.arc(sp.x, sp.y, 2.2 - s * 0.35, 0, TAU);
-                  context.fillStyle = "rgba(0, 212, 255, " + (0.8 - s * 0.18).toFixed(2) + ")";
-                  context.fill();
-                }
-              }
             }
           } else if (phase === "CHECKING") {
-            // Route verification ping test: rapid bidirectional sparks
-            const ping1 = (elapsed % 450) / 450;
-            const ping2 = ((elapsed + 225) % 450) / 450;
-            [ping1, 1 - ping2].forEach((t, i) => {
+            // Two alternating quiet pulses (forward and return)
+            const t1 = (elapsed % 800) / 800;
+            const t2 = ((elapsed + 400) % 800) / 800;
+            [t1, 1 - t2].forEach((t, i) => {
               const pt = this.projectLanePoint("user", targetKey, t, 0);
               if (pt.z > -0.02) {
                 context.beginPath();
-                context.arc(pt.x, pt.y, 2.8, 0, TAU);
-                context.fillStyle = i === 0 ? "#FFD043" : "#00F5FF";
-                context.shadowColor = i === 0 ? "#FFD043" : "#00F5FF";
-                context.shadowBlur = 8;
+                context.arc(pt.x, pt.y, 2.2, 0, TAU);
+                context.fillStyle = i === 0 ? "#FFD043" : "#00F5A0";
+                context.shadowColor = i === 0 ? "#FFD043" : "#00F5A0";
+                context.shadowBlur = 4;
                 context.fill();
               }
             });

@@ -6,6 +6,9 @@ import subprocess
 
 
 def prepare(go_executable: str, destination: Path, patch: Path) -> None:
+    marker = destination / ".deytt-boottime"
+    if marker.is_file() and (destination / "bin/go.exe").is_file():
+        return
     version = subprocess.check_output([go_executable, "version"], encoding="utf-8").strip()
     if not version.startswith("go version go1.25.14 windows/"):
         raise ValueError("AWG Windows builds require the reviewed Go 1.25.14 SDK")
