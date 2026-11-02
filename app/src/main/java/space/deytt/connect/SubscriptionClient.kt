@@ -81,10 +81,29 @@ object SubscriptionClient {
         val baseUrl = normalizeBaseUrl(rawUrl)
         val url = withFormat(baseUrl, "singbox")
         onStage("download")
-        val response = request(url, "application/json", required = true, transport = transport)!!
+
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(3)
+        val singboxFuture = pool.submit(java.util.concurrent.Callable {
+            request(url, "application/json", required = true, transport = transport)!!
+        })
+        val awgFuture = pool.submit(java.util.concurrent.Callable {
+            fetchAwgGenerations(baseUrl, transport)
+        })
+        val openFluxFuture = pool.submit(java.util.concurrent.Callable {
+            fetchOpenFluxProfiles(baseUrl, transport)
+        })
+
+        val response = try {
+            singboxFuture.get()
+        } catch (e: java.util.concurrent.ExecutionException) {
+            pool.shutdownNow()
+            throw (e.cause ?: e)
+        }
+
         val content = try {
             CdnLteProfile.attach(response.body, response.cdnLteMetadata)
         } catch (error: Exception) {
+            pool.shutdownNow()
             throw SubscriptionPayloadException()
         }
         onStage("validate")
@@ -92,11 +111,20 @@ object SubscriptionClient {
         val metadata = SubscriptionMetadata.parse(response.profileTitle, response.userInfo)
         val awgStore = AwgProfileStore(context)
         onStage("awg")
-        // The legacy endpoint is `format=amneziawg`; generation 3.1 has its own
-        // `format=amneziawg31` endpoint. Each generation has a fair 10-second
-        // optional-fetch budget, separate from the required sing-box request.
-        val awgResults = fetchAwgGenerations(baseUrl, transport)
-        val openFluxResult = fetchOpenFluxProfiles(baseUrl, transport)
+        val awgResults = try {
+            awgFuture.get()
+        } catch (e: java.util.concurrent.ExecutionException) {
+            pool.shutdownNow()
+            throw (e.cause ?: e)
+        }
+        val openFluxResult = try {
+            openFluxFuture.get()
+        } catch (e: java.util.concurrent.ExecutionException) {
+            pool.shutdownNow()
+            throw (e.cause ?: e)
+        } finally {
+            pool.shutdown()
+        }
         // An optional AWG endpoint must not make a valid core subscription unusable.
         // Keep a last-known-good family when its gateway is temporarily failing.
         fun mergedProfiles(previousAwgProfiles: List<AwgProfile>) = awgResults.flatMap { result ->
@@ -316,10 +344,22 @@ object SubscriptionClient {
     private fun fetchAwgGenerations(
         baseUrl: String,
         transport: SubscriptionHttpTransport,
-    ): List<AwgFetchResult> = listOf(
-        fetchAwgProfiles(baseUrl, "amneziawg", "15", transport),
-        fetchAwgProfiles(baseUrl, "amneziawg31", "31", transport),
-    )
+    ): List<AwgFetchResult> {
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        return try {
+            val f15 = pool.submit(java.util.concurrent.Callable {
+                fetchAwgProfiles(baseUrl, "amneziawg", "15", transport)
+            })
+            val f31 = pool.submit(java.util.concurrent.Callable {
+                fetchAwgProfiles(baseUrl, "amneziawg31", "31", transport)
+            })
+            listOf(f15.get(), f31.get())
+        } catch (e: java.util.concurrent.ExecutionException) {
+            throw (e.cause ?: e)
+        } finally {
+            pool.shutdown()
+        }
+    }
 
     private fun request(
         url: String,
@@ -519,60 +559,85 @@ object SubscriptionClient {
                     it.forEach { profile -> AwgProfileStore.validate(profile.config) }
                 }
             } else {
-                buildList {
-                    for (index in 0 until servers.length()) {
-                        val server = servers.optJSONObject(index) ?: continue
-                        val id = server.optString("id").trim()
-                        if (id.isBlank()) continue
-                        // The manifest response is itself a valid config for the
-                        // first advertised server. Keep it as the authoritative
-                        // fallback instead of throwing it away and requiring a
-                        // second request that can independently fail with 502/EOF.
-                        if (index == 0 && runCatching {
-                                val profile = AwgProfile(
-                                    id = "awg$version:$id",
-                                    version = version,
-                                    label = server.optString("label", id),
-                                    shortLabel = server.optString("short_label", id.uppercase()),
-                                    config = first.body,
-                                )
-                                requireAwgProfileSize(profile.config)
-                                AwgProfileStore.validate(profile.config)
-                                add(profile)
-                            }.isSuccess
-                        ) continue
-                        val url = appendQueryParameter(withFormat(baseUrl, format), "server_id", id)
-                        try {
-                            val response = request(
-                                url,
-                                "text/plain",
-                                required = true,
-                                transport = transport,
+                val serverItems = mutableListOf<Pair<Int, JSONObject>>()
+                for (index in 0 until servers.length()) {
+                    val server = servers.optJSONObject(index) ?: continue
+                    val id = server.optString("id").trim()
+                    if (id.isNotBlank()) serverItems.add(Pair(index, server))
+                }
+
+                val profilesList = mutableListOf<AwgProfile>()
+                val itemsToFetch = mutableListOf<Pair<Int, JSONObject>>()
+
+                for ((index, server) in serverItems) {
+                    val id = server.optString("id").trim()
+                    if (index == 0) {
+                        val usedFirst = runCatching {
+                            val profile = AwgProfile(
+                                id = "awg$version:$id",
+                                version = version,
+                                label = server.optString("label", id),
+                                shortLabel = server.optString("short_label", id.uppercase()),
+                                config = first.body,
                             )
-                            if (response == null) {
-                                failedIds += id
-                                failedRequestsAreTransient = false
-                            } else {
-                                val profile = AwgProfile(
-                                    id = "awg$version:$id",
-                                    version = version,
-                                    label = server.optString("label", id),
-                                    shortLabel = server.optString("short_label", id.uppercase()),
-                                    config = response.body,
-                                )
-                                requireAwgProfileSize(profile.config)
-                                AwgProfileStore.validate(profile.config)
-                                add(profile)
-                            }
-                        } catch (error: Exception) {
-                            if (isAccessFailure(error) || error is SubscriptionCancelledException) throw error
-                            failedIds += id
-                            if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) != true) {
-                                failedRequestsAreTransient = false
-                            }
-                        }
+                            requireAwgProfileSize(profile.config)
+                            AwgProfileStore.validate(profile.config)
+                            profilesList.add(profile)
+                        }.isSuccess
+                        if (!usedFirst) itemsToFetch.add(Pair(index, server))
+                    } else {
+                        itemsToFetch.add(Pair(index, server))
                     }
                 }
+
+                if (itemsToFetch.isNotEmpty()) {
+                    val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(4, itemsToFetch.size))
+                    try {
+                        val tasks = itemsToFetch.map { (_, server) ->
+                            val id = server.optString("id").trim()
+                            val url = appendQueryParameter(withFormat(baseUrl, format), "server_id", id)
+                            java.util.concurrent.Callable {
+                                val outcome = runCatching {
+                                    request(url, "text/plain", required = true, transport = transport)
+                                }
+                                Triple(id, server, outcome)
+                            }
+                        }
+                        val futures = pool.invokeAll(tasks)
+                        for (future in futures) {
+                            val (id, server, outcome) = future.get()
+                            if (outcome.isFailure) {
+                                val error = outcome.exceptionOrNull()!!
+                                val ex = error as? Exception ?: IOException(error.message, error)
+                                if (isAccessFailure(ex) || error is SubscriptionCancelledException) throw error
+                                failedIds += id
+                                if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) != true) {
+                                    failedRequestsAreTransient = false
+                                }
+                            } else {
+                                val response = outcome.getOrNull()
+                                if (response == null) {
+                                    failedIds += id
+                                    failedRequestsAreTransient = false
+                                } else {
+                                    val profile = AwgProfile(
+                                        id = "awg$version:$id",
+                                        version = version,
+                                        label = server.optString("label", id),
+                                        shortLabel = server.optString("short_label", id.uppercase()),
+                                        config = response.body,
+                                    )
+                                    requireAwgProfileSize(profile.config)
+                                    AwgProfileStore.validate(profile.config)
+                                    profilesList.add(profile)
+                                }
+                            }
+                        }
+                    } finally {
+                        pool.shutdown()
+                    }
+                }
+                profilesList
             }
             if (servers != null && servers.length() > 0 && profiles.isEmpty() && failedIds.isEmpty()) {
                 throw IOException("Сервер не вернул ни одного профиля AmneziaWG")

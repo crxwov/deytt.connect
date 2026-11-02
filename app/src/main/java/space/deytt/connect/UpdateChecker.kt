@@ -197,15 +197,46 @@ object UpdateChecker {
             received = 0L
         }
 
+        // Candidate URLs: Prefer high-speed server mirror directly if original is GitHub
+        val candidateUrls = buildList {
+            if (!asset.contains("deytt.space")) {
+                add("https://deytt.space/connect/releases/app-universal-release.apk")
+            }
+            add(asset)
+        }
+
         var attempts = 0
-        val maxDownloadAttempts = 4
+        val maxDownloadAttempts = 8
         var reportedProgress = -1
+
+        if (totalLength > 0 && received > 0L) {
+            val initial = ((received * 100L) / totalLength).toInt().coerceIn(0, 100)
+            reportedProgress = initial
+            onProgress(initial)
+        }
 
         while (attempts < maxDownloadAttempts) {
             attempts++
             var connection: HttpURLConnection? = null
             try {
-                connection = openAssetConnection(URL(asset), received)
+                // Try server mirror first if available, then fallback to asset URL
+                var openedConnection: HttpURLConnection? = null
+                for (urlStr in candidateUrls) {
+                    try {
+                        val conn = openAssetConnection(URL(urlStr), received)
+                        val code = conn.responseCode
+                        if (code in 200..299) {
+                            openedConnection = conn
+                            break
+                        } else {
+                            conn.disconnect()
+                        }
+                    } catch (e: Exception) {
+                        // Try next candidate
+                    }
+                }
+                connection = openedConnection ?: openAssetConnection(URL(asset), received)
+
                 val status = connection.responseCode
                 val isRangeResponse = (status == 206)
                 if (received > 0L && !isRangeResponse && status == 200) {
@@ -217,10 +248,11 @@ object UpdateChecker {
                     else if (streamLength > 0) streamLength else totalLength
 
                 val deadline = android.os.SystemClock.elapsedRealtime() + 15 * 60_000L
-                val outputStream = FileOutputStream(partial, received > 0L)
+                val outputStream = java.io.BufferedOutputStream(FileOutputStream(partial, received > 0L), 128 * 1024)
                 outputStream.use { file ->
-                    connection.inputStream.use { raw ->
-                        val buffer = ByteArray(64 * 1024)
+                    val inputStream = java.io.BufferedInputStream(connection.inputStream, 128 * 1024)
+                    inputStream.use { raw ->
+                        val buffer = ByteArray(128 * 1024)
                         while (true) {
                             check(!Thread.currentThread().isInterrupted) { "APK download cancelled" }
                             check(android.os.SystemClock.elapsedRealtime() < deadline) { "APK download timed out" }
@@ -245,16 +277,18 @@ object UpdateChecker {
                 }
                 break
             } catch (failure: Throwable) {
-                if (Thread.currentThread().isInterrupted || attempts >= maxDownloadAttempts) {
-                    partial.delete()
+                if (Thread.currentThread().isInterrupted) {
+                    throw failure
+                }
+                if (attempts >= maxDownloadAttempts) {
+                    // Retain partial download file on disk so the user can resume
                     throw failure
                 }
                 received = if (partial.exists()) partial.length() else 0L
                 try {
-                    Thread.sleep(1000L * attempts)
+                    Thread.sleep(minOf(1000L * attempts, 4000L))
                 } catch (e: InterruptedException) {
                     Thread.currentThread().interrupt()
-                    partial.delete()
                     throw failure
                 }
             } finally {
@@ -263,7 +297,6 @@ object UpdateChecker {
         }
 
         check(received > 0 && (totalLength < 0 || received == totalLength)) {
-            partial.delete()
             "APK download is incomplete (received $received bytes, expected $totalLength)"
         }
 
@@ -313,8 +346,8 @@ object UpdateChecker {
         repeat(MAX_REDIRECTS + 1) { attempt ->
             check(isAllowedAssetHost(url)) { "APK redirected to an untrusted host" }
             val connection = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 20_000
-                readTimeout = 60_000
+                connectTimeout = 12_000
+                readTimeout = 15_000
                 instanceFollowRedirects = false
                 setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
                 setRequestProperty("Accept", "application/octet-stream")

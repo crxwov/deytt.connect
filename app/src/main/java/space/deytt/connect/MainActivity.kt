@@ -139,6 +139,7 @@ class MainActivity : Activity() {
     private var accountGeneration = 0
     private var subscriptionRefreshInFlight = false
     private var subscriptionRefreshLastStartedAt = 0L
+    private val manualRefreshCallbacks = java.util.Collections.synchronizedList(mutableListOf<(Boolean, String) -> Unit>())
     private val connectionProgressHandler = Handler(Looper.getMainLooper())
     private val selectedRouteLatencyHandler = Handler(Looper.getMainLooper())
     private val mapTrafficHandler = Handler(Looper.getMainLooper())
@@ -564,7 +565,19 @@ class MainActivity : Activity() {
             }
             runOnUiThread {
                 subscriptionRefreshInFlight = false
-                if (isFinishing || isDestroyed || result.isFailure) return@runOnUiThread
+                val callbacks = synchronized(manualRefreshCallbacks) {
+                    val copy = ArrayList(manualRefreshCallbacks)
+                    manualRefreshCallbacks.clear()
+                    copy
+                }
+                if (isFinishing || isDestroyed || result.isFailure) {
+                    if (result.isFailure) {
+                        val err = result.exceptionOrNull()
+                        val msg = SubscriptionRetryPolicy.safeFailureSummary(err ?: java.io.IOException())
+                        callbacks.forEach { it.invoke(false, uiCopy("Не удалось обновить: $msg")) }
+                    }
+                    return@runOnUiThread
+                }
 
                 invalidateRouteCatalogCache()
                 val routes = runCatching {
@@ -579,25 +592,39 @@ class MainActivity : Activity() {
                     pageAdapter.refresh(1)
                     pageAdapter.refresh(2)
                 }
+                callbacks.forEach { it.invoke(true, uiCopy("Маршруты обновлены (${routes.size})")) }
             }
         }
     }
 
     internal fun refreshSubscriptionManually(onComplete: ((Boolean, String) -> Unit)? = null) {
         if (isFinishing || isDestroyed) return
+        onComplete?.let { manualRefreshCallbacks.add(it) }
+
+        val now = SystemClock.elapsedRealtime()
         if (subscriptionRefreshInFlight) {
-            onComplete?.invoke(false, uiCopy("Обновление уже выполняется…"))
-            return
+            // If already in flight and not stalled (< 8s), let it complete and notify all callbacks
+            if (subscriptionRefreshLastStartedAt > 0 && now - subscriptionRefreshLastStartedAt < 8_000) {
+                return
+            }
+            // Stalled background job: clear flag and force fresh start
+            subscriptionRefreshInFlight = false
         }
         val url = SubscriptionClient.getSavedSubscriptionUrl(this)?.trim()?.takeIf(String::isNotEmpty)
         val token = TelegramSessionStore.read(this)
         if (url == null && token == null) {
+            val callbacks = synchronized(manualRefreshCallbacks) {
+                val copy = ArrayList(manualRefreshCallbacks)
+                manualRefreshCallbacks.clear()
+                copy
+            }
+            callbacks.forEach { it.invoke(false, uiCopy("Подключите профиль или Telegram")) }
             openSetup()
             return
         }
 
         subscriptionRefreshInFlight = true
-        subscriptionRefreshLastStartedAt = SystemClock.elapsedRealtime()
+        subscriptionRefreshLastStartedAt = now
 
         subscriptionExecutor.execute {
             val targetUrl = url ?: runCatching {
@@ -607,7 +634,12 @@ class MainActivity : Activity() {
             if (targetUrl.isNullOrBlank()) {
                 runOnUiThread {
                     subscriptionRefreshInFlight = false
-                    onComplete?.invoke(false, uiCopy("Активная подписка не найдена"))
+                    val callbacks = synchronized(manualRefreshCallbacks) {
+                        val copy = ArrayList(manualRefreshCallbacks)
+                        manualRefreshCallbacks.clear()
+                        copy
+                    }
+                    callbacks.forEach { it.invoke(false, uiCopy("Активная подписка не найдена")) }
                 }
                 return@execute
             }
@@ -626,12 +658,17 @@ class MainActivity : Activity() {
 
             runOnUiThread {
                 subscriptionRefreshInFlight = false
+                val callbacks = synchronized(manualRefreshCallbacks) {
+                    val copy = ArrayList(manualRefreshCallbacks)
+                    manualRefreshCallbacks.clear()
+                    copy
+                }
                 if (isFinishing || isDestroyed) return@runOnUiThread
 
                 if (result.isFailure) {
                     val err = result.exceptionOrNull()
                     val msg = SubscriptionRetryPolicy.safeFailureSummary(err ?: java.io.IOException())
-                    onComplete?.invoke(false, uiCopy("Не удалось обновить: $msg"))
+                    callbacks.forEach { it.invoke(false, uiCopy("Не удалось обновить: $msg")) }
                     return@runOnUiThread
                 }
 
@@ -649,7 +686,7 @@ class MainActivity : Activity() {
                     pageAdapter.refresh(1)
                     pageAdapter.refresh(2)
                 }
-                onComplete?.invoke(true, uiCopy("Маршруты обновлены (${routes.size})"))
+                callbacks.forEach { it.invoke(true, uiCopy("Маршруты обновлены (${routes.size})")) }
             }
         }
     }

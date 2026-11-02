@@ -140,7 +140,15 @@ internal class ProfileFlows(
                 setOnClickListener {
                     subscriptionText?.text = host.uiCopy("обновляем подписку…")
                     refreshProfile()
-                    host.refreshSubscriptionManually()
+                    host.refreshSubscriptionManually { success, message ->
+                        if (!host.isFinishing && !host.isDestroyed) {
+                            if (success) {
+                                refreshProfile()
+                            } else {
+                                subscriptionText?.text = host.uiCopy(message)
+                            }
+                        }
+                    }
                 }
             }
         }

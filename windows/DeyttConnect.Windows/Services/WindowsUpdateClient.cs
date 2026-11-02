@@ -29,6 +29,7 @@ public static class WindowsUpdateClient
 {
     public const long MaximumPackageSizeBytes = 512L * 1024 * 1024;
     private const string ExpectedWindowsAssetName = "deytt-connect-windows-x64.zip";
+    private const string ServerUpdateUrl = "https://deytt.space/connect/releases/update.json";
 
     private const int MaximumReleaseResponseBytes = 2 * 1024 * 1024;
     private const int MaximumRedirects = 5;
@@ -48,6 +49,18 @@ public static class WindowsUpdateClient
     public static async Task<WindowsUpdateRelease?> FindLatestWindowsReleaseAsync(
         CancellationToken cancellationToken)
     {
+        // 1. Try dedicated high-speed server mirror first (no rate-limits, no DPI drops)
+        try
+        {
+            var serverRelease = await FetchServerReleaseAsync(cancellationToken);
+            if (serverRelease != null) return serverRelease;
+        }
+        catch
+        {
+            // Fall back to GitHub
+        }
+
+        // 2. Fall back to GitHub releases
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(ReleaseCheckTimeout);
 
@@ -60,6 +73,41 @@ public static class WindowsUpdateClient
 
         var json = await ReadBoundedTextAsync(response.Content, MaximumReleaseResponseBytes, timeout.Token);
         return ParseLatestWindowsReleaseResponse(json);
+    }
+
+    private static async Task<WindowsUpdateRelease?> FetchServerReleaseAsync(CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(6));
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, ServerUpdateUrl);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
+        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        if (!response.IsSuccessStatusCode) return null;
+
+        var json = await ReadBoundedTextAsync(response.Content, MaximumReleaseResponseBytes, timeout.Token);
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        var tag = GetJsonString(root, "tag") ?? GetJsonString(root, "version");
+        if (tag is null) return null;
+
+        var zipUrl = GetJsonString(root, "windows_zip_url");
+        var zipSize = GetJsonInt64(root, "windows_zip_size");
+        var zipDigest = GetJsonString(root, "windows_zip_sha256");
+
+        if (zipUrl is not null && zipSize is > 0 && zipDigest is not null)
+        {
+            return new WindowsUpdateRelease(
+                tag,
+                $"connect./{tag.Replace("connect./", "").Replace("v", "")}",
+                "",
+                ExpectedWindowsAssetName,
+                zipUrl,
+                zipSize,
+                zipDigest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? zipDigest : $"sha256:{zipDigest}");
+        }
+        return null;
     }
 
     internal static WindowsUpdateRelease? ParseLatestWindowsReleaseResponse(string json)
@@ -231,8 +279,19 @@ public static class WindowsUpdateClient
         string? expectedTag,
         string? expectedAssetName = null)
     {
-        if (uri.Scheme != Uri.UriSchemeHttps || !uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
-            uri.UserInfo.Length != 0 || uri.Port != 443 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+        if (uri.Scheme != Uri.UriSchemeHttps || uri.UserInfo.Length != 0 || uri.Port != 443 ||
+            uri.Query.Length != 0 || uri.Fragment.Length != 0)
+            return false;
+
+        if (uri.Host.Equals("deytt.space", StringComparison.OrdinalIgnoreCase) ||
+            uri.Host.Equals("ru.deytt.space", StringComparison.OrdinalIgnoreCase))
+        {
+            return uri.AbsolutePath.StartsWith("/connect/releases/", StringComparison.OrdinalIgnoreCase) &&
+                   (expectedAssetName == null || uri.AbsolutePath.EndsWith(expectedAssetName, StringComparison.OrdinalIgnoreCase) ||
+                    uri.AbsolutePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.EndsWith(".msi", StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
             return false;
 
         var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
@@ -288,7 +347,9 @@ public static class WindowsUpdateClient
 
     private static bool IsAllowedAssetUri(Uri uri) =>
         uri.Scheme == Uri.UriSchemeHttps && uri.UserInfo.Length == 0 && uri.Port == 443 &&
-        (uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+        (uri.Host.Equals("deytt.space", StringComparison.OrdinalIgnoreCase) ||
+         uri.Host.Equals("ru.deytt.space", StringComparison.OrdinalIgnoreCase) ||
+         uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
          uri.Host.Equals("githubusercontent.com", StringComparison.OrdinalIgnoreCase) ||
          uri.Host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase));
 
