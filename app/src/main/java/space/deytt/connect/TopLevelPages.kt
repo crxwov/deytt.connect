@@ -10,6 +10,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
 import android.net.VpnService
 import android.net.Uri
 import android.os.Build
@@ -350,7 +351,9 @@ internal class PrimaryPages(
         root.addView(host.sectionLabel("быстрый выбор"))
         val quickGroup = routeGroup()
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { route ->
-            appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", "выбрать", emphasis = selectedId == route.id)
+            val isSelected = selectedId == route.id
+            val actionText = if (isSelected) copy("выбрано", "selected") else copy("выбрать", "select")
+            appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", actionText, emphasis = isSelected)
                 .apply { setOnClickListener { host.selectRoute(route) } })
         }
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE || it.protocol == RouteProtocol.LTE }?.let { route ->
@@ -366,7 +369,16 @@ internal class PrimaryPages(
             val awgRoutes = countryRoutes.filter { it.engine == TunnelEngine.AMNEZIAWG }
             val first = countryRoutes.first()
             val cachedSamples = countryRoutes.mapNotNull { route -> RouteQualityStore.read(host, route.id) }
-            val cachedGrades = RouteProbeScoring.gradeByLatency(cachedSamples)
+            val measuredCached = cachedSamples.filter { it.latencyMillis?.let(RouteProbeStatistics::isValidLatencyMillis) == true }
+            val bestCachedId: String? = when {
+                measuredCached.isEmpty() -> null
+                measuredCached.size == 1 -> measuredCached.first().routeId
+                else -> RouteProbeScoring.bestRouteId(cachedSamples) ?: measuredCached.minByOrNull { it.latencyMillis!! }?.routeId
+            }
+            val worstCachedId: String? = when {
+                measuredCached.size < 2 -> null
+                else -> measuredCached.filter { it.routeId != bestCachedId }.maxByOrNull { it.latencyMillis!! }?.routeId
+            }
             val protocolSummary = countryRoutes.map { route ->
                 when (route.protocol) {
                     RouteProtocol.AWG15 -> "awg1.5"
@@ -409,16 +421,23 @@ internal class PrimaryPages(
                 val rowTitle = if (isAwg) route.profileName ?: route.protocol.title else route.protocol.title
                 val rowSubtitle = if (isAwg) "${route.shortMark()} · ${route.protocol.title}" else route.protocol.detail
                 val cached = RouteQualityStore.read(host, route.id)
-                val grade = cachedGrades[route.id] ?: RouteGrade.UNRATED
+                val isBest = route.id == bestCachedId
+                val isWorst = route.id == worstCachedId
+                val grade = when {
+                    isBest -> RouteGrade.GOOD
+                    isWorst -> RouteGrade.POOR
+                    cached?.latencyMillis != null -> RouteGrade.MEDIUM
+                    else -> RouteGrade.UNRATED
+                }
                 val metric = host.text(
-                    cached?.let { sampleLabel(it, grade == RouteGrade.GOOD, grade == RouteGrade.POOR) }
+                    cached?.let { sampleLabel(it, isBest, isWorst) }
                         ?: copy("Отклик: — · Скорость: —", "Response: — · Speed: —"),
                     11f,
                     gradeColor(grade),
                 ).apply {
                     maxLines = 2
                     setPadding(0, host.dp(4), 0, host.dp(8))
-                    if (grade == RouteGrade.GOOD || grade == RouteGrade.POOR) setTypeface(null, android.graphics.Typeface.BOLD)
+                    if (isBest || isWorst) setTypeface(null, android.graphics.Typeface.BOLD)
                 }
                 val progress = InlineMetricProgress(metric)
                 val leading = when {
@@ -453,7 +472,7 @@ internal class PrimaryPages(
                 item.setOnClickListener { host.selectRoute(route) }
                 val probeRow = ProbeRouteRow(route, metric, progress, item)
                 if (isAwg) {
-                    metric.text = cached?.let { sampleLabel(it, grade == RouteGrade.GOOD, grade == RouteGrade.POOR) }
+                    metric.text = cached?.let { sampleLabel(it, isBest, isWorst) }
                         ?: copy("Отклик: — · Скорость: —", "Response: — · Speed: —")
                     metric.setOnClickListener { startAwgProbe(probeRow) }
                 }
@@ -668,42 +687,24 @@ internal class PrimaryPages(
                 event.getStringExtra(RouteProbeClient.EXTRA_ERROR)?.takeIf(String::isNotBlank)
                     ?.let { country.errors[row.route.id] = it }
                 when (stage) {
-                    "latency" -> {
+                    "latency", "latency_sample", "latency_retry", "waiting_download" -> {
                         row.status.text = sampleLabel(sample)
+                        row.status.setTextColor(DeyttUi.TEXT)
+                        row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
                         row.progress.setLoading(true)
                     }
-                    "latency_sample" -> {
-                        row.status.text = sampleLabel(sample)
-                        row.progress.setLoading(country.speedCheckEnabled && speed == null)
-                    }
-                    "latency_retry" -> {
-                        row.status.text = sampleLabel(sample)
-                        row.progress.setLoading(true)
-                    }
-                    "download" -> {
-                        animateProbeText(row, RouteProbePresentation.speedProgress(latency?.let(::formatLatency), english))
-                        row.progress.setLoading(true)
-                    }
-                    "download_progress" -> {
-                        animateProbeText(row, RouteProbePresentation.speedProgress(
+                    "download", "download_progress" -> {
+                        row.status.text = RouteProbePresentation.speedProgress(
                             latency?.let(::formatLatency),
                             english,
                             reportedSpeed,
-                        ))
-                        row.progress.setLoading(true)
-                    }
-                    "waiting_download" -> {
-                        row.status.text = sampleLabel(sample)
+                        )
+                        row.status.setTextColor(DeyttUi.SKY)
                         row.progress.setLoading(true)
                     }
                     "complete", "failed" -> {
                         row.progress.setLoading(false)
-                        val grades = RouteProbeScoring.gradeByLatency(country.samples.values.toList())
-                        val grade = grades[row.route.id] ?: RouteGrade.UNRATED
-                        animateProbeText(
-                            row,
-                            sampleLabel(sample, grade == RouteGrade.GOOD, grade == RouteGrade.POOR),
-                        )
+                        val baseText = sampleLabel(sample)
                         if (speed == null) {
                             val reason = country.errors[row.route.id]?.let {
                                 RouteProbePresentation.failureMessage(it, english)
@@ -712,8 +713,12 @@ internal class PrimaryPages(
                             } else {
                                 copy("Скорость не измерена · нажмите страну для повтора", "Speed unavailable · reopen country to retry")
                             }
-                            row.status.append(" · $reason")
+                            row.status.text = "$baseText · $reason"
+                        } else {
+                            row.status.text = baseText
                         }
+                        row.status.setTextColor(DeyttUi.MUTED)
+                        row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
                         RouteQualityStore.write(host, sample)
                     }
                 }
@@ -745,32 +750,10 @@ internal class PrimaryPages(
     private fun finishCountryProbe(country: CountryProbeState) {
         if (country.cancelled || closed || !diagnosticForeground) { launchNextCountry(); return }
         country.isChecking = false
-        val samples = country.samples.values.toList()
-        val grades = RouteProbeScoring.grade(samples)
-        val latencyGrades = RouteProbeScoring.gradeByLatency(samples)
         country.summaryProgress.setLoading(false)
+        val selectedRouteId = SelectedRouteStore(host).read().id
+        applyCountryRanking(country, selectedRouteId)
         updateCountryLatencySummary(country)
-        country.rows.values.forEach { row ->
-            row.progress.setLoading(false)
-            row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
-            val grade = grades[row.route.id]?.takeIf { it != RouteGrade.UNRATED }
-                ?: latencyGrades[row.route.id] ?: RouteGrade.UNRATED
-            row.status.setTextColor(gradeColor(grade))
-            row.status.contentDescription = row.status.text
-        }
-        val completeSamples = samples.filter {
-            it.latencyMillis?.let(RouteProbeStatistics::isValidLatencyMillis) == true &&
-                it.downloadBytesPerSecond != null && it.downloadBytesPerSecond > 0L
-        }
-        val bestId = RouteProbeScoring.bestRouteId(samples) ?: completeSamples.singleOrNull()?.routeId
-        val best = bestId
-            ?.let { id -> country.routes.firstOrNull { it.id == id } }
-        best?.let { country.rows[it.id]?.status?.apply {
-            append(copy(" · лучший выбор", " · best choice"))
-            setTextColor(DeyttUi.MINT)
-            setTypeface(null, android.graphics.Typeface.BOLD)
-            contentDescription = text
-        } }
         launchNextCountry()
     }
 
@@ -849,8 +832,8 @@ internal class PrimaryPages(
         copy("Отклик: ", "Response: ") + (sample.latencyMillis?.let(::formatLatency) ?: "—") +
             "  ·  " + copy("Скорость: ", "Speed: ") + (sample.downloadBytesPerSecond?.takeIf { it > 0L }?.let(::formatSpeed) ?: "—") +
             when {
-                isBest -> copy(" · лучший", " · best")
-                isWorst -> copy(" · худший", " · slowest")
+                isBest -> copy(" · лучший выбор", " · best choice")
+                isWorst -> copy(" · худший отклик", " · slowest response")
                 else -> ""
             }
 
@@ -895,16 +878,16 @@ internal class PrimaryPages(
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = host.dp(64)
-            setPadding(host.dp(16), host.dp(10), host.dp(16), host.dp(10))
-            background = if (selected) host.glassRowBackground(true, 22f) else ColorDrawable(Color.TRANSPARENT)
+            setPadding(host.dp(8), host.dp(8), host.dp(8), host.dp(8))
+            background = host.glassRowBackground(selected, 22f)
             isClickable = true
             isFocusable = true
             foreground = host.ripple(22f)
-            host.pressFeedback(this, .985f)
+            host.pressFeedback(this, .99f)
             setOnClickListener { host.selectRoute(route) }
         }
         val leadingMark = host.routePairMark(selected)
-        root.addView(leadingMark, LinearLayout.LayoutParams(host.dp(40), host.dp(40)).apply { marginEnd = host.dp(12) })
+        root.addView(leadingMark, LinearLayout.LayoutParams(host.dp(40), host.dp(40)).apply { marginEnd = host.dp(10) })
 
         val middle = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
@@ -926,7 +909,7 @@ internal class PrimaryPages(
             addView(barTrack, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(4)).apply {
                 topMargin = host.dp(5)
                 bottomMargin = host.dp(4)
-                marginEnd = host.dp(16)
+                marginEnd = host.dp(8)
             })
 
             val sub = host.text(lteRenewalText(), 11f, MUTED)
@@ -934,74 +917,67 @@ internal class PrimaryPages(
         }
         root.addView(middle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        val action = host.actionLabel(if (selected) copy("выбрано", "selected") else copy("выбрать", "select")).apply {
+        val action = host.text(
+            if (selected) copy("выбрано", "selected") else copy("выбрать", "select"),
+            12f,
+            if (selected) DeyttUi.SKY else DeyttUi.TEXT,
+            android.graphics.Typeface.BOLD
+        ).apply {
+            gravity = Gravity.CENTER
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            minWidth = host.dp(60)
+            maxWidth = host.dp(84)
+            minHeight = host.dp(36)
+            setPadding(host.dp(8), host.dp(6), host.dp(8), host.dp(6))
+            background = host.glassRowBackground(selected, 18f)
             isClickable = false
             isFocusable = false
         }
-        root.addView(action)
+        root.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            leftMargin = host.dp(8)
+        })
         return root
     }
 
     private fun routeRankBackground(grade: RouteGrade, selected: Boolean): Drawable {
-        val density = host.resources.displayMetrics.density
-        if (selected) {
-            return LiquidGlassDrawable(
-                density = density,
-                cornerRadiusPx = 0f,
-                fillColors = intArrayOf(0x3525384E, 0x20152230),
-                strokeColors = intArrayOf(0x55FFFFFF.toInt(), 0x2A78B4E8.toInt(), 0x4860A5FA.toInt(), 0x20FFFFFF.toInt()),
-                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-                strokeWidthPx = 1.0f,
-                hasGloss = false,
-                innerLip = false,
-            )
-        }
-        return when (grade) {
-            RouteGrade.GOOD -> LiquidGlassDrawable(
-                density = density,
-                cornerRadiusPx = 0f,
-                fillColors = intArrayOf(0x281F3E34, 0x1812241E),
-                strokeColors = intArrayOf(0x65F0FFF8.toInt(), 0x3034D399.toInt(), 0x6010B981.toInt(), 0x22FFFFFF.toInt()),
-                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-                strokeWidthPx = 0.9f,
-                hasGloss = false,
-                innerLip = false,
-            )
-            RouteGrade.POOR -> LiquidGlassDrawable(
-                density = density,
-                cornerRadiusPx = 0f,
-                fillColors = intArrayOf(0x283E2824, 0x18241412),
-                strokeColors = intArrayOf(0x65FFF1F2.toInt(), 0x30F43F5E.toInt(), 0x60FB7185.toInt(), 0x22FFFFFF.toInt()),
-                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-                strokeWidthPx = 0.9f,
-                hasGloss = false,
-                innerLip = false,
-            )
-            else -> ColorDrawable(Color.TRANSPARENT)
-        }
-    }
+        val cornerRadius = host.dp(14).toFloat()
+        val insetH = host.dp(6)
+        val insetV = host.dp(2)
 
-    private fun animateProbeText(row: ProbeRouteRow, value: String) {
-        val view = row.status
-        if (view.text.toString() == value) return
-        if (host.prefersReducedMotion() ||
-            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled())
-        ) {
-            view.text = value
-            return
+        val gd = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            this.cornerRadius = cornerRadius
         }
-        view.animate().cancel()
-        view.animate()
-            .alpha(0.25f)
-            .setDuration(90L)
-            .withEndAction {
-                view.text = value
-                view.animate()
-                    .alpha(1f)
-                    .setDuration(120L)
-                    .start()
+
+        when {
+            selected && grade == RouteGrade.GOOD -> {
+                gd.setColor(0x3010B981.toInt())
+                gd.setStroke(host.dp(1), 0x9534D399.toInt())
+                return InsetDrawable(gd, insetH, insetV, insetH, insetV)
             }
-            .start()
+            selected && grade == RouteGrade.POOR -> {
+                gd.setColor(0x28EF4444.toInt())
+                gd.setStroke(host.dp(1), 0x90F87171.toInt())
+                return InsetDrawable(gd, insetH, insetV, insetH, insetV)
+            }
+            selected -> {
+                gd.setColor(0x283B82F6.toInt())
+                gd.setStroke(host.dp(1), 0x8060A5FA.toInt())
+                return InsetDrawable(gd, insetH, insetV, insetH, insetV)
+            }
+            grade == RouteGrade.GOOD -> {
+                gd.setColor(0x2010B981.toInt())
+                gd.setStroke(host.dp(1), 0x6034D399.toInt())
+                return InsetDrawable(gd, insetH, insetV, insetH, insetV)
+            }
+            grade == RouteGrade.POOR -> {
+                gd.setColor(0x1CEF4444.toInt())
+                gd.setStroke(host.dp(1), 0x50F87171.toInt())
+                return InsetDrawable(gd, insetH, insetV, insetH, insetV)
+            }
+            else -> return ColorDrawable(Color.TRANSPARENT)
+        }
     }
 
     private fun cachedLatencySummary(samples: List<RouteProbeSample>): String? =
@@ -1026,23 +1002,86 @@ internal class PrimaryPages(
         }
         country.summary.contentDescription = country.summary.text
         country.summaryProgress.setLoading(country.isChecking)
-        val grades = RouteProbeScoring.gradeByLatency(country.samples.values.toList())
+
         val selectedRouteId = SelectedRouteStore(host).read().id
-        country.rows.values.forEach { row ->
-            val grade = grades[row.route.id] ?: RouteGrade.UNRATED
-            if (country.samples[row.route.id]?.latencyMillis != null) {
-                row.status.setTextColor(gradeColor(grade))
+
+        if (country.isChecking) {
+            country.rows.values.forEach { row ->
+                val isSelected = selectedRouteId == row.route.id
+                row.surface.background = if (isSelected) {
+                    routeRankBackground(RouteGrade.UNRATED, selected = true)
+                } else {
+                    ColorDrawable(Color.TRANSPARENT)
+                }
             }
-            row.surface.background = routeRankBackground(
-                grade,
-                selectedRouteId == row.route.id,
-            )
+            return
+        }
+
+        applyCountryRanking(country, selectedRouteId)
+    }
+
+    private fun applyCountryRanking(country: CountryProbeState, selectedRouteId: String) {
+        val samples = country.samples.values.toList()
+        val measured = samples.filter { it.latencyMillis?.let(RouteProbeStatistics::isValidLatencyMillis) == true }
+
+        val bestRouteId: String? = when {
+            measured.isEmpty() -> null
+            measured.size == 1 -> measured.first().routeId
+            else -> {
+                RouteProbeScoring.bestRouteId(samples)
+                    ?: measured.minByOrNull { it.latencyMillis!! }?.routeId
+            }
+        }
+
+        val worstRouteId: String? = when {
+            measured.size < 2 -> null
+            else -> {
+                val candidates = measured.filter { it.routeId != bestRouteId }
+                candidates.maxByOrNull { it.latencyMillis!! }?.routeId
+            }
+        }
+
+        val english = AppLanguage.current(host) == AppLanguage.EN
+
+        country.rows.values.forEach { row ->
+            row.progress.setLoading(false)
+            val sample = country.samples[row.route.id] ?: RouteQualityStore.read(host, row.route.id)
+            val isBest = row.route.id == bestRouteId
+            val isWorst = row.route.id == worstRouteId
+            val grade = when {
+                isBest -> RouteGrade.GOOD
+                isWorst -> RouteGrade.POOR
+                sample?.latencyMillis != null -> RouteGrade.MEDIUM
+                else -> RouteGrade.UNRATED
+            }
+
+            row.surface.background = routeRankBackground(grade, selectedRouteId == row.route.id)
+
+            if (sample != null && sample.latencyMillis != null) {
+                val baseLabel = sampleLabel(sample, isBest = isBest, isWorst = isWorst)
+                val speedReason = if (sample.downloadBytesPerSecond == null) {
+                    country.errors[row.route.id]?.let {
+                        RouteProbePresentation.failureMessage(it, english)
+                    }
+                } else null
+                row.status.text = if (speedReason != null) "$baseLabel · $speedReason" else baseLabel
+                row.status.setTextColor(gradeColor(grade))
+                row.status.setTypeface(null, if (isBest || isWorst) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            } else {
+                val reason = country.errors[row.route.id]?.let {
+                    RouteProbePresentation.failureMessage(it, english)
+                } ?: copy("Нет ответа · нажмите для повтора", "No response · tap to retry")
+                row.status.text = "${copy("Отклик: —  ·  Скорость: —", "Response: —  ·  Speed: —")} · $reason"
+                row.status.setTextColor(DeyttUi.MUTED)
+                row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
+            }
+            row.status.contentDescription = row.status.text
         }
     }
 
     private fun gradeColor(grade: RouteGrade): Int = when (grade) {
         RouteGrade.GOOD -> DeyttUi.MINT
-        RouteGrade.MEDIUM -> AMBER
+        RouteGrade.MEDIUM -> DeyttUi.MUTED
         RouteGrade.POOR -> DeyttUi.CORAL
         RouteGrade.UNRATED -> DeyttUi.MUTED
     }
