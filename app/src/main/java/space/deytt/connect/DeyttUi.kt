@@ -286,16 +286,84 @@ object DeyttUi {
             )
         }
 
+        // Continually flowing glint & edge shimmer along the border of the connect button
+        val (shimmerStroke, shimmerFill) = when (phase) {
+            VpnPhase.CONNECTED -> intArrayOf(
+                0xEEFFFFFF.toInt(),
+                0xD834D399.toInt(),
+                0x75059669.toInt(),
+                0x28047857.toInt(),
+                0x75059669.toInt(),
+                0xD834D399.toInt(),
+                0xEEFFFFFF.toInt(),
+            ) to intArrayOf(
+                0x441A3E2E.toInt(),
+                0x240F241A.toInt(),
+                0x36163424.toInt(),
+                0x240F241A.toInt(),
+                0x441A3E2E.toInt(),
+            )
+            VpnPhase.STARTING, VpnPhase.CHECKING -> intArrayOf(
+                0xF0FFFFFF.toInt(),
+                0xD838BDF8.toInt(),
+                0x600284C7.toInt(),
+                0x280369A1.toInt(),
+                0x600284C7.toInt(),
+                0xD838BDF8.toInt(),
+                0xF0FFFFFF.toInt(),
+            ) to intArrayOf(
+                0x481E3854.toInt(),
+                0x28122438.toInt(),
+                0x3818324C.toInt(),
+                0x28122438.toInt(),
+                0x481E3854.toInt(),
+            )
+            VpnPhase.ERROR -> intArrayOf(
+                0xF0FFFFFF.toInt(),
+                0xD8F43F5E.toInt(),
+                0x70BE123C.toInt(),
+                0x30881337.toInt(),
+                0x70BE123C.toInt(),
+                0xD8F43F5E.toInt(),
+                0xF0FFFFFF.toInt(),
+            ) to intArrayOf(
+                0x443E1A22.toInt(),
+                0x28241016.toInt(),
+                0x3630141C.toInt(),
+                0x28241016.toInt(),
+                0x443E1A22.toInt(),
+            )
+            VpnPhase.STOPPING -> null to null
+            VpnPhase.IDLE -> intArrayOf(
+                0xEEFFFFFF.toInt(),
+                0xD538BDF8.toInt(),
+                0x700284C7.toInt(),
+                0x300369A1.toInt(),
+                0x700284C7.toInt(),
+                0xD538BDF8.toInt(),
+                0xEEFFFFFF.toInt(),
+            ) to intArrayOf(
+                0x481E3854.toInt(),
+                0x28122438.toInt(),
+                0x3818324C.toInt(),
+                0x28122438.toInt(),
+                0x481E3854.toInt(),
+            )
+        }
+
         return LiquidGlassDrawable(
             density = resources.displayMetrics.density,
             cornerRadiusPx = dp(28).toFloat(),
             fillColors = fill,
             strokeColors = stroke,
             strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-            strokeWidthPx = 1.25f,
+            strokeWidthPx = 1.35f,
             hasGloss = true,
-            glossAlpha = 0x16,
+            glossAlpha = 0x18,
             innerLip = true,
+            animatedShimmer = shimmerStroke != null,
+            shimmerStrokeColors = shimmerStroke,
+            shimmerFillColors = shimmerFill,
         )
     }
 
