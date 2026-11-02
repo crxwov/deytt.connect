@@ -1086,8 +1086,8 @@
       const dx = end.x - start.x, dy = end.y - start.y;
       const length = Math.hypot(dx, dy) || 1;
 
-      // Reference match: graceful 3D multi-lane separation (~16px), elevated without forming an oval
-      const offset = bell * (lane || 0) * Math.max(14, Math.min(18, length * 0.10));
+      // Balanced 3D multi-lane separation (~10px), cohesive bundle elevated without spreading too far
+      const offset = bell * (lane || 0) * Math.min(10.5, Math.max(7, length * 0.062));
 
       return {
         x: point.x - dy / length * offset,
