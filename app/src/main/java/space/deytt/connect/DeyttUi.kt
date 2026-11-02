@@ -286,84 +286,16 @@ object DeyttUi {
             )
         }
 
-        // Continually flowing single-color glint & shimmer aura for connect button and border
-        val (shimmerStroke, shimmerFill) = when (phase) {
-            VpnPhase.CONNECTED -> intArrayOf(
-                0xEEFFFFFF.toInt(),
-                0xD834D399.toInt(),
-                0x75059669.toInt(),
-                0x28047857.toInt(),
-                0x75059669.toInt(),
-                0xD834D399.toInt(),
-                0xEEFFFFFF.toInt(),
-            ) to intArrayOf(
-                0x441A3E2E.toInt(),
-                0x240F241A.toInt(),
-                0x36163424.toInt(),
-                0x240F241A.toInt(),
-                0x441A3E2E.toInt(),
-            )
-            VpnPhase.STARTING, VpnPhase.CHECKING -> intArrayOf(
-                0xF0FFFFFF.toInt(),
-                0xD838BDF8.toInt(),
-                0x600284C7.toInt(),
-                0x280369A1.toInt(),
-                0x600284C7.toInt(),
-                0xD838BDF8.toInt(),
-                0xF0FFFFFF.toInt(),
-            ) to intArrayOf(
-                0x481E3854.toInt(),
-                0x28122438.toInt(),
-                0x3818324C.toInt(),
-                0x28122438.toInt(),
-                0x481E3854.toInt(),
-            )
-            VpnPhase.ERROR -> intArrayOf(
-                0xF0FFFFFF.toInt(),
-                0xD8F43F5E.toInt(),
-                0x70BE123C.toInt(),
-                0x30881337.toInt(),
-                0x70BE123C.toInt(),
-                0xD8F43F5E.toInt(),
-                0xF0FFFFFF.toInt(),
-            ) to intArrayOf(
-                0x443E1A22.toInt(),
-                0x28241016.toInt(),
-                0x3630141C.toInt(),
-                0x28241016.toInt(),
-                0x443E1A22.toInt(),
-            )
-            VpnPhase.STOPPING -> null to null
-            VpnPhase.IDLE -> intArrayOf(
-                0xEEFFFFFF.toInt(),
-                0xD538BDF8.toInt(),
-                0x700284C7.toInt(),
-                0x300369A1.toInt(),
-                0x700284C7.toInt(),
-                0xD538BDF8.toInt(),
-                0xEEFFFFFF.toInt(),
-            ) to intArrayOf(
-                0x481E3854.toInt(),
-                0x28122438.toInt(),
-                0x3818324C.toInt(),
-                0x28122438.toInt(),
-                0x481E3854.toInt(),
-            )
-        }
-
         return LiquidGlassDrawable(
             density = resources.displayMetrics.density,
             cornerRadiusPx = dp(28).toFloat(),
             fillColors = fill,
             strokeColors = stroke,
             strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-            strokeWidthPx = 1.35f,
+            strokeWidthPx = 1.25f,
             hasGloss = true,
-            glossAlpha = 0x1A,
+            glossAlpha = 0x16,
             innerLip = true,
-            animatedShimmer = shimmerStroke != null,
-            shimmerStrokeColors = shimmerStroke,
-            shimmerFillColors = shimmerFill,
         )
     }
 
@@ -373,16 +305,16 @@ object DeyttUi {
         val strokeColors = if (isPrimary) {
             intArrayOf(
                 0x50FFFFFF.toInt(),
-                0x2884BCF4.toInt(),
-                0x186AAAF0.toInt(),
-                0x24FFFFFF.toInt(),
+                0x22FFFFFF.toInt(),
+                0x1078B8F8.toInt(),
+                0x1AFFFFFF.toInt(),
             )
         } else {
             intArrayOf(
-                0x40FFFFFF.toInt(),
-                0x1880B4F0.toInt(),
-                0x10609AE0.toInt(),
-                0x1CFFFFFF.toInt(),
+                0x2CFFFFFF.toInt(),
+                0x12FFFFFF.toInt(),
+                0x0C82B4E8.toInt(),
+                0x12FFFFFF.toInt(),
             )
         }
         return LiquidGlassDrawable(
@@ -390,11 +322,10 @@ object DeyttUi {
             cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
             fillColors = if (topColor == bottomColor) intArrayOf(topColor) else intArrayOf(topColor, bottomColor),
             strokeColors = strokeColors,
-            strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-            strokeWidthPx = if (isPrimary) 1.15f else 1.05f,
+            strokeWidthPx = if (isPrimary) 0.95f else 0.85f,
             hasGloss = true,
-            glossAlpha = if (isPrimary) 0x18 else 0x12,
-            innerLip = true,
+            glossAlpha = if (isPrimary) 0x1E else 0x12,
+            innerLip = false,
         )
     }
 

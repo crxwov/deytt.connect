@@ -1,38 +1,23 @@
 package space.deytt.connect
 
-import android.animation.Animator
-import android.animation.AnimatorListenerAdapter
-import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.content.res.ColorStateList
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.RadialGradient
-import android.graphics.RectF
-import android.graphics.Shader
-import android.graphics.SweepGradient
 import android.graphics.Typeface
-import android.graphics.drawable.ColorDrawable
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
-import android.view.animation.LinearInterpolator
-import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import space.deytt.connect.DeyttUi.dp
-import space.deytt.connect.DeyttUi.glassButtonBackground
-import space.deytt.connect.DeyttUi.glassCardBackground
 import space.deytt.connect.DeyttUi.glassRowBackground
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.pressFeedback
@@ -41,13 +26,9 @@ import space.deytt.connect.DeyttUi.text
 import java.util.concurrent.Executors
 
 /**
- * Futuristic Favorite Routes drawer for MainActivity Home screen.
- * Features:
- * - Interactive pull-up portal glowing ring animation on swipe
- * - Real-time background blur & frosted dimming
- * - LiquidGlass drawer panel with overshoot slide and physical settle shake
- * - Chess-like alternating staggered card entrance
- * - Parallel route latency measurement engine with live grade badges
+ * Compact Favorite Routes drawer for MainActivity Home screen.
+ * Opens as a lightweight half-screen / wrap_content sheet.
+ * Tapping any route immediately connects and dismisses.
  */
 @SuppressLint("ViewConstructor")
 internal class FavoriteRoutesDrawer(
@@ -63,17 +44,13 @@ internal class FavoriteRoutesDrawer(
 
     private lateinit var overlayRoot: FrameLayout
     private lateinit var scrimView: View
-    private lateinit var portalView: PullPortalView
     private lateinit var sheetContainer: LinearLayout
     private lateinit var cardsLayout: LinearLayout
     private lateinit var emptyCard: View
     private lateinit var measureButton: TextView
     private lateinit var countBadge: TextView
 
-    private val cardViews = mutableMapOf<String, View>()
     private val latencyBadges = mutableMapOf<String, TextView>()
-
-    private val PULL_THRESHOLD_PX = host.dp(110).toFloat()
 
     fun attachTo(stage: ViewGroup) {
         parentStage = stage
@@ -105,43 +82,76 @@ internal class FavoriteRoutesDrawer(
         }
         overlayRoot.addView(scrimView, FrameLayout.LayoutParams(-1, -1))
 
-        portalView = PullPortalView(host).apply {
-            alpha = 0f
-            visibility = View.GONE
-        }
-        val portalSize = host.dp(120)
-        overlayRoot.addView(portalView, FrameLayout.LayoutParams(portalSize, portalSize, Gravity.CENTER))
-
         sheetContainer = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             background = LiquidGlassDrawable(
                 density = host.resources.displayMetrics.density,
-                cornerRadiusPx = host.dp(28).toFloat(),
+                cornerRadiusPx = host.dp(24).toFloat(),
                 fillColors = intArrayOf(0xF80B1422.toInt(), 0xFC060C14.toInt()),
                 strokeColors = intArrayOf(
-                    0x70FFFFFF.toInt(),
-                    0x3088C0F8.toInt(),
-                    0x206AAAF0.toInt(),
-                    0x30FFFFFF.toInt(),
+                    0x60FFFFFF.toInt(),
+                    0x2888C0F8.toInt(),
+                    0x1A6AAAF0.toInt(),
+                    0x28FFFFFF.toInt(),
                 ),
                 strokePositions = floatArrayOf(0f, 0.32f, 0.70f, 1f),
-                strokeWidthPx = 1.25f,
+                strokeWidthPx = 1.15f,
                 hasGloss = true,
-                glossAlpha = 0x22,
+                glossAlpha = 0x18,
                 innerLip = true,
             )
             clipToOutline = true
-            setPadding(host.dp(16), host.dp(12), host.dp(16), host.dp(16))
+            setPadding(host.dp(16), host.dp(12), host.dp(16), host.dp(14))
             isClickable = true
+        }
+
+        var startY = 0f
+        var isDraggingDown = false
+        val touchSlop = ViewConfiguration.get(host).scaledTouchSlop
+        sheetContainer.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startY = event.rawY
+                    isDraggingDown = false
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = event.rawY - startY
+                    if (!isDraggingDown && dy > touchSlop) {
+                        isDraggingDown = true
+                        v.parent?.requestDisallowInterceptTouchEvent(true)
+                    }
+                    if (isDraggingDown) {
+                        sheetContainer.translationY = dy.coerceAtLeast(0f)
+                        val dragProgress = (dy / host.dp(180)).coerceIn(0f, 1f)
+                        scrimView.alpha = (1f - dragProgress * 0.7f).coerceIn(0f, 1f)
+                        true
+                    } else false
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isDraggingDown) {
+                        val dy = event.rawY - startY
+                        if (dy > host.dp(55)) {
+                            close()
+                        } else {
+                            sheetContainer.animate().translationY(0f).setDuration(160L).start()
+                            scrimView.animate().alpha(1f).setDuration(160L).start()
+                        }
+                        isDraggingDown = false
+                        true
+                    } else false
+                }
+                else -> false
+            }
         }
 
         // Top drag handle pill
         val handlePill = View(host).apply {
             background = host.glassRowBackground(emphasis = false, radius = 3f)
         }
-        sheetContainer.addView(handlePill, LinearLayout.LayoutParams(host.dp(44), host.dp(5)).apply {
+        sheetContainer.addView(handlePill, LinearLayout.LayoutParams(host.dp(40), host.dp(4)).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            bottomMargin = host.dp(14)
+            bottomMargin = host.dp(12)
         })
 
         // Header row
@@ -149,87 +159,99 @@ internal class FavoriteRoutesDrawer(
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
-        val titleText = host.text("Избранные маршруты", 18f, DeyttUi.TEXT, Typeface.BOLD)
-        countBadge = host.mono("", 11f, DeyttUi.SKY, 650).apply {
-            setPadding(host.dp(8), host.dp(3), host.dp(8), host.dp(3))
-            background = host.glassRowBackground(emphasis = true, radius = 10f)
+        val heartIcon = ImageView(host).apply {
+            setImageResource(R.drawable.ic_heart_filled)
+            imageTintList = ColorStateList.valueOf(0xFFFF5C7A.toInt())
         }
+        headerRow.addView(heartIcon, LinearLayout.LayoutParams(host.dp(15), host.dp(15)).apply { marginEnd = host.dp(7) })
+        val titleText = host.text("избранные маршруты", 16f, DeyttUi.TEXT, Typeface.BOLD)
         headerRow.addView(titleText, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        countBadge = host.mono("", 10.5f, DeyttUi.SKY, 650).apply {
+            setPadding(host.dp(7), host.dp(2), host.dp(7), host.dp(2))
+            background = host.glassRowBackground(emphasis = true, radius = 9f)
+        }
         headerRow.addView(countBadge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            marginEnd = host.dp(10)
+            marginEnd = host.dp(8)
+        })
+
+        measureButton = host.text("измерить", 11f, DeyttUi.SKY, Typeface.BOLD).apply {
+            background = host.glassRowBackground(emphasis = false, radius = 12f)
+            setPadding(host.dp(9), host.dp(4), host.dp(9), host.dp(4))
+            isClickable = true
+            isFocusable = true
+            foreground = host.ripple(12f)
+            host.pressFeedback(this)
+            setOnClickListener { measureFavorites() }
+        }
+        headerRow.addView(measureButton, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            marginEnd = host.dp(8)
         })
 
         val closeBtn = ImageView(host).apply {
             setImageResource(R.drawable.ic_chevron)
             rotation = 90f
             imageTintList = ColorStateList.valueOf(DeyttUi.MUTED)
-            background = host.glassRowBackground(emphasis = false, radius = 18f)
-            setPadding(host.dp(6), host.dp(6), host.dp(6), host.dp(6))
+            background = host.glassRowBackground(emphasis = false, radius = 15f)
+            setPadding(host.dp(5), host.dp(5), host.dp(5), host.dp(5))
             isClickable = true
-            foreground = host.ripple(18f)
+            foreground = host.ripple(15f)
             host.pressFeedback(this)
             setOnClickListener { close() }
         }
-        headerRow.addView(closeBtn, LinearLayout.LayoutParams(host.dp(34), host.dp(34)))
+        headerRow.addView(closeBtn, LinearLayout.LayoutParams(host.dp(28), host.dp(28)))
         sheetContainer.addView(headerRow)
 
-        val subtext = host.text("Быстрый выбор и замер отклика ключевых узлов", 12f, DeyttUi.MUTED).apply {
-            setPadding(0, host.dp(4), 0, host.dp(12))
-        }
-        sheetContainer.addView(subtext)
-
-        // Measure button
-        measureButton = host.text("Измерить маршруты", 13f, DeyttUi.TEXT, Typeface.BOLD).apply {
-            gravity = Gravity.CENTER
-            background = host.glassButtonBackground(0x403B82F6.toInt(), 0x251D4ED8.toInt(), radius = 20f)
-            foreground = host.ripple(20f)
-            host.pressFeedback(this)
-            isClickable = true
-            isFocusable = true
-            setPadding(host.dp(14), host.dp(11), host.dp(14), host.dp(11))
-            setOnClickListener { measureFavorites() }
-        }
-        sheetContainer.addView(measureButton, LinearLayout.LayoutParams(-1, host.dp(48)).apply {
-            bottomMargin = host.dp(12)
-        })
-
-        // Scrollable list of cards
+        // Cards layout inside bounded ScrollView (max 46% screen height, wrap_content otherwise)
         cardsLayout = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
         }
-        val scrollView = ScrollView(host).apply {
-            isFillViewport = true
+
+        val scrollView = object : ScrollView(host) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val maxH = (host.resources.displayMetrics.heightPixels * 0.46f).toInt()
+                val mode = MeasureSpec.getMode(heightMeasureSpec)
+                val size = MeasureSpec.getSize(heightMeasureSpec)
+                val constrainedSpec = MeasureSpec.makeMeasureSpec(
+                    if (mode == MeasureSpec.UNSPECIFIED) maxH else minOf(size, maxH),
+                    MeasureSpec.AT_MOST,
+                )
+                super.onMeasure(widthMeasureSpec, constrainedSpec)
+            }
+        }.apply {
+            isFillViewport = false
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(cardsLayout, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
         }
-        val maxListHeight = host.dp(320)
-        sheetContainer.addView(scrollView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, maxListHeight, 1f))
+        sheetContainer.addView(scrollView, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = host.dp(10)
+        })
 
         // Empty state view
         emptyCard = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            setPadding(host.dp(20), host.dp(24), host.dp(20), host.dp(24))
-            background = host.glassCardBackground(emphasis = false, radius = 20f)
+            setPadding(host.dp(16), host.dp(18), host.dp(16), host.dp(18))
+            background = host.glassRowBackground(emphasis = false, radius = 18f)
             val icon = ImageView(host).apply {
                 setImageResource(R.drawable.ic_heart)
                 imageTintList = ColorStateList.valueOf(0x80FFFFFF.toInt())
             }
-            addView(icon, LinearLayout.LayoutParams(host.dp(36), host.dp(36)))
-            val emptyTitle = host.text("Пока нет избранных", 15f, DeyttUi.TEXT, Typeface.BOLD).apply {
-                setPadding(0, host.dp(8), 0, host.dp(4))
+            addView(icon, LinearLayout.LayoutParams(host.dp(30), host.dp(30)))
+            val emptyTitle = host.text("пока нет избранных", 14f, DeyttUi.TEXT, Typeface.BOLD).apply {
+                setPadding(0, host.dp(6), 0, host.dp(3))
             }
             addView(emptyTitle)
             val emptyMsg = host.text(
-                "Нажмите сердечко рядом с любым маршрутом на вкладке Маршруты, чтобы добавить его сюда.",
-                12f,
+                "зажмите любой маршрут на вкладке маршруты, чтобы добавить его сюда.",
+                11.5f,
                 DeyttUi.MUTED,
             ).apply {
                 gravity = Gravity.CENTER
             }
             addView(emptyMsg)
-            val goRoutes = host.text("Перейти к маршрутам ›", 12f, DeyttUi.SKY, Typeface.BOLD).apply {
-                setPadding(0, host.dp(12), 0, 0)
+            val goRoutes = host.text("перейти к маршрутам ›", 12f, DeyttUi.SKY, Typeface.BOLD).apply {
+                setPadding(0, host.dp(10), 0, 0)
                 isClickable = true
                 setOnClickListener {
                     close()
@@ -244,59 +266,11 @@ internal class FavoriteRoutesDrawer(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM,
         ).apply {
-            val gutter = host.dp(10)
-            val bottomNavPadding = host.dp(84) // Sits comfortably above dock
+            val gutter = host.dp(12)
+            val bottomNavPadding = host.dp(78)
             setMargins(gutter, 0, gutter, bottomNavPadding)
         }
         overlayRoot.addView(sheetContainer, sheetParams)
-    }
-
-    private var lastPullProgress = 0f
-
-    fun onPullStart() {
-        if (isDrawerOpen) return
-        lastPullProgress = 0f
-        overlayRoot.visibility = View.VISIBLE
-        portalView.visibility = View.VISIBLE
-        portalView.alpha = 0f
-        portalView.setProgress(0f)
-    }
-
-    fun onPullMove(dy: Float) {
-        if (isDrawerOpen) return
-        val progress = (dy / PULL_THRESHOLD_PX).coerceIn(0f, 1f)
-        lastPullProgress = progress
-        portalView.visibility = View.VISIBLE
-        portalView.alpha = progress
-        portalView.setProgress(progress)
-        scrimView.alpha = progress * 0.45f
-    }
-
-    fun onPullEnd() {
-        if (isDrawerOpen) return
-        if (lastPullProgress >= 0.32f || portalView.alpha >= 0.32f) {
-            portalView.animate()
-                .scaleX(1.35f)
-                .scaleY(1.35f)
-                .alpha(0f)
-                .setDuration(160L)
-                .withEndAction {
-                    portalView.visibility = View.GONE
-                    portalView.scaleX = 1f
-                    portalView.scaleY = 1f
-                }
-                .start()
-            host.window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-            open()
-        } else {
-            portalView.animate().alpha(0f).scaleX(0.7f).scaleY(0.7f).setDuration(180L).withEndAction {
-                portalView.visibility = View.GONE
-                portalView.scaleX = 1f
-                portalView.scaleY = 1f
-                overlayRoot.visibility = View.GONE
-            }.start()
-            scrimView.animate().alpha(0f).setDuration(180L).start()
-        }
     }
 
     fun open() {
@@ -309,19 +283,15 @@ internal class FavoriteRoutesDrawer(
         refreshFavorites()
 
         scrimView.alpha = 0f
-        scrimView.animate().alpha(1f).setDuration(260L).start()
+        scrimView.animate().alpha(1f).setDuration(160L).start()
 
         sheetContainer.post {
-            val height = sheetContainer.height.takeIf { it > 0 } ?: host.dp(400)
-            sheetContainer.translationY = height.toFloat()
+            val height = sheetContainer.height.takeIf { it > 0 } ?: host.dp(240)
+            sheetContainer.translationY = height.toFloat() + host.dp(60)
             sheetContainer.animate()
                 .translationY(0f)
-                .setDuration(340L)
-                .setInterpolator(OvershootInterpolator(1.10f))
-                .withEndAction {
-                    // Futuristic micro-shake settle
-                    triggerFuturisticSettleShake()
-                }
+                .setDuration(220L)
+                .setInterpolator(DecelerateInterpolator())
                 .start()
         }
     }
@@ -332,45 +302,24 @@ internal class FavoriteRoutesDrawer(
         overlayRoot.isClickable = false
         scrimView.isClickable = false
         scrimView.setOnClickListener(null)
-        val height = sheetContainer.height.takeIf { it > 0 } ?: host.dp(400)
+        val height = sheetContainer.height.takeIf { it > 0 } ?: host.dp(240)
         sheetContainer.animate()
-            .translationY(height.toFloat())
-            .setDuration(220L)
+            .translationY(height.toFloat() + host.dp(60))
+            .setDuration(180L)
             .setInterpolator(DecelerateInterpolator())
             .start()
 
         scrimView.animate()
             .alpha(0f)
-            .setDuration(220L)
+            .setDuration(180L)
             .withEndAction {
                 overlayRoot.visibility = View.GONE
             }
             .start()
     }
 
-    private fun triggerFuturisticSettleShake() {
-        sheetContainer.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-        val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 280L
-            interpolator = LinearInterpolator()
-            addUpdateListener { va ->
-                val fraction = va.animatedFraction
-                val decay = kotlin.math.exp(-fraction * 5.2).toFloat()
-                val shake = kotlin.math.sin(fraction * Math.PI * 6.0).toFloat() * (host.dp(3) * 1.2f) * decay
-                sheetContainer.translationX = shake
-            }
-            addListener(object : AnimatorListenerAdapter() {
-                override fun onAnimationEnd(animation: Animator) {
-                    sheetContainer.translationX = 0f
-                }
-            })
-        }
-        animator.start()
-    }
-
     fun refreshFavorites() {
         cardsLayout.removeAllViews()
-        cardViews.clear()
         latencyBadges.clear()
 
         val favIds = store.getFavorites()
@@ -384,7 +333,6 @@ internal class FavoriteRoutesDrawer(
             return
         }
 
-        // Match favIds to route models
         val favRoutes = mutableListOf<DeyttRoute>()
         favIds.forEach { id ->
             when (id) {
@@ -399,25 +347,12 @@ internal class FavoriteRoutesDrawer(
             return
         }
 
-        favRoutes.forEachIndexed { index, route ->
+        favRoutes.forEach { route ->
             val isSelected = route.id == selectedId || (route.protocol == RouteProtocol.AUTO && selectedId == "auto")
             val card = createRouteCard(route, isSelected)
-            cardViews[route.id] = card
             cardsLayout.addView(card, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                bottomMargin = host.dp(8)
+                bottomMargin = host.dp(7)
             })
-
-            // Staggered chess-like entrance
-            val fromLeft = index % 2 == 0
-            card.translationX = if (fromLeft) -host.dp(60).toFloat() else host.dp(60).toFloat()
-            card.alpha = 0f
-            card.animate()
-                .translationX(0f)
-                .alpha(1f)
-                .setStartDelay(index * 36L)
-                .setDuration(240L)
-                .setInterpolator(DecelerateInterpolator(1.6f))
-                .start()
         }
     }
 
@@ -425,54 +360,58 @@ internal class FavoriteRoutesDrawer(
         val root = LinearLayout(host).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = host.dp(58)
-            setPadding(host.dp(12), host.dp(8), host.dp(12), host.dp(8))
-            background = host.glassRowBackground(emphasis = isSelected, radius = 18f)
+            minimumHeight = host.dp(52)
+            setPadding(host.dp(12), host.dp(7), host.dp(12), host.dp(7))
+            background = host.glassRowBackground(emphasis = isSelected, radius = 16f)
             isClickable = true
             isFocusable = true
-            foreground = host.ripple(18f)
+            foreground = host.ripple(16f)
             host.pressFeedback(this, 0.98f)
             setOnClickListener {
                 onRouteSelected(route)
                 close()
             }
+            setOnLongClickListener {
+                performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                store.setFavorite(route.id, false)
+                refreshFavorites()
+                true
+            }
         }
 
-        // Route icon / flag
         val flagView = host.text(
             when (route.protocol) {
                 RouteProtocol.AUTO -> "✦"
                 RouteProtocol.LTE -> "LTE"
                 else -> route.flag
             },
-            if (route.protocol == RouteProtocol.LTE) 12f else 18f,
+            if (route.protocol == RouteProtocol.LTE) 11f else 17f,
             if (isSelected) DeyttUi.SKY else DeyttUi.TEXT,
             Typeface.BOLD,
         ).apply {
             gravity = Gravity.CENTER
-            minWidth = host.dp(34)
+            minWidth = host.dp(30)
         }
-        root.addView(flagView, LinearLayout.LayoutParams(host.dp(38), host.dp(38)).apply { marginEnd = host.dp(8) })
+        root.addView(flagView, LinearLayout.LayoutParams(host.dp(34), host.dp(34)).apply { marginEnd = host.dp(8) })
 
-        // Text column
         val col = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
         }
         val title = host.text(
             when (route.protocol) {
-                RouteProtocol.AUTO -> "Автоподбор"
-                RouteProtocol.LTE -> "LTE · белые списки"
-                else -> countryCleanName(route.countryCode)
+                RouteProtocol.AUTO -> "автоподбор"
+                RouteProtocol.LTE -> "lte · белые списки"
+                else -> countryCleanName(route.countryCode).lowercase()
             },
-            14f,
+            13.5f,
             DeyttUi.TEXT,
             Typeface.BOLD,
         )
         val subtitle = host.text(
             when (route.protocol) {
-                RouteProtocol.AUTO -> "автовыбор оптимального узла"
-                RouteProtocol.LTE -> "обход блокировок по белым спискам"
-                else -> route.protocol.title + if (route.profileName != null) " · ${route.profileName}" else ""
+                RouteProtocol.AUTO -> "выберем доступный узел"
+                RouteProtocol.LTE -> "обход блокировок по спискам"
+                else -> "${route.protocol.title.lowercase()}${if (route.profileName != null) " · ${route.profileName.lowercase()}" else ""}"
             },
             11f,
             DeyttUi.MUTED,
@@ -481,50 +420,33 @@ internal class FavoriteRoutesDrawer(
         col.addView(subtitle)
         root.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        // Latency badge
         val cached = RouteQualityStore.read(host, route.id)
         val initialLatency = cached?.latencyMillis
         val badge = host.mono(
             if (initialLatency != null) "${initialLatency} мс" else "—",
-            11f,
+            10.5f,
             latencyColor(initialLatency),
             650,
         ).apply {
             gravity = Gravity.CENTER
-            setPadding(host.dp(8), host.dp(4), host.dp(8), host.dp(4))
-            background = host.glassRowBackground(emphasis = false, radius = 10f)
+            setPadding(host.dp(7), host.dp(3), host.dp(7), host.dp(3))
+            background = host.glassRowBackground(emphasis = false, radius = 9f)
         }
         latencyBadges[route.id] = badge
         root.addView(badge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             marginEnd = host.dp(8)
         })
 
-        // Heart button to remove from favorites
-        val heartIcon = ImageView(host).apply {
-            setImageResource(R.drawable.ic_heart_filled)
-            imageTintList = ColorStateList.valueOf(0xFFFF5C7A.toInt())
-            scaleType = ImageView.ScaleType.FIT_CENTER
+        val connectIndicator = host.text(
+            if (isSelected) "выбрано" else "подключить",
+            11f,
+            if (isSelected) DeyttUi.SKY else DeyttUi.TEXT,
+            Typeface.BOLD,
+        ).apply {
+            setPadding(host.dp(8), host.dp(4), host.dp(8), host.dp(4))
+            background = host.glassRowBackground(isSelected, 12f)
         }
-        val heartBtn = FrameLayout(host).apply {
-            background = host.glassRowBackground(emphasis = false, radius = 16f)
-            setPadding(host.dp(6), host.dp(6), host.dp(6), host.dp(6))
-            isClickable = true
-            isFocusable = true
-            foreground = host.ripple(16f)
-            host.pressFeedback(this)
-            addView(heartIcon, FrameLayout.LayoutParams(host.dp(20), host.dp(20), Gravity.CENTER))
-            setOnClickListener {
-                store.setFavorite(route.id, false)
-                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                root.animate()
-                    .alpha(0f)
-                    .translationX(host.dp(50).toFloat())
-                    .setDuration(180L)
-                    .withEndAction { refreshFavorites() }
-                    .start()
-            }
-        }
-        root.addView(heartBtn, LinearLayout.LayoutParams(host.dp(32), host.dp(32)))
+        root.addView(connectIndicator)
 
         return root
     }
@@ -532,7 +454,7 @@ internal class FavoriteRoutesDrawer(
     private fun measureFavorites() {
         if (isMeasuring) return
         isMeasuring = true
-        measureButton.text = "Измеряем маршруты…"
+        measureButton.text = "замер…"
         measureButton.isEnabled = false
         measureButton.alpha = 0.7f
 
@@ -542,9 +464,6 @@ internal class FavoriteRoutesDrawer(
         val awgConfig = AwgProfileStore(host).profiles().firstOrNull()?.config
 
         measureExecutor.execute {
-            var completed = 0
-            val total = favIds.size
-
             favIds.forEach { id ->
                 val route = when (id) {
                     "auto" -> catalog.firstOrNull { it.protocol == RouteProtocol.AUTO }
@@ -558,7 +477,6 @@ internal class FavoriteRoutesDrawer(
                     if (target != null) {
                         latencyResult = RouteLatency.measure(target, 2200)
                     } else if (route.protocol == RouteProtocol.AUTO) {
-                        // Ping first available non-auto route as representative
                         val firstEdge = catalog.firstOrNull { it.engine == TunnelEngine.LIBBOX && it.protocol != RouteProtocol.AUTO }
                         if (firstEdge != null) {
                             val edgeTarget = RouteLatency.target(config, firstEdge, awgConfig)
@@ -574,20 +492,15 @@ internal class FavoriteRoutesDrawer(
                 val finalLatency = latencyResult
                 mainHandler.post {
                     latencyBadges[route?.id ?: id]?.apply {
-                        text = if (finalLatency != null) "${finalLatency} мс" else "нет ответа"
+                        text = if (finalLatency != null) "${finalLatency} мс" else "—"
                         setTextColor(latencyColor(finalLatency))
-                        animate().scaleX(1.2f).scaleY(1.2f).setDuration(100L).withEndAction {
-                            animate().scaleX(1f).scaleY(1f).setDuration(100L).start()
-                        }.start()
                     }
                 }
-
-                completed++
             }
 
             mainHandler.post {
                 isMeasuring = false
-                measureButton.text = "Измерить маршруты"
+                measureButton.text = "измерить"
                 measureButton.isEnabled = true
                 measureButton.alpha = 1f
                 host.window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
@@ -610,66 +523,5 @@ internal class FavoriteRoutesDrawer(
         ms < 190L -> DeyttUi.SKY
         ms < 280L -> DeyttUi.AMBER
         else -> DeyttUi.CORAL
-    }
-
-    /**
-     * Futuristic glowing portal circle drawn dynamically during pull-up.
-     */
-    private class PullPortalView(context: MainActivity) : View(context) {
-        private var pullProgress = 0f
-        private val circlePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = (context.dp(3) * 1.2f)
-        }
-        private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.FILL
-        }
-        private val ringBounds = RectF()
-        private val gradientColors = intArrayOf(
-            0xFF38BDF8.toInt(),
-            0xFF818CF8.toInt(),
-            0xFFFF5C7A.toInt(),
-            0xFF34D399.toInt(),
-            0xFF38BDF8.toInt(),
-        )
-
-        fun setProgress(progress: Float) {
-            pullProgress = progress.coerceIn(0f, 1f)
-            invalidate()
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-            if (pullProgress <= 0.02f) return
-            val cx = width / 2f
-            val cy = height / 2f
-            val maxR = minOf(cx, cy) * 0.85f
-            val curR = maxR * (0.4f + 0.6f * pullProgress)
-
-            ringBounds.set(cx - curR, cy - curR, cx + curR, cy + curR)
-
-            // Outer soft glow
-            glowPaint.shader = RadialGradient(
-                cx, cy, curR * 1.3f,
-                intArrayOf(0x3038BDF8.toInt(), Color.TRANSPARENT),
-                null,
-                Shader.TileMode.CLAMP,
-            )
-            canvas.drawCircle(cx, cy, curR * 1.3f, glowPaint)
-
-            // Rotating sweep neon ring
-            val sweep = SweepGradient(cx, cy, gradientColors, null)
-            val matrix = android.graphics.Matrix()
-            matrix.postRotate(pullProgress * 360f, cx, cy)
-            sweep.setLocalMatrix(matrix)
-            circlePaint.shader = sweep
-            canvas.drawArc(ringBounds, 0f, 360f, false, circlePaint)
-
-            // Inner energy core
-            glowPaint.shader = null
-            glowPaint.color = 0x50FF5C7A.toInt()
-            val coreR = curR * 0.35f * pullProgress
-            canvas.drawCircle(cx, cy, coreR, glowPaint)
-        }
     }
 }

@@ -1,5 +1,7 @@
 package space.deytt.connect
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.Manifest
@@ -9,6 +11,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.ColorStateList
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.TrafficStats
@@ -30,6 +33,8 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -654,6 +659,8 @@ class MainActivity : Activity() {
         }
         navigationBar = DeyttUi.PrimaryNavigationBar(this, initialPage) { selectTab(it) }
         val dock = FrameLayout(this).apply {
+            clipChildren = false
+            clipToPadding = false
             setPadding(dp(12), 0, dp(12), dp(8))
             addView(navigationBar, FrameLayout.LayoutParams(-1, dp(66)))
         }
@@ -761,7 +768,10 @@ class MainActivity : Activity() {
             addView(root, FrameLayout.LayoutParams(-1, -1))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateHomeMapAnchor() }
         }
-        favoriteRoutesDrawer = FavoriteRoutesDrawer(this) { selectRoute(it) }.also {
+        favoriteRoutesDrawer = FavoriteRoutesDrawer(this) { route ->
+            selectRoute(route, navigateHome = true)
+            requestConnectSelectedRoute()
+        }.also {
             it.attachTo(globeStage)
         }
         setContentView(globeStage)
@@ -770,6 +780,13 @@ class MainActivity : Activity() {
         root.post {
             syncGlobeHost(pager.currentItem)
             updatePrimaryPageMotion()
+        }
+    }
+
+    internal fun requestConnectSelectedRoute() {
+        val selected = SelectedRouteStore(this).read()
+        if (!ConnectVpnService.isRunning() && !AwgTunnelController.isRunning() && !homeConnectQueued && pendingRoute == null) {
+            requestSelectedTunnel(selected)
         }
     }
 
@@ -828,11 +845,10 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_MOVE -> {
                     val dy = startY - ev.rawY
                     val dx = kotlin.math.abs(ev.rawX - startX)
-                    if (!isDraggingUp && dy > touchSlop && dy > dx * 0.85f) {
+                    if (!isDraggingUp && dy > touchSlop * 1.5f && dy > dx * 1.2f) {
                         isDraggingUp = true
                         parent?.requestDisallowInterceptTouchEvent(true)
                         pager.requestDisallowInterceptTouchEvent(true)
-                        favoriteRoutesDrawer?.onPullStart()
                         return true
                     }
                 }
@@ -852,23 +868,27 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_MOVE -> {
                     val dy = startY - event.rawY
                     val dx = kotlin.math.abs(event.rawX - startX)
-                    if (!isDraggingUp && dy > touchSlop && dy > dx * 0.85f) {
+                    if (!isDraggingUp && dy > touchSlop * 1.5f && dy > dx * 1.2f) {
                         isDraggingUp = true
                         parent?.requestDisallowInterceptTouchEvent(true)
                         pager.requestDisallowInterceptTouchEvent(true)
-                        favoriteRoutesDrawer?.onPullStart()
                     }
                     if (isDraggingUp) {
-                        favoriteRoutesDrawer?.onPullMove(dy)
                         return true
                     }
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                MotionEvent.ACTION_UP -> {
                     if (isDraggingUp) {
-                        favoriteRoutesDrawer?.onPullEnd()
+                        val dy = startY - event.rawY
+                        if (dy > touchSlop * 2f) {
+                            favoriteRoutesDrawer?.open()
+                        }
                         isDraggingUp = false
                         return true
                     }
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    isDraggingUp = false
                 }
             }
             return true
@@ -953,6 +973,29 @@ class MainActivity : Activity() {
                 measureSelectedRoute()
             }
         }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
+        val favsPill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = glassRowBackground(emphasis = false, radius = 16f)
+            clipToOutline = true
+            isClickable = true
+            isFocusable = true
+            foreground = ripple(16f)
+            pressFeedback(this, 0.94f)
+            setPadding(dp(14), dp(8), dp(14), dp(8))
+            val heartIcon = ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.ic_heart_filled)
+                imageTintList = ColorStateList.valueOf(0xFFFF5C7A.toInt())
+            }
+            addView(heartIcon, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) })
+            addView(text("избранные маршруты", 11.5f, DeyttUi.MUTED, Typeface.BOLD))
+            setOnClickListener { favoriteRoutesDrawer?.open() }
+        }
+        root.addView(favsPill, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = dp(10)
+            bottomMargin = dp(4)
+        })
         updateRouteFlow(SelectedRouteStore(this).read())
         updateNetworkLocationViews()
         root.addView(spacer(12, this))
@@ -969,32 +1012,6 @@ class MainActivity : Activity() {
                     setPadding(dp(12), dp(7), dp(12), dp(7))
                 })
             }
-        val favsPill = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            background = glassRowBackground(emphasis = false, radius = 16f)
-            clipToOutline = true
-            isClickable = true
-            isFocusable = true
-            foreground = ripple(16f)
-            pressFeedback(this, 0.94f)
-            setPadding(dp(14), dp(7), dp(14), dp(7))
-            val heartIcon = ImageView(this@MainActivity).apply {
-                setImageResource(R.drawable.ic_heart_filled)
-                imageTintList = android.content.res.ColorStateList.valueOf(0xFFFF5C7A.toInt())
-            }
-            addView(heartIcon, LinearLayout.LayoutParams(dp(15), dp(15)).apply { marginEnd = dp(6) })
-            val label = text("избранные маршруты  ↑", 12f, DeyttUi.MUTED, Typeface.BOLD)
-            addView(label)
-            setOnClickListener {
-                favoriteRoutesDrawer?.open()
-            }
-        }
-        root.addView(favsPill, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = dp(8)
-            bottomMargin = dp(4)
-        })
         rebuildRouteRow()
         renderStoredState()
         root.post { if (::pager.isInitialized) syncGlobeHost(pager.currentItem) }
@@ -2366,9 +2383,10 @@ class MainActivity : Activity() {
     }
 
     private fun sampleMapTraffic() {
+        val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning() || isSystemTunnelActive()
         val connectedOnHome = homeSpeedForeground && currentTrafficExplanation == null &&
             ::pager.isInitialized && pager.currentItem == 0 &&
-            renderedPhase == VpnPhase.CONNECTED && isSystemTunnelActive()
+            renderedPhase == VpnPhase.CONNECTED && tunnelActive
         setMapTrafficActive(connectedOnHome)
     }
 

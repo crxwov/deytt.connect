@@ -50,7 +50,6 @@ import space.deytt.connect.DeyttUi.LINE
 import space.deytt.connect.DeyttUi.MUTED
 import space.deytt.connect.DeyttUi.SURFACE
 import space.deytt.connect.DeyttUi.SURFACE_2
-import space.deytt.connect.DeyttUi.glassCardBackground
 import space.deytt.connect.DeyttUi.SELECTED
 import space.deytt.connect.DeyttUi.SELECTED_LINE
 import space.deytt.connect.DeyttUi.TEXT
@@ -353,11 +352,22 @@ internal class PrimaryPages(
         val quickGroup = routeGroup()
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { route ->
             val isSelected = selectedId == route.id
-            val autoRow = host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", "", emphasis = isSelected)
-                .apply { setOnClickListener { host.selectRoute(route) } }
-            autoRow.addView(createHeartButton(route.id), LinearLayout.LayoutParams(host.dp(36), host.dp(36)).apply {
-                leftMargin = host.dp(8)
-            })
+            val actionText = if (isSelected) copy("выбрано", "selected") else copy("выбрать", "select")
+            val autoRow = host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", actionText, emphasis = isSelected)
+                .apply {
+                    setOnClickListener { host.selectRoute(route) }
+                    setOnLongClickListener {
+                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                        val favStore = FavoriteRoutesStore(host)
+                        val isFav = favStore.toggleFavorite(route.id)
+                        android.widget.Toast.makeText(
+                            host,
+                            host.uiCopy(if (isFav) "автоподбор добавлен в избранное" else "автоподбор удален из избранного"),
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                        true
+                    }
+                }
             appendToGroup(quickGroup, autoRow)
         }
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE || it.protocol == RouteProtocol.LTE }?.let { route ->
@@ -473,11 +483,19 @@ internal class PrimaryPages(
                 val metricsColumn = item.getChildAt(1) as LinearLayout
                 metric.setPadding(0, host.dp(4), 0, host.dp(2))
                 metricsColumn.addView(metric)
-                item.addView(createHeartButton(route.id), LinearLayout.LayoutParams(host.dp(34), host.dp(34)).apply {
-                    leftMargin = host.dp(6)
-                    gravity = Gravity.CENTER_VERTICAL
-                })
                 item.setOnClickListener { host.selectRoute(route) }
+                item.setOnLongClickListener {
+                    item.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    val favStore = FavoriteRoutesStore(host)
+                    val isFav = favStore.toggleFavorite(route.id)
+                    val label = "${route.country} · ${route.protocol.title}".lowercase()
+                    android.widget.Toast.makeText(
+                        host,
+                        host.uiCopy(if (isFav) "$label добавлен в избранное" else "$label удален из избранного"),
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                    true
+                }
                 val probeRow = ProbeRouteRow(route, metric, progress, item)
                 if (isAwg) {
                     metric.text = cached?.let { sampleLabel(it, isBest, isWorst) }
@@ -510,7 +528,7 @@ internal class PrimaryPages(
             }
             val countryGroup = routeGroup()
             val countrySelected = countryRoutes.any { it.id == selectedId }
-            countryGroup.background = host.glassCardBackground(countrySelected, 22f)
+            countryGroup.background = host.glassRowBackground(countrySelected, 22f)
             countryGroup.clipToOutline = true
             countryGroup.addView(countryHeader)
             countryGroup.addView(headerDivider)
@@ -949,60 +967,38 @@ internal class PrimaryPages(
         }
         root.addView(middle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        root.addView(createHeartButton(route.id), LinearLayout.LayoutParams(host.dp(36), host.dp(36)).apply {
+        val action = host.text(
+            if (selected) copy("выбрано", "selected") else copy("выбрать", "select"),
+            12f,
+            if (selected) DeyttUi.SKY else DeyttUi.TEXT,
+            android.graphics.Typeface.BOLD
+        ).apply {
+            gravity = Gravity.CENTER
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            minWidth = host.dp(60)
+            maxWidth = host.dp(84)
+            minHeight = host.dp(36)
+            setPadding(host.dp(8), host.dp(6), host.dp(8), host.dp(6))
+            background = host.glassRowBackground(selected, 18f)
+            isClickable = false
+            isFocusable = false
+        }
+        root.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             leftMargin = host.dp(8)
         })
+        root.setOnLongClickListener {
+            root.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+            val store = FavoriteRoutesStore(host)
+            val isFav = store.toggleFavorite(route.id)
+            android.widget.Toast.makeText(
+                host,
+                host.uiCopy(if (isFav) "маршрут добавлен в избранное" else "маршрут удален из избранного"),
+                android.widget.Toast.LENGTH_SHORT,
+            ).show()
+            true
+        }
         return root
-    }
-
-    private fun createHeartButton(routeId: String): View {
-        val store = FavoriteRoutesStore(host)
-        var isFav = store.isFavorite(routeId)
-        val icon = ImageView(host).apply {
-            setImageResource(if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart)
-            imageTintList = ColorStateList.valueOf(if (isFav) 0xFFFF5C7A.toInt() else MUTED)
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }
-        val button = FrameLayout(host).apply {
-            background = host.glassRowBackground(emphasis = false, radius = 16f)
-            clipToOutline = true
-            isClickable = true
-            isFocusable = true
-            foreground = host.ripple(16f)
-            host.pressFeedback(this, 0.92f)
-            contentDescription = host.uiCopy(if (isFav) "Удалить из избранного" else "В избранное")
-            val p = host.dp(7)
-            setPadding(p, p, p, p)
-            addView(icon, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
-            setOnClickListener {
-                isFav = store.toggleFavorite(routeId)
-                icon.setImageResource(if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart)
-                icon.imageTintList = ColorStateList.valueOf(if (isFav) 0xFFFF5C7A.toInt() else MUTED)
-                contentDescription = host.uiCopy(if (isFav) "Удалить из избранного" else "В избранное")
-                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                animate().scaleX(1.25f).scaleY(1.25f).setDuration(110L).withEndAction {
-                    animate().scaleX(1f).scaleY(1f).setDuration(110L).start()
-                }.start()
-            }
-        }
-        val listener = {
-            val favNow = store.isFavorite(routeId)
-            if (isFav != favNow) {
-                isFav = favNow
-                icon.setImageResource(if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart)
-                icon.imageTintList = ColorStateList.valueOf(if (isFav) 0xFFFF5C7A.toInt() else MUTED)
-                button.contentDescription = host.uiCopy(if (isFav) "Удалить из избранного" else "В избранное")
-            }
-        }
-        FavoriteRoutesStore.addListener(listener)
-        button.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: View) {}
-            override fun onViewDetachedFromWindow(v: View) {
-                FavoriteRoutesStore.removeListener(listener)
-            }
-        })
-        return button
     }
 
     private fun routeRankBackground(grade: RouteGrade, selected: Boolean): Drawable {
@@ -1964,7 +1960,7 @@ internal class PrimaryPages(
         root.addView(LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(15), host.dp(3), host.dp(15), host.dp(3))
-            background = host.glassCardBackground(false, 22f)
+            background = host.rounded(SURFACE, 18f, LINE)
             clipToOutline = true
             addView(preferenceSwitch(
                 copy("Регион на карте", "Region on the map"),
@@ -1983,7 +1979,7 @@ internal class PrimaryPages(
         root.addView(LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(16), host.dp(13), host.dp(16), host.dp(13))
-            background = host.glassCardBackground(false, 22f)
+            background = host.rounded(SURFACE, 18f, LINE)
             clipToOutline = true
             addView(host.text("deytt.connect · ${BuildConfig.VERSION_NAME}", 13f, TEXT, android.graphics.Typeface.BOLD))
             updateStatus = host.text(updateStatusText, 11f, MUTED).apply { setPadding(0, host.dp(5), 0, host.dp(10)) }

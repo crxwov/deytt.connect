@@ -1468,20 +1468,21 @@
         const signature = this.overlaySignature(colors);
         if (signature !== this.overlayCacheSignature) this.renderOverlayCache(colors, time);
         this.context.drawImage(this.routeOverlayCanvas, 0, 0, this.width, this.height);
-        if (this.trafficActive) this.drawTraffic(this.cachedRouteLinks, time || performance.now());
+        const activeLinks = (this.cachedRouteLinks && this.cachedRouteLinks.length) ? this.cachedRouteLinks : (this.cachedRouteLinks = this.routeLinks());
+        if (this.trafficActive) this.drawTraffic(activeLinks, time || performance.now());
         if (this.connectionAnimationActive(time)) this.drawConnectionAnimation(time);
         this.context.drawImage(this.foregroundOverlayCanvas, 0, 0, this.width, this.height);
       }
       this.renderCount += 1;
       const cameraNeedsFrames = Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001;
       const connectionAnim = this.connectionAnimationActive(time);
-      if (cameraNeedsFrames || (idleActive && this.trafficActive) || connectionAnim) this.start();
+      if (cameraNeedsFrames || connectionAnim || (this.trafficActive && !this.reducedMotion.matches)) this.start();
       else if (idleActive && !this.idleFrameTimer) {
         this.idleFrameTimer = window.setTimeout(() => {
           this.idleFrameTimer = 0;
           this.start();
         }, 40);
-      } else if (this.trafficActive && !this.reducedMotion.matches) this.start();
+      }
     }
 
     resetIdleMotion() {
@@ -1668,6 +1669,7 @@
       this.trafficActive = next;
       if (next) {
         if (!this.trafficStartedAt) this.trafficStartedAt = performance.now();
+        this.overlayCacheSignature = "";
       } else {
         this.trafficStartedAt = 0;
       }
