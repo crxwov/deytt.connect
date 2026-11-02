@@ -1076,10 +1076,9 @@
       const omega = Math.acos(clamp(dot(from, to), -1, 1));
       const bell = Math.sin(amount * Math.PI);
 
-      // Elevated 3D altitude above the globe surface
-      const peakAltitude = 0.052 + Math.min(0.08, omega * 0.12);
-      const laneLiftOffset = (lane || 0) * bell * 0.008;
-      const lift = ground ? 1.002 : (1.020 + bell * peakAltitude + laneLiftOffset);
+      // Subtle 3D radial altitude for depth/occlusion without over-projecting
+      const peakAltitude = 0.025 + Math.min(0.04, omega * 0.06);
+      const lift = ground ? 1.002 : (1.012 + bell * peakAltitude);
 
       const start = this.projectVector(from, lift);
       const end = this.projectVector(to, lift);
@@ -1107,14 +1106,15 @@
         if (ny > 0) { nx = -nx; ny = -ny; }
       }
 
-      // 3D Bridge Arch / Rainbow canopy matching reference:
-      // - Spacing between lanes is ~16px in apogee
-      // - Middle line (download, lane = 0) is prominently arched upward (~28px)
-      // - Bottom line (upload, lane = -1) also curves upward parallel to the bundle (~12px), never sagging down
-      // - Top line (control, lane = 1) arches highest (~44px)
-      // - Smoothly converges to 0 at the node ends via bell curve
-      const laneSpacing = 16;
-      const minBottomArch = Math.max(10, Math.min(14, length * 0.08));
+      // Responsive 3D Bridge Arch:
+      // - Spacing scales down dynamically when globe is smaller / zoomed out
+      // - Top line (lane = 1) has a balanced, moderate curve instead of extreme bending
+      // - Middle line (lane = 0) remains clearly arched upward
+      // - Bottom line (lane = -1) remains parallelly arched upward, never sagging
+      const globeScale = (this.radius * (this.zoom || 1)) || 160;
+      const zoomFactor = clamp(globeScale / 180, 0.65, 1.25);
+      const laneSpacing = Math.max(7.5, Math.min(13, 10.5 * zoomFactor));
+      const minBottomArch = Math.max(4, Math.min(7.5, length * 0.035 * zoomFactor));
       const baseArch = minBottomArch + laneSpacing;
       const laneArch = baseArch + (lane || 0) * laneSpacing;
       const offset = bell * laneArch;
