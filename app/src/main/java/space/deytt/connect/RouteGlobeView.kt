@@ -118,6 +118,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                     applyActiveAutoRoute()
                     applyConnected()
                     applyTrafficActive()
+                    applyConnectionPhase()
                     applyBackdropStage()
                     applyBackdropProgress()
                 }
@@ -206,6 +207,28 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             applyActiveAutoRoute()
         }
         applyConnected()
+    }
+
+    private var connectionPhase = "IDLE"
+    private var connectionIsAuto = false
+    private var connectionTargetRoute: String? = null
+
+    internal fun setConnectionPhase(phase: String, isAuto: Boolean, targetRoute: String?) {
+        if (connectionPhase == phase && connectionIsAuto == isAuto && connectionTargetRoute == targetRoute) return
+        connectionPhase = phase
+        connectionIsAuto = isAuto
+        connectionTargetRoute = targetRoute
+        if (pageLoaded) applyConnectionPhase()
+    }
+
+    private fun applyConnectionPhase() {
+        if (!pageLoaded) return
+        val phaseQuoted = JSONObject.quote(connectionPhase)
+        val targetQuoted = connectionTargetRoute?.let(JSONObject::quote) ?: "null"
+        atlas.evaluateJavascript(
+            "window.deyttSetMapConnectionPhase && window.deyttSetMapConnectionPhase($phaseQuoted, $connectionIsAuto, $targetQuoted)",
+            null,
+        )
     }
 
     internal fun setTrafficActive(active: Boolean) {

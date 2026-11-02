@@ -171,7 +171,13 @@ class MainActivity : Activity() {
                 currentAutoRouteKey = intent.getStringExtra(ConnectVpnService.EXTRA_ACTIVE_ROUTE_KEY)
                     ?.takeIf { it in setOf("nl", "de", "fi", "ru", "it", "ru-de") }
                 currentAutoOutboundTag = intent.getStringExtra(ConnectVpnService.EXTRA_ACTIVE_OUTBOUND_TAG)
-                if (::globe.isInitialized) globe.setActiveAutoRoute(currentAutoRouteKey)
+                if (::globe.isInitialized) {
+                    globe.setActiveAutoRoute(currentAutoRouteKey)
+                    val selected = SelectedRouteStore(this@MainActivity).read()
+                    if (selected.id == "auto") {
+                        globe.setConnectionPhase((renderedPhase ?: VpnPhase.IDLE).name, isAuto = true, targetRoute = currentAutoRouteKey)
+                    }
+                }
                 val selected = SelectedRouteStore(this@MainActivity).read()
                 if ((previousKey != currentAutoRouteKey || previousOutboundTag != currentAutoOutboundTag) &&
                     selected.id == "auto" && selected.protocol == RouteProtocol.AUTO
@@ -600,6 +606,10 @@ class MainActivity : Activity() {
             focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
             setAvailableLocations(availableMapLocations())
             setUserLocation(currentNetworkLocation)
+            val initialSel = SelectedRouteStore(this@MainActivity).read()
+            val initialAuto = initialSel.id == "auto"
+            val initialTarget = if (initialAuto) currentAutoRouteKey else initialSel.id
+            setConnectionPhase(VpnStateStore(this@MainActivity).read().phase.name, initialAuto, initialTarget)
         }
         globeBackdrop = FrameLayout(this).apply {
             tag = "globe-underlay"
@@ -2278,6 +2288,12 @@ class MainActivity : Activity() {
             }
         }
         renderedPhase = currentPhase
+        if (::globe.isInitialized) {
+            val selected = SelectedRouteStore(this).read()
+            val isAuto = selected.id == "auto"
+            val target = if (isAuto) currentAutoRouteKey else selected.id
+            globe.setConnectionPhase(currentPhase.name, isAuto, target)
+        }
         if (currentPhase == VpnPhase.IDLE && migrateRemovedSelectedRoute() && ::globe.isInitialized) {
             rebuildRouteRow()
         }

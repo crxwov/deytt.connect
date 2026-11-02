@@ -98,6 +98,13 @@
     window.deyttMapConnected = Boolean(active);
     if (window.deyttMapAtlas) window.deyttMapAtlas.setConnected(window.deyttMapConnected);
   };
+  window.deyttMapConnectionPhase = "IDLE";
+  window.deyttSetMapConnectionPhase = function (phase, isAuto, targetRoute) {
+    window.deyttMapConnectionPhase = String(phase || "IDLE");
+    if (window.deyttMapAtlas) {
+      window.deyttMapAtlas.setConnectionPhase(window.deyttMapConnectionPhase, isAuto, targetRoute);
+    }
+  };
   window.deyttSetMapTrafficActive = function (active) {
     window.deyttMapTrafficActive = Boolean(active);
     if (window.deyttMapAtlas) window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
