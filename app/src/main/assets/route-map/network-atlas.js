@@ -1041,6 +1041,7 @@
       }
 
       const elapsed = Math.max(0, time - this.trafficStartedAt);
+      const trafficFade = Math.min(1, elapsed / 600);
       this.trafficStreams().filter(stream => this.selectedTrafficFlow == null || stream.id === this.selectedTrafficFlow).forEach(stream => {
         const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
         const count = this.reducedMotion.matches ? 1 : 5;
@@ -1049,8 +1050,8 @@
           const linkIndex = Math.min(directed.length - 1, Math.floor(position)), amount = position - linkIndex;
           const [fromKey, toKey] = directed[linkIndex], point = this.projectLanePoint(fromKey, toKey, amount, stream.lane);
           if (point.z <= -.02) continue;
-          if (!this.reducedMotion.matches && packet === 0) this.drawTrafficTrail(directed, position, stream);
-          this.drawTrafficDot(point.x, point.y, stream, packet % 4 === 0, 1, .84 + (packet % 3) * .10);
+          if (!this.reducedMotion.matches && packet === 0) this.drawTrafficTrail(directed, position, stream, trafficFade);
+          this.drawTrafficDot(point.x, point.y, stream, packet % 4 === 0, trafficFade, .84 + (packet % 3) * .10);
         }
       });
     }
@@ -1075,11 +1076,10 @@
       const omega = Math.acos(clamp(dot(from, to), -1, 1));
       const bell = Math.sin(amount * Math.PI);
 
-      // Elevated 3D arch above the globe
-      const peakAltitude = 0.075 + Math.min(0.10, omega * 0.14);
-      // Tiered 3D altitude: control (lane=1) floats higher, download (0) mid, upload (-1) lower
-      const laneLiftOffset = (lane || 0) * bell * 0.012;
-      const lift = ground ? 1.004 : (1.025 + bell * peakAltitude + laneLiftOffset);
+      // Elevated 3D altitude above the globe surface
+      const peakAltitude = 0.052 + Math.min(0.08, omega * 0.12);
+      const laneLiftOffset = (lane || 0) * bell * 0.008;
+      const lift = ground ? 1.002 : (1.020 + bell * peakAltitude + laneLiftOffset);
 
       const start = this.projectVector(from, lift);
       const end = this.projectVector(to, lift);
@@ -1087,19 +1087,48 @@
       const dx = end.x - start.x, dy = end.y - start.y;
       const length = Math.hypot(dx, dy) || 1;
 
-      // 3D multi-lane separation matching reference (~16px), elegant ribbon
-      const offset = bell * (lane || 0) * Math.max(15, Math.min(18, length * 0.10));
+      if (ground) {
+        return { x: point.x, y: point.y, z: point.z, lift, bell };
+      }
+
+      // Normal perpendicular to the route chord
+      let nx = -dy / length;
+      let ny = dx / length;
+
+      // Ensure normal points outward/upward over the curvature of the Earth into space
+      const midX = (start.x + end.x) / 2;
+      const midY = (start.y + end.y) / 2;
+      const vx = midX - this.centerX;
+      const vy = midY - this.centerY;
+      const vDist = Math.hypot(vx, vy);
+      if (vDist > 10) {
+        if (nx * vx + ny * vy < 0) { nx = -nx; ny = -ny; }
+      } else {
+        if (ny > 0) { nx = -nx; ny = -ny; }
+      }
+
+      // 3D Bridge Arch / Rainbow canopy matching reference:
+      // - Spacing between lanes is ~16px in apogee
+      // - Middle line (download, lane = 0) is prominently arched upward (~28px)
+      // - Bottom line (upload, lane = -1) also curves upward parallel to the bundle (~12px), never sagging down
+      // - Top line (control, lane = 1) arches highest (~44px)
+      // - Smoothly converges to 0 at the node ends via bell curve
+      const laneSpacing = 16;
+      const minBottomArch = Math.max(10, Math.min(14, length * 0.08));
+      const baseArch = minBottomArch + laneSpacing;
+      const laneArch = baseArch + (lane || 0) * laneSpacing;
+      const offset = bell * laneArch;
 
       return {
-        x: point.x - dy / length * offset,
-        y: point.y + dx / length * offset,
+        x: point.x + nx * offset,
+        y: point.y + ny * offset,
         z: point.z,
         lift: lift,
         bell: bell
       };
     }
 
-    drawTrafficTrail(links, position, stream) {
+    drawTrafficTrail(links, position, stream, fade = 1) {
       const points = [];
       for (let step = 10; step >= 0; step--) {
         const sample = position - .105 * step / 10;
@@ -1108,7 +1137,7 @@
         points.push(this.projectLanePoint(from, to, sample - index, stream.lane));
       }
       const context = this.context; context.save(); context.lineCap = context.lineJoin = "round"; context.shadowColor = stream.color; context.shadowBlur = 2;
-      for (let i = 1; i < points.length; i++) { const a = points[i-1], b = points[i]; if (a.z <= -.02 || b.z <= -.02) continue; const intensity = i / (points.length - 1); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.globalAlpha = intensity * .72; context.strokeStyle = intensity > .7 ? stream.bright : stream.color; context.lineWidth = .42 + intensity * .82; context.stroke(); }
+      for (let i = 1; i < points.length; i++) { const a = points[i-1], b = points[i]; if (a.z <= -.02 || b.z <= -.02) continue; const intensity = i / (points.length - 1); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.globalAlpha = intensity * .72 * fade; context.strokeStyle = intensity > .7 ? stream.bright : stream.color; context.lineWidth = .42 + intensity * .82; context.stroke(); }
       context.restore();
     }
 
@@ -1809,34 +1838,18 @@
           }
         }
 
-        // Single clean traveling pulse along the route
+        // Single neat light pulse traveling along the route
         if (userLoc && targetLoc) {
-          if (phase === "STARTING") {
-            const t = (elapsed % 900) / 900;
-            const pt = this.projectLanePoint("user", targetKey, t, 0);
-            if (pt.z > -0.02) {
-              context.beginPath();
-              context.arc(pt.x, pt.y, 2.4, 0, TAU);
-              context.fillStyle = "#00D4FF";
-              context.shadowColor = "#00D4FF";
-              context.shadowBlur = 4;
-              context.fill();
-            }
-          } else if (phase === "CHECKING") {
-            // Two alternating quiet pulses (forward and return)
-            const t1 = (elapsed % 800) / 800;
-            const t2 = ((elapsed + 400) % 800) / 800;
-            [t1, 1 - t2].forEach((t, i) => {
-              const pt = this.projectLanePoint("user", targetKey, t, 0);
-              if (pt.z > -0.02) {
-                context.beginPath();
-                context.arc(pt.x, pt.y, 2.2, 0, TAU);
-                context.fillStyle = i === 0 ? "#FFD043" : "#00F5A0";
-                context.shadowColor = i === 0 ? "#FFD043" : "#00F5A0";
-                context.shadowBlur = 4;
-                context.fill();
-              }
-            });
+          const pulseDuration = phase === "CHECKING" ? 750 : 850;
+          const t = (elapsed % pulseDuration) / pulseDuration;
+          const pt = this.projectLanePoint("user", targetKey, t, 0);
+          if (pt.z > -0.02) {
+            context.beginPath();
+            context.arc(pt.x, pt.y, 2.3, 0, TAU);
+            context.fillStyle = phase === "CHECKING" ? "#00F5A0" : "#00D4FF";
+            context.shadowColor = phase === "CHECKING" ? "#00F5A0" : "#00D4FF";
+            context.shadowBlur = 3.5;
+            context.fill();
           }
         }
       }
