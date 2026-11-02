@@ -1584,15 +1584,15 @@ class MainActivity : Activity() {
         )
         val route = activeAutoRoute ?: routes.firstOrNull { it.id == selected.id }
         if (route == null) return uiCopy(selected.title)
-        val (city, country) = when (route.countryCode) {
-            "NL" -> "Амстердам" to "Нидерланды"
-            "DE", "RU-DE" -> "Франкфурт" to "Германия"
-            "RU" -> "Санкт-Петербург" to "Россия"
-            "FI" -> "Хельсинки" to "Финляндия"
-            "IT" -> "Милан" to "Италия"
+        val country = when (route.countryCode) {
+            "NL" -> "Нидерланды"
+            "DE", "RU-DE" -> "Германия"
+            "RU" -> "Россия"
+            "FI" -> "Финляндия"
+            "IT" -> "Италия"
             else -> return uiCopy(selected.title)
         }
-        return (if (route.countryCode == "RU-DE") "🇩🇪" else route.flag) + " " + uiCopy(city) + ", " + uiCopy(country)
+        return (if (route.countryCode == "RU-DE") "🇩🇪" else route.flag) + " " + uiCopy(country)
     }
 
     private fun updateRouteFlow(selected: SelectedRoute) {
@@ -2264,17 +2264,7 @@ class MainActivity : Activity() {
         val connectedOnHome = homeSpeedForeground && currentTrafficExplanation == null &&
             ::pager.isInitialized && pager.currentItem == 0 &&
             renderedPhase == VpnPhase.CONNECTED && isSystemTunnelActive()
-        val active = if (connectedOnHome) {
-            mapTrafficWindow.observe(
-                rxBytes = TrafficStats.getTotalRxBytes(),
-                txBytes = TrafficStats.getTotalTxBytes(),
-                nowElapsedMs = SystemClock.elapsedRealtime(),
-            )
-        } else {
-            mapTrafficWindow.reset()
-            false
-        }
-        setMapTrafficActive(active)
+        setMapTrafficActive(connectedOnHome)
     }
 
     private fun setMapTrafficActive(active: Boolean) {
@@ -2318,6 +2308,7 @@ class MainActivity : Activity() {
                 homeSpeedConnectedRouteId = SelectedRouteStore(this).read().id
                 homeSpeedAttemptAt = 0L
                 scheduleHomeMeasurements()
+                sampleMapTraffic()
             } else homeSpeedConnectedRouteId = null
             if (!temporaryAwgMeasurement &&
                 (currentPhase == VpnPhase.CONNECTED || currentPhase == VpnPhase.IDLE || currentPhase == VpnPhase.ERROR)

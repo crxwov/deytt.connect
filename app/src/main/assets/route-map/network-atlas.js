@@ -1041,7 +1041,7 @@
       }
 
       const elapsed = Math.max(0, time - this.trafficStartedAt);
-      const trafficFade = Math.min(1, elapsed / 600);
+      const trafficFade = Math.min(1, elapsed / 280);
       this.trafficStreams().filter(stream => this.selectedTrafficFlow == null || stream.id === this.selectedTrafficFlow).forEach(stream => {
         const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
         const count = this.reducedMotion.matches ? 1 : 5;
@@ -1666,7 +1666,11 @@
       const next = Boolean(active);
       if (this.trafficActive === next) return;
       this.trafficActive = next;
-      this.trafficStartedAt = next ? performance.now() : 0;
+      if (next) {
+        if (!this.trafficStartedAt) this.trafficStartedAt = performance.now();
+      } else {
+        this.trafficStartedAt = 0;
+      }
       this.start();
     }
 

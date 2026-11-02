@@ -373,16 +373,16 @@ object DeyttUi {
         val strokeColors = if (isPrimary) {
             intArrayOf(
                 0x50FFFFFF.toInt(),
-                0x22FFFFFF.toInt(),
-                0x1078B8F8.toInt(),
-                0x1AFFFFFF.toInt(),
+                0x2884BCF4.toInt(),
+                0x186AAAF0.toInt(),
+                0x24FFFFFF.toInt(),
             )
         } else {
             intArrayOf(
-                0x2CFFFFFF.toInt(),
-                0x12FFFFFF.toInt(),
-                0x0C82B4E8.toInt(),
-                0x12FFFFFF.toInt(),
+                0x40FFFFFF.toInt(),
+                0x1880B4F0.toInt(),
+                0x10609AE0.toInt(),
+                0x1CFFFFFF.toInt(),
             )
         }
         return LiquidGlassDrawable(
@@ -390,10 +390,11 @@ object DeyttUi {
             cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
             fillColors = if (topColor == bottomColor) intArrayOf(topColor) else intArrayOf(topColor, bottomColor),
             strokeColors = strokeColors,
-            strokeWidthPx = if (isPrimary) 0.95f else 0.85f,
+            strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+            strokeWidthPx = if (isPrimary) 1.15f else 1.05f,
             hasGloss = true,
-            glossAlpha = if (isPrimary) 0x1E else 0x12,
-            innerLip = false,
+            glossAlpha = if (isPrimary) 0x18 else 0x12,
+            innerLip = true,
         )
     }
 
@@ -976,16 +977,49 @@ object DeyttUi {
             }
         }
 
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
+            val totalWidth = measuredWidth
+            if (totalWidth > 0) {
+                val cellWidth = ((totalWidth - activity.dp(16)).coerceAtLeast(0) / 4f).toInt()
+                selection.measure(
+                    MeasureSpec.makeMeasureSpec(cellWidth, MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(activity.dp(50), MeasureSpec.EXACTLY)
+                )
+            }
+        }
+
+        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
+            super.onLayout(changed, left, top, right, bottom)
+            val totalWidth = right - left
+            if (totalWidth > 0) {
+                val cellWidth = (totalWidth - activity.dp(16)).coerceAtLeast(0) / 4f
+                val targetWidth = cellWidth.toInt()
+                val selLeft = activity.dp(8)
+                val selTop = activity.dp(8)
+                selection.layout(selLeft, selTop, selLeft + targetWidth, selTop + activity.dp(50))
+                selection.translationX = cellWidth * pagePosition
+                selection.visibility = View.VISIBLE
+                selection.alpha = 1f
+            }
+        }
+
         private fun updateSelectionPosition() {
-            if (width <= 0) return
-            val cellWidth = (width - activity.dp(16)).coerceAtLeast(0) / 4f
-            val params = selection.layoutParams as? LayoutParams ?: return
+            val totalWidth = width
+            if (totalWidth <= 0) {
+                post { updateSelectionPosition() }
+                return
+            }
+            val cellWidth = (totalWidth - activity.dp(16)).coerceAtLeast(0) / 4f
             val targetWidth = cellWidth.toInt()
-            if (params.width != targetWidth) {
-                params.width = targetWidth
-                selection.layoutParams = params
+            if (selection.width != targetWidth && targetWidth > 0) {
+                val selLeft = activity.dp(8)
+                val selTop = activity.dp(8)
+                selection.layout(selLeft, selTop, selLeft + targetWidth, selTop + activity.dp(50))
             }
             selection.translationX = cellWidth * pagePosition
+            selection.visibility = View.VISIBLE
+            selection.alpha = 1f
         }
 
         override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

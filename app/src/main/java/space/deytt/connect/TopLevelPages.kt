@@ -1923,7 +1923,8 @@ internal class PrimaryPages(
         root.addView(LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(15), host.dp(3), host.dp(15), host.dp(3))
-            background = host.rounded(SURFACE, 18f, LINE)
+            background = host.glassCardBackground(false, 22f)
+            clipToOutline = true
             addView(preferenceSwitch(
                 copy("Регион на карте", "Region on the map"),
                 copy("По IP через ipinfo.io · без GPS и сохранения координат", "IP lookup via ipinfo.io · no GPS or saved coordinates"),
@@ -1941,7 +1942,8 @@ internal class PrimaryPages(
         root.addView(LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(16), host.dp(13), host.dp(16), host.dp(13))
-            background = host.rounded(SURFACE, 18f, LINE)
+            background = host.glassCardBackground(false, 22f)
+            clipToOutline = true
             addView(host.text("deytt.connect · ${BuildConfig.VERSION_NAME}", 13f, TEXT, android.graphics.Typeface.BOLD))
             updateStatus = host.text(updateStatusText, 11f, MUTED).apply { setPadding(0, host.dp(5), 0, host.dp(10)) }
             addView(updateStatus)

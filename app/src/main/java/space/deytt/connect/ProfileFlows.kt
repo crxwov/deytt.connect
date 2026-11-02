@@ -452,7 +452,7 @@ internal class ProfileFlows(
     private fun accordion(title: String, subtitle: String, content: LinearLayout): View {
         val group = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
-            background = host.glassCardBackground(false, 20f)
+            background = host.glassCardBackground(false, 22f)
             clipToOutline = true
         }
         content.visibility = View.GONE
