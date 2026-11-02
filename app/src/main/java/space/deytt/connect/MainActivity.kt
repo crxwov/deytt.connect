@@ -19,6 +19,7 @@ import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.os.Handler
 import android.os.Looper
@@ -27,6 +28,7 @@ import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -47,6 +49,8 @@ import space.deytt.connect.DeyttUi.actionLabel
 import space.deytt.connect.DeyttUi.brandHeader
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.displayText
+import space.deytt.connect.DeyttUi.glassRowBackground
+import space.deytt.connect.DeyttUi.ripple
 import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.screen
 import space.deytt.connect.DeyttUi.sectionLabel
@@ -83,6 +87,7 @@ class MainActivity : Activity() {
     private var telegramAccountName: TextView? = null
     private var telegramAvatarFallback: TextView? = null
     private var telegramAvatarImage: ImageView? = null
+    private var favoriteRoutesDrawer: FavoriteRoutesDrawer? = null
     private var pendingRoute: SelectedRoute? = null
     private var latencyGeneration = 0
     private var renderedPhase: VpnPhase? = null
@@ -442,6 +447,10 @@ class MainActivity : Activity() {
 
     @Deprecated("Back navigation is delegated to the selected primary tab")
     override fun onBackPressed() {
+        if (favoriteRoutesDrawer?.isOpen() == true) {
+            favoriteRoutesDrawer?.close()
+            return
+        }
         if (::pager.isInitialized && pager.currentItem != 0) {
             pager.setCurrentItem(0, true)
         } else {
@@ -451,6 +460,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         restoreAwgMeasurement?.invoke()
+        favoriteRoutesDrawer?.detach()
         if (::primaryPages.isInitialized) primaryPages.close()
         locationRequestGeneration++
         locationExecutor.shutdownNow()
@@ -751,6 +761,9 @@ class MainActivity : Activity() {
             addView(root, FrameLayout.LayoutParams(-1, -1))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateHomeMapAnchor() }
         }
+        favoriteRoutesDrawer = FavoriteRoutesDrawer(this) { selectRoute(it) }.also {
+            it.attachTo(globeStage)
+        }
         setContentView(globeStage)
         ViewCompat.requestApplyInsets(root)
         pager.setCurrentItem(initialPage, false)
@@ -798,7 +811,72 @@ class MainActivity : Activity() {
         startup.start()
     }
 
+    private inner class HomeGestureLayout(context: Context) : FrameLayout(context) {
+        private var startY = 0f
+        private var startX = 0f
+        private var isDraggingUp = false
+        private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
+
+        override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+            if (::pager.isInitialized && pager.currentItem != 0) return false
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startY = ev.rawY
+                    startX = ev.rawX
+                    isDraggingUp = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = startY - ev.rawY
+                    val dx = kotlin.math.abs(ev.rawX - startX)
+                    if (!isDraggingUp && dy > touchSlop && dy > dx * 0.85f) {
+                        isDraggingUp = true
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                        pager.requestDisallowInterceptTouchEvent(true)
+                        favoriteRoutesDrawer?.onPullStart()
+                        return true
+                    }
+                }
+            }
+            return isDraggingUp
+        }
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (::pager.isInitialized && pager.currentItem != 0) return false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    startY = event.rawY
+                    startX = event.rawX
+                    isDraggingUp = false
+                    return true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dy = startY - event.rawY
+                    val dx = kotlin.math.abs(event.rawX - startX)
+                    if (!isDraggingUp && dy > touchSlop && dy > dx * 0.85f) {
+                        isDraggingUp = true
+                        parent?.requestDisallowInterceptTouchEvent(true)
+                        pager.requestDisallowInterceptTouchEvent(true)
+                        favoriteRoutesDrawer?.onPullStart()
+                    }
+                    if (isDraggingUp) {
+                        favoriteRoutesDrawer?.onPullMove(dy)
+                        return true
+                    }
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    if (isDraggingUp) {
+                        favoriteRoutesDrawer?.onPullEnd()
+                        isDraggingUp = false
+                        return true
+                    }
+                }
+            }
+            return true
+        }
+    }
+
     private fun buildHomePage(): View {
+        val gestureLayout = HomeGestureLayout(this)
         val root = screen(withBackdrop = true)
         val mapSlot = FrameLayout(this).apply {
             tag = "home-map-gesture"
@@ -891,10 +969,37 @@ class MainActivity : Activity() {
                     setPadding(dp(12), dp(7), dp(12), dp(7))
                 })
             }
+        val favsPill = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            background = glassRowBackground(emphasis = false, radius = 16f)
+            clipToOutline = true
+            isClickable = true
+            isFocusable = true
+            foreground = ripple(16f)
+            pressFeedback(this, 0.94f)
+            setPadding(dp(14), dp(7), dp(14), dp(7))
+            val heartIcon = ImageView(this@MainActivity).apply {
+                setImageResource(R.drawable.ic_heart_filled)
+                imageTintList = android.content.res.ColorStateList.valueOf(0xFFFF5C7A.toInt())
+            }
+            addView(heartIcon, LinearLayout.LayoutParams(dp(15), dp(15)).apply { marginEnd = dp(6) })
+            val label = text("избранные маршруты  ↑", 12f, DeyttUi.MUTED, Typeface.BOLD)
+            addView(label)
+            setOnClickListener {
+                favoriteRoutesDrawer?.open()
+            }
+        }
+        root.addView(favsPill, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = dp(8)
+            bottomMargin = dp(4)
+        })
         rebuildRouteRow()
         renderStoredState()
         root.post { if (::pager.isInitialized) syncGlobeHost(pager.currentItem) }
-        return root
+        gestureLayout.addView(root, FrameLayout.LayoutParams(-1, -1))
+        return gestureLayout
     }
 
     internal fun getCachedRouteCatalog(): List<DeyttRoute> {

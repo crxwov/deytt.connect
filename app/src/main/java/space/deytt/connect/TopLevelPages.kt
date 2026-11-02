@@ -18,6 +18,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
+import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -352,9 +353,12 @@ internal class PrimaryPages(
         val quickGroup = routeGroup()
         routes.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { route ->
             val isSelected = selectedId == route.id
-            val actionText = if (isSelected) copy("выбрано", "selected") else copy("выбрать", "select")
-            appendToGroup(quickGroup, host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", actionText, emphasis = isSelected)
-                .apply { setOnClickListener { host.selectRoute(route) } })
+            val autoRow = host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", "", emphasis = isSelected)
+                .apply { setOnClickListener { host.selectRoute(route) } }
+            autoRow.addView(createHeartButton(route.id), LinearLayout.LayoutParams(host.dp(36), host.dp(36)).apply {
+                leftMargin = host.dp(8)
+            })
+            appendToGroup(quickGroup, autoRow)
         }
         routes.firstOrNull { it.protocol == RouteProtocol.RU_DE || it.protocol == RouteProtocol.LTE }?.let { route ->
             appendToGroup(quickGroup, buildLteWhitelistRow(route, selectedId == route.id))
@@ -469,6 +473,10 @@ internal class PrimaryPages(
                 val metricsColumn = item.getChildAt(1) as LinearLayout
                 metric.setPadding(0, host.dp(4), 0, host.dp(2))
                 metricsColumn.addView(metric)
+                item.addView(createHeartButton(route.id), LinearLayout.LayoutParams(host.dp(34), host.dp(34)).apply {
+                    leftMargin = host.dp(6)
+                    gravity = Gravity.CENTER_VERTICAL
+                })
                 item.setOnClickListener { host.selectRoute(route) }
                 val probeRow = ProbeRouteRow(route, metric, progress, item)
                 if (isAwg) {
@@ -941,27 +949,60 @@ internal class PrimaryPages(
         }
         root.addView(middle, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
-        val action = host.text(
-            if (selected) copy("выбрано", "selected") else copy("выбрать", "select"),
-            12f,
-            if (selected) DeyttUi.SKY else DeyttUi.TEXT,
-            android.graphics.Typeface.BOLD
-        ).apply {
-            gravity = Gravity.CENTER
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            minWidth = host.dp(60)
-            maxWidth = host.dp(84)
-            minHeight = host.dp(36)
-            setPadding(host.dp(8), host.dp(6), host.dp(8), host.dp(6))
-            background = host.glassRowBackground(selected, 18f)
-            isClickable = false
-            isFocusable = false
-        }
-        root.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+        root.addView(createHeartButton(route.id), LinearLayout.LayoutParams(host.dp(36), host.dp(36)).apply {
             leftMargin = host.dp(8)
         })
         return root
+    }
+
+    private fun createHeartButton(routeId: String): View {
+        val store = FavoriteRoutesStore(host)
+        var isFav = store.isFavorite(routeId)
+        val icon = ImageView(host).apply {
+            setImageResource(if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart)
+            imageTintList = ColorStateList.valueOf(if (isFav) 0xFFFF5C7A.toInt() else MUTED)
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        val button = FrameLayout(host).apply {
+            background = host.glassRowBackground(emphasis = false, radius = 16f)
+            clipToOutline = true
+            isClickable = true
+            isFocusable = true
+            foreground = host.ripple(16f)
+            host.pressFeedback(this, 0.92f)
+            contentDescription = host.uiCopy(if (isFav) "Удалить из избранного" else "В избранное")
+            val p = host.dp(7)
+            setPadding(p, p, p, p)
+            addView(icon, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+            setOnClickListener {
+                isFav = store.toggleFavorite(routeId)
+                icon.setImageResource(if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart)
+                icon.imageTintList = ColorStateList.valueOf(if (isFav) 0xFFFF5C7A.toInt() else MUTED)
+                contentDescription = host.uiCopy(if (isFav) "Удалить из избранного" else "В избранное")
+                performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                animate().scaleX(1.25f).scaleY(1.25f).setDuration(110L).withEndAction {
+                    animate().scaleX(1f).scaleY(1f).setDuration(110L).start()
+                }.start()
+            }
+        }
+        val listener = {
+            val favNow = store.isFavorite(routeId)
+            if (isFav != favNow) {
+                isFav = favNow
+                icon.setImageResource(if (isFav) R.drawable.ic_heart_filled else R.drawable.ic_heart)
+                icon.imageTintList = ColorStateList.valueOf(if (isFav) 0xFFFF5C7A.toInt() else MUTED)
+                button.contentDescription = host.uiCopy(if (isFav) "Удалить из избранного" else "В избранное")
+            }
+        }
+        FavoriteRoutesStore.addListener(listener)
+        button.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {}
+            override fun onViewDetachedFromWindow(v: View) {
+                FavoriteRoutesStore.removeListener(listener)
+            }
+        })
+        return button
     }
 
     private fun routeRankBackground(grade: RouteGrade, selected: Boolean): Drawable {
