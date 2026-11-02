@@ -550,12 +550,15 @@ class MainActivity : Activity() {
 
         subscriptionRefreshInFlight = true
         subscriptionRefreshLastStartedAt = now
+        SubscriptionRefreshState.start(uiCopy("Обновляем подписку и маршруты…"))
         subscriptionExecutor.execute {
             val result = runCatching {
                 SubscriptionClient.import(this@MainActivity, url, beforeCommit = {
                     if (SubscriptionClient.getSavedSubscriptionUrl(this@MainActivity) != url) {
                         throw SubscriptionCancelledException()
                     }
+                }, onStage = { stage ->
+                    SubscriptionRefreshState.updateStage(stage)
                 })
             }
             result.onFailure { failure ->
@@ -574,7 +577,9 @@ class MainActivity : Activity() {
                     if (result.isFailure) {
                         val err = result.exceptionOrNull()
                         val msg = SubscriptionRetryPolicy.safeFailureSummary(err ?: java.io.IOException())
-                        callbacks.forEach { it.invoke(false, uiCopy("Не удалось обновить: $msg")) }
+                        val failText = uiCopy("Не удалось обновить: $msg")
+                        SubscriptionRefreshState.finishFailure(failText)
+                        callbacks.forEach { it.invoke(false, failText) }
                     }
                     return@runOnUiThread
                 }
@@ -592,7 +597,9 @@ class MainActivity : Activity() {
                     pageAdapter.refresh(1)
                     pageAdapter.refresh(2)
                 }
-                callbacks.forEach { it.invoke(true, uiCopy("Маршруты обновлены (${routes.size})")) }
+                val successText = uiCopy("Маршруты обновлены (${routes.size})")
+                SubscriptionRefreshState.finishSuccess(routes.size, successText)
+                callbacks.forEach { it.invoke(true, successText) }
             }
         }
     }
@@ -625,6 +632,7 @@ class MainActivity : Activity() {
 
         subscriptionRefreshInFlight = true
         subscriptionRefreshLastStartedAt = now
+        SubscriptionRefreshState.start(uiCopy("Обновляем подписку и маршруты…"))
 
         subscriptionExecutor.execute {
             val targetUrl = url ?: runCatching {
@@ -639,7 +647,9 @@ class MainActivity : Activity() {
                         manualRefreshCallbacks.clear()
                         copy
                     }
-                    callbacks.forEach { it.invoke(false, uiCopy("Активная подписка не найдена")) }
+                    val failText = uiCopy("Активная подписка не найдена")
+                    SubscriptionRefreshState.finishFailure(failText)
+                    callbacks.forEach { it.invoke(false, failText) }
                 }
                 return@execute
             }
@@ -653,6 +663,8 @@ class MainActivity : Activity() {
                     if (SubscriptionClient.getSavedSubscriptionUrl(this@MainActivity) != targetUrl) {
                         throw SubscriptionCancelledException()
                     }
+                }, onStage = { stage ->
+                    SubscriptionRefreshState.updateStage(stage)
                 })
             }
 
@@ -668,7 +680,9 @@ class MainActivity : Activity() {
                 if (result.isFailure) {
                     val err = result.exceptionOrNull()
                     val msg = SubscriptionRetryPolicy.safeFailureSummary(err ?: java.io.IOException())
-                    callbacks.forEach { it.invoke(false, uiCopy("Не удалось обновить: $msg")) }
+                    val failText = uiCopy("Не удалось обновить: $msg")
+                    SubscriptionRefreshState.finishFailure(failText)
+                    callbacks.forEach { it.invoke(false, failText) }
                     return@runOnUiThread
                 }
 
@@ -686,7 +700,9 @@ class MainActivity : Activity() {
                     pageAdapter.refresh(1)
                     pageAdapter.refresh(2)
                 }
-                callbacks.forEach { it.invoke(true, uiCopy("Маршруты обновлены (${routes.size})")) }
+                val successText = uiCopy("Маршруты обновлены (${routes.size})")
+                SubscriptionRefreshState.finishSuccess(routes.size, successText)
+                callbacks.forEach { it.invoke(true, successText) }
             }
         }
     }

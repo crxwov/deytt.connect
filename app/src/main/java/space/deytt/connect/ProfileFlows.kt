@@ -84,6 +84,7 @@ internal class ProfileFlows(
     private var appSessions: LinearLayout? = null
     private var supportUrl = "https://t.me/deyttbot"
     private var pendingPaymentId: String? = null
+    private var starryPlanCard: StarryPlanCard? = null
     private var refreshGeneration = 0
     private val deviceChangesInFlight = mutableSetOf<Long>()
     private var currentDeviceLimit = 1
@@ -124,75 +125,55 @@ internal class ProfileFlows(
         }
         root.addView(identityCard(token))
 
-        root.addView(spacer(12, host))
-        root.addView(host.sectionLabel("подписка"))
-        val card = LinearLayout(host).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(host.dp(14), host.dp(13), host.dp(14), host.dp(13))
-            background = host.glassRowBackground(false, 20f)
+        root.addView(spacer(14, host))
+        root.addView(host.sectionLabel(copy("твоя подписка", "your subscription")))
+
+        // 1. Large shimmering Starry Night plan card
+        val starryCard = StarryPlanCard(host).apply {
             if (token != null) {
                 isClickable = true
                 isFocusable = true
                 with(DeyttUi) {
-                    foreground = host.ripple(20f)
+                    foreground = host.ripple(22f)
                     host.pressFeedback(this@apply, .99f)
                 }
                 setOnClickListener {
-                    subscriptionText?.text = host.uiCopy("обновляем подписку…")
                     refreshProfile()
                     host.refreshSubscriptionManually { success, message ->
                         if (!host.isFinishing && !host.isDestroyed) {
-                            if (success) {
-                                refreshProfile()
-                            } else {
-                                subscriptionText?.text = host.uiCopy(message)
-                            }
+                            refreshProfile()
                         }
                     }
                 }
             }
         }
-        subscriptionText = host.text(
-            if (token == null) "подключите telegram, чтобы загрузить тариф и срок действия."
-            else "загружаем данные подписки…",
-            14f,
-            if (token == null) MUTED else TEXT,
-            if (token == null) Typeface.NORMAL else Typeface.BOLD,
-        ).apply { maxLines = 2 }
-        usageText = host.text("", 12f, MUTED).apply { setPadding(0, host.dp(6), 0, 0) }
-        val quotaBar = FrameLayout(host).apply {
-            visibility = View.GONE
-            background = host.rounded(0x402A3D51, 4f)
-            clipToOutline = true
+        starryPlanCard = starryCard
+        root.addView(starryCard)
+
+        val planNote = host.text(
+            copy("бессрочная подписка — продлевать не нужно", "lifetime subscription — no renewal required"),
+            12f,
+            MUTED
+        ).apply {
+            setPadding(host.dp(6), host.dp(10), host.dp(6), host.dp(6))
         }
-        quotaUsageBar = quotaBar
-        val quotaFill = View(host).apply {
-            background = host.rounded(0xFF70C9FF.toInt(), 4f)
-            pivotX = 0f
-            scaleX = 0f
-        }
-        quotaUsageFill = quotaFill
-        quotaBar.addView(quotaFill, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(5), Gravity.START or Gravity.CENTER_VERTICAL))
-        card.addView(subscriptionText)
-        card.addView(usageText)
-        card.addView(quotaBar, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(5)).apply {
-            topMargin = host.dp(9)
-        })
+        root.addView(planNote)
+
         paymentStatusText = host.text("", 12f, AMBER).apply {
             visibility = View.GONE
             setPadding(0, host.dp(8), 0, 0)
             setOnClickListener { checkPaymentStatus() }
         }
-        card.addView(paymentStatusText)
+        root.addView(paymentStatusText)
+
         actionStatus = host.text("", 12f, MUTED).apply {
             visibility = View.GONE
             setPadding(0, host.dp(10), 0, 0)
         }
-        card.addView(actionStatus)
-        root.addView(card)
-        root.addView(spacer(10, host))
-        root.addView(trafficHistoryGroup())
-        root.addView(spacer(8, host))
+        root.addView(actionStatus)
+
+        // 2. Manage plan button
+        root.addView(spacer(12, host))
         paymentAction = host.row(
             copy("выбрать тариф", "choose a plan"),
             copy("тарифы и способы оплаты", "plans and payment methods"),
@@ -203,7 +184,19 @@ internal class ProfileFlows(
         }
         root.addView(paymentAction)
 
-        root.addView(spacer(12, host))
+        // 3. Support button
+        root.addView(spacer(8, host))
+        val supportAction = host.row(
+            copy("поддержка", "support"),
+            copy("написать команде в приложении", "message the team in the app"),
+            "BOT_ICON",
+            copy("написать", "chat"),
+            emphasis = true,
+        ).apply { setOnClickListener { showSupportChat() } }
+        root.addView(supportAction)
+
+        // 4. Devices & Sessions accordion
+        root.addView(spacer(10, host))
         val devicesGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
         deviceSummaryText = host.text(
             if (token == null) "подключите аккаунт, чтобы увидеть устройства."
@@ -228,17 +221,14 @@ internal class ProfileFlows(
             ),
             MUTED,
         ))
-
         root.addView(accordion(copy("устройства и сессии", "devices and sessions"), copy("подключения и управление доступом", "connections and access"), devicesGroup))
+
+        // 5. Daily usage accordion
         root.addView(spacer(10, host))
-        root.addView(host.row(
-            copy("поддержка", "support"),
-            copy("написать команде в приложении", "message the team in the app"),
-            "BOT_ICON",
-            copy("написать", "chat"),
-            emphasis = true,
-        ).apply { setOnClickListener { showSupportChat() } })
-        root.addView(spacer(8, host))
+        root.addView(trafficHistoryGroup())
+
+        // 6. Documents & other channels accordion
+        root.addView(spacer(10, host))
         val helpGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
         helpGroup.addView(host.row(
             copy("поддержка в telegram", "telegram support"),
@@ -330,13 +320,20 @@ internal class ProfileFlows(
         val chart = historyChart ?: return
         val rows = historyRows ?: return
         val days = subscription.optJSONArray("traffic_daily_history")
-        val entries = (0 until (days?.length() ?: 0)).mapNotNull { index ->
+        var entries = (0 until (days?.length() ?: 0)).mapNotNull { index ->
             val item = days?.optJSONObject(index) ?: return@mapNotNull null
             val date = item.optString("date")
             val bytes = item.optLong("bytes", -1L)
             if (!date.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) || bytes < 0L) null
             else date to bytes
         }.sortedBy { it.first }.takeLast(30)
+
+        if (entries.isNotEmpty()) {
+            DailyUsageStore.saveHistory(host, entries)
+        } else {
+            val totalBytes = subscription.optLong("traffic_total_bytes", 0L)
+            entries = DailyUsageStore.getDailyHistory(host, totalBytes)
+        }
         val empty = entries.isEmpty()
         historyEmpty?.visibility = if (empty) View.VISIBLE else View.GONE
         historyPeak?.visibility = if (empty) View.GONE else View.VISIBLE
@@ -474,13 +471,10 @@ internal class ProfileFlows(
             orientation = LinearLayout.VERTICAL
             background = host.glassRowBackground(false, 18f)
             clipToOutline = true
-            layoutTransition = android.animation.LayoutTransition().apply {
-                enableTransitionType(android.animation.LayoutTransition.CHANGING)
-                setDuration(190L)
-            }
         }
         content.visibility = View.GONE
         var expanded = false
+        var currentAnimator: ValueAnimator? = null
         val indicator = host.text("+", 20f, MUTED).apply { gravity = Gravity.CENTER; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }
         val toggle = LinearLayout(host).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -505,10 +499,84 @@ internal class ProfileFlows(
                 contentDescription = "$title · " + if (expanded) copy("развернуто", "expanded") else copy("свернуто", "collapsed")
                 announceForAccessibility(contentDescription)
                 performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                content.visibility = if (expanded) View.VISIBLE else View.GONE
-                (content.layoutParams as? LinearLayout.LayoutParams)?.let { p ->
-                    p.height = if (expanded) ViewGroup.LayoutParams.WRAP_CONTENT else 0
-                    content.layoutParams = p
+
+                if (host.prefersReducedMotion()) {
+                    content.visibility = if (expanded) View.VISIBLE else View.GONE
+                    (content.layoutParams as? LinearLayout.LayoutParams)?.let { p ->
+                        p.height = if (expanded) ViewGroup.LayoutParams.WRAP_CONTENT else 0
+                        content.layoutParams = p
+                    }
+                    return@setOnClickListener
+                }
+
+                currentAnimator?.cancel()
+                if (expanded) {
+                    content.visibility = View.VISIBLE
+                    content.alpha = 0f
+                    val availableWidth = if (group.width > 0) {
+                        group.width - host.dp(28)
+                    } else {
+                        val dm = host.resources.displayMetrics
+                        dm.widthPixels - host.dp(60)
+                    }
+                    content.measure(
+                        View.MeasureSpec.makeMeasureSpec(availableWidth.coerceAtLeast(host.dp(200)), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+                    )
+                    val targetHeight = content.measuredHeight.coerceAtLeast(host.dp(24))
+                    val startHeight = if (content.height > 0) content.height else 0
+                    val startAlpha = content.alpha
+
+                    currentAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                        duration = 260L
+                        interpolator = android.view.animation.DecelerateInterpolator(1.4f)
+                        addUpdateListener { anim ->
+                            val f = anim.animatedFraction
+                            val currentH = (startHeight + (targetHeight - startHeight) * f).toInt()
+                            (content.layoutParams as? LinearLayout.LayoutParams)?.let { p ->
+                                p.height = currentH
+                                content.layoutParams = p
+                            }
+                            content.alpha = startAlpha + (1f - startAlpha) * f
+                        }
+                        addListener(object : android.animation.AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: android.animation.Animator) {
+                                (content.layoutParams as? LinearLayout.LayoutParams)?.let { p ->
+                                    p.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    content.layoutParams = p
+                                }
+                                content.alpha = 1f
+                            }
+                        })
+                        start()
+                    }
+                } else {
+                    val startHeight = content.height
+                    val startAlpha = content.alpha
+                    currentAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
+                        duration = 220L
+                        interpolator = android.view.animation.AccelerateInterpolator(1.2f)
+                        addUpdateListener { anim ->
+                            val f = anim.animatedFraction
+                            val currentH = (startHeight * (1f - f)).toInt()
+                            (content.layoutParams as? LinearLayout.LayoutParams)?.let { p ->
+                                p.height = currentH
+                                content.layoutParams = p
+                            }
+                            content.alpha = startAlpha * (1f - f)
+                        }
+                        addListener(object : android.animation.AnimatorListenerAdapter() {
+                            override fun onAnimationEnd(animation: android.animation.Animator) {
+                                content.visibility = View.GONE
+                                (content.layoutParams as? LinearLayout.LayoutParams)?.let { p ->
+                                    p.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                                    content.layoutParams = p
+                                }
+                                content.alpha = 1f
+                            }
+                        })
+                        start()
+                    }
                 }
             }
         }
@@ -566,6 +634,15 @@ internal class ProfileFlows(
                     val traffic = ProfileTraffic.from(subscription)
                     val used = traffic.totalBytes
                     val limit = traffic.quotaLimitBytes
+                    starryPlanCard?.updateData(
+                        tariffName = tariff,
+                        expiryText = expiry,
+                        isUnlimitedTime = unlimitedTime,
+                        isActive = subscription.optBoolean("active", true),
+                        deviceLimit = if (unlimitedDevices) 10 else currentDeviceLimit,
+                        trafficTotalBytes = used,
+                        trafficQuotaLimitBytes = limit
+                    )
                     usageText?.text = if (limit > 0L) {
                         host.uiCopy("использовано ${formatBytes(traffic.quotaUsedBytes)} из ${formatBytes(limit)}") + "\n" + copy("всего передано", "total transferred") + " ${formatBytes(used)}"
                     } else host.uiCopy("передано ${formatBytes(used)} · без установленного лимита")

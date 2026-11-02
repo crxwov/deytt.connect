@@ -341,32 +341,97 @@ internal class PrimaryPages(
         )
             .apply { setPadding(0, 0, 0, host.dp(18)) })
 
-        var subscriptionRefreshing = false
         val subscriptionRow = host.row(
             copy("Обновить подписку", "Refresh subscription"),
             copy("Загрузить доступные маршруты", "Load available routes"),
             "SUBSCRIPTION_ICON",
-        ).apply {
-            setOnClickListener {
-                if (subscriptionRefreshing) return@setOnClickListener
-                val url = SubscriptionClient.getSavedSubscriptionUrl(host)
-                val token = TelegramSessionStore.read(host)
-                if (url == null && token == null) {
-                    host.openSetup()
-                    return@setOnClickListener
+        )
+        val labels = (subscriptionRow as? ViewGroup)?.getChildAt(1) as? LinearLayout
+        val subtitleView = labels?.getChildAt(1) as? TextView
+
+        fun applyRefreshState(animateSuccess: Boolean = false) {
+            if (SubscriptionRefreshState.inFlight) {
+                val phaseText = SubscriptionRefreshState.phaseDescription.ifBlank {
+                    host.uiCopy(copy("Обновляем подписку и маршруты…", "Refreshing subscription and routes…"))
                 }
-                subscriptionRefreshing = true
-                val labels = (this as? ViewGroup)?.getChildAt(1) as? LinearLayout
-                val subtitleView = labels?.getChildAt(1) as? TextView
-                subtitleView?.text = host.uiCopy(copy("Обновляем подписку и маршруты…", "Refreshing subscription and routes…"))
+                subtitleView?.text = phaseText
                 subtitleView?.setTextColor(DeyttUi.SKY)
-                host.refreshSubscriptionManually { success, message ->
-                    subscriptionRefreshing = false
-                    subtitleView?.text = message
-                    subtitleView?.setTextColor(if (success) DeyttUi.MINT else DeyttUi.CORAL)
+                return
+            }
+
+            val elapsedSinceSuccess = android.os.SystemClock.elapsedRealtime() - SubscriptionRefreshState.lastSuccessTimestamp
+            if (SubscriptionRefreshState.lastSuccessTimestamp > 0L && elapsedSinceSuccess < 4000L) {
+                val successMsg = SubscriptionRefreshState.lastMessage.ifBlank {
+                    host.uiCopy(copy("✓ Маршруты обновлены", "✓ Routes updated"))
+                }
+                subtitleView?.text = successMsg
+                subtitleView?.setTextColor(DeyttUi.MINT)
+                if (animateSuccess && !host.prefersReducedMotion()) {
+                    subscriptionRow.animate()
+                        .scaleX(1.03f)
+                        .scaleY(1.03f)
+                        .setDuration(160L)
+                        .withEndAction {
+                            subscriptionRow.animate()
+                                .scaleX(1f)
+                                .scaleY(1f)
+                                .setDuration(220L)
+                                .start()
+                        }
+                        .start()
+                }
+                subscriptionRow.postDelayed({
+                    if (!SubscriptionRefreshState.inFlight &&
+                        (android.os.SystemClock.elapsedRealtime() - SubscriptionRefreshState.lastSuccessTimestamp >= 3900L)
+                    ) {
+                        subtitleView?.text = host.uiCopy(copy("Загрузить доступные маршруты", "Load available routes"))
+                        subtitleView?.setTextColor(MUTED)
+                    }
+                }, (4000L - elapsedSinceSuccess).coerceAtLeast(100L))
+                return
+            }
+
+            if (SubscriptionRefreshState.currentPhase == SubscriptionRefreshState.Phase.FAILURE) {
+                subtitleView?.text = SubscriptionRefreshState.lastMessage.ifBlank {
+                    host.uiCopy(copy("Ошибка обновления", "Update failed"))
+                }
+                subtitleView?.setTextColor(DeyttUi.CORAL)
+                return
+            }
+
+            subtitleView?.text = host.uiCopy(copy("Загрузить доступные маршруты", "Load available routes"))
+            subtitleView?.setTextColor(MUTED)
+        }
+
+        subscriptionRow.setOnClickListener {
+            if (SubscriptionRefreshState.inFlight) return@setOnClickListener
+            val url = SubscriptionClient.getSavedSubscriptionUrl(host)
+            val token = TelegramSessionStore.read(host)
+            if (url == null && token == null) {
+                host.openSetup()
+                return@setOnClickListener
+            }
+            host.refreshSubscriptionManually()
+        }
+
+        val refreshListener = {
+            host.runOnUiThread {
+                if (!host.isFinishing && !host.isDestroyed) {
+                    val isSuccess = SubscriptionRefreshState.currentPhase == SubscriptionRefreshState.Phase.SUCCESS
+                    applyRefreshState(animateSuccess = isSuccess)
                 }
             }
         }
+        SubscriptionRefreshState.addListener(refreshListener)
+        subscriptionRow.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                applyRefreshState(false)
+            }
+            override fun onViewDetachedFromWindow(v: View) {
+                SubscriptionRefreshState.removeListener(refreshListener)
+            }
+        })
+        applyRefreshState(false)
         root.addView(subscriptionRow)
         root.addView(spacer(14, host))
 
