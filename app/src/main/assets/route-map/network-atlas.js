@@ -1050,7 +1050,7 @@
           const [fromKey, toKey] = directed[linkIndex], point = this.projectLanePoint(fromKey, toKey, amount, stream.lane);
           if (point.z <= -.02) continue;
           if (!this.reducedMotion.matches && packet === 0) this.drawTrafficTrail(directed, position, stream);
-          this.drawTrafficDot(point.x, point.y, stream, packet % 4 === 0, 1, .60 + (packet % 3) * .08);
+          this.drawTrafficDot(point.x, point.y, stream, packet % 4 === 0, 1, .75 + (packet % 3) * .10);
         }
       });
     }
@@ -1100,13 +1100,13 @@
     drawTrafficTrail(links, position, stream) {
       const points = [];
       for (let step = 10; step >= 0; step--) {
-        const sample = position - .065 * step / 10;
+        const sample = position - .09 * step / 10;
         if (sample < 0 || sample >= links.length) continue;
         const index = Math.floor(sample), [from, to] = links[index];
         points.push(this.projectLanePoint(from, to, sample - index, stream.lane));
       }
-      const context = this.context; context.save(); context.lineCap = context.lineJoin = "round"; context.shadowColor = stream.color; context.shadowBlur = 1;
-      for (let i = 1; i < points.length; i++) { const a = points[i-1], b = points[i]; if (a.z <= -.02 || b.z <= -.02) continue; const intensity = i / (points.length - 1); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.globalAlpha = intensity * .70; context.strokeStyle = intensity > .7 ? stream.bright : stream.color; context.lineWidth = .30 + intensity * .60; context.stroke(); }
+      const context = this.context; context.save(); context.lineCap = context.lineJoin = "round"; context.shadowColor = stream.color; context.shadowBlur = 1.5;
+      for (let i = 1; i < points.length; i++) { const a = points[i-1], b = points[i]; if (a.z <= -.02 || b.z <= -.02) continue; const intensity = i / (points.length - 1); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.globalAlpha = intensity * .72; context.strokeStyle = intensity > .7 ? stream.bright : stream.color; context.lineWidth = .38 + intensity * .75; context.stroke(); }
       context.restore();
     }
 
@@ -1116,11 +1116,11 @@
       let sprite = this.trafficSprites.get(key);
       if (!sprite) {
         sprite = document.createElement("canvas"); sprite.width = sprite.height = 48;
-        const paint = sprite.getContext("2d"); paint.scale(2, 2); const radius = head ? 1.5 : 1.1;
-        const halo = paint.createRadialGradient(12, 12, .5, 12, 12, 3.4); halo.addColorStop(0, stream.color + "58"); halo.addColorStop(1, stream.color + "00"); paint.fillStyle = halo; paint.fillRect(6, 6, 12, 12);
-        const sphere = paint.createRadialGradient(11.2, 11.2, .1, 12, 12, radius); sphere.addColorStop(0, "#FFFFFF"); sphere.addColorStop(.32, stream.bright); sphere.addColorStop(1, stream.color);
-        paint.beginPath(); paint.arc(12, 12, radius, 0, TAU); paint.fillStyle = sphere; paint.shadowColor = stream.color; paint.shadowBlur = head ? 2 : 1; paint.fill();
-        if (head) { paint.beginPath(); paint.arc(11.5, 11.2, .35, 0, TAU); paint.fillStyle = "#FFFFFF"; paint.fill(); }
+        const paint = sprite.getContext("2d"); paint.scale(2, 2); const radius = head ? 1.85 : 1.4;
+        const halo = paint.createRadialGradient(12, 12, .5, 12, 12, 4.4); halo.addColorStop(0, stream.color + "58"); halo.addColorStop(1, stream.color + "00"); paint.fillStyle = halo; paint.fillRect(5, 5, 14, 14);
+        const sphere = paint.createRadialGradient(11.2, 11.0, .1, 12, 12, radius); sphere.addColorStop(0, "#FFFFFF"); sphere.addColorStop(.32, stream.bright); sphere.addColorStop(1, stream.color);
+        paint.beginPath(); paint.arc(12, 12, radius, 0, TAU); paint.fillStyle = sphere; paint.shadowColor = stream.color; paint.shadowBlur = head ? 2.5 : 1.5; paint.fill();
+        if (head) { paint.beginPath(); paint.arc(11.4, 11.0, .4, 0, TAU); paint.fillStyle = "#FFFFFF"; paint.fill(); }
         this.trafficSprites.set(key, sprite);
       }
       this.context.globalAlpha = alpha; this.context.drawImage(sprite, x - 12 * size, y - 12 * size, 24 * size, 24 * size); this.context.globalAlpha = 1;
