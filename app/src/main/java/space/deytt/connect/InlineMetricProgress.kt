@@ -49,17 +49,11 @@ internal class InlineMetricProgress(private val label: TextView) {
         label.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(view: View) { observeVisibility(); updateAnimation() }
             override fun onViewDetachedFromWindow(view: View) {
-                visibilityObserver?.takeIf { it.isAlive }?.apply {
-                    removeOnGlobalLayoutListener(layoutChanged)
-                    removeOnWindowFocusChangeListener(focusChanged)
-                    removeOnScrollChangedListener(scrollChanged)
-                }
-                visibilityObserver = null
+                unobserveVisibility()
                 label.removeCallbacks(frame)
                 framePosted = false
             }
         })
-        if (label.isAttachedToWindow) observeVisibility()
     }
 
     fun isLoading(): Boolean = loading
@@ -76,12 +70,24 @@ internal class InlineMetricProgress(private val label: TextView) {
     }
 
     private fun observeVisibility() {
-        if (visibilityObserver != null) return
-        visibilityObserver = label.viewTreeObserver.also {
-            it.addOnGlobalLayoutListener(layoutChanged)
-            it.addOnWindowFocusChangeListener(focusChanged)
-            it.addOnScrollChangedListener(scrollChanged)
+        if (!loading || !hasSlots || visibilityObserver != null || !label.isAttachedToWindow) return
+        val vto = label.viewTreeObserver
+        if (vto.isAlive) {
+            visibilityObserver = vto.also {
+                it.addOnGlobalLayoutListener(layoutChanged)
+                it.addOnWindowFocusChangeListener(focusChanged)
+                it.addOnScrollChangedListener(scrollChanged)
+            }
         }
+    }
+
+    private fun unobserveVisibility() {
+        visibilityObserver?.takeIf { it.isAlive }?.apply {
+            removeOnGlobalLayoutListener(layoutChanged)
+            removeOnWindowFocusChangeListener(focusChanged)
+            removeOnScrollChangedListener(scrollChanged)
+        }
+        visibilityObserver = null
     }
 
     private fun updateSpans() {
@@ -96,6 +102,11 @@ internal class InlineMetricProgress(private val label: TextView) {
         val targetLayer = if (loading && hasSlots) View.LAYER_TYPE_SOFTWARE else View.LAYER_TYPE_NONE
         if (label.layerType != targetLayer) {
             label.setLayerType(targetLayer, null)
+        }
+        if (loading && hasSlots) {
+            observeVisibility()
+        } else {
+            unobserveVisibility()
         }
         if (previous.isNotEmpty() || hasSlots) label.requestLayout()
         label.invalidate()

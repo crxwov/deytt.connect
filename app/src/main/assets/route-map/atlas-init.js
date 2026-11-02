@@ -151,6 +151,12 @@
       window.deyttMapAtlas.setUserLocation(null, null, {});
     }
   };
+  window.deyttPauseGlobe = function () {
+    if (window.deyttMapAtlas) window.deyttMapAtlas.pause();
+  };
+  window.deyttResumeGlobe = function () {
+    if (window.deyttMapAtlas) window.deyttMapAtlas.resume();
+  };
 
   window.DeyttAtlas.create(root, {
     initialZoom: initialZoom,
@@ -160,7 +166,7 @@
     selectOnTap: false,
     wheelZoomOnly: windowsProfile,
     pixelRatioFloor: windowsProfile ? 1.6 : 1,
-    pixelRatioCap: windowsProfile ? 2.25 : undefined,
+    pixelRatioCap: windowsProfile ? 2.25 : window.DeyttAtlasBridge ? 2.0 : undefined,
     labelScale: windowsPalette ? 0.9 : windowsProfile ? 1.34 : 1,
     labelFontFamily: windowsPalette ? '"Inter Tight", "Segoe UI", sans-serif' : windowsProfile ? 'system-ui, "Segoe UI", sans-serif' : undefined,
     routeFocusMinZoom: windowsProfile ? 4.2 : undefined,

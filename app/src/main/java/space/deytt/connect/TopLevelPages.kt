@@ -1799,6 +1799,7 @@ internal class PrimaryPages(
             override fun afterTextChanged(s: Editable?) {}
         })
 
+        dialog.setOnDismissListener { executor.shutdown() }
         showSheet(dialog, sheet)
     }
 
