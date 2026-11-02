@@ -224,6 +224,7 @@ class MainActivity : Activity() {
                 RouteProbeClient.clear(this@MainActivity, event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty())
             }
             if (::primaryPages.isInitialized) primaryPages.onRouteProbeEvent(event)
+            favoriteRoutesDrawer?.onRouteProbeEvent(event)
             val requestId = event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty()
             if (requestId.isBlank() || requestId != pendingRouteProbeId) return
             val selected = SelectedRouteStore(this@MainActivity).read()
@@ -828,6 +829,14 @@ class MainActivity : Activity() {
         startup.start()
     }
 
+    private var homeContentRoot: View? = null
+
+    internal fun setHomeContentShift(shiftY: Float) {
+        homeContentRoot?.translationY = -shiftY
+    }
+
+    internal fun getHomeContentShift(): Float = -(homeContentRoot?.translationY ?: 0f)
+
     private inner class HomeGestureLayout(context: Context) : FrameLayout(context) {
         private var startY = 0f
         private var startX = 0f
@@ -836,6 +845,7 @@ class MainActivity : Activity() {
 
         override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
             if (::pager.isInitialized && pager.currentItem != 0) return false
+            if (favoriteRoutesDrawer?.isOpen() == true) return false
             when (ev.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     startY = ev.rawY
@@ -845,10 +855,11 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_MOVE -> {
                     val dy = startY - ev.rawY
                     val dx = kotlin.math.abs(ev.rawX - startX)
-                    if (!isDraggingUp && dy > touchSlop * 1.5f && dy > dx * 1.2f) {
+                    if (!isDraggingUp && dy > touchSlop && dy > dx * 0.85f) {
                         isDraggingUp = true
                         parent?.requestDisallowInterceptTouchEvent(true)
                         pager.requestDisallowInterceptTouchEvent(true)
+                        favoriteRoutesDrawer?.onDragStart()
                         return true
                     }
                 }
@@ -858,6 +869,7 @@ class MainActivity : Activity() {
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
             if (::pager.isInitialized && pager.currentItem != 0) return false
+            if (favoriteRoutesDrawer?.isOpen() == true) return false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     startY = event.rawY
@@ -868,27 +880,30 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_MOVE -> {
                     val dy = startY - event.rawY
                     val dx = kotlin.math.abs(event.rawX - startX)
-                    if (!isDraggingUp && dy > touchSlop * 1.5f && dy > dx * 1.2f) {
+                    if (!isDraggingUp && dy > touchSlop && dy > dx * 0.85f) {
                         isDraggingUp = true
                         parent?.requestDisallowInterceptTouchEvent(true)
                         pager.requestDisallowInterceptTouchEvent(true)
+                        favoriteRoutesDrawer?.onDragStart()
                     }
                     if (isDraggingUp) {
+                        favoriteRoutesDrawer?.onDragMove(dy)
                         return true
                     }
                 }
                 MotionEvent.ACTION_UP -> {
                     if (isDraggingUp) {
                         val dy = startY - event.rawY
-                        if (dy > touchSlop * 2f) {
-                            favoriteRoutesDrawer?.open()
-                        }
+                        favoriteRoutesDrawer?.onDragEnd(dy)
                         isDraggingUp = false
                         return true
                     }
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    isDraggingUp = false
+                    if (isDraggingUp) {
+                        favoriteRoutesDrawer?.onDragCancel()
+                        isDraggingUp = false
+                    }
                 }
             }
             return true
@@ -898,6 +913,7 @@ class MainActivity : Activity() {
     private fun buildHomePage(): View {
         val gestureLayout = HomeGestureLayout(this)
         val root = screen(withBackdrop = true)
+        homeContentRoot = root
         val mapSlot = FrameLayout(this).apply {
             tag = "home-map-gesture"
             clipChildren = false

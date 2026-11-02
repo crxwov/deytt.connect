@@ -1,6 +1,10 @@
 package space.deytt.connect
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Typeface
 import android.os.Handler
@@ -27,8 +31,9 @@ import java.util.concurrent.Executors
 
 /**
  * Compact Favorite Routes drawer for MainActivity Home screen.
- * Opens as a lightweight half-screen / wrap_content sheet.
+ * Pulling up physically shifts the Home page upwards and reveals favorites from below.
  * Tapping any route immediately connects and dismisses.
+ * Full speed and ping measurement matching the routes page.
  */
 @SuppressLint("ViewConstructor")
 internal class FavoriteRoutesDrawer(
@@ -50,7 +55,12 @@ internal class FavoriteRoutesDrawer(
     private lateinit var measureButton: TextView
     private lateinit var countBadge: TextView
 
-    private val latencyBadges = mutableMapOf<String, TextView>()
+    private val statusViews = mutableMapOf<String, TextView>()
+    private val currentFavRoutes = mutableListOf<DeyttRoute>()
+    private var currentProbeRequestId: String? = null
+    private var shiftAnimator: ValueAnimator? = null
+
+    private val maxHomeShiftPx: Float get() = host.dp(140).toFloat()
 
     fun attachTo(stage: ViewGroup) {
         parentStage = stage
@@ -61,11 +71,18 @@ internal class FavoriteRoutesDrawer(
 
     fun detach() {
         FavoriteRoutesStore.removeListener(::refreshFavorites)
+        shiftAnimator?.cancel()
         parentStage?.removeView(overlayRoot)
         parentStage = null
     }
 
     fun isOpen(): Boolean = isDrawerOpen
+
+    private fun sheetHeight(): Int {
+        if (!::sheetContainer.isInitialized) return host.dp(260)
+        val h = sheetContainer.height
+        return if (h > 0) h else host.dp(260)
+    }
 
     private fun buildViews() {
         overlayRoot = FrameLayout(host).apply {
@@ -123,19 +140,20 @@ internal class FavoriteRoutesDrawer(
                     }
                     if (isDraggingDown) {
                         sheetContainer.translationY = dy.coerceAtLeast(0f)
-                        val dragProgress = (dy / host.dp(180)).coerceIn(0f, 1f)
-                        scrimView.alpha = (1f - dragProgress * 0.7f).coerceIn(0f, 1f)
+                        val h = sheetHeight().toFloat()
+                        val dismissProgress = (dy / h).coerceIn(0f, 1f)
+                        scrimView.alpha = (1f - dismissProgress * 0.85f).coerceIn(0f, 1f)
+                        host.setHomeContentShift((1f - dismissProgress) * maxHomeShiftPx)
                         true
                     } else false
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     if (isDraggingDown) {
                         val dy = event.rawY - startY
-                        if (dy > host.dp(55)) {
-                            close()
+                        if (dy > host.dp(50)) {
+                            animateClose(fromCurrent = true)
                         } else {
-                            sheetContainer.animate().translationY(0f).setDuration(160L).start()
-                            scrimView.animate().alpha(1f).setDuration(160L).start()
+                            animateOpen(fromCurrent = true)
                         }
                         isDraggingDown = false
                         true
@@ -273,54 +291,127 @@ internal class FavoriteRoutesDrawer(
         overlayRoot.addView(sheetContainer, sheetParams)
     }
 
-    fun open() {
+    // Touch dragging from Home screen
+    fun onDragStart() {
         if (isDrawerOpen) return
+        refreshFavorites()
+        overlayRoot.visibility = View.VISIBLE
+        overlayRoot.isClickable = false
+        val h = sheetHeight().toFloat()
+        sheetContainer.translationY = h + host.dp(30)
+        scrimView.alpha = 0f
+    }
+
+    fun onDragMove(dy: Float) {
+        if (isDrawerOpen) return
+        val h = sheetHeight().toFloat()
+        val cappedDy = dy.coerceAtLeast(0f)
+        val progress = (cappedDy / h).coerceIn(0f, 1f)
+        sheetContainer.translationY = h * (1f - progress)
+        scrimView.alpha = progress * 0.85f
+        host.setHomeContentShift(progress * maxHomeShiftPx)
+    }
+
+    fun onDragEnd(dy: Float) {
+        if (isDrawerOpen) return
+        if (dy > host.dp(45)) {
+            animateOpen(fromCurrent = true)
+        } else {
+            animateClose(fromCurrent = true)
+        }
+    }
+
+    fun onDragCancel() {
+        if (!isDrawerOpen) {
+            animateClose(fromCurrent = true)
+        }
+    }
+
+    private fun animateOpen(fromCurrent: Boolean) {
         isDrawerOpen = true
         overlayRoot.visibility = View.VISIBLE
         overlayRoot.isClickable = true
         scrimView.isClickable = true
         scrimView.setOnClickListener { close() }
-        refreshFavorites()
 
-        scrimView.alpha = 0f
-        scrimView.animate().alpha(1f).setDuration(160L).start()
+        sheetContainer.animate().cancel()
+        scrimView.animate().cancel()
+        shiftAnimator?.cancel()
 
-        sheetContainer.post {
-            val height = sheetContainer.height.takeIf { it > 0 } ?: host.dp(240)
-            sheetContainer.translationY = height.toFloat() + host.dp(60)
-            sheetContainer.animate()
-                .translationY(0f)
-                .setDuration(220L)
-                .setInterpolator(DecelerateInterpolator())
-                .start()
+        sheetContainer.animate()
+            .translationY(0f)
+            .setDuration(220L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+
+        scrimView.animate()
+            .alpha(1f)
+            .setDuration(220L)
+            .start()
+
+        val startShift = host.getHomeContentShift()
+        shiftAnimator = ValueAnimator.ofFloat(startShift, maxHomeShiftPx).apply {
+            duration = 220L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { host.setHomeContentShift(it.animatedValue as Float) }
+            start()
         }
     }
 
-    fun close() {
-        if (!isDrawerOpen) return
+    private fun animateClose(fromCurrent: Boolean) {
         isDrawerOpen = false
         overlayRoot.isClickable = false
         scrimView.isClickable = false
         scrimView.setOnClickListener(null)
-        val height = sheetContainer.height.takeIf { it > 0 } ?: host.dp(240)
+
+        sheetContainer.animate().cancel()
+        scrimView.animate().cancel()
+        shiftAnimator?.cancel()
+
+        val h = sheetHeight().toFloat()
         sheetContainer.animate()
-            .translationY(height.toFloat() + host.dp(60))
-            .setDuration(180L)
+            .translationY(h + host.dp(60))
+            .setDuration(200L)
             .setInterpolator(DecelerateInterpolator())
             .start()
 
         scrimView.animate()
             .alpha(0f)
-            .setDuration(180L)
+            .setDuration(200L)
             .withEndAction {
-                overlayRoot.visibility = View.GONE
+                if (!isDrawerOpen) overlayRoot.visibility = View.GONE
             }
             .start()
+
+        val startShift = host.getHomeContentShift()
+        shiftAnimator = ValueAnimator.ofFloat(startShift, 0f).apply {
+            duration = 200L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener { host.setHomeContentShift(it.animatedValue as Float) }
+            start()
+        }
+    }
+
+    fun open() {
+        if (isDrawerOpen) return
+        refreshFavorites()
+        overlayRoot.visibility = View.VISIBLE
+        sheetContainer.post {
+            val h = sheetHeight().toFloat()
+            sheetContainer.translationY = h + host.dp(60)
+            scrimView.alpha = 0f
+            animateOpen(fromCurrent = false)
+        }
+    }
+
+    fun close() {
+        if (!isDrawerOpen) return
+        animateClose(fromCurrent = false)
     }
 
     fun refreshFavorites() {
         cardsLayout.removeAllViews()
-        latencyBadges.clear()
+        statusViews.clear()
 
         val favIds = store.getFavorites()
         val allRoutes = host.getCachedRouteCatalog()
@@ -360,8 +451,8 @@ internal class FavoriteRoutesDrawer(
         val root = LinearLayout(host).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = host.dp(52)
-            setPadding(host.dp(12), host.dp(7), host.dp(12), host.dp(7))
+            minimumHeight = host.dp(56)
+            setPadding(host.dp(12), host.dp(8), host.dp(12), host.dp(8))
             background = host.glassRowBackground(emphasis = isSelected, radius = 16f)
             isClickable = true
             isFocusable = true
@@ -407,7 +498,7 @@ internal class FavoriteRoutesDrawer(
             DeyttUi.TEXT,
             Typeface.BOLD,
         )
-        val subtitle = host.text(
+        val protoSubtitle = host.text(
             when (route.protocol) {
                 RouteProtocol.AUTO -> "выберем доступный узел"
                 RouteProtocol.LTE -> "обход блокировок по спискам"
@@ -416,26 +507,24 @@ internal class FavoriteRoutesDrawer(
             11f,
             DeyttUi.MUTED,
         )
-        col.addView(title)
-        col.addView(subtitle)
-        root.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         val cached = RouteQualityStore.read(host, route.id)
-        val initialLatency = cached?.latencyMillis
-        val badge = host.mono(
-            if (initialLatency != null) "${initialLatency} мс" else "—",
+        val status = host.mono(
+            formatSampleLabel(cached?.latencyMillis, cached?.downloadBytesPerSecond),
             10.5f,
-            latencyColor(initialLatency),
-            650,
+            if (cached?.downloadBytesPerSecond != null && cached.downloadBytesPerSecond > 0L) DeyttUi.MINT
+            else if (cached?.latencyMillis != null) DeyttUi.SKY
+            else DeyttUi.MUTED,
+            500,
         ).apply {
-            gravity = Gravity.CENTER
-            setPadding(host.dp(7), host.dp(3), host.dp(7), host.dp(3))
-            background = host.glassRowBackground(emphasis = false, radius = 9f)
+            setPadding(0, host.dp(2), 0, 0)
         }
-        latencyBadges[route.id] = badge
-        root.addView(badge, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            marginEnd = host.dp(8)
-        })
+        statusViews[route.id] = status
+
+        col.addView(title)
+        col.addView(protoSubtitle)
+        col.addView(status)
+        root.addView(col, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
 
         val connectIndicator = host.text(
             if (isSelected) "выбрано" else "подключить",
@@ -451,6 +540,19 @@ internal class FavoriteRoutesDrawer(
         return root
     }
 
+    private fun formatSampleLabel(latency: Long?, speedBytes: Long?): String {
+        val latText = if (latency != null && RouteProbeStatistics.isValidLatencyMillis(latency)) "${latency} мс" else "—"
+        val speedText = if (speedBytes != null && speedBytes > 0L) {
+            val bits = speedBytes * 8.0
+            if (bits >= 1_000_000.0) {
+                String.format(java.util.Locale.US, "%.1f мбит/с", bits / 1_000_000.0)
+            } else {
+                String.format(java.util.Locale.US, "%.0f кбит/с", bits / 1_000.0)
+            }
+        } else "—"
+        return "отклик: $latText  ·  скорость: $speedText"
+    }
+
     private fun measureFavorites() {
         if (isMeasuring) return
         isMeasuring = true
@@ -461,23 +563,197 @@ internal class FavoriteRoutesDrawer(
         val favIds = store.getFavorites()
         val catalog = host.getCachedRouteCatalog()
         val config = host.getCachedSubscriptionContent()
+        val token = TelegramSessionStore.read(host)
+
+        currentFavRoutes.clear()
+        favIds.forEach { id ->
+            when (id) {
+                "auto" -> catalog.firstOrNull { it.protocol == RouteProtocol.AUTO }?.let { currentFavRoutes.add(it) }
+                "lte" -> catalog.firstOrNull { it.protocol == RouteProtocol.LTE || it.protocol == RouteProtocol.RU_DE }?.let { currentFavRoutes.add(it) }
+                else -> catalog.firstOrNull { it.id == id }?.let { currentFavRoutes.add(it) }
+            }
+        }
+
+        if (currentFavRoutes.isEmpty() || config == null) {
+            finishMeasuring()
+            return
+        }
+
+        currentFavRoutes.forEach { route ->
+            statusViews[route.id]?.apply {
+                text = "в очереди…"
+                setTextColor(DeyttUi.SKY)
+            }
+        }
+
+        val libboxRoutes = currentFavRoutes.filter { it.engine == TunnelEngine.LIBBOX }
+        val awgRoutes = currentFavRoutes.filter { it.engine == TunnelEngine.AMNEZIAWG }
+
+        if (libboxRoutes.isNotEmpty()) {
+            runCatching {
+                if (RouteProbeClient.isRunning(host)) {
+                    RouteProbeClient.cancel(host)
+                }
+                RouteProbeClient.start(
+                    host,
+                    config,
+                    libboxRoutes.map(DeyttRoute::configTag),
+                    RouteProbePreferences.method(host),
+                    token,
+                    latencyOnly = false,
+                )
+            }.onSuccess { reqId ->
+                currentProbeRequestId = reqId
+            }.onFailure { err ->
+                android.util.Log.w("FavoriteRoutesDrawer", "RouteProbeClient.start failed: ${err.message}")
+                measureLibboxDirect(libboxRoutes) {
+                    if (awgRoutes.isNotEmpty()) {
+                        startAwgProbes(awgRoutes)
+                    } else {
+                        finishMeasuring()
+                    }
+                }
+            }
+        } else if (awgRoutes.isNotEmpty()) {
+            startAwgProbes(awgRoutes)
+        } else {
+            finishMeasuring()
+        }
+    }
+
+    fun onRouteProbeEvent(event: Intent) {
+        val requestId = event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty()
+        if (requestId.isBlank() || requestId != currentProbeRequestId) return
+        val stage = event.getStringExtra(RouteProbeClient.EXTRA_STAGE).orEmpty()
+        val tag = event.getStringExtra(RouteProbeClient.EXTRA_ROUTE_TAG).orEmpty()
+        val route = currentFavRoutes.firstOrNull { it.configTag == tag } ?: return
+        val latency = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L).takeIf { it >= 0L }
+        val speed = event.getLongExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, -1L).takeIf { it >= 0L }
+
+        when (stage) {
+            "ping" -> {
+                statusViews[route.id]?.apply {
+                    text = if (latency != null) "отклик: ${latency} мс  ·  замер скорости…" else "проверка отклика…"
+                    setTextColor(DeyttUi.SKY)
+                }
+            }
+            "speed" -> {
+                statusViews[route.id]?.apply {
+                    text = formatSampleLabel(latency, speed)
+                    setTextColor(DeyttUi.SKY)
+                }
+            }
+            "complete", "failed" -> {
+                val sample = RouteProbeSample(route.id, latency, speed)
+                RouteQualityStore.write(host, sample)
+                statusViews[route.id]?.apply {
+                    text = formatSampleLabel(latency, speed)
+                    setTextColor(if (speed != null && speed > 0L) DeyttUi.MINT else if (latency != null) DeyttUi.SKY else DeyttUi.CORAL)
+                }
+            }
+        }
+
+        if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
+            currentProbeRequestId = null
+            val awgRoutes = currentFavRoutes.filter { it.engine == TunnelEngine.AMNEZIAWG }
+            if (awgRoutes.isNotEmpty()) {
+                startAwgProbes(awgRoutes)
+            } else {
+                finishMeasuring()
+            }
+        }
+    }
+
+    private fun startAwgProbes(awgRoutes: List<DeyttRoute>) {
+        host.requestAwgMeasurements(awgRoutes, onComplete = {
+            finishMeasuring()
+        }, onRouteFailure = { route ->
+            statusViews[route.id]?.apply {
+                text = "отклик: —  ·  скорость: —"
+                setTextColor(DeyttUi.CORAL)
+            }
+        }, onRouteStarting = { route ->
+            statusViews[route.id]?.apply {
+                text = "подключение amneziawg…"
+                setTextColor(DeyttUi.SKY)
+            }
+        }, measure = { route, finished ->
+            measureAwgRoute(route, finished)
+        })
+    }
+
+    private fun measureAwgRoute(route: DeyttRoute, finished: (Boolean) -> Unit) {
+        val token = TelegramSessionStore.read(host)
+        measureExecutor.execute {
+            var measuredLatency: Long? = null
+            val pingSamples = mutableListOf<Long>()
+            runCatching {
+                RouteProxyProbe.measureThroughSystemVpn(
+                    RouteProbePreferences.method(host),
+                    timeoutMillis = 2_500,
+                    sampleCount = 1,
+                    onSample = { _, latency ->
+                        if (latency != null && RouteProbeStatistics.isValidLatencyMillis(latency)) {
+                            pingSamples += latency
+                            val currentLatency = RouteProbeStatistics.medianLatencyMillis(pingSamples)
+                            measuredLatency = currentLatency
+                            mainHandler.post {
+                                statusViews[route.id]?.apply {
+                                    text = "отклик: ${currentLatency} мс  ·  замер скорости…"
+                                    setTextColor(DeyttUi.SKY)
+                                }
+                            }
+                        }
+                    }
+                )
+            }.onSuccess { measuredLatency = it }
+
+            val speed = if (token.isNullOrBlank()) null else runCatching {
+                val current = { AwgTunnelController.isRunning() }
+                RouteProxyProbe.measureSystemDownload(token, current, sampleMillis = 500, onProgress = { bytesPerSecond ->
+                    val lat = measuredLatency
+                    mainHandler.post {
+                        statusViews[route.id]?.apply {
+                            text = formatSampleLabel(lat, bytesPerSecond)
+                            setTextColor(DeyttUi.SKY)
+                        }
+                    }
+                })
+            }.getOrNull()
+
+            val sample = RouteProbeSample(route.id, measuredLatency, speed)
+            RouteQualityStore.write(host, sample)
+
+            mainHandler.post {
+                statusViews[route.id]?.apply {
+                    text = formatSampleLabel(measuredLatency, speed)
+                    setTextColor(if (speed != null && speed > 0L) DeyttUi.MINT else DeyttUi.MUTED)
+                }
+                finished(measuredLatency != null)
+            }
+        }
+    }
+
+    private fun measureLibboxDirect(routes: List<DeyttRoute>, onComplete: () -> Unit) {
+        val config = host.getCachedSubscriptionContent()
         val awgConfig = AwgProfileStore(host).profiles().firstOrNull()?.config
 
         measureExecutor.execute {
-            favIds.forEach { id ->
-                val route = when (id) {
-                    "auto" -> catalog.firstOrNull { it.protocol == RouteProtocol.AUTO }
-                    "lte" -> catalog.firstOrNull { it.protocol == RouteProtocol.LTE || it.protocol == RouteProtocol.RU_DE }
-                    else -> catalog.firstOrNull { it.id == id }
+            routes.forEach { route ->
+                mainHandler.post {
+                    statusViews[route.id]?.apply {
+                        text = "замер отклика…"
+                        setTextColor(DeyttUi.SKY)
+                    }
                 }
 
                 var latencyResult: Long? = null
-                if (route != null && config != null) {
+                if (config != null) {
                     val target = RouteLatency.target(config, route, awgConfig)
                     if (target != null) {
                         latencyResult = RouteLatency.measure(target, 2200)
                     } else if (route.protocol == RouteProtocol.AUTO) {
-                        val firstEdge = catalog.firstOrNull { it.engine == TunnelEngine.LIBBOX && it.protocol != RouteProtocol.AUTO }
+                        val firstEdge = host.getCachedRouteCatalog().firstOrNull { it.engine == TunnelEngine.LIBBOX && it.protocol != RouteProtocol.AUTO }
                         if (firstEdge != null) {
                             val edgeTarget = RouteLatency.target(config, firstEdge, awgConfig)
                             if (edgeTarget != null) latencyResult = RouteLatency.measure(edgeTarget, 2200)
@@ -485,43 +761,39 @@ internal class FavoriteRoutesDrawer(
                     }
                 }
 
-                if (latencyResult != null && RouteProbeStatistics.isValidLatencyMillis(latencyResult)) {
-                    RouteQualityStore.writeLatency(host, route?.id ?: id, latencyResult)
+                val speedResult: Long? = null
+                val sample = RouteProbeSample(route.id, latencyResult, speedResult)
+                if (latencyResult != null) {
+                    RouteQualityStore.write(host, sample)
                 }
 
-                val finalLatency = latencyResult
                 mainHandler.post {
-                    latencyBadges[route?.id ?: id]?.apply {
-                        text = if (finalLatency != null) "${finalLatency} мс" else "—"
-                        setTextColor(latencyColor(finalLatency))
+                    statusViews[route.id]?.apply {
+                        text = formatSampleLabel(latencyResult, speedResult)
+                        setTextColor(if (latencyResult != null) DeyttUi.SKY else DeyttUi.CORAL)
                     }
                 }
             }
+            mainHandler.post { onComplete() }
+        }
+    }
 
-            mainHandler.post {
-                isMeasuring = false
-                measureButton.text = "измерить"
-                measureButton.isEnabled = true
-                measureButton.alpha = 1f
-                host.window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
-            }
+    private fun finishMeasuring() {
+        mainHandler.post {
+            isMeasuring = false
+            measureButton.text = "измерить"
+            measureButton.isEnabled = true
+            measureButton.alpha = 1f
+            host.window.decorView.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         }
     }
 
     private fun countryCleanName(code: String): String = when (code.uppercase()) {
-        "NL" -> "Нидерланды"
-        "DE", "RU-DE" -> "Германия"
-        "RU" -> "Россия"
-        "FI" -> "Финляндия"
-        "IT" -> "Италия"
-        else -> code
-    }
-
-    private fun latencyColor(ms: Long?): Int = when {
-        ms == null || !RouteProbeStatistics.isValidLatencyMillis(ms) -> DeyttUi.CORAL
-        ms < 95L -> DeyttUi.MINT
-        ms < 190L -> DeyttUi.SKY
-        ms < 280L -> DeyttUi.AMBER
-        else -> DeyttUi.CORAL
+        "NL" -> "нидерланды"
+        "DE", "RU-DE" -> "германия"
+        "RU" -> "россия"
+        "FI" -> "финляндия"
+        "IT" -> "италия"
+        else -> code.lowercase()
     }
 }
