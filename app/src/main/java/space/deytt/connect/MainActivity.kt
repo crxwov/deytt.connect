@@ -1078,8 +1078,11 @@ class MainActivity : Activity() {
         val config = SubscriptionStore(this).readCurrent()
         val previousRoute = config?.let { RouteCatalog.from(it, AwgProfileStore(this).profiles(), OpenFluxProfileStore(this).profiles(this)) }
             ?.firstOrNull { it.id == previous.id }
+            ?: if (previous.id == "auto") DeyttRoute(id = "auto", countryCode = "", country = "автоподбор", flag = "", protocol = RouteProtocol.AUTO, engine = TunnelEngine.LIBBOX) else null
         val wasConnected = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
-        if (config == null || previousRoute == null || (!wasConnected && isSystemTunnelActive())) {
+        android.util.Log.i("DeyttRouteProbe", "requestAwgMeasurements temporary=$temporaryAwgMeasurement routes=${routes.size} previous=${previous.id} previousRoute=${previousRoute?.id} wasConnected=$wasConnected")
+        if (config == null || (wasConnected && previousRoute == null)) {
+            android.util.Log.w("DeyttRouteProbe", "requestAwgMeasurements aborted: config=$config previousRoute=$previousRoute wasConnected=$wasConnected")
             routes.forEach(onRouteFailure)
             onComplete(false)
             return
@@ -1124,7 +1127,9 @@ class MainActivity : Activity() {
             activeStep++
             if (!switchedTunnel) { complete(true); return }
             AwgTunnelController.stop(app, publishStatus = false)
-            SelectedRouteStore(app).save(previousRoute)
+            if (previousRoute != null) {
+                SelectedRouteStore(app).save(previousRoute)
+            }
             SubscriptionStore(app).saveValidated(config)
             pendingRoute = null
             var waitStarted = SystemClock.elapsedRealtime()
@@ -1231,6 +1236,10 @@ class MainActivity : Activity() {
             AwgTunnelController.stop(app, publishStatus = false)
             SelectedRouteStore(app).save(route)
             awaitEnginesStopped(waitForDiagnostics = true, onFailure = { allSuccessful = false; restore() }, action = {
+                if (!wasConnected && isSystemTunnelActive()) {
+                    failed()
+                    return@awaitEnginesStopped
+                }
                 if (!restorationRequested && step == activeStep) {
                     val raw = AwgProfileStore(app).read(route.id)
                     if (raw == null) failed()
@@ -1243,7 +1252,7 @@ class MainActivity : Activity() {
                                 val state = VpnStateStore(app).read()
                                 when {
                                     isFinishing || isDestroyed -> restore()
-                                    state.phase == VpnPhase.ERROR || SystemClock.elapsedRealtime() - began > 30_000L -> failed()
+                                    state.phase == VpnPhase.ERROR || SystemClock.elapsedRealtime() - began > 5_000L -> failed()
                                     state.phase == VpnPhase.CONNECTED && AwgTunnelController.isRunning() -> measureReady()
                                     else -> handler.postDelayed(this, 30L)
                                 }
@@ -2220,7 +2229,7 @@ class MainActivity : Activity() {
         if (!ConnectVpnService.isRunning() &&
             !AwgTunnelController.isRunning() &&
             !AwgTunnelController.isStopping() &&
-            (!waitForDiagnostics || !RouteProbeClient.isRunning(this))
+            (!waitForDiagnostics || (!RouteProbeClient.isRunning(this) && !isSystemTunnelActive()))
         ) {
             action()
             return

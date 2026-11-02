@@ -62,6 +62,8 @@ internal class InlineMetricProgress(private val label: TextView) {
         if (label.isAttachedToWindow) observeVisibility()
     }
 
+    fun isLoading(): Boolean = loading
+
     fun setLoading(value: Boolean) {
         if (loading == value) { updateAnimation(); return }
         loading = value

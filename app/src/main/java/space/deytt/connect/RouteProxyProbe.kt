@@ -527,10 +527,11 @@ object RouteProxyProbe {
     fun measureThroughSystemVpn(
         method: RouteProbeMethod,
         timeoutMillis: Int = TIMEOUT_MILLIS,
+        sampleCount: Int = LATENCY_SAMPLE_COUNT,
         onSample: (index: Int, milliseconds: Long?) -> Unit = { _, _ -> },
     ): Long {
         val activeConnection = AtomicReference<Socket?>()
-        val task = FutureTask { measureThroughSystemVpnBlocking(method, timeoutMillis, activeConnection, onSample) }
+        val task = FutureTask { measureThroughSystemVpnBlocking(method, timeoutMillis, sampleCount, activeConnection, onSample) }
         try {
             systemVpnProbeExecutor.execute(task)
             return task.get(timeoutMillis.toLong(), TimeUnit.MILLISECONDS)
@@ -557,11 +558,12 @@ object RouteProxyProbe {
     private fun measureThroughSystemVpnBlocking(
         method: RouteProbeMethod,
         timeoutMillis: Int,
+        sampleCount: Int,
         activeConnection: AtomicReference<Socket?>,
         onSample: (index: Int, milliseconds: Long?) -> Unit,
     ): Long {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis
-        val samples = ArrayList<Long>(LATENCY_SAMPLE_COUNT)
+        val samples = ArrayList<Long>(sampleCount)
         var lastFailure: Exception? = null
         var currentSocket: Socket? = null
         var currentTlsSocket: SSLSocket? = null
@@ -576,7 +578,7 @@ object RouteProxyProbe {
         }
 
         try {
-            for (index in 1..LATENCY_SAMPLE_COUNT) {
+            for (index in 1..sampleCount) {
                 if (SystemClock.elapsedRealtime() >= deadline) break
                 try {
                     var tls = currentTlsSocket
@@ -598,7 +600,7 @@ object RouteProxyProbe {
                             .verify(PROBE_HOST, newTls.session)
                         if (!hostnameVerified) throw SSLPeerUnverifiedException("TLS hostname verification failed")
                     }
-                    val isLast = index == LATENCY_SAMPLE_COUNT
+                    val isLast = index == sampleCount
                     val sample = measureProbeHttpRoundTrip(tls, method, deadline, keepAlive = !isLast)
                     samples += sample
                     onSample(index, sample)
@@ -624,21 +626,22 @@ object RouteProxyProbe {
         transferActive: () -> Boolean = stillCurrent,
         onProgress: (bytesPerSecond: Long) -> Unit = {},
     ): Long {
-        require(sampleMillis in 1_000..5_000)
+        require(sampleMillis in 400..5_000)
         require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
         val activeConnection = AtomicReference<HttpsURLConnection?>()
         val task = FutureTask {
             measureSystemDownloadBlocking(token, stillCurrent, transferActive, sampleMillis, onProgress, activeConnection)
         }
+        val taskDeadline = (sampleMillis + 2_500L).coerceAtMost(SYSTEM_DOWNLOAD_DEADLINE_MILLIS)
         try {
             systemVpnProbeExecutor.execute(task)
-            return task.get(SYSTEM_DOWNLOAD_DEADLINE_MILLIS, TimeUnit.MILLISECONDS)
+            return task.get(taskDeadline, TimeUnit.MILLISECONDS)
         } catch (failure: RejectedExecutionException) {
             throw SocketTimeoutException("Слишком много одновременных проверок скорости").also { it.initCause(failure) }
         } catch (failure: TimeoutException) {
             activeConnection.getAndSet(null)?.disconnect()
             task.cancel(true)
-            throw SocketTimeoutException("Замер скорости превысил 8 секунд").also { it.initCause(failure) }
+            throw SocketTimeoutException("Замер скорости превысил $taskDeadline мс").also { it.initCause(failure) }
         } catch (failure: InterruptedException) {
             activeConnection.getAndSet(null)?.disconnect()
             task.cancel(true)
@@ -666,8 +669,8 @@ object RouteProxyProbe {
             .openConnection(Proxy.NO_PROXY) as HttpsURLConnection
         activeConnection.set(connection)
         try {
-            connection.connectTimeout = DOWNLOAD_CONNECT_TIMEOUT_MILLIS
-            connection.readTimeout = DOWNLOAD_CONNECT_TIMEOUT_MILLIS
+            connection.connectTimeout = 2_000
+            connection.readTimeout = 2_000
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("X-TG-App-Token", token)
             connection.setRequestProperty("Accept-Encoding", "identity")

@@ -51,6 +51,9 @@ object RouteProbeScoring {
     fun bestRouteId(samples: List<RouteProbeSample>): String? =
         samples.filter(::isComplete).takeIf { it.size >= 2 }?.let(::ranked)?.firstOrNull()?.first
 
+    fun worstRouteId(samples: List<RouteProbeSample>): String? =
+        samples.filter(::isComplete).takeIf { it.size >= 2 }?.let(::ranked)?.lastOrNull()?.first
+
     private fun isComplete(sample: RouteProbeSample): Boolean =
         sample.latencyMillis?.let(RouteProbeStatistics::isValidLatencyMillis) == true &&
             sample.downloadBytesPerSecond != null && sample.downloadBytesPerSecond > 0

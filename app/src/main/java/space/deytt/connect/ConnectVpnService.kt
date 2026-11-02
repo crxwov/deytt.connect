@@ -485,16 +485,17 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             cancellation.cancel()
             closeRouteProbeCore()
             if (activeRouteProbeRequestId == requestId) {
+                val isCancelled = operation.get() != operationId
                 started = false
                 routeProbeOnly = false
                 routeProbeRunning = false
                 routeProbeCancellation = null
-                stopForegroundCompat()
-                stopSelf()
                 sendRouteProbeResult(
                     requestId, "", null, null, complete = true,
-                    stage = if (operation.get() != operationId) "cancelled" else null,
+                    stage = if (isCancelled) "cancelled" else null,
                 )
+                stopForegroundCompat()
+                stopSelf()
             }
         }
     }
