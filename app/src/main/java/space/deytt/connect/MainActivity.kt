@@ -92,7 +92,6 @@ class MainActivity : Activity() {
     private var telegramAccountName: TextView? = null
     private var telegramAvatarFallback: TextView? = null
     private var telegramAvatarImage: ImageView? = null
-    private var favoriteRoutesDrawer: FavoriteRoutesDrawer? = null
     private var pendingRoute: SelectedRoute? = null
     private var latencyGeneration = 0
     private var renderedPhase: VpnPhase? = null
@@ -224,7 +223,6 @@ class MainActivity : Activity() {
                 RouteProbeClient.clear(this@MainActivity, event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty())
             }
             if (::primaryPages.isInitialized) primaryPages.onRouteProbeEvent(event)
-            favoriteRoutesDrawer?.onRouteProbeEvent(event)
             val requestId = event.getStringExtra(RouteProbeClient.EXTRA_REQUEST_ID).orEmpty()
             if (requestId.isBlank() || requestId != pendingRouteProbeId) return
             val selected = SelectedRouteStore(this@MainActivity).read()
@@ -453,10 +451,6 @@ class MainActivity : Activity() {
 
     @Deprecated("Back navigation is delegated to the selected primary tab")
     override fun onBackPressed() {
-        if (favoriteRoutesDrawer?.isOpen() == true) {
-            favoriteRoutesDrawer?.close()
-            return
-        }
         if (::pager.isInitialized && pager.currentItem != 0) {
             pager.setCurrentItem(0, true)
         } else {
@@ -466,7 +460,6 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         restoreAwgMeasurement?.invoke()
-        favoriteRoutesDrawer?.detach()
         if (::primaryPages.isInitialized) primaryPages.close()
         locationRequestGeneration++
         locationExecutor.shutdownNow()
@@ -769,25 +762,12 @@ class MainActivity : Activity() {
             addView(root, FrameLayout.LayoutParams(-1, -1))
             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateHomeMapAnchor() }
         }
-        favoriteRoutesDrawer = FavoriteRoutesDrawer(this) { route ->
-            selectRoute(route, navigateHome = true)
-            requestConnectSelectedRoute()
-        }.also {
-            it.attachTo(globeStage)
-        }
         setContentView(globeStage)
         ViewCompat.requestApplyInsets(root)
         pager.setCurrentItem(initialPage, false)
         root.post {
             syncGlobeHost(pager.currentItem)
             updatePrimaryPageMotion()
-        }
-    }
-
-    internal fun requestConnectSelectedRoute() {
-        val selected = SelectedRouteStore(this).read()
-        if (!ConnectVpnService.isRunning() && !AwgTunnelController.isRunning() && !homeConnectQueued && pendingRoute == null) {
-            requestSelectedTunnel(selected)
         }
     }
 
@@ -829,91 +809,8 @@ class MainActivity : Activity() {
         startup.start()
     }
 
-    private var homeContentRoot: View? = null
-
-    internal fun setHomeContentShift(shiftY: Float) {
-        homeContentRoot?.translationY = -shiftY
-    }
-
-    internal fun getHomeContentShift(): Float = -(homeContentRoot?.translationY ?: 0f)
-
-    private inner class HomeGestureLayout(context: Context) : FrameLayout(context) {
-        private var startY = 0f
-        private var startX = 0f
-        private var isDraggingUp = false
-        private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
-
-        override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
-            if (::pager.isInitialized && pager.currentItem != 0) return false
-            if (favoriteRoutesDrawer?.isOpen() == true) return false
-            when (ev.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    startY = ev.rawY
-                    startX = ev.rawX
-                    isDraggingUp = false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dy = startY - ev.rawY
-                    val dx = kotlin.math.abs(ev.rawX - startX)
-                    if (!isDraggingUp && dy > touchSlop && dy > dx * 0.85f) {
-                        isDraggingUp = true
-                        parent?.requestDisallowInterceptTouchEvent(true)
-                        pager.requestDisallowInterceptTouchEvent(true)
-                        favoriteRoutesDrawer?.onDragStart()
-                        return true
-                    }
-                }
-            }
-            return isDraggingUp
-        }
-
-        override fun onTouchEvent(event: MotionEvent): Boolean {
-            if (::pager.isInitialized && pager.currentItem != 0) return false
-            if (favoriteRoutesDrawer?.isOpen() == true) return false
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    startY = event.rawY
-                    startX = event.rawX
-                    isDraggingUp = false
-                    return true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dy = startY - event.rawY
-                    val dx = kotlin.math.abs(event.rawX - startX)
-                    if (!isDraggingUp && dy > touchSlop && dy > dx * 0.85f) {
-                        isDraggingUp = true
-                        parent?.requestDisallowInterceptTouchEvent(true)
-                        pager.requestDisallowInterceptTouchEvent(true)
-                        favoriteRoutesDrawer?.onDragStart()
-                    }
-                    if (isDraggingUp) {
-                        favoriteRoutesDrawer?.onDragMove(dy)
-                        return true
-                    }
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (isDraggingUp) {
-                        val dy = startY - event.rawY
-                        favoriteRoutesDrawer?.onDragEnd(dy)
-                        isDraggingUp = false
-                        return true
-                    }
-                }
-                MotionEvent.ACTION_CANCEL -> {
-                    if (isDraggingUp) {
-                        favoriteRoutesDrawer?.onDragCancel()
-                        isDraggingUp = false
-                    }
-                }
-            }
-            return true
-        }
-    }
-
     private fun buildHomePage(): View {
-        val gestureLayout = HomeGestureLayout(this)
         val root = screen(withBackdrop = true)
-        homeContentRoot = root
         val mapSlot = FrameLayout(this).apply {
             tag = "home-map-gesture"
             clipChildren = false
@@ -989,29 +886,6 @@ class MainActivity : Activity() {
                 measureSelectedRoute()
             }
         }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
-        val favsPill = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            background = glassRowBackground(emphasis = false, radius = 16f)
-            clipToOutline = true
-            isClickable = true
-            isFocusable = true
-            foreground = ripple(16f)
-            pressFeedback(this, 0.94f)
-            setPadding(dp(14), dp(8), dp(14), dp(8))
-            val heartIcon = ImageView(this@MainActivity).apply {
-                setImageResource(R.drawable.ic_heart_filled)
-                imageTintList = ColorStateList.valueOf(0xFFFF5C7A.toInt())
-            }
-            addView(heartIcon, LinearLayout.LayoutParams(dp(14), dp(14)).apply { marginEnd = dp(6) })
-            addView(text("избранные маршруты", 11.5f, DeyttUi.MUTED, Typeface.BOLD))
-            setOnClickListener { favoriteRoutesDrawer?.open() }
-        }
-        root.addView(favsPill, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = dp(10)
-            bottomMargin = dp(4)
-        })
         updateRouteFlow(SelectedRouteStore(this).read())
         updateNetworkLocationViews()
         root.addView(spacer(12, this))
@@ -1031,8 +905,7 @@ class MainActivity : Activity() {
         rebuildRouteRow()
         renderStoredState()
         root.post { if (::pager.isInitialized) syncGlobeHost(pager.currentItem) }
-        gestureLayout.addView(root, FrameLayout.LayoutParams(-1, -1))
-        return gestureLayout
+        return root
     }
 
     internal fun getCachedRouteCatalog(): List<DeyttRoute> {

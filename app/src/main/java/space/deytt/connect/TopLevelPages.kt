@@ -356,17 +356,6 @@ internal class PrimaryPages(
             val autoRow = host.row("Автоподбор", "Выберем доступный узел", "ROUTE_AUTO", actionText, emphasis = isSelected)
                 .apply {
                     setOnClickListener { host.selectRoute(route) }
-                    setOnLongClickListener {
-                        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                        val favStore = FavoriteRoutesStore(host)
-                        val isFav = favStore.toggleFavorite(route.id)
-                        android.widget.Toast.makeText(
-                            host,
-                            host.uiCopy(if (isFav) "автоподбор добавлен в избранное" else "автоподбор удален из избранного"),
-                            android.widget.Toast.LENGTH_SHORT,
-                        ).show()
-                        true
-                    }
                 }
             appendToGroup(quickGroup, autoRow)
         }
@@ -484,18 +473,6 @@ internal class PrimaryPages(
                 metric.setPadding(0, host.dp(4), 0, host.dp(2))
                 metricsColumn.addView(metric)
                 item.setOnClickListener { host.selectRoute(route) }
-                item.setOnLongClickListener {
-                    item.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-                    val favStore = FavoriteRoutesStore(host)
-                    val isFav = favStore.toggleFavorite(route.id)
-                    val label = "${route.country} · ${route.protocol.title}".lowercase()
-                    android.widget.Toast.makeText(
-                        host,
-                        host.uiCopy(if (isFav) "$label добавлен в избранное" else "$label удален из избранного"),
-                        android.widget.Toast.LENGTH_SHORT,
-                    ).show()
-                    true
-                }
                 val probeRow = ProbeRouteRow(route, metric, progress, item)
                 if (isAwg) {
                     metric.text = cached?.let { sampleLabel(it, isBest, isWorst) }
@@ -987,17 +964,6 @@ internal class PrimaryPages(
         root.addView(action, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             leftMargin = host.dp(8)
         })
-        root.setOnLongClickListener {
-            root.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
-            val store = FavoriteRoutesStore(host)
-            val isFav = store.toggleFavorite(route.id)
-            android.widget.Toast.makeText(
-                host,
-                host.uiCopy(if (isFav) "маршрут добавлен в избранное" else "маршрут удален из избранного"),
-                android.widget.Toast.LENGTH_SHORT,
-            ).show()
-            true
-        }
         return root
     }
 
