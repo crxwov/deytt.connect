@@ -389,7 +389,6 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         homeSpeedForeground = false
-        if (::action.isInitialized) (action.background as? LiquidGlassDrawable)?.stopShimmer()
         currentTrafficExplanation?.dismiss()
         mapTrafficHandler.removeCallbacks(mapTrafficTick)
         mapTrafficWindow.reset()
@@ -628,7 +627,7 @@ class MainActivity : Activity() {
         }
         pager = ViewPager2(this).apply {
             orientation = ViewPager2.ORIENTATION_HORIZONTAL
-            offscreenPageLimit = 1
+            offscreenPageLimit = 3
             isUserInputEnabled = true
             adapter = pageAdapter
             setPageTransformer { page, position ->
@@ -713,12 +712,7 @@ class MainActivity : Activity() {
             override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
                 navigationBar.setPageOffset(position, positionOffset)
                 val progress = (position + positionOffset).coerceIn(0f, 1f)
-                if (::globe.isInitialized) {
-                    if (position == 0 && progress < 0.98f && globe.visibility != View.VISIBLE) {
-                        globe.resumeGlobe()
-                    }
-                    globe.setBackdropProgress(if (pageMotionEnabled) progress else if (progress >= .5f) 1f else 0f)
-                }
+                globe.setBackdropProgress(if (pageMotionEnabled) progress else if (progress >= .5f) 1f else 0f)
             }
 
             override fun onPageSelected(position: Int) {
@@ -726,7 +720,6 @@ class MainActivity : Activity() {
                 if (position != 0) {
                     cancelHomeRouteDownload()
                     setMapTrafficActive(false)
-                    if (::action.isInitialized) (action.background as? LiquidGlassDrawable)?.stopShimmer()
                 } else {
                     sampleMapTraffic()
                 }
@@ -735,7 +728,6 @@ class MainActivity : Activity() {
 
             override fun onPageScrollStateChanged(state: Int) {
                 if (state == ViewPager2.SCROLL_STATE_DRAGGING || state == ViewPager2.SCROLL_STATE_SETTLING) {
-                    if (::globe.isInitialized) globe.resumeGlobe()
                     if (::globeStage.isInitialized) DeyttUi.setStarfieldMotion(globeStage, active = false)
                 } else if (state == ViewPager2.SCROLL_STATE_IDLE) {
                     confirmSelection()
@@ -791,12 +783,7 @@ class MainActivity : Activity() {
 
     private fun syncGlobeHost(page: Int) {
         if (!::globe.isInitialized || !::globeBackdrop.isInitialized) return
-        if (page == 0) {
-            globe.resumeGlobe()
-            homeMapSlot?.post { updateHomeMapAnchor() }
-        } else {
-            globe.pauseGlobe()
-        }
+        if (page == 0) homeMapSlot?.post { updateHomeMapAnchor() }
         globe.setBackdropStage(page != 0)
         if (!::pager.isInitialized || pager.scrollState == ViewPager2.SCROLL_STATE_IDLE) {
             globe.setBackdropProgress(if (page == 0) 0f else 1f)
@@ -2357,7 +2344,6 @@ class MainActivity : Activity() {
             VpnPhase.CONNECTED -> uiCopy(actionLabel) + ". " + uiCopy("Отключить")
             else -> uiCopy(actionLabel) + if (!errorDetail.isNullOrBlank()) ". ${uiCopy(errorDetail)}" else ""
         }
-        (action.background as? LiquidGlassDrawable)?.stopShimmer()
         action.background = connectionGlassBackground(currentPhase)
         action.isEnabled = currentPhase != VpnPhase.STOPPING && !homeConnectQueued
         action.alpha = if (action.isEnabled) 1f else .66f

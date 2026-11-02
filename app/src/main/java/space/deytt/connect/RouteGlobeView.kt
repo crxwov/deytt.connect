@@ -248,20 +248,11 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (next == backdropProgress || (kotlin.math.abs(next - backdropProgress) < .008f && next != 0f && next != 1f)) return
         backdropProgress = next
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (next <= 0.01f || next >= 0.99f) {
-                // Free 88MB+ GPU RenderTarget textures when completely on Home or completely on other tabs
-                alpha = if (next <= 0.01f) 1f else 0.4f
-                if (backdropBlurLevel != 0) {
-                    backdropBlurLevel = 0
-                    setRenderEffect(null)
-                }
-            } else {
-                alpha = 1f - .6f * next
-                val level = (next * BACKDROP_BLUR_STEPS).roundToInt()
-                if (level != backdropBlurLevel) {
-                    backdropBlurLevel = level
-                    setRenderEffect(backdropBlurEffects[level])
-                }
+            alpha = 1f - .6f * next
+            val level = (next * BACKDROP_BLUR_STEPS).roundToInt()
+            if (level != backdropBlurLevel) {
+                backdropBlurLevel = level
+                setRenderEffect(backdropBlurEffects[level])
             }
         } else if (pageLoaded) {
             val now = SystemClock.uptimeMillis()
@@ -288,26 +279,6 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         if (reducedMotionActive == enabled) return
         reducedMotionActive = enabled
         applyReducedMotion()
-    }
-
-    internal fun pauseGlobe() {
-        if (pageLoaded) {
-            atlas.evaluateJavascript("window.deyttPauseGlobe && window.deyttPauseGlobe()", null)
-        }
-        atlas.onPause()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && backdropBlurLevel != 0) {
-            backdropBlurLevel = 0
-            setRenderEffect(null)
-        }
-        visibility = View.INVISIBLE
-    }
-
-    internal fun resumeGlobe() {
-        visibility = View.VISIBLE
-        atlas.onResume()
-        if (pageLoaded) {
-            atlas.evaluateJavascript("window.deyttResumeGlobe && window.deyttResumeGlobe()", null)
-        }
     }
 
     override fun onAttachedToWindow() {

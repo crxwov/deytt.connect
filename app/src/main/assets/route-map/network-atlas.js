@@ -5,7 +5,7 @@
   const TAU = Math.PI * 2;
   const MAX_ZOOM = 32;
   const SAVE_DATA_PIXEL_RATIO_CAP = 1.5;
-  const MOBILE_PIXEL_RATIO_CAP = 2;
+  const MOBILE_PIXEL_RATIO_CAP = 3;
   const DESKTOP_PIXEL_RATIO_CAP = 2.25;
   const ANDROID_GEOGRAPHY_PIXEL_RATIO_CAP = 2;
   const ZOOM_EASE_MS = 120;
@@ -965,9 +965,8 @@
         const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
         directed.forEach(([fromKey, toKey]) => {
           const points = [];
-          const steps = window.DeyttAtlasBridge ? 30 : 80;
-          for (let i = 0; i <= steps; i++) {
-            points.push(this.projectLanePoint(fromKey, toKey, i / steps, stream.lane));
+          for (let i = 0; i <= 80; i++) {
+            points.push(this.projectLanePoint(fromKey, toKey, i / 80, stream.lane));
           }
           const emphasized = this.selectedTrafficFlow === stream.id;
 
@@ -1411,32 +1410,9 @@
       this.overlayCacheBuildCount += 1;
     }
 
-    pause() {
-      this.paused = true;
-      if (this.frame) {
-        cancelAnimationFrame(this.frame);
-        this.frame = 0;
-      }
-      if (this.idleFrameTimer) {
-        clearTimeout(this.idleFrameTimer);
-        this.idleFrameTimer = 0;
-      }
-      if (this.trafficFrameTimer) {
-        clearTimeout(this.trafficFrameTimer);
-        this.trafficFrameTimer = 0;
-      }
-    }
-
-    resume() {
-      if (!this.paused) return;
-      this.paused = false;
-      this.lastFrame = 0;
-      this.start();
-    }
-
     render(time) {
       this.frame = 0;
-      if (this.paused || !this.visible || document.hidden || !this.width) return;
+      if (!this.visible || document.hidden || !this.width) return;
       if (window.DeyttAtlasBridge && !this.viewportAnchor) return;
       const idleActive = this.idleMotionStart > 0 && this.variant === "home" && !this.reducedMotion.matches;
       const idleCycle = idleActive ? ((time - this.idleMotionStart) / 8000) * TAU : 0;
@@ -1469,17 +1445,14 @@
       // The animation loop intentionally stops at these same visual
       // tolerances. Snap the final sub-pixel remainder now so the next hover
       // cannot wake the camera and force a needless geography redraw.
-      const snapLon = window.DeyttAtlasBridge ? .04 : .01;
-      const snapLat = window.DeyttAtlasBridge ? .04 : .01;
-      const snapZoom = window.DeyttAtlasBridge ? .005 : .002;
-      if (Math.abs(this.targetLon - this.centerLon) < snapLon) this.centerLon = this.targetLon;
-      if (Math.abs(this.targetLat - this.centerLat) < snapLat) this.centerLat = this.targetLat;
-      if (Math.abs(this.targetZoom - this.zoom) < snapZoom) this.zoom = this.targetZoom;
+      if (Math.abs(this.targetLon - this.centerLon) < .01) this.centerLon = this.targetLon;
+      if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
+      if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
       if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 || Math.abs(this.zoom - previousZoom) > .0001) {
         this.staticDirty = true;
       }
-      const cameraSettled = !idleActive && !this.dragging && Math.abs(this.targetLon - this.centerLon) <= snapLon &&
-        Math.abs(this.targetLat - this.centerLat) <= snapLat && Math.abs(this.targetZoom - this.zoom) <= snapZoom && Math.abs(this.velocityLon) <= .001;
+      const cameraSettled = !idleActive && !this.dragging && Math.abs(this.targetLon - this.centerLon) <= .01 &&
+        Math.abs(this.targetLat - this.centerLat) <= .01 && Math.abs(this.targetZoom - this.zoom) <= .002 && Math.abs(this.velocityLon) <= .001;
       this.currentBasis = this.basis();
       this.context.clearRect(0, 0, this.width, this.height);
       const colors = this.colors();
@@ -1500,28 +1473,15 @@
         this.context.drawImage(this.foregroundOverlayCanvas, 0, 0, this.width, this.height);
       }
       this.renderCount += 1;
-      const cameraNeedsFrames = Math.abs(this.targetLon - this.centerLon) > snapLon || Math.abs(this.targetLat - this.centerLat) > snapLat || Math.abs(this.targetZoom - this.zoom) > snapZoom || Math.abs(this.velocityLon) > .001;
+      const cameraNeedsFrames = Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001;
       const connectionAnim = this.connectionAnimationActive(time);
-      if (cameraNeedsFrames || connectionAnim) {
-        this.start();
-      } else if (this.trafficActive && !this.reducedMotion.matches) {
-        if (window.DeyttAtlasBridge) {
-          // On mobile, throttle traffic animation to ~30 FPS to save 50% GPU/battery
-          if (!this.trafficFrameTimer) {
-            this.trafficFrameTimer = window.setTimeout(() => {
-              this.trafficFrameTimer = 0;
-              this.start();
-            }, 33);
-          }
-        } else {
-          this.start();
-        }
-      } else if (idleActive && !this.idleFrameTimer) {
+      if (cameraNeedsFrames || (idleActive && this.trafficActive) || connectionAnim) this.start();
+      else if (idleActive && !this.idleFrameTimer) {
         this.idleFrameTimer = window.setTimeout(() => {
           this.idleFrameTimer = 0;
           this.start();
         }, 40);
-      }
+      } else if (this.trafficActive && !this.reducedMotion.matches) this.start();
     }
 
     resetIdleMotion() {
@@ -1542,17 +1502,16 @@
         this.staticDirty = true;
       }
       this.idleMotionStart = 0;
-      if (window.DeyttAtlasBridge || this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
+      if (this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
       this.idleMotionTimer = window.setTimeout(() => {
         this.idleMotionTimer = 0;
-        if (window.DeyttAtlasBridge || this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
+        if (this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
         this.idleMotionStart = performance.now();
         this.start();
       }, 30000);
     }
 
     start() {
-      if (this.paused) return;
       if (!this.frame && this.visible && !document.hidden) this.frame = requestAnimationFrame((time) => this.render(time));
     }
 
