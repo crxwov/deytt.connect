@@ -232,8 +232,9 @@ internal class ProfileFlows(
             else -> copy("продление или смена тарифа", "renew or change plan")
         }
         paymentBadgeText?.text = when {
-            !isActive -> copy("выбрать ›", "choose ›")
-            else -> copy("продлить ›", "renew ›")
+            !isActive -> copy("выбрать", "choose")
+            unlimitedTime -> copy("тариф", "plan")
+            else -> copy("продлить", "renew")
         }
     }
 
@@ -296,100 +297,36 @@ internal class ProfileFlows(
         }
         root.addView(actionStatus)
 
-        // 2. Manage plan button (Redesigned primary card)
+        // 2. Manage plan button (Canonical row)
         root.addView(spacer(12, host))
-        val payCard = LinearLayout(host).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = host.dp(68)
-            setPadding(host.dp(14), host.dp(12), host.dp(14), host.dp(12))
-            background = host.glassRowBackground(emphasis = true, radius = 20f)
-            isClickable = true
-            isFocusable = true
-            with(DeyttUi) {
-                foreground = host.ripple(20f)
-                host.pressFeedback(this@apply, .99f)
-            }
+        val paymentRow = host.row(
+            copy("выбрать тариф", "choose a plan"),
+            copy("тарифы и способы оплаты", "plans and payment methods"),
+            "PAYMENTS_ICON",
+            copy("выбрать", "choose"),
+            emphasis = true,
+        ).apply {
             setOnClickListener { showPlanPicker() }
         }
-        val payIconContainer = FrameLayout(host).apply {
-            background = host.rounded(0x2838BDF8.toInt(), 14f, 0x4038BDF8.toInt())
-            addView(ImageView(host).apply {
-                setImageResource(R.drawable.ic_credit_card)
-                imageTintList = ColorStateList.valueOf(DeyttUi.SKY)
-                scaleType = ImageView.ScaleType.FIT_CENTER
-            }, FrameLayout.LayoutParams(host.dp(20), host.dp(20), Gravity.CENTER))
-        }
-        payCard.addView(payIconContainer, LinearLayout.LayoutParams(host.dp(42), host.dp(42)).apply { marginEnd = host.dp(12) })
+        val payLabels = paymentRow.getChildAt(1) as? LinearLayout
+        paymentTitleText = payLabels?.getChildAt(0) as? TextView
+        paymentSubtitleText = payLabels?.getChildAt(1) as? TextView
+        paymentBadgeText = paymentRow.getChildAt(2) as? TextView
+        paymentAction = paymentRow
+        root.addView(paymentRow)
 
-        val payLabels = LinearLayout(host).apply {
-            orientation = LinearLayout.VERTICAL
-            paymentTitleText = host.text(copy("выбрать тариф", "choose a plan"), 15f, Color.WHITE, Typeface.BOLD)
-            paymentSubtitleText = host.text(copy("тарифы и способы оплаты", "plans and payment methods"), 11f, MUTED).apply {
-                setPadding(0, host.dp(3), 0, 0)
-            }
-            addView(paymentTitleText)
-            addView(paymentSubtitleText)
-        }
-        payCard.addView(payLabels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-
-        paymentBadgeText = TextView(host).apply {
-            text = copy("выбрать ›", "choose ›")
-            textSize = 12f
-            setTextColor(DeyttUi.SKY)
-            typeface = host.typeface(DeyttUi.FontFamily.INTER_TIGHT, 650)
-            background = host.rounded(0x2238BDF8.toInt(), 12f, 0x3038BDF8.toInt())
-            setPadding(host.dp(10), host.dp(5), host.dp(10), host.dp(5))
-        }
-        payCard.addView(paymentBadgeText)
-        paymentAction = payCard
-        root.addView(payCard)
-
-        // 3. Support button (Redesigned secondary card)
+        // 3. Support button (Canonical row)
         root.addView(spacer(8, host))
-        val supCard = LinearLayout(host).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            minimumHeight = host.dp(68)
-            setPadding(host.dp(14), host.dp(12), host.dp(14), host.dp(12))
-            background = host.glassRowBackground(emphasis = false, radius = 20f)
-            isClickable = true
-            isFocusable = true
-            with(DeyttUi) {
-                foreground = host.ripple(20f)
-                host.pressFeedback(this@apply, .99f)
-            }
+        val supportRow = host.row(
+            copy("поддержка", "support"),
+            copy("написать команде в приложении · онлайн", "chat with team in app · online"),
+            "BOT_ICON",
+            copy("написать", "chat"),
+            emphasis = false,
+        ).apply {
             setOnClickListener { showSupportChat() }
         }
-        val supIconContainer = FrameLayout(host).apply {
-            background = host.rounded(0x2038BDF8.toInt(), 14f, 0x3038BDF8.toInt())
-            addView(ImageView(host).apply {
-                setImageResource(R.drawable.ic_bot)
-                imageTintList = ColorStateList.valueOf(DeyttUi.SKY)
-                scaleType = ImageView.ScaleType.FIT_CENTER
-            }, FrameLayout.LayoutParams(host.dp(20), host.dp(20), Gravity.CENTER))
-        }
-        supCard.addView(supIconContainer, LinearLayout.LayoutParams(host.dp(42), host.dp(42)).apply { marginEnd = host.dp(12) })
-
-        val supLabels = LinearLayout(host).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(host.text(copy("поддержка", "support"), 15f, Color.WHITE, Typeface.BOLD))
-            addView(host.text(copy("написать команде в приложении · онлайн", "chat with team in app · online"), 11f, MUTED).apply {
-                setPadding(0, host.dp(3), 0, 0)
-            })
-        }
-        supCard.addView(supLabels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-
-        val supBadge = TextView(host).apply {
-            text = copy("написать ›", "chat ›")
-            textSize = 12f
-            setTextColor(DeyttUi.SKY)
-            typeface = host.typeface(DeyttUi.FontFamily.INTER_TIGHT, 650)
-            background = host.rounded(0x1A38BDF8.toInt(), 12f, 0x2A38BDF8.toInt())
-            setPadding(host.dp(10), host.dp(5), host.dp(10), host.dp(5))
-        }
-        supCard.addView(supBadge)
-        root.addView(supCard)
+        root.addView(supportRow)
 
         // Initial instantaneous load from cache or local metadata store
         val cachedSnapshot = TelegramIdentityCache.readSnapshot(host)
@@ -421,7 +358,7 @@ internal class ProfileFlows(
                     (if (remaining != null) " ($remaining)" else "")
                 paymentTitleText?.text = copy("продлить подписку", "renew subscription")
                 paymentSubtitleText?.text = copy("продление или смена тарифа", "renew or change plan")
-                paymentBadgeText?.text = copy("продлить ›", "renew ›")
+                paymentBadgeText?.text = copy("продлить", "renew")
             } else {
                 starryPlanCard?.updateData(
                     tariffName = "deytt./connect",
@@ -435,7 +372,7 @@ internal class ProfileFlows(
                 planNoteView?.text = copy("подключите Telegram или ссылку подписки", "connect Telegram or subscription link")
                 paymentTitleText?.text = copy("выбрать тариф", "choose a plan")
                 paymentSubtitleText?.text = copy("тарифы и способы оплаты", "plans and payment methods")
-                paymentBadgeText?.text = copy("выбрать ›", "choose ›")
+                paymentBadgeText?.text = copy("выбрать", "choose")
             }
         }
 
