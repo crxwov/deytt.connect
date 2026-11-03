@@ -11,23 +11,23 @@
   const ZOOM_EASE_MS = 120;
   const PAN_EASE_MS = 120;
   const NODE_TAP_CORE_RADIUS = 12;
-  const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
+  const LOCATION_ORDER = ["ru", "fi", "nl", "de", "it"];
   const CONNECTED_LABEL_SIDE_PENALTY = 10000;
   const LABEL_OFFSETS = {
     nl: { x: -24, y: -42, align: "right" },
     de: { x: -24, y: 54, align: "right" },
-    fi: { x: -22, y: -42, align: "right" },
+    fi: { x: -22, y: -38, align: "right" },
     it: { x: -24, y: 52, align: "right" },
-    ru: { x: 24, y: -42, align: "left" },
+    ru: { x: 20, y: -84, align: "left" },
     user: { x: 22, y: -38, align: "left" }
   };
   const COMPACT_LABEL_OFFSETS = {
     nl: { x: -20, y: -42, align: "right" },
     de: { x: -20, y: 56, align: "right" },
-    fi: { x: -18, y: -82, align: "right" },
+    fi: { x: -20, y: -38, align: "right" },
     it: { x: -22, y: 54, align: "right" },
-    ru: { x: 18, y: -42, align: "left" },
-    user: { x: 18, y: -62, align: "left" }
+    ru: { x: 18, y: -84, align: "left" },
+    user: { x: 18, y: 50, align: "left" }
   };
   const LOCATIONS = {
     nl: { code: "nl", city: "Амстердам", country: "Нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
@@ -1249,7 +1249,15 @@
       const preferredSide = this.connected && window.DeyttAtlasBridge ? (key === "user" ? 1 : -1) : 0;
       // Prefer nearby labels; score all alternatives instead of falling back
       // to (8,8), which detached crowded user labels from their actual pin.
-      const alternatives = [offset,
+      const alternatives = key === "ru" ? [
+        offset,
+        { x: 18 * labelScale, y: -height / 2 - 32 * labelScale, align: "left" },
+        { x: -width / 2, y: -height - 28 * labelScale, align: "left" },
+        { x: -14 * labelScale, y: -height / 2 - 32 * labelScale, align: "right" },
+        { x: 18 * labelScale, y: height / 2 + 18 * labelScale, align: "left" },
+        { x: -width / 2, y: height + 24 * labelScale, align: "left" }
+      ] : [
+        offset,
         { x: 14 * labelScale, y: -height / 2 - 12 * labelScale, align: "left" },
         { x: -14 * labelScale, y: -height / 2 - 12 * labelScale, align: "right" },
         { x: 14 * labelScale, y: height / 2 + 12 * labelScale, align: "left" },
@@ -1304,10 +1312,11 @@
       context.beginPath();
       context.moveTo(point.x, point.y);
       context.lineTo(endX, endY);
-      context.strokeStyle = key === "user" ? colors.node : active ? colors.nodeCore : colors.border;
+      context.strokeStyle = key === "user" ? colors.node : active ? "#38BDF8" : colors.border;
       context.lineWidth = 1;
-      context.globalAlpha = active ? .7 : .35;
+      context.globalAlpha = active ? .75 : .35;
       context.stroke();
+
       occupied.push({ left: left, top: top, width: width, height: height });
       context.beginPath();
       context.roundRect(left, top, width, height, Math.round((compact ? 10 : 12) * labelScale));
@@ -1317,9 +1326,11 @@
       context.shadowBlur = 18;
       context.fill();
       context.shadowBlur = 0;
-      context.strokeStyle = this.hovered === key ? colors.borderHot : colors.border;
+      context.strokeStyle = this.hovered === key ? (colors.borderHot || "#38BDF8") : active ? "#38BDF8" : colors.border;
       context.globalAlpha = active ? (this.hovered === key ? .9 : .65) : .35;
+      context.lineWidth = 1;
       context.stroke();
+
       context.textBaseline = "middle";
       context.textAlign = "left";
       context.fillStyle = active ? colors.label : colors.labelMuted;

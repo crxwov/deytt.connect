@@ -117,6 +117,29 @@ internal object AppLanguage {
             "Отклик" to "Response",
             "Скорость" to "Speed",
             "Обновить замер" to "Refresh measurement",
+            "текущий тариф" to "Current plan",
+            "устройств в тарифе" to "Devices included",
+            "бессрочно" to "Lifetime",
+            "активный доступ" to "Active access",
+            "нет активной подписки" to "No active subscription",
+            "трафик" to "Traffic",
+            "активная подписка" to "Active subscription",
+            "подписка не подключена" to "Subscription not connected",
+            "подключите Telegram или ссылку подписки" to "Connect Telegram or subscription link",
+            "всего передано" to "Total transferred",
+            "Подписка обновлена" to "Subscription updated",
+            "Подписка успешно обновлена" to "Subscription updated successfully",
+            "Маршруты и ключи синхронизированы" to "Routes and keys synchronized",
+            "Ошибка обновления подписки" to "Subscription update failed",
+            "Обновляем подписку и маршруты…" to "Updating subscription and routes…",
+            "Связываемся с сервером подписки…" to "Connecting to subscription server…",
+            "Проверка протоколов и профилей…" to "Validating protocols and profiles…",
+            "Синхронизация sing-box, AmneziaWG и OpenFlux…" to "Synchronizing sing-box, AmneziaWG, and OpenFlux…",
+            "Сохранение и сборка маршрутов…" to "Saving and assembling routes…",
+            "Маршруты обновлены" to "Routes updated",
+            "Активная подписка не найдена" to "Active subscription not found",
+            "Подключите профиль или Telegram" to "Connect profile or Telegram",
+            "Не удалось обновить" to "Failed to update",
             "Последний замер загрузки. Нажмите, чтобы проверить маршруты." to "Last download test. Tap to compare routes.",
             "Войти через Telegram" to "Sign in with Telegram",
             "Быстрый QUIC-маршрут" to "QUIC transport",
@@ -188,6 +211,13 @@ internal object AppLanguage {
         }
         Regex("^Загружено маршрутов: ([0-9]+)\\. Текущий туннель не прерывался\\.$").matchEntire(value)?.let {
             return "Loaded routes: ${it.groupValues[1]}. Your current tunnel was not interrupted."
+        }
+        Regex("^[✓ ]*Маршруты обновлены \\(([0-9]+)\\)$", RegexOption.IGNORE_CASE).matchEntire(value.trim())?.let {
+            return "Routes updated (${it.groupValues[1]})"
+        }
+        Regex("^[✓ ]*Подписка обновлена · ([0-9]+) маршрут[а-я]*$", RegexOption.IGNORE_CASE).matchEntire(value.trim())?.let {
+            val count = it.groupValues[1]
+            return "Subscription updated · $count " + (if (count == "1") "route" else "routes")
         }
         Regex("^Проверяем задержку (.+)$").matchEntire(value)?.let {
             return "Checking latency for ${it.groupValues[1]}"

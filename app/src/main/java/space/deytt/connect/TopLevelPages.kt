@@ -352,9 +352,9 @@ internal class PrimaryPages(
         fun applyRefreshState(animateSuccess: Boolean = false) {
             if (SubscriptionRefreshState.inFlight) {
                 val phaseText = SubscriptionRefreshState.phaseDescription.ifBlank {
-                    host.uiCopy(copy("Обновляем подписку и маршруты…", "Refreshing subscription and routes…"))
+                    copy("Обновляем подписку и маршруты…", "Refreshing subscription and routes…")
                 }
-                subtitleView?.text = phaseText
+                subtitleView?.text = host.uiCopy(phaseText)
                 subtitleView?.setTextColor(DeyttUi.SKY)
                 return
             }
@@ -362,9 +362,9 @@ internal class PrimaryPages(
             val elapsedSinceSuccess = android.os.SystemClock.elapsedRealtime() - SubscriptionRefreshState.lastSuccessTimestamp
             if (SubscriptionRefreshState.lastSuccessTimestamp > 0L && elapsedSinceSuccess < 4000L) {
                 val successMsg = SubscriptionRefreshState.lastMessage.ifBlank {
-                    host.uiCopy(copy("✓ Маршруты обновлены", "✓ Routes updated"))
+                    copy("✓ Маршруты обновлены", "✓ Routes updated")
                 }
-                subtitleView?.text = successMsg
+                subtitleView?.text = host.uiCopy(successMsg)
                 subtitleView?.setTextColor(DeyttUi.MINT)
                 if (animateSuccess && !host.prefersReducedMotion()) {
                     subscriptionRow.animate()

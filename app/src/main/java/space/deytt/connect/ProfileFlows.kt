@@ -140,9 +140,16 @@ internal class ProfileFlows(
         val day = cal.get(Calendar.DAY_OF_MONTH)
         val month = cal.get(Calendar.MONTH)
         val year = cal.get(Calendar.YEAR)
-        val monthsRu = arrayOf("янв.", "февр.", "марта", "апр.", "мая", "июня", "июля", "авг.", "сент.", "окт.", "нояб.", "дек.")
-        val monthName = monthsRu.getOrElse(month) { "" }
-        return "до $day $monthName $year"
+        val isEn = AppLanguage.current(host) == AppLanguage.EN
+        return if (isEn) {
+            val monthsEn = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+            val monthName = monthsEn.getOrElse(month) { "" }
+            "until $monthName $day, $year"
+        } else {
+            val monthsRu = arrayOf("янв.", "февр.", "марта", "апр.", "мая", "июня", "июля", "авг.", "сент.", "окт.", "нояб.", "дек.")
+            val monthName = monthsRu.getOrElse(month) { "" }
+            "до $day $monthName $year"
+        }
     }
 
     private fun calculateRemainingDays(raw: String): String? {
@@ -232,7 +239,7 @@ internal class ProfileFlows(
 
     fun page(): View {
         val root = host.screen(withBackdrop = true)
-        root.addView(host.header("", "Профиль"))
+        root.addView(host.header("", copy("профиль", "profile")))
         root.addView(spacer(8, host))
         val token = TelegramSessionStore.read(host)
         // Rebuilding the signed-out page must invalidate requests issued before logout too.
@@ -345,7 +352,7 @@ internal class ProfileFlows(
             gravity = Gravity.CENTER_VERTICAL
             minimumHeight = host.dp(68)
             setPadding(host.dp(14), host.dp(12), host.dp(14), host.dp(12))
-            background = host.glassRowBackground(emphasis = true, radius = 20f)
+            background = host.glassRowBackground(emphasis = false, radius = 20f)
             isClickable = true
             isFocusable = true
             with(DeyttUi) {
@@ -355,10 +362,10 @@ internal class ProfileFlows(
             setOnClickListener { showSupportChat() }
         }
         val supIconContainer = FrameLayout(host).apply {
-            background = host.rounded(0x2210B981.toInt(), 14f, 0x3534D399.toInt())
+            background = host.rounded(0x2038BDF8.toInt(), 14f, 0x3038BDF8.toInt())
             addView(ImageView(host).apply {
                 setImageResource(R.drawable.ic_bot)
-                imageTintList = ColorStateList.valueOf(DeyttUi.MINT)
+                imageTintList = ColorStateList.valueOf(DeyttUi.SKY)
                 scaleType = ImageView.ScaleType.FIT_CENTER
             }, FrameLayout.LayoutParams(host.dp(20), host.dp(20), Gravity.CENTER))
         }
@@ -376,9 +383,9 @@ internal class ProfileFlows(
         val supBadge = TextView(host).apply {
             text = copy("написать ›", "chat ›")
             textSize = 12f
-            setTextColor(DeyttUi.MINT)
+            setTextColor(DeyttUi.SKY)
             typeface = host.typeface(DeyttUi.FontFamily.INTER_TIGHT, 650)
-            background = host.rounded(0x2010B981.toInt(), 12f, 0x3034D399.toInt())
+            background = host.rounded(0x1A38BDF8.toInt(), 12f, 0x2A38BDF8.toInt())
             setPadding(host.dp(10), host.dp(5), host.dp(10), host.dp(5))
         }
         supCard.addView(supBadge)
@@ -451,7 +458,12 @@ internal class ProfileFlows(
         devicesGroup.addView(happDevices)
         appSessions = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
         devicesGroup.addView(appSessions)
-        devicesGroup.addView(host.row("сбросить ключи", "отозвать действующие ключи выбранного типа", "↻", "управлять").apply {
+        devicesGroup.addView(host.row(
+            copy("сбросить ключи", "reset keys"),
+            copy("отозвать действующие ключи выбранного типа", "revoke active keys for the selected type"),
+            "↻",
+            copy("управлять", "manage")
+        ).apply {
             (layoutParams as? LinearLayout.LayoutParams)?.topMargin = host.dp(6)
             setOnClickListener { showResetChoices() }
         })
@@ -614,7 +626,7 @@ internal class ProfileFlows(
             }
             val fill = View(host).apply {
                 background = host.rounded(
-                    if (bytes == peak.second && peak.second > 0L) DeyttUi.MINT else DeyttUi.SKY,
+                    if (bytes == peak.second && peak.second > 0L) 0xFF38BDF8.toInt() else 0x9938BDF8.toInt(),
                     3f,
                 )
             }
@@ -651,8 +663,8 @@ internal class ProfileFlows(
                 if (isPeak) background = host.glassRowBackground(true, 12f)
                 contentDescription = "${displayDate("${date}T00:00:00", false)} · ${formatBytes(bytes)}"
             }
-            row.addView(host.text(displayDate("${date}T00:00:00", false), 12f, if (isPeak) DeyttUi.MINT else TEXT))
-            row.addView(host.text(formatBytes(bytes), 12f, if (isPeak) DeyttUi.MINT else MUTED).apply {
+            row.addView(host.text(displayDate("${date}T00:00:00", false), 12f, if (isPeak) Color.WHITE else TEXT))
+            row.addView(host.text(formatBytes(bytes), 12f, if (isPeak) DeyttUi.SKY else MUTED).apply {
                 gravity = Gravity.END
             }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             rows.addView(row)
@@ -1329,7 +1341,7 @@ internal class ProfileFlows(
                 .onSuccess { status -> host.runOnUiThread {
                     if (!isCurrent(token)) return@runOnUiThread
                     if (status == "paid") {
-                        paymentStatusText?.apply { text = host.uiCopy("Оплата подтверждена"); setTextColor(DeyttUi.MINT) }
+                        paymentStatusText?.apply { text = host.uiCopy("Оплата подтверждена"); setTextColor(DeyttUi.SKY) }
                         refreshProfile()
                     } else paymentStatusText?.text = host.uiCopy("Платёж ещё не подтверждён. Проверьте позже.")
                 } }
@@ -1445,7 +1457,7 @@ internal class ProfileFlows(
                 bubble.addView(host.mono(
                     if (fromSupport) "deytt · команда" else copy("вы", "you"),
                     8.5f,
-                    if (fromSupport) DeyttUi.MINT else DeyttUi.SKY,
+                    if (fromSupport) DeyttUi.SKY else 0xFF94A3B8.toInt(),
                     650
                 ))
                 bubble.addView(host.text("", 13.5f, Color.WHITE).apply {

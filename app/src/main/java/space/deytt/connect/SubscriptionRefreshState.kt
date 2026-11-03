@@ -50,6 +50,16 @@ object SubscriptionRefreshState {
         copy.forEach { runCatching { it.invoke() } }
     }
 
+    fun stageDescription(stage: String, isEnglish: Boolean): String {
+        return when (stage) {
+            "download" -> if (isEnglish) "Connecting to subscription server…" else "Связываемся с сервером подписки…"
+            "validate" -> if (isEnglish) "Validating protocols and profiles…" else "Проверка протоколов и профилей…"
+            "awg" -> if (isEnglish) "Synchronizing sing-box, AmneziaWG, and OpenFlux…" else "Синхронизация sing-box, AmneziaWG и OpenFlux…"
+            "save" -> if (isEnglish) "Saving and assembling routes…" else "Сохранение и сборка маршрутов…"
+            else -> if (isEnglish) "Updating subscription…" else "Обновляем подписку…"
+        }
+    }
+
     fun start(initialDescription: String = "Обновляем подписку и маршруты…") {
         inFlight = true
         currentPhase = Phase.CONNECTING

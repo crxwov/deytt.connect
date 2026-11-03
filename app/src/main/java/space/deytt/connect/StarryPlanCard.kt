@@ -82,10 +82,13 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
 
     // Subviews
     private val galaxyView: WebView
+    private val labelTariffView: TextView
     private val tariffNameView: TextView
     private val infinityGlyphView: InfinityGlyphView
     private val heroTextView: TextView
+    private val labelDevicesView: TextView
     private val deviceLimitView: TextView
+    private val labelTrafficView: TextView
     private val trafficView: TextView
 
     init {
@@ -138,14 +141,16 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
         }
 
+        val isEnInitial = AppLanguage.current(context) == AppLanguage.EN
         val labelTariff = TextView(context).apply {
-            text = "текущий тариф"
+            text = if (isEnInitial) "current plan" else "текущий тариф"
             textSize = 11f
             setTextColor(0xFF8EA2BA.toInt())
             typeface = interTightRegular
             letterSpacing = 0.02f
             setPadding(0, 0, 0, dp(3))
         }
+        labelTariffView = labelTariff
         planLabels.addView(labelTariff)
 
         tariffNameView = TextView(context).apply {
@@ -203,11 +208,12 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             val lbl = TextView(context).apply {
-                text = "устройств в тарифе"
+                text = if (isEnInitial) "devices included" else "устройств в тарифе"
                 textSize = 11f
                 setTextColor(0xFF8EA2BA.toInt())
                 typeface = interTightRegular
             }
+            labelDevicesView = lbl
             addView(lbl)
             deviceLimitView = TextView(context).apply {
                 text = "10"
@@ -225,14 +231,15 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
             orientation = LinearLayout.VERTICAL
             layoutParams = LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.25f)
             val lbl = TextView(context).apply {
-                text = "трафик"
+                text = if (isEnInitial) "traffic" else "трафик"
                 textSize = 11f
                 setTextColor(0xFF8EA2BA.toInt())
                 typeface = interTightRegular
             }
+            labelTrafficView = lbl
             addView(lbl)
             trafficView = TextView(context).apply {
-                text = "297,6 gb"
+                text = "…"
                 textSize = 22f
                 setTextColor(Color.WHITE)
                 typeface = unboundedBold
@@ -312,29 +319,38 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
         trafficTotalBytes: Long,
         trafficQuotaLimitBytes: Long
     ) {
-        val name = tariffName?.takeIf { it.isNotBlank() } ?: "deytt./connect"
-        tariffNameView.text = name
+        val isEn = AppLanguage.current(context) == AppLanguage.EN
+        labelTariffView.text = if (isEn) "current plan" else "текущий тариф"
+        labelDevicesView.text = if (isEn) "devices included" else "устройств в тарифе"
+        labelTrafficView.text = if (isEn) "traffic" else "трафик"
+
+        val rawName = tariffName?.takeIf { it.isNotBlank() } ?: "deytt./connect"
+        val translatedName = if (isEn) AppLanguage.text(context, rawName) else rawName
+        tariffNameView.text = translatedName
 
         if (isUnlimitedTime) {
             infinityGlyphView.visibility = View.VISIBLE
-            heroTextView.text = "бессрочно"
+            heroTextView.text = if (isEn) "lifetime" else "бессрочно"
         } else {
             infinityGlyphView.visibility = View.GONE
-            heroTextView.text = expiryText?.takeIf { it.isNotBlank() } ?: "активна"
+            val fallback = if (isEn) "active" else "активна"
+            heroTextView.text = expiryText?.takeIf { it.isNotBlank() } ?: fallback
         }
 
         deviceLimitView.text = if (deviceLimit > 0) deviceLimit.toString() else "∞"
-        trafficView.text = formatBytes(trafficTotalBytes)
+        trafficView.text = formatBytes(trafficTotalBytes, isEn)
     }
 
-    private fun formatBytes(bytes: Long): String {
+    private fun formatBytes(bytes: Long, isEn: Boolean = false): String {
         val b = bytes.coerceAtLeast(0L)
         val gb = b.toDouble() / (1024.0 * 1024.0 * 1024.0)
         return if (gb >= 1.0) {
-            String.format(Locale.GERMANY, "%.1f gb", gb).replace('.', ',')
+            if (isEn) String.format(Locale.US, "%.1f gb", gb)
+            else String.format(Locale.GERMANY, "%.1f gb", gb).replace('.', ',')
         } else {
             val mb = b.toDouble() / (1024.0 * 1024.0)
-            String.format(Locale.GERMANY, "%.0f mb", mb).replace('.', ',')
+            if (isEn) String.format(Locale.US, "%.0f mb", mb)
+            else String.format(Locale.GERMANY, "%.0f mb", mb).replace('.', ',')
         }
     }
 

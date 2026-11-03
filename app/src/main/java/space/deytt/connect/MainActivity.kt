@@ -136,13 +136,23 @@ class MainActivity : Activity() {
         runOnUiThread {
             android.util.Log.i("DeyttBanner", "globalSubscriptionRefreshListener: phase=${SubscriptionRefreshState.currentPhase}")
             if (!isFinishing && !isDestroyed) {
+                val isEn = AppLanguage.current(this@MainActivity) == AppLanguage.EN
                 if (SubscriptionRefreshState.currentPhase == SubscriptionRefreshState.Phase.SUCCESS) {
                     val count = SubscriptionRefreshState.lastSuccessRoutesCount
-                    val text = if (count > 0) "Подписка обновлена · $count маршрутов" else "Подписка успешно обновлена"
-                    showFloatingBanner(text, "Маршруты и ключи синхронизированы", isSuccess = true)
+                    val text = if (isEn) {
+                        if (count > 0) "Subscription updated · $count " + (if (count == 1) "route" else "routes")
+                        else "Subscription updated successfully"
+                    } else {
+                        if (count > 0) "Подписка обновлена · $count маршрутов" else "Подписка успешно обновлена"
+                    }
+                    val subtitle = if (isEn) "Routes and keys synchronized" else "Маршруты и ключи синхронизированы"
+                    showFloatingBanner(text, subtitle, isSuccess = true)
                 } else if (SubscriptionRefreshState.currentPhase == SubscriptionRefreshState.Phase.FAILURE) {
-                    val msg = SubscriptionRefreshState.lastMessage.ifBlank { "Ошибка обновления" }
-                    showFloatingBanner("Ошибка обновления подписки", msg, isSuccess = false)
+                    val msg = SubscriptionRefreshState.lastMessage.ifBlank {
+                        if (isEn) "Update failed" else "Ошибка обновления"
+                    }
+                    val title = if (isEn) "Subscription update failed" else "Ошибка обновления подписки"
+                    showFloatingBanner(title, uiCopy(msg), isSuccess = false)
                 }
             }
         }
@@ -699,7 +709,8 @@ class MainActivity : Activity() {
 
         subscriptionRefreshInFlight = true
         subscriptionRefreshLastStartedAt = now
-        SubscriptionRefreshState.start(uiCopy("Обновляем подписку и маршруты…"))
+        val isEn = AppLanguage.current(this) == AppLanguage.EN
+        SubscriptionRefreshState.start(if (isEn) "Updating subscription and routes…" else "Обновляем подписку и маршруты…")
         subscriptionExecutor.execute {
             val result = runCatching {
                 SubscriptionClient.import(this@MainActivity, url, beforeCommit = {
@@ -707,7 +718,7 @@ class MainActivity : Activity() {
                         throw SubscriptionCancelledException()
                     }
                 }, onStage = { stage ->
-                    SubscriptionRefreshState.updateStage(stage)
+                    SubscriptionRefreshState.updateStage(stage, SubscriptionRefreshState.stageDescription(stage, isEn))
                 })
             }
             result.onFailure { failure ->
@@ -726,7 +737,7 @@ class MainActivity : Activity() {
                     if (result.isFailure) {
                         val err = result.exceptionOrNull()
                         val msg = SubscriptionRetryPolicy.safeFailureSummary(err ?: java.io.IOException())
-                        val failText = uiCopy("Не удалось обновить: $msg")
+                        val failText = if (isEn) "Failed to update: $msg" else "Не удалось обновить: $msg"
                         SubscriptionRefreshState.finishFailure(failText)
                         callbacks.forEach { it.invoke(false, failText) }
                     }
@@ -746,7 +757,7 @@ class MainActivity : Activity() {
                     pageAdapter.refresh(1)
                     pageAdapter.refresh(2)
                 }
-                val successText = uiCopy("Маршруты обновлены (${routes.size})")
+                val successText = if (isEn) "Routes updated (${routes.size})" else "Маршруты обновлены (${routes.size})"
                 SubscriptionRefreshState.finishSuccess(routes.size, successText)
                 callbacks.forEach { it.invoke(true, successText) }
             }
@@ -766,6 +777,7 @@ class MainActivity : Activity() {
             // Stalled background job: clear flag and force fresh start
             subscriptionRefreshInFlight = false
         }
+        val isEnManual = AppLanguage.current(this) == AppLanguage.EN
         val url = SubscriptionClient.getSavedSubscriptionUrl(this)?.trim()?.takeIf(String::isNotEmpty)
         val token = TelegramSessionStore.read(this)
         if (url == null && token == null) {
@@ -774,14 +786,15 @@ class MainActivity : Activity() {
                 manualRefreshCallbacks.clear()
                 copy
             }
-            callbacks.forEach { it.invoke(false, uiCopy("Подключите профиль или Telegram")) }
+            val noAccountText = if (isEnManual) "Connect profile or Telegram" else "Подключите профиль или Telegram"
+            callbacks.forEach { it.invoke(false, noAccountText) }
             openSetup()
             return
         }
 
         subscriptionRefreshInFlight = true
         subscriptionRefreshLastStartedAt = now
-        SubscriptionRefreshState.start(uiCopy("Обновляем подписку и маршруты…"))
+        SubscriptionRefreshState.start(if (isEnManual) "Updating subscription and routes…" else "Обновляем подписку и маршруты…")
 
         subscriptionExecutor.execute {
             val targetUrl = url ?: runCatching {
@@ -796,7 +809,7 @@ class MainActivity : Activity() {
                         manualRefreshCallbacks.clear()
                         copy
                     }
-                    val failText = uiCopy("Активная подписка не найдена")
+                    val failText = if (isEnManual) "Active subscription not found" else "Активная подписка не найдена"
                     SubscriptionRefreshState.finishFailure(failText)
                     callbacks.forEach { it.invoke(false, failText) }
                 }
@@ -813,7 +826,7 @@ class MainActivity : Activity() {
                         throw SubscriptionCancelledException()
                     }
                 }, onStage = { stage ->
-                    SubscriptionRefreshState.updateStage(stage)
+                    SubscriptionRefreshState.updateStage(stage, SubscriptionRefreshState.stageDescription(stage, isEnManual))
                 })
             }
 
@@ -829,7 +842,7 @@ class MainActivity : Activity() {
                 if (result.isFailure) {
                     val err = result.exceptionOrNull()
                     val msg = SubscriptionRetryPolicy.safeFailureSummary(err ?: java.io.IOException())
-                    val failText = uiCopy("Не удалось обновить: $msg")
+                    val failText = if (isEnManual) "Failed to update: $msg" else "Не удалось обновить: $msg"
                     SubscriptionRefreshState.finishFailure(failText)
                     callbacks.forEach { it.invoke(false, failText) }
                     return@runOnUiThread
@@ -849,7 +862,8 @@ class MainActivity : Activity() {
                     pageAdapter.refresh(1)
                     pageAdapter.refresh(2)
                 }
-                val successText = uiCopy("Маршруты обновлены (${routes.size})")
+                val isEnManualFinish = AppLanguage.current(this) == AppLanguage.EN
+                val successText = if (isEnManualFinish) "Routes updated (${routes.size})" else "Маршруты обновлены (${routes.size})"
                 SubscriptionRefreshState.finishSuccess(routes.size, successText)
                 callbacks.forEach { it.invoke(true, successText) }
             }
@@ -1153,10 +1167,6 @@ class MainActivity : Activity() {
         root.addView(buildQualityStrip())
         val refreshBtn = button("Обновить замер", secondary = true).apply {
             tag = "home-refresh"
-            visibility = if (renderedPhase == VpnPhase.CONNECTED) View.VISIBLE else View.GONE
-            alpha = if (renderedPhase == VpnPhase.CONNECTED) 1f else 0f
-            scaleX = if (renderedPhase == VpnPhase.CONNECTED) 1f else 0.94f
-            scaleY = if (renderedPhase == VpnPhase.CONNECTED) 1f else 0.94f
             setOnClickListener {
                 homeSpeedAttemptAt = 0L
                 measureHomeRouteDownload()
@@ -2632,35 +2642,6 @@ class MainActivity : Activity() {
         action.background = connectionGlassBackground(currentPhase)
         action.isEnabled = currentPhase != VpnPhase.STOPPING && !homeConnectQueued
         action.alpha = if (action.isEnabled) 1f else .66f
-        val isConnected = currentPhase == VpnPhase.CONNECTED
-        homeRefreshButton?.let { btn ->
-            if (isConnected) {
-                if (btn.visibility != View.VISIBLE) {
-                    btn.visibility = View.VISIBLE
-                    btn.alpha = 0f
-                    btn.scaleX = 0.94f
-                    btn.scaleY = 0.94f
-                    btn.animate()
-                        .alpha(1f)
-                        .scaleX(1f)
-                        .scaleY(1f)
-                        .setDuration(280L)
-                        .setInterpolator(android.view.animation.DecelerateInterpolator())
-                        .start()
-                }
-            } else {
-                if (btn.visibility == View.VISIBLE) {
-                    btn.animate()
-                        .alpha(0f)
-                        .scaleX(0.94f)
-                        .scaleY(0.94f)
-                        .setDuration(220L)
-                        .setInterpolator(android.view.animation.AccelerateInterpolator())
-                        .withEndAction { btn.visibility = View.GONE }
-                        .start()
-                }
-            }
-        }
         if (::downloadText.isInitialized) updateQualityStrip()
     }
 

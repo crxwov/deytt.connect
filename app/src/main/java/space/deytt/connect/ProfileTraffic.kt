@@ -10,6 +10,16 @@ import org.json.JSONObject
  */
 internal data class ProfileTraffic(val totalBytes: Long, val quotaUsedBytes: Long, val quotaLimitBytes: Long) {
     companion object {
+        fun from(subscription: JSONObject): ProfileTraffic {
+            val quotaUsed = subscription.optLong("traffic_used_bytes", 0L).coerceAtLeast(0L)
+            val remoteTotal = subscription.optLong("traffic_total_bytes", quotaUsed).coerceAtLeast(0L)
+            return ProfileTraffic(
+                remoteTotal,
+                quotaUsed,
+                subscription.optLong("traffic_limit_bytes", 0L).coerceAtLeast(0L),
+            )
+        }
+
         fun from(context: Context, subscription: JSONObject?): ProfileTraffic {
             if (subscription == null) {
                 val metadata = SubscriptionMetadataStore(context).read()
