@@ -215,6 +215,17 @@ object UpdateChecker {
             onProgress(initial)
         }
 
+        // 1. High-speed 4-stream parallel segmented download directly from server mirror
+        if (totalLength >= 4 * 1024 * 1024 && received == 0L) {
+            val parallelFile = runCatching {
+                downloadParallel(cache, safeTag, candidateUrls, totalLength, onProgress)
+            }.getOrNull()
+            if (parallelFile != null && parallelFile.length() == totalLength) {
+                return finalizeAndVerify(context, parallelFile, output, release, onProgress)
+            }
+        }
+
+        // 2. Sequential / resume single-stream download fallback
         while (attempts < maxDownloadAttempts) {
             attempts++
             var connection: HttpURLConnection? = null
@@ -248,11 +259,11 @@ object UpdateChecker {
                     else if (streamLength > 0) streamLength else totalLength
 
                 val deadline = android.os.SystemClock.elapsedRealtime() + 15 * 60_000L
-                val outputStream = java.io.BufferedOutputStream(FileOutputStream(partial, received > 0L), 128 * 1024)
+                val outputStream = java.io.BufferedOutputStream(FileOutputStream(partial, received > 0L), 256 * 1024)
                 outputStream.use { file ->
-                    val inputStream = java.io.BufferedInputStream(connection.inputStream, 128 * 1024)
+                    val inputStream = java.io.BufferedInputStream(connection.inputStream, 256 * 1024)
                     inputStream.use { raw ->
-                        val buffer = ByteArray(128 * 1024)
+                        val buffer = ByteArray(256 * 1024)
                         while (true) {
                             check(!Thread.currentThread().isInterrupted) { "APK download cancelled" }
                             check(android.os.SystemClock.elapsedRealtime() < deadline) { "APK download timed out" }
@@ -300,9 +311,99 @@ object UpdateChecker {
             "APK download is incomplete (received $received bytes, expected $totalLength)"
         }
 
+        return finalizeAndVerify(context, partial, output, release, onProgress)
+    }
+
+    private fun downloadParallel(
+        cache: File,
+        safeTag: String,
+        candidateUrls: List<String>,
+        totalLength: Long,
+        onProgress: (Int) -> Unit,
+    ): File {
+        val numParts = 4
+        val partSize = (totalLength + numParts - 1) / numParts
+        val targetUrl = candidateUrls.firstOrNull { it.contains("deytt.space") } ?: candidateUrls.first()
+        val partFiles = (0 until numParts).map { File(cache, "deytt-connect-$safeTag.p$it") }
+        val bytesReceived = java.util.concurrent.atomic.AtomicLong(0L)
+        val reportedProgress = java.util.concurrent.atomic.AtomicInteger(-1)
+
+        val executor = java.util.concurrent.Executors.newFixedThreadPool(numParts)
+        try {
+            val futures = (0 until numParts).map { idx ->
+                val start = idx * partSize
+                val end = minOf(totalLength - 1, (idx + 1) * partSize - 1)
+                val partFile = partFiles[idx]
+                executor.submit(java.util.concurrent.Callable {
+                    val conn = openAssetConnection(URL(targetUrl), start, end)
+                    try {
+                        check(conn.responseCode == 206 || (start == 0L && totalLength == conn.contentLength.toLong())) {
+                            "Server does not support range requests: HTTP ${conn.responseCode}"
+                        }
+                        val expectedPart = end - start + 1
+                        var partRead = 0L
+                        conn.inputStream.use { input ->
+                            FileOutputStream(partFile, false).use { output ->
+                                val buf = ByteArray(256 * 1024)
+                                while (partRead < expectedPart) {
+                                    check(!Thread.currentThread().isInterrupted) { "Download cancelled" }
+                                    val toRead = minOf(buf.size.toLong(), expectedPart - partRead).toInt()
+                                    val n = input.read(buf, 0, toRead)
+                                    if (n < 0) break
+                                    output.write(buf, 0, n)
+                                    partRead += n
+                                    val totalNow = bytesReceived.addAndGet(n.toLong())
+                                    val prog = ((totalNow * 100L) / totalLength).toInt().coerceIn(0, 100)
+                                    var current = reportedProgress.get()
+                                    while (prog > current) {
+                                        if (reportedProgress.compareAndSet(current, prog)) {
+                                            onProgress(prog)
+                                            break
+                                        }
+                                        current = reportedProgress.get()
+                                    }
+                                }
+                            }
+                        }
+                        check(partRead == expectedPart) { "Incomplete part $idx: got $partRead, expected $expectedPart" }
+                    } finally {
+                        conn.disconnect()
+                    }
+                })
+            }
+            futures.forEach { it.get(10, java.util.concurrent.TimeUnit.MINUTES) }
+
+            val partial = File(cache, "deytt-connect-$safeTag.apk.part")
+            try {
+                FileOutputStream(partial).use { outStream ->
+                    for (partFile in partFiles) {
+                        partFile.inputStream().use { inStream ->
+                            inStream.copyTo(outStream, bufferSize = 1024 * 1024)
+                        }
+                        partFile.delete()
+                    }
+                }
+                return partial
+            } catch (e: Throwable) {
+                runCatching { if (partial.exists()) partial.delete() }
+                throw e
+            }
+        } finally {
+            executor.shutdownNow()
+            partFiles.forEach { runCatching { if (it.exists()) it.delete() } }
+        }
+    }
+
+    private fun finalizeAndVerify(
+        context: Context,
+        downloadedFile: File,
+        output: File,
+        release: ReleaseInfo,
+        onProgress: (Int) -> Unit,
+    ): File {
         // Verify SHA-256 digest
         val digest = MessageDigest.getInstance("SHA-256")
-        partial.inputStream().use { stream ->
+        downloadedFile.inputStream().use { stream ->
             val buf = ByteArray(64 * 1024)
             while (true) {
                 val n = stream.read(buf)
@@ -315,14 +416,14 @@ object UpdateChecker {
             val expectedHex = expected.removePrefix("sha256:").lowercase()
             check(Regex("[0-9a-f]{64}").matches(expectedHex)) { "Invalid APK digest format" }
             check(fileHex == expectedHex) {
-                partial.delete()
+                downloadedFile.delete()
                 "APK digest does not match metadata"
             }
         }
 
-        verifyInstalledPackageSignature(context, partial)
+        verifyInstalledPackageSignature(context, downloadedFile)
         if (output.exists()) check(output.delete()) { "Cannot replace cached APK" }
-        check(partial.renameTo(output)) { "Cannot finalize APK download" }
+        check(downloadedFile.renameTo(output)) { "Cannot finalize APK download" }
         onProgress(100)
         return output
     }
@@ -341,18 +442,20 @@ object UpdateChecker {
         context.startActivity(intent)
     }
 
-    private fun openAssetConnection(initial: URL, startByte: Long = 0L): HttpURLConnection {
+    private fun openAssetConnection(initial: URL, startByte: Long = 0L, endByte: Long = -1L): HttpURLConnection {
         var url = initial
         repeat(MAX_REDIRECTS + 1) { attempt ->
             check(isAllowedAssetHost(url)) { "APK redirected to an untrusted host" }
             val connection = (url.openConnection() as HttpURLConnection).apply {
                 connectTimeout = 12_000
-                readTimeout = 15_000
+                readTimeout = 20_000
                 instanceFollowRedirects = false
                 setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
                 setRequestProperty("Accept", "application/octet-stream")
-                if (startByte > 0L) {
-                    setRequestProperty("Range", "bytes=$startByte-")
+                setRequestProperty("Connection", "Keep-Alive")
+                if (startByte > 0L || endByte > 0L) {
+                    val rangeHeader = if (endByte > 0L) "bytes=$startByte-$endByte" else "bytes=$startByte-"
+                    setRequestProperty("Range", rangeHeader)
                 }
             }
             val status = connection.responseCode
