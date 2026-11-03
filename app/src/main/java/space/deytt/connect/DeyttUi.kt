@@ -445,8 +445,8 @@ object DeyttUi {
                 "LANGUAGE_ICON" -> actionIcon(R.drawable.ic_languages, emphasis)
                 "TELEGRAM_ICON" -> actionIcon(R.drawable.ic_send, emphasis)
                 "SPLIT_ICON" -> actionIcon(R.drawable.ic_split, emphasis)
-                "ROUTE_CHECK_ICON" -> actionIcon(R.drawable.ic_activity, emphasis)
-                "VPN_PERMISSION_ICON" -> actionIcon(R.drawable.ic_shield_check, emphasis)
+                "ROUTE_CHECK_ICON", "DOC_ICON" -> actionIcon(R.drawable.ic_activity, emphasis)
+                "VPN_PERMISSION_ICON", "SHIELD_ICON" -> actionIcon(R.drawable.ic_shield_check, emphasis)
                 "BOT_ICON" -> actionIcon(R.drawable.ic_bot, emphasis)
                 "ACCOUNT_ICON" -> actionIcon(R.drawable.ic_user_round, emphasis)
                 "DEVICE_DESKTOP" -> actionIcon(R.drawable.ic_monitor, emphasis)
@@ -535,20 +535,20 @@ object DeyttUi {
                 density = density,
                 cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
                 fillColors = intArrayOf(
-                    0x552C4A70.toInt(),
-                    0x381B3048.toInt(),
-                    0x24102032.toInt(),
+                    0x60223A56.toInt(),
+                    0x40162537.toInt(),
+                    0x2C0F1926.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x50FFFFFF.toInt(),
-                    0x2884BCF4.toInt(),
-                    0x186AAAF0.toInt(),
-                    0x24FFFFFF.toInt(),
+                    0x44FFFFFF.toInt(),
+                    0x2078BAF0.toInt(),
+                    0x12589CD8.toInt(),
+                    0x1EFFFFFF.toInt(),
                 ),
                 strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-                strokeWidthPx = 1.15f,
+                strokeWidthPx = 1.0f,
                 hasGloss = true,
-                glossAlpha = 0x18,
+                glossAlpha = 0x16,
                 innerLip = true,
             )
         } else {
@@ -556,20 +556,20 @@ object DeyttUi {
                 density = density,
                 cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
                 fillColors = intArrayOf(
-                    0x3822364C.toInt(),
-                    0x2213202E.toInt(),
-                    0x160B121C.toInt(),
+                    0x481C2C3F.toInt(),
+                    0x2C121D2A.toInt(),
+                    0x1E0C131D.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x30FFFFFF.toInt(),
-                    0x1480B2E0.toInt(),
-                    0x0C6090C8.toInt(),
-                    0x16FFFFFF.toInt(),
+                    0x2AFFFFFF.toInt(),
+                    0x1270A8E0.toInt(),
+                    0x0A5080B8.toInt(),
+                    0x14FFFFFF.toInt(),
                 ),
                 strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-                strokeWidthPx = 1.0f,
+                strokeWidthPx = 0.95f,
                 hasGloss = true,
-                glossAlpha = 0x12,
+                glossAlpha = 0x10,
                 innerLip = true,
             )
         }
@@ -744,44 +744,64 @@ object DeyttUi {
         val density = resources.displayMetrics.density
         val rPx = dp(radius.roundToInt()).toFloat()
         return when (fill) {
-            SURFACE, SHEET_SURFACE -> LiquidGlassDrawable(
+            SHEET_SURFACE -> LiquidGlassDrawable(
                 density = density,
                 cornerRadiusPx = rPx,
                 fillColors = intArrayOf(
-                    0x3E24364D.toInt(),
-                    0x26142232.toInt(),
-                    0x1A0D1520.toInt(),
+                    0xFF121B27.toInt(),
+                    0xFF0D141F.toInt(),
+                    0xFF090E16.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x38FFFFFF.toInt(),
-                    0x1888BAE8.toInt(),
-                    0x106AA0D8.toInt(),
-                    0x1AFFFFFF.toInt(),
+                    0x45FFFFFF.toInt(),
+                    0x2088BAE8.toInt(),
+                    0x126AA0D8.toInt(),
+                    0x25FFFFFF.toInt(),
                 ),
                 strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-                strokeWidthPx = 1.1f,
+                strokeWidthPx = 1.0f,
+                hasGloss = false,
+                glossAlpha = 0,
+                innerLip = false,
+            )
+            SURFACE -> LiquidGlassDrawable(
+                density = density,
+                cornerRadiusPx = rPx,
+                fillColors = intArrayOf(
+                    0x4E203248.toInt(),
+                    0x32132030.toInt(),
+                    0x220D1520.toInt(),
+                ),
+                strokeColors = intArrayOf(
+                    0x34FFFFFF.toInt(),
+                    0x1478B2EA.toInt(),
+                    0x0C5892CC.toInt(),
+                    0x16FFFFFF.toInt(),
+                ),
+                strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
+                strokeWidthPx = 0.95f,
                 hasGloss = true,
-                glossAlpha = 0x14,
+                glossAlpha = 0x12,
                 innerLip = true,
             )
             SURFACE_2 -> LiquidGlassDrawable(
                 density = density,
                 cornerRadiusPx = rPx,
                 fillColors = intArrayOf(
-                    0x48283E58.toInt(),
-                    0x2C18273A.toInt(),
-                    0x1E0E1926.toInt(),
+                    0x58263B54.toInt(),
+                    0x3818273A.toInt(),
+                    0x260E1926.toInt(),
                 ),
                 strokeColors = intArrayOf(
-                    0x40FFFFFF.toInt(),
-                    0x1C90C2F0.toInt(),
-                    0x1270A8E0.toInt(),
-                    0x1EFFFFFF.toInt(),
+                    0x38FFFFFF.toInt(),
+                    0x1680BAF0.toInt(),
+                    0x0E6098D4.toInt(),
+                    0x18FFFFFF.toInt(),
                 ),
                 strokePositions = floatArrayOf(0f, .34f, .72f, 1f),
-                strokeWidthPx = 1.15f,
+                strokeWidthPx = 1.0f,
                 hasGloss = true,
-                glossAlpha = 0x16,
+                glossAlpha = 0x14,
                 innerLip = true,
             )
             SELECTED -> LiquidGlassDrawable(

@@ -1130,6 +1130,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
 
     @Synchronized
     private fun stopTunnel() {
+        LocalTrafficRecorder.sample(this)
         CdnLteXrayController.stop(this)
         runCatching { activeCanary?.disconnect() }
         activeCanary = null

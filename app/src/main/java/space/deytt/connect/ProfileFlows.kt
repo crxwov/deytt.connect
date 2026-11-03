@@ -29,6 +29,11 @@ import android.widget.TextView
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.Executors
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import android.content.res.ColorStateList
 import space.deytt.connect.AppLanguage.uiCopy
 import space.deytt.connect.DeyttUi.AMBER
 import space.deytt.connect.DeyttUi.LINE
@@ -37,6 +42,7 @@ import space.deytt.connect.DeyttUi.SURFACE
 import space.deytt.connect.DeyttUi.SURFACE_2
 import space.deytt.connect.DeyttUi.TEXT
 import space.deytt.connect.DeyttUi.button
+import space.deytt.connect.DeyttUi.typeface
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.glassRowBackground
@@ -77,6 +83,10 @@ internal class ProfileFlows(
     private var historyEmpty: TextView? = null
     private var historyNote: TextView? = null
     private var paymentAction: View? = null
+    private var paymentTitleText: TextView? = null
+    private var paymentSubtitleText: TextView? = null
+    private var paymentBadgeText: TextView? = null
+    private var planNoteView: TextView? = null
     private var deviceSummaryText: TextView? = null
     private var happDevices: LinearLayout? = null
     private var paymentStatusText: TextView? = null
@@ -107,6 +117,116 @@ internal class ProfileFlows(
         if (!isCurrent(token)) return
         executor.execute {
             if (isCurrent(token)) action()
+        }
+    }
+
+    private fun parseExpiryDate(raw: String): Date? {
+        val trimmed = raw.trim()
+        trimmed.toLongOrNull()?.let { num ->
+            val ms = if (num < 100_000_000_000L) num * 1000L else num
+            return Date(ms)
+        }
+        val dateStr = trimmed.substringBefore('T')
+        for (pattern in arrayOf("yyyy-MM-dd", "yyyy-MM-dd HH:mm:ss", "dd.MM.yyyy", "dd/MM/yyyy")) {
+            val d = runCatching { SimpleDateFormat(pattern, Locale.US).parse(dateStr) }.getOrNull()
+            if (d != null) return d
+        }
+        return null
+    }
+
+    private fun formatExpiryDate(raw: String): String {
+        val d = parseExpiryDate(raw) ?: return raw.substringBefore('T')
+        val cal = Calendar.getInstance().apply { time = d }
+        val day = cal.get(Calendar.DAY_OF_MONTH)
+        val month = cal.get(Calendar.MONTH)
+        val year = cal.get(Calendar.YEAR)
+        val monthsRu = arrayOf("янв.", "февр.", "марта", "апр.", "мая", "июня", "июля", "авг.", "сент.", "окт.", "нояб.", "дек.")
+        val monthName = monthsRu.getOrElse(month) { "" }
+        return "до $day $monthName $year"
+    }
+
+    private fun calculateRemainingDays(raw: String): String? {
+        return runCatching {
+            val expiry = parseExpiryDate(raw) ?: return null
+            val now = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.time
+            val diffMs = expiry.time - now.time
+            val days = (diffMs / (1000 * 60 * 60 * 24)).toInt()
+            when {
+                days < 0 -> copy("истекла", "expired")
+                days == 0 -> copy("истекает сегодня", "expires today")
+                days == 1 -> copy("остался 1 день", "1 day left")
+                days in 2..4 -> copy("осталось $days дня", "$days days left")
+                else -> copy("осталось $days дней", "$days days left")
+            }
+        }.getOrNull()
+    }
+
+    private fun renderSubscriptionData(profile: JSONObject, subscription: JSONObject) {
+        currentDeviceLimit = subscription.optInt("device_limit", 1).coerceAtLeast(1)
+        unlimitedDevices = subscription.isNull("device_limit")
+        val isPaid = subscription.optBoolean("paid_active", false)
+        val meta = SubscriptionMetadataStore(host).read()
+        val hasMetaExpire = meta.expiresAtSeconds != null && meta.expiresAtSeconds > 0
+        val expiresRaw = subscription.optString("expires_at").takeIf { it.isNotBlank() && it != "null" }
+            ?: if (hasMetaExpire) meta.expiresAtSeconds.toString() else null
+
+        unlimitedTime = false
+        val isActive = subscription.optBoolean("active", isPaid)
+        val tariff = subscription.optString("tariff_name").takeIf(String::isNotBlank)
+            ?: meta.title.takeIf { it.isNotBlank() && it != "deytt" }
+            ?: if (isActive) host.uiCopy("активный доступ") else host.uiCopy("нет активной подписки")
+
+        val expiryFormatted = when {
+            expiresRaw != null -> formatExpiryDate(expiresRaw)
+            isActive -> host.uiCopy(copy("активна", "active"))
+            else -> host.uiCopy(copy("не активна", "inactive"))
+        }
+
+        subscriptionText?.text = "$tariff · $expiryFormatted"
+        val traffic = ProfileTraffic.from(host, subscription)
+        val used = traffic.totalBytes
+        val limit = traffic.quotaLimitBytes
+
+        starryPlanCard?.updateData(
+            tariffName = tariff,
+            expiryText = expiryFormatted,
+            isUnlimitedTime = false,
+            isActive = isActive,
+            deviceLimit = if (unlimitedDevices) 10 else currentDeviceLimit,
+            trafficTotalBytes = used,
+            trafficQuotaLimitBytes = limit
+        )
+
+        val remaining = if (expiresRaw != null) calculateRemainingDays(expiresRaw) else null
+        planNoteView?.text = when {
+            expiresRaw != null -> copy("активная подписка · $expiryFormatted", "active subscription · $expiryFormatted") + (if (remaining != null) " ($remaining)" else "")
+            isActive -> copy("активная подписка · управление тарифом", "active subscription · manage plan")
+            else -> copy("нет активной подписки — выберите тариф", "no active subscription — choose a plan")
+        }
+
+        usageText?.text = if (limit > 0L) {
+            host.uiCopy("использовано ${formatBytes(traffic.quotaUsedBytes)} из ${formatBytes(limit)}") + "\n" + copy("всего передано", "total transferred") + " ${formatBytes(used)}"
+        } else host.uiCopy("передано ${formatBytes(used)} · без установленного лимита")
+
+        renderQuotaUsage(traffic.quotaUsedBytes, limit)
+        renderTrafficHistory(subscription)
+
+        paymentTitleText?.text = when {
+            !isActive -> copy("выбрать тариф", "choose a plan")
+            else -> copy("продлить подписку", "renew subscription")
+        }
+        paymentSubtitleText?.text = when {
+            !isActive -> copy("тарифы и способы оплаты", "plans and payment methods")
+            else -> copy("продление или смена тарифа", "renew or change plan")
+        }
+        paymentBadgeText?.text = when {
+            !isActive -> copy("выбрать ›", "choose ›")
+            else -> copy("продлить ›", "renew ›")
         }
     }
 
@@ -150,14 +270,11 @@ internal class ProfileFlows(
         starryPlanCard = starryCard
         root.addView(starryCard)
 
-        val planNote = host.text(
-            copy("бессрочная подписка — продлевать не нужно", "lifetime subscription — no renewal required"),
-            12f,
-            MUTED
-        ).apply {
-            setPadding(host.dp(6), host.dp(10), host.dp(6), host.dp(6))
+        val note = host.text("", 12f, MUTED).apply {
+            setPadding(host.dp(6), host.dp(8), host.dp(6), host.dp(4))
         }
-        root.addView(planNote)
+        planNoteView = note
+        root.addView(note)
 
         paymentStatusText = host.text("", 12f, AMBER).apply {
             visibility = View.GONE
@@ -172,32 +289,155 @@ internal class ProfileFlows(
         }
         root.addView(actionStatus)
 
-        // 2. Manage plan button
+        // 2. Manage plan button (Redesigned primary card)
         root.addView(spacer(12, host))
-        paymentAction = host.row(
-            copy("выбрать тариф", "choose a plan"),
-            copy("тарифы и способы оплаты", "plans and payment methods"),
-            "PAYMENTS_ICON",
-            emphasis = true,
-        ).apply {
+        val payCard = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = host.dp(68)
+            setPadding(host.dp(14), host.dp(12), host.dp(14), host.dp(12))
+            background = host.glassRowBackground(emphasis = true, radius = 20f)
+            isClickable = true
+            isFocusable = true
+            with(DeyttUi) {
+                foreground = host.ripple(20f)
+                host.pressFeedback(this@apply, .99f)
+            }
             setOnClickListener { showPlanPicker() }
         }
-        root.addView(paymentAction)
+        val payIconContainer = FrameLayout(host).apply {
+            background = host.rounded(0x2838BDF8.toInt(), 14f, 0x4038BDF8.toInt())
+            addView(ImageView(host).apply {
+                setImageResource(R.drawable.ic_credit_card)
+                imageTintList = ColorStateList.valueOf(DeyttUi.SKY)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }, FrameLayout.LayoutParams(host.dp(20), host.dp(20), Gravity.CENTER))
+        }
+        payCard.addView(payIconContainer, LinearLayout.LayoutParams(host.dp(42), host.dp(42)).apply { marginEnd = host.dp(12) })
 
-        // 3. Support button
+        val payLabels = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            paymentTitleText = host.text(copy("выбрать тариф", "choose a plan"), 15f, Color.WHITE, Typeface.BOLD)
+            paymentSubtitleText = host.text(copy("тарифы и способы оплаты", "plans and payment methods"), 11f, MUTED).apply {
+                setPadding(0, host.dp(3), 0, 0)
+            }
+            addView(paymentTitleText)
+            addView(paymentSubtitleText)
+        }
+        payCard.addView(payLabels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        paymentBadgeText = TextView(host).apply {
+            text = copy("выбрать ›", "choose ›")
+            textSize = 12f
+            setTextColor(DeyttUi.SKY)
+            typeface = host.typeface(DeyttUi.FontFamily.INTER_TIGHT, 650)
+            background = host.rounded(0x2238BDF8.toInt(), 12f, 0x3038BDF8.toInt())
+            setPadding(host.dp(10), host.dp(5), host.dp(10), host.dp(5))
+        }
+        payCard.addView(paymentBadgeText)
+        paymentAction = payCard
+        root.addView(payCard)
+
+        // 3. Support button (Redesigned secondary card)
         root.addView(spacer(8, host))
-        val supportAction = host.row(
-            copy("поддержка", "support"),
-            copy("написать команде в приложении", "message the team in the app"),
-            "BOT_ICON",
-            copy("написать", "chat"),
-            emphasis = true,
-        ).apply { setOnClickListener { showSupportChat() } }
-        root.addView(supportAction)
+        val supCard = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = host.dp(68)
+            setPadding(host.dp(14), host.dp(12), host.dp(14), host.dp(12))
+            background = host.glassRowBackground(emphasis = true, radius = 20f)
+            isClickable = true
+            isFocusable = true
+            with(DeyttUi) {
+                foreground = host.ripple(20f)
+                host.pressFeedback(this@apply, .99f)
+            }
+            setOnClickListener { showSupportChat() }
+        }
+        val supIconContainer = FrameLayout(host).apply {
+            background = host.rounded(0x2210B981.toInt(), 14f, 0x3534D399.toInt())
+            addView(ImageView(host).apply {
+                setImageResource(R.drawable.ic_bot)
+                imageTintList = ColorStateList.valueOf(DeyttUi.MINT)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }, FrameLayout.LayoutParams(host.dp(20), host.dp(20), Gravity.CENTER))
+        }
+        supCard.addView(supIconContainer, LinearLayout.LayoutParams(host.dp(42), host.dp(42)).apply { marginEnd = host.dp(12) })
+
+        val supLabels = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(host.text(copy("поддержка", "support"), 15f, Color.WHITE, Typeface.BOLD))
+            addView(host.text(copy("написать команде в приложении · онлайн", "chat with team in app · online"), 11f, MUTED).apply {
+                setPadding(0, host.dp(3), 0, 0)
+            })
+        }
+        supCard.addView(supLabels, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        val supBadge = TextView(host).apply {
+            text = copy("написать ›", "chat ›")
+            textSize = 12f
+            setTextColor(DeyttUi.MINT)
+            typeface = host.typeface(DeyttUi.FontFamily.INTER_TIGHT, 650)
+            background = host.rounded(0x2010B981.toInt(), 12f, 0x3034D399.toInt())
+            setPadding(host.dp(10), host.dp(5), host.dp(10), host.dp(5))
+        }
+        supCard.addView(supBadge)
+        root.addView(supCard)
+
+        // Initial instantaneous load from cache or local metadata store
+        val cachedSnapshot = TelegramIdentityCache.readSnapshot(host)
+        if (cachedSnapshot != null) {
+            val cachedProfile = cachedSnapshot.optJSONObject("profile")
+            val cachedSub = cachedProfile?.optJSONObject("subscription")
+            if (cachedProfile != null && cachedSub != null) {
+                renderSubscriptionData(cachedProfile, cachedSub)
+            }
+        } else {
+            val metadata = SubscriptionMetadataStore(host).read()
+            val localBytes = LocalTrafficRecorder.getTotalBytes(host)
+            val combinedTraffic = metadata.usedBytes + localBytes
+            if (metadata.expiresAtSeconds != null && metadata.expiresAtSeconds > 0) {
+                val cal = Calendar.getInstance().apply { timeInMillis = metadata.expiresAtSeconds * 1000L }
+                val expStr = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
+                val expFormatted = formatExpiryDate(expStr)
+                val remaining = calculateRemainingDays(expStr)
+                starryPlanCard?.updateData(
+                    tariffName = metadata.title,
+                    expiryText = expFormatted,
+                    isUnlimitedTime = false,
+                    isActive = true,
+                    deviceLimit = 1,
+                    trafficTotalBytes = combinedTraffic,
+                    trafficQuotaLimitBytes = metadata.totalBytes
+                )
+                planNoteView?.text = copy("активная подписка · $expFormatted", "active subscription · $expFormatted") +
+                    (if (remaining != null) " ($remaining)" else "")
+                paymentTitleText?.text = copy("продлить подписку", "renew subscription")
+                paymentSubtitleText?.text = copy("продление или смена тарифа", "renew or change plan")
+                paymentBadgeText?.text = copy("продлить ›", "renew ›")
+            } else {
+                starryPlanCard?.updateData(
+                    tariffName = "deytt./connect",
+                    expiryText = copy("подписка не подключена", "subscription not connected"),
+                    isUnlimitedTime = false,
+                    isActive = false,
+                    deviceLimit = 0,
+                    trafficTotalBytes = localBytes,
+                    trafficQuotaLimitBytes = 0L
+                )
+                planNoteView?.text = copy("подключите Telegram или ссылку подписки", "connect Telegram or subscription link")
+                paymentTitleText?.text = copy("выбрать тариф", "choose a plan")
+                paymentSubtitleText?.text = copy("тарифы и способы оплаты", "plans and payment methods")
+                paymentBadgeText?.text = copy("выбрать ›", "choose ›")
+            }
+        }
 
         // 4. Devices & Sessions accordion
         root.addView(spacer(10, host))
-        val devicesGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
+        val devicesGroup = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(10), 0, host.dp(10), host.dp(10))
+        }
         deviceSummaryText = host.text(
             if (token == null) "подключите аккаунт, чтобы увидеть устройства."
             else "загружаем список…",
@@ -212,6 +452,7 @@ internal class ProfileFlows(
         appSessions = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
         devicesGroup.addView(appSessions)
         devicesGroup.addView(host.row("сбросить ключи", "отозвать действующие ключи выбранного типа", "↻", "управлять").apply {
+            (layoutParams as? LinearLayout.LayoutParams)?.topMargin = host.dp(6)
             setOnClickListener { showResetChoices() }
         })
         devicesGroup.addView(host.note(
@@ -229,17 +470,32 @@ internal class ProfileFlows(
 
         // 6. Documents & other channels accordion
         root.addView(spacer(10, host))
-        val helpGroup = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
+        val helpGroup = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(10), 0, host.dp(10), host.dp(10))
+        }
         helpGroup.addView(host.row(
             copy("поддержка в telegram", "telegram support"),
             copy("открыть запасной канал", "open the external channel"),
             "TELEGRAM_ICON",
             "↗",
         ).apply { setOnClickListener { openHttps(supportUrl) } })
-        helpGroup.addView(host.row("условия использования", copy("читать в приложении", "read in the app"), "↗", "открыть").apply {
+        helpGroup.addView(host.row(
+            copy("условия использования", "terms of service"),
+            copy("читать в приложении", "read in the app"),
+            "DOC_ICON",
+            "›"
+        ).apply {
+            (layoutParams as? LinearLayout.LayoutParams)?.topMargin = host.dp(6)
             setOnClickListener { openDocument("terms") }
         })
-        helpGroup.addView(host.row("политика конфиденциальности", copy("читать в приложении", "read in the app"), "↗", "открыть").apply {
+        helpGroup.addView(host.row(
+            copy("политика конфиденциальности", "privacy policy"),
+            copy("читать в приложении", "read in the app"),
+            "SHIELD_ICON",
+            "›"
+        ).apply {
+            (layoutParams as? LinearLayout.LayoutParams)?.topMargin = host.dp(6)
             setOnClickListener { openDocument("privacy") }
         })
         root.addView(accordion(copy("документы и другие каналы", "documents and other channels"), copy("условия, конфиденциальность, telegram", "terms, privacy, telegram"), helpGroup))
@@ -257,7 +513,10 @@ internal class ProfileFlows(
     }
 
     private fun trafficHistoryGroup(): View {
-        val content = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
+        val content = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(host.dp(10), 0, host.dp(10), host.dp(10))
+        }
         val historyEmptyView = host.text(
             copy(
                 "история начнёт собираться после обновления сервера. прошлые дни восстановить нельзя.",
@@ -610,6 +869,7 @@ internal class ProfileFlows(
                 }
                 snapshot to TelegramPairingClient.keys(token)
             }.onSuccess { (snapshot, keys) ->
+                TelegramIdentityCache.saveSnapshot(host, snapshot)
                 host.runOnUiThread {
                     if (generation != refreshGeneration || !isCurrent(token)) return@runOnUiThread
                     val profile = snapshot.optJSONObject("profile")
@@ -620,45 +880,7 @@ internal class ProfileFlows(
                         return@runOnUiThread
                     }
                     renderIdentity(profile)
-                    currentDeviceLimit = subscription.optInt("device_limit", 1).coerceAtLeast(1)
-                    unlimitedDevices = subscription.isNull("device_limit")
-                    unlimitedTime = subscription.optBoolean("unlimited_time")
-                    val tariff = subscription.optString("tariff_name").takeIf(String::isNotBlank)
-                        ?: if (subscription.optBoolean("active")) host.uiCopy("активный доступ") else host.uiCopy("нет активной подписки")
-                    val expiry = when {
-                        subscription.optBoolean("unlimited_time") -> host.uiCopy("без срока")
-                        !subscription.isNull("expires_at") -> subscription.optString("expires_at").substringBefore('T')
-                        else -> host.uiCopy("срок не указан")
-                    }
-                    subscriptionText?.text = "$tariff · $expiry"
-                    val traffic = ProfileTraffic.from(subscription)
-                    val used = traffic.totalBytes
-                    val limit = traffic.quotaLimitBytes
-                    starryPlanCard?.updateData(
-                        tariffName = tariff,
-                        expiryText = expiry,
-                        isUnlimitedTime = unlimitedTime,
-                        isActive = subscription.optBoolean("active", true),
-                        deviceLimit = if (unlimitedDevices) 10 else currentDeviceLimit,
-                        trafficTotalBytes = used,
-                        trafficQuotaLimitBytes = limit
-                    )
-                    usageText?.text = if (limit > 0L) {
-                        host.uiCopy("использовано ${formatBytes(traffic.quotaUsedBytes)} из ${formatBytes(limit)}") + "\n" + copy("всего передано", "total transferred") + " ${formatBytes(used)}"
-                    } else host.uiCopy("передано ${formatBytes(used)} · без установленного лимита")
-                    renderQuotaUsage(traffic.quotaUsedBytes, limit)
-                    renderTrafficHistory(subscription)
-                    val paymentLabels = (paymentAction as? ViewGroup)?.getChildAt(1) as? LinearLayout
-                    (paymentLabels?.getChildAt(0) as? TextView)?.text = when {
-                        !subscription.optBoolean("paid_active") -> copy("выбрать тариф", "choose a plan")
-                        subscription.optBoolean("unlimited_time") -> copy("управление тарифом", "manage plan")
-                        else -> copy("продлить подписку", "renew subscription")
-                    }
-                    (paymentLabels?.getChildAt(1) as? TextView)?.text = when {
-                        !subscription.optBoolean("paid_active") -> copy("тарифы и способы оплаты", "plans and payment methods")
-                        subscription.optBoolean("unlimited_time") -> copy("для изменения условий напишите в поддержку", "contact support to change your plan")
-                        else -> copy("продление или дополнительное устройство", "renew or add a device")
-                    }
+                    renderSubscriptionData(profile, subscription)
                     val awgCount = devices?.optInt("awg", 0)?.coerceAtLeast(0) ?: 0
                     val happCount = devices?.optInt("happ_devices", 0)?.coerceAtLeast(0) ?: 0
                     deviceSummaryText?.text = host.uiCopy("amneziawg: $awgCount · happ: $happCount")
@@ -1123,12 +1345,12 @@ internal class ProfileFlows(
         val dialog = Dialog(host)
         val root = LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(14))
-            background = host.glassRowBackground(true, 24f)
+            setPadding(host.dp(20), host.dp(18), host.dp(20), host.dp(16))
+            background = host.rounded(DeyttUi.SHEET_SURFACE, 26f)
         }
-        root.addView(host.mono("deytt · support", 9f, MUTED, 650))
-        root.addView(host.text("поддержка", 21f, TEXT, Typeface.BOLD).apply { setPadding(0, host.dp(8), 0, host.dp(4)) })
-        val status = host.text("загружаем переписку…", 12f, MUTED).apply { setPadding(0, 0, 0, host.dp(10)) }
+        root.addView(host.mono("deytt · support", 10f, 0xFF8EA2BA.toInt(), 650))
+        root.addView(host.text("поддержка", 22f, Color.WHITE, Typeface.BOLD).apply { setPadding(0, host.dp(6), 0, host.dp(2)) })
+        val status = host.text("загружаем переписку…", 12f, 0xFF94A3B8.toInt()).apply { setPadding(0, 0, 0, host.dp(10)) }
         root.addView(status)
         val messageList = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
         val messageScroll = ScrollView(host).apply {
@@ -1139,26 +1361,53 @@ internal class ProfileFlows(
         }
         val maxHeight = (host.resources.displayMetrics.heightPixels / host.resources.displayMetrics.density * .42f).toInt().coerceIn(220, 380)
         root.addView(messageScroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(maxHeight)))
+
+        val composerCard = LinearLayout(host).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            background = host.rounded(0xFF141C26.toInt(), 22f, 0x33FFFFFF.toInt())
+            setPadding(host.dp(14), host.dp(4), host.dp(6), host.dp(4))
+        }
         val input = EditText(host).apply {
-            hint = host.uiCopy("сообщение команде")
-            setTextColor(TEXT)
-            setHintTextColor(MUTED)
-            minLines = 2
+            hint = host.uiCopy("сообщение команде…")
+            setTextColor(Color.WHITE)
+            setHintTextColor(0xFF64748B.toInt())
+            textSize = 14f
+            minLines = 1
             maxLines = 4
             filters = arrayOf(InputFilter.LengthFilter(4000))
-            setPadding(host.dp(12), host.dp(8), host.dp(12), host.dp(8))
-            background = host.glassRowBackground(false, 14f)
+            background = null
+            setPadding(0, host.dp(8), 0, host.dp(8))
         }
-        root.addView(input, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = host.dp(10)
-        })
-        val actions = LinearLayout(host).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
-        val closeTicket = host.button("закрыть обращение", secondary = true).apply { visibility = View.GONE }
-        val send = host.button("отправить")
-        actions.addView(closeTicket, LinearLayout.LayoutParams(0, host.dp(46), 1f).apply { marginEnd = host.dp(7) })
-        actions.addView(send, LinearLayout.LayoutParams(0, host.dp(46), 1f))
-        root.addView(actions, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = host.dp(8)
+        composerCard.addView(input, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+        val sendBtn = FrameLayout(host).apply {
+            background = host.rounded(0x2038BDF8.toInt(), 18f, 0x3038BDF8.toInt())
+            isClickable = true
+            isFocusable = true
+            with(DeyttUi) {
+                foreground = host.ripple(18f)
+                host.pressFeedback(this@apply, .95f)
+            }
+            val sendIcon = ImageView(host).apply {
+                setImageResource(R.drawable.ic_send)
+                imageTintList = ColorStateList.valueOf(DeyttUi.SKY)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
+            addView(sendIcon, FrameLayout.LayoutParams(host.dp(18), host.dp(18), Gravity.CENTER))
+        }
+        composerCard.addView(sendBtn, LinearLayout.LayoutParams(host.dp(36), host.dp(36)).apply { marginStart = host.dp(6) })
+
+        val closeTicket = host.text(copy("закрыть обращение", "close ticket"), 12f, 0xFF94A3B8.toInt()).apply {
+            visibility = View.GONE
+            setPadding(host.dp(8), host.dp(4), host.dp(8), host.dp(6))
+            gravity = Gravity.END
+            isClickable = true
+            isFocusable = true
+        }
+        root.addView(closeTicket)
+        root.addView(composerCard, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = host.dp(6)
         })
 
         var ticketId: Int? = null
@@ -1186,17 +1435,26 @@ internal class ProfileFlows(
                 val fromSupport = message.optString("sender") == "support"
                 val bubble = LinearLayout(host).apply {
                     orientation = LinearLayout.VERTICAL
-                    setPadding(host.dp(12), host.dp(9), host.dp(12), host.dp(9))
-                    background = host.glassRowBackground(!fromSupport, 14f)
+                    setPadding(host.dp(14), host.dp(10), host.dp(14), host.dp(10))
+                    background = host.rounded(
+                        if (fromSupport) 0xFF141D2A.toInt() else 0xFF1E2F46.toInt(),
+                        16f,
+                        if (fromSupport) 0x24FFFFFF.toInt() else 0x3538BDF8.toInt()
+                    )
                 }
-                bubble.addView(host.mono(if (fromSupport) "deytt" else copy("вы", "you"), 8f, MUTED, 600))
-                bubble.addView(host.text("", 13f, TEXT).apply {
+                bubble.addView(host.mono(
+                    if (fromSupport) "deytt · команда" else copy("вы", "you"),
+                    8.5f,
+                    if (fromSupport) DeyttUi.MINT else DeyttUi.SKY,
+                    650
+                ))
+                bubble.addView(host.text("", 13.5f, Color.WHITE).apply {
                     text = message.optString("text")
                     setPadding(0, host.dp(4), 0, 0)
                     setTextIsSelectable(true)
                 })
                 messageList.addView(bubble, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-                    bottomMargin = host.dp(7)
+                    bottomMargin = host.dp(8)
                 })
             }
             messageScroll.post { messageScroll.fullScroll(View.FOCUS_DOWN) }
@@ -1225,7 +1483,7 @@ internal class ProfileFlows(
                 }
             }
         }
-        send.setOnClickListener {
+        sendBtn.setOnClickListener {
             val text = input.text?.toString().orEmpty().trim()
             if (text.length < 5) {
                 setStatus("напишите сообщение минимум из пяти символов.", true)
@@ -1233,7 +1491,8 @@ internal class ProfileFlows(
             }
             if (loading || !isCurrent(token)) return@setOnClickListener
             loading = true
-            send.isEnabled = false
+            sendBtn.isEnabled = false
+            sendBtn.alpha = 0.5f
             setStatus("отправляем сообщение…")
             executeFor(token) {
                 runCatching {
@@ -1243,7 +1502,8 @@ internal class ProfileFlows(
                 }.onSuccess { host.runOnUiThread {
                     if (!dialog.isShowing || !isCurrent(token)) return@runOnUiThread
                     loading = false
-                    send.isEnabled = true
+                    sendBtn.isEnabled = true
+                    sendBtn.alpha = 1f
                     if (dialog.isShowing && isCurrent(token)) {
                         input.text?.clear()
                         refresh()
@@ -1251,7 +1511,8 @@ internal class ProfileFlows(
                 } }.onFailure { failure -> host.runOnUiThread {
                     if (!dialog.isShowing || !isCurrent(token)) return@runOnUiThread
                     loading = false
-                    send.isEnabled = true
+                    sendBtn.isEnabled = true
+                    sendBtn.alpha = 1f
                     if (dialog.isShowing && isCurrent(token)) setStatus(host.uiCopy(apiError(failure)) + " · " + copy("нажмите, чтобы повторить", "tap to retry"), true)
                 } }
             }

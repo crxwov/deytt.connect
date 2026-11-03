@@ -64,6 +64,7 @@ import space.deytt.connect.DeyttUi.text
 import space.deytt.connect.DeyttUi.note
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.pressFeedback
+import space.deytt.connect.DeyttUi.typeface
 
 class MainActivity : Activity() {
     private lateinit var globe: RouteGlobeView
@@ -126,6 +127,26 @@ class MainActivity : Activity() {
     private var homeConnectionGeneration = 0L
     private var homeSpeedAttemptAt = 0L
     private var homeSpeedInFlight = false
+    private var homeRefreshButton: View? = null
+    private var activeFloatingBanner: View? = null
+    private var floatingBannerDismissRunnable: Runnable? = null
+    private val floatingBannerHandler = Handler(Looper.getMainLooper())
+    private var lastFloatingNotificationTs = 0L
+    private val globalSubscriptionRefreshListener = {
+        runOnUiThread {
+            android.util.Log.i("DeyttBanner", "globalSubscriptionRefreshListener: phase=${SubscriptionRefreshState.currentPhase}")
+            if (!isFinishing && !isDestroyed) {
+                if (SubscriptionRefreshState.currentPhase == SubscriptionRefreshState.Phase.SUCCESS) {
+                    val count = SubscriptionRefreshState.lastSuccessRoutesCount
+                    val text = if (count > 0) "Подписка обновлена · $count маршрутов" else "Подписка успешно обновлена"
+                    showFloatingBanner(text, "Маршруты и ключи синхронизированы", isSuccess = true)
+                } else if (SubscriptionRefreshState.currentPhase == SubscriptionRefreshState.Phase.FAILURE) {
+                    val msg = SubscriptionRefreshState.lastMessage.ifBlank { "Ошибка обновления" }
+                    showFloatingBanner("Ошибка обновления подписки", msg, isSuccess = false)
+                }
+            }
+        }
+    }
     private var homeSpeedError: String? = null
     private var homeSpeedErrorKey: HomeRouteMetricKey? = null
     private var homeSpeedBypassedKey: HomeRouteMetricKey? = null
@@ -356,6 +377,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) showStartupAnimation()
         window.decorView.post { showNetworkLocationConsentIfNeeded() }
         requestNotificationPermissionIfNeeded()
+        SubscriptionRefreshState.addListener(globalSubscriptionRefreshListener)
     }
 
     override fun onStart() {
@@ -460,6 +482,8 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        SubscriptionRefreshState.removeListener(globalSubscriptionRefreshListener)
+        floatingBannerDismissRunnable?.let { floatingBannerHandler.removeCallbacks(it) }
         restoreAwgMeasurement?.invoke()
         if (::primaryPages.isInitialized) primaryPages.close()
         locationRequestGeneration++
@@ -470,6 +494,131 @@ class MainActivity : Activity() {
         subscriptionRefreshInFlight = false
         selectedRouteLatencyHandler.removeCallbacksAndMessages(null)
         super.onDestroy()
+    }
+
+    internal fun showFloatingBanner(title: String, subtitle: String? = null, isSuccess: Boolean = true) {
+        android.util.Log.i("DeyttBanner", "showFloatingBanner: title=$title isSuccess=$isSuccess")
+        if (isFinishing || isDestroyed || !::globeStage.isInitialized) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastFloatingNotificationTs < 800L) return
+        lastFloatingNotificationTs = now
+
+        floatingBannerDismissRunnable?.let { floatingBannerHandler.removeCallbacks(it) }
+        activeFloatingBanner?.let { existing ->
+            (existing.parent as? ViewGroup)?.removeView(existing)
+            activeFloatingBanner = null
+        }
+
+        val statusHeight = (if (::statusInset.isInitialized) (statusInset.layoutParams as? ViewGroup.LayoutParams)?.height else null)
+            ?.takeIf { it > 0 } ?: if (::statusInset.isInitialized) statusInset.height else 0
+        val topInset = if (statusHeight > 0) statusHeight else dp(28)
+        val banner = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            elevation = dp(32).toFloat()
+            translationZ = dp(32).toFloat()
+            val borderColor = if (isSuccess) 0x6534D399.toInt() else 0x65F43F5E.toInt()
+            background = rounded(0xFD111A26.toInt(), 22f, borderColor)
+            setPadding(dp(16), dp(10), dp(18), dp(10))
+            isClickable = true
+            isFocusable = true
+        }
+
+        val iconContainer = FrameLayout(this).apply {
+            val iconBg = if (isSuccess) 0x2810B981.toInt() else 0x28F43F5E.toInt()
+            val iconBorder = if (isSuccess) 0x4534D399.toInt() else 0x45F43F5E.toInt()
+            background = rounded(iconBg, 14f, iconBorder)
+            val iv = ImageView(this@MainActivity).apply {
+                setImageResource(if (isSuccess) R.drawable.ic_shield_check else R.drawable.ic_sync)
+                imageTintList = ColorStateList.valueOf(if (isSuccess) DeyttUi.MINT else DeyttUi.CORAL)
+                scaleType = ImageView.ScaleType.FIT_CENTER
+            }
+            addView(iv, FrameLayout.LayoutParams(dp(16), dp(16), Gravity.CENTER))
+        }
+        banner.addView(iconContainer, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(12) })
+
+        val textGroup = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val titleTv = TextView(this@MainActivity).apply {
+                text = uiCopy(title)
+                textSize = 13.5f
+                setTextColor(Color.WHITE)
+                typeface = typeface(DeyttUi.FontFamily.INTER_TIGHT, 650)
+            }
+            addView(titleTv)
+            if (!subtitle.isNullOrBlank()) {
+                val subTv = TextView(this@MainActivity).apply {
+                    text = uiCopy(subtitle)
+                    textSize = 11f
+                    setTextColor(if (isSuccess) 0xFF7DD3FC.toInt() else DeyttUi.MUTED)
+                    typeface = typeface(DeyttUi.FontFamily.INTER_TIGHT, 400)
+                    setPadding(0, dp(2), 0, 0)
+                }
+                addView(subTv)
+            }
+        }
+        banner.addView(textGroup, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+
+        val params = FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+            topMargin = topInset + dp(64) + dp(10)
+            leftMargin = dp(16)
+            rightMargin = dp(16)
+        }
+
+        banner.translationY = -dp(20).toFloat()
+        banner.alpha = 0f
+        banner.scaleX = 0.94f
+        banner.scaleY = 0.94f
+
+        globeStage.addView(banner, params)
+        banner.bringToFront()
+        activeFloatingBanner = banner
+        android.util.Log.i("DeyttBanner", "banner added to globeStage at topMargin=${params.topMargin}")
+
+        banner.animate()
+            .translationY(0f)
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(320L)
+            .setInterpolator(android.view.animation.OvershootInterpolator(1.1f))
+            .start()
+
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                banner.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            } else {
+                banner.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            }
+        }
+
+        fun dismissBanner() {
+            banner.animate()
+                .translationY(-dp(40).toFloat())
+                .alpha(0f)
+                .scaleX(0.94f)
+                .scaleY(0.94f)
+                .setDuration(220L)
+                .setInterpolator(android.view.animation.AccelerateInterpolator())
+                .withEndAction {
+                    (banner.parent as? ViewGroup)?.removeView(banner)
+                    if (activeFloatingBanner === banner) activeFloatingBanner = null
+                }
+                .start()
+        }
+
+        banner.setOnClickListener {
+            floatingBannerDismissRunnable?.let { floatingBannerHandler.removeCallbacks(it) }
+            dismissBanner()
+        }
+
+        val dismissTask = Runnable {
+            if (!isFinishing && !isDestroyed && activeFloatingBanner === banner) {
+                dismissBanner()
+            }
+        }
+        floatingBannerDismissRunnable = dismissTask
+        floatingBannerHandler.postDelayed(dismissTask, 4500L)
     }
 
     internal fun updateTelegramIdentity(username: String?, avatar: Bitmap?) {
@@ -1002,14 +1151,20 @@ class MainActivity : Activity() {
         root.addView(action, LinearLayout.LayoutParams(-1, dp(56)))
         root.addView(spacer(12, this))
         root.addView(buildQualityStrip())
-        root.addView(button("Обновить замер", secondary = true).apply {
+        val refreshBtn = button("Обновить замер", secondary = true).apply {
             tag = "home-refresh"
+            visibility = if (renderedPhase == VpnPhase.CONNECTED) View.VISIBLE else View.GONE
+            alpha = if (renderedPhase == VpnPhase.CONNECTED) 1f else 0f
+            scaleX = if (renderedPhase == VpnPhase.CONNECTED) 1f else 0.94f
+            scaleY = if (renderedPhase == VpnPhase.CONNECTED) 1f else 0.94f
             setOnClickListener {
                 homeSpeedAttemptAt = 0L
                 measureHomeRouteDownload()
                 measureSelectedRoute()
             }
-        }, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
+        }
+        homeRefreshButton = refreshBtn
+        root.addView(refreshBtn, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
         updateRouteFlow(SelectedRouteStore(this).read())
         updateNetworkLocationViews()
         root.addView(spacer(12, this))
@@ -2397,6 +2552,9 @@ class MainActivity : Activity() {
 
     private fun sampleMapTraffic() {
         val tunnelActive = ConnectVpnService.isRunning() || AwgTunnelController.isRunning() || isSystemTunnelActive()
+        if (tunnelActive) {
+            LocalTrafficRecorder.sample(this)
+        }
         val connectedOnHome = homeSpeedForeground && currentTrafficExplanation == null &&
             ::pager.isInitialized && pager.currentItem == 0 &&
             renderedPhase == VpnPhase.CONNECTED && tunnelActive
@@ -2474,6 +2632,35 @@ class MainActivity : Activity() {
         action.background = connectionGlassBackground(currentPhase)
         action.isEnabled = currentPhase != VpnPhase.STOPPING && !homeConnectQueued
         action.alpha = if (action.isEnabled) 1f else .66f
+        val isConnected = currentPhase == VpnPhase.CONNECTED
+        homeRefreshButton?.let { btn ->
+            if (isConnected) {
+                if (btn.visibility != View.VISIBLE) {
+                    btn.visibility = View.VISIBLE
+                    btn.alpha = 0f
+                    btn.scaleX = 0.94f
+                    btn.scaleY = 0.94f
+                    btn.animate()
+                        .alpha(1f)
+                        .scaleX(1f)
+                        .scaleY(1f)
+                        .setDuration(280L)
+                        .setInterpolator(android.view.animation.DecelerateInterpolator())
+                        .start()
+                }
+            } else {
+                if (btn.visibility == View.VISIBLE) {
+                    btn.animate()
+                        .alpha(0f)
+                        .scaleX(0.94f)
+                        .scaleY(0.94f)
+                        .setDuration(220L)
+                        .setInterpolator(android.view.animation.AccelerateInterpolator())
+                        .withEndAction { btn.visibility = View.GONE }
+                        .start()
+                }
+            }
+        }
         if (::downloadText.isInitialized) updateQualityStrip()
     }
 

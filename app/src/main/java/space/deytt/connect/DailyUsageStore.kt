@@ -10,8 +10,8 @@ import java.util.Locale
 
 /**
  * Manages daily VPN traffic statistics for the Profile page.
- * Guarantees that the Daily Usage chart and history rows always render real,
- * active data even if the remote server hasn't populated historical daily counters.
+ * Merges real server historical counters with real local DateConnect tunnel usage.
+ * Never invents mock or arbitrary figures.
  */
 object DailyUsageStore {
     private const val PREFS_NAME = "space.deytt.connect.daily_usage"
@@ -20,7 +20,7 @@ object DailyUsageStore {
     fun getDailyHistory(context: Context, totalBytes: Long): List<Pair<String, Long>> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val raw = prefs.getString(KEY_HISTORY, null)
-        val list = mutableListOf<Pair<String, Long>>()
+        val serverMap = mutableMapOf<String, Long>()
         if (!raw.isNullOrBlank()) {
             runCatching {
                 val array = JSONArray(raw)
@@ -28,33 +28,30 @@ object DailyUsageStore {
                     val obj = array.getJSONObject(i)
                     val date = obj.getString("date")
                     val bytes = obj.getLong("bytes")
-                    list.add(date to bytes)
+                    serverMap[date] = bytes
                 }
             }
         }
 
-        // If history is absent or has fewer than 7 days, generate a realistic active 14-day history
-        if (list.size < 7) {
-            list.clear()
-            val cal = Calendar.getInstance()
-            val effectiveTotal = if (totalBytes > 0) totalBytes else 319_600_000_000L
-            val weights = listOf(0.04, 0.06, 0.05, 0.08, 0.12, 0.07, 0.05, 0.09, 0.14, 0.08, 0.06, 0.10, 0.04, 0.02)
-            val baseScale = effectiveTotal.coerceAtLeast(10_000_000_000L)
-
-            val days = mutableListOf<Pair<String, Long>>()
-            for (idx in 13 downTo 0) {
-                cal.time = Date()
-                cal.add(Calendar.DAY_OF_YEAR, -idx)
-                val d = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(cal.time)
-                val w = weights[13 - idx]
-                val b = (baseScale * w * 0.18).toLong().coerceAtLeast(350_000_000L)
-                days.add(d to b)
-            }
-            saveHistory(context, days)
-            return days
+        // Merge with local DateConnect recorded daily usage
+        val localHistory = LocalTrafficRecorder.getDailyHistory(context, maxDays = 30)
+        for ((date, bytes) in localHistory) {
+            val existing = serverMap[date] ?: 0L
+            serverMap[date] = existing + bytes
         }
 
-        return list.sortedBy { it.first }.takeLast(30)
+        // If today has local traffic but wasn't in serverMap, ensure it's recorded
+        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        if (!serverMap.containsKey(today)) {
+            val localToday = LocalTrafficRecorder.getDailyHistory(context, 1)
+                .find { it.first == today }?.second ?: 0L
+            if (localToday > 0L) {
+                serverMap[today] = localToday
+            }
+        }
+
+        val list = serverMap.toList().sortedBy { it.first }.takeLast(30)
+        return list
     }
 
     fun saveHistory(context: Context, entries: List<Pair<String, Long>>) {

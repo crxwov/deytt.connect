@@ -92,6 +92,7 @@ object AwgTunnelController {
     }
 
     fun stop(context: Context, publishStatus: Boolean = true) {
+        LocalTrafficRecorder.sample(context)
         val operationId = operation.incrementAndGet()
         runtimeRunning = false
         stopping = true

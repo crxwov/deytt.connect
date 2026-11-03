@@ -149,7 +149,7 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
         planLabels.addView(labelTariff)
 
         tariffNameView = TextView(context).apply {
-            text = "deytt./ultra"
+            text = "deytt./connect"
             textSize = 22f
             setTextColor(Color.WHITE)
             typeface = unboundedBold
@@ -159,7 +159,7 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
         topRow.addView(planLabels)
         contentLayout.addView(topRow)
 
-        // Center Hero: Large thick Vector Infinity glyph + "бессрочно"
+        // Center Hero: Large thick Vector Infinity glyph + "бессрочно" or expiry date
         val heroLayout = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -167,6 +167,7 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
         }
 
         infinityGlyphView = InfinityGlyphView(context).apply {
+            visibility = View.GONE
             layoutParams = LinearLayout.LayoutParams(dp(44), dp(24)).apply {
                 marginEnd = dp(14)
             }
@@ -174,7 +175,7 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
         heroLayout.addView(infinityGlyphView)
 
         heroTextView = TextView(context).apply {
-            text = "бессрочно"
+            text = "…"
             textSize = 19f
             setTextColor(Color.WHITE)
             typeface = unboundedBold
@@ -311,7 +312,7 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
         trafficTotalBytes: Long,
         trafficQuotaLimitBytes: Long
     ) {
-        val name = tariffName?.takeIf { it.isNotBlank() } ?: "deytt./ultra"
+        val name = tariffName?.takeIf { it.isNotBlank() } ?: "deytt./connect"
         tariffNameView.text = name
 
         if (isUnlimitedTime) {
@@ -319,7 +320,7 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
             heroTextView.text = "бессрочно"
         } else {
             infinityGlyphView.visibility = View.GONE
-            heroTextView.text = expiryText?.takeIf { it.isNotBlank() } ?: "срок действия"
+            heroTextView.text = expiryText?.takeIf { it.isNotBlank() } ?: "активна"
         }
 
         deviceLimitView.text = if (deviceLimit > 0) deviceLimit.toString() else "∞"
