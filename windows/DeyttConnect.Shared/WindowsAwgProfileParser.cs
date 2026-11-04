@@ -278,9 +278,27 @@ public static class WindowsAwgProfileParser
     {
         if (Optional(source, sourceKey) is not { } value)
             return;
-        if (!bool.TryParse(value, out var parsed))
+        if (!TryParseBool(value, out var parsed))
             throw new InvalidDataException("The AmneziaWG profile contains an invalid boolean setting.");
         target[targetKey] = parsed;
+    }
+
+    private static bool TryParseBool(string value, out bool result)
+    {
+        if (bool.TryParse(value, out result))
+            return true;
+        if (string.Equals(value, "on", StringComparison.OrdinalIgnoreCase) || value == "1")
+        {
+            result = true;
+            return true;
+        }
+        if (string.Equals(value, "off", StringComparison.OrdinalIgnoreCase) || value == "0")
+        {
+            result = false;
+            return true;
+        }
+        result = false;
+        return false;
     }
 
     private static (string Host, int Port) ParseRemote(string value)

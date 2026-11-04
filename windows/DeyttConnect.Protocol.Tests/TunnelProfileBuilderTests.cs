@@ -154,10 +154,10 @@ public sealed class TunnelProfileBuilderTests
     private static string Profile(params string[] routeTags)
     {
         var availableTags = routeTags.ToList();
-        var hasSupportedRoute = availableTags.Any(tag =>
-            tag.StartsWith("route:", StringComparison.Ordinal) &&
-            tag != "route:RU" && !tag.StartsWith("route:RU:", StringComparison.Ordinal));
-        if (hasSupportedRoute && !availableTags.Contains("route:DE:VLESS", StringComparer.Ordinal))
+        var hasRussianOnlyRoute = availableTags.Count > 0 && availableTags.All(tag =>
+            tag.Equals("route:RU", StringComparison.OrdinalIgnoreCase) ||
+            tag.StartsWith("route:RU:", StringComparison.OrdinalIgnoreCase));
+        if (!hasRussianOnlyRoute && !availableTags.Contains("route:DE:VLESS", StringComparer.Ordinal))
             availableTags.Add("route:DE:VLESS");
 
         var outbounds = new JsonArray
@@ -505,7 +505,7 @@ public sealed class TunnelProfileBuilderTests
         var rules = runtime["route"]!["rules"]!.AsArray();
 
         // Process rule should route to VPN (route:NL:VLESS)
-        var processRule = rules.OfType<JsonObject>().FirstOrDefault(r => r.ContainsKey("process_name"));
+        var processRule = rules.OfType<JsonObject>().FirstOrDefault(r => r.ContainsKey("process_name") && !r.ContainsKey("domain_suffix"));
         Assert.NotNull(processRule);
         Assert.Equal("route:NL:VLESS", processRule["outbound"]!.GetValue<string>());
         var procNames = processRule["process_name"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();

@@ -539,16 +539,16 @@ object SubscriptionClient {
             val servers = try { JSONArray(first.awgServers ?: "[]") } catch (error: Exception) {
                 throw SubscriptionPayloadException()
             }
-            if (servers != null && servers.length() > 16) throw SubscriptionPayloadException()
+            if (servers.length() > 16) throw SubscriptionPayloadException()
             val advertisedIds = mutableSetOf<String>()
-            if (servers != null) for (index in 0 until servers.length()) {
+            for (index in 0 until servers.length()) {
                 val item = servers.optJSONObject(index) ?: throw SubscriptionPayloadException()
                 val id = item.optString("id").trim()
                 if (id.isEmpty() || id.length > 128 || !advertisedIds.add(id)) throw SubscriptionPayloadException()
             }
             val failedIds = mutableSetOf<String>()
             var failedRequestsAreTransient = true
-            val profiles = if (servers == null || servers.length() == 0) {
+            val profiles = if (servers.length() == 0) {
                 listOf(AwgProfile("awg$version", version, "основной", "awg", first.body)).also {
                     requireAwgProfileSize(first.body)
                     it.forEach { profile -> AwgProfileStore.validate(profile.config) }
@@ -634,7 +634,7 @@ object SubscriptionClient {
                 }
                 profilesList
             }
-            if (servers != null && servers.length() > 0 && profiles.isEmpty() && failedIds.isEmpty()) {
+            if (servers.length() > 0 && profiles.isEmpty() && failedIds.isEmpty()) {
                 throw IOException("Сервер не вернул ни одного профиля AmneziaWG")
             }
             if (profiles.isEmpty() && failedIds.isNotEmpty()) {

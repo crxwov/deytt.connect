@@ -18,6 +18,8 @@
     <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
     <Compile Include="..\DeyttConnect.Windows.Service\TunnelHealthMonitorLifetime.cs"
              Link="Service\TunnelHealthMonitorLifetime.cs" />
+    <Compile Include="..\DeyttConnect.Windows.Service\ConnectDnsPrerequisiteResolver.cs"
+             Link="Service\ConnectDnsPrerequisiteResolver.cs" />
     <Compile Include="..\DeyttConnect.Windows.Service\EngineProcessLifetime.cs"
              Link="Service\EngineProcessLifetime.cs" />
     <Compile Include="..\DeyttConnect.Windows.Service\ProbeListenerReadiness.cs"

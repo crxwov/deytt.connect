@@ -14,11 +14,13 @@ internal object AtomicSubscriptionFile {
     private const val OPENFLUX_FILE_NAME = "openflux-profiles.json"
     private val snapshotNames = legacySnapshotNames + OPENFLUX_FILE_NAME
     private val activeDirectories = ThreadLocal.withInitial { mutableSetOf<String>() }
+    private fun activeDirs(): MutableSet<String> =
+        activeDirectories.get() ?: mutableSetOf<String>().also { activeDirectories.set(it) }
 
     /** Undo journal is published before any live file changes; deletion is the commit point. */
     fun transaction(directory: File, block: () -> Unit) = synchronized(lock) {
         val key = directory.canonicalPath
-        if (key in activeDirectories.get()) {
+        if (key in activeDirs()) {
             block()
             return@synchronized
         }
@@ -31,23 +33,23 @@ internal object AtomicSubscriptionFile {
         }
         val journal = File(directory, JOURNAL)
         writeEncrypted(journal, snapshot.toString())
-        activeDirectories.get().add(key)
+        activeDirs().add(key)
         try {
             block()
             if (!journal.delete()) throw IOException("Не удалось завершить сохранение подписки")
         } catch (failure: Exception) {
-            activeDirectories.get().remove(key)
+            activeDirs().remove(key)
             try { recover(directory) } catch (rollbackFailure: Exception) {
                 failure.addSuppressed(rollbackFailure)
             }
             throw failure
         } finally {
-            activeDirectories.get().remove(key)
+            activeDirs().remove(key)
         }
     }
 
     fun recover(directory: File) = synchronized(lock) {
-        if (directory.canonicalPath in activeDirectories.get()) return@synchronized
+        if (directory.canonicalPath in activeDirs()) return@synchronized
         val journal = File(directory, JOURNAL)
         if (!journal.exists()) return@synchronized
         val snapshot = try {
@@ -97,7 +99,7 @@ internal object AtomicSubscriptionFile {
             if (!temporary.renameTo(target)) {
                 // Android/Linux rename replaces atomically; Windows JVMs require
                 // the explicit replace operation for the same storage checks.
-                if (!System.getProperty("os.name", "").startsWith("Windows")) {
+                if (!(System.getProperty("os.name") ?: "").startsWith("Windows")) {
                     throw IOException("Не удалось сохранить подписку")
                 }
                 WindowsAtomicReplace.move(temporary, target)
