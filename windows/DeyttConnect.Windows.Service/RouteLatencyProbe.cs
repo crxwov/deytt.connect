@@ -29,7 +29,7 @@ internal static class RouteLatencyProbe
             var reply = await ping.SendPingAsync(serverAddress.ToString(), TimeSpan.FromSeconds(3),
                 new byte[32], null, cancellationToken).ConfigureAwait(false);
             return reply.Status == IPStatus.Success
-                ? new RouteLatencyProbeResult(reply.RoundtripTime, null)
+                ? new RouteLatencyProbeResult(Math.Max(1, reply.RoundtripTime), null)
                 : new RouteLatencyProbeResult(null, "Сервер VPN не ответил на ICMP-пинг.");
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -47,7 +47,8 @@ internal static class RouteLatencyProbe
         CancellationToken cancellationToken,
         Action<RouteLatencyProbeObservation>? reportProgress = null,
         RouteLatencyProbeTimeouts? timeouts = null,
-        IReadOnlyList<Uri>? targets = null)
+        IReadOnlyList<Uri>? targets = null,
+        IReadOnlyDictionary<Uri, HttpStatusCode>? expectedStatuses = null)
     {
         ArgumentNullException.ThrowIfNull(proxyClient);
         cancellationToken.ThrowIfCancellationRequested();
@@ -65,6 +66,10 @@ internal static class RouteLatencyProbe
         using var overallCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         overallCancellation.CancelAfter(limits.Overall);
 
+        HttpStatusCode ExpectedStatus(Uri target) =>
+            expectedStatuses is not null && expectedStatuses.TryGetValue(target, out var status)
+                ? status : HttpStatusCode.NoContent;
+
         var coldTargets = targets ?? DefaultTargets;
         if (coldTargets.Count == 0) throw new ArgumentException("At least one latency target is required.", nameof(targets));
         var coldOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count);
@@ -79,6 +84,7 @@ internal static class RouteLatencyProbe
                     break;
 
                 var outcome = await MeasureRequestAsync(proxyClient, target,
+                    ExpectedStatus(target),
                     overallCancellation.Token, cancellationToken, overallCancellation.Token, limits.Individual)
                     .ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
@@ -117,6 +123,7 @@ internal static class RouteLatencyProbe
             var outcome = await MeasureRequestAsync(
                 proxyClient,
                 selectedCold.Target,
+                ExpectedStatus(selectedCold.Target),
                 overallCancellation.Token,
                 cancellationToken,
                 overallCancellation.Token,
@@ -152,6 +159,7 @@ internal static class RouteLatencyProbe
     private static async Task<RouteLatencyProbeAttempt> MeasureRequestAsync(
         HttpClient client,
         Uri target,
+        HttpStatusCode expectedStatus,
         CancellationToken phaseCancellation,
         CancellationToken userCancellation,
         CancellationToken overallCancellation,
@@ -177,11 +185,11 @@ internal static class RouteLatencyProbe
 
             var elapsedMilliseconds = (long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             var isOriginalTarget = response.RequestMessage?.RequestUri == target;
-            var isExpectedResponse = response.StatusCode == HttpStatusCode.NoContent;
+            var isExpectedResponse = response.StatusCode == expectedStatus;
 
             if (isOriginalTarget && isExpectedResponse)
             {
-                // A 204 normally has no body. Keep the measured header time if cleanup itself times out.
+                // A canary normally has a small or empty body. Keep the measured header time if cleanup itself times out.
                 try
                 {
                     if (response.Content is not null)
@@ -199,7 +207,7 @@ internal static class RouteLatencyProbe
                 }
                 catch (IOException)
                 {
-                    // The valid 204 headers are the latency sample; disposing the response cancels its body.
+                    // The validated headers are the latency sample; disposing the response cancels its body.
                 }
 
                 return new RouteLatencyProbeAttempt(target, elapsedMilliseconds, RouteLatencyProbeFailure.None);

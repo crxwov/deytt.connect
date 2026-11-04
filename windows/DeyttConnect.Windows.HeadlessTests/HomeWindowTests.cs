@@ -295,6 +295,8 @@ public sealed class HomeWindowTests
 
             var globe = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
                 .OfType<RouteGlobeWebView>());
+            string? emittedRoute = null;
+            globe.RouteSelected += value => emittedRoute = value;
             var webView = new NativeWebView();
             typeof(RouteGlobeWebView).GetField("_webView", BindingFlags.Instance | BindingFlags.NonPublic)!
                 .SetValue(globe, webView);
@@ -306,6 +308,7 @@ public sealed class HomeWindowTests
                 [webView, new WebMessageReceivedEventArgs { Body = "\"route:select:de-hy2\"" }]);
             Dispatcher.UIThread.RunJobs();
 
+            Assert.Equal("de-hy2", emittedRoute);
             Assert.Equal("de-hysteria2", typeof(MainWindow).GetProperty("_selectedRoute",
                 BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
             Assert.Equal("de", globe.SelectedRoute);
@@ -355,6 +358,72 @@ public sealed class HomeWindowTests
             var map = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
                 .OfType<RouteGlobeWebView>());
             Assert.Equal(expected, map.HomePresentation?.Protocol);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(0, null)]
+    [InlineData(-1, null)]
+    [InlineData(12, "12")]
+    public void Connected_home_never_presents_nonpositive_latency(long latency, string? expected)
+    {
+        var fixture = Fixture(signedIn: true, state: "connected");
+        fixture = fixture with
+        {
+            Tunnel = fixture.Tunnel with { TunnelLatencyMilliseconds = latency },
+            ProbeResult = new WindowsRouteProbeResult("qa:nl-vless", latency, null, null, "complete"),
+        };
+        var window = new MainWindow(fixture);
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var map = Assert.Single(Descendants(Required<Grid>(window, "PageHost")).OfType<RouteGlobeWebView>());
+            Assert.Equal(expected, map.HomePresentation?.Latency);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void Initial_route_probe_uses_an_available_country_when_Netherlands_is_absent()
+    {
+        var routes = Fixture().Routes;
+        Assert.Equal("NL", MainWindow.InitialProbeCountry(routes));
+        Assert.Equal("DE", MainWindow.InitialProbeCountry(routes.Where(route => route.CountryCode is "AUTO" or "DE").ToArray()));
+        Assert.Null(MainWindow.InitialProbeCountry(routes.Where(route => route.CountryCode == "AUTO").ToArray()));
+    }
+
+    [Theory]
+    [InlineData(-1, -1)]
+    [InlineData(0, -1)]
+    [InlineData(1, 1)]
+    [InlineData(73, 73)]
+    public void Latency_requires_a_positive_measurement(long input, long expected) =>
+        Assert.Equal(expected > 0 ? expected : (long?)null, MainWindow.PositiveLatency(input));
+
+    [Fact]
+    public void Best_route_never_prefers_an_invalid_zero_latency_sample()
+    {
+        var samples = new[]
+        {
+            new WindowsRouteProbeResult("invalid", 0, 100_000_000, null),
+            new WindowsRouteProbeResult("valid", 71, 1_000_000, null),
+        };
+        Assert.Equal("valid", MainWindow.SelectBestMeasuredRoute(samples));
+    }
+
+    [AvaloniaFact]
+    public void Route_progress_rejects_zero_latency_but_preserves_measured_speed()
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true));
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var sample = new WindowsRouteProbeResult("qa:nl-vless", 0, 1_000_000, null, "complete");
+            Assert.True(window.ApplyProbeProgress([sample], [sample.RouteTag]));
+            Assert.False(window.ApplyProbeProgress([sample with { LatencyMilliseconds = null }], [sample.RouteTag]));
         }
         finally { window.Close(); }
     }
@@ -999,7 +1068,7 @@ public sealed class HomeWindowTests
             Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
                 body.HorizontalScrollBarVisibility);
             Assert.Contains(Descendants(overlay).OfType<TextBlock>(), text =>
-                text.Text?.Contains("VPN-службы или сетевые туннели", StringComparison.OrdinalIgnoreCase) == true);
+                text.Text?.Contains("не отключает службы без вашего выбора", StringComparison.OrdinalIgnoreCase) == true);
             Assert.True(layout.ContinueButton.IsEnabled);
             Assert.True(layout.ContinueButton.IsEffectivelyVisible);
             Assert.True(stopAction.IsEffectivelyVisible);

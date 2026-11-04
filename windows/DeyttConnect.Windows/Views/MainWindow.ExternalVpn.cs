@@ -177,7 +177,7 @@ public partial class MainWindow
                 13, DeyttTheme.Sky, FontWeight.SemiBold);
             settingsText.HorizontalAlignment = HorizontalAlignment.Center;
             var openVpnSettings = DeyttTheme.Action(settingsText, static () => { });
-            openVpnSettings.Height = 40;
+            openVpnSettings.Height = 44;
             openVpnSettings.HorizontalAlignment = HorizontalAlignment.Stretch;
             openVpnSettings.HorizontalContentAlignment = HorizontalAlignment.Center;
             openVpnSettings.Padding = new Thickness(12, 8);

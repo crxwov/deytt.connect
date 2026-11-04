@@ -4,6 +4,7 @@
   const root = document.querySelector(".network-atlas");
   const mainPanel = root.querySelector(".home-panel-shell");
   const compactPanel = root.querySelector(".home-compact");
+  const DEFAULT_ZOOM = 0.85;
   const panelTiltStartZoom = 1;
   const panelTiltRampZoom = 0.25;
   const panelTiltMaxDegrees = 20;
@@ -479,7 +480,7 @@
     if (!atlas) return;
     atlas.targetLon = 15;
     atlas.targetLat = 50;
-    atlas.targetZoom = 1;
+    atlas.targetZoom = DEFAULT_ZOOM;
     atlas.velocityLon = 0;
     atlas.markMapDirty();
     atlas.start();
@@ -547,7 +548,7 @@
     topologyUrl: "world-land.json",
     selectOnTap: false,
     wheelZoomOnly: true,
-    initialZoom: 1,
+    initialZoom: DEFAULT_ZOOM,
     initialLon: 15,
     initialLat: 50,
     pixelRatioFloor: 1.25,
@@ -560,10 +561,10 @@
     // shadow beneath each country; sphere lighting supplies the depth.
     softLandShadow: false,
     labelFontFamily: '"Inter Tight", "Segoe UI", sans-serif',
-    routeFocusMinZoom: 1,
-    // Initial route framing must not cross the user-controlled compact threshold.
-    routeFocusMaxZoom: 1,
-    routeFocusSingleZoom: 1,
+    // Route metadata updates preserve the one-step-out default framing.
+    routeFocusMinZoom: DEFAULT_ZOOM,
+    routeFocusMaxZoom: DEFAULT_ZOOM,
+    routeFocusSingleZoom: DEFAULT_ZOOM,
     routeFocusFill: .34,
     routeFocusScale: 1,
     routeFocusLatitudeOffset: 12
@@ -603,7 +604,7 @@
       };
     };
     atlas.reducedMotion = { get matches() { return reducedMotion || systemReducedMotion.matches; } };
-    atlas.targetZoom = atlas.zoom = 1;
+    atlas.targetZoom = atlas.zoom = DEFAULT_ZOOM;
     atlas.setLanguage(language);
     atlas.setTrafficActive(window.deyttMapTrafficActive);
     if (window.deyttMapLocations.length) atlas.setAvailableLocations(window.deyttMapLocations);

@@ -22,6 +22,12 @@ public partial class MainWindow
     private DateTimeOffset _homeProbeUpdatedAt;
     private string? _homeMeasurementSession;
     private bool _initialNetherlandsRouteProbeStarted;
+
+    internal static long? PositiveLatency(long? latency) => latency is > 0 ? latency : null;
+
+    internal static string? InitialProbeCountry(IReadOnlyList<WindowsRoute> routes) =>
+        routes.Any(route => route.CountryCode == "NL") ? "NL" :
+        routes.FirstOrDefault(route => route.CountryCode != "AUTO")?.CountryCode;
     private TelegramAwgTraffic? _awgTraffic;
     private string _awgTrafficState = "absent";
 
@@ -42,22 +48,23 @@ public partial class MainWindow
             _homeProbeCancellation?.Cancel();
             _homeLiveProbe = null;
             _homeMeasurementSession = session;
+            _homeProbeUpdatedAt = default;
         }
         if (_homeLiveProbe?.RouteTag == routeTag && _homeProbeCancellation is null)
         {
             _homeLiveProbe = _homeLiveProbe with
             {
-                LatencyMilliseconds = _vpnSnapshot.TunnelLatencyMilliseconds,
+                LatencyMilliseconds = PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds),
                 Error = _homeLiveProbe.Stage == "latency" ? null : _vpnSnapshot.TunnelLatencyError is null
                     ? _homeLiveProbe.Error
-                    : Copy("Не удалось выполнить пинг до выбранного сервера VPN.", "Could not ping the selected VPN server."),
+                    : Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."),
             };
         }
         else if (_homeLiveProbe is null)
         {
-            _homeLiveProbe = new(routeTag, _vpnSnapshot.TunnelLatencyMilliseconds, null,
-                _vpnSnapshot.TunnelLatencyError is null ? null : Copy("Не удалось выполнить пинг до выбранного сервера VPN.",
-                    "Could not ping the selected VPN server."), "complete");
+            _homeLiveProbe = new(routeTag, PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds), null,
+                _vpnSnapshot.TunnelLatencyError is null ? null : Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.",
+                    "Could not measure the HTTPS response through the selected route."), "complete");
         }
         if (_homeProbeCancellation is not null || !forceRefresh && _homeLiveProbe?.RouteTag == routeTag && DateTimeOffset.UtcNow - _homeProbeUpdatedAt < TimeSpan.FromSeconds(30)) return;
         _ = MeasureHomeConnectionAsync(routeTag);
@@ -93,13 +100,13 @@ public partial class MainWindow
                 {
                     _vpnSnapshot = _vpnSnapshot with
                     {
-                        TunnelLatencyMilliseconds = measuredTunnel.TunnelLatencyMilliseconds,
+                        TunnelLatencyMilliseconds = PositiveLatency(measuredTunnel.TunnelLatencyMilliseconds),
                         TunnelLatencyError = measuredTunnel.TunnelLatencyError,
                         HealthCheckedAt = measuredTunnel.HealthCheckedAt,
                     };
-                    latency = measuredTunnel.TunnelLatencyMilliseconds;
+                    latency = PositiveLatency(measuredTunnel.TunnelLatencyMilliseconds);
                     latencyError = measuredTunnel.TunnelLatencyError is null ? null :
-                        Copy("Не удалось выполнить пинг до выбранного сервера VPN.", "Could not ping the selected VPN server.");
+                        Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route.");
                     UpdateHomeGlobePresentation();
                 }
             }
@@ -109,7 +116,7 @@ public partial class MainWindow
             }
             catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
             {
-                latencyError = Copy("Не удалось выполнить пинг до выбранного сервера VPN.", "Could not ping the selected VPN server.");
+                latencyError = Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route.");
             }
             var result = await HomeConnectionProbe.MeasureSpeedAsync(
                 routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
@@ -344,7 +351,7 @@ public partial class MainWindow
             "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
             "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
             "AUTO" or null => Copy("автоподбор", "auto-select"),
-            _ => RouteCountryName(displayedRoute),
+            _ => RouteCountryName(displayedRoute!),
         };
         var destination = GetHomeDestinationParts(displayedRoute);
         var location = new StackPanel { Spacing = 4 };
@@ -539,6 +546,7 @@ public partial class MainWindow
         map.SubscriptionKeyCopyRequested += () => _ = CopySubscriptionKeyToClipboardAsync();
         map.SignInRequested += () => ShowSignInDialog();
         map.RenewRequested += () => OpenExternal("https://t.me/deyttbot");
+        map.SupportRequested += () => _ = ShowSupportWindowAsync();
         map.ImportRequested += () => _ = ShowSetupWindowAsync();
         map.LanguagePickerRequested += () => _ = ShowLanguagePickerAsync();
         map.SplitTunnelRequested += () => ShowSplitTunnelingInfo();
@@ -667,7 +675,7 @@ public partial class MainWindow
             "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
             "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
             "AUTO" or null => Copy("автоподбор", "auto-select"),
-            _ => RouteCountryName(displayedRoute).ToLowerInvariant(),
+            _ => RouteCountryName(displayedRoute!).ToLowerInvariant(),
         };
         var protocol = displayedRoute?.CountryCode is null or "AUTO" ? "" : ProtocolDescriptor(displayedRoute).ToLowerInvariant();
         var city = displayedRoute?.CountryCode is null or "AUTO"
@@ -750,14 +758,14 @@ public partial class MainWindow
             probe = _homeLiveProbe! with
             {
                 LatencyMilliseconds = _homeLiveProbe.Stage == "latency"
-                    ? _homeLiveProbe.LatencyMilliseconds : _vpnSnapshot.TunnelLatencyMilliseconds,
+                    ? PositiveLatency(_homeLiveProbe.LatencyMilliseconds) : PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds),
                 Error = _vpnSnapshot.TunnelLatencyError is null ? _homeLiveProbe.Error :
-                    Copy("Не удалось выполнить пинг до выбранного сервера VPN.", "Could not ping the selected VPN server."),
+                    Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."),
             };
         var probeQuality = displayedRoute is null ? RouteQualityGrade.Unrated : CountryRouteQuality(
             _routes.Where(route => string.Equals(route.CountryCode, displayedRoute.CountryCode,
                 StringComparison.OrdinalIgnoreCase)).ToArray()).Grades.GetValueOrDefault(displayedRoute.Tag);
-        var latencyText = probe?.LatencyMilliseconds is { } latency
+        var latencyText = PositiveLatency(probe?.LatencyMilliseconds) is { } latency
             ? latency.ToString(UiCulture) : probe?.Stage is "latency" or "retry" ? "…" : null;
         var speedBytes = probe?.BytesPerSecond;
         var speedText = speedBytes is > 0
@@ -768,7 +776,7 @@ public partial class MainWindow
             RouteQualityGrade.Poor => "warn",
             _ => "normal",
         };
-        var measured = probe is not null && (probe.LatencyMilliseconds is not null || probe.BytesPerSecond is > 0);
+        var measured = probe is not null && (PositiveLatency(probe.LatencyMilliseconds) is not null || probe.BytesPerSecond is > 0);
         var statusTone = connected ? "good" : failed ? "error" : startingTone(connecting, routeProbeActive, healthUnknown);
         var countryCode = destination.Code is "NL" or "DE" or "RU" or "FI" or "IT" ? destination.Code : "";
           var actionTone = connected ? "connected" : failed ? "error" :
@@ -818,14 +826,16 @@ public partial class MainWindow
             _keysSnapshot?.ProfileJson is not { Length: > 0 })
             return;
 
-        var routeTags = _routes.Where(route => route.CountryCode == "NL")
+        var countryCode = InitialProbeCountry(_routes);
+        if (countryCode is null) return;
+        var routeTags = _routes.Where(route => route.CountryCode == countryCode)
             .Select(route => route.Tag).Distinct(StringComparer.Ordinal).ToArray();
         if (routeTags.Length == 0)
             return;
 
         _initialNetherlandsRouteProbeStarted = true;
-        _expandedRouteCountries.Add("NL");
-        QueueRouteCountryProbe("NL", routeTags);
+        _expandedRouteCountries.Add(countryCode);
+        QueueRouteCountryProbe(countryCode, routeTags);
     }
 
     private void UpdateHomeGlobePresentation()
@@ -1076,7 +1086,7 @@ public partial class MainWindow
     private Control BuildHomeRouteDiagnostic(string? routeTag)
     {
         var result = routeTag is not null ? _routeProbeResults.GetValueOrDefault(routeTag) : null;
-        var latency = result?.LatencyMilliseconds is { } ping ? $"{ping} {Copy("мс", "ms")}" : Copy("не измерено", "not measured");
+        var latency = PositiveLatency(result?.LatencyMilliseconds) is { } ping ? $"{ping} {Copy("мс", "ms")}" : Copy("не измерено", "not measured");
         var speed = result?.BytesPerSecond is { } bytesPerSecond && bytesPerSecond > 0
             ? (bytesPerSecond * 8d / 1_000_000d).ToString("0.#", UiCulture) + " " + LocalizedSpeedUnit(_language)
             : Copy("не измерено", "not measured");

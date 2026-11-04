@@ -46,7 +46,6 @@ internal sealed class EngineController
     private string? _routeTag;
     private IReadOnlyList<string>? _tunAddresses;
     private IReadOnlyDictionary<string, IPAddress[]>? _canaryAddresses;
-    private IReadOnlyDictionary<string, IPAddress> _serverAddresses = new Dictionary<string, IPAddress>(StringComparer.Ordinal);
     private ServiceSnapshot _snapshot = new("disconnected", "VPN выключен");
     private readonly object _probeProgressLock = new();
     private readonly Dictionary<string, ServiceProbeResult> _probeProgress = new(StringComparer.Ordinal);
@@ -55,6 +54,8 @@ internal sealed class EngineController
 
     internal sealed record AwgResolution(string Profile, IReadOnlySet<string> FailedEndpointTags);
     internal sealed record OutboundHostResolution(string Profile, IReadOnlySet<string> FailedOutboundTags);
+    internal sealed record ConnectionHostResolution(string Profile, IReadOnlySet<string> FailedOutboundTags,
+        IReadOnlySet<string> FailedEndpointTags);
     internal sealed record ProbeAwgResolution(string Profile, IReadOnlyList<ProbeRouteEndpoint> Endpoints,
         IReadOnlyList<ServiceProbeResult> FailedResults);
 
@@ -71,16 +72,15 @@ internal sealed class EngineController
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         Process? process;
-        ActiveRouteTelemetry? telemetry;
-        string? routeTag;
-        IReadOnlyDictionary<string, IPAddress> serverAddresses;
+        IReadOnlyList<string>? tunAddresses;
+        IReadOnlyDictionary<string, IPAddress[]>? canaryAddresses;
         try
         {
             process = _engine;
-            telemetry = _activeRouteTelemetry;
-            routeTag = _routeTag;
-            serverAddresses = _serverAddresses;
-            if (Snapshot.State != "connected" || process is null || process.HasExited || telemetry is null)
+            tunAddresses = _tunAddresses;
+            canaryAddresses = _canaryAddresses;
+            if (Snapshot.State != "connected" || process is null || process.HasExited || tunAddresses is null ||
+                canaryAddresses is null)
                 return Snapshot with
                 {
                     TunnelLatencyMilliseconds = null,
@@ -92,25 +92,22 @@ internal sealed class EngineController
         RouteLatencyProbeResult result;
         try
         {
-            var outboundTag = await telemetry.ReadActiveOutboundTagAsync(cancellationToken).ConfigureAwait(false);
-            if (outboundTag is null && routeTag is { Length: > 0 })
-            {
-                var selectedTag = routeTag.StartsWith("awg", StringComparison.Ordinal)
-                    ? TunnelProfileBuilder.AwgEndpointTag(routeTag)
-                    : routeTag;
-                outboundTag = await telemetry.ReadSelectedOutboundTagAsync(selectedTag, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            if (outboundTag is null)
-                throw new InvalidOperationException("The active VPN outbound is unavailable.");
-            if (!serverAddresses.TryGetValue(outboundTag, out var serverAddress))
-                throw new InvalidOperationException("The active VPN server address is unavailable.");
-            result = await RouteLatencyProbe.MeasureServerAsync(serverAddress, cancellationToken).ConfigureAwait(false);
+            var tunnelInterface = FindTunInterface(tunAddresses)
+                ?? throw new InvalidOperationException("The configured TUN address is unavailable.");
+            var targets = TunnelCanaries.Select(canary => new Uri(canary.Url)).ToArray();
+            var expectedStatuses = TunnelCanaries.ToDictionary(canary => new Uri(canary.Url),
+                canary => canary.ExpectedStatus ?? HttpStatusCode.OK);
+            using var http = CreateTunnelHttpClient(tunnelInterface,
+                RouteLatencyProbe.ProductionTimeouts.Overall, canaryAddresses);
+            result = await RouteLatencyProbe.MeasureAsync(http, cancellationToken,
+                timeouts: RouteLatencyProbe.ProductionTimeouts,
+                targets: targets,
+                expectedStatuses: expectedStatuses).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception error)
         {
-            result = new RouteLatencyProbeResult(null, SummarizeTunnelFailure("ICMP", error));
+            result = new RouteLatencyProbeResult(null, SummarizeTunnelFailure("HTTPS", error));
         }
 
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -159,23 +156,16 @@ internal sealed class EngineController
             preflight = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             // Start independent DNS bootstrap while AWG hosts and the profile are prepared.
             canaryTask = ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync, preflight.Token);
-            var outboundHosts = await ResolveOutboundServerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync,
-                preflight.Token).ConfigureAwait(false);
-            runtimeProfile = outboundHosts.Profile;
-            if (outboundHosts.FailedOutboundTags.Count != 0)
+            var connectionHosts = await ResolveConnectionHostsAsync(runtimeProfile, awgConfig is not null,
+                ResolveDnsAddressesAsync, preflight.Token).ConfigureAwait(false);
+            runtimeProfile = connectionHosts.Profile;
+            if (connectionHosts.FailedOutboundTags.Count != 0)
                 return SetError("Не удалось разрешить адрес VPN-сервера до запуска TUN. Проверьте DNS сети и повторите.");
-            if (awgConfig is not null)
+            if (connectionHosts.FailedEndpointTags.Count != 0)
             {
-                var resolved = await ResolveAwgPeerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync,
-                    preflight.Token).ConfigureAwait(false);
-                runtimeProfile = resolved.Profile;
-                if (resolved.FailedEndpointTags.Count != 0)
-                {
-                    StopCore();
-                    return SetError("Не удалось разрешить адрес узла AmneziaWG. Проверьте соединение и повторите.");
-                }
+                StopCore();
+                return SetError("Не удалось разрешить адрес узла AmneziaWG. Проверьте соединение и повторите.");
             }
-            var serverAddresses = ReadServerAddresses(runtimeProfile);
             var tunAddresses = TunnelProfileBuilder.GetTunAddresses(runtimeProfile);
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
@@ -232,7 +222,6 @@ internal sealed class EngineController
             _routeTag = routeTag;
             _tunAddresses = tunAddresses;
             _canaryAddresses = canaryAddresses;
-            _serverAddresses = serverAddresses;
             _ = MonitorEngineAsync(process, runtimeDiagnostic);
 
             _verification?.Cancel();
@@ -280,7 +269,6 @@ internal sealed class EngineController
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         var probeRequestInitialized = false;
         var probeProfileWritten = false;
-        ActiveRouteTelemetry? probeTelemetry = null;
         try
         {
             if (Snapshot.State is "connected" or "starting" or "checking" ||
@@ -319,11 +307,7 @@ internal sealed class EngineController
             probeProfile = resolvedProbe.Profile;
             var resolvedOutbounds = await ResolveOutboundServerHostsAsync(probeProfile,
                 ResolveDnsAddressesAsync, probeToken).ConfigureAwait(false);
-            var telemetryProfile = ActiveRouteTelemetry.Create(resolvedOutbounds.Profile, endpoints[0].RouteTag);
-            probeProfile = telemetryProfile.Profile;
-            var routeTelemetry = telemetryProfile.Telemetry;
-            probeTelemetry = routeTelemetry;
-            var serverAddresses = ReadServerAddresses(probeProfile);
+            probeProfile = resolvedOutbounds.Profile;
             _profilePath = WritePrivateProfile(probeProfile);
             probeProfileWritten = true;
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
@@ -370,36 +354,13 @@ internal sealed class EngineController
                 async Task<long?> Measure(ProbeRouteEndpoint endpoint, string _, CancellationToken ct,
                     Action<int, long?> report)
                 {
-                    var selectedTag = endpoint.AwgConfig is null ? endpoint.RouteTag :
-                        TunnelProfileBuilder.AwgEndpointTag(endpoint.RouteTag);
-                    string? outboundTag;
-                    try
+                    using var http = new HttpClient(RouteProxyTransport.CreateHandler(endpoint), disposeHandler: true)
                     {
-                        outboundTag = await routeTelemetry.ReadSelectedOutboundTagAsync(selectedTag, ct)
-                            .ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-                    catch (Exception error) when (error is HttpRequestException or IOException or JsonException or
-                        InvalidDataException or ObjectDisposedException)
-                    {
-                        failures[endpoint.RouteTag] = "Не удалось получить выбранный сервер этого маршрута.";
-                        report(1, null);
-                        return null;
-                    }
-                    if (outboundTag is null)
-                    {
-                        failures[endpoint.RouteTag] = "Не удалось определить выбранный сервер этого маршрута.";
-                        report(1, null);
-                        return null;
-                    }
-                    if (!serverAddresses.TryGetValue(outboundTag, out var serverAddress))
-                    {
-                        failures[endpoint.RouteTag] = "Не удалось определить IP выбранного сервера маршрута.";
-                        report(1, null);
-                        return null;
-                    }
-                    var result = await RouteLatencyProbe.MeasureServerAsync(serverAddress, ct).ConfigureAwait(false);
-                    report(1, result.LatencyMilliseconds);
+                        Timeout = RouteLatencyProbe.ProductionTimeouts.Overall,
+                    };
+                    var result = await RouteLatencyProbe.MeasureAsync(http, ct,
+                        observation => report(observation.Attempt, observation.LatencyMilliseconds),
+                        RouteLatencyProbe.ProductionTimeouts).ConfigureAwait(false);
                     if (result.Failure is { } failure)
                         failures[endpoint.RouteTag] = failure;
                     return result.LatencyMilliseconds;
@@ -464,7 +425,6 @@ internal sealed class EngineController
         }
         finally
         {
-            probeTelemetry?.Dispose();
             if (probeRequestInitialized)
             {
                 lock (_probeProgressLock)
@@ -835,10 +795,6 @@ internal sealed class EngineController
 
     private static string SummarizeTunnelFailure(string stage, Exception error)
     {
-        if (stage == "ICMP")
-            return error is InvalidOperationException
-                ? "Не удалось определить сервер активного маршрута."
-                : "Не удалось выполнить пинг до сервера VPN.";
         if (error is InvalidOperationException && error.Message.Contains("engine exited", StringComparison.Ordinal))
             return "Ядро VPN остановилось до появления TUN-адреса.";
         if (stage == "core")
@@ -1157,6 +1113,61 @@ internal sealed class EngineController
         return root.ToJsonString();
     }
 
+    internal static async Task<ConnectionHostResolution> ResolveConnectionHostsAsync(string runtimeProfile,
+        bool resolveAwgPeers, Func<string, CancellationToken, Task<IPAddress[]>> resolve,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var resolution = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var outboundTask = ResolveOutboundServerHostsAsync(runtimeProfile, resolve, resolution.Token);
+        if (!resolveAwgPeers)
+        {
+            var outboundOnly = await outboundTask.ConfigureAwait(false);
+            return new ConnectionHostResolution(outboundOnly.Profile, outboundOnly.FailedOutboundTags,
+                new HashSet<string>(StringComparer.Ordinal));
+        }
+
+        var awgTask = ResolveAwgPeerHostsAsync(runtimeProfile, resolve, resolution.Token);
+        try
+        {
+            var first = await Task.WhenAny(outboundTask, awgTask).ConfigureAwait(false);
+            if (first == outboundTask)
+            {
+                var earlyOutbound = await outboundTask.ConfigureAwait(false);
+                if (earlyOutbound.FailedOutboundTags.Count != 0)
+                {
+                    resolution.Cancel();
+                    try { await awgTask.ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+                    return new ConnectionHostResolution(earlyOutbound.Profile, earlyOutbound.FailedOutboundTags,
+                        new HashSet<string>(StringComparer.Ordinal));
+                }
+            }
+            else if (awgTask.IsFaulted || awgTask.IsCanceled)
+            {
+                await awgTask.ConfigureAwait(false);
+            }
+
+            await Task.WhenAll(outboundTask, awgTask).ConfigureAwait(false);
+        }
+        catch
+        {
+            resolution.Cancel();
+            throw;
+        }
+
+        var outbound = await outboundTask.ConfigureAwait(false);
+        var awg = await awgTask.ConfigureAwait(false);
+        var root = JsonNode.Parse(outbound.Profile) as JsonObject
+                   ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
+        var awgRoot = JsonNode.Parse(awg.Profile) as JsonObject
+                      ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
+        if (awgRoot["endpoints"] is JsonNode resolvedEndpoints)
+            root["endpoints"] = resolvedEndpoints.DeepClone();
+        return new ConnectionHostResolution(root.ToJsonString(), outbound.FailedOutboundTags,
+            awg.FailedEndpointTags);
+    }
+
     internal static async Task<AwgResolution> ResolveAwgPeerHostsAsync(string runtimeProfile,
         Func<string, CancellationToken, Task<IPAddress[]>> resolve,
         CancellationToken cancellationToken, TimeSpan? timeout = null)
@@ -1469,52 +1480,6 @@ internal sealed class EngineController
         error is SocketError.TryAgain or SocketError.TimedOut or SocketError.NetworkDown or
             SocketError.NetworkUnreachable;
 
-    private static IReadOnlyDictionary<string, IPAddress> ReadServerAddresses(string profile)
-    {
-        using var document = JsonDocument.Parse(profile, new JsonDocumentOptions { MaxDepth = 32 });
-        var root = document.RootElement;
-        var result = new Dictionary<string, IPAddress>(StringComparer.Ordinal);
-        if (root.TryGetProperty("outbounds", out var outbounds) && outbounds.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var outbound in outbounds.EnumerateArray())
-            {
-                if (outbound.ValueKind == JsonValueKind.Object &&
-                    ReadJsonString(outbound, "tag") is { } tag &&
-                    ReadJsonString(outbound, "server") is { } server && TryParseServerAddress(server, out var address))
-                    result[tag] = address;
-            }
-        }
-        if (root.TryGetProperty("endpoints", out var endpoints) && endpoints.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var endpoint in endpoints.EnumerateArray())
-            {
-                if (endpoint.ValueKind != JsonValueKind.Object || ReadJsonString(endpoint, "tag") is not { } tag ||
-                    !endpoint.TryGetProperty("peers", out var peers) || peers.ValueKind != JsonValueKind.Array ||
-                    peers.GetArrayLength() != 1)
-                    continue;
-                var peer = peers[0];
-                if (peer.ValueKind == JsonValueKind.Object &&
-                    ReadJsonString(peer, "address") is { } server && TryParseServerAddress(server, out var address))
-                    result[tag] = address;
-            }
-        }
-        return result;
-    }
-
-    private static bool TryParseServerAddress(string value, out IPAddress address)
-    {
-        var candidate = value.Length > 2 && value[0] == '[' && value[^1] == ']'
-            ? value[1..^1]
-            : value;
-        if (IPAddress.TryParse(candidate, out var parsed) && parsed is not null)
-        {
-            address = parsed;
-            return true;
-        }
-        address = IPAddress.None;
-        return false;
-    }
-
     internal static async Task<ProbeAwgResolution> ResolveProbeAwgHostsAsync(string runtimeProfile,
         IReadOnlyList<ProbeRouteEndpoint> endpoints,
         Func<string, CancellationToken, Task<IPAddress[]>> resolve, CancellationToken cancellationToken,
@@ -1653,7 +1618,7 @@ internal sealed class EngineController
                     latencyConcurrency.Release();
             }
 
-            var error = latency is null ? latencyFailure?.Invoke(endpoint) ?? "Маршрут не ответил на ICMP-пинг сервера." :
+            var error = latency is null ? latencyFailure?.Invoke(endpoint) ?? "Маршрут не ответил на HTTPS-проверку." :
                 canMeasureSpeed ? null : "Скорость недоступна для этой сессии.";
             var result = new ServiceProbeResult(endpoint.RouteTag, latency, null, error,
                 latency is null || error is not null ? "error" : "waiting_speed");
@@ -2165,7 +2130,6 @@ internal sealed class EngineController
         _routeTag = null;
         _tunAddresses = null;
         _canaryAddresses = null;
-        _serverAddresses = new Dictionary<string, IPAddress>(StringComparer.Ordinal);
         _tunStartupCollisionRetries = 0;
     }
 

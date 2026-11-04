@@ -150,6 +150,27 @@ public sealed class RouteGlobeStateLifecycleTests
     }
 
     [AvaloniaFact]
+    public async Task Profile_support_bridge_dispatches_only_from_the_current_webview()
+    {
+        var (window, globe) = CreateReadyHost();
+        var supportRequests = 0;
+        globe.SupportRequested += () => supportRequests++;
+        var webView = Field<NativeWebView>(globe, "_webView");
+        var onMessage = typeof(RouteGlobeWebView).GetMethod("OnWebMessageReceived",
+            BindingFlags.Instance | BindingFlags.NonPublic)!;
+        try
+        {
+            onMessage.Invoke(globe, [null, new WebMessageReceivedEventArgs { Body = "\"profile:support\"" }]);
+            await DrainAsync();
+            Assert.Equal(0, supportRequests);
+            onMessage.Invoke(globe, [webView, new WebMessageReceivedEventArgs { Body = "\"profile:support\"" }]);
+            await DrainAsync();
+            Assert.Equal(1, supportRequests);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public async Task Webview_window_controls_reach_the_native_window()
     {
         var (window, globe) = CreateReadyHost();

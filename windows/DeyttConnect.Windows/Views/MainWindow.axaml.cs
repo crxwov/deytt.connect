@@ -417,7 +417,7 @@ public partial class MainWindow : Window
         }
 
         ShowPageInHost(tab, page);
-        if (previousTab != tab && tab == MainTab.Routes && _sessionToken is not null)
+        if (!_qaFixture && previousTab != tab && tab == MainTab.Routes && _sessionToken is not null)
             _ = RefreshSignedInAccountAsync();
         EnsureInitialNetherlandsRouteProbe();
         if (previousTab != tab)
@@ -1628,7 +1628,7 @@ public partial class MainWindow : Window
     {
         var measured = routes
             .Select(route => _routeProbeResults.GetValueOrDefault(route.Tag))
-            .Where(sample => sample?.LatencyMilliseconds is >= 0 and <= 8_000)
+            .Where(sample => sample?.LatencyMilliseconds is > 0 and <= 8_000)
             .Select(sample => sample!)
             .ToArray();
         var grades = new Dictionary<string, RouteQualityGrade>(StringComparer.Ordinal);
@@ -1669,7 +1669,7 @@ public partial class MainWindow : Window
 
     internal static string? SelectBestMeasuredRoute(IReadOnlyList<WindowsRouteProbeResult> samples)
     {
-        var complete = samples.Where(sample => sample.LatencyMilliseconds is >= 0 and <= 8_000 &&
+        var complete = samples.Where(sample => sample.LatencyMilliseconds is > 0 and <= 8_000 &&
                                                 sample.BytesPerSecond is > 0).ToArray();
         if (complete.Length == 0)
             return null;
@@ -1746,7 +1746,7 @@ public partial class MainWindow : Window
         if (_compactLayout)
             Grid.SetRow(labels, 0);
 
-        var latencyText = measured?.LatencyMilliseconds is { } probeLatency
+        var latencyText = PositiveLatency(measured?.LatencyMilliseconds) is { } probeLatency
             ? $"{probeLatency} {Copy("мс", "ms")}" : Copy("не измерено", "not measured");
         var speedText = measured?.BytesPerSecond is { } bytesPerSecond && bytesPerSecond > 0
                     ? $"{(bytesPerSecond * 8d / 1_000_000d).ToString("0.#", UiCulture)} {LocalizedSpeedUnit(_language)}"
@@ -3337,6 +3337,7 @@ public partial class MainWindow : Window
 
     private void SuspendRouteCountryProbes()
     {
+        _initialNetherlandsRouteProbeStarted = false;
         _routeCountryProbeGeneration++;
         _pendingRouteProbeQueue.Clear();
         _pendingRouteProbeNodes.Clear();
@@ -3463,7 +3464,7 @@ public partial class MainWindow : Window
                     ? new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal)
                     : new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal);
                 foreach (var probe in probes)
-                    updatedResults[probe.RouteTag] = probe;
+                    updatedResults[probe.RouteTag] = probe with { LatencyMilliseconds = PositiveLatency(probe.LatencyMilliseconds) };
                 foreach (var routeTag in routeTags)
                     if (!updatedResults.ContainsKey(routeTag))
                         updatedResults[routeTag] = new WindowsRouteProbeResult(routeTag, null, null,
@@ -3551,8 +3552,9 @@ public partial class MainWindow : Window
     {
         var updated = new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal);
         var changed = false;
-        foreach (var item in progress)
+        foreach (var sample in progress)
         {
+            var item = sample with { LatencyMilliseconds = PositiveLatency(sample.LatencyMilliseconds) };
             if (!requestedRouteTags.Contains(item.RouteTag, StringComparer.Ordinal))
                 continue;
             if (updated.TryGetValue(item.RouteTag, out var previous) && previous == item)

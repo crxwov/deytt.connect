@@ -46,7 +46,7 @@ internal sealed partial class QaApp : Application
                 else if (options.VerifyNavigation || options.VerifyZoom || options.CaptureMotion)
                     window.Opened += async (_, _) => await RunNavigationQaAsync(window, options);
                 else if (options.CaptureHomePreview is { Length: > 0 } capturePath)
-                    window.Opened += (_, _) => _ = options.Tab == "home" && !Environment.GetCommandLineArgs().Contains("--setup-preview", StringComparer.Ordinal)
+                    window.Opened += (_, _) => _ = options.Tab == "home" || OperatingSystem.IsWindows() && !Environment.GetCommandLineArgs().Contains("--setup-preview", StringComparer.Ordinal)
                         ? CaptureHomePreviewAsync(window, capturePath, options)
                         : CapturePageAsync(window, capturePath, options);
             }
@@ -217,6 +217,58 @@ internal sealed partial class QaApp : Application
         var (flatPanel, zoom, immersive, measureFrames, selectPacket) =
             (options.FlatPanel, options.Zoom, options.Immersive, options.MeasureFrames, options.InspectTrafficLine);
         var field = typeof(MainWindow).GetField("_routeGlobe", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (options.Tab != "home")
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            var showTab = typeof(MainWindow).GetMethod("ShowTab", flags)!;
+            var tabType = showTab.GetParameters()[0].ParameterType;
+            void Navigate(string tab) => showTab.Invoke(window, [Enum.Parse(tabType, tab), true]);
+            Navigate("Home");
+
+            var readyDeadline = DateTimeOffset.UtcNow.AddSeconds(25);
+            RouteGlobeWebView? globe = null;
+            CoreWebView2? core = null;
+            while (DateTimeOffset.UtcNow < readyDeadline)
+            {
+                globe = field?.GetValue(window) as RouteGlobeWebView;
+                core = globe is null ? null : typeof(RouteGlobeWebView)
+                    .GetField("_coreWebView2", flags)?.GetValue(globe) as CoreWebView2;
+                if (core is not null)
+                {
+                    try
+                    {
+                        var ready = await core.ExecuteScriptAsync("Boolean(window.deyttMapAtlas?.canvas)");
+                        if (JsonSerializer.Deserialize<bool>(ready))
+                            break;
+                    }
+                    catch (Exception) { }
+                }
+
+                await Task.Delay(150);
+            }
+
+            if (core is null || DateTimeOffset.UtcNow >= readyDeadline)
+                throw new TimeoutException("Native WebView capture could not initialize its home stage.");
+
+            Navigate(char.ToUpperInvariant(options.Tab[0]) + options.Tab[1..]);
+            var targetStage = "stage-" + options.Tab;
+            var tabDeadline = DateTimeOffset.UtcNow.AddSeconds(5);
+            var stageReady = false;
+            while (DateTimeOffset.UtcNow < tabDeadline)
+            {
+                var active = await core.ExecuteScriptAsync($"Boolean(document.getElementById('{targetStage}')?.classList.contains('is-active'))");
+                if (JsonSerializer.Deserialize<bool>(active))
+                {
+                    stageReady = true;
+                    break;
+                }
+                await Task.Delay(50);
+            }
+            if (!stageReady)
+                throw new TimeoutException($"Native WebView capture could not activate the {options.Tab} stage.");
+            Console.WriteLine($"QA native WebView capture stage: {options.Tab}");
+        }
+
         var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
         while (DateTimeOffset.UtcNow < deadline)
         {
@@ -1219,6 +1271,15 @@ internal sealed partial class QaApp : Application
             {
                 window.Width = originalWidth;
                 window.Height = originalHeight;
+            }
+            await core.ExecuteScriptAsync("window.deyttResetMapView()");
+            var resetSettled = await WaitSettledAsync(.85);
+            using (var reset = await ReadSnapshotAsync())
+            {
+                samples.Add(new { stage = "reset-default", snapshot = reset.RootElement.Clone() });
+                if (!resetSettled || Math.Abs(reset.RootElement.GetProperty("zoom").GetDouble() - .85) >= .003)
+                    failures.Add(new { stage = "reset-default", invariant = "reset returns to one-step-out default zoom", expected = .85,
+                        actual = reset.RootElement.GetProperty("zoom").GetDouble() });
             }
             var motionPreference = await core.ExecuteScriptAsync("""
                 (()=>{const wasReduced=window.deyttMapReducedMotion;

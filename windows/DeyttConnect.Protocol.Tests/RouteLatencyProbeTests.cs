@@ -282,6 +282,47 @@ public sealed class RouteLatencyProbeTests
         Assert.Null(result.Failure);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Canary_http_200_is_valid_only_when_explicitly_expected(bool allowOk)
+    {
+        var target = new Uri("https://canary.example/trace");
+        using var handler = new CallbackHandler((request, _) =>
+            Task.FromResult(Response(request, HttpStatusCode.OK)));
+        using var client = NewClient(handler);
+        var result = await RouteLatencyProbe.MeasureAsync(client, CancellationToken.None,
+            targets: [target], expectedStatuses: allowOk
+                ? new Dictionary<Uri, HttpStatusCode> { [target] = HttpStatusCode.OK }
+                : null);
+        if (allowOk)
+        {
+            Assert.True(result.LatencyMilliseconds is > 0);
+            Assert.Null(result.Failure);
+        }
+        else
+        {
+            Assert.Null(result.LatencyMilliseconds);
+            Assert.Contains("HTTP 200", result.Failure);
+        }
+    }
+
+    [Fact]
+    public async Task Unspecified_canary_status_still_requires_http_204()
+    {
+        var target = new Uri("https://canary.example/generate_204");
+        using var handler = new CallbackHandler((request, _) =>
+            Task.FromResult(Response(request, HttpStatusCode.NoContent)));
+        using var client = NewClient(handler);
+        var result = await RouteLatencyProbe.MeasureAsync(client, CancellationToken.None,
+            targets: [target], expectedStatuses: new Dictionary<Uri, HttpStatusCode>
+            {
+                [new Uri("https://other.example/trace")] = HttpStatusCode.OK,
+            });
+        Assert.True(result.LatencyMilliseconds is > 0);
+        Assert.Null(result.Failure);
+    }
+
     private static HttpClient NewClient(HttpMessageHandler handler) => new(handler)
     {
         Timeout = Timeout.InfiniteTimeSpan,

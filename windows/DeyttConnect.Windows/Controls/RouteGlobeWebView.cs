@@ -168,6 +168,7 @@ public sealed class RouteGlobeWebView : ContentControl
 
     public event Action? SignInRequested;
     public event Action? RenewRequested;
+    public event Action? SupportRequested;
     public event Action? ImportRequested;
     public event Action? LanguagePickerRequested;
     public event Action? SplitTunnelRequested;
@@ -1018,6 +1019,15 @@ public sealed class RouteGlobeWebView : ContentControl
                 if (node == "profile:signin" || node == "settings:signin")
         {
             Dispatcher.UIThread.Post(() => SignInRequested?.Invoke());
+            return;
+        }
+        if (node == "profile:support")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SupportRequested?.Invoke();
+            });
             return;
         }
         if (node == "profile:renew")
