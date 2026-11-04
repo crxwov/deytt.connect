@@ -16,7 +16,7 @@
     if (window.deyttMapAtlas) window.deyttMapAtlas.setViewportAnchor(x, y, width, height);
   };
   const windowsProfile = new URLSearchParams(window.location.search).get("profile") === "windows";
-  const initialZoom = window.DeyttAtlasBridge ? 1.28 : 1.1;
+  const initialZoom = window.DeyttAtlasBridge ? 1.28 : windowsProfile ? 1.0 : 1.1;
   const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
   if (windowsProfile) document.documentElement.dataset.atlasProfile = "windows";
   function updateInteractionHint() {

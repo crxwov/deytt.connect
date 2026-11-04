@@ -5,6 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using DeyttConnect.Protocol;
@@ -185,11 +186,13 @@ public sealed class HomeWindowTests
             var path = Assert.Single(Descendants(page).OfType<Border>(), border =>
                 AutomationProperties.GetAutomationId(border) == "HomeTrafficPath");
             var pathText = Descendants(path).OfType<TextBlock>().Select(text => text.Text).ToArray();
-            Assert.Contains("./lte ru+de", Descendants(page).OfType<TextBlock>().Select(text => text.Text));
-            Assert.Contains("регион скрыт", pathText);
-            Assert.Contains("россия", pathText);
-            Assert.Contains("франкфурт", pathText);
-            Assert.DoesNotContain("санкт-петербург", pathText);
+            var normalizedPathText = string.Join(" ", pathText).ToLowerInvariant();
+            Assert.Contains("россия → германия · ru → de",
+                Descendants(page).OfType<TextBlock>().Select(text => text.Text));
+            Assert.Contains("регион скрыт", normalizedPathText);
+            Assert.Contains("россия", normalizedPathText);
+            Assert.Contains("франкфурт", normalizedPathText);
+            Assert.DoesNotContain("санкт-петербург", normalizedPathText);
         }
         finally
         {
@@ -373,6 +376,8 @@ public sealed class HomeWindowTests
                     "RouteOption-nl-", StringComparison.Ordinal) == true)
                 .ToArray();
             Assert.Equal(3, routeOptions.Length);
+            Assert.Contains(Descendants(routeOptions[0]), control =>
+                AutomationProperties.GetName(control) == "VLESS");
             Assert.All(routeOptions, option =>
             {
                 Assert.True(option.Bounds.Width > 300);
@@ -402,6 +407,154 @@ public sealed class HomeWindowTests
             Assert.NotNull(dotsLeft);
             Assert.InRange(Math.Abs(labelLeft.Value - dotsLeft.Value), 0, 0.5);
 
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public void Route_diagnostics_do_not_render_nonpositive_ping_as_measured(long latency)
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, expandedRouteCountry: "NL"))
+        {
+            Width = 900,
+            Height = 830,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(window.ApplyProbeProgress(
+                [new WindowsRouteProbeResult("qa:nl-vless", latency, 1_000_000, null, "complete", 1)],
+                ["qa:nl-vless"]));
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            var option = Assert.Single(Descendants(page).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "RouteOption-nl-vless");
+            var metrics = Descendants(option).OfType<TextBlock>().Select(text => text.Text).ToArray();
+            Assert.Contains("— ms", metrics);
+            Assert.DoesNotContain($"{latency} ms", metrics);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public void Home_diagnostics_do_not_render_nonpositive_ping_as_measured(long latency)
+    {
+        var window = new MainWindow(Fixture(signedIn: true, selectedRoute: "nl-vless"))
+        {
+            Width = 900,
+            Height = 830,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(window.ApplyProbeProgress(
+                [new WindowsRouteProbeResult("qa:nl-vless", latency, 1_000_000, null, "complete", 1)],
+                ["qa:nl-vless"]));
+            Dispatcher.UIThread.RunJobs();
+
+            var measurement = Assert.Single(Descendants(Required<Grid>(window, "PageHost")).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "HomeRouteMeasurements");
+            var metrics = Descendants(measurement).OfType<TextBlock>().Select(text => text.Text).ToArray();
+            Assert.Contains("— ms", metrics);
+            Assert.DoesNotContain($"{latency} ms", metrics);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Signed_out_route_page_explains_speed_authentication_without_hiding_ping_checks()
+    {
+        var window = new MainWindow(Fixture(tab: "routes")) { Width = 900, Height = 830 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var copy = string.Join(" ", Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<TextBlock>().Select(text => text.Text));
+            Assert.Contains("пинг можно проверить без входа", copy);
+            Assert.Contains("telegram", copy);
+            Assert.Contains("скорости", copy);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("connected")]
+    [InlineData("error")]
+    public void Connection_action_uses_a_phase_aware_glass_surface(string state)
+    {
+        var window = new MainWindow(Fixture(signedIn: true, state: state)) { Width = 900, Height = 830 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var tile = Assert.Single(Descendants(Required<Grid>(window, "PageHost")).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "HomeConnectionActionTile");
+            Assert.IsType<LinearGradientBrush>(tile.Background);
+            Assert.IsType<LinearGradientBrush>(tile.BorderBrush);
+            var sheen = Assert.Single(Descendants(tile).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "ConnectionGlassSheen");
+            Assert.False(sheen.IsHitTestVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Profile_subscription_uses_the_shared_glass_surface()
+    {
+        var window = new MainWindow(Fixture(tab: "profile", signedIn: true)) { Width = 1360, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            var subscription = Assert.Single(Descendants(page).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "ProfileSubscriptionCard");
+            Assert.IsType<LinearGradientBrush>(subscription.Background);
+            Assert.IsType<LinearGradientBrush>(subscription.BorderBrush);
+            Assert.Single(Descendants(subscription), control =>
+                AutomationProperties.GetAutomationId(control) == "ProfileSubscriptionStarfield");
+            Assert.Single(Descendants(subscription), control =>
+                AutomationProperties.GetAutomationId(control) == "ProfileSubscriptionInfinity");
+            var renewal = Assert.Single(Descendants(page), control =>
+                AutomationProperties.GetAutomationId(control) == "ProfileRenewalRow");
+            var support = Assert.Single(Descendants(page), control =>
+                AutomationProperties.GetAutomationId(control) == "ProfileSupportRow");
+            var subscriptionY = subscription.TranslatePoint(new Point(0, 0), page)?.Y
+                ?? throw new Xunit.Sdk.XunitException("Subscription card is not arranged.");
+            var renewalY = renewal.TranslatePoint(new Point(0, 0), page)?.Y
+                ?? throw new Xunit.Sdk.XunitException("Renewal row is not arranged.");
+            var supportY = support.TranslatePoint(new Point(0, 0), page)?.Y
+                ?? throw new Xunit.Sdk.XunitException("Support row is not arranged.");
+            Assert.True(subscriptionY < renewalY && renewalY < supportY,
+                "Profile actions should follow the subscription card in Android release order.");
+            Assert.Contains("продлить подписку", Descendants(renewal).OfType<TextBlock>()
+                .Select(text => text.Text));
         }
         finally
         {
@@ -573,10 +726,10 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaTheory]
-    [InlineData(720d, 520d, true)]
-    [InlineData(1440d, 900d, false)]
-    public void Signed_in_profile_keeps_one_tariff_action_in_the_expected_hierarchy(
-        double width, double height, bool compact)
+    [InlineData(720d, 520d)]
+    [InlineData(1440d, 900d)]
+    public void Signed_in_profile_renews_after_the_subscription_card_at_supported_widths(
+        double width, double height)
     {
         var window = new MainWindow(Fixture(tab: "profile", signedIn: true))
         {
@@ -589,21 +742,19 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var pageHost = Required<Grid>(window, "PageHost");
-            var tariffActions = Descendants(pageHost).OfType<Button>()
-                .Where(button => Descendants(button).OfType<TextBlock>()
-                    .Any(text => text.Text == "тарифы и оплата"))
-                .ToArray();
-            var tariffAction = Assert.Single(tariffActions);
-            var tariffRow = Assert.IsType<Border>(tariffAction.GetVisualParent());
+            var renewalRow = Assert.Single(Descendants(pageHost).OfType<Border>(), border =>
+                AutomationProperties.GetAutomationId(border) == "ProfileRenewalRow");
+            Assert.Contains(Descendants(renewalRow).OfType<TextBlock>(),
+                text => text.Text == "продлить подписку");
             var subscriptionHeading = Descendants(pageHost).OfType<TextBlock>()
                 .Single(text => text.Text == "подписка");
             var pageScroll = Required<ScrollViewer>(window, "PageScroll");
-            var tariffTop = tariffRow.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
+            var renewalTop = renewalRow.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
             var subscriptionTop = subscriptionHeading.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
 
-            Assert.True(tariffAction.IsEffectivelyVisible);
-            Assert.True(IsFullyWithinViewport(tariffRow, Required<ScrollViewer>(window, "PageScroll")));
-            Assert.Equal(compact, tariffTop < subscriptionTop);
+            Assert.True(renewalRow.IsEffectivelyVisible);
+            Assert.True(IsFullyWithinViewport(renewalRow, pageScroll));
+            Assert.True(renewalTop > subscriptionTop);
         }
         finally
         {

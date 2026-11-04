@@ -1,8 +1,18 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Media;
 
 namespace DeyttConnect.Windows.UI;
+
+internal enum ConnectionGlassPhase
+{
+    Idle,
+    Connecting,
+    Connected,
+    Stopping,
+    Error,
+}
 
 internal static class DeyttTheme
 {
@@ -81,6 +91,120 @@ internal static class DeyttTheme
             Padding = padding ?? new Thickness(18),
             Child = child,
         };
+    }
+
+    public static Border GlassCard(
+        Control child,
+        Color? fill = null,
+        Color? accent = null,
+        double radius = 22,
+        Thickness? padding = null)
+    {
+        var surface = fill ?? Surface;
+        var edge = accent ?? Sky;
+        return new Border
+        {
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(surface, 0),
+                    new GradientStop(Surface, 1),
+                },
+            },
+            BorderBrush = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.Parse("#3CFFFFFF"), 0),
+                    new GradientStop(edge, 0.48),
+                    new GradientStop(Color.Parse("#24FFFFFF"), 1),
+                },
+            },
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(radius),
+            Padding = padding ?? new Thickness(18),
+            Child = child,
+        };
+    }
+
+    public static Border ConnectionGlass(Control child, ConnectionGlassPhase phase, double height)
+    {
+        var (top, bottom, accent) = phase switch
+        {
+            ConnectionGlassPhase.Connected => (Color.Parse("#55345143"), Color.Parse("#25202E27"), Mint),
+            ConnectionGlassPhase.Connecting => (Color.Parse("#50364D67"), Color.Parse("#25202B3A"), Sky),
+            ConnectionGlassPhase.Stopping => (Color.Parse("#45384350"), Color.Parse("#2219232E"), Muted),
+            ConnectionGlassPhase.Error => (Color.Parse("#553B2833"), Color.Parse("#28201720"), Coral),
+            _ => (Color.Parse("#50384D63"), Color.Parse("#25202B3A"), Sky),
+        };
+        var sheen = new Border
+        {
+            Height = 30,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top,
+            CornerRadius = new CornerRadius(19, 19, 0, 0),
+            IsHitTestVisible = false,
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.Parse("#2FFFFFFF"), 0),
+                    new GradientStop(Color.Parse("#00FFFFFF"), 1),
+                },
+            },
+        };
+        AutomationProperties.SetAutomationId(sheen, "ConnectionGlassSheen");
+
+        var content = new Grid();
+        content.Children.Add(sheen);
+        content.Children.Add(child);
+        content.Children.Add(new Border
+        {
+            Margin = new Thickness(1),
+            BorderThickness = new Thickness(1),
+            BorderBrush = Brush(Color.Parse("#20FFFFFF")),
+            CornerRadius = new CornerRadius(19),
+            IsHitTestVisible = false,
+        });
+
+        var tile = new Border
+        {
+            Height = height,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
+            BorderThickness = new Thickness(1),
+            BorderBrush = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 0, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.Parse("#9AFFFFFF"), 0),
+                    new GradientStop(accent, 0.5),
+                    new GradientStop(Color.Parse("#4AFFFFFF"), 1),
+                },
+            },
+            CornerRadius = new CornerRadius(20),
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(top, 0),
+                    new GradientStop(bottom, 1),
+                },
+            },
+            ClipToBounds = true,
+            Child = content,
+        };
+        return tile;
     }
 
     public static Button Action(Control child, Action onClick)

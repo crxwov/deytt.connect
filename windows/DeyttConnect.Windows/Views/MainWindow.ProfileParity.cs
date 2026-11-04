@@ -1,9 +1,12 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
+using DeyttConnect.Windows.Controls;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
 
@@ -13,6 +16,82 @@ public partial class MainWindow
 {
     private readonly HashSet<long> _happDeviceChangesInFlight = [];
     private readonly HashSet<string> _sessionRevokesInFlight = new(StringComparer.Ordinal);
+
+    private Control BuildProfileStarrySubscriptionCard(Control content)
+    {
+        var starfield = new StarfieldBackground { Opacity = 0.68, IsHitTestVisible = false };
+        AutomationProperties.SetAutomationId(starfield, "ProfileSubscriptionStarfield");
+        var infinity = new TextBlock
+        {
+            Text = "∞",
+            FontFamily = DeyttTheme.Unbounded,
+            FontSize = 68,
+            FontWeight = FontWeight.SemiBold,
+            Foreground = new SolidColorBrush(Color.Parse("#6A78BFE8")),
+            Opacity = 0.14,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+        };
+        AutomationProperties.SetAutomationId(infinity, "ProfileSubscriptionInfinity");
+
+        var foreground = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,96"),
+            Margin = new Thickness(18, 16),
+        };
+        foreground.Children.Add(content);
+        Grid.SetColumn(infinity, 1);
+        foreground.Children.Add(infinity);
+
+        var layers = new Grid();
+        layers.Children.Add(starfield);
+        layers.Children.Add(new Border
+        {
+            IsHitTestVisible = false,
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.Parse("#68101A2B"), 0),
+                    new GradientStop(Color.Parse("#D80A101A"), 0.72),
+                    new GradientStop(Color.Parse("#E1080C14"), 1),
+                },
+            },
+        });
+        layers.Children.Add(foreground);
+
+        var card = DeyttTheme.GlassCard(layers, DeyttTheme.BlueSurface, DeyttTheme.Sky,
+            22, new Thickness(0));
+        card.ClipToBounds = true;
+        AutomationProperties.SetAutomationId(card, "ProfileSubscriptionCard");
+
+        var shimmer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+        var phase = 0d;
+        shimmer.Tick += (_, _) =>
+        {
+            if (_reduceMotion)
+            {
+                starfield.Opacity = 0.68;
+                infinity.Opacity = 0.14;
+                shimmer.Stop();
+                return;
+            }
+
+            phase += 0.15;
+            starfield.Opacity = 0.62 + 0.12 * ((Math.Sin(phase) + 1) / 2);
+            infinity.Opacity = 0.10 + 0.08 * ((Math.Sin(phase + 0.9) + 1) / 2);
+        };
+        card.AttachedToVisualTree += (_, _) =>
+        {
+            if (!_reduceMotion)
+                shimmer.Start();
+        };
+        card.DetachedFromVisualTree += (_, _) => shimmer.Stop();
+        return card;
+    }
 
     private Control BuildTelegramIdentityEntry(TelegramAccount? account, bool signedIn, Action onClick)
     {

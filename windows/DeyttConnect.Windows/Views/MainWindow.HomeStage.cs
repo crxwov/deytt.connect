@@ -279,12 +279,16 @@ public partial class MainWindow
             "FI" => "FI",
             "IT" => "IT",
             "RU" => "RU",
+            "RU-DE" => "RU → DE",
             _ => "AUTO",
         };
         var name = SelectedExitPlaceLabel(route);
-        var hint = route is null || route.CountryCode == "AUTO"
-            ? Copy("узел выберется автоматически", "node selected automatically")
-            : Copy("выбранный выход", "selected exit");
+        var hint = route?.CountryCode switch
+        {
+            "RU-DE" => Copy("Россия → Германия · двойной маршрут", "Russia → Germany · double hop"),
+            "AUTO" or null => Copy("узел выберется автоматически", "node selected automatically"),
+            _ => Copy("выбранный выход", "selected exit"),
+        };
         return (code, name, hint);
     }
 
@@ -372,7 +376,8 @@ public partial class MainWindow
     private Control BuildHomeRouteDiagnostic(string? routeTag)
     {
         var result = routeTag is not null ? _routeProbeResults.GetValueOrDefault(routeTag) : null;
-        var latency = result?.LatencyMilliseconds is { } ping ? $"{ping} ms" : "— ms";
+        var latency = IsValidLatency(result?.LatencyMilliseconds)
+            ? $"{result!.LatencyMilliseconds} ms" : "— ms";
         var speed = result?.BytesPerSecond is { } bytesPerSecond && bytesPerSecond > 0
             ? $"{bytesPerSecond * 8d / 1_000_000d:0.#} mbps"
             : "— mbps";
@@ -384,7 +389,7 @@ public partial class MainWindow
             ColumnSpacing = 16,
         };
         measurements.Children.Add(HomeMeasurement(Copy("ПИНГ", "PING"), latency,
-            routeProbeActive && result?.LatencyMilliseconds is null));
+            routeProbeActive && !IsValidLatency(result?.LatencyMilliseconds)));
         var speedMeasurement = HomeMeasurement(Copy("СКОРОСТЬ", "SPEED"), speed,
             routeProbeActive && result?.BytesPerSecond is not > 0);
         Grid.SetColumn(speedMeasurement, 1);

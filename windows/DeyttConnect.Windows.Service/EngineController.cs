@@ -81,22 +81,31 @@ internal sealed class EngineController
             var lteSocksPort = routeTag == CdnLteProfile.RouteTag ? AllocateLoopbackPort() : (int?)null;
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
                 upstreamInterface, customBypassDomains, customBypassProcesses, splitTunnelMode, lteSocksPort);
+            IReadOnlyDictionary<string, IPAddress[]>? canaryAddresses = null;
             if (awgConfig is not null)
             {
-                var resolved = await ResolveAwgPeerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync,
+                var resolved = await ConnectDnsPrerequisiteResolver.ResolveAsync(
+                    token => ResolveAwgPeerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync, token),
+                    token => ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync, token),
+                    result => result.FailedEndpointTags.Count == 0,
+                    addresses => addresses.Count > 0,
                     cancellationToken).ConfigureAwait(false);
-                runtimeProfile = resolved.Profile;
-                if (resolved.FailedEndpointTags.Count != 0)
+                if (resolved.First is { } awgResolution)
                 {
-                    StopCore();
-                    return SetError("Не удалось разрешить адрес узла AmneziaWG. Проверьте соединение и повторите.");
+                    runtimeProfile = awgResolution.Profile;
+                    if (awgResolution.FailedEndpointTags.Count != 0)
+                    {
+                        StopCore();
+                        return SetError("Не удалось разрешить адрес узла AmneziaWG. Проверьте соединение и повторите.");
+                    }
                 }
+                canaryAddresses = resolved.Second;
             }
             var tunAddresses = TunnelProfileBuilder.GetTunAddresses(runtimeProfile);
             // Windows strict routing blocks DNS on physical interfaces as soon as
             // TUN starts. Resolve the public health-check hosts before that change;
             // HTTPS still uses their hostnames for SNI and certificate validation.
-            var canaryAddresses = await ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync,
+            canaryAddresses ??= await ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync,
                 cancellationToken).ConfigureAwait(false);
             if (canaryAddresses.Count == 0)
                 return SetError("Не удалось разрешить адреса проверки VPN до запуска TUN. Проверьте DNS сети.");
