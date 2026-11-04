@@ -944,6 +944,11 @@ public partial class MainWindow
             awgQuota
         );
 
+        if (!string.IsNullOrEmpty(_telegramAvatarDataUrl))
+        {
+            map.UpdateProfileAvatar(_telegramAvatarDataUrl);
+        }
+
         var splitStore = WindowsSplitTunnelStore.Load();
         var customCount = (splitStore.CustomDomains?.Count ?? 0) + (splitStore.CustomProcesses?.Count ?? 0);
         var splitSummary = customCount > 0

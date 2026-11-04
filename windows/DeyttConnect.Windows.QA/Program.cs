@@ -129,6 +129,20 @@ internal sealed partial class QaApp : Application
             Width = options.Width,
             Height = options.Height,
         };
+        if (options.SignedIn)
+        {
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            try
+            {
+                var avatarPath = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DEYTT", "Connect", "telegram-avatar.b64");
+                string? avatarDataUrl = System.IO.File.Exists(avatarPath) ? System.IO.File.ReadAllText(avatarPath).Trim() : null;
+                if (!string.IsNullOrEmpty(avatarDataUrl))
+                {
+                    typeof(MainWindow).GetField("_telegramAvatarDataUrl", flags)?.SetValue(window, avatarDataUrl);
+                }
+            }
+            catch { }
+        }
         if (fixtureArgs.Contains("--setup-preview", StringComparer.Ordinal))
         {
             const BindingFlags setupFlags = BindingFlags.Instance | BindingFlags.NonPublic;

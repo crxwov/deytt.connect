@@ -13,7 +13,24 @@ public partial class MainWindow
 {
     private readonly HashSet<long> _happDeviceChangesInFlight = [];
     private readonly HashSet<string> _sessionRevokesInFlight = new(StringComparer.Ordinal);
-    private string? _telegramAvatarDataUrl;
+    private string? _telegramAvatarDataUrl = GetCachedTelegramAvatarDataUrl();
+
+    private static string? GetCachedTelegramAvatarDataUrl()
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DEYTT", "Connect");
+            var file = System.IO.Path.Combine(dir, "telegram-avatar.b64");
+            if (System.IO.File.Exists(file))
+            {
+                var s = System.IO.File.ReadAllText(file).Trim();
+                if (!string.IsNullOrEmpty(s) && s.StartsWith("data:image/"))
+                    return s;
+            }
+        }
+        catch { }
+        return null;
+    }
 
     internal static string NormalizeTariffDisplayName(string? value)
     {
@@ -189,6 +206,16 @@ public partial class MainWindow
         var previous = _telegramAvatarBitmap;
         _telegramAvatarBitmap = bitmap;
         _telegramAvatarDataUrl = dataUrl;
+        if (!string.IsNullOrEmpty(dataUrl))
+        {
+            try
+            {
+                var dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DEYTT", "Connect");
+                System.IO.Directory.CreateDirectory(dir);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "telegram-avatar.b64"), dataUrl);
+            }
+            catch { }
+        }
         _routeGlobe?.UpdateProfileAvatar(dataUrl);
         if (_profileAvatarImage is not null)
             _profileAvatarImage.Source = bitmap;
