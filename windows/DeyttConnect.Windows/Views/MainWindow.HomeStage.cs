@@ -527,6 +527,7 @@ public partial class MainWindow
         map.ImmersiveModeRequested += SetMapImmersive;
         map.TabChanged += OnMapTabChanged;
         map.RouteSelected += OnMapRouteSelected;
+        map.SubscriptionRefreshRequested += () => _ = RefreshSignedInAccountAsync();
         map.CountryProbeRequested += HandleCountryProbeRequested;
         map.CheckUpdatesRequested += () => _ = ShowUpdateDialogAsync();
         map.SettingToggled += (key, enabled) => HandleSettingToggledFromWeb(key, enabled);
@@ -726,7 +727,7 @@ public partial class MainWindow
                 : canCancel
                     ? CopyExact("отменить подключение", "cancel connection")
                     : tunnelActive
-                        ? CopyExact("отключить", "disconnect")
+                        ? CopyExact("подключено", "connected")
                         : connecting || _vpnActionInProgress
                             ? CopyExact("подключаемся…", "connecting…")
                             : routeProbeActive
@@ -821,7 +822,7 @@ public partial class MainWindow
 
     private void EnsureInitialNetherlandsRouteProbe()
     {
-        if (_qaFixture || _activeTab != MainTab.Routes || _initialNetherlandsRouteProbeStarted ||
+        if (_qaFixture || _initialNetherlandsRouteProbeStarted ||
             !_vpnServiceAvailable || _vpnActionInProgress || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) ||
             _keysSnapshot?.ProfileJson is not { Length: > 0 })
             return;
@@ -834,7 +835,8 @@ public partial class MainWindow
             return;
 
         _initialNetherlandsRouteProbeStarted = true;
-        _expandedRouteCountries.Add(countryCode);
+        if (_activeTab == MainTab.Routes)
+            _expandedRouteCountries.Add(countryCode);
         QueueRouteCountryProbe(countryCode, routeTags);
     }
 

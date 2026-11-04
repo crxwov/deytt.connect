@@ -158,6 +158,7 @@ public sealed class RouteGlobeWebView : ContentControl
     public event Action<long>? HappDeviceManagementRequested;
     public event Action<string>? TelegramSessionManagementRequested;
     public event Action? SubscriptionKeyCopyRequested;
+    public event Action? SubscriptionRefreshRequested;
     public event Action? ExitRequested;
 
     /// <summary>Raised when the user toggles a client setting in the web presentation.</summary>
@@ -620,11 +621,7 @@ public sealed class RouteGlobeWebView : ContentControl
                     return;
                 }
 
-#if DEBUG
-                var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USER_DATA_FOLDER");
-#else
-                string? qaUserDataFolder = null;
-#endif
+var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USER_DATA_FOLDER");
                 webView2UserDataFolder = string.IsNullOrWhiteSpace(qaUserDataFolder)
                     ? Path.Combine(localAppData, "DEYTT", "Connect", "WebView2")
                     : Path.GetFullPath(qaUserDataFolder);
@@ -1027,6 +1024,15 @@ public sealed class RouteGlobeWebView : ContentControl
             {
                 if (!_atlasFailed && ReferenceEquals(sender, _webView))
                     SupportRequested?.Invoke();
+            });
+            return;
+        }
+        if (node is "routes:refresh:subscription" or "subscription:refresh" or "routes-refresh-subscription")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SubscriptionRefreshRequested?.Invoke();
             });
             return;
         }

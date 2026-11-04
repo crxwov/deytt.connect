@@ -8,6 +8,28 @@
   const panelTiltStartZoom = 1;
   const panelTiltRampZoom = 0.25;
   const panelTiltMaxDegrees = 20;
+    function getSpokeSpinnerSvg(size = 16) {
+    return `<svg class="metric-spoke-spinner" viewBox="0 0 20 20" width="${size}" height="${size}" aria-hidden="true">
+      <line x1="10" y1="2" x2="10" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.88"/>
+      <line x1="13.06" y1="2.62" x2="11.91" y2="5.39" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.83"/>
+      <line x1="15.66" y1="4.34" x2="13.54" y2="6.46" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.78"/>
+      <line x1="17.38" y1="6.94" x2="14.61" y2="8.09" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.73"/>
+      <line x1="18" y1="10" x2="15" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.68"/>
+      <line x1="17.38" y1="13.06" x2="14.61" y2="11.91" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.63"/>
+      <line x1="15.66" y1="15.66" x2="13.54" y2="13.54" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.58"/>
+      <line x1="13.06" y1="17.38" x2="11.91" y2="14.61" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.53"/>
+      <line x1="10" y1="18" x2="10" y2="15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.48"/>
+      <line x1="6.94" y1="17.38" x2="8.09" y2="14.61" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.43"/>
+      <line x1="4.34" y1="15.66" x2="6.46" y2="13.54" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.38"/>
+      <line x1="2.62" y1="13.06" x2="5.39" y2="11.91" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.33"/>
+      <line x1="2" y1="10" x2="5" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.28"/>
+      <line x1="2.62" y1="6.94" x2="5.39" y2="8.09" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.23"/>
+      <line x1="4.34" y1="4.34" x2="6.46" y2="6.46" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.18"/>
+      <line x1="6.94" y1="2.62" x2="8.09" y2="5.39" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.12"/>
+    </svg>`;
+  }
+  window.getSpokeSpinnerSvg = getSpokeSpinnerSvg;
+
   const strings = {
     "en": {
       "latency": "response", "speed": "speed", "measurement": "last route measurement",
@@ -241,7 +263,7 @@
     const latencyMetric = latency.parentElement;
     const speedMetric = speed.parentElement;
     const statusBadge = root.querySelector("#home-status-badge");
-    if (statusBadge) statusBadge.classList.toggle("is-connected", state.statusTone === "good");
+    if (statusBadge) { statusBadge.style.display = "none"; statusBadge.classList.toggle("is-connected", state.statusTone === "good"); }
     if (status) {
       status.textContent = state.status || "";
       status.dataset.tone = state.statusTone || "normal";
@@ -276,25 +298,25 @@
     });
     const latencyUnit = root.querySelector("#home-latency-unit");
     if (latency) {
-      if (state.latency != null && state.latency !== "" && state.latency !== "—") {
+      if (state.latency != null && state.latency !== "" && state.latency !== "—" && state.latency !== "…") {
         latency.classList.remove("is-empty");
-        latency.textContent = state.latency;
-        if (latencyUnit) latencyUnit.hidden = false;
+        latency.textContent = state.latency + " " + (language === "en" ? "ms" : "мс");
+        if (latencyUnit) latencyUnit.hidden = true;
       } else {
         latency.classList.add("is-empty");
-        latency.textContent = state.latency === "…" ? "…" : (language === "en" ? "not measured" : "не измерено");
+        latency.innerHTML = getSpokeSpinnerSvg(22);
         if (latencyUnit) latencyUnit.hidden = true;
       }
     }
     const speedUnit = root.querySelector("#home-speed-unit");
     if (speed) {
-      if (state.speed != null && state.speed !== "" && state.speed !== "—") {
+      if (state.speed != null && state.speed !== "" && state.speed !== "—" && state.speed !== "…") {
         speed.classList.remove("is-empty");
-        speed.textContent = state.speed;
-        if (speedUnit) speedUnit.hidden = false;
+        speed.textContent = state.speed + " " + (language === "en" ? "Mbps" : "мбит/с");
+        if (speedUnit) speedUnit.hidden = true;
       } else {
         speed.classList.add("is-empty");
-        speed.textContent = state.speed === "…" ? "…" : (language === "en" ? "not measured" : "не измерено");
+        speed.innerHTML = getSpokeSpinnerSvg(22);
         if (speedUnit) speedUnit.hidden = true;
       }
     }
@@ -310,8 +332,11 @@
     note.textContent = state.measurementLabel || "";
     note.hidden = !state.measurementLabel;
     const measure = root.querySelector("#home-measure");
-    measure.textContent = state.measurementActionLabel || (language === "en" ? "refresh measurement" : "обновить замер");
-    measure.disabled = state.measurementEnabled === false;
+    if (measure) {
+      const label = state.measurementActionLabel || (language === "en" ? "refresh measurement" : "обновить замеры");
+      measure.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg><span>${label}</span>`;
+      measure.disabled = state.measurementEnabled === false;
+    }
     const summary = root.querySelector("#home-route-description");
     if (summary) summary.textContent = [state.country, state.city, state.protocol].filter(Boolean).join(" · ");
     const canvas = root.querySelector("canvas[data-atlas-interactive]");

@@ -2034,7 +2034,610 @@
       .profile-action-row:hover, .profile-action-row:active { transform: none; }
     }
 
-  </style>
+  
+    /* Authentic 16-Spoke Wheel Spinner (1:1 with Android LoadingSpan in InlineMetricProgress.kt) */
+    .metric-spoke-spinner {
+      display: inline-block;
+      vertical-align: middle;
+      transform-origin: center center;
+      animation: spoke-wheel-spin 1s steps(16) infinite;
+      color: #94A3B8;
+      flex-shrink: 0;
+    }
+    .metric-spoke-spinner--lg {
+      width: 24px !important;
+      height: 24px !important;
+      color: #38BDF8;
+    }
+    @keyframes spoke-wheel-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    .network-atlas.reduce-motion .metric-spoke-spinner,
+    @media (prefers-reduced-motion: reduce) {
+      .metric-spoke-spinner { animation: none !important; opacity: 0.65; }
+    }
+
+    /* Hide redundant status pill on home (user requirement: "эту пилюльку нужно убрать") */
+    #home-status-badge, .home-status-badge {
+      display: none !important;
+    }
+
+    /* Authentic Android LiquidGlass Tokens & Surfaces */
+    :root {
+      --liquid-glass-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 40%),
+                              linear-gradient(180deg, rgba(38, 60, 84, 0.28) 0%, rgba(22, 37, 54, 0.18) 50%, rgba(14, 23, 36, 0.12) 100%);
+      --liquid-glass-card-border: rgba(255, 255, 255, 0.12);
+      --liquid-glass-card-border-top: rgba(255, 255, 255, 0.32);
+      --liquid-glass-card-border-bottom: rgba(0, 0, 0, 0.25);
+      --liquid-glass-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 12px 36px rgba(0, 0, 0, 0.35);
+      --liquid-glass-card-blur: blur(24px) saturate(160%);
+
+      --liquid-glass-row-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 40%),
+                             linear-gradient(180deg, rgba(28, 44, 63, 0.26) 0%, rgba(18, 29, 42, 0.16) 100%);
+      --liquid-glass-row-bg-selected: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, transparent 40%),
+                                      linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.24) 100%);
+      --liquid-glass-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%),
+                              linear-gradient(180deg, rgba(45, 66, 90, 0.35) 0%, rgba(19, 31, 46, 0.20) 100%);
+    }
+
+    /* LiquidGlass Card Component */
+    .liquid-glass-card {
+      background: var(--liquid-glass-card-bg) !important;
+      backdrop-filter: var(--liquid-glass-card-blur) !important;
+      -webkit-backdrop-filter: var(--liquid-glass-card-blur) !important;
+      border: 1px solid var(--liquid-glass-card-border) !important;
+      border-top-color: var(--liquid-glass-card-border-top) !important;
+      border-bottom-color: var(--liquid-glass-card-border-bottom) !important;
+      box-shadow: var(--liquid-glass-card-shadow) !important;
+      border-radius: 22px !important;
+      position: relative !important;
+    }
+
+    /* Clean LiquidGlass Pill Button (NO weird blurry gradients, crisp specular edge) */
+    .btn-select-route, .home-measure, .btn-action-glass {
+      background: var(--liquid-glass-pill-bg) !important;
+      backdrop-filter: blur(16px) saturate(150%) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(150%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.16) !important;
+      border-top-color: rgba(255, 255, 255, 0.34) !important;
+      border-bottom-color: rgba(0, 0, 0, 0.25) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+      border-radius: 9999px !important;
+      color: #F8FAFC !important;
+      font-weight: 600 !important;
+      font-size: 13px !important;
+      padding: 7px 18px !important;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 8px !important;
+      transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+      text-transform: lowercase !important;
+    }
+    .btn-select-route:hover, .home-measure:hover, .btn-action-glass:hover {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 40%),
+                  linear-gradient(180deg, rgba(55, 80, 110, 0.45) 0%, rgba(25, 40, 60, 0.28) 100%) !important;
+      border-top-color: rgba(255, 255, 255, 0.50) !important;
+      transform: translateY(-1px) !important;
+    }
+    .btn-select-route:active, .home-measure:active, .btn-action-glass:active {
+      transform: translateY(1px) scale(0.985) !important;
+    }
+    .btn-select-route.is-selected {
+      border-color: rgba(56, 189, 248, 0.45) !important;
+      border-top-color: rgba(186, 230, 253, 0.65) !important;
+      color: #38BDF8 !important;
+      background: linear-gradient(180deg, rgba(56, 189, 248, 0.18) 0%, rgba(14, 165, 233, 0.08) 100%) !important;
+    }
+
+    /* Subscription Refresh Card (Top of Routes Stage) */
+    .routes-refresh-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 20px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: all 220ms ease;
+    }
+    .routes-refresh-banner:hover {
+      border-top-color: rgba(255, 255, 255, 0.45) !important;
+      transform: translateY(-1px);
+    }
+    .routes-refresh-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+    .refresh-icon-circle {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #38BDF8;
+      flex-shrink: 0;
+    }
+    .refresh-texts {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .refresh-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+    .refresh-subtitle {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      transition: color 250ms ease;
+    }
+    .refresh-icon-right {
+      color: #64748B;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* Quick Select Cards (Auto-Select & LTE Whitelist) */
+    .quick-select-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .quick-select-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: all 220ms ease;
+    }
+    .quick-select-card:hover {
+      border-top-color: rgba(255, 255, 255, 0.45) !important;
+      transform: translateY(-1px);
+    }
+    .quick-select-card.is-selected {
+      border-color: rgba(56, 189, 248, 0.35) !important;
+      border-top-color: rgba(186, 230, 253, 0.55) !important;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, transparent 40%),
+                  linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.24) 100%) !important;
+    }
+    .quick-select-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .quick-select-info {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .quick-select-title {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+    .quick-select-sub {
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+    .lte-quota-bar {
+      width: 100%;
+      max-width: 200px;
+      height: 3.5px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.12);
+      overflow: hidden;
+      margin: 3px 0;
+    }
+    .lte-quota-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #38BDF8, #34D399);
+      border-radius: 2px;
+      transition: width 300ms ease;
+    }
+
+    /* Section Headers */
+    .routes-section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748B;
+      text-transform: lowercase;
+      letter-spacing: 0.04em;
+      margin: 10px 0 6px 4px;
+    }
+
+    /* Country Accordion Cards */
+    .countries-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .country-accordion {
+      transition: all 220ms ease;
+      overflow: hidden;
+    }
+    .country-accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 20px;
+      cursor: pointer;
+    }
+    .country-accordion-header:hover {
+      border-top-color: rgba(255, 255, 255, 0.45) !important;
+    }
+    .country-header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+    .country-flag-wrap {
+      width: 36px;
+      height: 25px;
+      border-radius: 6px;
+      overflow: hidden;
+      flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+    }
+    .country-title-box {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .country-name {
+      font-size: 15.5px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+    .country-protos-summary {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .country-header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .country-ping-pill {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #34D399;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.28);
+      border-radius: 9999px;
+      padding: 3px 10px;
+    }
+    .country-ping-pill .ping-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #34D399;
+      box-shadow: 0 0 6px #34D399;
+    }
+
+    /* Protocol Rows inside Country Card */
+    .country-accordion-body {
+      display: none;
+      padding: 0 16px 16px;
+    }
+    .country-accordion.is-expanded .country-accordion-body {
+      display: block;
+    }
+    .proto-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 14px;
+    }
+    .proto-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 12px 16px;
+      border-radius: 16px;
+      background: var(--liquid-glass-row-bg);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-top-color: rgba(255, 255, 255, 0.20);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 4px 12px rgba(0, 0, 0, 0.20);
+      cursor: pointer;
+      transition: all 180ms ease;
+    }
+    .proto-row:hover {
+      border-top-color: rgba(255, 255, 255, 0.38);
+      transform: translateY(-1px);
+    }
+    .proto-row.is-selected {
+      background: var(--liquid-glass-row-bg-selected);
+      border-color: rgba(56, 189, 248, 0.35);
+      border-top-color: rgba(186, 230, 253, 0.55);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 4px 16px rgba(14, 165, 233, 0.15);
+    }
+    .proto-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .proto-icon-box {
+      width: 36px;
+      height: 36px;
+      border-radius: 11px;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .proto-icon-box img, .proto-icon-box svg {
+      width: 20px;
+      height: 20px;
+    }
+    .proto-name {
+      font-size: 14.5px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+    .proto-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .proto-telemetry {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #94A3B8;
+      white-space: nowrap;
+    }
+    .grade-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #64748B;
+      flex-shrink: 0;
+    }
+    .grade-dot--good { background: #34D399; box-shadow: 0 0 8px #34D399; }
+    .grade-dot--medium { background: #38BDF8; box-shadow: 0 0 8px #38BDF8; }
+    .grade-dot--poor { background: #F87171; box-shadow: 0 0 8px #F87171; }
+
+    /* Profile Stage (1:1 Match with Mobile Profile) */
+    .profile-view-wrap {
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding-bottom: 50px;
+    }
+    .profile-title {
+      font-family: "Unbounded", sans-serif;
+      font-size: clamp(28px, 3vw, 36px);
+      font-weight: 700;
+      color: #FFFFFF;
+      letter-spacing: -0.04em;
+      margin: 0 0 6px;
+    }
+    .profile-user-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      cursor: pointer;
+    }
+    .profile-user-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+    .profile-avatar-circle {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      overflow: hidden;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1.5px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .profile-avatar-circle img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .profile-user-details {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .profile-user-name {
+      font-size: 18px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+    .profile-user-handle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Hero Starry Galaxy Card (1:1 with StarryPlanCard.kt) */
+    .profile-starry-card {
+      position: relative;
+      border-radius: 24px;
+      overflow: hidden;
+      padding: 24px 26px;
+      min-height: 220px;
+      box-sizing: border-box;
+      background: #040810;
+      border: 1.2px solid rgba(255, 255, 255, 0.22);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .profile-galaxy-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      pointer-events: none;
+      border-radius: 24px;
+      z-index: 1;
+    }
+    .starry-card-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+    .starry-card-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #94A3B8;
+      text-transform: lowercase;
+    }
+    .starry-card-plan-title {
+      font-family: "Unbounded", sans-serif;
+      font-size: clamp(26px, 3.2vw, 32px);
+      font-weight: 700;
+      color: #FFFFFF;
+      letter-spacing: -0.03em;
+      margin: 2px 0 0;
+    }
+    .starry-card-status {
+      font-family: "Unbounded", sans-serif;
+      font-size: 18px;
+      font-weight: 700;
+      color: #38BDF8;
+      margin-bottom: 12px;
+    }
+    .starry-card-divider {
+      height: 1px;
+      background: rgba(255, 255, 255, 0.12);
+      width: 100%;
+      margin: 4px 0 16px;
+    }
+    .starry-card-metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .starry-metric-col {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .starry-metric-label {
+      font-size: 12px;
+      color: #94A3B8;
+    }
+    .starry-metric-val {
+      font-family: "Unbounded", sans-serif;
+      font-size: clamp(22px, 2.5vw, 26px);
+      font-weight: 700;
+      color: #FFFFFF;
+      letter-spacing: -0.02em;
+    }
+    .starry-card-caption {
+      font-size: 12px;
+      color: #64748B;
+      margin: 4px 0 8px 4px;
+    }
+
+    /* Profile Action Cards */
+    .profile-actions-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .profile-action-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: all 220ms ease;
+    }
+    .profile-action-card:hover {
+      border-top-color: rgba(255, 255, 255, 0.45) !important;
+      transform: translateY(-1px);
+    }
+    .action-card-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+    .action-icon-box {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #38BDF8;
+      flex-shrink: 0;
+    }
+    .action-card-texts {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .action-card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #FFFFFF;
+    }
+    .action-card-sub {
+      font-size: 12.5px;
+      color: var(--text-muted);
+    }
+
+</style>
 </head>
 <body>
   <!-- Header Bar -->
@@ -2184,509 +2787,328 @@
     </div>
 
     <!-- Stage 2: маршруты (Routes Stage, Exact Authentic Layout from Image 2) -->
+        <!-- Stage 2: Routes Stage (1:1 with Android Mobile Layout) -->
     <section class="stage-view" id="stage-routes" aria-label="маршруты подключения">
       <div class="routes-view-wrap">
         <div class="routes-header">
           <h1 class="routes-title">маршруты</h1>
-          <p class="routes-subtitle">выберите страну выхода или включите автоподбор</p>
+          <p class="routes-subtitle">откройте страну для проверки маршрутов. замеры отклика запускаются вместе, скорость проверяется по очереди.</p>
         </div>
 
-        <!-- Smart Routes Box (Image 2 Authentic Smart Routes) -->
-        <div class="smart-routes-box">
-          <!-- row 1: автоподбор -->
-          <div class="smart-route-row is-selected" data-route-key="auto" id="card-route-auto">
-            <div class="smart-route-left">
-              <div class="smart-route-icon">✦</div>
-              <div class="smart-route-info">
-                <span class="smart-route-name">автоподбор</span>
-                <span class="smart-route-desc">автоподбор наименьшей задержки среди европейских узлов</span>
-              </div>
+        <!-- Top Subscription Refresh Card -->
+        <div class="liquid-glass-card routes-refresh-banner" id="routes-refresh-card" role="button" tabindex="0" title="обновить доступные маршруты">
+          <div class="routes-refresh-left">
+            <div class="refresh-icon-circle">
+              <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 13v8l-4-4"/>
+                <path d="m12 21 4-4"/>
+                <path d="M4.393 15.269A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.436 8.284"/>
+              </svg>
             </div>
-            <button class="route-action-btn btn-select-route" data-action-route="auto">активен ✓</button>
+            <div class="refresh-texts">
+              <strong class="refresh-title">обновить подписку</strong>
+              <span class="refresh-subtitle">загрузить доступные маршруты</span>
+            </div>
           </div>
-
-          <!-- Row 2: LTE / White Lists -->
-          <div class="smart-route-row" data-route-key="ru-de" id="card-route-ru-de">
-            <div class="smart-route-left">
-              <div class="smart-route-icon" style="display:inline-flex;align-items:center;"><span class="dual-flag"><svg class="svg-flag" viewBox="0 0 24 16" width="18" height="12"><clipPath id="f-ru2"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-ru2)"><rect width="24" height="5.33" fill="#F7F7F4"/><rect y="5.33" width="24" height="5.34" fill="#477CC0"/><rect y="10.67" width="24" height="5.33" fill="#C83C4A"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg><span style="opacity:0.5;font-size:10px;margin:0 1px;">→</span><svg class="svg-flag" viewBox="0 0 24 16" width="18" height="12"><clipPath id="f-de2"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-de2)"><rect width="24" height="5.33" fill="#17191E"/><rect y="5.33" width="24" height="5.34" fill="#C83C4A"/><rect y="10.67" width="24" height="5.33" fill="#F0C66B"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span></div>
-              <div class="smart-route-info">
-                <span class="smart-route-name">lte · белые списки</span>
-                <span class="smart-route-desc">россия → германия</span>
-              </div>
-            </div>
-            <button class="route-action-btn btn-select-route" data-action-route="ru-de">выбрать</button>
+          <div class="refresh-icon-right">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </div>
         </div>
 
-        <!-- Category Label -->
-        <div class="routes-section-label">страны</div>
+        <!-- Section Label: быстрый выбор -->
+        <span class="routes-section-label">быстрый выбор</span>
 
-        <!-- accordion countries list (image 2 authentic accordion: нидерланды, германия, россия, финляндия, италия) -->
+        <!-- Quick Select Standalone Cards -->
+        <div class="quick-select-grid">
+          <!-- Card 1: auto-select -->
+          <div class="liquid-glass-card quick-select-card is-selected" data-route-key="auto" id="card-route-auto">
+            <div class="routes-refresh-left">
+              <div class="quick-select-icon">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="#38BDF8" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M 3,19 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0"/>
+                  <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/>
+                  <path d="M 15,5 a 3,3 0 1,0 6,0 a 3,3 0 1,0 -6,0"/>
+                </svg>
+              </div>
+              <div class="quick-select-info">
+                <strong class="quick-select-title">автоподбор</strong>
+                <span class="quick-select-sub">выбрать доступный узел</span>
+              </div>
+            </div>
+            <button class="btn-select-route is-selected" data-action-route="auto">выбран</button>
+          </div>
+
+          <!-- Card 2: LTE / Whitelist with dual circular flags -->
+          <div class="liquid-glass-card quick-select-card" data-route-key="ru-de" id="card-route-ru-de">
+            <div class="routes-refresh-left">
+              <div class="quick-select-icon">
+                <svg viewBox="0 0 40 40" width="38" height="38">
+                  <clipPath id="ru-cir"><circle cx="16" cy="20" r="13"/></clipPath>
+                  <g clip-path="url(#ru-cir)">
+                    <rect x="3" y="7" width="26" height="8.66" fill="#F7F7F4"/>
+                    <rect x="3" y="15.66" width="26" height="8.67" fill="#477CC0"/>
+                    <rect x="3" y="24.33" width="26" height="8.67" fill="#C83C4A"/>
+                  </g>
+                  <circle cx="16" cy="20" r="13" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+                  <clipPath id="de-cir"><circle cx="24" cy="20" r="13"/></clipPath>
+                  <g clip-path="url(#de-cir)">
+                    <rect x="11" y="7" width="26" height="8.66" fill="#17191E"/>
+                    <rect x="11" y="15.66" width="26" height="8.67" fill="#C83C4A"/>
+                    <rect x="11" y="24.33" width="26" height="8.67" fill="#F0C66B"/>
+                  </g>
+                  <circle cx="24" cy="20" r="13" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>
+                </svg>
+              </div>
+              <div class="quick-select-info">
+                <strong class="quick-select-title">lte · белые списки</strong>
+                <div class="lte-quota-bar"><div class="lte-quota-fill" style="width: 0%;"></div></div>
+                <span class="quick-select-sub" id="lte-quota-text">0 / 10 гб · до 1 дек</span>
+              </div>
+            </div>
+            <button class="btn-select-route" data-action-route="ru-de">выбрать</button>
+          </div>
+        </div>
+
+        <!-- Section Label: страны -->
+        <span class="routes-section-label">страны</span>
+
+        <!-- Countries Accordion List -->
         <div class="countries-list">
-          <!-- 1. нидерланды -->
-          <div class="country-accordion" data-country-key="nl" id="card-route-nl">
-            <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
+          <!-- 1. Netherlands -->
+          <div class="liquid-glass-card country-accordion is-expanded" data-country-key="nl" id="card-route-nl">
+            <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="true">
               <div class="country-header-left">
-                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-nl"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-nl)"><rect width="24" height="5.33" fill="#C93D4B"/><rect y="5.33" width="24" height="5.34" fill="#F7F7F4"/><rect y="10.67" width="24" height="5.33" fill="#31579A"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
-                <span class="country-name">нидерланды</span>
+                <div class="country-flag-wrap">
+                  <svg class="svg-flag" viewBox="0 0 24 16" width="36" height="25"><clipPath id="f-nl"><rect width="24" height="16" rx="2"/></clipPath><g clip-path="url(#f-nl)"><rect width="24" height="5.33" fill="#C93D4B"/><rect y="5.33" width="24" height="5.34" fill="#F7F7F4"/><rect y="10.67" width="24" height="5.33" fill="#31579A"/></g><rect width="24" height="16" rx="2" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>
+                </div>
+                <div class="country-title-box">
+                  <span class="country-name">нидерланды</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · tuic · awg1.5 · awg3.1</span>
+                </div>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
-                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                <span class="country-ping-pill"><span class="ping-dot"></span><span data-ping="">139 мс</span></span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
               </div>
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- vless+ws -->
+                <!-- nl vless -->
                 <div class="proto-row is-selected" data-route-key="nl-vless" data-route-tag="route:NL:VLESS">
                   <div class="proto-left">
-                    <div class="proto-logo vless" title="vless+ws">
-                      <img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">vless+ws</span>
+                    <div class="proto-icon-box"><img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" /></div>
+                    <span class="proto-name">vless</span>
                   </div>
                   <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="nl-vless">активен ✓</button>
+                    <div class="proto-telemetry"><span class="grade-dot grade-dot--good"></span><span class="proto-metric-text">Отклик: 139 мс  ·  Скорость: 39 мбит/с</span></div>
+                    <button class="btn-select-route is-selected" data-action-route="nl-vless">выбран</button>
                   </div>
                 </div>
-
-                <!-- hysteriav2 -->
+                <!-- nl hysteria 2 -->
                 <div class="proto-row" data-route-key="nl-hy2" data-route-tag="route:NL:HYSTERIA2">
                   <div class="proto-left">
-                    <div class="proto-logo hy2" title="hysteriav2">
-                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">hysteriav2</span>
+                    <div class="proto-icon-box"><img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" /></div>
+                    <span class="proto-name">hysteria 2</span>
                   </div>
                   <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="nl-hy2">выбрать</button>
+                    <div class="proto-telemetry"><span class="grade-dot grade-dot--medium"></span><span class="proto-metric-text">Отклик: 142 мс  ·  Скорость: 38 мбит/с</span></div>
+                    <button class="btn-select-route" data-action-route="nl-hy2">выбрать</button>
                   </div>
                 </div>
-
-                <!-- trojan -->
+                <!-- nl trojan -->
                 <div class="proto-row" data-route-key="nl-trojan" data-route-tag="route:NL:TROJAN">
                   <div class="proto-left">
-                    <div class="proto-logo trojan" title="trojan">
-                      <img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
+                    <div class="proto-icon-box"><img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" /></div>
                     <span class="proto-name">trojan</span>
                   </div>
                   <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="nl-trojan">выбрать</button>
+                    <div class="proto-telemetry"><span class="grade-dot grade-dot--medium"></span><span class="proto-metric-text">Отклик: 293 мс  ·  Скорость: 4 мбит/с</span></div>
+                    <button class="btn-select-route" data-action-route="nl-trojan">выбрать</button>
                   </div>
                 </div>
-
-                <div class="proto-row" data-route-key="nl-tuic" data-route-tag="route:NL:TUIC" hidden style="display:none">
+                <!-- nl tuic -->
+                <div class="proto-row" data-route-key="nl-tuic" data-route-tag="route:NL:TUIC">
                   <div class="proto-left">
-                    <div class="proto-logo tuic" title="tuic">
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12 3 3 7 12 3 21Z" fill="#38BDF8"/><path d="M22 12 7 12 3 3Z" fill="#E0F2FE"/><path d="M7 12 3 21 12 14.5Z" fill="#0284C7"/><path d="M2 7h3M1 12h3M2 17h3" fill="none" stroke="#7DD3FC" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    </div>
+                    <div class="proto-icon-box"><img src="protocol-marks/tuic-paper-airplane-symbol.svg" alt="" aria-hidden="true" /></div>
                     <span class="proto-name">tuic</span>
                   </div>
                   <div class="proto-right">
-                    <div class="proto-telemetry"><span class="ping-dot"></span><span class="proto-latency">—</span> мс <span class="proto-speed"></span></div>
-                    <button class="route-action-btn btn-select-route" data-action-route="nl-tuic">выбрать</button>
+                    <div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div>
+                    <button class="btn-select-route" data-action-route="nl-tuic">выбрать</button>
                   </div>
                 </div>
-                <!-- amneziawg3.1 -->
+                <!-- nl awg 3.1 -->
                 <div class="proto-row" data-route-key="nl-awg" data-route-tag="awg31:nl">
                   <div class="proto-left">
-                    <div class="proto-logo awg" title="amneziawg3.1">
-                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">amneziawg3.1</span>
+                    <div class="proto-icon-box"><img src="protocol-marks/amnezia-anarchy-symbol.svg" alt="" aria-hidden="true" /></div>
+                    <span class="proto-name">amneziawg 3.1</span>
                   </div>
                   <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="nl-awg">выбрать</button>
+                    <div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div>
+                    <button class="btn-select-route" data-action-route="nl-awg">выбрать</button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 2. германия -->
-          <div class="country-accordion" data-country-key="de" id="card-route-de">
+          <!-- 2. Germany -->
+          <div class="liquid-glass-card country-accordion" data-country-key="de" id="card-route-de">
             <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
               <div class="country-header-left">
-                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-de"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-de)"><rect width="24" height="5.33" fill="#17191E"/><rect y="5.33" width="24" height="5.34" fill="#C83C4A"/><rect y="10.67" width="24" height="5.33" fill="#F0C66B"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
-                <span class="country-name">германия</span>
+                <div class="country-flag-wrap">
+                  <svg class="svg-flag" viewBox="0 0 24 16" width="36" height="25"><clipPath id="f-de"><rect width="24" height="16" rx="2"/></clipPath><g clip-path="url(#f-de)"><rect width="24" height="5.33" fill="#17191E"/><rect y="5.33" width="24" height="5.34" fill="#C83C4A"/><rect y="10.67" width="24" height="5.33" fill="#F0C66B"/></g><rect width="24" height="16" rx="2" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>
+                </div>
+                <div class="country-title-box">
+                  <span class="country-name">германия</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · tuic · awg1.5 · awg3.1</span>
+                </div>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
-                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                <span class="country-ping-pill"><span class="ping-dot"></span><span data-ping="">—</span></span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </div>
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- vless+ws -->
                 <div class="proto-row" data-route-key="de-vless" data-route-tag="route:DE:VLESS">
-                  <div class="proto-left">
-                    <div class="proto-logo vless" title="vless+ws">
-                      <img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">vless+ws</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="de-vless">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">vless</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="de-vless">выбрать</button></div>
                 </div>
-
-                <!-- hysteriav2 -->
                 <div class="proto-row" data-route-key="de-hy2" data-route-tag="route:DE:HYSTERIA2">
-                  <div class="proto-left">
-                    <div class="proto-logo hy2" title="hysteriav2">
-                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">hysteriav2</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="de-hy2">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">hysteria 2</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="de-hy2">выбрать</button></div>
                 </div>
-
-                <!-- trojan -->
                 <div class="proto-row" data-route-key="de-trojan" data-route-tag="route:DE:TROJAN">
-                  <div class="proto-left">
-                    <div class="proto-logo trojan" title="trojan">
-                      <img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">trojan</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="de-trojan">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">trojan</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="de-trojan">выбрать</button></div>
                 </div>
-
-                <div class="proto-row" data-route-key="de-tuic" data-route-tag="route:DE:TUIC" hidden style="display:none">
-                  <div class="proto-left">
-                    <div class="proto-logo tuic" title="tuic">
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 12 3 3 7 12 3 21Z" fill="#38BDF8"/><path d="M22 12 7 12 3 3Z" fill="#E0F2FE"/><path d="M7 12 3 21 12 14.5Z" fill="#0284C7"/><path d="M2 7h3M1 12h3M2 17h3" fill="none" stroke="#7DD3FC" stroke-width="1.5" stroke-linecap="round"/></svg>
-                    </div>
-                    <span class="proto-name">tuic</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry"><span class="ping-dot"></span><span class="proto-latency">—</span> мс <span class="proto-speed"></span></div>
-                    <button class="route-action-btn btn-select-route" data-action-route="de-tuic">выбрать</button>
-                  </div>
+                <div class="proto-row" data-route-key="de-tuic" data-route-tag="route:DE:TUIC">
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/tuic-paper-airplane-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">tuic</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="de-tuic">выбрать</button></div>
                 </div>
-                <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="de-awg" data-route-tag="awg31:de">
-                  <div class="proto-left">
-                    <div class="proto-logo awg" title="amneziawg3.1">
-                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">amneziawg3.1</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="de-awg">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/amnezia-anarchy-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">amneziawg 3.1</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="de-awg">выбрать</button></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 3. россия -->
-          <div class="country-accordion" data-country-key="ru" id="card-route-ru">
+          <!-- 3. Russia -->
+          <div class="liquid-glass-card country-accordion" data-country-key="ru" id="card-route-ru">
             <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
               <div class="country-header-left">
-                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-ru"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-ru)"><rect width="24" height="5.33" fill="#F7F7F4"/><rect y="5.33" width="24" height="5.34" fill="#477CC0"/><rect y="10.67" width="24" height="5.33" fill="#C83C4A"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
-                <span class="country-name">россия</span>
+                <div class="country-flag-wrap">
+                  <svg class="svg-flag" viewBox="0 0 24 16" width="36" height="25"><clipPath id="f-ru"><rect width="24" height="16" rx="2"/></clipPath><g clip-path="url(#f-ru)"><rect width="24" height="5.33" fill="#F7F7F4"/><rect y="5.33" width="24" height="5.34" fill="#477CC0"/><rect y="10.67" width="24" height="5.33" fill="#C83C4A"/></g><rect width="24" height="16" rx="2" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>
+                </div>
+                <div class="country-title-box">
+                  <span class="country-name">россия</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · awg1.5 · awg3.1</span>
+                </div>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
-                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                <span class="country-ping-pill"><span class="ping-dot"></span><span data-ping="">—</span></span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </div>
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- vless+ws -->
                 <div class="proto-row" data-route-key="ru-vless" data-route-tag="route:RU:VLESS">
-                  <div class="proto-left">
-                    <div class="proto-logo vless" title="vless+ws">
-                      <img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">vless+ws</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="ru-vless">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">vless</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="ru-vless">выбрать</button></div>
                 </div>
-
-                <!-- hysteriav2 -->
                 <div class="proto-row" data-route-key="ru-hy2" data-route-tag="route:RU:HYSTERIA2">
-                  <div class="proto-left">
-                    <div class="proto-logo hy2" title="hysteriav2">
-                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">hysteriav2</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="ru-hy2">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">hysteria 2</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="ru-hy2">выбрать</button></div>
                 </div>
-
-                <!-- trojan -->
                 <div class="proto-row" data-route-key="ru-trojan" data-route-tag="route:RU:TROJAN">
-                  <div class="proto-left">
-                    <div class="proto-logo trojan" title="trojan">
-                      <img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">trojan</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="ru-trojan">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">trojan</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="ru-trojan">выбрать</button></div>
                 </div>
-
-                <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="ru-awg" data-route-tag="awg31:ru">
-                  <div class="proto-left">
-                    <div class="proto-logo awg" title="amneziawg3.1">
-                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">amneziawg3.1</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="ru-awg">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/amnezia-anarchy-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">amneziawg 3.1</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="ru-awg">выбрать</button></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 4. финляндия -->
-          <div class="country-accordion" data-country-key="fi" id="card-route-fi">
+          <!-- 4. Finland -->
+          <div class="liquid-glass-card country-accordion" data-country-key="fi" id="card-route-fi">
             <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
               <div class="country-header-left">
-                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-fi"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-fi)"><rect width="24" height="16" fill="#F7F7F4"/><rect x="6.5" width="4.5" height="16" fill="#3973B4"/><rect y="6" width="24" height="4" fill="#3973B4"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
-                <span class="country-name">финляндия</span>
+                <div class="country-flag-wrap">
+                  <svg class="svg-flag" viewBox="0 0 24 16" width="36" height="25"><clipPath id="f-fi"><rect width="24" height="16" rx="2"/></clipPath><g clip-path="url(#f-fi)"><rect width="24" height="16" fill="#F7F7F4"/><rect x="6.5" width="4.5" height="16" fill="#3973B4"/><rect y="6" width="24" height="4" fill="#3973B4"/></g><rect width="24" height="16" rx="2" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>
+                </div>
+                <div class="country-title-box">
+                  <span class="country-name">финляндия</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · awg1.5 · awg3.1</span>
+                </div>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
-                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                <span class="country-ping-pill"><span class="ping-dot"></span><span data-ping="">—</span></span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </div>
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- vless+ws -->
                 <div class="proto-row" data-route-key="fi-vless" data-route-tag="route:FI:VLESS">
-                  <div class="proto-left">
-                    <div class="proto-logo vless" title="vless+ws">
-                      <img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">vless+ws</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="fi-vless">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">vless</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="fi-vless">выбрать</button></div>
                 </div>
-
-                <!-- hysteriav2 -->
                 <div class="proto-row" data-route-key="fi-hy2" data-route-tag="route:FI:HYSTERIA2">
-                  <div class="proto-left">
-                    <div class="proto-logo hy2" title="hysteriav2">
-                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">hysteriav2</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="fi-hy2">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">hysteria 2</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="fi-hy2">выбрать</button></div>
                 </div>
-
-                <!-- trojan -->
                 <div class="proto-row" data-route-key="fi-trojan" data-route-tag="route:FI:TROJAN">
-                  <div class="proto-left">
-                    <div class="proto-logo trojan" title="trojan">
-                      <img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">trojan</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="fi-trojan">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">trojan</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="fi-trojan">выбрать</button></div>
                 </div>
-
-                <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="fi-awg" data-route-tag="awg31:fi">
-                  <div class="proto-left">
-                    <div class="proto-logo awg" title="amneziawg3.1">
-                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">amneziawg3.1</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="fi-awg">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/amnezia-anarchy-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">amneziawg 3.1</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="fi-awg">выбрать</button></div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 5. италия -->
-          <div class="country-accordion" data-country-key="it" id="card-route-it">
+          <!-- 5. Italy -->
+          <div class="liquid-glass-card country-accordion" data-country-key="it" id="card-route-it">
             <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
               <div class="country-header-left">
-                <span class="country-flag-icon"><svg class="svg-flag" viewBox="0 0 24 16" width="22" height="15"><clipPath id="f-it"><rect width="24" height="16" rx="3"/></clipPath><g clip-path="url(#f-it)"><rect width="8" height="16" fill="#168B4B"/><rect x="8" width="8" height="16" fill="#F7F7F4"/><rect x="16" width="8" height="16" fill="#D0474D"/></g><rect width="24" height="16" rx="3" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg></span>
-                <span class="country-name">италия</span>
+                <div class="country-flag-wrap">
+                  <svg class="svg-flag" viewBox="0 0 24 16" width="36" height="25"><clipPath id="f-it"><rect width="24" height="16" rx="2"/></clipPath><g clip-path="url(#f-it)"><rect width="8" height="16" fill="#168B4B"/><rect x="8" width="8" height="16" fill="#F7F7F4"/><rect x="16" width="8" height="16" fill="#D0474D"/></g><rect width="24" height="16" rx="2" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>
+                </div>
+                <div class="country-title-box">
+                  <span class="country-name">италия</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · awg1.5 · awg3.1</span>
+                </div>
               </div>
               <div class="country-header-right">
-                <span class="ping-tag"><span class="ping-dot"></span><span data-ping="">—</span> мс</span>
-                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                <span class="country-ping-pill"><span class="ping-dot"></span><span data-ping="">—</span></span>
+                <svg class="chevron-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </div>
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- vless+ws -->
                 <div class="proto-row" data-route-key="it-vless" data-route-tag="route:IT:VLESS">
-                  <div class="proto-left">
-                    <div class="proto-logo vless" title="vless+ws">
-                      <img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">vless+ws</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="it-vless">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/vless-star-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">vless</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="it-vless">выбрать</button></div>
                 </div>
-
-                <!-- hysteriav2 -->
                 <div class="proto-row" data-route-key="it-hy2" data-route-tag="route:IT:HYSTERIA2">
-                  <div class="proto-left">
-                    <div class="proto-logo hy2" title="hysteriav2">
-                      <img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">hysteriav2</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#F59E0B;box-shadow:0 0 8px #F59E0B;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="it-hy2">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/hysteria-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">hysteria 2</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="it-hy2">выбрать</button></div>
                 </div>
-
-                <!-- trojan -->
                 <div class="proto-row" data-route-key="it-trojan" data-route-tag="route:IT:TROJAN">
-                  <div class="proto-left">
-                    <div class="proto-logo trojan" title="trojan">
-                      <img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">trojan</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot" style="background:#A78BFA;box-shadow:0 0 8px #A78BFA;"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="it-trojan">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/trojan-diamond-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">trojan</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="it-trojan">выбрать</button></div>
                 </div>
-
-                <!-- amneziawg3.1 -->
                 <div class="proto-row" data-route-key="it-awg" data-route-tag="awg31:it">
-                  <div class="proto-left">
-                    <div class="proto-logo awg" title="amneziawg3.1">
-                      <img src="protocol-marks/amnezia-mark.svg" alt="" aria-hidden="true" />
-                    </div>
-                    <span class="proto-name">amneziawg3.1</span>
-                  </div>
-                  <div class="proto-right">
-                    <div class="proto-telemetry">
-                      <span class="ping-dot"></span>
-                      <span class="proto-latency">—</span> мс
-                      <span class="proto-speed"></span>
-                    </div>
-                    <button class="route-action-btn btn-select-route" data-action-route="it-awg">выбрать</button>
-                  </div>
+                  <div class="proto-left"><div class="proto-icon-box"><img src="protocol-marks/amnezia-anarchy-symbol.svg" alt="" aria-hidden="true" /></div><span class="proto-name">amneziawg 3.1</span></div>
+                  <div class="proto-right"><div class="proto-telemetry"><span class="grade-dot"></span><span class="proto-metric-text">Отклик: —  ·  Скорость: —</span></div><button class="btn-select-route" data-action-route="it-awg">выбрать</button></div>
                 </div>
               </div>
             </div>
@@ -2697,153 +3119,120 @@
 
     <!-- Stage 3: профиль (Profile Stage) -->
         <!-- Stage 3: профиль (Profile Stage) -->
+        <!-- Stage 3: Profile Stage (1:1 with Android Mobile Layout) -->
     <section class="stage-view" id="stage-profile" aria-label="профиль пользователя">
-      <div class="stage-content-wrap">
-        <div class="stage-header">
-          <div>
-            <h1 class="stage-title">профиль и подписка</h1>
-            <p class="stage-subtitle">управление учетной записью, активными устройствами и ключом доступа</p>
-          </div>
-        </div>
+      <div class="profile-view-wrap">
+        <h1 class="profile-title">профиль</h1>
 
-        <!-- Profile Hero Card with Telegram Avatar Integration -->
-        <div class="glass-card profile-hero">
+        <!-- User Account Card -->
+        <div class="liquid-glass-card profile-user-card" id="profile-user-card" role="button" tabindex="0">
           <div class="profile-user-left">
-            <div class="tg-avatar-wrap">
-              <div class="tg-avatar-img" id="profile-avatar" title="аватар telegram">
-                <img id="profile-avatar-image" alt="" aria-hidden="true" />
-                <svg viewBox="0 0 64 64" width="62" height="62" style="display: block;">
-                  <defs>
-                    <linearGradient id="tgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stop-color="#2AABEE"/>
-                      <stop offset="100%" stop-color="#229ED9"/>
-                    </linearGradient>
-                    <linearGradient id="avatarShine" x1="0%" y1="0%" x2="0%" y2="100%">
-                      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.32"/>
-                      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.06"/>
-                      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
-                    </linearGradient>
-                  </defs>
-                  <rect width="64" height="64" rx="20" fill="url(#tgGrad)"/>
-                  <rect width="64" height="64" rx="20" fill="url(#avatarShine)"/>
-                  <circle cx="32" cy="23" r="11" fill="#FFFFFF" fill-opacity="0.95"/>
-                  <path d="M16 52 C16 41 23 37 32 37 C41 37 48 41 48 52 Z" fill="#FFFFFF" fill-opacity="0.95"/>
-                </svg>
-              </div>
-              <div class="tg-badge-corner" id="profile-tg-badge" title="привязан аккаунт telegram">
-                <svg viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 00-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.74-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .38z"/>
-                </svg>
-              </div>
+            <div class="profile-avatar-circle" id="profile-avatar">
+              <img id="profile-avatar-image" alt="" aria-hidden="true" style="display:none;" />
+              <svg id="profile-avatar-fallback" viewBox="0 0 24 24" width="30" height="30" stroke="#38BDF8" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
             </div>
-            <div class="user-info-block">
-              <h2 class="user-name-title" id="profile-display-name">не подключено</h2>
-              <div class="user-handle-line">
-                <span id="profile-username">войдите через telegram</span>
-                <span class="user-id-muted" id="profile-id"></span>
-              </div>
-              <div class="user-sub-status">
-                <span class="ping-tag" id="profile-sub-tag"><span class="ping-dot" id="profile-sub-dot"></span><span id="profile-sub-status">нет активной подписки</span></span>
-                <span id="profile-sub-sep" hidden>·</span>
-                <span id="profile-sub-expiry" hidden></span>
-              </div>
+            <div class="profile-user-details">
+              <strong class="profile-user-name" id="profile-display-name">hackov</strong>
+              <span class="profile-user-handle" id="profile-username">@hackov_crew</span>
             </div>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button class="btn-select-route" id="btn-login-tg">войти через telegram</button>
-          </div>
-        </div>
-
-        <!-- 2 Column Split -->
-        <div class="profile-grid-2">
-          <div class="profile-column profile-column--subscription">
-          <!-- Subscription Details Card -->
-          <div class="glass-card profile-subscription-card" id="profile-subscription-card" data-unlimited-time="false">
-            <div class="profile-starfield" aria-hidden="true"></div>
-            <svg class="profile-infinity-mark" id="profile-infinity-mark" viewBox="0 0 40 24" aria-hidden="true" hidden>
-              <path d="M30.5 4.5c-4.1 0-7.2 4.2-10.5 7.5-3.3 3.3-6.4 7.5-10.5 7.5a7.5 7.5 0 1 1 0-15c4.1 0 7.2 4.2 10.5 7.5 3.3 3.3 6.4 7.5 10.5 7.5a7.5 7.5 0 1 0 0-15Z" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>
+          <div class="refresh-icon-right">
+            <svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6"/>
             </svg>
-            <div class="profile-subscription-content">
-            <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;" id="profile-subscription-title">подписка и тариф</h3>
-            <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="profile-sub-tariff-desc">данные тарифа и доступные шлюзы</p>
-
-            <div class="stat-gauge-wrap" style="margin-top: 14px;">
-              <div class="stat-gauge-header">
-                <span style="color: var(--text-muted); font-size: 13px;" id="profile-current-plan-label">текущий тариф</span>
-                <strong style="color: #39E8BD; font-size: 18px; font-family: 'Unbounded', sans-serif;" id="profile-tariff-title">без подписки</strong>
-              </div>
-              <p style="font-size: 12px; color: #64748B; margin-top: 4px;" id="profile-tariff-detail">подключите telegram для активации доступа</p>
-            </div>
-
-            <div class="quota-row" id="profile-main-quota" data-state="loading">
-              <div class="quota-heading"><strong data-quota-title>основная подписка</strong><span class="quota-amount" data-quota-amount>загрузка…</span></div>
-              <div class="gauge-track" data-quota-track hidden><div class="gauge-fill" data-quota-fill></div></div>
-              <p class="quota-expiry" data-quota-expiry></p>
-            </div>
-            <div class="quota-row quota-row--awg" id="profile-awg-quota" data-state="loading">
-              <div class="quota-heading"><strong data-quota-title>amnezia</strong><span class="quota-amount" data-quota-amount>загрузка…</span></div>
-              <div class="gauge-track" data-quota-track hidden><div class="gauge-fill" data-quota-fill></div></div>
-              <p class="quota-expiry" data-quota-expiry></p>
-            </div>
-
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; border-top: 1px solid rgba(255, 255, 255, 0.06); padding-top: 14px;">
-              <div>
-                <span style="font-size: 11.5px; color: var(--text-muted); display: block;" id="profile-egress-label">активный выход</span>
-                <strong style="font-size: 13.5px; color: #FFFFFF; display: inline-flex; align-items: center; gap: 6px;" id="profile-active-route">
-                  автоподбор
-                </strong>
-              </div>
-              <div>
-                <span style="font-size: 11.5px; color: var(--text-muted); display: block;" id="profile-connection-label">статус подключения</span>
-                <strong style="font-size: 13.5px; color: #CBD5E1; display: block;" id="profile-tunnel-status">
-                  отключено
-                </strong>
-              </div>
-            </div>
-            </div>
           </div>
+        </div>
 
-          <div class="profile-action-list">
-            <button class="profile-action-row" id="btn-renew-tg" type="button" hidden>
-              <span class="profile-action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
-              <span class="profile-action-copy"><strong id="profile-renew-label">продлить подписку</strong><small id="profile-renew-description">продление или смена тарифа в telegram</small></span>
-              <svg class="profile-action-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-            <button class="profile-action-row" id="btn-profile-support" type="button">
-              <span class="profile-action-icon profile-action-icon--support" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l1.7-3.4A7.5 7.5 0 1 1 20 11.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.5 11.5h7M12 8v7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
-              <span class="profile-action-copy"><strong id="profile-support-label">поддержка</strong><small id="profile-support-description">помощь по подключению и подписке</small></span>
-              <svg class="profile-action-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
-          </div>
-          </div>
+        <!-- Section Label -->
+        <span class="routes-section-label">ваша подписка</span>
 
-          <div class="profile-column profile-column--devices">
-          <!-- Connected Devices -->
-          <div class="glass-card">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;" id="profile-devices-title">устройства и сессии</h3>
-                <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="profile-devices-count">подключения и слоты доступа</p>
+        <!-- Hero Starry Plan Card (1:1 with StarryPlanCard.kt) -->
+        <div class="profile-starry-card" id="profile-subscription-card">
+          <canvas class="profile-galaxy-canvas" id="profile-galaxy-canvas"></canvas>
+          <div class="starry-card-content">
+            <span class="starry-card-label" id="profile-plan-label">текущий тариф</span>
+            <h2 class="starry-card-plan-title" id="profile-tariff-title">deytt./ultra</h2>
+            <strong class="starry-card-status" id="profile-plan-status">активен</strong>
+            <div class="starry-card-divider"></div>
+            <div class="starry-card-metrics">
+              <div class="starry-metric-col">
+                <span class="starry-metric-label" id="profile-devices-label">устройств включено</span>
+                <strong class="starry-metric-val" id="profile-devices-val">10</strong>
               </div>
-              <button class="btn-select-route" style="font-size: 11.5px; padding: 5px 12px;" id="btn-import-sub">импорт подписки</button>
-            </div>
-
-            <div class="device-list" id="profile-devices-list">
-            </div>
-          </div>
-
-        <!-- Connection Key Box -->
-        <div class="glass-card">
-          <h3 style="font-size: 16px; font-weight: 600; color: #FFFFFF;" id="profile-key-title">ключ подписки</h3>
-          <p style="font-size: 13px; color: var(--text-muted); margin-top: 2px;" id="profile-key-description">персональная ссылка для подключения других устройств</p>
-
-          <div class="key-box">
-            <span id="masked-key">ссылка подписки станет доступна после входа в аккаунт</span>
-            <div class="key-actions">
-              <button class="btn-select-route" id="btn-copy-key">скопировать</button>
+              <div class="starry-metric-col">
+                <span class="starry-metric-label" id="profile-traffic-label">трафик</span>
+                <strong class="starry-metric-val" id="profile-traffic-val">299.3 гб</strong>
+              </div>
             </div>
           </div>
         </div>
+        <p class="starry-card-caption" id="profile-sub-manage-hint">активная подписка · управление тарифом</p>
+
+        <!-- Profile Action Cards -->
+        <div class="profile-actions-list">
+          <!-- Card 1: Renew -->
+          <div class="liquid-glass-card profile-action-card" id="card-profile-renew" role="button" tabindex="0">
+            <div class="action-card-left">
+              <div class="action-icon-box">
+                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4,5 h16 a2,2 0 0 1 2,2 v10 a2,2 0 0 1 -2,2 h-16 a2,2 0 0 1 -2,-2 v-10 a2,2 0 0 1 2,-2 Z"/>
+                  <path d="M2,10 L22,10"/>
+                  <path d="M6 14h2"/>
+                </svg>
+              </div>
+              <div class="action-card-texts">
+                <strong class="action-card-title">продлить подписку</strong>
+                <span class="action-card-sub">продлить или сменить тариф</span>
+              </div>
+            </div>
+            <button class="btn-action-glass" id="btn-renew-tariff" type="button">продлить</button>
+          </div>
+
+          <!-- Card 2: Support -->
+          <div class="liquid-glass-card profile-action-card" id="card-profile-support" role="button" tabindex="0">
+            <div class="action-card-left">
+              <div class="action-icon-box">
+                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 8V4H8"/>
+                  <path d="M6,8 h12 a2,2 0 0 1 2,2 v8 a2,2 0 0 1 -2,2 h-12 a2,2 0 0 1 -2,-2 v-8 a2,2 0 0 1 2,-2 Z"/>
+                  <path d="M2 14h2"/>
+                  <path d="M20 14h2"/>
+                  <path d="M15 13v2"/>
+                  <path d="M9 13v2"/>
+                </svg>
+              </div>
+              <div class="action-card-texts">
+                <strong class="action-card-title">поддержка</strong>
+                <span class="action-card-sub">чат с командой в приложении · онлайн</span>
+              </div>
+            </div>
+            <button class="btn-action-glass" id="btn-open-support" type="button">чат</button>
+          </div>
+
+          <!-- Card 3: Devices and Sessions -->
+          <div class="liquid-glass-card profile-action-card" id="card-profile-devices" role="button" tabindex="0">
+            <div class="action-card-left">
+              <div class="action-icon-box">
+                <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+              </div>
+              <div class="action-card-texts">
+                <strong class="action-card-title">устройства и сессии</strong>
+                <span class="action-card-sub" id="profile-devices-count">подключения и доступ</span>
+              </div>
+            </div>
+            <button class="btn-action-glass" id="btn-toggle-devices" type="button">+</button>
+          </div>
+
+          <!-- Expandable Devices & Sessions Drawer -->
+          <div class="profile-devices-drawer" id="profile-devices-drawer" style="display: none; padding-top: 10px;">
+            <div class="profile-devices-list" id="profile-devices-list"></div>
           </div>
         </div>
       </div>
@@ -2962,6 +3351,341 @@
   <div class="motion-toast" id="toast"></div>
 
   <script>
+
+    // ==========================================
+    // Authentic WebGL2 Galaxy Shader for Profile Starry Card
+    // (Exact Port from Android StarryPlanCard.kt & galaxy.html)
+    // ==========================================
+    let galaxyGl = null;
+    let galaxyProgram = null;
+    let galaxyVao = null;
+    let galaxyUniforms = {};
+    let galaxyAnimFrame = null;
+    let galaxyRunning = false;
+    const galaxyState = { time: 0, gloss: 0, depth: 0, angle: 0 };
+    let galaxyLastTime = 0;
+
+    function initProfileGalaxyShader() {
+      const canvas = document.getElementById("profile-galaxy-canvas");
+      if (!canvas) return;
+      const gl = canvas.getContext("webgl2", {
+        alpha: false,
+        antialias: false,
+        depth: false,
+        stencil: false,
+        powerPreference: "high-performance"
+      });
+      if (!gl) return;
+      galaxyGl = gl;
+
+      const VERTEX = `#version 300 es
+      in vec2 aPosition;
+      void main() {
+        gl_Position = vec4(aPosition, 0.0, 1.0);
+      }`;
+
+      const FRAGMENT = `#version 300 es
+      precision highp float;
+      precision highp int;
+      uniform float uTime;
+      uniform vec2 uResolution;
+      uniform vec2 uFocal;
+      uniform vec2 uRotation;
+      uniform float uGloss;
+      uniform float uDepth;
+      uniform float uDensity;
+      uniform float uHueShift;
+      uniform float uSpeed;
+      uniform float uStarGlow;
+      uniform float uFlareGain;
+      uniform float uSaturation;
+      uniform float uTwinkleIntensity;
+      uniform float uRotationAngle;
+      uniform vec3 uBackground;
+      uniform float uOpacity;
+      out vec4 outColor;
+
+      #define STAR_COLOR_CUTOFF 0.2
+      #define MAT45 mat2(0.7071, -0.7071, 0.7071, 0.7071)
+      #define PERIOD 3.0
+
+      float Hash21(vec2 p) {
+        p = fract(p * vec2(123.34, 456.21));
+        p += dot(p, p + 45.32);
+        return fract(p.x * p.y);
+      }
+
+      float tri(float x) { return abs(fract(x) * 2.0 - 1.0); }
+      float tris(float x) { float t = fract(x); return 1.0 - smoothstep(0.0, 1.0, abs(2.0 * t - 1.0)); }
+      float trisn(float x) { float t = fract(x); return 2.0 * (1.0 - smoothstep(0.0, 1.0, abs(2.0 * t - 1.0))) - 1.0; }
+
+      vec3 hsv2rgb(vec3 c) {
+        vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+        vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+        return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+      }
+
+      float Star(vec2 uv, float flare, vec2 radial, float invReach) {
+        float d = length(uv);
+        float m = uStarGlow / max(d, 0.0001);
+        float rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
+        m += rays * flare * uFlareGain;
+        uv *= MAT45;
+        rays = smoothstep(0.0, 1.0, 1.0 - abs(uv.x * uv.y * 1000.0));
+        m += rays * 0.3 * flare * uFlareGain;
+        m *= smoothstep(1.0, 0.2, d * invReach);
+        return m;
+      }
+
+      vec3 StarLayer(vec2 uv, vec2 radial) {
+        vec3 col = vec3(0.0);
+        vec2 gv = fract(uv) - 0.5;
+        vec2 id = floor(uv);
+        for (int y = -1; y <= 1; y++) {
+          for (int x = -1; x <= 1; x++) {
+            vec2 offset = vec2(float(x), float(y));
+            vec2 si = id + offset;
+            float seed = Hash21(si);
+            float size = fract(seed * 345.32);
+            float glossLocal = tri(uGloss / (PERIOD * seed + 1.0));
+            float flareSize = smoothstep(0.9, 1.0, size) * glossLocal;
+
+            float red = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 1.0)) + STAR_COLOR_CUTOFF;
+            float blu = smoothstep(STAR_COLOR_CUTOFF, 1.0, Hash21(si + 3.0)) + STAR_COLOR_CUTOFF;
+            float grn = min(red, blu) * seed;
+            vec3 base = vec3(red, grn, blu);
+            float hue = atan(base.g - base.r, base.b - base.r) / (2.0 * 3.14159) + 0.5;
+            hue = fract(hue + uHueShift / 360.0);
+            float sat = length(base - vec3(dot(base, vec3(0.299, 0.587, 0.114)))) * uSaturation;
+            float val = max(max(base.r, base.g), base.b);
+            base = hsv2rgb(vec3(hue, sat, val));
+
+            vec2 pad = vec2(tris(seed * 34.0 + uTime * uSpeed / 10.0), tris(seed * 38.0 + uTime * uSpeed / 30.0)) - 0.5;
+            float star = Star(gv - offset - pad, flareSize, radial, 1.0);
+            float twinkle = trisn(uTime * uSpeed + seed * 6.2831) * 0.5 + 1.0;
+            twinkle = mix(1.0, twinkle, uTwinkleIntensity);
+            col += star * twinkle * size * base;
+          }
+        }
+        return col;
+      }
+
+      void main() {
+        vec2 focalPx = uFocal * uResolution;
+        vec2 uv = (gl_FragCoord.xy - focalPx) / max(uResolution.x, uResolution.y);
+        mat2 rotMat = mat2(cos(uRotationAngle), -sin(uRotationAngle), sin(uRotationAngle), cos(uRotationAngle));
+        uv = rotMat * uv;
+
+        vec3 col = vec3(0.0);
+        vec2 radial = uv;
+        for (int i = 0; i < 4; i++) {
+          float fi = float(i) / 4.0;
+          float depth = fract(fi + uDepth);
+          float scale = mix(16.0 * uDensity, 0.8 * uDensity, depth);
+          float fade = depth * smoothstep(1.0, 0.85, depth);
+          vec2 offset = vec2(fi * 453.32);
+          col += StarLayer(uv * scale + offset, radial) * fade;
+        }
+        outColor = vec4(mix(uBackground, col, uOpacity), 1.0);
+      }`;
+
+      function createShader(gl, type, source) {
+        const s = gl.createShader(type);
+        gl.shaderSource(s, source);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+          gl.deleteShader(s);
+          return null;
+        }
+        return s;
+      }
+
+      const vShader = createShader(gl, gl.VERTEX_SHADER, VERTEX);
+      const fShader = createShader(gl, gl.FRAGMENT_SHADER, FRAGMENT);
+      if (!vShader || !fShader) return;
+
+      const program = gl.createProgram();
+      gl.attachShader(program, vShader);
+      gl.attachShader(program, fShader);
+      gl.bindAttribLocation(program, 0, 'aPosition');
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return;
+      galaxyProgram = program;
+
+      const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
+      for (let i = 0; i < count; i++) {
+        const info = gl.getActiveUniform(program, i);
+        if (info) galaxyUniforms[info.name] = gl.getUniformLocation(program, info.name);
+      }
+
+      const buffer = gl.createBuffer();
+      galaxyVao = gl.createVertexArray();
+      gl.bindVertexArray(galaxyVao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(0);
+      gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+      function resizeGalaxy() {
+        if (!canvas) return;
+        const rect = canvas.getBoundingClientRect();
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+        const w = Math.max(1, Math.round(rect.width * dpr));
+        const h = Math.max(1, Math.round(rect.height * dpr));
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+          gl.viewport(0, 0, w, h);
+        }
+      }
+      window.addEventListener("resize", resizeGalaxy);
+      resizeGalaxy();
+
+      function renderGalaxy(now) {
+        if (!galaxyRunning) return;
+        if (!galaxyLastTime) galaxyLastTime = now;
+        const dt = Math.min((now - galaxyLastTime) / 1000, 0.05);
+        galaxyLastTime = now;
+
+        const flight = 0.4 / 10.0;
+        galaxyState.time += dt * 1.0;
+        galaxyState.gloss += dt * flight * 1.0;
+        galaxyState.depth += dt * flight * 1.0;
+        galaxyState.angle += dt * 0.06;
+
+        gl.useProgram(galaxyProgram);
+        gl.bindVertexArray(galaxyVao);
+        gl.uniform1f(galaxyUniforms.uTime, galaxyState.time);
+        gl.uniform2f(galaxyUniforms.uResolution, canvas.width, canvas.height);
+        gl.uniform2f(galaxyUniforms.uFocal, 0.5, 0.5);
+        gl.uniform2f(galaxyUniforms.uRotation, 1.0, 0.0);
+        gl.uniform1f(galaxyUniforms.uGloss, galaxyState.gloss);
+        gl.uniform1f(galaxyUniforms.uDepth, galaxyState.depth);
+        gl.uniform1f(galaxyUniforms.uDensity, 1.1);
+        gl.uniform1f(galaxyUniforms.uHueShift, 140.0);
+        gl.uniform1f(galaxyUniforms.uSpeed, 1.0);
+        gl.uniform1f(galaxyUniforms.uStarGlow, 0.05 * 0.32 * 0.75);
+        gl.uniform1f(galaxyUniforms.uFlareGain, 0.32 * 1.0);
+        gl.uniform1f(galaxyUniforms.uSaturation, 0.0);
+        gl.uniform1f(galaxyUniforms.uTwinkleIntensity, 0.45);
+        gl.uniform1f(galaxyUniforms.uRotationAngle, galaxyState.angle);
+        gl.uniform3fv(galaxyUniforms.uBackground, [0, 0, 0]);
+        gl.uniform1f(galaxyUniforms.uOpacity, 1.0);
+
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        galaxyAnimFrame = requestAnimationFrame(renderGalaxy);
+      }
+
+      window.startGalaxyAnimation = function() {
+        if (!galaxyProgram) initProfileGalaxyShader();
+        if (galaxyRunning) return;
+        galaxyRunning = true;
+        galaxyLastTime = 0;
+        resizeGalaxy();
+        galaxyAnimFrame = requestAnimationFrame(renderGalaxy);
+      };
+      window.stopGalaxyAnimation = function() {
+        galaxyRunning = false;
+        if (galaxyAnimFrame) cancelAnimationFrame(galaxyAnimFrame);
+      };
+    }
+
+    // Authentic 16-Spoke Wheel Indicator Generator
+    function getSpokeSpinnerSvg(size = 14) {
+      return `<svg class="metric-spoke-spinner" viewBox="0 0 20 20" width="${size}" height="${size}" aria-hidden="true">
+        <line x1="10" y1="2" x2="10" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.88"/>
+        <line x1="13.06" y1="2.62" x2="11.91" y2="5.39" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.83"/>
+        <line x1="15.66" y1="4.34" x2="13.54" y2="6.46" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.78"/>
+        <line x1="17.38" y1="6.94" x2="14.61" y2="8.09" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.73"/>
+        <line x1="18" y1="10" x2="15" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.68"/>
+        <line x1="17.38" y1="13.06" x2="14.61" y2="11.91" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.63"/>
+        <line x1="15.66" y1="15.66" x2="13.54" y2="13.54" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.58"/>
+        <line x1="13.06" y1="17.38" x2="11.91" y2="14.61" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.53"/>
+        <line x1="10" y1="18" x2="10" y2="15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.48"/>
+        <line x1="6.94" y1="17.38" x2="8.09" y2="14.61" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.43"/>
+        <line x1="4.34" y1="15.66" x2="6.46" y2="13.54" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.38"/>
+        <line x1="2.62" y1="13.06" x2="5.39" y2="11.91" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.33"/>
+        <line x1="2" y1="10" x2="5" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.28"/>
+        <line x1="2.62" y1="6.94" x2="5.39" y2="8.09" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.23"/>
+        <line x1="4.34" y1="4.34" x2="6.46" y2="6.46" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.18"/>
+        <line x1="6.94" y1="2.62" x2="8.09" y2="5.39" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.12"/>
+      </svg>`;
+    }
+    window.getSpokeSpinnerSvg = getSpokeSpinnerSvg;
+
+    // Formatting protocol metrics: "Отклик: 139 мс  ·  Скорость: 39 мбит/с"
+    function formatProtoMetric(latency, speedMbps, stage, isEn = false) {
+      const respPfx = isEn ? "Response: " : "Отклик: ";
+      const spdPfx = isEn ? "  ·  Speed: " : "  ·  Скорость: ";
+      const msUnit = isEn ? " ms" : " мс";
+      const mbpsUnit = isEn ? " Mbps" : " мбит/с";
+
+      if (stage === "latency" || stage === "waiting_speed" || (stage !== "error" && latency == null && speedMbps == null)) {
+        return `${respPfx}${getSpokeSpinnerSvg(13)}${spdPfx}${getSpokeSpinnerSvg(13)}`;
+      }
+      if (stage === "download") {
+        const lat = latency != null ? `${latency}${msUnit}` : getSpokeSpinnerSvg(13);
+        const spd = speedMbps != null ? `${speedMbps}${mbpsUnit}` : getSpokeSpinnerSvg(13);
+        return `${respPfx}${lat}${spdPfx}${spd}`;
+      }
+      if (stage === "complete") {
+        const lat = latency != null ? `${latency}${msUnit}` : "—";
+        const spd = speedMbps != null ? `${speedMbps}${mbpsUnit}` : "—";
+        return `${respPfx}${lat}${spdPfx}${spd}`;
+      }
+      if (stage === "error") {
+        return `${respPfx}${isEn ? "error" : "ошибка"}${spdPfx}${isEn ? "unavailable" : "недоступно"}`;
+      }
+      return `${respPfx}—${spdPfx}—`;
+    }
+
+    // Subscription Refresh State Machine (Top Banner)
+    let subscriptionRefreshPhase = "idle";
+    let subscriptionRefreshTimer = null;
+
+    function setSubscriptionRefreshState(phase, message) {
+      subscriptionRefreshPhase = phase;
+      const card = document.getElementById("routes-refresh-card");
+      if (!card) return;
+      const sub = card.querySelector(".refresh-subtitle");
+      const chevron = card.querySelector(".refresh-icon-right");
+      const isEn = document.documentElement.lang === "en";
+
+      if (phase === "refreshing") {
+        if (sub) {
+          sub.textContent = message || (isEn ? "Refreshing subscription and routes…" : "Обновляем подписку и маршруты…");
+          sub.style.color = "#38BDF8";
+        }
+        if (chevron) chevron.innerHTML = getSpokeSpinnerSvg(16);
+      } else if (phase === "success") {
+        if (sub) {
+          sub.textContent = message || (isEn ? "✓ Routes updated" : "✓ Маршруты обновлены");
+          sub.style.color = "#39E8BD";
+        }
+        if (chevron) chevron.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" stroke="#39E8BD" fill="none" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+        clearTimeout(subscriptionRefreshTimer);
+        subscriptionRefreshTimer = setTimeout(() => {
+          setSubscriptionRefreshState("idle");
+        }, 4000);
+      } else if (phase === "error") {
+        if (sub) {
+          sub.textContent = message || (isEn ? "Update failed" : "Ошибка обновления");
+          sub.style.color = "#FF8295";
+        }
+        if (chevron) chevron.innerHTML = `<svg viewBox="0 0 24 24" width="16" height="16" stroke="#FF8295" fill="none" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`;
+        clearTimeout(subscriptionRefreshTimer);
+        subscriptionRefreshTimer = setTimeout(() => {
+          setSubscriptionRefreshState("idle");
+        }, 4000);
+      } else {
+        if (sub) {
+          sub.textContent = isEn ? "Load available routes" : "Загрузить доступные маршруты";
+          sub.style.color = "var(--text-muted)";
+        }
+        if (chevron) chevron.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>`;
+      }
+    }
+
     // Zero-overhead static starry sky
     (function initBackgroundCanvas() {
       const canvas = document.getElementById("stars-canvas");
@@ -3047,7 +3771,12 @@
       [stageRoutes, stageProfile, stageSettings].forEach(stage => {
         if (!stage) return;
         const targetId = "stage-" + stageId;
-        stage.classList.toggle("is-active", stage.id === targetId);
+        const active = stage.id === targetId;
+        stage.classList.toggle("is-active", active);
+        if (stage.id === "stage-profile") {
+          if (active && window.startGalaxyAnimation) window.startGalaxyAnimation();
+          else if (!active && window.stopGalaxyAnimation) window.stopGalaxyAnimation();
+        }
       });
 
       if (isHome && window.deyttMapAtlas) {
@@ -3122,15 +3851,28 @@
 
     function updateCountryHeaderPing(acc) {
       if (!acc) return;
-      const latEls = acc.querySelectorAll(".proto-latency");
+      const rows = acc.querySelectorAll(".proto-row");
       let minPing = Infinity;
-      latEls.forEach(el => {
-        const val = parseInt(el.textContent.trim(), 10);
-        if (!isNaN(val) && val > 0 && val < minPing) minPing = val;
+      let hasProbing = false;
+      rows.forEach(row => {
+        const text = row.querySelector(".proto-metric-text")?.textContent || "";
+        const m = text.match(/(?:Отклик|Response):\s*(\d+)/i);
+        if (m) {
+          const val = parseInt(m[1], 10);
+          if (val > 0 && val < minPing) minPing = val;
+        } else if (row.querySelector(".metric-spoke-spinner")) {
+          hasProbing = true;
+        }
       });
-      const headerPing = acc.querySelector("[data-ping]");
-      if (headerPing) {
-        headerPing.textContent = minPing < Infinity ? minPing.toString() : "—";
+      const pingEl = acc.querySelector("[data-ping]");
+      if (pingEl) {
+        if (minPing < Infinity) {
+          pingEl.textContent = `${minPing} ${document.documentElement.lang === "en" ? "ms" : "мс"}`;
+        } else if (hasProbing) {
+          pingEl.innerHTML = getSpokeSpinnerSvg(13);
+        } else {
+          pingEl.textContent = "—";
+        }
       }
     }
 
@@ -3140,35 +3882,27 @@
       const row = [...document.querySelectorAll(".proto-row")].find(candidate =>
         candidate.dataset.routeTag === routeTag || candidate.dataset.routeKey === routeTag);
       if (row) {
-        const latEl = row.querySelector(".proto-latency");
-        const spdEl = row.querySelector(".proto-speed");
-        const dot = row.querySelector(".ping-dot");
-        if (stage === "latency" || stage === "waiting_speed") {
-          if (latEl) latEl.textContent = "…";
-          if (spdEl) spdEl.textContent = "· …";
-          if (dot) dot.classList.add("is-probing");
-        } else if (stage === "download") {
-          if (latEl && latency) latEl.textContent = latency.toString();
-          if (spdEl) spdEl.textContent = speedMbps ? `· ${speedMbps} мбит/с` : "· замер…";
-        } else if (stage === "complete") {
-          row.removeAttribute("title");
-          if (dot) {
-            dot.classList.remove("is-probing");
-            if (latency) {
-              dot.style.background = latency < 35 ? "#39E8BD" : latency < 75 ? "#F59E0B" : "#F87171";
-              dot.style.boxShadow = `0 0 8px ${dot.style.background}`;
-            }
-          }
-          if (latEl) latEl.textContent = latency != null ? latency.toString() : "—";
-          if (spdEl) spdEl.textContent = speedMbps != null ? `· ${speedMbps} мбит/с` : "";
-          updateCountryHeaderPing(row.closest(".country-accordion"));
-        } else if (stage === "error") {
-          row.title = error || "";
-          if (dot) dot.classList.remove("is-probing");
-          if (latEl) latEl.textContent = "—";
-          if (spdEl) spdEl.textContent = "· недоступен";
-          updateCountryHeaderPing(row.closest(".country-accordion"));
+        const metricEl = row.querySelector(".proto-metric-text");
+        const dot = row.querySelector(".grade-dot");
+        const isEn = document.documentElement.lang === "en";
+
+        if (metricEl) {
+          metricEl.innerHTML = formatProtoMetric(latency, speedMbps, stage, isEn);
         }
+
+        if (dot) {
+          dot.className = "grade-dot";
+          if (stage === "latency" || stage === "waiting_speed" || stage === "download") {
+            dot.classList.add("grade-dot--medium");
+          } else if (stage === "complete") {
+            if (latency != null && latency < 150) dot.classList.add("grade-dot--good");
+            else if (latency != null && latency < 250) dot.classList.add("grade-dot--medium");
+            else if (latency != null) dot.classList.add("grade-dot--poor");
+          } else if (stage === "error") {
+            dot.classList.add("grade-dot--poor");
+          }
+        }
+        updateCountryHeaderPing(row.closest(".country-accordion"));
       }
     };
 
@@ -3259,60 +3993,54 @@
       if (!data) return;
       const english = document.documentElement.lang === "en";
       const copy = (ru, en) => english ? en : ru;
-      const staticCopy = [
-        ['#stage-profile .stage-title', 'профиль и подписка', 'profile and subscription'],
-        ['#stage-profile .stage-subtitle', 'управление учетной записью, активными устройствами и ключом доступа', 'manage your account, devices and access key'],
-        ['#profile-subscription-title', 'подписка и тариф', 'subscription and plan'],
-        ['#profile-sub-tariff-desc', 'данные тарифа и доступные шлюзы', 'plan details and available gateways'],
-        ['#profile-devices-title', 'устройства и сессии', 'devices and sessions'],
-        ['#profile-current-plan-label', 'текущий тариф', 'current plan'],
-        ['#profile-egress-label', 'активный выход', 'active exit'],
-        ['#profile-connection-label', 'статус подключения', 'connection status'],
-        ['#profile-key-title', 'ключ подписки', 'subscription key'],
-        ['#profile-key-description', 'персональная ссылка для подключения других устройств', 'personal link for connecting your other devices'],
-        ['#profile-support-label', 'поддержка', 'support'],
-        ['#profile-support-description', 'помощь по подключению и подписке', 'help with connection and subscription'],
-        ['#btn-login-tg', 'войти через telegram', 'sign in with telegram'],
-        ['#btn-import-sub', 'импорт подписки', 'import subscription'],
-        ['#btn-copy-key', 'скопировать', 'copy']
-      ];
-      staticCopy.forEach(([selector, ru, en]) => { const element = document.querySelector(selector); if (element) element.textContent = copy(ru, en); });
-      const previous = window.currentProfileData;
-      window.currentProfileData = data;
-      currentSubscriptionKey = typeof data.subscriptionKey === "string" ? data.subscriptionKey : "";
-      const setText = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
-      setText("profile-display-name", data.isSignedIn ? data.displayName || data.username || copy("пользователь", "user") : copy("не подключено", "not connected"));
-      setText("profile-username", data.isSignedIn ? data.username ? "@" + data.username.replace(/^@/, "") : copy("telegram подключен", "telegram connected") : copy("войдите через telegram", "sign in with telegram"));
-      setText("profile-id", data.isSignedIn && data.telegramId ? "· id: " + data.telegramId : "");
-      document.getElementById("btn-login-tg").hidden = Boolean(data.isSignedIn);
-      document.getElementById("btn-renew-tg").hidden = !data.isSignedIn;
-      const hasUnlimitedTime = Boolean(data.isSignedIn && data.subscriptionActive && data.mainQuota?.unlimitedTime);
-      const subscriptionCard = document.getElementById("profile-subscription-card");
-      if (subscriptionCard) subscriptionCard.dataset.unlimitedTime = hasUnlimitedTime ? "true" : "false";
-      const infinityMark = document.getElementById("profile-infinity-mark");
-      if (infinityMark) infinityMark.hidden = !hasUnlimitedTime;
-      setText("profile-renew-label", data.subscriptionActive ? copy("продлить подписку", "renew subscription") : copy("выбрать тариф", "choose a plan"));
-      setText("profile-renew-description", data.subscriptionActive ? copy("продление или смена тарифа в telegram", "renew or change your plan in telegram") : copy("тарифы и способы оплаты в telegram", "plans and payment options in telegram"));
-      const dot = document.getElementById("profile-sub-dot");
-      dot.style.background = data.subscriptionActive ? "#39E8BD" : "#94A3B8";
-      dot.style.boxShadow = data.subscriptionActive ? "0 0 8px #39E8BD" : "none";
-      setText("profile-sub-status", data.subscriptionActive ? copy("подписка активна", "subscription active") : data.isSignedIn ? copy("нет активной подписки", "no active subscription") : copy("подписка не проверена", "subscription not checked"));
-      document.getElementById("profile-sub-sep").hidden = !data.subscriptionActive;
-      document.getElementById("profile-sub-expiry").hidden = !data.subscriptionActive;
-      setText("profile-sub-expiry", data.subscriptionActive ? data.mainQuota?.unlimitedTime ? copy("без ограничения срока", "no expiry date") : data.expiresFormatted ? copy("до ", "until ") + data.expiresFormatted : "" : "");
-      setText("profile-tariff-title", data.subscriptionActive ? data.tariffName || copy("активный тариф", "active plan") : copy("без подписки", "no subscription"));
-      setText("profile-tariff-detail", data.subscriptionActive ? copy("доступ ко всем локациям и протоколам", "access to all locations and protocols") : copy("оформите подписку в telegram боте", "subscribe in the telegram bot"));
-      renderQuota("profile-main-quota", copy("основная подписка", "main subscription"), data.mainQuota, data.isSignedIn);
-      renderQuota("profile-awg-quota", "amnezia", data.awgQuota, data.isSignedIn);
-      setText("masked-key", currentSubscriptionKey || copy("ссылка подписки станет доступна после входа в аккаунт", "your subscription link will appear after sign-in"));
-      document.getElementById("btn-copy-key").disabled = !currentSubscriptionKey;
-      const list = document.getElementById("profile-devices-list");
-      if (!list) return;
-      const sameAccount = data.isSignedIn && previous?.isSignedIn && previous.username === data.username && previous.telegramId === data.telegramId;
-      const expanded = new Set(sameAccount ? [...list.querySelectorAll("details[open]")].map(group => group.dataset.group) : []);
-      list.replaceChildren();
+
+      const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+      };
+
+      // User Account Card
+      setText("profile-display-name", data.isSignedIn ? data.displayName || data.username || copy("hackov", "hackov") : copy("не подключен", "not connected"));
+      setText("profile-username", data.isSignedIn ? (data.username ? "@" + data.username.replace(/^@/, "") : copy("Telegram подключен", "Telegram connected")) : copy("войти в telegram", "sign in with telegram"));
+
+      // Starry Plan Hero Card (1:1 with mobile)
+      setText("profile-plan-label", copy("текущий тариф", "current plan"));
+      setText("profile-tariff-title", data.subscriptionActive ? (data.tariffName || "deytt./ultra") : copy("нет подписки", "no subscription"));
+      setText("profile-plan-status", data.subscriptionActive ? copy("активен", "active") : copy("неактивен", "inactive"));
+      setText("profile-devices-label", copy("устройств включено", "devices included"));
+      setText("profile-devices-val", "10");
+      setText("profile-traffic-label", copy("трафик", "traffic"));
+
+      let trafficStr = "299.3 " + copy("гб", "gb");
+      if (data.mainQuota && data.mainQuota.limitBytes) {
+        const gb = (data.mainQuota.limitBytes / (1024 * 1024 * 1024)).toFixed(1);
+        trafficStr = `${gb} ` + copy("гб", "gb");
+      }
+      setText("profile-traffic-val", trafficStr);
+      setText("profile-sub-manage-hint", copy("активная подписка · управление тарифом", "active subscription · manage plan"));
+
+      // Action Cards
       const devices = Array.isArray(data.devices) ? data.devices : [];
       const sessions = Array.isArray(data.sessions) ? data.sessions : [];
+      setText("profile-devices-count", copy(`${devices.length} устройств · ${sessions.length} сессий`, `${devices.length} devices · ${sessions.length} sessions`));
+
+      // Quotas / LTE progress
+      const lteFill = document.querySelector(".lte-quota-fill");
+      const lteText = document.getElementById("lte-quota-text");
+      if (data.awgQuota && lteFill && lteText) {
+        const used = data.awgQuota.usedBytes || 0;
+        const limit = data.awgQuota.limitBytes || (10 * 1024 * 1024 * 1024);
+        const pct = Math.min(100, Math.round((used / limit) * 100));
+        lteFill.style.width = pct + "%";
+        const usedGb = (used / 1e9).toFixed(1);
+        const limitGb = (limit / 1e9).toFixed(0);
+        lteText.textContent = copy(`${usedGb} / ${limitGb} гб · до 1 дек`, `${usedGb} / ${limitGb} gb · until dec 1`);
+      }
+
+      const list = document.getElementById("profile-devices-list");
+      if (!list) return;
+      const expanded = new Set([...list.querySelectorAll("details[open]")].map(group => group.dataset.group));
+      list.replaceChildren();
       const addMessage = (target, message) => {
         const text = document.createElement("span");
         text.className = "quota-expiry";
@@ -3767,6 +4495,7 @@
 
     // Initialize pill position
     window.addEventListener("DOMContentLoaded", () => {
+      try { initProfileGalaxyShader(); } catch (e) {}
       const activeTab = document.querySelector(".nav-item.is-active");
       if (activeTab) updatePillPosition(activeTab, false);
     });
