@@ -11,7 +11,8 @@ internal object AtomicSubscriptionFile {
     val lock = Any()
     private const val JOURNAL = ".subscription-transaction.json"
     private val legacySnapshotNames = listOf("current.json", "previous.json", "awg-profiles.json")
-    private val snapshotNames = legacySnapshotNames + OpenFluxProfileStore.FILE_NAME
+    private const val OPENFLUX_FILE_NAME = "openflux-profiles.json"
+    private val snapshotNames = legacySnapshotNames + OPENFLUX_FILE_NAME
     private val activeDirectories = ThreadLocal.withInitial { mutableSetOf<String>() }
 
     /** Undo journal is published before any live file changes; deletion is the commit point. */

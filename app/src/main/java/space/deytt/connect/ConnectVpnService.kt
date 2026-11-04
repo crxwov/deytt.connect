@@ -1228,10 +1228,12 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 NotificationChannel(CHANNEL_ID, "deytt./connect", NotificationManager.IMPORTANCE_LOW),
             )
         }
+        val openIntent = packageManager.getLaunchIntentForPackage(packageName)
+            ?: Intent(this, MainActivity::class.java)
         val openApp = PendingIntent.getActivity(
             this,
             0,
-            Intent(this, MainActivity::class.java),
+            openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val stopAction = if (routeProbeOnly) ACTION_CANCEL_ROUTE_PROBE else ACTION_STOP

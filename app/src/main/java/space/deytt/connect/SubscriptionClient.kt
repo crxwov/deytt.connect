@@ -201,15 +201,10 @@ object SubscriptionClient {
     }
 
     fun getSavedSubscriptionUrl(context: android.content.Context): String? =
-        context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
-            .getString("subscription_url", null)
-            ?.let { raw -> runCatching { LocalSecretCipher.decryptOrPlaintext(raw) }.getOrNull() }
+        SubscriptionStore.getSavedSubscriptionUrl(context)
 
     fun saveSubscriptionUrl(context: android.content.Context, url: String): Boolean =
-        context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
-            .edit()
-            .putString("subscription_url", LocalSecretCipher.encrypt(url))
-            .commit()
+        SubscriptionStore.saveSubscriptionUrl(context, url)
 
     internal fun validateDownloadedProfile(content: String): ProfileSummary = try {
         ProfileValidator.validate(content).also {

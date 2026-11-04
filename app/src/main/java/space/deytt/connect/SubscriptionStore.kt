@@ -42,4 +42,17 @@ class SubscriptionStore internal constructor(private val directory: File) {
 
     private fun readIfPresent(file: File): String? =
         AtomicSubscriptionFile.readDecrypted(file)
+
+    companion object {
+        fun getSavedSubscriptionUrl(context: Context): String? =
+            context.getSharedPreferences("profile_settings", Context.MODE_PRIVATE)
+                .getString("subscription_url", null)
+                ?.let { raw -> runCatching { LocalSecretCipher.decryptOrPlaintext(raw) }.getOrNull() }
+
+        fun saveSubscriptionUrl(context: Context, url: String): Boolean =
+            context.getSharedPreferences("profile_settings", Context.MODE_PRIVATE)
+                .edit()
+                .putString("subscription_url", LocalSecretCipher.encrypt(url))
+                .commit()
+    }
 }

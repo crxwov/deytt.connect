@@ -137,7 +137,7 @@ class OpenFluxProfileStore internal constructor(private val directory: File) {
         internal const val FILE_NAME = "openflux-profiles.json"
 
         internal fun owner(context: Context): String? = synchronized(AtomicSubscriptionFile.lock) {
-            owner(context, SubscriptionClient.getSavedSubscriptionUrl(context))
+            owner(context, SubscriptionStore.getSavedSubscriptionUrl(context))
         }
 
         internal fun owner(context: Context, url: String?): String? = synchronized(AtomicSubscriptionFile.lock) {
