@@ -869,7 +869,8 @@
       inset: 0;
       width: 100%;
       height: 100%;
-      padding: 88px 36px 36px;
+      padding: 96px 24px 44px !important;
+    scroll-padding-top: 96px !important;
       overflow-y: auto;
       opacity: 0;
       pointer-events: none;
@@ -2710,32 +2711,58 @@
       color: #FFFFFF !important;
     }
 
-    /* Clean LiquidGlass Pill Button for "обновить замер" */
+    /* Clean LiquidGlass Pill Button for "обновить замер" (Parity with Mobile) */
     .home-measure, #home-measure {
       width: 100% !important;
       height: 48px !important;
       border-radius: 9999px !important;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(20, 28, 40, 0.50) 100%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.14) !important;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+      background: linear-gradient(180deg, rgba(64, 76, 104, 0.28) 0%, rgba(18, 30, 46, 0.48) 100%) !important;
+      backdrop-filter: blur(20px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.16) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.38) !important;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35),
+                  inset 0 -1px 1px rgba(0, 0, 0, 0.20),
+                  0 4px 16px rgba(0, 0, 0, 0.25) !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
-      gap: 8px !important;
+      gap: 9px !important;
       color: #FFFFFF !important;
       font-family: 'Inter Tight', sans-serif !important;
       font-size: 14px !important;
       font-weight: 600 !important;
       cursor: pointer !important;
+      position: relative !important;
+      overflow: hidden !important;
       transition: all 0.16s ease !important;
     }
+    .home-measure::after, #home-measure::after {
+      content: "" !important;
+      position: absolute !important;
+      top: 1px !important;
+      left: 2px !important;
+      right: 2px !important;
+      height: 42% !important;
+      border-radius: 9999px 9999px 60% 60% / 9999px 9999px 30% 30% !important;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.02) 80%, transparent 100%) !important;
+      pointer-events: none !important;
+    }
     .home-measure:hover, #home-measure:hover {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(30, 42, 60, 0.65) 100%) !important;
-      border-color: rgba(255, 255, 255, 0.25) !important;
+      background: linear-gradient(180deg, rgba(80, 96, 128, 0.35) 0%, rgba(24, 38, 58, 0.58) 100%) !important;
+      border-color: rgba(255, 255, 255, 0.28) !important;
+      border-top-color: rgba(255, 255, 255, 0.55) !important;
+      box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.5),
+                  0 0 20px rgba(56, 189, 248, 0.35),
+                  0 6px 20px rgba(0, 0, 0, 0.3) !important;
       transform: translateY(-1px) !important;
     }
     .home-measure:active, #home-measure:active {
       transform: scale(0.985) !important;
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+    }
+    .home-measure.is-measuring svg, #home-measure.is-measuring svg {
+      animation: spoke-spin 0.9s linear infinite !important;
     }
 
     /* 16-Spoke Radial Spinner (Exact LoadingSpan from Mobile) */
@@ -2767,202 +2794,10 @@
     }
 
     /* Routes Container centered on Desktop */
-    .routes-view-wrap, .profile-view-wrap {
-      max-width: 640px !important;
+    .routes-view-wrap, .profile-view-wrap, .settings-view-wrap {
+      max-width: 620px !important;
       margin: 0 auto !important;
-      padding: 0 12px 40px 12px !important;
-      display: flex !important;
-      flex-direction: column !important;
-      gap: 14px !important;
-      box-sizing: border-box !important;
-    }
-
-    /* Section Label */
-    .routes-section-label {
-      font-size: 13px !important;
-      font-weight: 500 !important;
-      color: #94A3B8 !important;
-      margin: 10px 0 2px 4px !important;
-      text-transform: lowercase !important;
-      letter-spacing: 0.02em !important;
-      display: block !important;
-    }
-
-    /* Top Subscription Banner */
-    .routes-refresh-banner {
-      padding: 16px 20px !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: space-between !important;
-      cursor: pointer !important;
-    }
-    .routes-refresh-left {
-      display: flex !important;
-      align-items: center !important;
-      gap: 16px !important;
-      min-width: 0 !important;
-    }
-    .refresh-icon-circle {
-      width: 44px !important;
-      height: 44px !important;
-      border-radius: 50% !important;
-      background: rgba(30, 48, 72, 0.55) !important;
-      border: 1px solid rgba(56, 189, 248, 0.3) !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      color: #38BDF8 !important;
-      flex-shrink: 0 !important;
-    }
-    .refresh-texts {
-      display: flex !important;
-      flex-direction: column !important;
-      gap: 2px !important;
-    }
-    .refresh-title {
-      font-size: 16px !important;
-      font-weight: 700 !important;
-      color: #FFFFFF !important;
-    }
-    .refresh-subtitle {
-      font-size: 12.5px !important;
-      color: #94A3B8 !important;
-    }
-
-    /* Quick Select Cards */
-    .quick-select-card {
-      padding: 14px 18px !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: space-between !important;
-      cursor: pointer !important;
-    }
-    .quick-select-icon {
-      width: 44px !important;
-      height: 44px !important;
-      border-radius: 50% !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      flex-shrink: 0 !important;
-      overflow: hidden !important;
-    }
-    .quick-select-icon.auto-icon {
-      background: rgba(30, 48, 72, 0.55) !important;
-      border: 1px solid rgba(56, 189, 248, 0.3) !important;
-    }
-    .quick-select-title {
-      font-size: 16px !important;
-      font-weight: 700 !important;
-      color: #FFFFFF !important;
-    }
-    .quick-select-sub {
-      font-size: 12.5px !important;
-      color: #94A3B8 !important;
-    }
-    .lte-progress-bar {
-      width: 140px !important;
-      height: 4px !important;
-      border-radius: 2px !important;
-      background: rgba(255, 255, 255, 0.12) !important;
-      margin: 4px 0 !important;
-      overflow: hidden !important;
-    }
-    .lte-progress-fill {
-      height: 100% !important;
-      border-radius: 2px !important;
-      background: #FFFFFF !important;
-      width: 10% !important;
-    }
-
-    /* Small Glass Action Buttons (выбрать / выбрано) */
-    .btn-select-route, .btn-action-glass {
-      padding: 8px 18px !important;
-      border-radius: 9999px !important;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(30, 44, 62, 0.45) 100%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.14) !important;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15) !important;
-      color: #FFFFFF !important;
-      font-family: 'Inter Tight', sans-serif !important;
-      font-size: 13.5px !important;
-      font-weight: 600 !important;
-      cursor: pointer !important;
-      transition: all 0.16s ease !important;
-    }
-    .btn-select-route:hover, .btn-action-glass:hover {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(45, 64, 90, 0.6) 100%) !important;
-      border-color: rgba(255, 255, 255, 0.28) !important;
-      transform: translateY(-1px) !important;
-    }
-    .btn-select-route.is-selected {
-      background: rgba(16, 40, 32, 0.5) !important;
-      border-color: rgba(52, 211, 153, 0.6) !important;
-      color: #6EE7B7 !important;
-    }
-
-    /* Country Accordion (1:1 with mobile) */
-    .country-accordion {
-      overflow: hidden !important;
-      margin-bottom: 10px !important;
-    }
-    .country-accordion-header {
-      padding: 16px 20px !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: space-between !important;
-      cursor: pointer !important;
-      user-select: none !important;
-    }
-    .country-header-left {
-      display: flex !important;
-      align-items: center !important;
-      gap: 16px !important;
-      min-width: 0 !important;
-    }
-    .country-flag-wrap {
-      width: 44px !important;
-      height: 30px !important;
-      border-radius: 5px !important;
-      overflow: hidden !important;
-      flex-shrink: 0 !important;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
-    }
-    .country-name {
-      font-size: 16px !important;
-      font-weight: 700 !important;
-      color: #FFFFFF !important;
-      display: block !important;
-      letter-spacing: -0.01em !important;
-    }
-    .country-protos-summary {
-      font-size: 12px !important;
-      color: #94A3B8 !important;
-      display: block !important;
-      margin-top: 1px !important;
-    }
-    .country-chevron-arrow {
-      color: #94A3B8 !important;
-      transition: transform 0.22s ease !important;
-      display: flex !important;
-      align-items: center !important;
-    }
-    .country-accordion.is-expanded .country-chevron-arrow,
-    .country-accordion.is-open .country-chevron-arrow {
-      transform: rotate(180deg) !important;
-    }
-    .country-accordion-body {
-      display: none !important;
-      border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-    }
-    .country-accordion.is-expanded .country-accordion-body,
-    .country-accordion.is-open .country-accordion-body {
-      display: block !important;
-      max-height: none !important;
-      opacity: 1 !important;
-    }
-
-    /* Unified Protocol Rows inside expanded country */
-    .proto-list {
+      padding: 0 12px 48px 12px !important;
       display: flex !important;
       flex-direction: column !important;
     }
@@ -3238,16 +3073,22 @@
     }
 
 
-      /* === TRUE LIQUID GLASS BUTTONS & ENHANCEMENTS === */
-      @keyframes liquid-chroma-spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
+      /* === TRUE LIQUID GLASS BUTTONS & ENHANCEMENTS (PARITY WITH DeyttUi.kt) === */
+      @property --shimmer-angle {
+        syntax: '<angle>';
+        initial-value: 0deg;
+        inherits: false;
+      }
+
+      @keyframes liquid-conic-spin {
+        from { --shimmer-angle: 0deg; }
+        to { --shimmer-angle: 360deg; }
       }
 
       .home-action, #home-action, .compact-action, #compact-action {
         min-height: 52px !important;
         border-radius: 9999px !important;
-        padding: 0 28px !important;
+        padding: 0 32px !important;
         font-family: inherit !important;
         font-size: 15.5px !important;
         font-weight: 700 !important;
@@ -3257,50 +3098,52 @@
         position: relative !important;
         overflow: hidden !important;
         isolation: isolate !important;
-        border: 1px solid rgba(255, 255, 255, 0.24) !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.58) !important;
-        background: linear-gradient(180deg, #2494F8 0%, #1060C8 100%) !important;
-        backdrop-filter: blur(24px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.65),
-                    inset 0 -1px 1px rgba(0, 0, 0, 0.25),
-                    0 8px 24px -4px rgba(29, 140, 248, 0.42),
-                    0 2px 6px rgba(0, 0, 0, 0.28) !important;
+        border: 1.35px solid rgba(255, 255, 255, 0.22) !important;
+        border-top: 1.35px solid rgba(255, 255, 255, 0.60) !important;
+        background: linear-gradient(180deg, rgba(45, 66, 90, 0.50) 0%, rgba(19, 31, 46, 0.72) 100%) !important;
+        backdrop-filter: blur(24px) saturate(190%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+        box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.65),
+                    inset 0 -1px 2px rgba(0, 0, 0, 0.35),
+                    0 0 24px rgba(56, 189, 248, 0.45),
+                    0 8px 24px -4px rgba(2, 132, 199, 0.35),
+                    0 2px 6px rgba(0, 0, 0, 0.32) !important;
         color: #FFFFFF !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         gap: 10px !important;
-        transition: transform 150ms ease, box-shadow 200ms ease, background 250ms ease !important;
+        transition: transform 150ms ease, box-shadow 250ms ease, background 250ms ease, border-color 250ms ease !important;
       }
 
-      /* Animated Chromatic Iridescent Rim Shimmer */
+      /* Animated Chromatic Iridescent Rim Shimmer (Angular rotation without shape distortion) */
       .home-action::before, #home-action::before,
       .compact-action::before, #compact-action::before {
         content: "" !important;
         position: absolute !important;
-        inset: -2px !important;
+        inset: 0 !important;
         border-radius: 9999px !important;
-        padding: 2px !important;
-        background: conic-gradient(from 0deg,
-          rgba(255, 255, 255, 0.70),
+        padding: 1.5px !important;
+        background: conic-gradient(from var(--shimmer-angle),
+          rgba(255, 255, 255, 0.95),
           rgba(56, 189, 248, 0.85),
-          rgba(168, 85, 247, 0.65),
-          rgba(236, 72, 153, 0.55),
+          rgba(2, 132, 199, 0.45),
+          rgba(3, 105, 161, 0.20),
+          rgba(2, 132, 199, 0.45),
           rgba(56, 189, 248, 0.85),
-          rgba(255, 255, 255, 0.70)
+          rgba(255, 255, 255, 0.95)
         ) !important;
         -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
         -webkit-mask-composite: xor !important;
         mask-composite: exclude !important;
         pointer-events: none !important;
-        animation: liquid-chroma-spin 4.5s linear infinite !important;
-        opacity: 0.75 !important;
+        animation: liquid-conic-spin 5.5s linear infinite !important;
+        opacity: 0.85 !important;
         z-index: 1 !important;
         transition: opacity 250ms ease !important;
       }
 
-      /* Curved Lens Specular Gloss Highlight (top 42%) */
+      /* Curved Lens Specular Gloss Highlight (top 42% curved lens) */
       .home-action::after, #home-action::after,
       .compact-action::after, #compact-action::after {
         content: "" !important;
@@ -3308,9 +3151,9 @@
         top: 1px !important;
         left: 2px !important;
         right: 2px !important;
-        height: 44% !important;
+        height: 42% !important;
         border-radius: 9999px 9999px 60% 60% / 9999px 9999px 30% 30% !important;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.05) 75%, transparent 100%) !important;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.04) 75%, transparent 100%) !important;
         pointer-events: none !important;
         z-index: 2 !important;
       }
@@ -3318,9 +3161,11 @@
       .home-action:hover, #home-action:hover,
       .compact-action:hover, #compact-action:hover {
         transform: translateY(-1px) !important;
-        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8),
-                    0 12px 32px -4px rgba(29, 140, 248, 0.55),
-                    0 4px 10px rgba(0, 0, 0, 0.32) !important;
+        box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.8),
+                    inset 0 -1px 2px rgba(0, 0, 0, 0.35),
+                    0 0 32px rgba(56, 189, 248, 0.65),
+                    0 12px 32px -4px rgba(2, 132, 199, 0.50),
+                    0 4px 10px rgba(0, 0, 0, 0.35) !important;
       }
       .home-action:hover::before, #home-action:hover::before {
         opacity: 1 !important;
@@ -3329,30 +3174,60 @@
       .home-action:active, #home-action:active,
       .compact-action:active, #compact-action:active {
         transform: translateY(1px) scale(0.985) !important;
-        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3),
-                    0 4px 12px rgba(29, 140, 248, 0.3) !important;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4),
+                    0 0 16px rgba(56, 189, 248, 0.3) !important;
       }
 
+      /* Connected State: True Translucent Emerald Glass + Emerald Halo */
       .home-action[data-tone="good"], .home-action[data-tone="connected"],
       #home-action[data-tone="good"], #home-action[data-tone="connected"],
       .compact-action[data-tone="good"], .compact-action[data-tone="connected"] {
-        background: linear-gradient(180deg, #10B981 0%, #059669 100%) !important;
+        background: linear-gradient(180deg, rgba(31, 58, 48, 0.58) 0%, rgba(16, 32, 26, 0.75) 100%) !important;
         border-color: rgba(167, 243, 208, 0.35) !important;
-        border-top-color: rgba(255, 255, 255, 0.65) !important;
-        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7),
-                    0 8px 24px -4px rgba(16, 185, 129, 0.45),
+        border-top-color: rgba(255, 255, 255, 0.70) !important;
+        box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.65),
+                    inset 0 -1px 2px rgba(0, 0, 0, 0.35),
+                    0 0 28px rgba(52, 211, 153, 0.50),
+                    0 8px 24px -4px rgba(5, 150, 105, 0.40),
                     0 2px 6px rgba(0, 0, 0, 0.28) !important;
+      }
+      .home-action[data-tone="good"]::before, .home-action[data-tone="connected"]::before,
+      #home-action[data-tone="good"]::before, #home-action[data-tone="connected"]::before {
+        background: conic-gradient(from var(--shimmer-angle),
+          rgba(255, 255, 255, 0.95),
+          rgba(52, 211, 153, 0.85),
+          rgba(5, 150, 105, 0.45),
+          rgba(4, 120, 87, 0.20),
+          rgba(5, 150, 105, 0.45),
+          rgba(52, 211, 153, 0.85),
+          rgba(255, 255, 255, 0.95)
+        ) !important;
       }
 
       .home-action[data-tone="connecting"], #home-action[data-tone="connecting"] {
-        background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%) !important;
+        background: linear-gradient(180deg, rgba(30, 56, 84, 0.60) 0%, rgba(18, 36, 56, 0.78) 100%) !important;
+        box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.65),
+                    0 0 30px rgba(56, 189, 248, 0.55),
+                    0 8px 24px -4px rgba(2, 132, 199, 0.40) !important;
       }
 
       .home-action[data-tone="error"], #home-action[data-tone="error"] {
-        background: linear-gradient(180deg, #EF4444 0%, #B91C1C 100%) !important;
+        background: linear-gradient(180deg, rgba(62, 26, 34, 0.62) 0%, rgba(36, 16, 22, 0.78) 100%) !important;
         border-color: rgba(254, 202, 202, 0.4) !important;
-        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6),
-                    0 8px 24px -4px rgba(239, 68, 68, 0.45) !important;
+        box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.6),
+                    0 0 28px rgba(244, 63, 94, 0.50),
+                    0 8px 24px -4px rgba(190, 18, 60, 0.45) !important;
+      }
+      .home-action[data-tone="error"]::before, #home-action[data-tone="error"]::before {
+        background: conic-gradient(from var(--shimmer-angle),
+          rgba(255, 255, 255, 0.95),
+          rgba(244, 63, 94, 0.85),
+          rgba(190, 18, 60, 0.45),
+          rgba(136, 19, 55, 0.20),
+          rgba(190, 18, 60, 0.45),
+          rgba(244, 63, 94, 0.85),
+          rgba(255, 255, 255, 0.95)
+        ) !important;
       }
 
       .home-action > span, #home-action > span {
@@ -3479,6 +3354,203 @@
         overflow: hidden !important;
       }
 
+
+    /* Unified Country Accordion Body & List (Parity with Mobile) */
+    .country-accordion-body {
+      padding: 0 !important;
+      background: transparent !important;
+    }
+    .proto-list {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0 !important;
+      padding: 0 !important;
+      background: transparent !important;
+    }
+    .proto-row {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 14px !important;
+      padding: 13px 18px !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      border: none !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      cursor: pointer !important;
+      transition: background 150ms ease, border-color 150ms ease !important;
+    }
+    .proto-row:first-child {
+      border-top: 1px solid rgba(255, 255, 255, 0.10) !important;
+    }
+    .proto-row:last-child {
+      border-bottom-left-radius: 18px !important;
+      border-bottom-right-radius: 18px !important;
+    }
+    .proto-row:hover {
+      background: rgba(255, 255, 255, 0.04) !important;
+      transform: none !important;
+    }
+    .proto-row.is-selected {
+      background: rgba(56, 189, 248, 0.08) !important;
+    }
+    .proto-row.is-best-choice {
+      background: rgba(52, 211, 153, 0.07) !important;
+    }
+    .proto-row.is-best-choice .proto-title {
+      color: #34D399 !important;
+    }
+    .proto-row.is-best-choice [data-metric-latency] {
+      color: #34D399 !important;
+      font-weight: 700 !important;
+    }
+    .proto-row.is-slowest-choice [data-metric-latency] {
+      color: #FB7185 !important;
+    }
+    .badge-best-choice {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 6px;
+      background: rgba(52, 211, 153, 0.15);
+      border: 1px solid rgba(52, 211, 153, 0.35);
+      color: #34D399;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    .badge-slowest-choice {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 6px;
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      color: #FB7185;
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    .proto-icon-box {
+      width: 36px !important;
+      height: 36px !important;
+      border-radius: 11px !important;
+      background: rgba(255, 255, 255, 0.05) !important;
+      border: 1px solid rgba(255, 255, 255, 0.10) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex-shrink: 0 !important;
+    }
+    .proto-info {
+      flex: 1 1 auto !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 2px !important;
+      min-width: 0 !important;
+    }
+    .proto-title {
+      font-size: 14.5px !important;
+      font-weight: 600 !important;
+      color: #FFFFFF !important;
+      text-transform: lowercase !important;
+      display: flex !important;
+      align-items: center !important;
+    }
+    .proto-detail {
+      font-size: 12px !important;
+      color: #8E9EAF !important;
+    }
+    .proto-telemetry {
+      font-size: 11.5px !important;
+      color: #8E9EAF !important;
+      margin-top: 2px !important;
+    }
+    .metric-k { opacity: 0.65; }
+    .metric-v { color: #E2E8F0; font-weight: 600; }
+    .route-accent-tag {
+      color: #38BDF8 !important;
+      font-weight: 700 !important;
+      text-transform: lowercase !important;
+      letter-spacing: 0.02em !important;
+    }
+    
+    /* Settings View 1:1 Parity Styles */
+    .settings-view-wrap {
+      width: 100% !important;
+      max-width: 600px !important;
+      margin: 0 auto !important;
+      padding: 0 12px 48px 12px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 20px !important;
+    }
+    .settings-section-title {
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      color: #8E9EAF !important;
+      letter-spacing: 0.04em !important;
+      text-transform: lowercase !important;
+      margin-left: 6px !important;
+      margin-bottom: -10px !important;
+    }
+    .setting-item {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      padding: 13px 18px !important;
+      cursor: pointer !important;
+      transition: background 150ms ease !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+    }
+    .setting-item:first-child {
+      border-top: none !important;
+    }
+    .setting-item:hover {
+      background: rgba(255, 255, 255, 0.035) !important;
+    }
+    .setting-left-wrap {
+      display: flex !important;
+      align-items: center !important;
+      gap: 14px !important;
+      min-width: 0 !important;
+    }
+    .setting-icon-box {
+      width: 38px !important;
+      height: 38px !important;
+      border-radius: 50% !important;
+      background: rgba(255, 255, 255, 0.05) !important;
+      border: 1px solid rgba(255, 255, 255, 0.10) !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex-shrink: 0 !important;
+      color: #38BDF8 !important;
+    }
+    .setting-text-wrap {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 2px !important;
+      min-width: 0 !important;
+    }
+    .setting-label {
+      font-size: 14.5px !important;
+      font-weight: 600 !important;
+      color: #FFFFFF !important;
+      text-transform: lowercase !important;
+    }
+    .setting-desc {
+      font-size: 12px !important;
+      color: #8E9EAF !important;
+    }
+    .setting-chevron {
+      font-size: 20px !important;
+      color: #64748B !important;
+      font-weight: 300 !important;
+      padding-right: 4px !important;
+    }
+
 </style>
 </head>
 <body>
@@ -3568,11 +3640,11 @@
             </div>
             <div class="panel-copy route-copy">
               <div class="route-heading">
-                <span id="home-flag" class="route-flag route-flag-pill" aria-hidden="true">✦</span>
+                <span id="home-flag" class="route-flag route-flag-pill" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" stroke="#38BDF8" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg></span>
                 <div class="route-heading-text">
-                  <strong id="home-city" class="home-city">автоподбор</strong>
+                  <strong id="home-city" class="home-city">auto-select</strong>
                   <div class="route-meta-row">
-                    <p id="home-route-subtitle" class="home-route-subtitle">выбирает самый быстрый европейский выход</p>
+                    <p id="home-route-subtitle" class="home-route-subtitle"><span class="route-accent-tag">auto</span> <span style="opacity:0.4;">·</span> <span>выбирает самый быстрый европейский выход</span></p>
                     <span id="home-country" class="home-country" hidden></span>
                     <span id="home-protocol" class="home-protocol" hidden></span>
                   </div>
@@ -3709,8 +3781,8 @@
             </div>
             <div>
               <strong class="quick-select-title">lte · белые списки</strong>
-              <div class="lte-progress-bar"><div class="lte-progress-fill" style="width: 10%;"></div></div>
-              <span class="quick-select-sub" id="lte-quota-sub">30.5 / 322 гб · до 1 дек</span>
+              <div class="lte-progress-bar" style="background: rgba(255,255,255,0.12); height: 4px; border-radius: 9999px; overflow: hidden; margin: 4px 0;"><div class="lte-progress-fill" style="width: 0%; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #38BDF8 0%, #10B981 100%);"></div></div>
+              <span class="quick-select-sub" id="lte-quota-sub">0 / 10 gb · until dec 1</span>
             </div>
           </div>
           <button class="btn-select-route is-selected" data-action-route="ru-de" type="button">выбрано</button>
@@ -3719,9 +3791,8 @@
         <!-- Секция: страны -->
         <span class="routes-section-label">страны</span>
         <div class="countries-accordion-group" id="countries-list">
-
-          <!-- 1. Нидерланды -->
-          <div class="liquid-glass-card country-accordion is-expanded" data-country-key="nl" id="card-route-nl">
+          <!-- нидерланды -->
+          <div class="liquid-glass-card country-accordion is-expanded is-open" data-country-key="nl" id="card-route-nl">
             <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="true">
               <div class="country-header-left">
                 <div class="country-flag-wrap">
@@ -3737,7 +3808,7 @@
                 </div>
                 <div>
                   <span class="country-name">нидерланды</span>
-                  <span class="country-protos-summary">vless · trojan · hysteria 2 · tuic · awg1.5 · awg3.1</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · tuic · amneziawg 3.1</span>
                 </div>
               </div>
               <div class="country-chevron-arrow">
@@ -3748,9 +3819,8 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <!-- vless -->
-                <div class="proto-row is-selected" data-route-key="nl-vless" data-action-route="nl-vless" role="button" tabindex="0">
-                  <div class="proto-icon-box"><svg viewBox="0 0 1000 1000" width="22" height="22" fill="#E2E8F0"><path d="M530,530 L900,530 L650,650 L530,1000 Z"/><path d="M470,530 L470,900 L350,650 L0,530 Z"/><path d="M530,470 L530,100 L650,350 L1000,470 Z"/><path d="M470,470 L100,470 L350,350 L470,0 Z"/></svg></div>
+                <div class="proto-row" data-route-key="nl-vless" data-route-tag="route:NL:VLESS" data-action-route="nl-vless" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 1000 1000" width="18" height="18" fill="#DFDFD6"><path d="M530,530 L900,530 L650,650 L530,1000 Z M470,530 L470,900 L350,650 L0,530 Z M530,470 L530,100 L650,350 L1000,470 Z M470,470 L100,470 L350,350 L470,0 Z"/></svg></div>
                   <div class="proto-info">
                     <span class="proto-title">vless</span>
                     <span class="proto-detail">websocket + tls</span>
@@ -3758,19 +3828,8 @@
                   </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
-                <!-- hysteria 2 -->
-                <div class="proto-row" data-route-key="nl-hy2" data-action-route="nl-hy2" role="button" tabindex="0">
-                  <div class="proto-icon-box"><svg viewBox="0 0 442.19 323.31" width="22" height="22"><path fill="#FFFFFF" d="M72.8,140.45 L60.1,285.55 L102.51,285.55 L111.5,182.86 L111.54,182.86 L115.21,140.45 L72.8,140.45 Z"/><path fill="#FFFFFF" d="M124.16,37.75 L81.76,37.75 L76.19,101.36 L118.59,101.36 L124.16,37.75 Z"/><path fill="#FFFFFF" d="M318.36,285.56 L360.44,285.56 L366.01,221.95 L323.9,221.95 L318.36,285.56 Z"/><path fill="#FFFFFF" d="M382.09,37.76 L340,37.76 L329.16,161.66 L221.09,161.66 L206.95,323.31 L292.78,201.84 L438.67,201.84 L442.19,161.66 L371.25,161.66 L382.09,37.76 Z"/><path fill="#FFBC00" d="M149.41,121.47 L3.52,121.47 L0,161.66 L221.09,161.66 L235.23,0 L149.41,121.47 Z"/></svg></div>
-                  <div class="proto-info">
-                    <span class="proto-title">hysteria 2</span>
-                    <span class="proto-detail">quic transport</span>
-                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
-                  </div>
-                  <span class="proto-selected-mark">выбрано</span>
-                </div>
-                <!-- trojan -->
-                <div class="proto-row" data-route-key="nl-trojan" data-action-route="nl-trojan" role="button" tabindex="0">
-                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#F59E0B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16M7 19v-4l2-3h6l2 3v4M9 12V7l4-3 3 2v6"/><circle cx="14" cy="7" r="1" fill="#F59E0B"/></svg></div>
+                <div class="proto-row" data-route-key="nl-trojan" data-route-tag="route:NL:TROJAN" data-action-route="nl-trojan" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#F59E0B" d="M19,3 L15,3 L13,6 L9,6 L7,9 L4,13 L4,16 L7,15 L6,21 L9,21 L11,17 L14,21 L16,21 L18,14 L16,10 L19,6 Z"/><path fill="#FDE68A" d="M15,5 L13,8 L10,8 L8,11 L6,13.5 L6,14.5 L8,13.8 L7.2,18 L8.8,18 L10.5,14.5 L13.5,18 L14.8,18 L16.5,12.5 L14.8,9.2 L17.2,6 Z"/><path fill="#182333" d="M8.5,11.5 A1,1 0 1,0 8.5,9.5 A1,1 0 1,0 8.5,11.5 Z"/></svg></div>
                   <div class="proto-info">
                     <span class="proto-title">trojan</span>
                     <span class="proto-detail">websocket + tls</span>
@@ -3778,9 +3837,17 @@
                   </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
-                <!-- tuic -->
-                <div class="proto-row" data-route-key="nl-tuic" data-action-route="nl-tuic" role="button" tabindex="0">
-                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/></svg></div>
+                <div class="proto-row" data-route-key="nl-hy2" data-route-tag="route:NL:HYSTERIA2" data-action-route="nl-hy2" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 442.19 323.31" width="18" height="18"><path fill="#FFFFFF" d="M72.8,140.45 L60.1,285.55 L102.51,285.55 L111.5,182.86 L111.54,182.86 L115.21,140.45 L72.8,140.45 Z M124.16,37.75 L81.76,37.75 L76.19,101.36 L118.59,101.36 L124.16,37.75 Z M318.36,285.56 L360.44,285.56 L366.01,221.95 L323.9,221.95 L318.36,285.56 Z M382.09,37.76 L340,37.76 L329.16,161.66 L221.09,161.66 L206.95,323.31 L292.78,201.84 L438.67,201.84 L442.19,161.66 L371.25,161.66 L382.09,37.76 Z"/><path fill="#FFBC00" d="M149.41,121.47 L3.52,121.47 L0,161.66 L221.09,161.66 L235.23,0 L149.41,121.47 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">hysteria 2</span>
+                    <span class="proto-detail">quic transport</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="nl-tuic" data-route-tag="route:NL:TUIC" data-action-route="nl-tuic" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#38BDF8" d="M22,12 L3,3 L7,12 L3,21 Z"/><path fill="#E0F2FE" d="M22,12 L7,12 L3,3 Z"/><path fill="#0284C7" d="M7,12 L3,21 L12,14.5 Z"/><path stroke="#7DD3FC" stroke-width="1.5" stroke-linecap="round" d="M2,7 L5,7 M1,12 L4,12 M2,17 L5,17"/></svg></div>
                   <div class="proto-info">
                     <span class="proto-title">tuic</span>
                     <span class="proto-detail">quic transport</span>
@@ -3788,9 +3855,8 @@
                   </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
-                <!-- amneziawg 3.1 -->
-                <div class="proto-row" data-route-key="nl-awg" data-action-route="nl-awg" role="button" tabindex="0">
-                  <div class="proto-icon-box"><svg viewBox="0 0 568 568" width="22" height="22" fill="#A78BFA"><path d="M472.8,24.2c-4.1,5.6 -9.5,14.9 -12.9,22.8 -2.9,6.6 -8.2,16.3 -16.3,29.8 -4.8,8 -14.3,8.9 -20.7,2.1 -2.6,-2.8 -8.9,-18.2 -8.9,-21.8 0,-7.2 -11,-8.5 -23,-2.7 -9.5,4.6 -12.6,4.6 -27,-0.5 -22.2,-7.8 -37.2,-11.8 -52,-13.9 -3.9,-0.6 -10.2,-1.5 -14,-2 -17.1,-2.4 -71,-0.1 -85,3.7 -12.1,3.3 -37.4,15.4 -54.9,26.3 -11.1,6.9 -13.4,8 -17.3,8 -4.5,0 -4.7,0.1 -12.2,9 -7.3,8.5 -16.2,16.8 -17.1,15.9 -0.2,-0.3 -0.9,-3.6 -1.5,-7.4 -2.3,-15.1 -12,-40.1 -20.3,-52.5 -1.8,-2.6 -3.7,-5.5 -4.3,-6.5 -1.6,-2.9 -3.2,-1 -5.4,6.4 -2.2,7.2 -2.5,16.5 -2.1,72.9 0.2,22.8 0,23.5 -10.7,37.1 -15.5,19.6 -29.9,54.7 -32.7,79.6 -0.8,7.1 -2.4,21.8 -3.7,32.5 -3.6,31.1 -3.5,35.3 1.4,53 1.1,4.1 3.1,11.4 4.4,16.1 1.2,4.8 4.4,13.3 7,19 2.5,5.7 5.9,13.6 7.4,17.5 12.3,30.9 53.6,76.9 79.9,89.1 23.9,11 29.5,15.2 34.1,25.4 1.4,2.9 4,8.3 5.8,11.9 1.9,3.6 6.7,14.3 10.8,23.8 18.9,44 22.8,45.4 29.8,11.1 7.3,-36.1 12.4,-39.7 49.9,-35.4 14.5,1.6 16.1,1.6 30.2,0 36.7,-4.1 35.8,-4.5 42.5,16.5 1.6,5.2 3,11.1 3,13.2s1.2,6.8 2.7,10.5c9.1,23.2 19,22.8 26.9,-0.9 1.5,-4.6 3.5,-9.4 4.4,-10.8s4.5,-8.1 7.9,-15c3.3,-6.9 7.8,-14.6 9.9,-17.2 16.9,-21.2 46.1,-47.9 73.6,-67.3 6.5,-4.6 17.5,-17.5 21.3,-24.9 1.4,-2.8 5.6,-9.7 9.3,-15.3 7.6,-11.4 12.1,-23.6 16.5,-44.6 1.4,-7.1 4,-15.3 6.4,-20.7 8.8,-19.7 11.5,-41.1 6.7,-51.6 -5.8,-12.5 -9.5,-53.5 -6.6,-71.9 2.1,-13.3 2.8,-25.5 1.9,-29.1 -1.1,-3.7 -9.1,-8.4 -14.4,-8.4 -8.9,0 -23.5,-15.2 -23.5,-24.4 0,-0.8 -2.2,-5.8 -5,-11 -5.6,-10.7 -5.8,-12.1 -3,-23.5 4.9,-19.7 8.3,-73 4.8,-75.9 -1.3,-1 -1.9,-0.7 -4,2M305.3,85.5c15.4,1.2 29.5,5.6 47.1,14.6 9.5,5 20.1,8.9 24.1,8.9 4.2,0 35.9,20.9 38,25.1 1.9,3.6 1.9,7.6 0,13 -0.9,2.4 -1.3,5.4 -1,6.6s0,4.4 -0.6,7c-2.5,11.2 -4,21.7 -4.9,35.8 -0.6,8.2 -1.9,20.2 -3.1,26.5 -1.1,6.3 -2.6,16.2 -3.3,22 -1.7,13.4 -4.1,25.4 -7,35.5 -4.2,14.1 -7.4,26.9 -8,31.5 -0.4,2.5 -2,9.9 -3.5,16.5 -1.6,6.6 -3.5,16.3 -4.1,21.5 -2.7,21.7 -10.3,50.7 -16.5,63 -5.4,10.5 -8.8,14 -11.4,11.6 -2.3,-2.1 -8.1,-16.2 -8.1,-19.8 0,-1.3 -1.2,-5 -2.6,-8.3s-3.6,-9.8 -4.8,-14.5c-1.3,-4.7 -3.2,-10.3 -4.3,-12.5s-2.4,-5.1 -2.8,-6.5 -2.5,-6.3 -4.7,-10.9c-5.7,-12.2 -8.5,-21.6 -9.3,-30.6 -0.8,-9.7 -1.8,-13.7 -5.6,-23.8 -1.6,-4.3 -3.6,-12.2 -4.4,-17.5s-2.2,-14.4 -3.1,-20.2c-1.7,-12.1 -2.5,-15.3 -6.4,-27 -3.6,-10.8 -8.2,-25.5 -11,-34.6 -3.6,-12.1 -4,-12.2 -8.9,-0.3 -5.7,14.1 -12.9,36.3 -14.6,45.2 -2.9,15.6 -8.1,40.7 -10.5,50.7 -1,4.1 -2.6,11.5 -3.5,16.5 -0.9,4.9 -3.2,12.8 -5.1,17.5 -5.4,12.9 -7.3,18 -9.4,24 -9.8,29.2 -25.8,73.1 -27.6,75.8 -2.4,3.7 -7.1,2.7 -11,-2.5 -4.5,-5.9 -7.6,-14.7 -13.9,-39.3 -3,-11.8 -6.6,-25.6 -8,-30.5 -4.8,-16.8 -10.5,-38.9 -15,-58.5 -2.4,-10.7 -5.2,-22.4 -6.1,-26 -1.6,-6.7 -4.5,-19.2 -8.8,-38.5 -1.4,-6.1 -3.2,-15.5 -4.1,-21s-2.2,-12.9 -3,-16.5 -1.9,-10.1 -2.5,-14.5 -2,-11.2 -3.1,-15.2c-1.1,-3.9 -2.4,-10.2 -3,-14 -0.5,-3.7 -1.2,-8.2 -1.5,-10 -1.6,-8.9 29.9,-30.1 58.6,-39.6 37.3,-12.2 56.4,-15.9 83.7,-16.1 11.7,-0.1 21.6,-0.5 22,-1 0.4,-0.4 2.8,-0.5 5.3,-0.2s7.5,0.8 11.3,1.1m146.9,111.2c22.3,23 22.4,98.5 0.3,144.8 -2.9,6 -6.2,13.9 -7.4,17.3 -8.3,24.4 -39.3,60.8 -44.6,52.2 -0.7,-1.1 4,-17.4 5.9,-20.5 2.2,-3.5 5.2,-17.2 6.1,-27.5 0.8,-9.2 3,-20.1 6.1,-30 1.3,-4.1 2.6,-9.5 3,-12s2.2,-10.2 4,-17.2 4,-17.8 4.8,-24 2.2,-14.6 3.1,-18.7c1.5,-7.1 2.4,-12.1 6,-35.6 0.8,-5.5 2.4,-12.7 3.5,-15.9 1.1,-3.3 2,-8.3 2,-11.1 0,-8.1 0.9,-8.3 7.2,-1.8m-361.5,3.8c4.9,8.5 8.8,18.1 12.8,31 4.9,16.2 7.7,23.9 11,30.5 5.6,11 11.7,32.9 16.4,58.5 1.1,6 2.9,15.3 4.1,20.5 3.8,17.3 3,56.1 -1.2,61.6 -7.8,9.9 -33,-7.3 -47.1,-32.1 -1.9,-3.3 -5.5,-9.4 -8,-13.5 -5.1,-8.2 -14.5,-30 -18.4,-42.5 -4.3,-13.7 -1.7,-66.3 4,-82C68.9,219.9 83.6,193 86,193c0.3,0 2.4,3.4 4.7,7.5m191,108.1c1.2,3.2 3.1,9.5 4.2,13.9s3.5,13.2 5.2,19.5c1.8,6.3 3.5,14.2 3.9,17.5 0.5,3.3 1.7,9.1 2.8,13 3.6,12.4 10.3,35.8 12.2,43 7.6,27.7 -17.3,46.3 -52.2,39 -4,-0.9 -8.3,-1.3 -9.6,-1 -3,0.7 -8.1,-2.4 -11.6,-7l-2.7,-3.5 4,-8.6c2.2,-4.7 4.5,-11.3 5.2,-14.7 0.6,-3.4 1.9,-8.2 2.9,-10.7 2.3,-6 6.2,-20.6 9.5,-36 6.4,-29.5 9.3,-40.2 14.3,-51.6 1.7,-3.8 3.7,-9.2 4.6,-11.9 0.9,-2.8 1.9,-5.6 2.1,-6.3 0.9,-2.6 3,-0.5 5.2,5.4"/></svg></div>
+                <div class="proto-row" data-route-key="nl-awg" data-route-tag="route:NL:AWG" data-action-route="nl-awg" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 568 568" width="18" height="18" fill="#FB7185"><path d="M472.8,24.2c-4.1,5.6 -9.5,14.9 -12.9,22.8 -2.9,6.6 -8.2,16.3 -16.3,29.8 -4.8,8 -14.3,8.9 -20.7,2.1 -2.6,-2.8 -8.9,-18.2 -8.9,-21.8 0,-7.2 -11,-8.5 -23,-2.7 -9.5,4.6 -12.6,4.6 -27,-0.5 -22.2,-7.8 -37.2,-11.8 -52,-13.9 -3.9,-0.6 -10.2,-1.5 -14,-2 -17.1,-2.4 -71,-0.1 -85,3.7 -12.1,3.3 -37.4,15.4 -54.9,26.3 -11.1,6.9 -13.4,8 -17.3,8 -4.5,0 -4.7,0.1 -12.2,9 -7.3,8.5 -16.2,16.8 -17.1,15.9 -0.2,-0.3 -0.9,-3.6 -1.5,-7.4 -2.3,-15.1 -12,-40.1 -20.3,-52.5 -1.8,-2.6 -3.7,-5.5 -4.3,-6.5 -1.6,-2.9 -3.2,-1 -5.4,6.4 -2.2,7.2 -2.5,16.5 -2.1,72.9 0.2,22.8 0,23.5 -10.7,37.1 -15.5,19.6 -29.9,54.7 -32.7,79.6 -0.8,7.1 -2.4,21.8 -3.7,32.5 -3.6,31.1 -3.5,35.3 1.4,53 1.1,4.1 3.1,11.4 4.4,16.1 1.2,4.8 4.4,13.3 7,19 2.5,5.7 5.9,13.6 7.4,17.5 12.3,30.9 53.6,76.9 79.9,89.1 23.9,11 29.5,15.2 34.1,25.4 1.4,2.9 4,8.3 5.8,11.9 1.9,3.6 6.7,14.3 10.8,23.8 18.9,44 22.8,45.4 29.8,11.1 7.3,-36.1 12.4,-39.7 49.9,-35.4 14.5,1.6 16.1,1.6 30.2,0 36.7,-4.1 35.8,-4.5 42.5,16.5 1.6,5.2 3,11.1 3,13.2s1.2,6.8 2.7,10.5c9.1,23.2 19,22.8 26.9,-0.9 1.5,-4.6 3.5,-9.4 4.4,-10.8s4.5,-8.1 7.9,-15c3.3,-6.9 7.8,-14.6 9.9,-17.2 16.9,-21.2 46.1,-47.9 73.6,-67.3 6.5,-4.6 17.5,-17.5 21.3,-24.9 1.4,-2.8 5.6,-9.7 9.3,-15.3 7.6,-11.4 12.1,-23.6 16.5,-44.6 1.4,-7.1 4,-15.3 6.4,-20.7 8.8,-19.7 11.5,-41.1 6.7,-51.6 -5.8,-12.5 -9.5,-53.5 -6.6,-71.9 2.1,-13.3 2.8,-25.5 1.9,-29.1 -1.1,-3.7 -9.1,-8.4 -14.4,-8.4 -8.9,0 -23.5,-15.2 -23.5,-24.4 0,-0.8 -2.2,-5.8 -5,-11 -5.6,-10.7 -5.8,-12.1 -3,-23.5 4.9,-19.7 8.3,-73 4.8,-75.9 -1.3,-1 -1.9,-0.7 -4,2M305.3,85.5c15.4,1.2 29.5,5.6 47.1,14.6 9.5,5 20.1,8.9 24.1,8.9 4.2,0 35.9,20.9 38,25.1 1.9,3.6 1.9,7.6 0,13 -0.9,2.4 -1.3,5.4 -1,6.6s0,4.4 -0.6,7c-2.5,11.2 -4,21.7 -4.9,35.8 -0.6,8.2 -1.9,20.2 -3.1,26.5 -1.1,6.3 -2.6,16.2 -3.3,22 -1.7,13.4 -4.1,25.4 -7,35.5 -4.2,14.1 -7.4,26.9 -8,31.5 -0.4,2.5 -2,9.9 -3.5,16.5 -1.6,6.6 -3.5,16.3 -4.1,21.5 -2.7,21.7 -10.3,50.7 -16.5,63 -5.4,10.5 -8.8,14 -11.4,11.6 -2.3,-2.1 -8.1,-16.2 -8.1,-19.8 0,-1.3 -1.2,-5 -2.6,-8.3s-3.6,-9.8 -4.8,-14.5c-1.3,-4.7 -3.2,-10.3 -4.3,-12.5s-2.4,-5.1 -2.8,-6.5 -2.5,-6.3 -4.7,-10.9c-5.7,-12.2 -8.5,-21.6 -9.3,-30.6 -0.8,-9.7 -1.8,-13.7 -5.6,-23.8 -1.6,-4.3 -3.6,-12.2 -4.4,-17.5s-2.2,-14.4 -3.1,-20.2c-1.7,-12.1 -2.5,-15.3 -6.4,-27 -3.6,-10.8 -8.2,-25.5 -11,-34.6 -3.6,-12.1 -4,-12.2 -8.9,-0.3 -5.7,14.1 -12.9,36.3 -14.6,45.2 -2.9,15.6 -8.1,40.7 -10.5,50.7 -1,4.1 -2.6,11.5 -3.5,16.5 -0.9,4.9 -3.2,12.8 -5.1,17.5 -5.4,12.9 -7.3,18 -9.4,24 -9.8,29.2 -25.8,73.1 -27.6,75.8 -2.4,3.7 -7.1,2.7 -11,-2.5 -4.5,-5.9 -7.6,-14.7 -13.9,-39.3 -3,-11.8 -6.6,-25.6 -8,-30.5 -4.8,-16.8 -10.5,-38.9 -15,-58.5 -2.4,-10.7 -5.2,-22.4 -6.1,-26 -1.6,-6.7 -4.5,-19.2 -8.8,-38.5 -1.4,-6.1 -3.2,-15.5 -4.1,-21s-2.2,-12.9 -3,-16.5 -1.9,-10.1 -2.5,-14.5 -2,-11.2 -3.1,-15.2c-1.1,-3.9 -2.4,-10.2 -3,-14 -0.5,-3.7 -1.2,-8.2 -1.5,-10 -1.6,-8.9 29.9,-30.1 58.6,-39.6 37.3,-12.2 56.4,-15.9 83.7,-16.1 11.7,-0.1 21.6,-0.5 22,-1 0.4,-0.4 2.8,-0.5 5.3,-0.2s7.5,0.8 11.3,1.1m146.9,111.2c22.3,23 22.4,98.5 0.3,144.8 -2.9,6 -6.2,13.9 -7.4,17.3 -8.3,24.4 -39.3,60.8 -44.6,52.2 -0.7,-1.1 4,-17.4 5.9,-20.5 2.2,-3.5 5.2,-17.2 6.1,-27.5 0.8,-9.2 3,-20.1 6.1,-30 1.3,-4.1 2.6,-9.5 3,-12s2.2,-10.2 4,-17.2 4,-17.8 4.8,-24 2.2,-14.6 3.1,-18.7c1.5,-7.1 2.4,-12.1 6,-35.6 0.8,-5.5 2.4,-12.7 3.5,-15.9 1.1,-3.3 2,-8.3 2,-11.1 0,-8.1 0.9,-8.3 7.2,-1.8m-361.5,3.8c4.9,8.5 8.8,18.1 12.8,31 4.9,16.2 7.7,23.9 11,30.5 5.6,11 11.7,32.9 16.4,58.5 1.1,6 2.9,15.3 4.1,20.5 3.8,17.3 3,56.1 -1.2,61.6 -7.8,9.9 -33,-7.3 -47.1,-32.1 -1.9,-3.3 -5.5,-9.4 -8,-13.5 -5.1,-8.2 -14.5,-30 -18.4,-42.5 -4.3,-13.7 -1.7,-66.3 4,-82C68.9,219.9 83.6,193 86,193c0.3,0 2.4,3.4 4.7,7.5m191,108.1c1.2,3.2 3.1,9.5 4.2,13.9s3.5,13.2 5.2,19.5c1.8,6.3 3.5,14.2 3.9,17.5 0.5,3.3 1.7,9.1 2.8,13 3.6,12.4 10.3,35.8 12.2,43 7.6,27.7 -17.3,46.3 -52.2,39 -4,-0.9 -8.3,-1.3 -9.6,-1 -3,0.7 -8.1,-2.4 -11.6,-7l-2.7,-3.5 4,-8.6c2.2,-4.7 4.5,-11.3 5.2,-14.7 0.6,-3.4 1.9,-8.2 2.9,-10.7 2.3,-6 6.2,-20.6 9.5,-36 6.4,-29.5 9.3,-40.2 14.3,-51.6 1.7,-3.8 3.7,-9.2 4.6,-11.9 0.9,-2.8 1.9,-5.6 2.1,-6.3 0.9,-2.6 3,-0.5 5.2,5.4"/></svg></div>
                   <div class="proto-info">
                     <span class="proto-title">amneziawg 3.1</span>
                     <span class="proto-detail">профиль amneziawg</span>
@@ -3801,8 +3867,7 @@
               </div>
             </div>
           </div>
-
-          <!-- 2. Германия -->
+          <!-- германия -->
           <div class="liquid-glass-card country-accordion" data-country-key="de" id="card-route-de">
             <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
               <div class="country-header-left">
@@ -3819,7 +3884,7 @@
                 </div>
                 <div>
                   <span class="country-name">германия</span>
-                  <span class="country-protos-summary">vless · trojan · hysteria 2 · tuic · awg1.5 · awg3.1</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · tuic · amneziawg 3.1</span>
                 </div>
               </div>
               <div class="country-chevron-arrow">
@@ -3830,16 +3895,55 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <div class="proto-row" data-route-key="de-vless" data-action-route="de-vless" role="button" tabindex="0">
-                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="#F8FAFC" stroke="#94A3B8" stroke-width="0.8"/></svg></div>
-                  <div class="proto-info"><span class="proto-title">vless</span><span class="proto-detail">websocket + tls</span><div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div></div>
+                <div class="proto-row" data-route-key="de-vless" data-route-tag="route:DE:VLESS" data-action-route="de-vless" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 1000 1000" width="18" height="18" fill="#DFDFD6"><path d="M530,530 L900,530 L650,650 L530,1000 Z M470,530 L470,900 L350,650 L0,530 Z M530,470 L530,100 L650,350 L1000,470 Z M470,470 L100,470 L350,350 L470,0 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">vless</span>
+                    <span class="proto-detail">websocket + tls</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="de-trojan" data-route-tag="route:DE:TROJAN" data-action-route="de-trojan" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#F59E0B" d="M19,3 L15,3 L13,6 L9,6 L7,9 L4,13 L4,16 L7,15 L6,21 L9,21 L11,17 L14,21 L16,21 L18,14 L16,10 L19,6 Z"/><path fill="#FDE68A" d="M15,5 L13,8 L10,8 L8,11 L6,13.5 L6,14.5 L8,13.8 L7.2,18 L8.8,18 L10.5,14.5 L13.5,18 L14.8,18 L16.5,12.5 L14.8,9.2 L17.2,6 Z"/><path fill="#182333" d="M8.5,11.5 A1,1 0 1,0 8.5,9.5 A1,1 0 1,0 8.5,11.5 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">trojan</span>
+                    <span class="proto-detail">websocket + tls</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="de-hy2" data-route-tag="route:DE:HYSTERIA2" data-action-route="de-hy2" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 442.19 323.31" width="18" height="18"><path fill="#FFFFFF" d="M72.8,140.45 L60.1,285.55 L102.51,285.55 L111.5,182.86 L111.54,182.86 L115.21,140.45 L72.8,140.45 Z M124.16,37.75 L81.76,37.75 L76.19,101.36 L118.59,101.36 L124.16,37.75 Z M318.36,285.56 L360.44,285.56 L366.01,221.95 L323.9,221.95 L318.36,285.56 Z M382.09,37.76 L340,37.76 L329.16,161.66 L221.09,161.66 L206.95,323.31 L292.78,201.84 L438.67,201.84 L442.19,161.66 L371.25,161.66 L382.09,37.76 Z"/><path fill="#FFBC00" d="M149.41,121.47 L3.52,121.47 L0,161.66 L221.09,161.66 L235.23,0 L149.41,121.47 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">hysteria 2</span>
+                    <span class="proto-detail">quic transport</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="de-tuic" data-route-tag="route:DE:TUIC" data-action-route="de-tuic" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#38BDF8" d="M22,12 L3,3 L7,12 L3,21 Z"/><path fill="#E0F2FE" d="M22,12 L7,12 L3,3 Z"/><path fill="#0284C7" d="M7,12 L3,21 L12,14.5 Z"/><path stroke="#7DD3FC" stroke-width="1.5" stroke-linecap="round" d="M2,7 L5,7 M1,12 L4,12 M2,17 L5,17"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">tuic</span>
+                    <span class="proto-detail">quic transport</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="de-awg" data-route-tag="route:DE:AWG" data-action-route="de-awg" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 568 568" width="18" height="18" fill="#FB7185"><path d="M472.8,24.2c-4.1,5.6 -9.5,14.9 -12.9,22.8 -2.9,6.6 -8.2,16.3 -16.3,29.8 -4.8,8 -14.3,8.9 -20.7,2.1 -2.6,-2.8 -8.9,-18.2 -8.9,-21.8 0,-7.2 -11,-8.5 -23,-2.7 -9.5,4.6 -12.6,4.6 -27,-0.5 -22.2,-7.8 -37.2,-11.8 -52,-13.9 -3.9,-0.6 -10.2,-1.5 -14,-2 -17.1,-2.4 -71,-0.1 -85,3.7 -12.1,3.3 -37.4,15.4 -54.9,26.3 -11.1,6.9 -13.4,8 -17.3,8 -4.5,0 -4.7,0.1 -12.2,9 -7.3,8.5 -16.2,16.8 -17.1,15.9 -0.2,-0.3 -0.9,-3.6 -1.5,-7.4 -2.3,-15.1 -12,-40.1 -20.3,-52.5 -1.8,-2.6 -3.7,-5.5 -4.3,-6.5 -1.6,-2.9 -3.2,-1 -5.4,6.4 -2.2,7.2 -2.5,16.5 -2.1,72.9 0.2,22.8 0,23.5 -10.7,37.1 -15.5,19.6 -29.9,54.7 -32.7,79.6 -0.8,7.1 -2.4,21.8 -3.7,32.5 -3.6,31.1 -3.5,35.3 1.4,53 1.1,4.1 3.1,11.4 4.4,16.1 1.2,4.8 4.4,13.3 7,19 2.5,5.7 5.9,13.6 7.4,17.5 12.3,30.9 53.6,76.9 79.9,89.1 23.9,11 29.5,15.2 34.1,25.4 1.4,2.9 4,8.3 5.8,11.9 1.9,3.6 6.7,14.3 10.8,23.8 18.9,44 22.8,45.4 29.8,11.1 7.3,-36.1 12.4,-39.7 49.9,-35.4 14.5,1.6 16.1,1.6 30.2,0 36.7,-4.1 35.8,-4.5 42.5,16.5 1.6,5.2 3,11.1 3,13.2s1.2,6.8 2.7,10.5c9.1,23.2 19,22.8 26.9,-0.9 1.5,-4.6 3.5,-9.4 4.4,-10.8s4.5,-8.1 7.9,-15c3.3,-6.9 7.8,-14.6 9.9,-17.2 16.9,-21.2 46.1,-47.9 73.6,-67.3 6.5,-4.6 17.5,-17.5 21.3,-24.9 1.4,-2.8 5.6,-9.7 9.3,-15.3 7.6,-11.4 12.1,-23.6 16.5,-44.6 1.4,-7.1 4,-15.3 6.4,-20.7 8.8,-19.7 11.5,-41.1 6.7,-51.6 -5.8,-12.5 -9.5,-53.5 -6.6,-71.9 2.1,-13.3 2.8,-25.5 1.9,-29.1 -1.1,-3.7 -9.1,-8.4 -14.4,-8.4 -8.9,0 -23.5,-15.2 -23.5,-24.4 0,-0.8 -2.2,-5.8 -5,-11 -5.6,-10.7 -5.8,-12.1 -3,-23.5 4.9,-19.7 8.3,-73 4.8,-75.9 -1.3,-1 -1.9,-0.7 -4,2M305.3,85.5c15.4,1.2 29.5,5.6 47.1,14.6 9.5,5 20.1,8.9 24.1,8.9 4.2,0 35.9,20.9 38,25.1 1.9,3.6 1.9,7.6 0,13 -0.9,2.4 -1.3,5.4 -1,6.6s0,4.4 -0.6,7c-2.5,11.2 -4,21.7 -4.9,35.8 -0.6,8.2 -1.9,20.2 -3.1,26.5 -1.1,6.3 -2.6,16.2 -3.3,22 -1.7,13.4 -4.1,25.4 -7,35.5 -4.2,14.1 -7.4,26.9 -8,31.5 -0.4,2.5 -2,9.9 -3.5,16.5 -1.6,6.6 -3.5,16.3 -4.1,21.5 -2.7,21.7 -10.3,50.7 -16.5,63 -5.4,10.5 -8.8,14 -11.4,11.6 -2.3,-2.1 -8.1,-16.2 -8.1,-19.8 0,-1.3 -1.2,-5 -2.6,-8.3s-3.6,-9.8 -4.8,-14.5c-1.3,-4.7 -3.2,-10.3 -4.3,-12.5s-2.4,-5.1 -2.8,-6.5 -2.5,-6.3 -4.7,-10.9c-5.7,-12.2 -8.5,-21.6 -9.3,-30.6 -0.8,-9.7 -1.8,-13.7 -5.6,-23.8 -1.6,-4.3 -3.6,-12.2 -4.4,-17.5s-2.2,-14.4 -3.1,-20.2c-1.7,-12.1 -2.5,-15.3 -6.4,-27 -3.6,-10.8 -8.2,-25.5 -11,-34.6 -3.6,-12.1 -4,-12.2 -8.9,-0.3 -5.7,14.1 -12.9,36.3 -14.6,45.2 -2.9,15.6 -8.1,40.7 -10.5,50.7 -1,4.1 -2.6,11.5 -3.5,16.5 -0.9,4.9 -3.2,12.8 -5.1,17.5 -5.4,12.9 -7.3,18 -9.4,24 -9.8,29.2 -25.8,73.1 -27.6,75.8 -2.4,3.7 -7.1,2.7 -11,-2.5 -4.5,-5.9 -7.6,-14.7 -13.9,-39.3 -3,-11.8 -6.6,-25.6 -8,-30.5 -4.8,-16.8 -10.5,-38.9 -15,-58.5 -2.4,-10.7 -5.2,-22.4 -6.1,-26 -1.6,-6.7 -4.5,-19.2 -8.8,-38.5 -1.4,-6.1 -3.2,-15.5 -4.1,-21s-2.2,-12.9 -3,-16.5 -1.9,-10.1 -2.5,-14.5 -2,-11.2 -3.1,-15.2c-1.1,-3.9 -2.4,-10.2 -3,-14 -0.5,-3.7 -1.2,-8.2 -1.5,-10 -1.6,-8.9 29.9,-30.1 58.6,-39.6 37.3,-12.2 56.4,-15.9 83.7,-16.1 11.7,-0.1 21.6,-0.5 22,-1 0.4,-0.4 2.8,-0.5 5.3,-0.2s7.5,0.8 11.3,1.1m146.9,111.2c22.3,23 22.4,98.5 0.3,144.8 -2.9,6 -6.2,13.9 -7.4,17.3 -8.3,24.4 -39.3,60.8 -44.6,52.2 -0.7,-1.1 4,-17.4 5.9,-20.5 2.2,-3.5 5.2,-17.2 6.1,-27.5 0.8,-9.2 3,-20.1 6.1,-30 1.3,-4.1 2.6,-9.5 3,-12s2.2,-10.2 4,-17.2 4,-17.8 4.8,-24 2.2,-14.6 3.1,-18.7c1.5,-7.1 2.4,-12.1 6,-35.6 0.8,-5.5 2.4,-12.7 3.5,-15.9 1.1,-3.3 2,-8.3 2,-11.1 0,-8.1 0.9,-8.3 7.2,-1.8m-361.5,3.8c4.9,8.5 8.8,18.1 12.8,31 4.9,16.2 7.7,23.9 11,30.5 5.6,11 11.7,32.9 16.4,58.5 1.1,6 2.9,15.3 4.1,20.5 3.8,17.3 3,56.1 -1.2,61.6 -7.8,9.9 -33,-7.3 -47.1,-32.1 -1.9,-3.3 -5.5,-9.4 -8,-13.5 -5.1,-8.2 -14.5,-30 -18.4,-42.5 -4.3,-13.7 -1.7,-66.3 4,-82C68.9,219.9 83.6,193 86,193c0.3,0 2.4,3.4 4.7,7.5m191,108.1c1.2,3.2 3.1,9.5 4.2,13.9s3.5,13.2 5.2,19.5c1.8,6.3 3.5,14.2 3.9,17.5 0.5,3.3 1.7,9.1 2.8,13 3.6,12.4 10.3,35.8 12.2,43 7.6,27.7 -17.3,46.3 -52.2,39 -4,-0.9 -8.3,-1.3 -9.6,-1 -3,0.7 -8.1,-2.4 -11.6,-7l-2.7,-3.5 4,-8.6c2.2,-4.7 4.5,-11.3 5.2,-14.7 0.6,-3.4 1.9,-8.2 2.9,-10.7 2.3,-6 6.2,-20.6 9.5,-36 6.4,-29.5 9.3,-40.2 14.3,-51.6 1.7,-3.8 3.7,-9.2 4.6,-11.9 0.9,-2.8 1.9,-5.6 2.1,-6.3 0.9,-2.6 3,-0.5 5.2,5.4"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">amneziawg 3.1</span>
+                    <span class="proto-detail">профиль amneziawg</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
               </div>
             </div>
           </div>
-
-          <!-- 3. Россия -->
+          <!-- россия -->
           <div class="liquid-glass-card country-accordion" data-country-key="ru" id="card-route-ru">
             <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
               <div class="country-header-left">
@@ -3856,7 +3960,7 @@
                 </div>
                 <div>
                   <span class="country-name">россия</span>
-                  <span class="country-protos-summary">vless · trojan · hysteria 2 · awg1.5 · awg3.1</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · amneziawg 3.1</span>
                 </div>
               </div>
               <div class="country-chevron-arrow">
@@ -3867,16 +3971,46 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <div class="proto-row" data-route-key="ru-vless" data-action-route="ru-vless" role="button" tabindex="0">
-                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="#F8FAFC" stroke="#94A3B8" stroke-width="0.8"/></svg></div>
-                  <div class="proto-info"><span class="proto-title">vless</span><span class="proto-detail">websocket + tls</span><div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div></div>
+                <div class="proto-row" data-route-key="ru-vless" data-route-tag="route:RU:VLESS" data-action-route="ru-vless" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 1000 1000" width="18" height="18" fill="#DFDFD6"><path d="M530,530 L900,530 L650,650 L530,1000 Z M470,530 L470,900 L350,650 L0,530 Z M530,470 L530,100 L650,350 L1000,470 Z M470,470 L100,470 L350,350 L470,0 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">vless</span>
+                    <span class="proto-detail">websocket + tls</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="ru-trojan" data-route-tag="route:RU:TROJAN" data-action-route="ru-trojan" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#F59E0B" d="M19,3 L15,3 L13,6 L9,6 L7,9 L4,13 L4,16 L7,15 L6,21 L9,21 L11,17 L14,21 L16,21 L18,14 L16,10 L19,6 Z"/><path fill="#FDE68A" d="M15,5 L13,8 L10,8 L8,11 L6,13.5 L6,14.5 L8,13.8 L7.2,18 L8.8,18 L10.5,14.5 L13.5,18 L14.8,18 L16.5,12.5 L14.8,9.2 L17.2,6 Z"/><path fill="#182333" d="M8.5,11.5 A1,1 0 1,0 8.5,9.5 A1,1 0 1,0 8.5,11.5 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">trojan</span>
+                    <span class="proto-detail">websocket + tls</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="ru-hy2" data-route-tag="route:RU:HYSTERIA2" data-action-route="ru-hy2" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 442.19 323.31" width="18" height="18"><path fill="#FFFFFF" d="M72.8,140.45 L60.1,285.55 L102.51,285.55 L111.5,182.86 L111.54,182.86 L115.21,140.45 L72.8,140.45 Z M124.16,37.75 L81.76,37.75 L76.19,101.36 L118.59,101.36 L124.16,37.75 Z M318.36,285.56 L360.44,285.56 L366.01,221.95 L323.9,221.95 L318.36,285.56 Z M382.09,37.76 L340,37.76 L329.16,161.66 L221.09,161.66 L206.95,323.31 L292.78,201.84 L438.67,201.84 L442.19,161.66 L371.25,161.66 L382.09,37.76 Z"/><path fill="#FFBC00" d="M149.41,121.47 L3.52,121.47 L0,161.66 L221.09,161.66 L235.23,0 L149.41,121.47 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">hysteria 2</span>
+                    <span class="proto-detail">quic transport</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="ru-awg" data-route-tag="route:RU:AWG" data-action-route="ru-awg" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 568 568" width="18" height="18" fill="#FB7185"><path d="M472.8,24.2c-4.1,5.6 -9.5,14.9 -12.9,22.8 -2.9,6.6 -8.2,16.3 -16.3,29.8 -4.8,8 -14.3,8.9 -20.7,2.1 -2.6,-2.8 -8.9,-18.2 -8.9,-21.8 0,-7.2 -11,-8.5 -23,-2.7 -9.5,4.6 -12.6,4.6 -27,-0.5 -22.2,-7.8 -37.2,-11.8 -52,-13.9 -3.9,-0.6 -10.2,-1.5 -14,-2 -17.1,-2.4 -71,-0.1 -85,3.7 -12.1,3.3 -37.4,15.4 -54.9,26.3 -11.1,6.9 -13.4,8 -17.3,8 -4.5,0 -4.7,0.1 -12.2,9 -7.3,8.5 -16.2,16.8 -17.1,15.9 -0.2,-0.3 -0.9,-3.6 -1.5,-7.4 -2.3,-15.1 -12,-40.1 -20.3,-52.5 -1.8,-2.6 -3.7,-5.5 -4.3,-6.5 -1.6,-2.9 -3.2,-1 -5.4,6.4 -2.2,7.2 -2.5,16.5 -2.1,72.9 0.2,22.8 0,23.5 -10.7,37.1 -15.5,19.6 -29.9,54.7 -32.7,79.6 -0.8,7.1 -2.4,21.8 -3.7,32.5 -3.6,31.1 -3.5,35.3 1.4,53 1.1,4.1 3.1,11.4 4.4,16.1 1.2,4.8 4.4,13.3 7,19 2.5,5.7 5.9,13.6 7.4,17.5 12.3,30.9 53.6,76.9 79.9,89.1 23.9,11 29.5,15.2 34.1,25.4 1.4,2.9 4,8.3 5.8,11.9 1.9,3.6 6.7,14.3 10.8,23.8 18.9,44 22.8,45.4 29.8,11.1 7.3,-36.1 12.4,-39.7 49.9,-35.4 14.5,1.6 16.1,1.6 30.2,0 36.7,-4.1 35.8,-4.5 42.5,16.5 1.6,5.2 3,11.1 3,13.2s1.2,6.8 2.7,10.5c9.1,23.2 19,22.8 26.9,-0.9 1.5,-4.6 3.5,-9.4 4.4,-10.8s4.5,-8.1 7.9,-15c3.3,-6.9 7.8,-14.6 9.9,-17.2 16.9,-21.2 46.1,-47.9 73.6,-67.3 6.5,-4.6 17.5,-17.5 21.3,-24.9 1.4,-2.8 5.6,-9.7 9.3,-15.3 7.6,-11.4 12.1,-23.6 16.5,-44.6 1.4,-7.1 4,-15.3 6.4,-20.7 8.8,-19.7 11.5,-41.1 6.7,-51.6 -5.8,-12.5 -9.5,-53.5 -6.6,-71.9 2.1,-13.3 2.8,-25.5 1.9,-29.1 -1.1,-3.7 -9.1,-8.4 -14.4,-8.4 -8.9,0 -23.5,-15.2 -23.5,-24.4 0,-0.8 -2.2,-5.8 -5,-11 -5.6,-10.7 -5.8,-12.1 -3,-23.5 4.9,-19.7 8.3,-73 4.8,-75.9 -1.3,-1 -1.9,-0.7 -4,2M305.3,85.5c15.4,1.2 29.5,5.6 47.1,14.6 9.5,5 20.1,8.9 24.1,8.9 4.2,0 35.9,20.9 38,25.1 1.9,3.6 1.9,7.6 0,13 -0.9,2.4 -1.3,5.4 -1,6.6s0,4.4 -0.6,7c-2.5,11.2 -4,21.7 -4.9,35.8 -0.6,8.2 -1.9,20.2 -3.1,26.5 -1.1,6.3 -2.6,16.2 -3.3,22 -1.7,13.4 -4.1,25.4 -7,35.5 -4.2,14.1 -7.4,26.9 -8,31.5 -0.4,2.5 -2,9.9 -3.5,16.5 -1.6,6.6 -3.5,16.3 -4.1,21.5 -2.7,21.7 -10.3,50.7 -16.5,63 -5.4,10.5 -8.8,14 -11.4,11.6 -2.3,-2.1 -8.1,-16.2 -8.1,-19.8 0,-1.3 -1.2,-5 -2.6,-8.3s-3.6,-9.8 -4.8,-14.5c-1.3,-4.7 -3.2,-10.3 -4.3,-12.5s-2.4,-5.1 -2.8,-6.5 -2.5,-6.3 -4.7,-10.9c-5.7,-12.2 -8.5,-21.6 -9.3,-30.6 -0.8,-9.7 -1.8,-13.7 -5.6,-23.8 -1.6,-4.3 -3.6,-12.2 -4.4,-17.5s-2.2,-14.4 -3.1,-20.2c-1.7,-12.1 -2.5,-15.3 -6.4,-27 -3.6,-10.8 -8.2,-25.5 -11,-34.6 -3.6,-12.1 -4,-12.2 -8.9,-0.3 -5.7,14.1 -12.9,36.3 -14.6,45.2 -2.9,15.6 -8.1,40.7 -10.5,50.7 -1,4.1 -2.6,11.5 -3.5,16.5 -0.9,4.9 -3.2,12.8 -5.1,17.5 -5.4,12.9 -7.3,18 -9.4,24 -9.8,29.2 -25.8,73.1 -27.6,75.8 -2.4,3.7 -7.1,2.7 -11,-2.5 -4.5,-5.9 -7.6,-14.7 -13.9,-39.3 -3,-11.8 -6.6,-25.6 -8,-30.5 -4.8,-16.8 -10.5,-38.9 -15,-58.5 -2.4,-10.7 -5.2,-22.4 -6.1,-26 -1.6,-6.7 -4.5,-19.2 -8.8,-38.5 -1.4,-6.1 -3.2,-15.5 -4.1,-21s-2.2,-12.9 -3,-16.5 -1.9,-10.1 -2.5,-14.5 -2,-11.2 -3.1,-15.2c-1.1,-3.9 -2.4,-10.2 -3,-14 -0.5,-3.7 -1.2,-8.2 -1.5,-10 -1.6,-8.9 29.9,-30.1 58.6,-39.6 37.3,-12.2 56.4,-15.9 83.7,-16.1 11.7,-0.1 21.6,-0.5 22,-1 0.4,-0.4 2.8,-0.5 5.3,-0.2s7.5,0.8 11.3,1.1m146.9,111.2c22.3,23 22.4,98.5 0.3,144.8 -2.9,6 -6.2,13.9 -7.4,17.3 -8.3,24.4 -39.3,60.8 -44.6,52.2 -0.7,-1.1 4,-17.4 5.9,-20.5 2.2,-3.5 5.2,-17.2 6.1,-27.5 0.8,-9.2 3,-20.1 6.1,-30 1.3,-4.1 2.6,-9.5 3,-12s2.2,-10.2 4,-17.2 4,-17.8 4.8,-24 2.2,-14.6 3.1,-18.7c1.5,-7.1 2.4,-12.1 6,-35.6 0.8,-5.5 2.4,-12.7 3.5,-15.9 1.1,-3.3 2,-8.3 2,-11.1 0,-8.1 0.9,-8.3 7.2,-1.8m-361.5,3.8c4.9,8.5 8.8,18.1 12.8,31 4.9,16.2 7.7,23.9 11,30.5 5.6,11 11.7,32.9 16.4,58.5 1.1,6 2.9,15.3 4.1,20.5 3.8,17.3 3,56.1 -1.2,61.6 -7.8,9.9 -33,-7.3 -47.1,-32.1 -1.9,-3.3 -5.5,-9.4 -8,-13.5 -5.1,-8.2 -14.5,-30 -18.4,-42.5 -4.3,-13.7 -1.7,-66.3 4,-82C68.9,219.9 83.6,193 86,193c0.3,0 2.4,3.4 4.7,7.5m191,108.1c1.2,3.2 3.1,9.5 4.2,13.9s3.5,13.2 5.2,19.5c1.8,6.3 3.5,14.2 3.9,17.5 0.5,3.3 1.7,9.1 2.8,13 3.6,12.4 10.3,35.8 12.2,43 7.6,27.7 -17.3,46.3 -52.2,39 -4,-0.9 -8.3,-1.3 -9.6,-1 -3,0.7 -8.1,-2.4 -11.6,-7l-2.7,-3.5 4,-8.6c2.2,-4.7 4.5,-11.3 5.2,-14.7 0.6,-3.4 1.9,-8.2 2.9,-10.7 2.3,-6 6.2,-20.6 9.5,-36 6.4,-29.5 9.3,-40.2 14.3,-51.6 1.7,-3.8 3.7,-9.2 4.6,-11.9 0.9,-2.8 1.9,-5.6 2.1,-6.3 0.9,-2.6 3,-0.5 5.2,5.4"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">amneziawg 3.1</span>
+                    <span class="proto-detail">профиль amneziawg</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
               </div>
             </div>
           </div>
-
-          <!-- 4. Финляндия -->
+          <!-- финляндия -->
           <div class="liquid-glass-card country-accordion" data-country-key="fi" id="card-route-fi">
             <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
               <div class="country-header-left">
@@ -3893,7 +4027,7 @@
                 </div>
                 <div>
                   <span class="country-name">финляндия</span>
-                  <span class="country-protos-summary">vless · trojan · hysteria 2 · awg1.5 · awg3.1</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · tuic · amneziawg 3.1</span>
                 </div>
               </div>
               <div class="country-chevron-arrow">
@@ -3904,16 +4038,55 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <div class="proto-row" data-route-key="fi-vless" data-action-route="fi-vless" role="button" tabindex="0">
-                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="#F8FAFC" stroke="#94A3B8" stroke-width="0.8"/></svg></div>
-                  <div class="proto-info"><span class="proto-title">vless</span><span class="proto-detail">websocket + tls</span><div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div></div>
+                <div class="proto-row" data-route-key="fi-vless" data-route-tag="route:FI:VLESS" data-action-route="fi-vless" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 1000 1000" width="18" height="18" fill="#DFDFD6"><path d="M530,530 L900,530 L650,650 L530,1000 Z M470,530 L470,900 L350,650 L0,530 Z M530,470 L530,100 L650,350 L1000,470 Z M470,470 L100,470 L350,350 L470,0 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">vless</span>
+                    <span class="proto-detail">websocket + tls</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="fi-trojan" data-route-tag="route:FI:TROJAN" data-action-route="fi-trojan" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#F59E0B" d="M19,3 L15,3 L13,6 L9,6 L7,9 L4,13 L4,16 L7,15 L6,21 L9,21 L11,17 L14,21 L16,21 L18,14 L16,10 L19,6 Z"/><path fill="#FDE68A" d="M15,5 L13,8 L10,8 L8,11 L6,13.5 L6,14.5 L8,13.8 L7.2,18 L8.8,18 L10.5,14.5 L13.5,18 L14.8,18 L16.5,12.5 L14.8,9.2 L17.2,6 Z"/><path fill="#182333" d="M8.5,11.5 A1,1 0 1,0 8.5,9.5 A1,1 0 1,0 8.5,11.5 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">trojan</span>
+                    <span class="proto-detail">websocket + tls</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="fi-hy2" data-route-tag="route:FI:HYSTERIA2" data-action-route="fi-hy2" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 442.19 323.31" width="18" height="18"><path fill="#FFFFFF" d="M72.8,140.45 L60.1,285.55 L102.51,285.55 L111.5,182.86 L111.54,182.86 L115.21,140.45 L72.8,140.45 Z M124.16,37.75 L81.76,37.75 L76.19,101.36 L118.59,101.36 L124.16,37.75 Z M318.36,285.56 L360.44,285.56 L366.01,221.95 L323.9,221.95 L318.36,285.56 Z M382.09,37.76 L340,37.76 L329.16,161.66 L221.09,161.66 L206.95,323.31 L292.78,201.84 L438.67,201.84 L442.19,161.66 L371.25,161.66 L382.09,37.76 Z"/><path fill="#FFBC00" d="M149.41,121.47 L3.52,121.47 L0,161.66 L221.09,161.66 L235.23,0 L149.41,121.47 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">hysteria 2</span>
+                    <span class="proto-detail">quic transport</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="fi-tuic" data-route-tag="route:FI:TUIC" data-action-route="fi-tuic" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#38BDF8" d="M22,12 L3,3 L7,12 L3,21 Z"/><path fill="#E0F2FE" d="M22,12 L7,12 L3,3 Z"/><path fill="#0284C7" d="M7,12 L3,21 L12,14.5 Z"/><path stroke="#7DD3FC" stroke-width="1.5" stroke-linecap="round" d="M2,7 L5,7 M1,12 L4,12 M2,17 L5,17"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">tuic</span>
+                    <span class="proto-detail">quic transport</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="fi-awg" data-route-tag="route:FI:AWG" data-action-route="fi-awg" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 568 568" width="18" height="18" fill="#FB7185"><path d="M472.8,24.2c-4.1,5.6 -9.5,14.9 -12.9,22.8 -2.9,6.6 -8.2,16.3 -16.3,29.8 -4.8,8 -14.3,8.9 -20.7,2.1 -2.6,-2.8 -8.9,-18.2 -8.9,-21.8 0,-7.2 -11,-8.5 -23,-2.7 -9.5,4.6 -12.6,4.6 -27,-0.5 -22.2,-7.8 -37.2,-11.8 -52,-13.9 -3.9,-0.6 -10.2,-1.5 -14,-2 -17.1,-2.4 -71,-0.1 -85,3.7 -12.1,3.3 -37.4,15.4 -54.9,26.3 -11.1,6.9 -13.4,8 -17.3,8 -4.5,0 -4.7,0.1 -12.2,9 -7.3,8.5 -16.2,16.8 -17.1,15.9 -0.2,-0.3 -0.9,-3.6 -1.5,-7.4 -2.3,-15.1 -12,-40.1 -20.3,-52.5 -1.8,-2.6 -3.7,-5.5 -4.3,-6.5 -1.6,-2.9 -3.2,-1 -5.4,6.4 -2.2,7.2 -2.5,16.5 -2.1,72.9 0.2,22.8 0,23.5 -10.7,37.1 -15.5,19.6 -29.9,54.7 -32.7,79.6 -0.8,7.1 -2.4,21.8 -3.7,32.5 -3.6,31.1 -3.5,35.3 1.4,53 1.1,4.1 3.1,11.4 4.4,16.1 1.2,4.8 4.4,13.3 7,19 2.5,5.7 5.9,13.6 7.4,17.5 12.3,30.9 53.6,76.9 79.9,89.1 23.9,11 29.5,15.2 34.1,25.4 1.4,2.9 4,8.3 5.8,11.9 1.9,3.6 6.7,14.3 10.8,23.8 18.9,44 22.8,45.4 29.8,11.1 7.3,-36.1 12.4,-39.7 49.9,-35.4 14.5,1.6 16.1,1.6 30.2,0 36.7,-4.1 35.8,-4.5 42.5,16.5 1.6,5.2 3,11.1 3,13.2s1.2,6.8 2.7,10.5c9.1,23.2 19,22.8 26.9,-0.9 1.5,-4.6 3.5,-9.4 4.4,-10.8s4.5,-8.1 7.9,-15c3.3,-6.9 7.8,-14.6 9.9,-17.2 16.9,-21.2 46.1,-47.9 73.6,-67.3 6.5,-4.6 17.5,-17.5 21.3,-24.9 1.4,-2.8 5.6,-9.7 9.3,-15.3 7.6,-11.4 12.1,-23.6 16.5,-44.6 1.4,-7.1 4,-15.3 6.4,-20.7 8.8,-19.7 11.5,-41.1 6.7,-51.6 -5.8,-12.5 -9.5,-53.5 -6.6,-71.9 2.1,-13.3 2.8,-25.5 1.9,-29.1 -1.1,-3.7 -9.1,-8.4 -14.4,-8.4 -8.9,0 -23.5,-15.2 -23.5,-24.4 0,-0.8 -2.2,-5.8 -5,-11 -5.6,-10.7 -5.8,-12.1 -3,-23.5 4.9,-19.7 8.3,-73 4.8,-75.9 -1.3,-1 -1.9,-0.7 -4,2M305.3,85.5c15.4,1.2 29.5,5.6 47.1,14.6 9.5,5 20.1,8.9 24.1,8.9 4.2,0 35.9,20.9 38,25.1 1.9,3.6 1.9,7.6 0,13 -0.9,2.4 -1.3,5.4 -1,6.6s0,4.4 -0.6,7c-2.5,11.2 -4,21.7 -4.9,35.8 -0.6,8.2 -1.9,20.2 -3.1,26.5 -1.1,6.3 -2.6,16.2 -3.3,22 -1.7,13.4 -4.1,25.4 -7,35.5 -4.2,14.1 -7.4,26.9 -8,31.5 -0.4,2.5 -2,9.9 -3.5,16.5 -1.6,6.6 -3.5,16.3 -4.1,21.5 -2.7,21.7 -10.3,50.7 -16.5,63 -5.4,10.5 -8.8,14 -11.4,11.6 -2.3,-2.1 -8.1,-16.2 -8.1,-19.8 0,-1.3 -1.2,-5 -2.6,-8.3s-3.6,-9.8 -4.8,-14.5c-1.3,-4.7 -3.2,-10.3 -4.3,-12.5s-2.4,-5.1 -2.8,-6.5 -2.5,-6.3 -4.7,-10.9c-5.7,-12.2 -8.5,-21.6 -9.3,-30.6 -0.8,-9.7 -1.8,-13.7 -5.6,-23.8 -1.6,-4.3 -3.6,-12.2 -4.4,-17.5s-2.2,-14.4 -3.1,-20.2c-1.7,-12.1 -2.5,-15.3 -6.4,-27 -3.6,-10.8 -8.2,-25.5 -11,-34.6 -3.6,-12.1 -4,-12.2 -8.9,-0.3 -5.7,14.1 -12.9,36.3 -14.6,45.2 -2.9,15.6 -8.1,40.7 -10.5,50.7 -1,4.1 -2.6,11.5 -3.5,16.5 -0.9,4.9 -3.2,12.8 -5.1,17.5 -5.4,12.9 -7.3,18 -9.4,24 -9.8,29.2 -25.8,73.1 -27.6,75.8 -2.4,3.7 -7.1,2.7 -11,-2.5 -4.5,-5.9 -7.6,-14.7 -13.9,-39.3 -3,-11.8 -6.6,-25.6 -8,-30.5 -4.8,-16.8 -10.5,-38.9 -15,-58.5 -2.4,-10.7 -5.2,-22.4 -6.1,-26 -1.6,-6.7 -4.5,-19.2 -8.8,-38.5 -1.4,-6.1 -3.2,-15.5 -4.1,-21s-2.2,-12.9 -3,-16.5 -1.9,-10.1 -2.5,-14.5 -2,-11.2 -3.1,-15.2c-1.1,-3.9 -2.4,-10.2 -3,-14 -0.5,-3.7 -1.2,-8.2 -1.5,-10 -1.6,-8.9 29.9,-30.1 58.6,-39.6 37.3,-12.2 56.4,-15.9 83.7,-16.1 11.7,-0.1 21.6,-0.5 22,-1 0.4,-0.4 2.8,-0.5 5.3,-0.2s7.5,0.8 11.3,1.1m146.9,111.2c22.3,23 22.4,98.5 0.3,144.8 -2.9,6 -6.2,13.9 -7.4,17.3 -8.3,24.4 -39.3,60.8 -44.6,52.2 -0.7,-1.1 4,-17.4 5.9,-20.5 2.2,-3.5 5.2,-17.2 6.1,-27.5 0.8,-9.2 3,-20.1 6.1,-30 1.3,-4.1 2.6,-9.5 3,-12s2.2,-10.2 4,-17.2 4,-17.8 4.8,-24 2.2,-14.6 3.1,-18.7c1.5,-7.1 2.4,-12.1 6,-35.6 0.8,-5.5 2.4,-12.7 3.5,-15.9 1.1,-3.3 2,-8.3 2,-11.1 0,-8.1 0.9,-8.3 7.2,-1.8m-361.5,3.8c4.9,8.5 8.8,18.1 12.8,31 4.9,16.2 7.7,23.9 11,30.5 5.6,11 11.7,32.9 16.4,58.5 1.1,6 2.9,15.3 4.1,20.5 3.8,17.3 3,56.1 -1.2,61.6 -7.8,9.9 -33,-7.3 -47.1,-32.1 -1.9,-3.3 -5.5,-9.4 -8,-13.5 -5.1,-8.2 -14.5,-30 -18.4,-42.5 -4.3,-13.7 -1.7,-66.3 4,-82C68.9,219.9 83.6,193 86,193c0.3,0 2.4,3.4 4.7,7.5m191,108.1c1.2,3.2 3.1,9.5 4.2,13.9s3.5,13.2 5.2,19.5c1.8,6.3 3.5,14.2 3.9,17.5 0.5,3.3 1.7,9.1 2.8,13 3.6,12.4 10.3,35.8 12.2,43 7.6,27.7 -17.3,46.3 -52.2,39 -4,-0.9 -8.3,-1.3 -9.6,-1 -3,0.7 -8.1,-2.4 -11.6,-7l-2.7,-3.5 4,-8.6c2.2,-4.7 4.5,-11.3 5.2,-14.7 0.6,-3.4 1.9,-8.2 2.9,-10.7 2.3,-6 6.2,-20.6 9.5,-36 6.4,-29.5 9.3,-40.2 14.3,-51.6 1.7,-3.8 3.7,-9.2 4.6,-11.9 0.9,-2.8 1.9,-5.6 2.1,-6.3 0.9,-2.6 3,-0.5 5.2,5.4"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">amneziawg 3.1</span>
+                    <span class="proto-detail">профиль amneziawg</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
               </div>
             </div>
           </div>
-
-          <!-- 5. Италия -->
+          <!-- италия -->
           <div class="liquid-glass-card country-accordion" data-country-key="it" id="card-route-it">
             <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
               <div class="country-header-left">
@@ -3930,7 +4103,7 @@
                 </div>
                 <div>
                   <span class="country-name">италия</span>
-                  <span class="country-protos-summary">vless · trojan · hysteria 2 · awg1.5 · awg3.1</span>
+                  <span class="country-protos-summary">vless · trojan · hysteria 2 · tuic · amneziawg 3.1</span>
                 </div>
               </div>
               <div class="country-chevron-arrow">
@@ -3941,15 +4114,54 @@
             </div>
             <div class="country-accordion-body">
               <div class="proto-list">
-                <div class="proto-row" data-route-key="it-vless" data-action-route="it-vless" role="button" tabindex="0">
-                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="#F8FAFC" stroke="#94A3B8" stroke-width="0.8"/></svg></div>
-                  <div class="proto-info"><span class="proto-title">vless</span><span class="proto-detail">websocket + tls</span><div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div></div>
+                <div class="proto-row" data-route-key="it-vless" data-route-tag="route:IT:VLESS" data-action-route="it-vless" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 1000 1000" width="18" height="18" fill="#DFDFD6"><path d="M530,530 L900,530 L650,650 L530,1000 Z M470,530 L470,900 L350,650 L0,530 Z M530,470 L530,100 L650,350 L1000,470 Z M470,470 L100,470 L350,350 L470,0 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">vless</span>
+                    <span class="proto-detail">websocket + tls</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="it-trojan" data-route-tag="route:IT:TROJAN" data-action-route="it-trojan" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#F59E0B" d="M19,3 L15,3 L13,6 L9,6 L7,9 L4,13 L4,16 L7,15 L6,21 L9,21 L11,17 L14,21 L16,21 L18,14 L16,10 L19,6 Z"/><path fill="#FDE68A" d="M15,5 L13,8 L10,8 L8,11 L6,13.5 L6,14.5 L8,13.8 L7.2,18 L8.8,18 L10.5,14.5 L13.5,18 L14.8,18 L16.5,12.5 L14.8,9.2 L17.2,6 Z"/><path fill="#182333" d="M8.5,11.5 A1,1 0 1,0 8.5,9.5 A1,1 0 1,0 8.5,11.5 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">trojan</span>
+                    <span class="proto-detail">websocket + tls</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="it-hy2" data-route-tag="route:IT:HYSTERIA2" data-action-route="it-hy2" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 442.19 323.31" width="18" height="18"><path fill="#FFFFFF" d="M72.8,140.45 L60.1,285.55 L102.51,285.55 L111.5,182.86 L111.54,182.86 L115.21,140.45 L72.8,140.45 Z M124.16,37.75 L81.76,37.75 L76.19,101.36 L118.59,101.36 L124.16,37.75 Z M318.36,285.56 L360.44,285.56 L366.01,221.95 L323.9,221.95 L318.36,285.56 Z M382.09,37.76 L340,37.76 L329.16,161.66 L221.09,161.66 L206.95,323.31 L292.78,201.84 L438.67,201.84 L442.19,161.66 L371.25,161.66 L382.09,37.76 Z"/><path fill="#FFBC00" d="M149.41,121.47 L3.52,121.47 L0,161.66 L221.09,161.66 L235.23,0 L149.41,121.47 Z"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">hysteria 2</span>
+                    <span class="proto-detail">quic transport</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="it-tuic" data-route-tag="route:IT:TUIC" data-action-route="it-tuic" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="18" height="18"><path fill="#38BDF8" d="M22,12 L3,3 L7,12 L3,21 Z"/><path fill="#E0F2FE" d="M22,12 L7,12 L3,3 Z"/><path fill="#0284C7" d="M7,12 L3,21 L12,14.5 Z"/><path stroke="#7DD3FC" stroke-width="1.5" stroke-linecap="round" d="M2,7 L5,7 M1,12 L4,12 M2,17 L5,17"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">tuic</span>
+                    <span class="proto-detail">quic transport</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
+                  <span class="proto-selected-mark">выбрано</span>
+                </div>
+                <div class="proto-row" data-route-key="it-awg" data-route-tag="route:IT:AWG" data-action-route="it-awg" role="button" tabindex="0">
+                  <div class="proto-icon-box"><svg viewBox="0 0 568 568" width="18" height="18" fill="#FB7185"><path d="M472.8,24.2c-4.1,5.6 -9.5,14.9 -12.9,22.8 -2.9,6.6 -8.2,16.3 -16.3,29.8 -4.8,8 -14.3,8.9 -20.7,2.1 -2.6,-2.8 -8.9,-18.2 -8.9,-21.8 0,-7.2 -11,-8.5 -23,-2.7 -9.5,4.6 -12.6,4.6 -27,-0.5 -22.2,-7.8 -37.2,-11.8 -52,-13.9 -3.9,-0.6 -10.2,-1.5 -14,-2 -17.1,-2.4 -71,-0.1 -85,3.7 -12.1,3.3 -37.4,15.4 -54.9,26.3 -11.1,6.9 -13.4,8 -17.3,8 -4.5,0 -4.7,0.1 -12.2,9 -7.3,8.5 -16.2,16.8 -17.1,15.9 -0.2,-0.3 -0.9,-3.6 -1.5,-7.4 -2.3,-15.1 -12,-40.1 -20.3,-52.5 -1.8,-2.6 -3.7,-5.5 -4.3,-6.5 -1.6,-2.9 -3.2,-1 -5.4,6.4 -2.2,7.2 -2.5,16.5 -2.1,72.9 0.2,22.8 0,23.5 -10.7,37.1 -15.5,19.6 -29.9,54.7 -32.7,79.6 -0.8,7.1 -2.4,21.8 -3.7,32.5 -3.6,31.1 -3.5,35.3 1.4,53 1.1,4.1 3.1,11.4 4.4,16.1 1.2,4.8 4.4,13.3 7,19 2.5,5.7 5.9,13.6 7.4,17.5 12.3,30.9 53.6,76.9 79.9,89.1 23.9,11 29.5,15.2 34.1,25.4 1.4,2.9 4,8.3 5.8,11.9 1.9,3.6 6.7,14.3 10.8,23.8 18.9,44 22.8,45.4 29.8,11.1 7.3,-36.1 12.4,-39.7 49.9,-35.4 14.5,1.6 16.1,1.6 30.2,0 36.7,-4.1 35.8,-4.5 42.5,16.5 1.6,5.2 3,11.1 3,13.2s1.2,6.8 2.7,10.5c9.1,23.2 19,22.8 26.9,-0.9 1.5,-4.6 3.5,-9.4 4.4,-10.8s4.5,-8.1 7.9,-15c3.3,-6.9 7.8,-14.6 9.9,-17.2 16.9,-21.2 46.1,-47.9 73.6,-67.3 6.5,-4.6 17.5,-17.5 21.3,-24.9 1.4,-2.8 5.6,-9.7 9.3,-15.3 7.6,-11.4 12.1,-23.6 16.5,-44.6 1.4,-7.1 4,-15.3 6.4,-20.7 8.8,-19.7 11.5,-41.1 6.7,-51.6 -5.8,-12.5 -9.5,-53.5 -6.6,-71.9 2.1,-13.3 2.8,-25.5 1.9,-29.1 -1.1,-3.7 -9.1,-8.4 -14.4,-8.4 -8.9,0 -23.5,-15.2 -23.5,-24.4 0,-0.8 -2.2,-5.8 -5,-11 -5.6,-10.7 -5.8,-12.1 -3,-23.5 4.9,-19.7 8.3,-73 4.8,-75.9 -1.3,-1 -1.9,-0.7 -4,2M305.3,85.5c15.4,1.2 29.5,5.6 47.1,14.6 9.5,5 20.1,8.9 24.1,8.9 4.2,0 35.9,20.9 38,25.1 1.9,3.6 1.9,7.6 0,13 -0.9,2.4 -1.3,5.4 -1,6.6s0,4.4 -0.6,7c-2.5,11.2 -4,21.7 -4.9,35.8 -0.6,8.2 -1.9,20.2 -3.1,26.5 -1.1,6.3 -2.6,16.2 -3.3,22 -1.7,13.4 -4.1,25.4 -7,35.5 -4.2,14.1 -7.4,26.9 -8,31.5 -0.4,2.5 -2,9.9 -3.5,16.5 -1.6,6.6 -3.5,16.3 -4.1,21.5 -2.7,21.7 -10.3,50.7 -16.5,63 -5.4,10.5 -8.8,14 -11.4,11.6 -2.3,-2.1 -8.1,-16.2 -8.1,-19.8 0,-1.3 -1.2,-5 -2.6,-8.3s-3.6,-9.8 -4.8,-14.5c-1.3,-4.7 -3.2,-10.3 -4.3,-12.5s-2.4,-5.1 -2.8,-6.5 -2.5,-6.3 -4.7,-10.9c-5.7,-12.2 -8.5,-21.6 -9.3,-30.6 -0.8,-9.7 -1.8,-13.7 -5.6,-23.8 -1.6,-4.3 -3.6,-12.2 -4.4,-17.5s-2.2,-14.4 -3.1,-20.2c-1.7,-12.1 -2.5,-15.3 -6.4,-27 -3.6,-10.8 -8.2,-25.5 -11,-34.6 -3.6,-12.1 -4,-12.2 -8.9,-0.3 -5.7,14.1 -12.9,36.3 -14.6,45.2 -2.9,15.6 -8.1,40.7 -10.5,50.7 -1,4.1 -2.6,11.5 -3.5,16.5 -0.9,4.9 -3.2,12.8 -5.1,17.5 -5.4,12.9 -7.3,18 -9.4,24 -9.8,29.2 -25.8,73.1 -27.6,75.8 -2.4,3.7 -7.1,2.7 -11,-2.5 -4.5,-5.9 -7.6,-14.7 -13.9,-39.3 -3,-11.8 -6.6,-25.6 -8,-30.5 -4.8,-16.8 -10.5,-38.9 -15,-58.5 -2.4,-10.7 -5.2,-22.4 -6.1,-26 -1.6,-6.7 -4.5,-19.2 -8.8,-38.5 -1.4,-6.1 -3.2,-15.5 -4.1,-21s-2.2,-12.9 -3,-16.5 -1.9,-10.1 -2.5,-14.5 -2,-11.2 -3.1,-15.2c-1.1,-3.9 -2.4,-10.2 -3,-14 -0.5,-3.7 -1.2,-8.2 -1.5,-10 -1.6,-8.9 29.9,-30.1 58.6,-39.6 37.3,-12.2 56.4,-15.9 83.7,-16.1 11.7,-0.1 21.6,-0.5 22,-1 0.4,-0.4 2.8,-0.5 5.3,-0.2s7.5,0.8 11.3,1.1m146.9,111.2c22.3,23 22.4,98.5 0.3,144.8 -2.9,6 -6.2,13.9 -7.4,17.3 -8.3,24.4 -39.3,60.8 -44.6,52.2 -0.7,-1.1 4,-17.4 5.9,-20.5 2.2,-3.5 5.2,-17.2 6.1,-27.5 0.8,-9.2 3,-20.1 6.1,-30 1.3,-4.1 2.6,-9.5 3,-12s2.2,-10.2 4,-17.2 4,-17.8 4.8,-24 2.2,-14.6 3.1,-18.7c1.5,-7.1 2.4,-12.1 6,-35.6 0.8,-5.5 2.4,-12.7 3.5,-15.9 1.1,-3.3 2,-8.3 2,-11.1 0,-8.1 0.9,-8.3 7.2,-1.8m-361.5,3.8c4.9,8.5 8.8,18.1 12.8,31 4.9,16.2 7.7,23.9 11,30.5 5.6,11 11.7,32.9 16.4,58.5 1.1,6 2.9,15.3 4.1,20.5 3.8,17.3 3,56.1 -1.2,61.6 -7.8,9.9 -33,-7.3 -47.1,-32.1 -1.9,-3.3 -5.5,-9.4 -8,-13.5 -5.1,-8.2 -14.5,-30 -18.4,-42.5 -4.3,-13.7 -1.7,-66.3 4,-82C68.9,219.9 83.6,193 86,193c0.3,0 2.4,3.4 4.7,7.5m191,108.1c1.2,3.2 3.1,9.5 4.2,13.9s3.5,13.2 5.2,19.5c1.8,6.3 3.5,14.2 3.9,17.5 0.5,3.3 1.7,9.1 2.8,13 3.6,12.4 10.3,35.8 12.2,43 7.6,27.7 -17.3,46.3 -52.2,39 -4,-0.9 -8.3,-1.3 -9.6,-1 -3,0.7 -8.1,-2.4 -11.6,-7l-2.7,-3.5 4,-8.6c2.2,-4.7 4.5,-11.3 5.2,-14.7 0.6,-3.4 1.9,-8.2 2.9,-10.7 2.3,-6 6.2,-20.6 9.5,-36 6.4,-29.5 9.3,-40.2 14.3,-51.6 1.7,-3.8 3.7,-9.2 4.6,-11.9 0.9,-2.8 1.9,-5.6 2.1,-6.3 0.9,-2.6 3,-0.5 5.2,5.4"/></svg></div>
+                  <div class="proto-info">
+                    <span class="proto-title">amneziawg 3.1</span>
+                    <span class="proto-detail">профиль amneziawg</span>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
+                  </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </section>
@@ -4048,24 +4260,34 @@
           </div>
 
           <!-- Устройства и сессии -->
-          <div class="liquid-glass-card profile-action-card" id="card-profile-devices" role="button" tabindex="0">
-            <div class="action-card-left">
-              <div>
-                <strong class="action-card-title">устройства и сессии</strong>
-                <span class="action-card-sub">подключения и доступ</span>
+          <div class="liquid-glass-card profile-action-card" id="card-profile-devices" role="button" tabindex="0" style="flex-direction: column; align-items: stretch; gap: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+              <div class="action-card-left">
+                <div class="action-icon-box">
+                  <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="2" width="16" height="20" rx="2" ry="2"/>
+                    <line x1="12" y1="18" x2="12.01" y2="18"/>
+                  </svg>
+                </div>
+                <div>
+                  <strong class="action-card-title">устройства и сессии</strong>
+                  <span class="action-card-sub" id="profile-devices-count">подключения и доступ</span>
+                </div>
               </div>
+              <button class="btn-action-glass" id="btn-toggle-devices-drawer" type="button" style="width: 34px; height: 34px; padding: 0; font-size: 16px;">+</button>
             </div>
-            <button class="btn-action-glass" id="btn-toggle-devices-drawer" type="button">+</button>
+            <div id="profile-devices-drawer" hidden style="border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 12px; margin-top: 4px;">
+              <div id="profile-devices-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Stage 4: настройки (Settings Stage) -->
-        <!-- Stage 4: настройки (Settings Stage matching v0.11.30) -->
+    <!-- Stage 4: настройки (Settings Stage 1:1 with Mobile) -->
     <section class="stage-view" id="stage-settings" aria-label="параметры и настройки">
-      <div class="stage-content-wrap">
-        <div class="stage-header">
+      <div class="settings-view-wrap">
+        <div class="stage-header" style="border: none; padding-bottom: 4px;">
           <div>
             <h1 class="stage-title">настройки</h1>
             <p class="stage-subtitle">параметры подключения, язык, приватность и служба vpn</p>
@@ -4073,95 +4295,113 @@
         </div>
 
         <!-- Group 1: Language & Account -->
-        <div class="settings-group">
-          <span class="settings-group-title">язык и аккаунт</span>
-          <div class="glass-card" style="padding: 6px 10px;">
-            <div class="setting-item" id="row-setting-lang" style="cursor: pointer;">
+        <span class="settings-section-title">язык и аккаунт</span>
+        <div class="liquid-glass-card" style="padding: 4px 0; border-radius: 18px;">
+          <div class="setting-item" id="row-setting-lang" role="button" tabindex="0">
+            <div class="setting-left-wrap">
+              <div class="setting-icon-box"><svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20M12 2a14.5 14.5 0 0 1 0 20M2 12h20"/></svg></div>
               <div class="setting-text-wrap">
                 <span class="setting-label">язык приложения</span>
                 <span class="setting-desc" id="setting-lang-desc">русский</span>
               </div>
-              <button class="btn-select-route" id="btn-setting-lang" style="font-size: 11.5px; padding: 4px 10px;">изменить</button>
             </div>
-            <div class="setting-item" id="row-setting-account" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+            <div class="setting-chevron">›</div>
+          </div>
+          <div class="setting-item" id="row-setting-account" role="button" tabindex="0">
+            <div class="setting-left-wrap">
+              <div class="setting-icon-box" id="setting-account-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
               <div class="setting-text-wrap">
                 <span class="setting-label">аккаунт telegram</span>
-                <span class="setting-desc" id="setting-account-desc">войти для управления подпиской</span>
+                <span class="setting-desc" id="setting-account-desc">@hackov_crew · подключен</span>
               </div>
-              <button class="btn-select-route" id="btn-setting-account" style="font-size: 11.5px; padding: 4px 10px;">войти</button>
             </div>
-            <button class="btn-select-route" id="btn-setting-import" style="font-size: 11.5px; padding: 4px 10px;">открыть</button>
-            </div>
+            <div class="setting-chevron">›</div>
           </div>
         </div>
 
-        <!-- Group 2: Connection & Service -->
-        <div class="settings-group">
-          <span class="settings-group-title">подключение</span>
-          <div class="glass-card" style="padding: 6px 10px;">
-            <div class="setting-item" id="row-setting-split" style="cursor: pointer;">
+        <!-- Group 2: Connection -->
+        <span class="settings-section-title">подключение</span>
+        <div class="liquid-glass-card" style="padding: 4px 0; border-radius: 18px;">
+          <div class="setting-item" id="row-setting-split" role="button" tabindex="0">
+            <div class="setting-left-wrap">
+              <div class="setting-icon-box"><svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></div>
               <div class="setting-text-wrap">
                 <span class="setting-label">раздельное туннелирование</span>
                 <span class="setting-desc" id="setting-split-desc">сайты из подписки · все протоколы</span>
               </div>
-              <button class="btn-select-route" id="btn-setting-split" style="font-size: 11.5px; padding: 4px 10px;">настроить</button>
             </div>
-            <div class="setting-item" id="row-setting-probe" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+            <div class="setting-chevron">›</div>
+          </div>
+          <div class="setting-item" id="row-setting-probe" role="button" tabindex="0">
+            <div class="setting-left-wrap">
+              <div class="setting-icon-box"><svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
               <div class="setting-text-wrap">
                 <span class="setting-label">проверка маршрута</span>
                 <span class="setting-desc" id="setting-probe-desc">HTTP HEAD · быстрая проверка, загрузка 1 с</span>
               </div>
-              <button class="btn-select-route" id="btn-setting-probe" style="font-size: 11.5px; padding: 4px 10px;">выбрать</button>
             </div>
-            <div class="setting-item" id="row-setting-service" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+            <div class="setting-chevron">›</div>
+          </div>
+          <div class="setting-item" id="row-setting-service" role="button" tabindex="0">
+            <div class="setting-left-wrap">
+              <div class="setting-icon-box"><svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></div>
               <div class="setting-text-wrap">
                 <span class="setting-label">служба vpn</span>
-                <span class="setting-desc" id="setting-service-desc">служба установлена · нажмите для проверки</span>
+                <span class="setting-desc" id="setting-service-desc">служба установлена · проверка</span>
               </div>
-              <button class="btn-select-route" id="btn-setting-service" style="font-size: 11.5px; padding: 4px 10px;">проверить</button>
             </div>
-            <div class="setting-item" id="row-setting-bot" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
+            <div class="setting-chevron">›</div>
+          </div>
+          <div class="setting-item" id="row-setting-bot" role="button" tabindex="0">
+            <div class="setting-left-wrap">
+              <div class="setting-icon-box"><svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 15h.01M16 15h.01"/></svg></div>
               <div class="setting-text-wrap">
                 <span class="setting-label">бот deytt</span>
                 <span class="setting-desc">управление подпиской и оплата в telegram</span>
               </div>
-              <button class="btn-select-route" id="btn-setting-bot" style="font-size: 11.5px; padding: 4px 10px;">открыть ↗</button>
             </div>
+            <div class="setting-chevron">›</div>
           </div>
         </div>
 
         <!-- Group 3: Appearance & Privacy -->
-        <div class="settings-group">
-          <span class="settings-group-title">вид и приватность</span>
-          <div class="glass-card" style="padding: 6px 10px;">
-            <div class="setting-item">
+        <span class="settings-section-title">вид и приватность</span>
+        <div class="liquid-glass-card" style="padding: 4px 0; border-radius: 18px;">
+          <div class="setting-item" id="row-switch-region" role="button" tabindex="0">
+            <div class="setting-left-wrap">
+              <div class="setting-icon-box"><svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
               <div class="setting-text-wrap">
-                <span class="setting-label">показывать мой регион</span>
-                <span class="setting-desc">IP · ipinfo.io · не GPS · только в памяти</span>
+                <span class="setting-label">регион на карте</span>
+                <span class="setting-desc">по IP через ipinfo.io · без GPS и сохранения координат</span>
               </div>
-              <div class="glass-switch is-checked" id="switch-setting-region" data-setting="region"></div>
             </div>
-            <div class="setting-item" style="border-top: 1px solid rgba(255, 255, 255, 0.06);">
+            <div class="glass-switch is-checked" id="switch-setting-region" data-setting="region"></div>
+          </div>
+          <div class="setting-item" id="row-switch-motion" role="button" tabindex="0">
+            <div class="setting-left-wrap">
+              <div class="setting-icon-box"><svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
               <div class="setting-text-wrap">
-                <span class="setting-label">уменьшить движение</span>
-                <span class="setting-desc">скрыть звездный фон и анимации</span>
+                <span class="setting-label">меньше движения</span>
+                <span class="setting-desc">остановить анимацию фона</span>
               </div>
-              <div class="glass-switch" id="switch-setting-motion" data-setting="reduce_motion"></div>
             </div>
+            <div class="glass-switch" id="switch-setting-motion" data-setting="reduce_motion"></div>
           </div>
         </div>
 
-        <!-- Group 4: About & Updates -->
-        <div class="settings-group">
-          <span class="settings-group-title">обновления</span>
-          <div class="glass-card" style="display: flex; align-items: center; justify-content: space-between;">
-            <div>
-              <strong style="color: #FFFFFF; font-size: 15px; display: block;">./connect</strong>
-              <span style="font-size: 13px; color: var(--text-muted);" id="settings-app-version">версия приложения (windows x64) · канал: ./beta</span>
-            </div>
-            <button class="btn-select-route" id="btn-check-updates">проверить обновления</button>
+        <!-- Group 4: Updates -->
+        <span class="settings-section-title">обновления</span>
+        <div class="liquid-glass-card" style="padding: 20px 22px; border-radius: 18px; display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <strong style="color: #FFFFFF; font-size: 15px; display: block; font-family: 'Unbounded', sans-serif;" id="settings-app-version">deytt.connect · v0.11.118</strong>
+            <span style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px; display: block;" id="settings-app-status">актуальная версия · канал ./beta</span>
           </div>
+          <button class="home-measure" id="btn-check-updates" type="button" style="height: 44px !important;">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            <span>проверить обновления</span>
+          </button>
         </div>
+
       </div>
     </section>
   </main>
@@ -4703,37 +4943,118 @@
       }
     }
 
-    window.deyttUpdateRouteProbe = function(tag, latency, speedMbps, stage, error) {
-      if (!tag) return;
-      const routeTag = String(tag);
-      const row = [...document.querySelectorAll(".proto-row")].find(candidate =>
-        candidate.dataset.routeTag === routeTag || candidate.dataset.routeKey === routeTag);
-      if (row) {
-        const metricEl = row.querySelector(".proto-metric-text");
-        const dot = row.querySelector(".grade-dot");
-        const isEn = document.documentElement.lang === "en";
+    function findProtoRow(routeTag) {
+      if (!routeTag) return null;
+      const t = String(routeTag).toLowerCase();
+      // 1. Direct match on data-route-tag or data-route-key
+      let row = document.querySelector(`.proto-row[data-route-tag="${routeTag}" i], .proto-row[data-route-key="${t}" i]`);
+      if (row) return row;
+      // 2. Parse tag like route:NL:VLESS
+      const parts = t.split(":");
+      if (parts.length >= 3 && parts[0] === "route") {
+        const c = parts[1];
+        let p = parts[2];
+        if (p === "hysteria2") p = "hy2";
+        if (p === "lte") return document.getElementById("card-route-ru-de");
+        row = document.querySelector(`.proto-row[data-route-key="${c}-${p}" i]`);
+        if (row) return row;
+      } else if (t.startsWith("awg")) {
+        row = document.querySelector(`.proto-row[data-route-key$="-awg" i]`);
+        if (row) return row;
+      }
+      return null;
+    }
 
-        if (metricEl) {
-          metricEl.innerHTML = formatProtoMetric(latency, speedMbps, stage, isEn);
+    function updateCountryRankings(countryCard) {
+      if (!countryCard) return;
+      const rows = [...countryCard.querySelectorAll(".proto-row")];
+      const validRows = rows.map(r => {
+        const lat = parseFloat(r.dataset.probeLatency);
+        return { row: r, lat: (!isNaN(lat) && lat > 0) ? lat : Infinity };
+      }).filter(item => item.lat < Infinity);
+
+      rows.forEach(r => {
+        r.classList.remove("is-best-choice", "is-slowest-choice");
+        r.querySelector(".badge-best-choice, .badge-slowest-choice")?.remove();
+      });
+
+      if (validRows.length >= 2) {
+        validRows.sort((a, b) => a.lat - b.lat);
+        const best = validRows[0].row;
+        const slowest = validRows[validRows.length - 1].row;
+
+        best.classList.add("is-best-choice");
+        const bestTitle = best.querySelector(".proto-title");
+        if (bestTitle && !best.querySelector(".badge-best-choice")) {
+          const badge = document.createElement("span");
+          badge.className = "badge-best-choice";
+          badge.textContent = "лучший выбор";
+          bestTitle.appendChild(badge);
         }
 
-        if (dot) {
-          dot.className = "grade-dot";
-          if (stage === "latency" || stage === "waiting_speed" || stage === "download") {
-            dot.classList.add("grade-dot--medium");
-          } else if (stage === "complete") {
-            if (latency != null && latency < 150) dot.classList.add("grade-dot--good");
-            else if (latency != null && latency < 250) dot.classList.add("grade-dot--medium");
-            else if (latency != null) dot.classList.add("grade-dot--poor");
-          } else if (stage === "error") {
-            dot.classList.add("grade-dot--poor");
+        if (slowest !== best) {
+          slowest.classList.add("is-slowest-choice");
+          const slowestTitle = slowest.querySelector(".proto-title");
+          if (slowestTitle && !slowest.querySelector(".badge-slowest-choice")) {
+            const badge = document.createElement("span");
+            badge.className = "badge-slowest-choice";
+            badge.textContent = "медленный ответ";
+            slowestTitle.appendChild(badge);
           }
         }
-        updateCountryHeaderPing(row.closest(".country-accordion"));
+      }
+    }
+
+    window.deyttUpdateRouteProbe = function(tag, latency, speedMbps, stage, error) {
+      if (!tag) return;
+      const row = findProtoRow(tag);
+      if (row) {
+        const latEl = row.querySelector("[data-metric-latency], .proto-latency");
+        const spdEl = row.querySelector("[data-metric-speed], .proto-speed");
+        const dot = row.querySelector(".ping-dot, .grade-dot");
+
+        if (stage === "latency" || stage === "waiting_speed" || stage === "download") {
+          if (latEl) latEl.textContent = latency != null ? `${latency} мс` : "…";
+          if (spdEl) spdEl.textContent = speedMbps != null ? `${speedMbps} мбит/с` : "…";
+          if (dot) dot.classList.add("is-probing");
+        } else if (stage === "complete") {
+          if (latEl) latEl.textContent = latency != null ? `${latency} мс` : "—";
+          if (spdEl) spdEl.textContent = speedMbps != null ? `${speedMbps} мбит/с` : "—";
+          if (dot) {
+            dot.classList.remove("is-probing");
+            dot.className = "grade-dot";
+            if (latency != null && latency < 150) dot.classList.add("grade-dot--good");
+            else if (latency != null && latency < 260) dot.classList.add("grade-dot--medium");
+            else if (latency != null) dot.classList.add("grade-dot--poor");
+          }
+          if (latency != null) {
+            row.dataset.probeLatency = latency;
+            updateCountryRankings(row.closest(".country-accordion"));
+          }
+        } else if (stage === "error") {
+          if (dot) dot.classList.remove("is-probing");
+          if (latEl && latEl.textContent === "…") latEl.textContent = "—";
+          if (spdEl && spdEl.textContent === "…") spdEl.textContent = "—";
+        }
+      }
+
+      // Live update Home Screen metrics if active or during auto-select probe
+      if (stage === "complete" && latency != null) {
+        const homeLat = document.getElementById("home-latency");
+        const homeSpd = document.getElementById("home-speed");
+        const homeMeasureBtn = document.getElementById("home-measure");
+        if (homeLat && (homeLat.textContent === "—" || activeRouteKey === "auto")) {
+          homeLat.textContent = latency;
+          document.getElementById("home-latency-unit")?.removeAttribute("hidden");
+        }
+        if (homeSpd && speedMbps != null && (homeSpd.textContent === "—" || activeRouteKey === "auto")) {
+          homeSpd.textContent = speedMbps;
+          document.getElementById("home-speed-unit")?.removeAttribute("hidden");
+        }
+        if (homeMeasureBtn) homeMeasureBtn.classList.remove("is-measuring");
       }
     };
 
-    
     let currentSubscriptionKey = "";
 
     window.deyttSetProfileAvatar = function(dataUrl) {
@@ -4852,8 +5173,8 @@
       setText("profile-devices-count", copy(`${devices.length} устройств · ${sessions.length} сессий`, `${devices.length} devices · ${sessions.length} sessions`));
 
       // Quotas / LTE progress
-      const lteFill = document.querySelector(".lte-quota-fill");
-      const lteText = document.getElementById("lte-quota-text");
+      const lteFill = document.querySelector(".lte-progress-fill, .lte-quota-fill");
+      const lteText = document.getElementById("lte-quota-sub") || document.getElementById("lte-quota-text");
       if (data.awgQuota && lteFill && lteText) {
         const used = data.awgQuota.usedBytes || 0;
         const limit = data.awgQuota.limitBytes || (10 * 1024 * 1024 * 1024);
@@ -5077,7 +5398,7 @@
         const code = /^(NL|DE|RU|FI|IT|RU-DE|EU)$/.test(routeCountryCode) ? routeCountryCode : "";
         element.dataset.country = code;
         element.classList.toggle("is-generic", !code);
-        element.innerHTML = code ? getFlagSvg(code, 22, 15) : "✦";
+        element.innerHTML = (code && code !== "AUTO") ? getFlagSvg(code, 22, 15) : '<svg viewBox="0 0 24 24" width="22" height="22" stroke="#38BDF8" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>';
         element.setAttribute("aria-label", code);
       }
 
@@ -5094,7 +5415,7 @@
       const homeRouteSubtitle = document.getElementById("home-route-subtitle");
       if (homeRouteSubtitle) {
         if (key === "auto") {
-          homeRouteSubtitle.textContent = "выбирает самый быстрый европейский выход";
+          homeRouteSubtitle.innerHTML = '<span class="route-accent-tag">auto</span> <span style="opacity:0.4;">·</span> <span>выбирает самый быстрый европейский выход</span>';
         } else if (key === "ru-de") {
           homeRouteSubtitle.textContent = "российский вход и европейский выход";
         } else {
@@ -5320,17 +5641,84 @@
 
     
     // Profile & Settings IPC actions
-    document.getElementById("btn-login-tg")?.addEventListener("click", () => postHost("profile:signin"));
-    document.getElementById("btn-renew-tg")?.addEventListener("click", () => postHost("profile:renew"));
-    document.getElementById("btn-profile-support")?.addEventListener("click", () => postHost("profile:support"));
-    document.getElementById("btn-import-sub")?.addEventListener("click", () => postHost("profile:import"));
-    document.getElementById("btn-setting-lang")?.addEventListener("click", () => postHost("settings:language"));
-    document.getElementById("btn-setting-account")?.addEventListener("click", () => postHost("settings:signin"));
-    document.getElementById("btn-setting-import")?.addEventListener("click", () => postHost("settings:import"));
-    document.getElementById("btn-setting-split")?.addEventListener("click", () => postHost("settings:splittunnel"));
-    document.getElementById("btn-setting-probe")?.addEventListener("click", () => postHost("settings:probemethod"));
-    document.getElementById("btn-setting-service")?.addEventListener("click", () => postHost("settings:service"));
-    document.getElementById("btn-setting-bot")?.addEventListener("click", () => postHost("settings:bot"));
+    ["btn-login-tg", "profile-user-card"].forEach(id => {
+      document.getElementById(id)?.addEventListener("click", () => postHost("profile:signin"));
+    });
+
+    ["btn-renew-tg", "btn-renew-tariff", "profile-renew-plan"].forEach(id => {
+      document.getElementById(id)?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        postHost("profile:renew");
+      });
+    });
+
+    ["btn-profile-support", "card-profile-support", "btn-support-chat"].forEach(id => {
+      document.getElementById(id)?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        postHost("profile:support");
+      });
+    });
+
+    // Devices & Sessions Accordion Drawer Toggle
+    document.getElementById("card-profile-devices")?.addEventListener("click", (e) => {
+      if (e.target.closest("button, details, summary")) return;
+      const drawer = document.getElementById("profile-devices-drawer");
+      const btn = document.getElementById("btn-toggle-devices-drawer");
+      if (drawer) {
+        drawer.hidden = !drawer.hidden;
+        if (btn) btn.textContent = drawer.hidden ? "+" : "✕";
+      }
+    });
+    document.getElementById("btn-toggle-devices-drawer")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const drawer = document.getElementById("profile-devices-drawer");
+      const btn = document.getElementById("btn-toggle-devices-drawer");
+      if (drawer) {
+        drawer.hidden = !drawer.hidden;
+        if (btn) btn.textContent = drawer.hidden ? "+" : "✕";
+      }
+    });
+
+    ["btn-copy-key", "btn-copy-subscription-key"].forEach(id => {
+      document.getElementById(id)?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        postHost("profile:copy_key");
+      });
+    });
+
+    // Settings Stage IPC actions (Row click & button click parity)
+    document.getElementById("row-setting-lang")?.addEventListener("click", () => postHost("settings:language"));
+    document.getElementById("btn-setting-lang")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:language"); });
+
+    document.getElementById("row-setting-account")?.addEventListener("click", () => postHost("settings:signin"));
+    document.getElementById("btn-setting-account")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:signin"); });
+
+    document.getElementById("row-setting-split")?.addEventListener("click", () => postHost("settings:splittunnel"));
+    document.getElementById("btn-setting-split")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:splittunnel"); });
+
+    document.getElementById("row-setting-probe")?.addEventListener("click", () => postHost("settings:probemethod"));
+    document.getElementById("btn-setting-probe")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:probemethod"); });
+
+    document.getElementById("row-setting-service")?.addEventListener("click", () => postHost("settings:service"));
+    document.getElementById("btn-setting-service")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:service"); });
+
+    document.getElementById("row-setting-bot")?.addEventListener("click", () => postHost("settings:bot"));
+    document.getElementById("btn-setting-bot")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:bot"); });
+
+    document.getElementById("btn-check-updates")?.addEventListener("click", () => {
+      const btn = document.getElementById("btn-check-updates");
+      if (btn) btn.classList.add("is-measuring");
+      postHost("routes:refresh:subscription");
+      setTimeout(() => btn?.classList.remove("is-measuring"), 3000);
+    });
+
+    // Home measurement button click animation & probe dispatch
+    document.getElementById("home-measure")?.addEventListener("click", () => {
+      const btn = document.getElementById("home-measure");
+      if (btn) btn.classList.add("is-measuring");
+      postHost("home-measure");
+      setTimeout(() => btn?.classList.remove("is-measuring"), 6000);
+    });
 
     // Initialize pill position
     window.addEventListener("DOMContentLoaded", () => {
