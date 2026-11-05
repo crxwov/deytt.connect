@@ -18,6 +18,10 @@ public sealed class TelegramApiClient
         AllowAutoRedirect = false,
         UseCookies = false,
         AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate,
+        SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+        {
+            CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
+        },
     })
     {
         Timeout = TimeSpan.FromSeconds(45),

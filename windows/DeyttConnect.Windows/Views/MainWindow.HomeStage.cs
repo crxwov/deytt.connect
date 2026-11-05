@@ -276,67 +276,14 @@ public partial class MainWindow
 
     private Control BuildMapLoadingView()
     {
-        var orbit = new Canvas { Width = 228, Height = 228 };
-        foreach (var (inset, opacity) in new[] { (0d, 0.18d), (28d, 0.24d), (57d, 0.3d) })
+        // Clean transparent panel during startup: typewriter splash (./c) covers the window
+        // until the globe map is fully ready, preventing any radar/text flicker.
+        return new Panel
         {
-            var ring = new Ellipse
-            {
-                Width = 228 - inset * 2,
-                Height = 228 - inset * 2,
-                Stroke = DeyttTheme.Brush(DeyttTheme.Sky),
-                StrokeThickness = 1,
-                Opacity = opacity,
-            };
-            Canvas.SetLeft(ring, inset);
-            Canvas.SetTop(ring, inset);
-            orbit.Children.Add(ring);
-        }
-
-        var route = new Line
-        {
-            StartPoint = new Point(46, 159),
-            EndPoint = new Point(173, 73),
-            Stroke = DeyttTheme.Brush(DeyttTheme.Sky),
-            StrokeThickness = 1.5,
-            Opacity = 0.46,
+            Background = Brushes.Transparent,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
         };
-        orbit.Children.Add(route);
-        foreach (var (x, y, color) in new[]
-                 {
-                     (46d, 159d, DeyttTheme.Sky),
-                     (173d, 73d, DeyttTheme.Mint),
-                 })
-        {
-            var halo = new Ellipse
-            {
-                Width = 18, Height = 18,
-                Fill = DeyttTheme.Brush(color),
-                Opacity = 0.15,
-            };
-            Canvas.SetLeft(halo, x - 9);
-            Canvas.SetTop(halo, y - 9);
-            orbit.Children.Add(halo);
-            var node = new Ellipse
-            {
-                Width = 6, Height = 6,
-                Fill = DeyttTheme.Brush(color),
-            };
-            Canvas.SetLeft(node, x - 3);
-            Canvas.SetTop(node, y - 3);
-            orbit.Children.Add(node);
-        }
-
-        var label = DeyttTheme.TextBlock(Copy("Готовим атлас маршрутов", "Preparing route atlas"),
-            12, DeyttTheme.Muted, FontWeight.Medium, wrap: false);
-        label.HorizontalAlignment = HorizontalAlignment.Center;
-        var placeholder = new StackPanel
-        {
-            Spacing = 12,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Children = { orbit, label },
-        };
-        return placeholder;
     }
 
     private Control BuildHomeRouteDetails()

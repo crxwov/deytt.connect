@@ -3237,6 +3237,248 @@
       margin-top: 1px !important;
     }
 
+
+      /* === TRUE LIQUID GLASS BUTTONS & ENHANCEMENTS === */
+      @keyframes liquid-chroma-spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+
+      .home-action, #home-action, .compact-action, #compact-action {
+        min-height: 52px !important;
+        border-radius: 9999px !important;
+        padding: 0 28px !important;
+        font-family: inherit !important;
+        font-size: 15.5px !important;
+        font-weight: 700 !important;
+        text-transform: lowercase !important;
+        letter-spacing: -0.015em !important;
+        cursor: pointer !important;
+        position: relative !important;
+        overflow: hidden !important;
+        isolation: isolate !important;
+        border: 1px solid rgba(255, 255, 255, 0.24) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.58) !important;
+        background: linear-gradient(180deg, #2494F8 0%, #1060C8 100%) !important;
+        backdrop-filter: blur(24px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.65),
+                    inset 0 -1px 1px rgba(0, 0, 0, 0.25),
+                    0 8px 24px -4px rgba(29, 140, 248, 0.42),
+                    0 2px 6px rgba(0, 0, 0, 0.28) !important;
+        color: #FFFFFF !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: 10px !important;
+        transition: transform 150ms ease, box-shadow 200ms ease, background 250ms ease !important;
+      }
+
+      /* Animated Chromatic Iridescent Rim Shimmer */
+      .home-action::before, #home-action::before,
+      .compact-action::before, #compact-action::before {
+        content: "" !important;
+        position: absolute !important;
+        inset: -2px !important;
+        border-radius: 9999px !important;
+        padding: 2px !important;
+        background: conic-gradient(from 0deg,
+          rgba(255, 255, 255, 0.70),
+          rgba(56, 189, 248, 0.85),
+          rgba(168, 85, 247, 0.65),
+          rgba(236, 72, 153, 0.55),
+          rgba(56, 189, 248, 0.85),
+          rgba(255, 255, 255, 0.70)
+        ) !important;
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
+        -webkit-mask-composite: xor !important;
+        mask-composite: exclude !important;
+        pointer-events: none !important;
+        animation: liquid-chroma-spin 4.5s linear infinite !important;
+        opacity: 0.75 !important;
+        z-index: 1 !important;
+        transition: opacity 250ms ease !important;
+      }
+
+      /* Curved Lens Specular Gloss Highlight (top 42%) */
+      .home-action::after, #home-action::after,
+      .compact-action::after, #compact-action::after {
+        content: "" !important;
+        position: absolute !important;
+        top: 1px !important;
+        left: 2px !important;
+        right: 2px !important;
+        height: 44% !important;
+        border-radius: 9999px 9999px 60% 60% / 9999px 9999px 30% 30% !important;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.05) 75%, transparent 100%) !important;
+        pointer-events: none !important;
+        z-index: 2 !important;
+      }
+
+      .home-action:hover, #home-action:hover,
+      .compact-action:hover, #compact-action:hover {
+        transform: translateY(-1px) !important;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8),
+                    0 12px 32px -4px rgba(29, 140, 248, 0.55),
+                    0 4px 10px rgba(0, 0, 0, 0.32) !important;
+      }
+      .home-action:hover::before, #home-action:hover::before {
+        opacity: 1 !important;
+      }
+
+      .home-action:active, #home-action:active,
+      .compact-action:active, #compact-action:active {
+        transform: translateY(1px) scale(0.985) !important;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3),
+                    0 4px 12px rgba(29, 140, 248, 0.3) !important;
+      }
+
+      .home-action[data-tone="good"], .home-action[data-tone="connected"],
+      #home-action[data-tone="good"], #home-action[data-tone="connected"],
+      .compact-action[data-tone="good"], .compact-action[data-tone="connected"] {
+        background: linear-gradient(180deg, #10B981 0%, #059669 100%) !important;
+        border-color: rgba(167, 243, 208, 0.35) !important;
+        border-top-color: rgba(255, 255, 255, 0.65) !important;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7),
+                    0 8px 24px -4px rgba(16, 185, 129, 0.45),
+                    0 2px 6px rgba(0, 0, 0, 0.28) !important;
+      }
+
+      .home-action[data-tone="connecting"], #home-action[data-tone="connecting"] {
+        background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%) !important;
+      }
+
+      .home-action[data-tone="error"], #home-action[data-tone="error"] {
+        background: linear-gradient(180deg, #EF4444 0%, #B91C1C 100%) !important;
+        border-color: rgba(254, 202, 202, 0.4) !important;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6),
+                    0 8px 24px -4px rgba(239, 68, 68, 0.45) !important;
+      }
+
+      .home-action > span, #home-action > span {
+        position: relative !important;
+        z-index: 3 !important;
+      }
+
+      /* Parity Squircles for Auto-Select & Refresh Icons */
+      .refresh-icon-circle, .quick-select-icon, .quick-select-icon.auto-icon {
+        width: 40px !important;
+        height: 40px !important;
+        border-radius: 13.5px !important;
+        background: rgba(30, 48, 72, 0.55) !important;
+        border: 1px solid rgba(56, 189, 248, 0.28) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        flex-shrink: 0 !important;
+      }
+
+      /* Compact Proportions for Auto-Select Card */
+      .quick-select-card {
+        padding: 12px 16px !important;
+        border-radius: 18px !important;
+        background: linear-gradient(180deg, rgba(28, 43, 64, 0.55) 0%, rgba(17, 29, 45, 0.65) 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.12) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.26) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 4px 16px rgba(0, 0, 0, 0.22) !important;
+        backdrop-filter: blur(20px) saturate(160%) !important;
+      }
+      .quick-select-card.is-selected {
+        background: linear-gradient(180deg, rgba(40, 74, 110, 0.65) 0%, rgba(22, 46, 72, 0.75) 100%) !important;
+        border-color: rgba(56, 189, 248, 0.45) !important;
+        border-top-color: rgba(255, 255, 255, 0.45) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 20px rgba(14, 165, 233, 0.25) !important;
+      }
+
+      /* LiquidGlass Pill Buttons for Route Selection (выбрать / выбрано) */
+      .btn-select-route, .btn-action-glass {
+        min-height: 36px !important;
+        padding: 6px 18px !important;
+        border-radius: 9999px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+        transition: all 180ms ease !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        text-transform: lowercase !important;
+        letter-spacing: -0.01em !important;
+        position: relative !important;
+        overflow: hidden !important;
+        background: linear-gradient(180deg, rgba(54, 76, 104, 0.50) 0%, rgba(18, 30, 46, 0.65) 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.16) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.35) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+        color: #E2E8F0 !important;
+      }
+      .btn-select-route::after, .btn-action-glass::after {
+        content: "" !important;
+        position: absolute !important;
+        top: 1px !important;
+        left: 2px !important;
+        right: 2px !important;
+        height: 42% !important;
+        border-radius: 9999px 9999px 40% 40% / 9999px 9999px 20% 20% !important;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.04) 75%, transparent 100%) !important;
+        pointer-events: none !important;
+      }
+      .btn-select-route.is-selected, .btn-action-glass.is-selected, .proto-selected-mark {
+        background: linear-gradient(180deg, #2494F8 0%, #1060C8 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.26) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.55) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), 0 4px 14px rgba(29, 140, 248, 0.40) !important;
+        color: #FFFFFF !important;
+      }
+
+      /* Country Flags: Full Container Fill */
+      .country-flag-wrap {
+        width: 44px !important;
+        height: 30px !important;
+        border-radius: 6px !important;
+        overflow: hidden !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        background: rgba(0, 0, 0, 0.25) !important;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+      }
+      .country-flag-wrap svg, .country-flag-wrap .svg-flag {
+        width: 100% !important;
+        height: 100% !important;
+        display: block !important;
+        border-radius: 6px !important;
+      }
+
+      /* Profile and Settings LiquidGlass Buttons */
+      .btn-profile-primary, .profile-btn-primary {
+        min-height: 46px !important;
+        border-radius: 9999px !important;
+        background: linear-gradient(180deg, #2494F8 0%, #1060C8 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.24) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.55) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px rgba(29, 140, 248, 0.38) !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        cursor: pointer !important;
+        position: relative !important;
+        overflow: hidden !important;
+      }
+      .btn-profile-secondary, .profile-btn-secondary {
+        min-height: 46px !important;
+        border-radius: 9999px !important;
+        background: linear-gradient(180deg, rgba(54, 76, 104, 0.45) 0%, rgba(18, 30, 46, 0.60) 100%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.16) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.32) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 3px 10px rgba(0, 0, 0, 0.25) !important;
+        color: #E2E8F0 !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+        position: relative !important;
+        overflow: hidden !important;
+      }
+
 </style>
 </head>
 <body>
@@ -3344,11 +3586,11 @@
             <div class="home-metrics panel-copy" aria-label="последний замер маршрута">
               <div class="metric">
                 <span class="metric-label" id="latency-label"><span class="ping-dot"></span>отклик</span>
-                <div><strong id="home-latency" class="is-empty">не измерено</strong><small id="home-latency-unit" hidden>мс</small></div>
+                <div><strong id="home-latency">—</strong><small id="home-latency-unit" hidden>мс</small></div>
               </div>
               <div class="metric">
                 <span class="metric-label" id="speed-label"><span class="ping-dot" style="background:#38BDF8;box-shadow:0 0 8px #38BDF8;"></span>скорость</span>
-                <div><strong id="home-speed" class="is-empty">не измерено</strong><small id="home-speed-unit" hidden>мбит/с</small></div>
+                <div><strong id="home-speed">—</strong><small id="home-speed-unit" hidden>мбит/с</small></div>
               </div>
             </div>
             <p id="home-measurement-note" class="measurement-note panel-copy" hidden></p>
@@ -3508,61 +3750,51 @@
               <div class="proto-list">
                 <!-- vless -->
                 <div class="proto-row is-selected" data-route-key="nl-vless" data-action-route="nl-vless" role="button" tabindex="0">
-                  <div class="proto-icon-box">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="#F8FAFC" stroke="#94A3B8" stroke-width="0.8"/></svg>
-                  </div>
+                  <div class="proto-icon-box"><svg viewBox="0 0 1000 1000" width="22" height="22" fill="#E2E8F0"><path d="M530,530 L900,530 L650,650 L530,1000 Z"/><path d="M470,530 L470,900 L350,650 L0,530 Z"/><path d="M530,470 L530,100 L650,350 L1000,470 Z"/><path d="M470,470 L100,470 L350,350 L470,0 Z"/></svg></div>
                   <div class="proto-info">
                     <span class="proto-title">vless</span>
                     <span class="proto-detail">websocket + tls</span>
-                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v good" data-metric-latency>139 мс</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>39 мбит/с</span></div>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
                   </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
                 <!-- hysteria 2 -->
                 <div class="proto-row" data-route-key="nl-hy2" data-action-route="nl-hy2" role="button" tabindex="0">
-                  <div class="proto-icon-box">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M7 4V20M17 4V20M4 9H20M4 15H20" stroke="#FBBF24" stroke-width="2.2" stroke-linecap="round"/></svg>
-                  </div>
+                  <div class="proto-icon-box"><svg viewBox="0 0 442.19 323.31" width="22" height="22"><path fill="#FFFFFF" d="M72.8,140.45 L60.1,285.55 L102.51,285.55 L111.5,182.86 L111.54,182.86 L115.21,140.45 L72.8,140.45 Z"/><path fill="#FFFFFF" d="M124.16,37.75 L81.76,37.75 L76.19,101.36 L118.59,101.36 L124.16,37.75 Z"/><path fill="#FFFFFF" d="M318.36,285.56 L360.44,285.56 L366.01,221.95 L323.9,221.95 L318.36,285.56 Z"/><path fill="#FFFFFF" d="M382.09,37.76 L340,37.76 L329.16,161.66 L221.09,161.66 L206.95,323.31 L292.78,201.84 L438.67,201.84 L442.19,161.66 L371.25,161.66 L382.09,37.76 Z"/><path fill="#FFBC00" d="M149.41,121.47 L3.52,121.47 L0,161.66 L221.09,161.66 L235.23,0 L149.41,121.47 Z"/></svg></div>
                   <div class="proto-info">
                     <span class="proto-title">hysteria 2</span>
                     <span class="proto-detail">quic transport</span>
-                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v good" data-metric-latency>142 мс</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>38 мбит/с</span></div>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
                   </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
                 <!-- trojan -->
                 <div class="proto-row" data-route-key="nl-trojan" data-action-route="nl-trojan" role="button" tabindex="0">
-                  <div class="proto-icon-box">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M4.5 16.5L12 3L19.5 16.5L12 21L4.5 16.5Z" stroke="#F59E0B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="13" r="2.5" fill="#F59E0B"/></svg>
-                  </div>
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#F59E0B" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16M7 19v-4l2-3h6l2 3v4M9 12V7l4-3 3 2v6"/><circle cx="14" cy="7" r="1" fill="#F59E0B"/></svg></div>
                   <div class="proto-info">
                     <span class="proto-title">trojan</span>
                     <span class="proto-detail">websocket + tls</span>
-                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>293 мс</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>4 мбит/с</span></div>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
                   </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
                 <!-- tuic -->
                 <div class="proto-row" data-route-key="nl-tuic" data-action-route="nl-tuic" role="button" tabindex="0">
-                  <div class="proto-icon-box">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </div>
+                  <div class="proto-icon-box"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#38BDF8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2L15 22L11 13M22 2L2 9L11 13"/></svg></div>
                   <div class="proto-info">
                     <span class="proto-title">tuic</span>
                     <span class="proto-detail">quic transport</span>
-                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency><svg class="inline-spoke-spinner" viewBox="0 0 24 24" width="14" height="14"><g stroke="#38BDF8" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="6" opacity="1.0"/><line x1="16.24" y1="3.76" x2="13.41" y2="6.59" opacity="0.9"/><line x1="19.07" y1="7.93" x2="15.24" y2="9.52" opacity="0.8"/><line x1="20" y1="12" x2="16" y2="12" opacity="0.7"/><line x1="19.07" y1="16.07" x2="15.24" y2="14.48" opacity="0.6"/><line x1="16.24" y1="20.24" x2="13.41" y2="17.41" opacity="0.5"/><line x1="12" y1="22" x2="12" y2="18" opacity="0.4"/><line x1="7.76" y1="20.24" x2="10.59" y2="17.41" opacity="0.3"/><line x1="4.93" y1="16.07" x2="8.76" y2="14.48" opacity="0.2"/><line x1="4" y1="12" x2="8" y2="12" opacity="0.15"/><line x1="4.93" y1="7.93" x2="8.76" y2="9.52" opacity="0.1"/><line x1="7.76" y1="3.76" x2="10.59" y2="6.59" opacity="0.05"/></g></svg></span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed><svg class="inline-spoke-spinner" viewBox="0 0 24 24" width="14" height="14"><g stroke="#38BDF8" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="6" opacity="1.0"/><line x1="16.24" y1="3.76" x2="13.41" y2="6.59" opacity="0.9"/><line x1="19.07" y1="7.93" x2="15.24" y2="9.52" opacity="0.8"/><line x1="20" y1="12" x2="16" y2="12" opacity="0.7"/><line x1="19.07" y1="16.07" x2="15.24" y2="14.48" opacity="0.6"/><line x1="16.24" y1="20.24" x2="13.41" y2="17.41" opacity="0.5"/><line x1="12" y1="22" x2="12" y2="18" opacity="0.4"/><line x1="7.76" y1="20.24" x2="10.59" y2="17.41" opacity="0.3"/><line x1="4.93" y1="16.07" x2="8.76" y2="14.48" opacity="0.2"/><line x1="4" y1="12" x2="8" y2="12" opacity="0.15"/><line x1="4.93" y1="7.93" x2="8.76" y2="9.52" opacity="0.1"/><line x1="7.76" y1="3.76" x2="10.59" y2="6.59" opacity="0.05"/></g></svg></span></div>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
                   </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
                 <!-- amneziawg 3.1 -->
                 <div class="proto-row" data-route-key="nl-awg" data-action-route="nl-awg" role="button" tabindex="0">
-                  <div class="proto-icon-box">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none"><circle cx="12" cy="12" r="9" stroke="#A78BFA" stroke-width="1.8"/><path d="M6.5 17L12 5L17.5 17M8.5 13H15.5" stroke="#A78BFA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </div>
+                  <div class="proto-icon-box"><svg viewBox="0 0 568 568" width="22" height="22" fill="#A78BFA"><path d="M472.8,24.2c-4.1,5.6 -9.5,14.9 -12.9,22.8 -2.9,6.6 -8.2,16.3 -16.3,29.8 -4.8,8 -14.3,8.9 -20.7,2.1 -2.6,-2.8 -8.9,-18.2 -8.9,-21.8 0,-7.2 -11,-8.5 -23,-2.7 -9.5,4.6 -12.6,4.6 -27,-0.5 -22.2,-7.8 -37.2,-11.8 -52,-13.9 -3.9,-0.6 -10.2,-1.5 -14,-2 -17.1,-2.4 -71,-0.1 -85,3.7 -12.1,3.3 -37.4,15.4 -54.9,26.3 -11.1,6.9 -13.4,8 -17.3,8 -4.5,0 -4.7,0.1 -12.2,9 -7.3,8.5 -16.2,16.8 -17.1,15.9 -0.2,-0.3 -0.9,-3.6 -1.5,-7.4 -2.3,-15.1 -12,-40.1 -20.3,-52.5 -1.8,-2.6 -3.7,-5.5 -4.3,-6.5 -1.6,-2.9 -3.2,-1 -5.4,6.4 -2.2,7.2 -2.5,16.5 -2.1,72.9 0.2,22.8 0,23.5 -10.7,37.1 -15.5,19.6 -29.9,54.7 -32.7,79.6 -0.8,7.1 -2.4,21.8 -3.7,32.5 -3.6,31.1 -3.5,35.3 1.4,53 1.1,4.1 3.1,11.4 4.4,16.1 1.2,4.8 4.4,13.3 7,19 2.5,5.7 5.9,13.6 7.4,17.5 12.3,30.9 53.6,76.9 79.9,89.1 23.9,11 29.5,15.2 34.1,25.4 1.4,2.9 4,8.3 5.8,11.9 1.9,3.6 6.7,14.3 10.8,23.8 18.9,44 22.8,45.4 29.8,11.1 7.3,-36.1 12.4,-39.7 49.9,-35.4 14.5,1.6 16.1,1.6 30.2,0 36.7,-4.1 35.8,-4.5 42.5,16.5 1.6,5.2 3,11.1 3,13.2s1.2,6.8 2.7,10.5c9.1,23.2 19,22.8 26.9,-0.9 1.5,-4.6 3.5,-9.4 4.4,-10.8s4.5,-8.1 7.9,-15c3.3,-6.9 7.8,-14.6 9.9,-17.2 16.9,-21.2 46.1,-47.9 73.6,-67.3 6.5,-4.6 17.5,-17.5 21.3,-24.9 1.4,-2.8 5.6,-9.7 9.3,-15.3 7.6,-11.4 12.1,-23.6 16.5,-44.6 1.4,-7.1 4,-15.3 6.4,-20.7 8.8,-19.7 11.5,-41.1 6.7,-51.6 -5.8,-12.5 -9.5,-53.5 -6.6,-71.9 2.1,-13.3 2.8,-25.5 1.9,-29.1 -1.1,-3.7 -9.1,-8.4 -14.4,-8.4 -8.9,0 -23.5,-15.2 -23.5,-24.4 0,-0.8 -2.2,-5.8 -5,-11 -5.6,-10.7 -5.8,-12.1 -3,-23.5 4.9,-19.7 8.3,-73 4.8,-75.9 -1.3,-1 -1.9,-0.7 -4,2M305.3,85.5c15.4,1.2 29.5,5.6 47.1,14.6 9.5,5 20.1,8.9 24.1,8.9 4.2,0 35.9,20.9 38,25.1 1.9,3.6 1.9,7.6 0,13 -0.9,2.4 -1.3,5.4 -1,6.6s0,4.4 -0.6,7c-2.5,11.2 -4,21.7 -4.9,35.8 -0.6,8.2 -1.9,20.2 -3.1,26.5 -1.1,6.3 -2.6,16.2 -3.3,22 -1.7,13.4 -4.1,25.4 -7,35.5 -4.2,14.1 -7.4,26.9 -8,31.5 -0.4,2.5 -2,9.9 -3.5,16.5 -1.6,6.6 -3.5,16.3 -4.1,21.5 -2.7,21.7 -10.3,50.7 -16.5,63 -5.4,10.5 -8.8,14 -11.4,11.6 -2.3,-2.1 -8.1,-16.2 -8.1,-19.8 0,-1.3 -1.2,-5 -2.6,-8.3s-3.6,-9.8 -4.8,-14.5c-1.3,-4.7 -3.2,-10.3 -4.3,-12.5s-2.4,-5.1 -2.8,-6.5 -2.5,-6.3 -4.7,-10.9c-5.7,-12.2 -8.5,-21.6 -9.3,-30.6 -0.8,-9.7 -1.8,-13.7 -5.6,-23.8 -1.6,-4.3 -3.6,-12.2 -4.4,-17.5s-2.2,-14.4 -3.1,-20.2c-1.7,-12.1 -2.5,-15.3 -6.4,-27 -3.6,-10.8 -8.2,-25.5 -11,-34.6 -3.6,-12.1 -4,-12.2 -8.9,-0.3 -5.7,14.1 -12.9,36.3 -14.6,45.2 -2.9,15.6 -8.1,40.7 -10.5,50.7 -1,4.1 -2.6,11.5 -3.5,16.5 -0.9,4.9 -3.2,12.8 -5.1,17.5 -5.4,12.9 -7.3,18 -9.4,24 -9.8,29.2 -25.8,73.1 -27.6,75.8 -2.4,3.7 -7.1,2.7 -11,-2.5 -4.5,-5.9 -7.6,-14.7 -13.9,-39.3 -3,-11.8 -6.6,-25.6 -8,-30.5 -4.8,-16.8 -10.5,-38.9 -15,-58.5 -2.4,-10.7 -5.2,-22.4 -6.1,-26 -1.6,-6.7 -4.5,-19.2 -8.8,-38.5 -1.4,-6.1 -3.2,-15.5 -4.1,-21s-2.2,-12.9 -3,-16.5 -1.9,-10.1 -2.5,-14.5 -2,-11.2 -3.1,-15.2c-1.1,-3.9 -2.4,-10.2 -3,-14 -0.5,-3.7 -1.2,-8.2 -1.5,-10 -1.6,-8.9 29.9,-30.1 58.6,-39.6 37.3,-12.2 56.4,-15.9 83.7,-16.1 11.7,-0.1 21.6,-0.5 22,-1 0.4,-0.4 2.8,-0.5 5.3,-0.2s7.5,0.8 11.3,1.1m146.9,111.2c22.3,23 22.4,98.5 0.3,144.8 -2.9,6 -6.2,13.9 -7.4,17.3 -8.3,24.4 -39.3,60.8 -44.6,52.2 -0.7,-1.1 4,-17.4 5.9,-20.5 2.2,-3.5 5.2,-17.2 6.1,-27.5 0.8,-9.2 3,-20.1 6.1,-30 1.3,-4.1 2.6,-9.5 3,-12s2.2,-10.2 4,-17.2 4,-17.8 4.8,-24 2.2,-14.6 3.1,-18.7c1.5,-7.1 2.4,-12.1 6,-35.6 0.8,-5.5 2.4,-12.7 3.5,-15.9 1.1,-3.3 2,-8.3 2,-11.1 0,-8.1 0.9,-8.3 7.2,-1.8m-361.5,3.8c4.9,8.5 8.8,18.1 12.8,31 4.9,16.2 7.7,23.9 11,30.5 5.6,11 11.7,32.9 16.4,58.5 1.1,6 2.9,15.3 4.1,20.5 3.8,17.3 3,56.1 -1.2,61.6 -7.8,9.9 -33,-7.3 -47.1,-32.1 -1.9,-3.3 -5.5,-9.4 -8,-13.5 -5.1,-8.2 -14.5,-30 -18.4,-42.5 -4.3,-13.7 -1.7,-66.3 4,-82C68.9,219.9 83.6,193 86,193c0.3,0 2.4,3.4 4.7,7.5m191,108.1c1.2,3.2 3.1,9.5 4.2,13.9s3.5,13.2 5.2,19.5c1.8,6.3 3.5,14.2 3.9,17.5 0.5,3.3 1.7,9.1 2.8,13 3.6,12.4 10.3,35.8 12.2,43 7.6,27.7 -17.3,46.3 -52.2,39 -4,-0.9 -8.3,-1.3 -9.6,-1 -3,0.7 -8.1,-2.4 -11.6,-7l-2.7,-3.5 4,-8.6c2.2,-4.7 4.5,-11.3 5.2,-14.7 0.6,-3.4 1.9,-8.2 2.9,-10.7 2.3,-6 6.2,-20.6 9.5,-36 6.4,-29.5 9.3,-40.2 14.3,-51.6 1.7,-3.8 3.7,-9.2 4.6,-11.9 0.9,-2.8 1.9,-5.6 2.1,-6.3 0.9,-2.6 3,-0.5 5.2,5.4"/></svg></div>
                   <div class="proto-info">
                     <span class="proto-title">amneziawg 3.1</span>
                     <span class="proto-detail">профиль amneziawg</span>
-                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency><svg class="inline-spoke-spinner" viewBox="0 0 24 24" width="14" height="14"><g stroke="#38BDF8" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="6" opacity="1.0"/><line x1="16.24" y1="3.76" x2="13.41" y2="6.59" opacity="0.9"/><line x1="19.07" y1="7.93" x2="15.24" y2="9.52" opacity="0.8"/><line x1="20" y1="12" x2="16" y2="12" opacity="0.7"/><line x1="19.07" y1="16.07" x2="15.24" y2="14.48" opacity="0.6"/><line x1="16.24" y1="20.24" x2="13.41" y2="17.41" opacity="0.5"/><line x1="12" y1="22" x2="12" y2="18" opacity="0.4"/><line x1="7.76" y1="20.24" x2="10.59" y2="17.41" opacity="0.3"/><line x1="4.93" y1="16.07" x2="8.76" y2="14.48" opacity="0.2"/><line x1="4" y1="12" x2="8" y2="12" opacity="0.15"/><line x1="4.93" y1="7.93" x2="8.76" y2="9.52" opacity="0.1"/><line x1="7.76" y1="3.76" x2="10.59" y2="6.59" opacity="0.05"/></g></svg></span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed><svg class="inline-spoke-spinner" viewBox="0 0 24 24" width="14" height="14"><g stroke="#38BDF8" stroke-width="2" stroke-linecap="round"><line x1="12" y1="2" x2="12" y2="6" opacity="1.0"/><line x1="16.24" y1="3.76" x2="13.41" y2="6.59" opacity="0.9"/><line x1="19.07" y1="7.93" x2="15.24" y2="9.52" opacity="0.8"/><line x1="20" y1="12" x2="16" y2="12" opacity="0.7"/><line x1="19.07" y1="16.07" x2="15.24" y2="14.48" opacity="0.6"/><line x1="16.24" y1="20.24" x2="13.41" y2="17.41" opacity="0.5"/><line x1="12" y1="22" x2="12" y2="18" opacity="0.4"/><line x1="7.76" y1="20.24" x2="10.59" y2="17.41" opacity="0.3"/><line x1="4.93" y1="16.07" x2="8.76" y2="14.48" opacity="0.2"/><line x1="4" y1="12" x2="8" y2="12" opacity="0.15"/><line x1="4.93" y1="7.93" x2="8.76" y2="9.52" opacity="0.1"/><line x1="7.76" y1="3.76" x2="10.59" y2="6.59" opacity="0.05"/></g></svg></span></div>
+                    <div class="proto-telemetry"><span class="metric-k">отклик:</span> <span class="metric-v" data-metric-latency>—</span> <span style="opacity:0.4;">·</span> <span class="metric-k">скорость:</span> <span class="metric-v" data-metric-speed>—</span></div>
                   </div>
                   <span class="proto-selected-mark">выбрано</span>
                 </div>
@@ -3858,12 +4090,7 @@
               </div>
               <button class="btn-select-route" id="btn-setting-account" style="font-size: 11.5px; padding: 4px 10px;">войти</button>
             </div>
-            <div class="setting-item" id="row-setting-import" style="border-top: 1px solid rgba(255, 255, 255, 0.06); cursor: pointer;">
-              <div class="setting-text-wrap">
-                <span class="setting-label">импорт подписки</span>
-                <span class="setting-desc">вставить ссылку или подключить профиль</span>
-              </div>
-              <button class="btn-select-route" id="btn-setting-import" style="font-size: 11.5px; padding: 4px 10px;">открыть</button>
+            <button class="btn-select-route" id="btn-setting-import" style="font-size: 11.5px; padding: 4px 10px;">открыть</button>
             </div>
           </div>
         </div>
@@ -4257,6 +4484,15 @@
         clearTimeout(subscriptionRefreshTimer);
         subscriptionRefreshTimer = setTimeout(() => {
           setSubscriptionRefreshState("idle");
+      // Attach click handler for routes-refresh-card
+      const routesRefreshCard = document.getElementById("routes-refresh-card");
+      if (routesRefreshCard) {
+        routesRefreshCard.addEventListener("click", () => {
+          setSubscriptionRefreshState("refreshing");
+          postHost("routes:refresh:subscription");
+        });
+      }
+
         }, 4000);
       } else if (phase === "error") {
         if (sub) {
@@ -4414,7 +4650,7 @@
     };
 
     let flagInstance = 0;
-    function getFlagSvg(code, w = 22, h = 15) {
+    function getFlagSvg(code, w = "100%", h = "100%") {
       const c = String(code || "").toUpperCase();
       const rx = 3;
       const clipId = `flag-${c.toLowerCase()}-${++flagInstance}`;
@@ -5025,16 +5261,22 @@
         compactAction.disabled = state.actionEnabled === false;
       }
 
+      const isGoodConn = (typeof isGood !== "undefined" && isGood) || (state.statusTone === "good");
+      const isMeasuring = state.measuring === true || state.latency === "…" || state.speed === "…";
       const latencyEl = document.getElementById("home-latency");
       const latencyUnit = document.getElementById("home-latency-unit");
       if (latencyEl) {
-        if (state.latency != null && state.latency !== "" && state.latency !== "—") {
+        if (isGoodConn && state.latency != null && state.latency !== "" && state.latency !== "—" && state.latency !== "…") {
           latencyEl.classList.remove("is-empty");
           latencyEl.textContent = state.latency;
           if (latencyUnit) latencyUnit.hidden = false;
-        } else {
+        } else if (isGoodConn && isMeasuring) {
           latencyEl.classList.add("is-empty");
-          latencyEl.textContent = state.latency === "…" ? "…" : "не измерено";
+          latencyEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(22) : "…";
+          if (latencyUnit) latencyUnit.hidden = true;
+        } else {
+          latencyEl.classList.remove("is-empty");
+          latencyEl.textContent = "—";
           if (latencyUnit) latencyUnit.hidden = true;
         }
       }
@@ -5042,13 +5284,17 @@
       const speedEl = document.getElementById("home-speed");
       const speedUnit = document.getElementById("home-speed-unit");
       if (speedEl) {
-        if (state.speed != null && state.speed !== "" && state.speed !== "—") {
+        if (isGoodConn && state.speed != null && state.speed !== "" && state.speed !== "—" && state.speed !== "…") {
           speedEl.classList.remove("is-empty");
           speedEl.textContent = state.speed;
           if (speedUnit) speedUnit.hidden = false;
-        } else {
+        } else if (isGoodConn && isMeasuring) {
           speedEl.classList.add("is-empty");
-          speedEl.textContent = state.speed === "…" ? "…" : "не измерено";
+          speedEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(22) : "…";
+          if (speedUnit) speedUnit.hidden = true;
+        } else {
+          speedEl.classList.remove("is-empty");
+          speedEl.textContent = "—";
           if (speedUnit) speedUnit.hidden = true;
         }
       }

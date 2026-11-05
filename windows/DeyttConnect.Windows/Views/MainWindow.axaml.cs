@@ -244,14 +244,8 @@ public partial class MainWindow : Window
         _startupFlowStarted = true;
         UpdateResponsiveLayout();
 
-        try
-        {
-            await Task.WhenAny(SplashOverlay.WaitForCompletionAsync(), Task.Delay(2000));
-        }
-        catch
-        {
-            // Ignore splash wait failure
-        }
+        // Let typewriter finish revealing characters before proceeding
+        await Task.Delay(1100);
 
         if (OperatingSystem.IsWindows())
             await ShowStartupExternalVpnNoticeAsync();
@@ -293,6 +287,7 @@ public partial class MainWindow : Window
         _homeMapInitializationAllowed = true;
         if (OperatingSystem.IsWindows() && IsVisible && _activeTab == MainTab.Home)
             ShowTab(MainTab.Home);
+        SplashOverlay.RequestDismiss();
     }
 
     private void ConfigureNavigation()

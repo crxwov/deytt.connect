@@ -42,6 +42,8 @@ public sealed class StartupSplashOverlay : Control
     private readonly TaskCompletionSource _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _reduceMotion;
     private bool _finished;
+    private bool _dismissRequested;
+    private long _dismissStartMs;
 
     public StartupSplashOverlay()
     {
@@ -61,14 +63,28 @@ public sealed class StartupSplashOverlay : Control
     {
         if (_finished) return;
 
-        if (_stopwatch.ElapsedMilliseconds >= TotalDurationMs)
+        long elapsed = _stopwatch.ElapsedMilliseconds;
+        if (_dismissRequested)
         {
-            Finish();
+            if (elapsed - _dismissStartMs >= SplashExitDurationMs)
+            {
+                Finish();
+                return;
+            }
         }
-        else
+        else if (elapsed >= 6000L)
         {
-            InvalidateVisual();
+            RequestDismiss();
         }
+
+        InvalidateVisual();
+    }
+
+    public void RequestDismiss()
+    {
+        if (_finished || _dismissRequested) return;
+        _dismissRequested = true;
+        _dismissStartMs = _stopwatch.ElapsedMilliseconds;
     }
 
     public Task WaitForCompletionAsync() => _completion.Task;
@@ -156,8 +172,8 @@ public sealed class StartupSplashOverlay : Control
         double height = Bounds.Height;
         if (width <= 0 || height <= 0) return;
 
-        double exitAlpha = elapsed < SplashExitStartMs ? 1.0 :
-            Math.Clamp(1.0 - AlignCurve((elapsed - SplashExitStartMs) / (double)SplashExitDurationMs), 0.0, 1.0);
+        double exitAlpha = !_dismissRequested ? 1.0 :
+            Math.Clamp(1.0 - AlignCurve((elapsed - _dismissStartMs) / (double)SplashExitDurationMs), 0.0, 1.0);
 
         // Backdrop: Deep space black-blue
         var bgBrush = new SolidColorBrush(Color.FromArgb((byte)(255 * exitAlpha), 8, 13, 23));
@@ -241,8 +257,9 @@ public sealed class StartupSplashOverlay : Control
             x += advances[i];
         }
 
-        // Terminal block cursor
-        double cursorAlpha = Math.Clamp(1.0 - (elapsed - 680.0) / 160.0, 0.0, 1.0);
+        // Terminal block cursor: blinking cursor in hold state
+        double cursorAlpha = elapsed < 680.0 ? 1.0 :
+            ((elapsed / 450) % 2 == 0 ? 0.85 : 0.15);
         if (cursorAlpha > 0.001 && exitAlpha > 0.001)
         {
             var cursorBrush = new SolidColorBrush(Color.FromArgb((byte)(255 * cursorAlpha * exitAlpha), 56, 189, 248));

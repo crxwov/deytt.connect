@@ -296,27 +296,37 @@
       el.hidden = state.statusTone !== "good";
       el.textContent = language === "en" ? "connected" : "подключено";
     });
+    const isVpnConnected = state.statusTone === "good";
+    const isMeasuring = state.measuring === true || state.latency === "…" || state.speed === "…";
     const latencyUnit = root.querySelector("#home-latency-unit");
     if (latency) {
-      if (state.latency != null && state.latency !== "" && state.latency !== "—" && state.latency !== "…") {
+      if (isVpnConnected && state.latency != null && state.latency !== "" && state.latency !== "—" && state.latency !== "…") {
         latency.classList.remove("is-empty");
         latency.textContent = state.latency + " " + (language === "en" ? "ms" : "мс");
         if (latencyUnit) latencyUnit.hidden = true;
-      } else {
+      } else if (isVpnConnected && isMeasuring) {
         latency.classList.add("is-empty");
         latency.innerHTML = getSpokeSpinnerSvg(22);
+        if (latencyUnit) latencyUnit.hidden = true;
+      } else {
+        latency.classList.remove("is-empty");
+        latency.textContent = "—";
         if (latencyUnit) latencyUnit.hidden = true;
       }
     }
     const speedUnit = root.querySelector("#home-speed-unit");
     if (speed) {
-      if (state.speed != null && state.speed !== "" && state.speed !== "—" && state.speed !== "…") {
+      if (isVpnConnected && state.speed != null && state.speed !== "" && state.speed !== "—" && state.speed !== "…") {
         speed.classList.remove("is-empty");
         speed.textContent = state.speed + " " + (language === "en" ? "Mbps" : "мбит/с");
         if (speedUnit) speedUnit.hidden = true;
-      } else {
+      } else if (isVpnConnected && isMeasuring) {
         speed.classList.add("is-empty");
         speed.innerHTML = getSpokeSpinnerSvg(22);
+        if (speedUnit) speedUnit.hidden = true;
+      } else {
+        speed.classList.remove("is-empty");
+        speed.textContent = "—";
         if (speedUnit) speedUnit.hidden = true;
       }
     }
@@ -325,8 +335,8 @@
       if (state.message) homeRouteSubtitle.textContent = state.message;
       else if (state.statusTone === "good") homeRouteSubtitle.textContent = language === "en" ? "secure tunnel active" : "защищенный туннель активен";
     }
-    root.querySelector("#compact-latency").textContent = (state.latency == null ? "—" : state.latency) + " " + (language === "en" ? "ms" : "мс");
-    root.querySelector("#compact-speed").textContent = (state.speed == null ? "—" : state.speed) + " " + (language === "en" ? "mbit/s" : "мбит/с");
+    root.querySelector("#compact-latency").textContent = (!isVpnConnected || state.latency == null || state.latency === "" ? "—" : state.latency + " " + (language === "en" ? "ms" : "мс"));
+    root.querySelector("#compact-speed").textContent = (!isVpnConnected || state.speed == null || state.speed === "" ? "—" : state.speed + " " + (language === "en" ? "mbit/s" : "мбит/с"));
     latencyMetric.dataset.tone = state.latencyTone || "normal";
     speedMetric.dataset.tone = state.speedTone || "normal";
     note.textContent = state.measurementLabel || "";

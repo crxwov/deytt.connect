@@ -47,6 +47,10 @@ public static class WindowsUpdateClient
         AllowAutoRedirect = false,
         ConnectTimeout = TimeSpan.FromSeconds(15),
         UseCookies = false,
+        SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+        {
+            CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
+        },
     })
     {
         Timeout = Timeout.InfiniteTimeSpan,
