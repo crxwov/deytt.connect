@@ -996,7 +996,14 @@ public partial class MainWindow
                 if (IsVpnDisplayConnected()) RefreshHomeConnectionMeasurement(true);
                 else if (_routes.FirstOrDefault(route => route.Id == _selectedRoute) is { Id: not "auto" } route)
                     _ = ProbeRoutesAsync([route.Tag]);
-                else ShowTab(MainTab.Routes);
+                else
+                {
+                    var candidateTags = _routes.Where(r => r.Id != "auto").Take(5).Select(r => r.Tag).ToArray();
+                    if (candidateTags.Length > 0)
+                        _ = ProbeRoutesAsync(candidateTags);
+                    else
+                        ShowTab(MainTab.Routes);
+                }
                 break;
         }
     }
