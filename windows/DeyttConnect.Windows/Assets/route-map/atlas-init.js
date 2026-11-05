@@ -195,24 +195,48 @@
     const city = root.querySelector("#" + prefix + "city");
     const protocol = root.querySelector("#" + prefix + "protocol");
     const subtitle = root.querySelector("#" + prefix + "route-subtitle");
-    if (flag) {
-      const code = routeFlag(state.countryCode);
-      flag.dataset.country = code;
-      flag.classList.toggle("is-generic", !code);
-      if (code && typeof window.getFlagSvg === "function") {
-        flag.innerHTML = window.getFlagSvg(code, 22, 15);
-      } else if (code) {
-        flag.textContent = code;
-      } else {
-        flag.textContent = "✦";
-      }
-      flag.setAttribute("aria-label", code || "");
-    }
     const countryCode = (state.countryCode || "").toLowerCase();
+    const isAuto = !countryCode || countryCode === "auto";
+
+    if (flag) {
+      if (isAuto) {
+        flag.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none"><circle cx="12" cy="12" r="9.5" stroke="#38BDF8" stroke-width="1.8"/><circle cx="12" cy="12" r="5" stroke="#38BDF8" stroke-width="1.4" opacity="0.6"/><circle cx="12" cy="12" r="2" fill="#38BDF8"/></svg>';
+        flag.dataset.country = "auto";
+        flag.classList.remove("is-generic");
+      } else {
+        const code = routeFlag(state.countryCode);
+        flag.dataset.country = code;
+        flag.classList.toggle("is-generic", !code);
+        if (code && typeof window.getFlagSvg === "function") {
+          flag.innerHTML = window.getFlagSvg(code, 22, 15);
+        } else if (code) {
+          flag.textContent = code;
+        } else {
+          flag.textContent = "✦";
+        }
+      }
+      flag.setAttribute("aria-label", isAuto ? "auto" : (state.countryCode || ""));
+    }
+
     let rawProto = (state.protocol || "").toLowerCase().replace(/^\.\//, "");
     const compactRouteTag = prefix === "compact-" && countryCode && rawProto
       ? `${countryCode}./${rawProto}` : "";
-    if (countryCode && rawProto) {
+
+    if (isAuto) {
+      if (city) city.textContent = "auto-select";
+      if (country) {
+        country.textContent = "";
+        country.hidden = true;
+      }
+      if (protocol) {
+        protocol.textContent = "";
+        protocol.hidden = true;
+      }
+      if (subtitle) {
+        subtitle.hidden = false;
+        subtitle.innerHTML = '<span class="route-accent-tag">auto</span> <span style="opacity:0.4;">·</span> <span>выбирает самый быстрый европейский выход</span>';
+      }
+    } else if (countryCode && rawProto) {
       if (country) {
         country.textContent = "";
         country.hidden = true;
@@ -220,6 +244,10 @@
       if (protocol) {
         protocol.textContent = `${countryCode}./${rawProto}`;
         protocol.hidden = prefix === "compact-";
+      }
+      if (city) city.textContent = compactRouteTag || state.city || "";
+      if (subtitle) {
+        subtitle.hidden = true;
       }
     } else {
       if (country) {
@@ -230,10 +258,10 @@
         protocol.textContent = state.protocol || "";
         protocol.hidden = !state.protocol;
       }
-    }
-    if (city) city.textContent = compactRouteTag || state.city || "";
-    if (subtitle) {
-      subtitle.hidden = Boolean(state.country || state.protocol || (countryCode && rawProto));
+      if (city) city.textContent = compactRouteTag || state.city || "";
+      if (subtitle) {
+        subtitle.hidden = Boolean(state.country || state.protocol || (countryCode && rawProto));
+      }
     }
   }
 

@@ -618,7 +618,7 @@ public partial class MainWindow
         displayedRoute ??= _routes.FirstOrDefault(route => route.Id == _selectedRoute);
         var destination = GetHomeDestinationParts(displayedRoute);
         var automatic = _selectedRoute == "auto";
-        var country = automatic ? Copy("автоподбор", "auto-select") : displayedRoute?.CountryCode switch
+        var country = automatic ? "" : displayedRoute?.CountryCode switch
         {
             "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
             "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
@@ -629,7 +629,7 @@ public partial class MainWindow
         var city = displayedRoute?.CountryCode is null or "AUTO"
             ? connected ? Copy("уточняем выбранный выход…", "confirming the selected exit…")
                 : connecting || routeProbeActive ? Copy("выбираем выход…", "selecting an exit…")
-                : Copy("выход выберется автоматически", "exit selected automatically")
+                : Copy("auto-select", "auto-select")
             : displayedRoute?.Protocol == "AWG31" && !string.IsNullOrWhiteSpace(displayedRoute.ProfileName)
                 ? destination.Name
                 : automatic ? Copy($"{destination.Name} · {RouteCountryName(displayedRoute!)}", $"{destination.Name} · {RouteCountryName(displayedRoute!)}").ToLowerInvariant()
@@ -764,6 +764,11 @@ public partial class MainWindow
 
         var tags = _routes.Where(route => string.Equals(route.CountryCode, countryCode, StringComparison.OrdinalIgnoreCase))
             .Select(route => route.Tag).ToArray();
+        if (tags.Length == 0)
+        {
+            tags = _routes.Where(route => route.Id.StartsWith($"route:{countryCode}:", StringComparison.OrdinalIgnoreCase))
+                .Select(route => route.Tag).ToArray();
+        }
         QueueRouteCountryProbe(countryCode, tags);
     }
 
