@@ -21,7 +21,14 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow(InitialImportUrl);
+            desktop.ShutdownMode = Avalonia.Controls.ShutdownMode.OnExplicitShutdown;
+            var mainWindow = new MainWindow(InitialImportUrl);
+            desktop.MainWindow = mainWindow;
+            if (OperatingSystem.IsWindows())
+            {
+                Program.StartActivationListener(mainWindow);
+                desktop.Exit += (_, _) => Program.StopActivationListener();
+            }
         }
 
         base.OnFrameworkInitializationCompleted();

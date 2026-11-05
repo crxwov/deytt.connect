@@ -47,7 +47,6 @@ public sealed class RouteLatencyProbeTests
 
         Assert.NotNull(result.LatencyMilliseconds);
         Assert.Null(result.Failure);
-        Assert.False(result.UsedColdFallback);
         Assert.Equal(1, cloudflareCalls);
         Assert.Equal(4, googleCalls);
 
@@ -62,7 +61,7 @@ public sealed class RouteLatencyProbeTests
             observations.Where(observation => observation.Phase == RouteLatencyProbePhase.WarmSample)
                 .Select(observation => observation.Attempt));
         Assert.Equal(warmTimes[1], result.LatencyMilliseconds);
-        Assert.Equal(4, observations.Count(observation => observation.LatencyMilliseconds is not null));
+        Assert.Equal(3, observations.Count(observation => observation.LatencyMilliseconds is not null));
 
         Assert.Equal(
             new[] { "connectivitycheck.gstatic.com", "cp.cloudflare.com" },
@@ -78,7 +77,7 @@ public sealed class RouteLatencyProbeTests
     }
 
     [Fact]
-    public async Task ReturnsColdSampleWhenNoWarmSampleSucceeds()
+    public async Task DoesNotReturnColdLatencyWhenNoWarmSampleSucceeds()
     {
         var googleCalls = 0;
         using var handler = new CallbackHandler((request, _) =>
@@ -98,9 +97,8 @@ public sealed class RouteLatencyProbeTests
             CancellationToken.None,
             timeouts: new RouteLatencyProbeTimeouts(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1)));
 
-        Assert.NotNull(result.LatencyMilliseconds);
-        Assert.Null(result.Failure);
-        Assert.True(result.UsedColdFallback);
+        Assert.Null(result.LatencyMilliseconds);
+        Assert.Contains("повторный HTTPS-отклик", result.Failure ?? string.Empty, StringComparison.Ordinal);
         Assert.Equal(4, googleCalls);
     }
 
@@ -135,7 +133,6 @@ public sealed class RouteLatencyProbeTests
             .ToArray();
         Assert.Equal(2, warmTimes.Length);
         Assert.Equal((long)Math.Round((warmTimes[0] + warmTimes[1]) / 2d, MidpointRounding.AwayFromZero), result.LatencyMilliseconds);
-        Assert.False(result.UsedColdFallback);
     }
 
     [Fact]
@@ -160,7 +157,6 @@ public sealed class RouteLatencyProbeTests
             timeouts: new RouteLatencyProbeTimeouts(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(1)));
 
         Assert.Null(result.LatencyMilliseconds);
-        Assert.False(result.UsedColdFallback);
         Assert.Contains("перенаправил", result.Failure ?? string.Empty, StringComparison.Ordinal);
     }
 
@@ -231,7 +227,10 @@ public sealed class RouteLatencyProbeTests
         var result = await RouteLatencyProbe.MeasureAsync(client, CancellationToken.None, observations.Add);
         Assert.NotNull(result.LatencyMilliseconds);
         Assert.Null(result.Failure);
-        Assert.Contains(observations, observation => observation.Phase == RouteLatencyProbePhase.ColdConnect && observation.Attempt == 2 && observation.LatencyMilliseconds is not null);
+        Assert.Contains(observations, observation => observation.Phase == RouteLatencyProbePhase.ColdConnect && observation.Attempt == 2);
+        Assert.All(observations.Where(observation => observation.Phase == RouteLatencyProbePhase.ColdConnect),
+            observation => Assert.Null(observation.LatencyMilliseconds));
+        Assert.Contains(observations, observation => observation.Phase == RouteLatencyProbePhase.WarmSample && observation.LatencyMilliseconds is not null);
         Assert.All(observations, observation => Assert.InRange(observation.Attempt, 1, 3));
     }
 
@@ -280,6 +279,47 @@ public sealed class RouteLatencyProbeTests
         using var client = NewClient(handler);
         var result = await RouteLatencyProbe.MeasureAsync(client, CancellationToken.None);
         Assert.NotNull(result.LatencyMilliseconds);
+        Assert.Null(result.Failure);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Canary_http_200_is_valid_only_when_explicitly_expected(bool allowOk)
+    {
+        var target = new Uri("https://canary.example/trace");
+        using var handler = new CallbackHandler((request, _) =>
+            Task.FromResult(Response(request, HttpStatusCode.OK)));
+        using var client = NewClient(handler);
+        var result = await RouteLatencyProbe.MeasureAsync(client, CancellationToken.None,
+            targets: [target], expectedStatuses: allowOk
+                ? new Dictionary<Uri, HttpStatusCode> { [target] = HttpStatusCode.OK }
+                : null);
+        if (allowOk)
+        {
+            Assert.True(result.LatencyMilliseconds is > 0);
+            Assert.Null(result.Failure);
+        }
+        else
+        {
+            Assert.Null(result.LatencyMilliseconds);
+            Assert.Contains("HTTP 200", result.Failure);
+        }
+    }
+
+    [Fact]
+    public async Task Unspecified_canary_status_still_requires_http_204()
+    {
+        var target = new Uri("https://canary.example/generate_204");
+        using var handler = new CallbackHandler((request, _) =>
+            Task.FromResult(Response(request, HttpStatusCode.NoContent)));
+        using var client = NewClient(handler);
+        var result = await RouteLatencyProbe.MeasureAsync(client, CancellationToken.None,
+            targets: [target], expectedStatuses: new Dictionary<Uri, HttpStatusCode>
+            {
+                [new Uri("https://other.example/trace")] = HttpStatusCode.OK,
+            });
+        Assert.True(result.LatencyMilliseconds is > 0);
         Assert.Null(result.Failure);
     }
 

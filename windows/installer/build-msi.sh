@@ -67,10 +67,12 @@ rm -rf "$service_dir"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$repo_root/windows/installer/Get-WebView2Bootstrapper.ps1")" -Destination "$(cygpath -w "$package_dir/Prerequisites/MicrosoftEdgeWebview2Setup.exe")"
 (cd "$package_dir" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
 
+product_code="$(powershell.exe -NoProfile -File "$(cygpath -w "$repo_root/windows/installer/Get-ProductCode.ps1")" -ProductVersion "$product_version" | tr -d '\r')"
 "$dotnet_bin" build "$repo_root/windows/installer/DEYTTConnect.Windows.Installer.wixproj" \
   --configuration Release \
   -p:PackageStageDir="$package_dir" \
   -p:ProductVersion="$product_version" \
+  -p:SetupProductCode="$product_code" \
   -p:InstallerBuildRoot="$temp_dir/wix-build" \
   --nologo
 

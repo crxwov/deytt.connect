@@ -15,9 +15,10 @@ internal static class RouteFlagVisual
             "NL" => HorizontalStripes(width, height, "#C93D4B", "#F7F7F4", "#31579A"),
             "DE" => HorizontalStripes(width, height, "#17191E", "#C83C4A", "#F0C66B"),
             "RU" => HorizontalStripes(width, height, "#F7F7F4", "#477CC0", "#C83C4A"),
-            "EU" => EuropeanFlag(width, height),
             "FI" => FinnishFlag(width, height),
             "IT" => VerticalStripes(width, height, "#168B4B", "#F7F7F4", "#D0474D"),
+            "EU" => EuropeanFlag(width, height),
+            "RU-DE" => DoubleFlag(width, height),
             _ => Fallback(code, width, height),
         };
 
@@ -94,6 +95,31 @@ internal static class RouteFlagVisual
         TextAlignment = TextAlignment.Center,
     };
 
+    private static Control DoubleFlag(double width, double height)
+    {
+        var flagWidth = Math.Max(2, (width - 12) / 2);
+        var pair = new Grid
+        {
+            Width = width - 2,
+            ColumnDefinitions = new ColumnDefinitions("*,10,*"),
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        pair.Children.Add(Frame(HorizontalStripes(flagWidth, height * 0.58,
+            "#F7F7F4", "#477CC0", "#C83C4A"), flagWidth, height * 0.58));
+        var arrow = DeyttTheme.TextBlock("→", 13, DeyttTheme.Muted,
+            FontWeight.SemiBold, wrap: false);
+        arrow.TextAlignment = TextAlignment.Center;
+        arrow.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+        Grid.SetColumn(arrow, 1);
+        pair.Children.Add(arrow);
+        var destination = Frame(HorizontalStripes(flagWidth, height * 0.58,
+            "#17191E", "#C83C4A", "#F0C66B"), flagWidth, height * 0.58);
+        Grid.SetColumn(destination, 2);
+        pair.Children.Add(destination);
+        return pair;
+    }
+
     private static Control Fallback(string code, double width, double height)
     {
         var label = code switch
@@ -137,6 +163,7 @@ internal static class RouteFlagVisual
         "FI" => "флаг финляндии",
         "IT" => "флаг италии",
         "EU" => "флаг европы",
+        "RU-DE" => "флаги россии и германии",
         "AUTO" => "автоматический выбор маршрута",
         "IP" => "регион, определённый по ip",
         _ => "регион не указан",

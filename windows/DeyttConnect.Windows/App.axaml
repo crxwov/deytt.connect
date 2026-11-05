@@ -1,42 +1,7 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             x:Class="DeyttConnect.Windows.App"
-             RequestedThemeVariant="Dark">
-
-    <Application.Styles>
-        <FluentTheme />
-        <Style Selector="TextBlock">
-            <Setter Property="FontFamily" Value="fonts:DEYTT#Inter Tight" />
-            <Setter Property="Foreground" Value="#F2F5FC" />
-        </Style>
-        <Style Selector="Button.deytt-button">
-            <Setter Property="Background" Value="Transparent" />
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="VerticalContentAlignment" Value="Center" />
-            <Setter Property="Foreground" Value="#F2F5FC" />
-        </Style>
-        <Style Selector="Button.deytt-button:pointerover">
-            <Setter Property="Opacity" Value="0.90" />
-        </Style>
-        <Style Selector="Button.deytt-button:pressed">
-            <Setter Property="Opacity" Value="0.72" />
-        </Style>
-        <Style Selector="Button.deytt-button:focus">
-            <Setter Property="BorderBrush" Value="#6BDDF2" />
-            <Setter Property="BorderThickness" Value="1" />
-        </Style>
-        <Style Selector="Button.nav-pill:focus">
-            <Setter Property="BorderBrush" Value="Transparent" />
-            <Setter Property="BorderThickness" Value="0" />
-        </Style>
-        <Style Selector="Button.nav-pill:focus Border.nav-surface">
-            <Setter Property="BorderBrush" Value="#6BDDF2" />
-        </Style>
-        <Style Selector="Button.deytt-button:disabled">
-            <Setter Property="Opacity" Value="0.56" />
-        </Style>
-    </Application.Styles>
+             x:Class="DeyttConnect.Windows.App">
+  <Application.Styles>
+    <StyleInclude Source="avares://DeyttConnect.Windows/UI/ConnectStyles.axaml" />
+  </Application.Styles>
 </Application>

@@ -11,6 +11,80 @@ namespace DeyttConnect.Setup
 {
     public static class SetupActions
     {
+        private const string ConnectUpgradeCode = "{405BFF99-D3EE-5F7F-BF2D-FC11478F37B5}";
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetShellWindow();
+
+        private static bool HasInteractiveShell() => GetShellWindow() != IntPtr.Zero;
+
+        private static bool LaunchConnect(string executable)
+        {
+            var workingDirectory = Path.GetDirectoryName(executable) ?? Environment.CurrentDirectory;
+            if (HasInteractiveShell())
+            {
+                // Ask the logged-in Explorer shell to open the app so an elevated MSI
+                // never starts the interactive client with its administrator token.
+                var explorer = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "explorer.exe");
+                var shellStart = new ProcessStartInfo(explorer, "\"" + executable + "\"")
+                {
+                    UseShellExecute = true,
+                    WorkingDirectory = workingDirectory,
+                };
+                using (var process = Process.Start(shellStart))
+                    return process != null;
+            }
+
+            var identity = WindowsIdentity.GetCurrent();
+            if (new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator))
+                return false;
+
+            var appStart = new ProcessStartInfo(executable)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = workingDirectory,
+            };
+            using (var process = Process.Start(appStart))
+                return process != null;
+        }
+
+        internal static bool IsInstalledConnectProcess(string processPath, string installedExecutable)
+        {
+            if (string.IsNullOrWhiteSpace(processPath) || string.IsNullOrWhiteSpace(installedExecutable)) return false;
+            try
+            {
+                return string.Equals(Path.GetFullPath(processPath), Path.GetFullPath(installedExecutable), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (ArgumentException) { return false; }
+        }
+
+        private static bool StopInstalledConnect(string executable)
+        {
+            using (var current = Process.GetCurrentProcess())
+            {
+                foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(executable)))
+                {
+                    using (process)
+                    {
+                        try
+                        {
+                            if (process.Id == current.Id || process.SessionId != current.SessionId) continue;
+                            if (!IsInstalledConnectProcess(process.MainModule.FileName, executable)) continue;
+                            process.CloseMainWindow();
+                            // A normal close hides this client to the tray, so stop only this matching process after a grace period.
+                            if (!process.WaitForExit(3000))
+                            {
+                                process.Kill();
+                                if (!process.WaitForExit(5000)) return false;
+                            }
+                        }
+                        catch (InvalidOperationException) { }
+                    }
+                }
+            }
+            return true;
+        }
+
         // Parse the executable, never an occurrence of its name in an argument.
         public static bool IsConnectService(string command)
         {
@@ -44,13 +118,81 @@ namespace DeyttConnect.Setup
             catch (ArgumentException) { return false; }
         }
 
+        internal static string ClassifySetupMode(
+            bool sameProductInstalled,
+            bool upgradeDetected,
+            Version installedVersion,
+            Version packageVersion)
+        {
+            if (sameProductInstalled) return "maintenance";
+            if (upgradeDetected && (installedVersion == null || packageVersion == null ||
+                installedVersion.CompareTo(packageVersion) < 0))
+                return "update";
+            return "install";
+        }
+
+        private static Version FindInstalledConnectVersion(Session session)
+        {
+            var currentProductCode = session["ProductCode"];
+            var upgradeProductCodes = session["WIX_UPGRADE_DETECTED"] ?? "";
+            Version newest = null;
+            foreach (var product in ProductInstallation.GetRelatedProducts(ConnectUpgradeCode))
+            {
+                if (!product.IsInstalled) continue;
+
+                var code = product.ProductCode;
+                var isCurrent = string.Equals(NormalizeProductCode(code), NormalizeProductCode(currentProductCode), StringComparison.OrdinalIgnoreCase);
+                var isUpgradeCandidate = ContainsProductCode(upgradeProductCodes, code);
+                if (!isCurrent && !isUpgradeCandidate) continue;
+
+                var version = product.ProductVersion;
+                if (version != null && (newest == null || version.CompareTo(newest) > 0))
+                    newest = version;
+            }
+            return newest;
+        }
+
+        private static bool ContainsProductCode(string list, string productCode)
+        {
+            var normalized = NormalizeProductCode(productCode);
+            if (normalized.Length == 0) return false;
+            foreach (var candidate in list.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries))
+                if (string.Equals(NormalizeProductCode(candidate), normalized, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
+        private static string NormalizeProductCode(string productCode) =>
+            (productCode ?? "").Trim().Trim('{', '}');
+
         [CustomAction]
         public static ActionResult DetectLegacyService(Session session)
         {
             session["CONNECT_SERVICE_COMPATIBLE"] = IsConnectService(session["EXISTING_SERVICE_PATH"]) ? "1" : "";
+            var sameProductInstalled = session["Installed"] == "1";
+            var upgradeDetected = !string.IsNullOrWhiteSpace(session["WIX_UPGRADE_DETECTED"]);
+            Version installedVersion = null;
+            Version packageVersion = null;
+            Version.TryParse(session["ProductVersion"], out packageVersion);
+            try
+            {
+                installedVersion = FindInstalledConnectVersion(session);
+            }
+            catch (Exception exception)
+            {
+                // Installation mode still follows native MSI properties; version metadata is display-only.
+                session.Log("Installed product version lookup failed: {0}", exception.GetType().Name);
+            }
+            session["SETUP_INSTALLED_VERSION"] = installedVersion?.ToString() ?? "не определена";
+            session["SETUP_MODE"] = ClassifySetupMode(
+                sameProductInstalled, upgradeDetected, installedVersion, packageVersion);
+            session["SETUP_COMMIT_LABEL"] = session["SETUP_MODE"] == "update" ? "&Обновить" : "&Установить";
+
             var identity = WindowsIdentity.GetCurrent();
-            // Never launch the interactive client with the installer's elevated token.
-            session["CAN_LAUNCH_CONNECT"] = !new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator) ? "1" : "";
+            // An existing interactive Explorer shell can launch the client unelevated
+            // even when Windows Installer is running with its UAC-elevated token.
+            session["CAN_LAUNCH_CONNECT"] = HasInteractiveShell() ||
+                !new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator) ? "1" : "";
             session["WEBVIEW2_PRESENT"] = HasWebView2Runtime() ? "1" : "";
             return ActionResult.Success;
         }
@@ -140,7 +282,7 @@ namespace DeyttConnect.Setup
         {
             if (!File.Exists(executable)) throw new FileNotFoundException("Не найден файл приложения.", executable);
             Directory.CreateDirectory(desktop);
-            var shortcutPath = Path.Combine(desktop, "deytt connect.lnk");
+            var shortcutPath = Path.Combine(desktop, "deytt.connect.lnk");
             var link = (IShellLinkW)new ShellLink();
             try
             {
@@ -151,17 +293,20 @@ namespace DeyttConnect.Setup
                     var target = new System.Text.StringBuilder(32768);
                     link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
                     if (!string.Equals(Path.GetFullPath(target.ToString()), Path.GetFullPath(executable), StringComparison.OrdinalIgnoreCase))
-                        throw new IOException("на рабочем столе уже есть другой ярлык с именем deytt connect. переименуйте его и повторите попытку.");
+                        throw new IOException("на рабочем столе уже есть другой ярлык с именем deytt.connect. переименуйте его и повторите попытку.");
                 }
                 link.SetPath(executable);
                 link.SetWorkingDirectory(Path.GetDirectoryName(executable));
-                link.SetDescription("deytt connect — подключение к vpn");
+                link.SetDescription("deytt./connect — подключение к VPN");
                 link.SetIconLocation(executable, 0);
                 link.SetShowCmd(1);
                 persist.Save(shortcutPath, true);
             }
             finally { Marshal.FinalReleaseComObject(link); }
         }
+
+        internal static bool ShouldLaunchConnect(string launch, string canLaunch, string rebootNeeded) =>
+            launch == "1" && canLaunch == "1" && rebootNeeded != "1";
 
         [CustomAction]
         public static ActionResult FinishSetup(Session session)
@@ -173,14 +318,62 @@ namespace DeyttConnect.Setup
                 var executable = Path.Combine(session["INSTALLFOLDER"], "DeyttConnect.Windows.exe");
                 if (session["CREATE_DESKTOP_SHORTCUT"] == "1")
                     CreateDesktopShortcut(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), executable);
-                if (session["LAUNCH_CONNECT"] == "1" && session["CAN_LAUNCH_CONNECT"] == "1")
-                    Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true, WorkingDirectory = Path.GetDirectoryName(executable) });
+                if (ShouldLaunchConnect(session["LAUNCH_CONNECT"], session["CAN_LAUNCH_CONNECT"],
+                    session["REBOOTNEEDED"]))
+                {
+                    if (!StopInstalledConnect(executable))
+                    {
+                        session["FINISH_ERROR"] = "приложение установлено. не удалось перезапустить deytt./connect. закройте приложение и нажмите «Готово» ещё раз.";
+                        return ActionResult.Success;
+                    }
+                    if (!LaunchConnect(executable))
+                    {
+                        session["FINISH_ERROR"] = "приложение установлено. не удалось открыть deytt./connect. откройте его из меню «пуск» после завершения установки.";
+                        return ActionResult.Success;
+                    }
+                }
                 session["FINISH_ACTIONS_OK"] = "1";
             }
             catch (Exception exception)
             {
                 session.Log("Finish setup failed: {0}", exception.Message);
                 session["FINISH_ERROR"] = "приложение установлено. не удалось выполнить выбранное действие: " + exception.Message.ToLowerInvariant() + " можно снять галочку и завершить установку.";
+            }
+            return ActionResult.Success;
+        }
+
+        [CustomAction]
+        public static ActionResult PrepareConnectDataRemoval(Session session)
+        {
+            var data = new CustomActionData();
+            data["InstallDirectory"] = session["INSTALLFOLDER"];
+            var ownerSid = session["ALLOWEDUSERSID"];
+            using (var profile = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\" + ownerSid))
+            {
+                var profilePath = profile?.GetValue("ProfileImagePath") as string;
+                if (!string.IsNullOrEmpty(profilePath))
+                    data["UserDirectory"] = Path.Combine(Environment.ExpandEnvironmentVariables(profilePath), "AppData", "Local", "DEYTT", "Connect");
+            }
+            data["RuntimeDirectory"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "DEYTT", "Connect", "runtime");
+            session["RemoveConnectData"] = data.ToString();
+            return ActionResult.Success;
+        }
+
+        [CustomAction]
+        public static ActionResult RemoveConnectData(Session session)
+        {
+            // This action is never scheduled for a major upgrade.
+            try
+            {
+                var data = session.CustomActionData;
+                if (data.ContainsKey("UserDirectory")) ConnectDataCleanup.RemoveUserData(data["UserDirectory"]);
+                ConnectDataCleanup.RemoveRuntime(data["RuntimeDirectory"]);
+                ConnectDataCleanup.RemoveInstalledCache(data["InstallDirectory"]);
+            }
+            catch (Exception exception)
+            {
+                session.Log("Connect data cleanup failed: {0}", exception.GetType().Name);
+                return ActionResult.Failure;
             }
             return ActionResult.Success;
         }
@@ -195,57 +388,13 @@ namespace DeyttConnect.Setup
             return ActionResult.Success;
         }
 
-        private const string RegistryKeyPath = @"SOFTWARE\DEYTT\Connect";
-        private const string LegacyRegistryKeyPath = @"SOFTWARE\DeyttConnect";
-        private const string RegistryValueName = "AllowedUserSid";
-
-        public static void WriteUserSidRegistry(string userSid)
-        {
-            using (var baseKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64))
-            {
-                if (string.IsNullOrEmpty(userSid))
-                {
-                    using (var key = baseKey.OpenSubKey(RegistryKeyPath, writable: true))
-                        key?.DeleteValue(RegistryValueName, throwOnMissingValue: false);
-                    using (var legacyKey = baseKey.OpenSubKey(LegacyRegistryKeyPath, writable: true))
-                        legacyKey?.DeleteValue(RegistryValueName, throwOnMissingValue: false);
-                    return;
-                }
-
-                var sid = new SecurityIdentifier(userSid);
-                using (var key = baseKey.CreateSubKey(RegistryKeyPath, writable: true))
-                    key?.SetValue(RegistryValueName, sid.Value, RegistryValueKind.String);
-            }
-        }
-
-        public static int RunSc(string arguments, int timeoutMilliseconds = 30000)
-        {
-            var scPath = Path.Combine(Environment.SystemDirectory, "sc.exe");
-            using (var process = Process.Start(new ProcessStartInfo(scPath, arguments)
-            {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                WindowStyle = ProcessWindowStyle.Hidden,
-            }))
-            {
-                if (process == null)
-                    throw new IOException("не удалось запустить системную утилиту sc.exe.");
-                if (!process.WaitForExit(timeoutMilliseconds))
-                {
-                    try { process.Kill(); } catch { }
-                    throw new TimeoutException("команда sc.exe не завершилась вовремя.");
-                }
-                return process.ExitCode;
-            }
-        }
-
         [CustomAction]
         public static ActionResult RemoveDesktopShortcut(Session session)
         {
             // Do not remove an unrelated/replaced shortcut or user data. Major upgrades skip this action.
             try
             {
-                var path = Path.Combine(session.CustomActionData["Desktop"], "deytt connect.lnk");
+                var path = Path.Combine(session.CustomActionData["Desktop"], "deytt.connect.lnk");
                 if (!File.Exists(path)) return ActionResult.Success;
                 var link = (IShellLinkW)new ShellLink();
                 try
@@ -286,3 +435,4 @@ namespace DeyttConnect.Setup
         void SetPath([MarshalAs(UnmanagedType.LPWStr)] string path);
     }
 }
+

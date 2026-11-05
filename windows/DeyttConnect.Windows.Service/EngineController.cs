@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Net.NetworkInformation;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
@@ -16,7 +17,9 @@ internal sealed record ServiceSnapshot(string State, string Detail,
     string? RouteTag = null, DateTimeOffset? ConnectedAt = null,
     IReadOnlyList<ServiceProbeResult>? ProbeResults = null,
     DateTimeOffset? HealthCheckedAt = null,
-    string? ActiveRouteTag = null);
+    string? ActiveRouteTag = null,
+    long? TunnelLatencyMilliseconds = null,
+    string? TunnelLatencyError = null);
 
 internal sealed class EngineController
 {
@@ -37,9 +40,12 @@ internal sealed class EngineController
     private CancellationTokenSource? _verification;
     private CancellationTokenSource? _probeCancellation;
     private TunnelHealthMonitorLifetime? _healthMonitor;
+    private ActiveRouteTelemetry? _activeRouteTelemetry;
     private string? _profilePath;
     private string? _xrayProfilePath;
     private string? _routeTag;
+    private IReadOnlyList<string>? _tunAddresses;
+    private IReadOnlyDictionary<string, IPAddress[]>? _canaryAddresses;
     private ServiceSnapshot _snapshot = new("disconnected", "VPN выключен");
     private readonly object _probeProgressLock = new();
     private readonly Dictionary<string, ServiceProbeResult> _probeProgress = new(StringComparer.Ordinal);
@@ -47,6 +53,9 @@ internal sealed class EngineController
     private int _tunStartupCollisionRetries;
 
     internal sealed record AwgResolution(string Profile, IReadOnlySet<string> FailedEndpointTags);
+    internal sealed record OutboundHostResolution(string Profile, IReadOnlySet<string> FailedOutboundTags);
+    internal sealed record ConnectionHostResolution(string Profile, IReadOnlySet<string> FailedOutboundTags,
+        IReadOnlySet<string> FailedEndpointTags);
     internal sealed record ProbeAwgResolution(string Profile, IReadOnlyList<ProbeRouteEndpoint> Endpoints,
         IReadOnlyList<ServiceProbeResult> FailedResults);
 
@@ -59,6 +68,65 @@ internal sealed class EngineController
                 ProbeResults: _probeProgress.Values.Take(32).ToArray());
     }
 
+    public async Task<ServiceSnapshot> MeasureTunnelLatencyAsync(CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        Process? process;
+        IReadOnlyList<string>? tunAddresses;
+        IReadOnlyDictionary<string, IPAddress[]>? canaryAddresses;
+        try
+        {
+            process = _engine;
+            tunAddresses = _tunAddresses;
+            canaryAddresses = _canaryAddresses;
+            if (Snapshot.State != "connected" || process is null || process.HasExited || tunAddresses is null ||
+                canaryAddresses is null)
+                return Snapshot with
+                {
+                    TunnelLatencyMilliseconds = null,
+                    TunnelLatencyError = Snapshot.State == "connected" ? "Проверка VPN недоступна." : null,
+                };
+        }
+        finally { _gate.Release(); }
+
+        RouteLatencyProbeResult result;
+        try
+        {
+            var tunnelInterface = FindTunInterface(tunAddresses)
+                ?? throw new InvalidOperationException("The configured TUN address is unavailable.");
+            var targets = TunnelCanaries.Select(canary => new Uri(canary.Url)).ToArray();
+            var expectedStatuses = TunnelCanaries.ToDictionary(canary => new Uri(canary.Url),
+                canary => canary.ExpectedStatus ?? HttpStatusCode.OK);
+            using var http = CreateTunnelHttpClient(tunnelInterface,
+                RouteLatencyProbe.ProductionTimeouts.Overall, canaryAddresses);
+            result = await RouteLatencyProbe.MeasureAsync(http, cancellationToken,
+                timeouts: RouteLatencyProbe.ProductionTimeouts,
+                targets: targets,
+                expectedStatuses: expectedStatuses).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception error)
+        {
+            result = new RouteLatencyProbeResult(null, SummarizeTunnelFailure("HTTPS", error));
+        }
+
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (ReferenceEquals(_engine, process) && !process.HasExited && Snapshot.State == "connected")
+            {
+                SetSnapshot(Snapshot with
+                {
+                    TunnelLatencyMilliseconds = result.LatencyMilliseconds,
+                    TunnelLatencyError = result.Failure,
+                    HealthCheckedAt = DateTimeOffset.UtcNow,
+                });
+            }
+            return Snapshot;
+        }
+        finally { _gate.Release(); }
+    }
+
     public async Task<ServiceSnapshot> ConnectAsync(string profile, string routeTag, string? awgConfig,
         CancellationToken cancellationToken,
         IReadOnlyList<string>? customBypassDomains = null,
@@ -66,6 +134,9 @@ internal sealed class EngineController
         string? splitTunnelMode = null)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        CancellationTokenSource? preflight = null;
+        Task<IReadOnlyDictionary<string, IPAddress[]>>? canaryTask = null;
+        var canaryResultRead = false;
         try
         {
             StopCore();
@@ -77,41 +148,29 @@ internal sealed class EngineController
 
             SetSnapshot(new ServiceSnapshot("starting", "Подготовка VPN…", routeTag));
 
-            var upstreamInterface = FindActiveHappTunnel();
             var lteSocksPort = routeTag == CdnLteProfile.RouteTag ? AllocateLoopbackPort() : (int?)null;
+            // A full TUN must bootstrap on the physical network; binding it to Happ creates a routing loop.
             var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
-                upstreamInterface, customBypassDomains, customBypassProcesses, splitTunnelMode, lteSocksPort);
-            IReadOnlyDictionary<string, IPAddress[]>? canaryAddresses = null;
-            if (awgConfig is not null)
+                null, customBypassDomains, customBypassProcesses, splitTunnelMode,
+                cdnLteSocksPort: lteSocksPort);
+            preflight = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            // Start independent DNS bootstrap while AWG hosts and the profile are prepared.
+            canaryTask = ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync, preflight.Token);
+            var connectionHosts = await ResolveConnectionHostsAsync(runtimeProfile, awgConfig is not null,
+                ResolveDnsAddressesAsync, preflight.Token).ConfigureAwait(false);
+            runtimeProfile = connectionHosts.Profile;
+            if (connectionHosts.FailedOutboundTags.Count != 0)
+                return SetError("Не удалось разрешить адрес VPN-сервера до запуска TUN. Проверьте DNS сети и повторите.");
+            if (connectionHosts.FailedEndpointTags.Count != 0)
             {
-                var resolved = await ConnectDnsPrerequisiteResolver.ResolveAsync(
-                    token => ResolveAwgPeerHostsAsync(runtimeProfile, ResolveDnsAddressesAsync, token),
-                    token => ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync, token),
-                    result => result.FailedEndpointTags.Count == 0,
-                    addresses => addresses.Count > 0,
-                    cancellationToken).ConfigureAwait(false);
-                if (resolved.First is { } awgResolution)
-                {
-                    runtimeProfile = awgResolution.Profile;
-                    if (awgResolution.FailedEndpointTags.Count != 0)
-                    {
-                        StopCore();
-                        return SetError("Не удалось разрешить адрес узла AmneziaWG. Проверьте соединение и повторите.");
-                    }
-                }
-                canaryAddresses = resolved.Second;
+                StopCore();
+                return SetError("Не удалось разрешить адрес узла AmneziaWG. Проверьте соединение и повторите.");
             }
             var tunAddresses = TunnelProfileBuilder.GetTunAddresses(runtimeProfile);
-            // Windows strict routing blocks DNS on physical interfaces as soon as
-            // TUN starts. Resolve the public health-check hosts before that change;
-            // HTTPS still uses their hostnames for SNI and certificate validation.
-            canaryAddresses ??= await ResolveCanaryAddressesAsync(ResolveDnsAddressesAsync,
-                cancellationToken).ConfigureAwait(false);
-            if (canaryAddresses.Count == 0)
-                return SetError("Не удалось разрешить адреса проверки VPN до запуска TUN. Проверьте DNS сети.");
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return SetError("Не найдено ядро VPN. Переустановите приложение.");
+            (runtimeProfile, _activeRouteTelemetry) = ActiveRouteTelemetry.Create(runtimeProfile, routeTag);
             _profilePath = WritePrivateProfile(runtimeProfile);
 
             using (var check = StartEngine(enginePath, "check", _profilePath, out var checkError,
@@ -144,7 +203,7 @@ internal sealed class EngineController
 
             if (lteSocksPort is int socksPort)
             {
-                var dialer = FindXrayDialer(upstreamInterface);
+                var dialer = FindXrayDialer(null);
                 var xrayConfig = CdnLteProfile.BuildXrayConfig(profile, socksPort);
                 _xrayProfilePath = WritePrivateProfile(xrayConfig);
                 var xray = StartOwnedXray(_xrayProfilePath, dialer.InterfaceName, dialer.DnsEndpoint);
@@ -152,9 +211,17 @@ internal sealed class EngineController
                 _ = MonitorXrayAsync(xray);
             }
 
+            // Resolve before TUN changes routing; this lookup overlaps profile validation.
+            var canaryAddresses = await canaryTask.ConfigureAwait(false);
+            canaryResultRead = true;
+            if (canaryAddresses.Count == 0)
+                return SetError("Не удалось разрешить адреса проверки VPN до запуска TUN. Проверьте DNS сети.");
+
             var runtimeDiagnostic = new EngineRuntimeDiagnostic();
             var process = StartOwnedEngine(enginePath, _profilePath, runtimeDiagnostic);
             _routeTag = routeTag;
+            _tunAddresses = tunAddresses;
+            _canaryAddresses = canaryAddresses;
             _ = MonitorEngineAsync(process, runtimeDiagnostic);
 
             _verification?.Cancel();
@@ -183,6 +250,14 @@ internal sealed class EngineController
         }
         finally
         {
+            if (!canaryResultRead && preflight is not null)
+                preflight.Cancel();
+            if (!canaryResultRead && canaryTask is not null)
+            {
+                try { await canaryTask.ConfigureAwait(false); }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+            }
+            preflight?.Dispose();
             _gate.Release();
         }
     }
@@ -230,6 +305,9 @@ internal sealed class EngineController
                     ProbeResults: noRoutes.ProbeResults);
             }
             probeProfile = resolvedProbe.Profile;
+            var resolvedOutbounds = await ResolveOutboundServerHostsAsync(probeProfile,
+                ResolveDnsAddressesAsync, probeToken).ConfigureAwait(false);
+            probeProfile = resolvedOutbounds.Profile;
             _profilePath = WritePrivateProfile(probeProfile);
             probeProfileWritten = true;
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
@@ -276,15 +354,13 @@ internal sealed class EngineController
                 async Task<long?> Measure(ProbeRouteEndpoint endpoint, string _, CancellationToken ct,
                     Action<int, long?> report)
                 {
-                    using var client = new HttpClient(RouteProxyTransport.CreateHandler(endpoint)) { Timeout = Timeout.InfiniteTimeSpan };
-                    long? lastSuccessfulSample = null;
-                    var result = await RouteLatencyProbe.MeasureAsync(client, ct,
-                        observation =>
-                        {
-                            if (observation.LatencyMilliseconds is { } value)
-                                lastSuccessfulSample = value;
-                            report(observation.Attempt, lastSuccessfulSample);
-                        }).ConfigureAwait(false);
+                    using var http = new HttpClient(RouteProxyTransport.CreateHandler(endpoint), disposeHandler: true)
+                    {
+                        Timeout = RouteLatencyProbe.ProductionTimeouts.Overall,
+                    };
+                    var result = await RouteLatencyProbe.MeasureAsync(http, ct,
+                        observation => report(observation.Attempt, observation.LatencyMilliseconds),
+                        RouteLatencyProbe.ProductionTimeouts).ConfigureAwait(false);
                     if (result.Failure is { } failure)
                         failures[endpoint.RouteTag] = failure;
                     return result.LatencyMilliseconds;
@@ -476,7 +552,10 @@ internal sealed class EngineController
                     _healthMonitor?.Stop();
                     _healthMonitor?.Dispose();
                     _healthMonitor = new TunnelHealthMonitorLifetime();
-                    _ = MonitorTunnelHealthAsync(process, routeTag, tunAddresses, _healthMonitor.Token);
+                    _ = MonitorTunnelHealthAsync(process, routeTag, tunAddresses, canaryAddresses,
+                        _healthMonitor.Token);
+                    if (_activeRouteTelemetry is { } telemetry)
+                        _ = MonitorActiveRouteAsync(process, telemetry, _healthMonitor.Token);
                 }
             }
             finally
@@ -520,7 +599,7 @@ internal sealed class EngineController
     }
 
     private async Task MonitorTunnelHealthAsync(Process process, string routeTag,
-        IReadOnlyList<string> tunAddresses,
+        IReadOnlyList<string> tunAddresses, IReadOnlyDictionary<string, IPAddress[]> canaryAddresses,
         CancellationToken cancellationToken)
     {
         const int intervalSeconds = 60;
@@ -552,7 +631,8 @@ internal sealed class EngineController
                         return;
                     SetSnapshot(new ServiceSnapshot("health_checking", "Повторно проверяем VPN-трафик…",
                         routeTag, Snapshot.ConnectedAt, HealthCheckedAt: Snapshot.HealthCheckedAt,
-                        ActiveRouteTag: Snapshot.ActiveRouteTag));
+                        ActiveRouteTag: Snapshot.ActiveRouteTag,
+                        TunnelLatencyMilliseconds: null, TunnelLatencyError: null));
                 }
                 finally { _gate.Release(); }
 
@@ -562,7 +642,7 @@ internal sealed class EngineController
                     var tunnelInterface = FindTunInterface(tunAddresses)
                         ?? throw new InvalidOperationException("The configured TUN address is unavailable.");
                     await VerifyHttpsThroughTunAsync(tunnelInterface,
-                        TimeSpan.FromSeconds(canaryTimeoutSeconds), cancellationToken).ConfigureAwait(false);
+                        TimeSpan.FromSeconds(canaryTimeoutSeconds), cancellationToken, canaryAddresses).ConfigureAwait(false);
                     passed = !process.HasExited;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
@@ -586,7 +666,8 @@ internal sealed class EngineController
                     };
                     SetSnapshot(new ServiceSnapshot(transition.State, detail, routeTag,
                         Snapshot.ConnectedAt, HealthCheckedAt: transition.State == "unknown" ? null : checkedAt,
-                        ActiveRouteTag: transition.State == "unknown" ? null : Snapshot.ActiveRouteTag));
+                        ActiveRouteTag: transition.State == "unknown" ? null : Snapshot.ActiveRouteTag,
+                        TunnelLatencyMilliseconds: null, TunnelLatencyError: null));
                 }
                 finally { _gate.Release(); }
             }
@@ -595,10 +676,48 @@ internal sealed class EngineController
         finally { NetworkChange.NetworkAddressChanged -= OnNetworkChanged; }
     }
 
+    private async Task MonitorActiveRouteAsync(Process process, ActiveRouteTelemetry telemetry,
+        CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        try
+        {
+            do
+            {
+                string? route = null;
+                try
+                {
+                    route = await telemetry.ReadActiveRouteTagAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
+                catch (OperationCanceledException) { }
+                catch (Exception error) when (error is HttpRequestException or IOException or
+                    System.Text.Json.JsonException or InvalidDataException or ObjectDisposedException)
+                {
+                    // Missing/invalid telemetry clears the optional route instead of retaining a stale location.
+                }
+                await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    if (!ReferenceEquals(_engine, process) || !ReferenceEquals(_activeRouteTelemetry, telemetry) ||
+                        process.HasExited)
+                        return;
+                    var snapshot = Snapshot;
+                    if (snapshot.State is "connected" or "health_checking" or "degraded")
+                        SetSnapshot(snapshot with { ActiveRouteTag = route });
+                }
+                finally { _gate.Release(); }
+            } while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
+
     private static async Task<WindowsTunnelCanaryInterface> WaitForTunInterfaceAsync(Process process,
         IReadOnlyList<string> tunAddresses, CancellationToken cancellationToken)
     {
-        for (var attempt = 0; attempt < 30; attempt++)
+        const int maximumAttempts = 150;
+        var pollInterval = TimeSpan.FromMilliseconds(200);
+        for (var attempt = 0; attempt < maximumAttempts; attempt++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (process.HasExited)
@@ -606,39 +725,71 @@ internal sealed class EngineController
             var tunnelInterface = FindTunInterface(tunAddresses);
             if (tunnelInterface is not null)
                 return tunnelInterface;
-            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken).ConfigureAwait(false);
+            await Task.Delay(pollInterval, cancellationToken).ConfigureAwait(false);
         }
         throw new InvalidOperationException("The configured TUN address is not assigned to an active interface.");
     }
 
-    private static async Task VerifyHttpsThroughTunAsync(WindowsTunnelCanaryInterface tunnelInterface,
+    private static async Task<long> VerifyHttpsThroughTunAsync(WindowsTunnelCanaryInterface tunnelInterface,
         TimeSpan timeout, CancellationToken cancellationToken,
         IReadOnlyDictionary<string, IPAddress[]>? resolvedAddresses = null)
     {
-        // A single successful HTTPS response through a socket pinned to TUN proves
-        // traffic reached the tunnel. Public canaries can fail independently.
-        Exception? lastError = null;
-        foreach (var canary in TunnelCanaries)
-        {
-            try
+        // Canaries are independent; one unreachable host must not delay a working route.
+        var probes = TunnelCanaries.Select<(string Url, HttpStatusCode? ExpectedStatus), Func<CancellationToken, Task<long?>>>(canary =>
+            async token =>
             {
                 using var http = CreateTunnelHttpClient(tunnelInterface, timeout, resolvedAddresses);
-                using var response = await http.GetAsync(canary.Url, cancellationToken).ConfigureAwait(false);
-                if (canary.ExpectedStatus is { } expected
+                var started = Stopwatch.GetTimestamp();
+                using var request = new HttpRequestMessage(HttpMethod.Get, canary.Url);
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, token)
+                    .ConfigureAwait(false);
+                var accepted = canary.ExpectedStatus is { } expected
                     ? response.StatusCode == expected
-                    : response.IsSuccessStatusCode)
-                    return;
-                lastError = new HttpRequestException("HTTPS canary returned an unexpected status.");
-            }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
+                    : response.IsSuccessStatusCode;
+                return accepted
+                    ? (long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds)
+                    : null;
+            }).ToArray();
+        return await FirstSuccessfulCanaryAsync(probes, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<long> FirstSuccessfulCanaryAsync(
+        IReadOnlyList<Func<CancellationToken, Task<long?>>> probes, CancellationToken cancellationToken)
+    {
+        if (probes.Count == 0)
+            throw new ArgumentException("At least one HTTPS canary is required.", nameof(probes));
+
+        using var attemptsCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var pending = probes.Select(async probe =>
+        {
+            try { return (Latency: await probe(attemptsCancellation.Token).ConfigureAwait(false), Error: (Exception?)null); }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception error) when (error is HttpRequestException or OperationCanceledException or IOException)
             {
-                lastError = error;
+                return (Latency: (long?)null, Error: error);
+            }
+        }).ToList();
+        Exception? lastError = null;
+        try
+        {
+            while (pending.Count != 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var completed = await Task.WhenAny(pending).ConfigureAwait(false);
+                pending.Remove(completed);
+                var result = await completed.ConfigureAwait(false);
+                if (result.Latency is { } latency)
+                    return latency;
+                lastError = result.Error ?? lastError;
             }
         }
+        finally
+        {
+            attemptsCancellation.Cancel();
+            try { await Task.WhenAll(pending).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+        }
+
         throw new HttpRequestException("No HTTPS canary passed through TUN.", lastError);
     }
 
@@ -723,7 +874,7 @@ internal sealed class EngineController
         deadline.CancelAfter(timeout ?? TimeSpan.FromSeconds(15));
         var resolved = new System.Collections.Concurrent.ConcurrentDictionary<string, IPAddress[]>(
             StringComparer.OrdinalIgnoreCase);
-        await Task.WhenAll(TunnelCanaries.Select(canary => new Uri(canary.Url).Host)
+        var lookups = TunnelCanaries.Select(canary => new Uri(canary.Url).Host)
             .Distinct(StringComparer.OrdinalIgnoreCase).Select(async host =>
         {
             try
@@ -754,9 +905,37 @@ internal sealed class EngineController
                 }
             }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
-        })).ConfigureAwait(false);
+        }).ToList();
+        try
+        {
+            while (lookups.Count != 0 && resolved.IsEmpty && !deadline.IsCancellationRequested)
+            {
+                var completed = await Task.WhenAny(lookups).ConfigureAwait(false);
+                lookups.Remove(completed);
+                await completed.ConfigureAwait(false);
+            }
+        }
+        catch
+        {
+            deadline.Cancel();
+            _ = DisposeAfterCanaryLookupsAsync(lookups, deadline);
+            throw;
+        }
+        if (lookups.Count == 0)
+            deadline.Dispose();
+        else
+            // Keep late DNS results available to tunnel verification.
+            _ = DisposeAfterCanaryLookupsAsync(lookups, deadline);
         cancellationToken.ThrowIfCancellationRequested();
         return resolved;
+    }
+
+    private static async Task DisposeAfterCanaryLookupsAsync(IEnumerable<Task> lookups,
+        CancellationTokenSource deadline)
+    {
+        try { await Task.WhenAll(lookups).ConfigureAwait(false); }
+        catch { /* A successful bootstrap address remains valid if an optional canary fails. */ }
+        finally { deadline.Dispose(); }
     }
 
     private static HttpClient CreateTunnelHttpClient(WindowsTunnelCanaryInterface tunnelInterface,
@@ -934,6 +1113,61 @@ internal sealed class EngineController
         return root.ToJsonString();
     }
 
+    internal static async Task<ConnectionHostResolution> ResolveConnectionHostsAsync(string runtimeProfile,
+        bool resolveAwgPeers, Func<string, CancellationToken, Task<IPAddress[]>> resolve,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var resolution = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var outboundTask = ResolveOutboundServerHostsAsync(runtimeProfile, resolve, resolution.Token);
+        if (!resolveAwgPeers)
+        {
+            var outboundOnly = await outboundTask.ConfigureAwait(false);
+            return new ConnectionHostResolution(outboundOnly.Profile, outboundOnly.FailedOutboundTags,
+                new HashSet<string>(StringComparer.Ordinal));
+        }
+
+        var awgTask = ResolveAwgPeerHostsAsync(runtimeProfile, resolve, resolution.Token);
+        try
+        {
+            var first = await Task.WhenAny(outboundTask, awgTask).ConfigureAwait(false);
+            if (first == outboundTask)
+            {
+                var earlyOutbound = await outboundTask.ConfigureAwait(false);
+                if (earlyOutbound.FailedOutboundTags.Count != 0)
+                {
+                    resolution.Cancel();
+                    try { await awgTask.ConfigureAwait(false); }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+                    return new ConnectionHostResolution(earlyOutbound.Profile, earlyOutbound.FailedOutboundTags,
+                        new HashSet<string>(StringComparer.Ordinal));
+                }
+            }
+            else if (awgTask.IsFaulted || awgTask.IsCanceled)
+            {
+                await awgTask.ConfigureAwait(false);
+            }
+
+            await Task.WhenAll(outboundTask, awgTask).ConfigureAwait(false);
+        }
+        catch
+        {
+            resolution.Cancel();
+            throw;
+        }
+
+        var outbound = await outboundTask.ConfigureAwait(false);
+        var awg = await awgTask.ConfigureAwait(false);
+        var root = JsonNode.Parse(outbound.Profile) as JsonObject
+                   ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
+        var awgRoot = JsonNode.Parse(awg.Profile) as JsonObject
+                      ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
+        if (awgRoot["endpoints"] is JsonNode resolvedEndpoints)
+            root["endpoints"] = resolvedEndpoints.DeepClone();
+        return new ConnectionHostResolution(root.ToJsonString(), outbound.FailedOutboundTags,
+            awg.FailedEndpointTags);
+    }
+
     internal static async Task<AwgResolution> ResolveAwgPeerHostsAsync(string runtimeProfile,
         Func<string, CancellationToken, Task<IPAddress[]>> resolve,
         CancellationToken cancellationToken, TimeSpan? timeout = null)
@@ -1072,6 +1306,176 @@ internal sealed class EngineController
         return new AwgResolution(root.ToJsonString(), failedTags);
     }
 
+    internal static async Task<OutboundHostResolution> ResolveOutboundServerHostsAsync(string runtimeProfile,
+        Func<string, CancellationToken, Task<IPAddress[]>> resolve,
+        CancellationToken cancellationToken, TimeSpan? timeout = null)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var root = JsonNode.Parse(runtimeProfile) as JsonObject
+                   ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
+        var outbounds = root["outbounds"] as JsonArray
+                        ?? throw new InvalidDataException("Windows tunnel profile has no outbounds.");
+        var servers = outbounds.OfType<JsonObject>()
+            .Select(outbound => (Outbound: outbound, Tag: ReadJsonString(outbound, "tag"),
+                Server: ReadJsonString(outbound, "server")))
+            .Where(item => !string.IsNullOrWhiteSpace(item.Server) &&
+                           !IsIpLiteral(item.Server!))
+            .ToArray();
+        var hosts = servers.Select(item => item.Server!)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        deadline.CancelAfter(timeout ?? TimeSpan.FromSeconds(15));
+        using var concurrency = new SemaphoreSlim(8, 8);
+        var resolvedHosts = new System.Collections.Concurrent.ConcurrentDictionary<string, IPAddress>(
+            StringComparer.OrdinalIgnoreCase);
+        TimeSpan[] dnsRetryDelays = [TimeSpan.FromMilliseconds(350), TimeSpan.FromMilliseconds(800)];
+
+        async Task ResolveOneAsync(string host)
+        {
+            var acquired = false;
+            try
+            {
+                await concurrency.WaitAsync(deadline.Token).ConfigureAwait(false);
+                acquired = true;
+                for (var attempt = 0; attempt < 3; attempt++)
+                {
+                    using var attemptTimeout = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token);
+                    attemptTimeout.CancelAfter(TimeSpan.FromSeconds(4));
+                    try
+                    {
+                        var addresses = await resolve(host, attemptTimeout.Token).WaitAsync(attemptTimeout.Token)
+                            .ConfigureAwait(false);
+                        var selected = addresses.Where(address => address.AddressFamily is
+                                AddressFamily.InterNetwork or AddressFamily.InterNetworkV6)
+                            .OrderBy(address => address.AddressFamily == AddressFamily.InterNetwork ? 0 : 1)
+                            .FirstOrDefault();
+                        if (selected is not null)
+                        {
+                            resolvedHosts[host] = selected;
+                            return;
+                        }
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+                    {
+                        return;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Give a cold-start DNS service another bounded chance.
+                    }
+                    catch (SocketException error) when (IsTransientDnsFailure(error.SocketErrorCode))
+                    {
+                        // DNS can briefly fail while Windows starts or changes networks.
+                    }
+                    catch
+                    {
+                        // A permanent lookup failure is local to this outbound.
+                        return;
+                    }
+
+                    if (attempt < dnsRetryDelays.Length)
+                        await Task.Delay(dnsRetryDelays[attempt], deadline.Token).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                // The shared DNS deadline expired. Unresolved servers are marked failed below.
+            }
+            finally
+            {
+                if (acquired)
+                    concurrency.Release();
+            }
+        }
+
+        try
+        {
+            await Task.WhenAll(hosts.Select(ResolveOneAsync)).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+
+        static bool IsIpLiteral(string server)
+        {
+            var candidate = server.Length > 2 && server[0] == '[' && server[^1] == ']'
+                ? server[1..^1]
+                : server;
+            return IPAddress.TryParse(candidate, out _);
+        }
+
+        var failedTags = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in servers)
+        {
+            var server = item.Server!;
+            if (!resolvedHosts.TryGetValue(server, out var resolved))
+            {
+                if (item.Tag is { Length: > 0 } failedTag)
+                    failedTags.Add(failedTag);
+                continue;
+            }
+
+            var originalHost = server;
+            if (item.Outbound["tls"] is JsonObject tls &&
+                tls["enabled"] is JsonValue enabledValue &&
+                enabledValue.TryGetValue<bool>(out var tlsEnabled) && tlsEnabled &&
+                (tls["server_name"] is null ||
+                 tls["server_name"] is JsonValue serverNameValue &&
+                 serverNameValue.TryGetValue<string>(out var serverName) &&
+                 string.IsNullOrWhiteSpace(serverName)))
+            {
+                tls["server_name"] = originalHost;
+            }
+
+            if (item.Outbound["transport"] is JsonObject transport)
+            {
+                var transportType = ReadJsonString(transport, "type");
+                var hostIsMissing = transport["host"] is null ||
+                                    transport["host"] is JsonValue hostValue &&
+                                    hostValue.TryGetValue<string>(out var transportHost) &&
+                                    string.IsNullOrWhiteSpace(transportHost);
+                var hostListIsEmpty = transport["host"] is JsonArray hostArray && hostArray.Count == 0;
+                if (string.Equals(transportType, "ws", StringComparison.OrdinalIgnoreCase))
+                {
+                    JsonObject? headers = transport["headers"] as JsonObject;
+                    if (headers is null && transport["headers"] is null)
+                    {
+                        headers = new JsonObject();
+                        transport["headers"] = headers;
+                    }
+
+                    if (headers is not null &&
+                        !headers.Any(header => header.Key.Equals("Host", StringComparison.OrdinalIgnoreCase)))
+                        headers["Host"] = originalHost;
+                }
+                else if (string.Equals(transportType, "httpupgrade", StringComparison.OrdinalIgnoreCase) &&
+                         (hostIsMissing || hostListIsEmpty))
+                {
+                    transport["host"] = originalHost;
+                }
+                else if (string.Equals(transportType, "http", StringComparison.OrdinalIgnoreCase) &&
+                         (hostIsMissing || hostListIsEmpty))
+                {
+                    transport["host"] = new JsonArray(originalHost);
+                }
+            }
+
+            item.Outbound["server"] = resolved.ToString();
+        }
+
+        return new OutboundHostResolution(root.ToJsonString(), failedTags);
+    }
+
     private static bool IsTransientDnsFailure(SocketError error) =>
         error is SocketError.TryAgain or SocketError.TimedOut or SocketError.NetworkDown or
             SocketError.NetworkUnreachable;
@@ -1132,6 +1536,11 @@ internal sealed class EngineController
 
     private static string? ReadJsonString(JsonObject value, string property) =>
         value[property] is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var text) ? text : null;
+
+    private static string? ReadJsonString(JsonElement value, string property) =>
+        value.TryGetProperty(property, out var jsonValue) && jsonValue.ValueKind == JsonValueKind.String
+            ? jsonValue.GetString()
+            : null;
 
     private static IReadOnlyList<ServiceProbeResult> OrderProbeResults(
         IReadOnlyList<ProbeRouteEndpoint> requested, IReadOnlyList<ServiceProbeResult> results)
@@ -1449,130 +1858,6 @@ internal sealed class EngineController
         return process;
     }
 
-    private static int AllocateLoopbackPort()
-    {
-        // shortcut: the OS-picked port is released before Xray binds; use a reservation handoff only if collisions are observed.
-        var listener = new TcpListener(IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    private static (string InterfaceName, string DnsEndpoint) FindXrayDialer(string? preferredInterface)
-    {
-        var interfaces = NetworkInterface.GetAllNetworkInterfaces()
-            .Where(item => item.OperationalStatus == OperationalStatus.Up &&
-                           item.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
-                           !IsOwnedTunInterface(item.Name))
-            .ToArray();
-        var selected = preferredInterface is not null
-            ? interfaces.FirstOrDefault(item => string.Equals(item.Name, preferredInterface,
-                StringComparison.OrdinalIgnoreCase))
-            : interfaces.FirstOrDefault(item => item.GetIPProperties().GatewayAddresses.Any(gateway =>
-                !IsAnyAddress(gateway.Address)))
-              ?? throw new InvalidOperationException("Не найдена сеть для LTE Xray.");
-        if (selected is null)
-            throw new InvalidOperationException("Не найдена сеть для LTE Xray.");
-
-        var dns = selected.GetIPProperties().DnsAddresses.FirstOrDefault(address =>
-            !IsAnyAddress(address) && !IPAddress.IsLoopback(address));
-        if (dns is null)
-            throw new InvalidOperationException("У сети LTE Xray не найден DNS-сервер.");
-        var host = dns.AddressFamily == AddressFamily.InterNetworkV6 ? $"[{dns}]" : dns.ToString();
-        return (selected.Name, $"{host}:53");
-    }
-
-    private static bool IsAnyAddress(IPAddress address) =>
-        address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any);
-
-    private Process StartOwnedXray(string profilePath, string interfaceName, string dnsEndpoint)
-    {
-        var xrayPath = Path.Combine(AppContext.BaseDirectory, "xray.exe");
-        if (!File.Exists(xrayPath))
-            throw new FileNotFoundException("Не найден компонент CDN Xray. Переустановите Connect.", xrayPath);
-        var process = StartXrayProcess(xrayPath, profilePath, interfaceName, dnsEndpoint);
-        try
-        {
-            _xrayLifetime = EngineProcessLifetime.Attach(process);
-            _xray = process;
-            return process;
-        }
-        catch
-        {
-            TryKill(process);
-            process.Dispose();
-            throw;
-        }
-    }
-
-    private static Process StartXrayProcess(string xrayPath, string profilePath, string interfaceName,
-        string dnsEndpoint)
-    {
-        var start = new ProcessStartInfo
-        {
-            FileName = xrayPath,
-            WorkingDirectory = AppContext.BaseDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
-        start.ArgumentList.Add("run");
-        start.ArgumentList.Add("-dns");
-        start.ArgumentList.Add(dnsEndpoint);
-        start.ArgumentList.Add("-interface");
-        start.ArgumentList.Add(interfaceName);
-        start.ArgumentList.Add("-config");
-        start.ArgumentList.Add(profilePath);
-        var process = Process.Start(start) ?? throw new InvalidOperationException("Xray did not start.");
-        process.OutputDataReceived += static (_, _) => { };
-        process.ErrorDataReceived += static (_, _) => { };
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        return process;
-    }
-
-    private async Task WaitForXraySocksAsync(Process process, int port, CancellationToken cancellationToken)
-    {
-        var deadline = System.Diagnostics.Stopwatch.StartNew();
-        while (deadline.Elapsed < TimeSpan.FromSeconds(15))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (process.HasExited)
-                throw new InvalidDataException("CDN Xray завершился при запуске.");
-            using var socket = new TcpClient(AddressFamily.InterNetwork);
-            try
-            {
-                await socket.ConnectAsync(IPAddress.Loopback, port, cancellationToken).ConfigureAwait(false);
-                return;
-            }
-            catch (SocketException)
-            {
-                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-            }
-        }
-        throw new TimeoutException("CDN Xray не открыл локальный SOCKS-порт.");
-    }
-
-    private async Task MonitorXrayAsync(Process process)
-    {
-        try { await process.WaitForExitAsync().ConfigureAwait(false); }
-        catch { return; }
-        await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
-        try
-        {
-            if (!ReferenceEquals(_xray, process))
-                return;
-            StopCore();
-            SetError("LTE-маршрут отключился. Повторите подключение.");
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
-
     private static async Task<string> ReadBoundedStandardErrorAsync(StreamReader reader)
     {
         const int maximumCharacters = 16_384;
@@ -1726,8 +2011,19 @@ internal sealed class EngineController
             Volatile.Write(ref _latestLine, summary);
             if (System.Text.RegularExpressions.Regex.IsMatch(line,
                     @"(?i)\b(fatal|error|failed|invalid|unsupported|unknown|missing|decode|parse|panic)\b"))
-                Volatile.Write(ref _latestError, summary);
+            {
+                // Engine shutdown can emit a final DNS "exchange failed: context canceled"
+                // after the actionable startup failure. Keep cancellation as a fallback only.
+                if (IsCancellationCleanup(line))
+                    Interlocked.CompareExchange(ref _latestError, summary, null);
+                else
+                    Volatile.Write(ref _latestError, summary);
+            }
         }
+
+        private static bool IsCancellationCleanup(string line) =>
+            System.Text.RegularExpressions.Regex.IsMatch(line,
+                @"(?i)\b(?:context|operation|request)\s+(?:was\s+)?cancel(?:ed|led)\b");
     }
 
     private static string WritePrivateProfile(string content)
@@ -1804,7 +2100,14 @@ internal sealed class EngineController
         _healthMonitor?.Stop();
         _healthMonitor?.Dispose();
         _healthMonitor = null;
-        SetSnapshot(Snapshot with { ActiveRouteTag = null });
+        _activeRouteTelemetry?.Dispose();
+        _activeRouteTelemetry = null;
+        SetSnapshot(Snapshot with
+        {
+            ActiveRouteTag = null,
+            TunnelLatencyMilliseconds = null,
+            TunnelLatencyError = null,
+        });
         _verification?.Cancel();
         _verification?.Dispose();
         _verification = null;
@@ -1825,15 +2128,140 @@ internal sealed class EngineController
             _xrayProfilePath = null;
         }
         _routeTag = null;
+        _tunAddresses = null;
+        _canaryAddresses = null;
         _tunStartupCollisionRetries = 0;
     }
 
-    private void StopOwnedEngineProcess()
+    private static int AllocateLoopbackPort()
     {
-        var process = _engine;
-        _engine = null;
-        _engineLifetime?.Dispose();
-        _engineLifetime = null;
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
+    }
+
+    private static (string InterfaceName, string DnsEndpoint) FindXrayDialer(string? preferredInterface)
+    {
+        var interfaces = NetworkInterface.GetAllNetworkInterfaces()
+            .Where(item => item.OperationalStatus == OperationalStatus.Up &&
+                           item.NetworkInterfaceType != NetworkInterfaceType.Loopback &&
+                           !IsOwnedTunInterface(item.Name))
+            .ToArray();
+        var selected = preferredInterface is not null
+            ? interfaces.FirstOrDefault(item => string.Equals(item.Name, preferredInterface,
+                StringComparison.OrdinalIgnoreCase))
+            : interfaces.FirstOrDefault(item => item.GetIPProperties().GatewayAddresses.Any(gateway =>
+                !IsAnyAddress(gateway.Address)))
+              ?? throw new InvalidOperationException("Не найдена сеть для LTE Xray.");
+        if (selected is null)
+            throw new InvalidOperationException("Не найдена сеть для LTE Xray.");
+
+        var dns = selected.GetIPProperties().DnsAddresses.FirstOrDefault(address =>
+            !IsAnyAddress(address) && !IPAddress.IsLoopback(address));
+        if (dns is null)
+            throw new InvalidOperationException("У сети LTE Xray не найден DNS-сервер.");
+        var host = dns.AddressFamily == AddressFamily.InterNetworkV6 ? $"[{dns}]" : dns.ToString();
+        return (selected.Name, $"{host}:53");
+    }
+
+    private static bool IsAnyAddress(IPAddress address) =>
+        address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any);
+
+    private Process StartOwnedXray(string profilePath, string interfaceName, string dnsEndpoint)
+    {
+        var xrayPath = Path.Combine(AppContext.BaseDirectory, "xray.exe");
+        if (!File.Exists(xrayPath))
+            throw new FileNotFoundException("Не найден компонент CDN Xray. Переустановите Connect.", xrayPath);
+        var process = StartXrayProcess(xrayPath, profilePath, interfaceName, dnsEndpoint);
+        try
+        {
+            _xrayLifetime = EngineProcessLifetime.Attach(process);
+            _xray = process;
+            return process;
+        }
+        catch
+        {
+            TryKill(process);
+            process.Dispose();
+            throw;
+        }
+    }
+
+    private static Process StartXrayProcess(string xrayPath, string profilePath, string interfaceName,
+        string dnsEndpoint)
+    {
+        var start = new ProcessStartInfo
+        {
+            FileName = xrayPath,
+            WorkingDirectory = AppContext.BaseDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        start.ArgumentList.Add("run");
+        start.ArgumentList.Add("-dns");
+        start.ArgumentList.Add(dnsEndpoint);
+        start.ArgumentList.Add("-interface");
+        start.ArgumentList.Add(interfaceName);
+        start.ArgumentList.Add("-config");
+        start.ArgumentList.Add(profilePath);
+        var process = Process.Start(start) ?? throw new InvalidOperationException("Xray did not start.");
+        process.OutputDataReceived += static (_, _) => { };
+        process.ErrorDataReceived += static (_, _) => { };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        return process;
+    }
+
+    private async Task WaitForXraySocksAsync(Process process, int port, CancellationToken cancellationToken)
+    {
+        var deadline = System.Diagnostics.Stopwatch.StartNew();
+        while (deadline.Elapsed < TimeSpan.FromSeconds(15))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (process.HasExited)
+                throw new InvalidDataException("CDN Xray завершился при запуске.");
+            using var socket = new TcpClient(AddressFamily.InterNetwork);
+            try
+            {
+                await socket.ConnectAsync(IPAddress.Loopback, port, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            catch (SocketException)
+            {
+                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+            }
+        }
+        throw new TimeoutException("CDN Xray не открыл локальный SOCKS-порт.");
+    }
+
+    private async Task MonitorXrayAsync(Process process)
+    {
+        try { await process.WaitForExitAsync().ConfigureAwait(false); }
+        catch { return; }
+        await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            if (!ReferenceEquals(_xray, process))
+                return;
+            StopCore();
+            SetError("LTE-маршрут отключился. Повторите подключение.");
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private void StopOwnedXrayProcess()
+    {
+        var process = _xray;
+        _xray = null;
+        _xrayLifetime?.Dispose();
+        _xrayLifetime = null;
         if (process is null)
             return;
         try
@@ -1851,12 +2279,12 @@ internal sealed class EngineController
         process.Dispose();
     }
 
-    private void StopOwnedXrayProcess()
+    private void StopOwnedEngineProcess()
     {
-        var process = _xray;
-        _xray = null;
-        _xrayLifetime?.Dispose();
-        _xrayLifetime = null;
+        var process = _engine;
+        _engine = null;
+        _engineLifetime?.Dispose();
+        _engineLifetime = null;
         if (process is null)
             return;
         try

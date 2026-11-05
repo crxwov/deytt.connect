@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
@@ -30,6 +32,8 @@ public sealed record SetupWindowOptions
     public string Language { get; init; } = "ru";
     public string? InitialImportUrl { get; init; }
     public bool RestoreExistingSession { get; init; } = true;
+    /// <summary>Only an existing usable subscription may leave setup without importing.</summary>
+    public bool AllowCancel { get; init; } = true;
     /// <summary>Keep the current account intact until a fresh pairing imports usable routes.</summary>
     public bool DeferSessionSaveUntilImport { get; init; }
     public SetupUrlImportHandler? ImportUrlAsync { get; init; }
@@ -90,12 +94,14 @@ public sealed class SetupWindow : UserControl
     private readonly CancellationTokenSource _lifetime = new();
     private readonly SetupImportCommitGate _importCommitGate = new();
     private Task? _activationTask;
-    private readonly StackPanel _body = new() { Spacing = 15 };
+    private readonly StackPanel _body = new() { Spacing = 14 };
     private readonly TextBlock _headline;
     private readonly TextBlock _intro;
     private readonly Border _statusPanel;
+    private readonly Border _statusDot;
     private readonly TextBlock _statusText;
     private readonly Border[] _stepBars = new Border[3];
+    private readonly TextBlock[] _stepLabels = new TextBlock[3];
 
     private ViewState _state = ViewState.Username;
     private TextBox? _usernameInput;
@@ -120,33 +126,42 @@ public sealed class SetupWindow : UserControl
 
     public SetupWindow(SetupWindowOptions? options = null)
     {
+        Resources["AppFocusBrush"] = DeyttTheme.Brush(DeyttTheme.DialogAccent);
         _options = options ?? new SetupWindowOptions();
         _api = _options.ApiClient ?? new TelegramApiClient();
         _language = string.Equals(_options.Language, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "ru";
 
-        _headline = DeyttTheme.TextBlock(Copy("Подключите DEYTT", "Set up DEYTT"), 25, DeyttTheme.Text, FontWeight.Bold,
+        _headline = DeyttTheme.TextBlock(_language == "en" ? "Set up ./Connect" : "Подключите ./Connect", 26, DeyttTheme.Text, FontWeight.Bold,
             DeyttTheme.Unbounded);
         _intro = DeyttTheme.TextBlock(
-            Copy("Войдите через Telegram, чтобы загрузить подписку и маршруты.",
-                "Sign in with Telegram to load your subscription and routes."),
+            Copy("Войдите через Telegram, чтобы загрузить подписку и выбрать маршрут.",
+                "Sign in with Telegram to load your subscription and choose a route."),
             14, DeyttTheme.Muted);
         _statusText = DeyttTheme.TextBlock("", 13, DeyttTheme.Muted);
-        _statusPanel = new Border
+        _statusDot = new Border
         {
-            Padding = new Thickness(13, 11),
-            CornerRadius = new CornerRadius(13),
-            Background = DeyttTheme.Brush(DeyttTheme.Surface2),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            Child = _statusText,
-            IsVisible = false,
+            Width = 8,
+            Height = 8,
+            CornerRadius = new CornerRadius(4),
+            Background = DeyttTheme.Brush(DeyttTheme.Mint),
+            VerticalAlignment = VerticalAlignment.Center,
         };
+        var statusContent = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            ColumnSpacing = 10,
+        };
+        Grid.SetColumn(_statusText, 1);
+        statusContent.Children.Add(_statusDot);
+        statusContent.Children.Add(_statusText);
+        _statusPanel = DeyttTheme.DialogPanel(statusContent, 14, new Thickness(14, 12));
+        _statusPanel.IsVisible = false;
 
         var header = BuildHeader();
         var steps = BuildSteps();
         var content = new StackPanel
         {
-            Spacing = 20,
+            Spacing = 18,
             MaxWidth = 620,
             Children =
             {
@@ -156,19 +171,11 @@ public sealed class SetupWindow : UserControl
                 _body,
             },
         };
-        var card = DeyttTheme.Card(content, DeyttTheme.Surface, DeyttTheme.Line, 25,
-            new Thickness(30, 28));
+        var card = DeyttTheme.DialogCard(content, 25, new Thickness(24));
         card.MaxWidth = 680;
-        card.HorizontalAlignment = HorizontalAlignment.Center;
+        card.HorizontalAlignment = HorizontalAlignment.Stretch;
         card.VerticalAlignment = VerticalAlignment.Center;
         card.Margin = new Thickness(22);
-        card.BoxShadow = new BoxShadows(new BoxShadow
-        {
-            Blur = 55,
-            Spread = 4,
-            OffsetY = 12,
-            Color = Color.Parse("#59000000"),
-        });
 
         // MainWindow already scrolls PageHost. A nested scroll viewer here measures the
         // centered card against unbounded height and leaves it below the compact viewport.
@@ -209,6 +216,14 @@ public sealed class SetupWindow : UserControl
 
     /// <summary>Cancels in-flight setup work and asks the host to leave this view once.</summary>
     public void Cancel()
+    {
+        if (!_options.AllowCancel)
+            return;
+        Abort();
+    }
+
+    /// <summary>Stops pending work when the host closes, including mandatory first-run setup.</summary>
+    internal void Abort()
     {
         if (_backRequested || _completed)
             return;
@@ -310,14 +325,16 @@ public sealed class SetupWindow : UserControl
         if (_busy)
             return;
         _completeAfterPairing = false;
-        _username = _usernameInput?.Text?.Trim() ?? _username;
-        if (_username.Length == 0)
+        if (!TelegramApiClient.TryNormalizeUsername(_usernameInput?.Text ?? _username, out var username))
         {
-            SetStatus(Copy("Введи Telegram username, например @username.",
-                "Enter your Telegram username, for example @username."), DeyttTheme.Amber);
+            SetStatus(Copy("Введи @username: от 5 до 32 латинских букв, цифр или знаков подчёркивания.",
+                "Enter @username: 5 to 32 Latin letters, digits, or underscores."), DeyttTheme.Amber);
             _usernameInput?.Focus();
             return;
         }
+        _username = username;
+        if (_usernameInput is not null)
+            _usernameInput.Text = username;
 
         SetBusy(true);
         Render(ViewState.Refreshing, Copy("Создаём защищённый запрос на вход…", "Starting secure sign-in…"), DeyttTheme.Blue);
@@ -326,7 +343,6 @@ public sealed class SetupWindow : UserControl
             var pairing = await _api.StartPairingAsync(_username, _lifetime.Token);
             _challenge = pairing.Challenge;
             _botUrl = pairing.BotUrl;
-            _username = _username.Trim().TrimStart('@');
             var needsBotStart = pairing.Delivery != "sent";
             Render(ViewState.Code,
                 pairing.Delivery switch
@@ -345,8 +361,8 @@ public sealed class SetupWindow : UserControl
         {
             if (IsDeviceSlotConflict(error))
                 Render(ViewState.DeviceConflict, Copy(
-                    "Для аккаунта достигнут лимит приложений. Удали старый сеанс DEYTT в Telegram и затем попробуй снова.",
-                    "This account has reached its app limit. Remove an old DEYTT session in Telegram, then try again."),
+                    "Слот компьютера занят. Отключите прежний компьютер Connect в Telegram-боте и повторите вход.",
+                    "The computer slot is in use. Disconnect the previous Connect computer in the Telegram bot and sign in again."),
                     DeyttTheme.Amber);
             else
                 Render(ViewState.Username, PairingError(error), ErrorColor(error));
@@ -418,8 +434,8 @@ public sealed class SetupWindow : UserControl
             if (IsDeviceSlotConflict(error))
             {
                 Render(ViewState.DeviceConflict, Copy(
-                    "Для аккаунта достигнут лимит приложений. Удали старый сеанс DEYTT в Telegram и затем попробуй снова.",
-                    "This account has reached its app limit. Remove an old DEYTT session in Telegram, then try again."),
+                    "Слот компьютера занят. Отключите прежний компьютер Connect в Telegram-боте и повторите вход.",
+                    "The computer slot is in use. Disconnect the previous Connect computer in the Telegram bot and sign in again."),
                     DeyttTheme.Amber);
             }
             else
@@ -525,8 +541,8 @@ public sealed class SetupWindow : UserControl
         catch (TelegramApiException error) when (IsDeviceSlotConflict(error))
         {
             Render(ViewState.DeviceConflict, Copy(
-                "Занят слот компьютера. Выйди из deytt.connect на прежнем компьютере и повтори проверку. Если доступа к нему нет, обратись в поддержку. Слоты телефона и Happ отдельные.",
-                "The computer slot is in use. Sign out of deytt.connect on the previous computer, then retry the check. If you cannot access it, contact support. Phone and Happ slots are separate."),
+                "Слот компьютера занят. Отключите прежний компьютер Connect в Telegram-боте и повторите проверку.",
+                "The computer slot is in use. Disconnect the previous Connect computer in the Telegram bot and retry the check."),
                 DeyttTheme.Amber);
         }
         catch (TelegramApiException error) when (error.Code == "device_blocked")
@@ -795,14 +811,23 @@ public sealed class SetupWindow : UserControl
 
     private void BuildUsernameView()
     {
-        _body.Children.Add(DeyttTheme.SectionLabel("01 / TELEGRAM"));
+        _body.Children.Add(DeyttTheme.TextBlock(Copy("Telegram username", "Telegram username"), 13,
+            DeyttTheme.Text, FontWeight.SemiBold));
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
-            "Укажи username аккаунта, в котором оформлена подписка.",
-            "Enter the username of the account that has the subscription."), 15, DeyttTheme.Text));
+            "Войди в аккаунт, где оформлена подписка.",
+            "Sign in to the account that has your subscription."), 13, DeyttTheme.Muted));
 
-        _usernameInput = CreateInput("@username", 44);
-        _usernameInput.MaxLength = 33;
+        _usernameInput = CreateInput("@username", 50);
+        // Validate the whole pasted value rather than silently truncating it into another account.
+        _usernameInput.MaxLength = 256;
+        _usernameInput.Name = "TelegramUsernameInput";
+        Avalonia.Automation.AutomationProperties.SetName(_usernameInput, Copy("Telegram username", "Telegram username"));
         _usernameInput.Text = _username;
+        _usernameInput.LostFocus += (_, _) =>
+        {
+            if (TelegramApiClient.TryNormalizeUsername(_usernameInput.Text, out var normalized))
+                _usernameInput.Text = normalized;
+        };
         _usernameInput.KeyDown += (_, args) =>
         {
             if (args.Key == Key.Enter)
@@ -812,8 +837,8 @@ public sealed class SetupWindow : UserControl
 
         _body.Children.Add(BuildPrimary(Copy("Получить код", "Get code"), () => _ = StartPairingAsync()));
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
-            "Бот пришлёт одноразовый код в Telegram. Оплата для подключения приложения не требуется.",
-            "The bot will send a one-time code in Telegram. No payment is needed to link this app."),
+            "Получишь одноразовый код в Telegram. Подключение приложения бесплатно.",
+            "You’ll receive a one-time code in Telegram. Linking the app is free."),
             12, DeyttTheme.Muted));
         if (_options.ImportUrlAsync is not null)
             _body.Children.Add(BuildTextButton(Copy("У меня есть ссылка подписки", "I have a subscription link"),
@@ -822,19 +847,25 @@ public sealed class SetupWindow : UserControl
 
     private void BuildCodeView(bool showBotButton)
     {
-        _body.Children.Add(DeyttTheme.SectionLabel(Copy("01 / ПОДТВЕРЖДЕНИЕ", "01 / VERIFICATION")));
-        _body.Children.Add(DeyttTheme.TextBlock(Copy($"Код для @{_username.TrimStart('@')}",
-            $"Code for @{_username.TrimStart('@')}"), 15, DeyttTheme.Text,
-            FontWeight.SemiBold));
+        var account = DeyttTheme.DialogPanel(
+            DeyttTheme.TextBlock($"@{_username.TrimStart('@')}", 14, DeyttTheme.DialogAccent,
+                FontWeight.SemiBold, wrap: false),
+            12, new Thickness(12, 9));
+        account.Background = DeyttTheme.Brush(DeyttTheme.DialogSelected);
+        account.BorderBrush = DeyttTheme.Brush(DeyttTheme.DialogSelectionLine);
+        account.HorizontalAlignment = HorizontalAlignment.Left;
+        _body.Children.Add(account);
+        _body.Children.Add(DeyttTheme.TextBlock(Copy("Одноразовый код", "One-time code"), 13,
+            DeyttTheme.Text, FontWeight.SemiBold));
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
             "Введи шестизначный код из Telegram. Если чат с ботом ещё не открыт, открой его один раз.",
             "Enter the six-digit code from Telegram. If you have not started the bot chat, open it once."),
             13, DeyttTheme.Muted));
 
-        _codeInput = CreateInput("123456", 52);
+        _codeInput = CreateInput("123456", 56);
         _codeInput.MaxLength = 6;
         _codeInput.FontFamily = DeyttTheme.JetBrainsMono;
-        _codeInput.FontSize = 22;
+        _codeInput.FontSize = 24;
         _codeInput.HorizontalContentAlignment = HorizontalAlignment.Center;
         _codeInput.KeyDown += (_, args) =>
         {
@@ -851,14 +882,11 @@ public sealed class SetupWindow : UserControl
 
     private void BuildLoadingView(bool isUrlImport)
     {
-        _body.Children.Add(DeyttTheme.SectionLabel(isUrlImport
-            ? Copy("02 / ИМПОРТ", "02 / IMPORT")
-            : Copy("02 / ПОДПИСКА", "02 / SUBSCRIPTION")));
         _body.Children.Add(new ProgressBar
         {
             IsIndeterminate = true,
             Height = 4,
-            Background = DeyttTheme.Brush(DeyttTheme.Surface2),
+            Background = DeyttTheme.DialogSurface,
             Foreground = DeyttTheme.Brush(DeyttTheme.Mint),
         });
         _body.Children.Add(DeyttTheme.TextBlock(isUrlImport
@@ -872,7 +900,6 @@ public sealed class SetupWindow : UserControl
 
     private void BuildRefreshErrorView()
     {
-        _body.Children.Add(DeyttTheme.SectionLabel(Copy("02 / ОБНОВЛЕНИЕ", "02 / REFRESH")));
         _body.Children.Add(DeyttTheme.TextBlock(_options.DeferSessionSaveUntilImport
             ? Copy("Текущий аккаунт пока не изменён.", "Your current account is unchanged.")
             : Copy("Сеанс сохранён на этом устройстве.", "Your session is saved on this device."), 15,
@@ -902,7 +929,6 @@ public sealed class SetupWindow : UserControl
 
     private void BuildNoSubscriptionView()
     {
-        _body.Children.Add(DeyttTheme.SectionLabel(Copy("02 / ПОДПИСКА", "02 / SUBSCRIPTION")));
         var accountName = _account?.FirstName is { Length: > 0 } name ? name : _account?.Username;
         _body.Children.Add(DeyttTheme.TextBlock(_options.DeferSessionSaveUntilImport
             ? Copy("Код подтверждён. Текущий аккаунт пока не изменён.",
@@ -930,15 +956,19 @@ public sealed class SetupWindow : UserControl
 
     private void BuildDeviceConflictView()
     {
-        _body.Children.Add(DeyttTheme.SectionLabel(Copy("01 / СЛОТ КОМПЬЮТЕРА", "01 / COMPUTER SLOT")));
         _body.Children.Add(DeyttTheme.TextBlock(Copy("Слот компьютера занят.",
             "The computer slot is in use."), 15,
             DeyttTheme.Text, FontWeight.SemiBold));
+        _body.Children.Add(DeyttTheme.TextBlock(Copy(
+            "Удаление или переустановка приложения не отключает прежний сеанс на сервере. Откройте бота → Устройства → предыдущий компьютер ./Connect → Отключить и подтвердите действие. Слот телефона и устройства Happ отдельные.",
+            "Uninstalling or reinstalling the app does not disconnect the previous server session. Open the bot → Devices → previous ./Connect computer → Disconnect, then confirm. The phone slot and Happ devices are separate."),
+            13, DeyttTheme.Muted));
+        _body.Children.Add(BuildTextButton(Copy("Открыть Telegram-бота", "Open the Telegram bot"), OpenBot));
         if (_sessionToken is { Length: > 0 })
         {
             _body.Children.Add(DeyttTheme.TextBlock(Copy(
-                "Выйди из deytt.connect на прежнем компьютере и повтори проверку. Слоты телефона и Happ отдельные. Если прежний компьютер недоступен, попроси поддержку освободить слот. Приложение не отключает устройства автоматически.",
-                "Sign out of deytt.connect on the previous computer, then retry the check. Phone and Happ slots are separate. If the previous computer is unavailable, ask support to free its slot. The app does not disconnect devices automatically."),
+                "После отключения прежнего компьютера повторите проверку. Если управлять устройствами не удаётся, обратитесь в поддержку.",
+                "After disconnecting the previous computer, retry the check. Contact support if you cannot manage your devices."),
                 13, DeyttTheme.Muted));
             _body.Children.Add(BuildPrimary(Copy("Повторить проверку", "Retry the check"), () =>
             {
@@ -958,16 +988,17 @@ public sealed class SetupWindow : UserControl
         else
         {
             _body.Children.Add(DeyttTheme.TextBlock(Copy(
-                "Сначала подключи аккаунт Telegram. Если прежний компьютер недоступен, войди в аккаунт и обратись в поддержку, чтобы освободить компьютерный слот.",
-                "Sign in to Telegram first. If the previous computer is unavailable, contact support to free the computer slot."),
+                "После отключения прежнего компьютера повторите вход с вашим Telegram username.",
+                "After disconnecting the previous computer, sign in again with your Telegram username."),
                 13, DeyttTheme.Muted));
             _body.Children.Add(BuildPrimary(Copy("Попробовать снова", "Try again"), () => Render(ViewState.Username)));
         }
-        _body.Children.Add(BuildTextButton(Copy("Назад к коду", "Back to code"), () =>
-        {
-            if (!_busy)
-                Render(ViewState.Code);
-        }));
+        if (_challenge.Length > 0)
+            _body.Children.Add(BuildTextButton(Copy("Назад к коду", "Back to code"), () =>
+            {
+                if (!_busy)
+                    Render(ViewState.Code);
+            }));
     }
 
     private async Task RequestDeviceTransferAsync()
@@ -989,7 +1020,7 @@ public sealed class SetupWindow : UserControl
 
         SetBusy(true);
         SetStatus(Copy("Отправляем запрос в поддержку…", "Sending the support request…"), DeyttTheme.Blue);
-        const string message = "здравствуйте! на новом компьютере deytt.connect отвечает http 409 app_device_limit_reached (download/http_409). не получается освободить слот прежнего компьютера самостоятельно. прошу проверить и освободить только компьютерный слот; слот телефона и happ менять не нужно.";
+        const string message = "здравствуйте! на новом компьютере deytt./connect отвечает http 409 app_device_limit_reached (download/http_409). не получается освободить слот прежнего компьютера самостоятельно. прошу проверить и освободить только компьютерный слот; слот телефона и happ менять не нужно.";
         try
         {
             var thread = await _support.GetThreadAsync(token, _lifetime.Token);
@@ -1056,12 +1087,13 @@ public sealed class SetupWindow : UserControl
 
     private void BuildImportUrlView()
     {
-        _body.Children.Add(DeyttTheme.SectionLabel(Copy("01 / ССЫЛКА ПОДПИСКИ", "01 / SUBSCRIPTION LINK")));
+        _body.Children.Add(DeyttTheme.TextBlock(Copy("Ссылка подписки", "Subscription link"), 13,
+            DeyttTheme.Text, FontWeight.SemiBold));
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
             "Вставь ссылку DEYTT. Она должна начинаться с https://deytt.space/sub/token/.",
             "Paste a DEYTT link. It must start with https://deytt.space/sub/token/."),
             14, DeyttTheme.Text));
-        _urlInput = CreateInput("https://deytt.space/sub/token/…", 48);
+        _urlInput = CreateInput("https://deytt.space/sub/token/…", 50);
         _urlInput.MaxLength = 4096;
         _urlInput.Text = _resolvedImportUrl;
         _urlInput.KeyDown += (_, args) =>
@@ -1080,18 +1112,19 @@ public sealed class SetupWindow : UserControl
         if (_payload is null || _subscription is null || _selectedRoute is null)
             return;
 
-        _body.Children.Add(DeyttTheme.SectionLabel(Copy("03 / МАРШРУТ", "03 / ROUTE")));
         var accountName = _payload.Account?.FirstName is { Length: > 0 } name
             ? name
             : _payload.Account?.Username;
-        _body.Children.Add(DeyttTheme.TextBlock(Copy(
+        var readiness = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        readiness.Children.Add(DeyttTheme.TextBlock(Copy(
             accountName is { Length: > 0 } ? $"Готово, {accountName}." : "Подписка готова.",
             accountName is { Length: > 0 } ? $"You're all set, {accountName}." : "Your subscription is ready."),
-            18, DeyttTheme.Text, FontWeight.SemiBold));
-        _body.Children.Add(DeyttTheme.TextBlock(Copy(
+            15, DeyttTheme.Text, FontWeight.SemiBold));
+        readiness.Children.Add(DeyttTheme.TextBlock(Copy(
             "Выбери первый маршрут. Его и профиль подписки приложение получит при продолжении.",
             "Choose your first route. The app will import it and your subscription profile when you continue."),
-            13, DeyttTheme.Muted));
+            12, DeyttTheme.Muted));
+        _body.Children.Add(DeyttTheme.DialogPanel(readiness, 16, new Thickness(16, 14)));
 
         var routeList = new StackPanel { Spacing = 8 };
         foreach (var route in _subscription.Routes)
@@ -1113,117 +1146,85 @@ public sealed class SetupWindow : UserControl
     private Button BuildRouteChoice(WindowsRoute route)
     {
         var isSelected = _selectedRoute?.Id == route.Id;
-        var details = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-        details.Children.Add(DeyttTheme.TextBlock($"{route.Flag}  {GetRouteTitle(route)}", 14,
+        var details = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
+        details.Children.Add(DeyttTheme.TextBlock(GetRouteTitle(route), 14,
             DeyttTheme.Text, FontWeight.SemiBold));
         details.Children.Add(DeyttTheme.TextBlock(
             route.Protocol == "AUTO" ? GetRouteProtocol(route) : $"{GetRouteProtocol(route)}  ·  {route.CountryCode}",
             11, DeyttTheme.Muted));
 
-        var row = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            ColumnSpacing = 15,
-        };
-        Grid.SetColumn(details, 0);
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 12 };
+        row.Children.Add(RouteFlagVisual.Create(route.CountryCode, 34, 24));
+        Grid.SetColumn(details, 1);
         row.Children.Add(details);
-        var marker = new Border
-        {
-            Width = 20,
-            Height = 20,
-            CornerRadius = new CornerRadius(10),
-            BorderThickness = new Thickness(isSelected ? 6 : 1),
-            BorderBrush = DeyttTheme.Brush(isSelected ? DeyttTheme.Mint : DeyttTheme.Line),
-            Background = DeyttTheme.Brush(isSelected ? DeyttTheme.MintSurface : DeyttTheme.Surface2),
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        Grid.SetColumn(marker, 1);
-        row.Children.Add(marker);
-
-        var button = new Button
-        {
-            Content = row,
-            Padding = new Thickness(13, 10),
-            HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Background = DeyttTheme.Brush(isSelected ? DeyttTheme.Selected : DeyttTheme.Surface2),
-            BorderBrush = DeyttTheme.Brush(isSelected ? DeyttTheme.SelectedLine : DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(13),
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-        };
-        button.Click += (_, _) =>
+        return DeyttTheme.DialogChoice(row, isSelected, () =>
         {
             _selectedRoute = route;
             Render(ViewState.Success, Copy($"Выбран маршрут «{GetRouteTitle(route)} · {GetRouteProtocol(route)}».",
                 $"Selected route: {GetRouteTitle(route)} · {GetRouteProtocol(route)}."), DeyttTheme.Mint);
-        };
-        return button;
+        });
     }
 
     private Border BuildPrimary(string label, Action action)
     {
-        var text = DeyttTheme.TextBlock(label, 15, DeyttTheme.Background, FontWeight.SemiBold, wrap: false);
+        var text = DeyttTheme.TextBlock(label, 15, Colors.White, FontWeight.SemiBold, wrap: false);
         text.HorizontalAlignment = HorizontalAlignment.Stretch;
         text.TextAlignment = TextAlignment.Center;
-        var button = DeyttTheme.Action(text, action);
+        var surface = DeyttTheme.DialogPrimaryButton(text, action);
+        var button = (Button)surface.Child!;
         button.HorizontalAlignment = HorizontalAlignment.Stretch;
         button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
         button.MinHeight = 52;
         _primaryButton = button;
         _primaryLabel = text;
-        return new Border
-        {
-            MinHeight = 52,
-            Background = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
-                GradientStops = { new GradientStop(DeyttTheme.Sky, 0), new GradientStop(DeyttTheme.Mint, 1) },
-            },
-            CornerRadius = new CornerRadius(16),
-            Child = button,
-        };
+        surface.MinHeight = 52;
+        return surface;
     }
 
     private Button BuildTextButton(string label, Action action)
     {
         var button = DeyttTheme.Action(
-            DeyttTheme.TextBlock(label, 13, DeyttTheme.Sky, FontWeight.SemiBold), action);
+            DeyttTheme.TextBlock(label, 13, DeyttTheme.DialogAccent, FontWeight.SemiBold), action);
+        DeyttTheme.StyleDialogButton(button);
+        button.Foreground = DeyttTheme.Brush(DeyttTheme.DialogAccent);
         button.HorizontalAlignment = HorizontalAlignment.Left;
         button.MinHeight = 36;
         return button;
     }
 
-    private static TextBox CreateInput(string placeholder, double minHeight) => new()
+    private static TextBox CreateInput(string placeholder, double minHeight)
     {
-        PlaceholderText = placeholder,
-        MinHeight = minHeight,
-        FontSize = 15,
-        Foreground = DeyttTheme.Brush(DeyttTheme.Text),
-        Background = DeyttTheme.Brush(DeyttTheme.Surface2),
-        BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-        BorderThickness = new Thickness(1),
-        Padding = new Thickness(15, 10),
-        VerticalContentAlignment = VerticalAlignment.Center,
-        HorizontalAlignment = HorizontalAlignment.Stretch,
-    };
+        var input = new TextBox
+        {
+            PlaceholderText = placeholder,
+            MinHeight = minHeight,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        DeyttTheme.StyleDialogInput(input);
+        input.MinHeight = minHeight;
+        return input;
+    }
 
     private Control BuildHeader()
     {
-        var heading = new StackPanel { Spacing = 7 };
+        var heading = new StackPanel { Spacing = 9 };
         var brandLine = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 11,
+            Spacing = 10,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        brandLine.Children.Add(DeyttTheme.IconTile("◉", 42, DeyttTheme.Mint));
-        var brand = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
-        brand.Children.Add(DeyttTheme.TextBlock("DEYTT CONNECT", 10, DeyttTheme.Muted,
-            FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        brand.Children.Add(DeyttTheme.TextBlock(Copy("НАСТРОЙКА ПОДКЛЮЧЕНИЯ", "CONNECTION SETUP"), 9, DeyttTheme.Muted,
-            FontWeight.Medium, DeyttTheme.JetBrainsMono, wrap: false));
-        brandLine.Children.Add(brand);
+        using (var icon = AssetLoader.Open(new Uri("avares://DeyttConnect.Windows/Assets/deyttconnect.ico")))
+            brandLine.Children.Add(new Image
+            {
+                Source = new Bitmap(icon),
+                Width = 34,
+                Height = 34,
+                Stretch = Stretch.Uniform,
+            });
+        brandLine.Children.Add(DeyttTheme.TextBlock("deytt./connect", 13, DeyttTheme.DialogAccent,
+            FontWeight.SemiBold, wrap: false));
         heading.Children.Add(brandLine);
         heading.Children.Add(_headline);
         heading.Children.Add(_intro);
@@ -1236,53 +1237,67 @@ public sealed class SetupWindow : UserControl
         Grid.SetColumn(heading, 0);
         header.Children.Add(heading);
 
-        var backButton = BuildTextButton(Copy("← Назад", "← Back"), Cancel);
-        backButton.VerticalAlignment = VerticalAlignment.Top;
-        Grid.SetColumn(backButton, 1);
-        header.Children.Add(backButton);
+        if (_options.AllowCancel)
+        {
+            var backButton = BuildTextButton(Copy("← Назад", "← Back"), Cancel);
+            backButton.VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetColumn(backButton, 1);
+            header.Children.Add(backButton);
+        }
         return header;
     }
 
     private Control BuildSteps()
     {
-        var row = new Grid
+        var progress = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,*,*"),
-            ColumnSpacing = 7,
+            ColumnSpacing = 8,
         };
-        var labels = new[] { "TELEGRAM", Copy("ПОДПИСКА", "SUBSCRIPTION"), Copy("МАРШРУТ", "ROUTE") };
-        for (var index = 0; index < labels.Length; index++)
+        for (var index = 0; index < _stepBars.Length; index++)
         {
-            var segment = new StackPanel { Spacing = 7 };
-            var bar = new Border
+            var segment = new Border
             {
-                Height = 3,
+                Height = 4,
                 CornerRadius = new CornerRadius(2),
                 Background = DeyttTheme.Brush(DeyttTheme.Line),
             };
-            _stepBars[index] = bar;
-            segment.Children.Add(bar);
-            segment.Children.Add(DeyttTheme.TextBlock(labels[index], 9, DeyttTheme.Muted,
-                FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
+            _stepBars[index] = segment;
             Grid.SetColumn(segment, index);
-            row.Children.Add(segment);
+            progress.Children.Add(segment);
         }
-        return row;
+
+        var labels = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,*,*"),
+            ColumnSpacing = 8,
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        var values = new[] { Copy("telegram", "telegram"), Copy("подписка", "subscription"), Copy("маршрут", "route") };
+        for (var index = 0; index < values.Length; index++)
+        {
+            var label = DeyttTheme.TextBlock(values[index], 12, DeyttTheme.Muted,
+                FontWeight.Medium, wrap: false);
+            _stepLabels[index] = label;
+            Grid.SetColumn(label, index);
+            labels.Children.Add(label);
+        }
+        return new StackPanel { Spacing = 0, Children = { progress, labels } };
     }
 
     private void SetHeader(ViewState state)
     {
         (_headline.Text, _intro.Text) = state switch
         {
-            ViewState.Username => (Copy("Подключите DEYTT", "Set up DEYTT"),
+            ViewState.Username => (_language == "en" ? "Set up ./Connect" : "Подключите ./Connect",
                 Copy("Войдите через Telegram, чтобы загрузить подписку и выбрать первый маршрут.",
                     "Sign in with Telegram to load your subscription and choose the first route.")),
             ViewState.Code => (Copy("Подтвердите вход", "Confirm sign-in"),
                 Copy("Одноразовый код связывает Windows-приложение с вашим Telegram-аккаунтом.",
                     "A one-time code links this Windows app to your Telegram account.")),
             ViewState.DeviceConflict => (Copy("Нужен свободный слот компьютера", "A computer slot is needed"),
-                Copy("Освободи слот на прежнем компьютере и повтори проверку. Если он недоступен, обратись в поддержку. Слоты телефона и happ отдельные.",
-                    "Free the slot on the previous computer and retry. If it is unavailable, contact support. Phone and happ slots are separate.")),
+                Copy("Управляйте своими устройствами Connect в Telegram-боте.",
+                    "Manage your Connect devices in the Telegram bot.")),
             ViewState.Refreshing => (Copy("Загружаем данные", "Loading your data"),
                 Copy("Сверяем аккаунт и получаем готовые маршруты подписки.",
                     "Checking your account and loading subscription routes.")),
@@ -1296,18 +1311,30 @@ public sealed class SetupWindow : UserControl
                 Copy("Ссылка подготовит профиль для первого маршрута.",
                     "The link will load a profile for your first route.")),
             ViewState.Success => (Copy("Маршруты готовы", "Routes are ready"),
-                Copy("Выберите стартовый выход и передайте профиль в DEYTT Connect.",
-                    "Choose your starting route and import the profile into DEYTT Connect.")),
-            _ => (Copy("Подключите DEYTT", "Set up DEYTT"),
+                Copy("Выберите маршрут, чтобы завершить настройку подписки.",
+                    "Choose a route to finish setting up your subscription.")),
+            _ => (_language == "en" ? "Set up ./Connect" : "Подключите ./Connect",
                 Copy("Войдите через Telegram, чтобы загрузить подписку и выбрать первый маршрут.",
                     "Sign in with Telegram to load your subscription and choose the first route.")),
         };
+        _headline.Text = _headline.Text.ToLowerInvariant();
+        _intro.Text = _intro.Text.ToLowerInvariant();
     }
 
     private void UpdateSteps(int activeStep)
     {
         for (var index = 0; index < _stepBars.Length; index++)
-            _stepBars[index].Background = DeyttTheme.Brush(index <= activeStep ? DeyttTheme.Mint : DeyttTheme.Line);
+        {
+            var complete = index < activeStep;
+            var current = index == activeStep;
+            _stepBars[index].Background = DeyttTheme.Brush(complete || current
+                ? DeyttTheme.Mint
+                : DeyttTheme.Line);
+            _stepLabels[index].Foreground = DeyttTheme.Brush(current
+                ? DeyttTheme.Text
+                : complete ? DeyttTheme.Mint : DeyttTheme.Muted);
+            _stepLabels[index].FontWeight = current ? FontWeight.SemiBold : FontWeight.Medium;
+        }
     }
 
     private void SetStatus(string message, Color color)
@@ -1315,7 +1342,10 @@ public sealed class SetupWindow : UserControl
         _statusText.Text = message;
         _statusText.Foreground = DeyttTheme.Brush(color);
         _statusPanel.IsVisible = !string.IsNullOrWhiteSpace(message);
-        _statusPanel.BorderBrush = DeyttTheme.Brush(color == DeyttTheme.Coral ? DeyttTheme.Coral : DeyttTheme.Line);
+        _statusPanel.BorderBrush = DeyttTheme.Brush(color == DeyttTheme.Coral
+            ? DeyttTheme.Coral
+            : color == DeyttTheme.Mint ? DeyttTheme.DialogSelectionLine : DeyttTheme.Line);
+        _statusDot.Background = DeyttTheme.Brush(color);
     }
 
     private void SetBusy(bool busy)
@@ -1369,7 +1399,8 @@ public sealed class SetupWindow : UserControl
 
     private void OpenBot()
     {
-        if (!Uri.TryCreate(_botUrl, UriKind.Absolute, out var uri) ||
+        var botUrl = _botUrl.Length > 0 ? _botUrl : "https://t.me/deyttbot";
+        if (!Uri.TryCreate(botUrl, UriKind.Absolute, out var uri) ||
             uri.Scheme != Uri.UriSchemeHttps || !uri.Host.Equals("t.me", StringComparison.OrdinalIgnoreCase))
         {
             SetStatus(Copy("Ссылка Telegram недоступна. Повтори запрос кода.",
@@ -1406,8 +1437,8 @@ public sealed class SetupWindow : UserControl
         "session_expired" or "session_invalid" => Copy("Сеанс истёк. Войди через Telegram ещё раз.",
             "Your session expired. Sign in with Telegram again."),
         "app_device_limit_reached" or "device_limit_reached" => Copy(
-            "Слот компьютера занят. Выйди из deytt.connect на прежнем компьютере и повтори проверку. Если доступа к нему нет, обратись в поддержку. Слоты телефона и Happ отдельные.",
-            "The computer slot is in use. Sign out of deytt.connect on the previous computer, then retry the check. If you cannot access it, contact support. Phone and Happ slots are separate."),
+            "Слот компьютера уже занят другим компьютером. На аккаунт доступно по одному телефону и одному компьютеру; слот телефона и квота Happ отдельные. Если нужно заменить компьютер, обратись в поддержку.",
+            "The computer slot is already used by another computer. Each account has one phone slot and one computer slot; the phone slot and Happ allowance are separate. Contact support if you need to replace the computer."),
         _ => Copy("Сервер не подтвердил вход. Повтори попытку позже.",
             "The server could not confirm sign-in. Please try again later."),
     };
@@ -1438,6 +1469,7 @@ public sealed class SetupWindow : UserControl
         return route.CountryCode switch
         {
             "AUTO" => "Automatic selection",
+            "RU-DE" => "LTE + allowlists",
             "NL" => "Netherlands",
             "RU" => "Russia",
             "DE" => "Germany",
@@ -1475,3 +1507,4 @@ public sealed class SetupWindow : UserControl
         Dispatcher.UIThread.Post(() => control.Focus(), DispatcherPriority.Input);
     }
 }
+

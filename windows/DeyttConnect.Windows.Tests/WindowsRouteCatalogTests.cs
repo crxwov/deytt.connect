@@ -1,7 +1,7 @@
+using DeyttConnect.Protocol;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using DeyttConnect.Windows.Services;
-using DeyttConnect.Protocol;
 using Xunit;
 
 namespace DeyttConnect.Windows.Tests;
@@ -135,6 +135,7 @@ public sealed class WindowsRouteCatalogTests
         Assert.Equal("EU", lte.CountryCode);
     }
 
+
     [Fact]
     public void DuplicateTagsAcrossOutboundsAndEndpointsAreRejected()
     {
@@ -177,7 +178,7 @@ public sealed class WindowsRouteCatalogTests
     }
 
     [Fact]
-    public void AwgCatalogKeepsLegacyAndCurrentGenerationsAsSeparateRoutes()
+    public void AwgCatalogExcludesLegacyGenerationEvenWhenCachedProfileIsProvided()
     {
         const string source = """
             {
@@ -214,9 +215,10 @@ public sealed class WindowsRouteCatalogTests
 
         var routes = WindowsRouteCatalog.Parse(profile.RootElement, awgProfiles);
 
-        var legacy = Assert.Single(routes, route => route.Id == "awg15:aXQ");
+        Assert.DoesNotContain(routes, route => route.Id == "awg15:aXQ" || route.Protocol == "AWG15");
         var current = Assert.Single(routes, route => route.Id == "awg31:aXQ");
-        Assert.Equal(("AWG15", "amneziawg 1.5", "IT"), (legacy.Protocol, legacy.ProtocolName, legacy.CountryCode));
         Assert.Equal(("AWG31", "amneziawg 3.1", "IT"), (current.Protocol, current.ProtocolName, current.CountryCode));
+        Assert.Equal("италия 3.1", current.ProfileName);
     }
 }
+

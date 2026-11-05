@@ -1,12 +1,9 @@
 using System.Globalization;
 using Avalonia;
-using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
-using Avalonia.Threading;
-using DeyttConnect.Windows.Controls;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
 
@@ -16,82 +13,43 @@ public partial class MainWindow
 {
     private readonly HashSet<long> _happDeviceChangesInFlight = [];
     private readonly HashSet<string> _sessionRevokesInFlight = new(StringComparer.Ordinal);
+    private string? _telegramAvatarDataUrl = GetCachedTelegramAvatarDataUrl();
 
-    private Control BuildProfileStarrySubscriptionCard(Control content)
+    private static string? GetCachedTelegramAvatarDataUrl()
     {
-        var starfield = new StarfieldBackground { Opacity = 0.68, IsHitTestVisible = false };
-        AutomationProperties.SetAutomationId(starfield, "ProfileSubscriptionStarfield");
-        var infinity = new TextBlock
+        try
         {
-            Text = "∞",
-            FontFamily = DeyttTheme.Unbounded,
-            FontSize = 68,
-            FontWeight = FontWeight.SemiBold,
-            Foreground = new SolidColorBrush(Color.Parse("#6A78BFE8")),
-            Opacity = 0.14,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false,
-        };
-        AutomationProperties.SetAutomationId(infinity, "ProfileSubscriptionInfinity");
-
-        var foreground = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,96"),
-            Margin = new Thickness(18, 16),
-        };
-        foreground.Children.Add(content);
-        Grid.SetColumn(infinity, 1);
-        foreground.Children.Add(infinity);
-
-        var layers = new Grid();
-        layers.Children.Add(starfield);
-        layers.Children.Add(new Border
-        {
-            IsHitTestVisible = false,
-            Background = new LinearGradientBrush
+            var dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DEYTT", "Connect");
+            var file = System.IO.Path.Combine(dir, "telegram-avatar.b64");
+            if (System.IO.File.Exists(file))
             {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-                GradientStops =
-                {
-                    new GradientStop(Color.Parse("#68101A2B"), 0),
-                    new GradientStop(Color.Parse("#D80A101A"), 0.72),
-                    new GradientStop(Color.Parse("#E1080C14"), 1),
-                },
-            },
-        });
-        layers.Children.Add(foreground);
-
-        var card = DeyttTheme.GlassCard(layers, DeyttTheme.BlueSurface, DeyttTheme.Sky,
-            22, new Thickness(0));
-        card.ClipToBounds = true;
-        AutomationProperties.SetAutomationId(card, "ProfileSubscriptionCard");
-
-        var shimmer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
-        var phase = 0d;
-        shimmer.Tick += (_, _) =>
-        {
-            if (_reduceMotion)
-            {
-                starfield.Opacity = 0.68;
-                infinity.Opacity = 0.14;
-                shimmer.Stop();
-                return;
+                var s = System.IO.File.ReadAllText(file).Trim();
+                if (!string.IsNullOrEmpty(s) && s.StartsWith("data:image/"))
+                    return s;
             }
-
-            phase += 0.15;
-            starfield.Opacity = 0.62 + 0.12 * ((Math.Sin(phase) + 1) / 2);
-            infinity.Opacity = 0.10 + 0.08 * ((Math.Sin(phase + 0.9) + 1) / 2);
-        };
-        card.AttachedToVisualTree += (_, _) =>
-        {
-            if (!_reduceMotion)
-                shimmer.Start();
-        };
-        card.DetachedFromVisualTree += (_, _) => shimmer.Stop();
-        return card;
+        }
+        catch { }
+        return null;
     }
+
+    internal static string NormalizeTariffDisplayName(string? value)
+    {
+        var name = value?.Trim();
+        if (string.IsNullOrEmpty(name))
+            return string.Empty;
+
+        var compact = new string(name.Where(char.IsLetterOrDigit).ToArray());
+        return compact.Equals("deyttultra", StringComparison.OrdinalIgnoreCase) ||
+               compact.Equals("ultra", StringComparison.OrdinalIgnoreCase)
+            ? "deytt. ultra"
+            : name;
+    }
+
+    internal static bool SubscriptionExpiryNeedsHighlight(DateTimeOffset? expiry, DateTimeOffset now) =>
+        expiry is DateTimeOffset value && value <= now.AddDays(8);
+
+    internal static bool SubscriptionDeviceLimitReached(int? used, int? limit) =>
+        used is int current && limit is > 0 && current >= limit.Value;
 
     private Control BuildTelegramIdentityEntry(TelegramAccount? account, bool signedIn, Action onClick)
     {
@@ -230,12 +188,14 @@ public partial class MainWindow
     private void SetTelegramAvatar(byte[]? bytes)
     {
         Bitmap? bitmap = null;
+        string? dataUrl = null;
         if (bytes is { Length: > 0 })
         {
             try
             {
                 using var stream = new MemoryStream(bytes);
                 bitmap = Bitmap.DecodeToWidth(stream, 256, BitmapInterpolationMode.HighQuality);
+                dataUrl = CreateTelegramAvatarDataUrl(bytes);
             }
             catch (Exception error) when (error is ArgumentException or InvalidDataException or NotSupportedException or InvalidOperationException)
             {
@@ -245,9 +205,33 @@ public partial class MainWindow
 
         var previous = _telegramAvatarBitmap;
         _telegramAvatarBitmap = bitmap;
+        _telegramAvatarDataUrl = dataUrl;
+        if (!string.IsNullOrEmpty(dataUrl))
+        {
+            try
+            {
+                var dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DEYTT", "Connect");
+                System.IO.Directory.CreateDirectory(dir);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "telegram-avatar.b64"), dataUrl);
+            }
+            catch { }
+        }
+        _routeGlobe?.UpdateProfileAvatar(dataUrl);
         if (_profileAvatarImage is not null)
             _profileAvatarImage.Source = bitmap;
         previous?.Dispose();
+    }
+
+    private static string? CreateTelegramAvatarDataUrl(byte[] bytes)
+    {
+        string? mediaType = bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 &&
+            bytes[2] == 0x4E && bytes[3] == 0x47 && bytes[4] == 0x0D && bytes[5] == 0x0A &&
+            bytes[6] == 0x1A && bytes[7] == 0x0A ? "image/png" :
+            bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF ? "image/jpeg" :
+            bytes.Length >= 12 && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F' &&
+            bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P' ? "image/webp" :
+            bytes.Length >= 6 && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F' ? "image/gif" : null;
+        return mediaType is null ? null : $"data:{mediaType};base64,{Convert.ToBase64String(bytes)}";
     }
 
     private void ClearTelegramAvatar()
@@ -400,8 +384,8 @@ public partial class MainWindow
             ? Copy("Освободите место в тарифе, затем повторите восстановление доступа.",
                 "Free a slot in your plan, then retry restoring device access.")
             : deviceMissing
-                ? Copy("Устройство больше не зарегистрировано. Обновите список и повторите действие.",
-                    "This device is no longer registered. Refresh the list and retry the action.")
+                ? Copy("Устройство больше не зарегистрировано. Обновите список, чтобы увидеть актуальные устройства.",
+                    "This device is no longer registered. Refresh the list to see the current devices.")
                 : Copy("Сервер не подтвердил изменение. Проверьте подключение и обновите список.",
                     "The server did not confirm the change. Check your connection and refresh the list.");
         var retry = DeyttTheme.PrimaryButton(Copy("Обновить список", "Refresh list"), () => { });
@@ -417,10 +401,11 @@ public partial class MainWindow
             {
                 DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
                 retry,
-                retryChange,
                 close,
             },
         };
+        if (!deviceMissing)
+            content.Children.Insert(2, retryChange);
         var result = await ShowContentInShellAsync(title, content, 500, dialog =>
         {
             if (retry.Child is Button retryButton)

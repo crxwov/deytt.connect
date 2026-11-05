@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -15,6 +16,10 @@ namespace DeyttConnect.Windows.Views;
 
 public partial class MainWindow
 {
+    private readonly Func<CancellationToken, Task<WindowsUpdateRelease?>>? _manualUpdateLookup;
+    private readonly Func<WindowsUpdateRelease, Action<long, long>?, CancellationToken,
+        Task<VerifiedWindowsUpdatePackage>>? _manualUpdateDownload;
+
     private static readonly HttpClient SubscriptionImportHttp = new(new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
@@ -43,6 +48,7 @@ public partial class MainWindow
             Language = _language,
             InitialImportUrl = initialImportUrl,
             RestoreExistingSession = !forceFreshPairing,
+            AllowCancel = _keysSnapshot?.ProfileJson is { Length: > 0 } && _routes.Count > 0,
             DeferSessionSaveUntilImport = forceFreshPairing,
             ImportUrlAsync = ImportSubscriptionUrlAsync,
             CommitImportAsync = (result, cancellationToken) =>
@@ -61,17 +67,36 @@ public partial class MainWindow
         SetupWindowResult? completedResult = null;
         try
         {
+            if (_routeGlobe is { Parent: not null } globe)
+            {
+                var capture = globe.CapturePreviewAsync();
+                try { _setupPagePreview = await capture.WaitAsync(PagePreviewCaptureTimeout); }
+                catch (TimeoutException)
+                {
+                    _ = capture.ContinueWith(task => task.Result?.Dispose(), CancellationToken.None,
+                        TaskContinuationOptions.OnlyOnRanToCompletion, TaskScheduler.Default);
+                }
+            }
+            if (!IsVisible) return;
             ShowTab(MainTab.Setup);
             await setup.ActivateAsync();
             completedResult = await completion.Task;
         }
         finally
         {
-            setup.Cancel();
+            setup.Abort();
             _activeSetupView = null;
             _setupFlowCompletion = null;
             if (IsVisible && _activeTab == MainTab.Setup)
                 ShowTab(completedResult is null ? returnTab : MainTab.Home);
+            _setupPagePreview?.Dispose();
+            _setupPagePreview = null;
+            _setupBackdropPage = null;
+            if (IsVisible && _pendingExternalImportUrl is { Length: > 0 } queuedImportUrl)
+            {
+                _pendingExternalImportUrl = null;
+                _ = ShowSetupWindowAsync(queuedImportUrl);
+            }
         }
     }
 
@@ -256,7 +281,7 @@ public partial class MainWindow
 
         var countryRoutes = _routes.Where(route =>
                 route.CountryCode == countryCode &&
-                route.Protocol is "VLESS" or "TROJAN" or "HYSTERIA2" or "TUIC" or "LTE" or "AWG15" or "AWG31")
+                route.Protocol is "VLESS" or "TROJAN" or "HYSTERIA2" or "TUIC" or "AWG31")
             .OrderBy(route => route.Protocol switch
             {
                 "LTE" => 0,
@@ -264,14 +289,17 @@ public partial class MainWindow
                 "TROJAN" => 2,
                 "HYSTERIA2" => 3,
                 "TUIC" => 4,
-                "AWG15" or "AWG31" => 5,
-                _ => 5,
+                "AWG31" => 4,
+                _ => 4,
             })
             .ToArray();
         var choices = new List<WindowsRoute>();
         if (_routes.FirstOrDefault(route => route.Protocol == "AUTO") is { } automatic)
             choices.Add(automatic);
         choices.AddRange(countryRoutes);
+        if ((countryCode is "RU" or "DE") &&
+            _routes.FirstOrDefault(route => route.Protocol == "RU-DE") is { } chain)
+            choices.Add(chain);
 
         var countryName = countryRoutes.FirstOrDefault()?.CountryName ?? countryCode switch
         {
@@ -310,17 +338,19 @@ public partial class MainWindow
             {
                 "AUTO" => Copy("Выбрать доступный выход автоматически", "Select an available exit automatically"),
                 "LTE" => Copy("Белые списки LTE · лимит 10 ГБ в месяц", "Whitelist LTE · 10 GB monthly limit"),
+                "RU-DE" => Copy("Двойной маршрут · Санкт-Петербург → Франкфурт", "Double route · Saint Petersburg → Frankfurt"),
                 "VLESS" or "TROJAN" => Copy("WebSocket + TLS", "WebSocket + TLS"),
                 "HYSTERIA2" => Copy("Быстрый QUIC-маршрут", "Fast QUIC route"),
                 "TUIC" => Copy("Оптимизированный QUIC-маршрут", "Optimized QUIC route"),
-                "AWG15" or "AWG31" => route.ProfileName ?? AwgProtocolTitle(route.Protocol),
+                "AWG31" => route.ProfileName ?? AwgProtocolTitle(route.Protocol),
                 _ => route.ProfileName ?? route.ProtocolName,
             };
             var selected = route.Id == _selectedRoute;
             var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
             labels.Children.Add(DeyttTheme.TextBlock(
                 route.Protocol == "AUTO" ? Copy("Автоподбор", "Auto-select") :
-                route.Protocol == "LTE" ? "lte" :
+                route.Protocol == "LTE" ? "lte • белые списки" :
+                route.Protocol == "RU-DE" ? Copy("LTE + белые списки · RU → DE", "LTE + whitelist · RU → DE") :
                 route.ProtocolName,
                 15, DeyttTheme.Text, FontWeight.SemiBold));
             labels.Children.Add(DeyttTheme.TextBlock(detail, 11, DeyttTheme.Muted));
@@ -441,6 +471,177 @@ public partial class MainWindow
         {
             ShowTab(MainTab.Settings);
         }
+    }
+
+    private async Task ShowUpdateDialogAsync()
+    {
+        var status = DeyttTheme.TextBlock(Copy("Проверяем релизы Windows…", "Checking Windows releases…"),
+            13, DeyttTheme.Muted);
+        var openRelease = DeyttTheme.Action(
+            DeyttTheme.TextBlock(Copy("Открыть все релизы", "Open all releases"), 13,
+                DeyttTheme.Sky, FontWeight.SemiBold),
+            () => OpenExternal("https://github.com/crxwov/deytt.connect/releases"));
+        var packageButton = DeyttTheme.PrimaryButton(Copy("Скачать и запустить обновление", "Download and start update"),
+            () => { });
+        packageButton.IsVisible = false;
+        var download = (Button)packageButton.Child!;
+        AutomationProperties.SetAutomationId(download, "ManualUpdateDownloadButton");
+        var cancelDownloadButton = DeyttTheme.Action(
+            DeyttTheme.TextBlock(Copy("Отменить загрузку", "Cancel download"), 13,
+                DeyttTheme.Muted, FontWeight.SemiBold), () => { });
+        cancelDownloadButton.IsVisible = false;
+        var body = new StackPanel
+        {
+            Spacing = 13,
+            Children =
+            {
+                DeyttTheme.TextBlock(Copy("КАНАЛ WINDOWS", "WINDOWS CHANNEL"), 9,
+                    DeyttTheme.Sky, FontWeight.SemiBold, DeyttTheme.JetBrainsMono),
+                DeyttTheme.TextBlock(Copy("Обновления приложения", "Application updates"),
+                    22, DeyttTheme.Text, FontWeight.Bold),
+                status,
+                packageButton,
+                cancelDownloadButton,
+                openRelease,
+            },
+        };
+        using var cancellation = new CancellationTokenSource();
+
+        WindowsUpdateRelease? release = null;
+        CancellationTokenSource? downloadCancellation = null;
+        var downloadInFlight = false;
+        var dialogIsOpen = false;
+
+        cancelDownloadButton.Click += (_, _) => downloadCancellation?.Cancel();
+
+        async Task BeginDownloadAsync()
+        {
+            if (release is null || !release.CanDownloadVerifiedPackage || downloadInFlight)
+                return;
+
+            downloadInFlight = true;
+            download.IsEnabled = false;
+            cancelDownloadButton.IsVisible = true;
+            downloadCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
+            status.Text = Copy("Загружаем пакет и сверяем SHA-256…", "Downloading package and checking SHA-256…");
+            try
+            {
+                Action<long, long> onProgress = (received, total) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                    {
+                        if (dialogIsOpen)
+                        {
+                            var percent = total > 0 ? Math.Clamp(received * 100 / total, 0, 100) : 0;
+                            status.Text = Copy($"Загрузка и проверка · {percent}%",
+                                $"Downloading and verifying · {percent}%");
+                        }
+                    });
+                var package = await (_manualUpdateDownload?.Invoke(release, onProgress, downloadCancellation.Token) ??
+                                     DownloadAndLaunchUpdateAsync(release, onProgress, downloadCancellation.Token));
+
+                if (!dialogIsOpen)
+                    return;
+
+                var megabytes = package.Size / (1024d * 1024d);
+                status.Text = release.PackageKind == WindowsUpdatePackageKind.Msi
+                    ? Copy($"MSI проверен · {megabytes:0.0} МБ · SHA-256 {package.Sha256}\nЗапущен установщик Windows.",
+                        $"MSI verified · {megabytes:0.0} MB · SHA-256 {package.Sha256}\nWindows Installer has started.")
+                    : Copy($"ZIP проверен · {megabytes:0.0} МБ · SHA-256 {package.Sha256}\nПроводник выделил архив. Распаковка остаётся под вашим контролем.",
+                        $"ZIP verified · {megabytes:0.0} MB · SHA-256 {package.Sha256}\nFile Explorer selected the archive. Extraction remains under your control.");
+                packageButton.IsVisible = false;
+            }
+            catch (OperationCanceledException) when (downloadCancellation?.IsCancellationRequested == true)
+            {
+                if (dialogIsOpen)
+                    status.Text = Copy("Загрузка отменена. Можно попробовать ещё раз.",
+                        "Download cancelled. You can try again.");
+            }
+            catch (System.ComponentModel.Win32Exception error) when (error.NativeErrorCode == 1223)
+            {
+                if (dialogIsOpen)
+                    status.Text = Copy("Запуск установки отменён.", "Installer launch was cancelled.");
+            }
+            catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
+                                          UnauthorizedAccessException or System.Security.SecurityException or
+                                          System.ComponentModel.Win32Exception or PlatformNotSupportedException or
+                                          InvalidOperationException)
+            {
+                if (dialogIsOpen)
+                    status.Text = Copy("Не удалось загрузить, проверить или открыть пакет обновления.",
+                        "Could not download, verify, or open the update package.");
+            }
+            finally
+            {
+                downloadCancellation?.Dispose();
+                downloadCancellation = null;
+                if (dialogIsOpen)
+                {
+                    downloadInFlight = false;
+                    cancelDownloadButton.IsVisible = false;
+                    download.IsEnabled = true;
+                }
+            }
+        }
+        download.Click += async (_, _) => await BeginDownloadAsync();
+
+        async Task LoadLatestReleaseAsync()
+        {
+            try
+            {
+                release = await (_manualUpdateLookup?.Invoke(cancellation.Token) ??
+                                 FindManualUpdateAsync(cancellation.Token));
+                if (!dialogIsOpen)
+                    return;
+                if (release is null)
+                {
+                    status.Text = Copy(
+                        "Установлена последняя доступная версия для этого типа Windows-пакета.",
+                        "The latest available version for this Windows package type is installed.");
+                }
+                else
+                {
+                    var releaseDetails = $"{release.Tag}\n{release.Name}\n{release.Notes}";
+                    if (release.CanDownloadVerifiedPackage)
+                    {
+                        var megabytes = release.AssetSize!.Value / (1024d * 1024d);
+                        status.Text = $"{releaseDetails}\n\n{release.AssetName} · {megabytes:0.0} MB";
+                        packageButton.IsVisible = true;
+                    }
+                    else
+                    {
+                        status.Text = releaseDetails + "\n\n" + Copy(
+                            "Для этого пакета нет корректных данных GitHub о SHA-256 и размере. Проверить загрузку не удаётся.",
+                            "GitHub has not provided valid SHA-256 and size metadata for this package. Its download cannot be verified.");
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                if (dialogIsOpen && !cancellation.IsCancellationRequested)
+                    status.Text = Copy("Проверка заняла слишком много времени. Попробуйте ещё раз.",
+                        "The update check timed out. Try again.");
+            }
+            catch (Exception error) when (error is HttpRequestException or JsonException or IOException or
+                                          InvalidDataException)
+            {
+                if (dialogIsOpen)
+                    status.Text = Copy("Не удалось проверить релизы. Проверьте подключение и повторите.",
+                        "Could not check releases. Check the connection and try again.");
+            }
+        }
+
+        var releaseLookup = Task.CompletedTask;
+        await ShowContentInShellAsync(Copy("Обновления", "Updates"), body, 540, modal =>
+        {
+            dialogIsOpen = true;
+            modal.Closed += () =>
+            {
+                dialogIsOpen = false;
+                cancellation.Cancel();
+                downloadCancellation?.Cancel();
+            };
+            releaseLookup = LoadLatestReleaseAsync();
+        });
+        await releaseLookup;
     }
 
     private static async Task<string> ReadBoundedTextAsync(

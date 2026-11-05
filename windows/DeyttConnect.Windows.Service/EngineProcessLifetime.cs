@@ -5,6 +5,11 @@ using Microsoft.Win32.SafeHandles;
 
 namespace DeyttConnect.Windows.Service;
 
+/// <summary>
+/// Owns a Job Object whose close terminates the engine process assigned to it.
+/// Call this for a newly started engine process and retain the returned instance
+/// for as long as that process is owned by the service.
+/// </summary>
 internal sealed class EngineProcessLifetime : IDisposable
 {
     private const uint JobObjectLimitKillOnJobClose = 0x00002000;

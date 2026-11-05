@@ -32,6 +32,7 @@ public sealed class TelegramAccountParseProfileTests
         Assert.Equal(long.MaxValue, account.Subscription.TrafficLimitBytes);
         Assert.Equal(long.MinValue, account.Subscription.TrafficUsedBytes);
         Assert.Equal(9007199254740993L, account.Subscription.TrafficTotalBytes);
+        Assert.False(account.Subscription.UnlimitedTraffic);
     }
 
     [Fact]
@@ -58,6 +59,32 @@ public sealed class TelegramAccountParseProfileTests
         Assert.Null(account.Subscription.TrafficLimitBytes);
         Assert.Equal(0L, account.Subscription.TrafficUsedBytes);
         Assert.Null(account.Subscription.TrafficTotalBytes);
+        Assert.True(account.Subscription.UnlimitedTraffic);
+    }
+
+    [Theory]
+    [InlineData("null", true)]
+    [InlineData("0", true)]
+    [InlineData("-1", true)]
+    [InlineData("1", false)]
+    public void ParseProfile_UsesOnlyExplicitNullOrNonpositiveLimitAsUnlimited(string limit, bool unlimited)
+    {
+        using var document = JsonDocument.Parse($"{{\"subscription\":{{\"traffic_limit_bytes\":{limit}}}}}");
+
+        var account = TelegramAccount.ParseProfile(document.RootElement);
+
+        Assert.Equal(unlimited, account.Subscription?.UnlimitedTraffic);
+    }
+
+    [Fact]
+    public void ParseProfile_LeavesMissingTrafficLimitUnknown()
+    {
+        using var document = JsonDocument.Parse("{\"subscription\":{}}");
+
+        var account = TelegramAccount.ParseProfile(document.RootElement);
+
+        Assert.Null(account.Subscription?.TrafficLimitBytes);
+        Assert.False(account.Subscription?.UnlimitedTraffic);
     }
 
     [Theory]

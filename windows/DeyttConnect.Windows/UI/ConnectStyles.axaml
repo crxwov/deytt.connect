@@ -1,0 +1,80 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <SolidColorBrush x:Key="AppTextBrush" Color="#F2F5FC" />
+    <SolidColorBrush x:Key="AppFocusBrush" Color="#6378F6" />
+  </Styles.Resources>
+  <FluentTheme />
+  <Style Selector="TextBlock">
+    <Setter Property="FontFamily" Value="fonts:DEYTT#Inter Tight" />
+    <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}" />
+  </Style>
+  <Style Selector="Button.deytt-button">
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="0:0:0.12" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource AppTextBrush}" />
+  </Style>
+  <Style Selector="Button.deytt-button:pointerover">
+    <Setter Property="Opacity" Value="0.90" />
+  </Style>
+  <!-- Keep Fluent's template states on the app's own surfaces. -->
+  <Style Selector="Button.deytt-button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+    <Setter Property="BorderBrush" Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+  </Style>
+  <Style Selector="Button.deytt-button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+    <Setter Property="BorderBrush" Value="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}" />
+  </Style>
+  <Style Selector="Button.deytt-button:focus /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="BorderBrush" Value="{DynamicResource AppFocusBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{Binding CornerRadius, RelativeSource={RelativeSource TemplatedParent}}" />
+  </Style>
+  <Style Selector="Button.deytt-button:pressed">
+    <Setter Property="Opacity" Value="0.72" />
+  </Style>
+  <Style Selector="Button.deytt-button:focus">
+    <Setter Property="BorderBrush" Value="{DynamicResource AppFocusBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+  </Style>
+  <Style Selector="Button.nav-pill:focus">
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.nav-pill:focus Border.nav-surface">
+    <Setter Property="BorderBrush" Value="{DynamicResource AppFocusBrush}" />
+  </Style>
+  <Style Selector="Button.nav-pill:pointerover Border.nav-surface">
+    <Setter Property="Background" Value="#1FFFFFFF" />
+  </Style>
+  <Style Selector="Button.chrome-button:pointerover">
+    <Setter Property="Background" Value="#2EFFFFFF" />
+    <Setter Property="BorderBrush" Value="#4DFFFFFF" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Button.close-button:pointerover">
+    <Setter Property="Background" Value="#D9EF4444" />
+    <Setter Property="BorderBrush" Value="#EF4444" />
+    <Setter Property="Foreground" Value="#FFFFFF" />
+    <Setter Property="Opacity" Value="1" />
+  </Style>
+  <Style Selector="Button.deytt-button:disabled">
+    <Setter Property="Opacity" Value="0.56" />
+  </Style>
+  <Style Selector="TextBox.glass-input:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="#38BDF8" />
+    <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+  </Style>
+  <Style Selector="TextBox.glass-input:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}" />
+  </Style>
+</Styles>

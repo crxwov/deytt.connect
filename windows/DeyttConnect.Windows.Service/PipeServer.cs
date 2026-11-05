@@ -101,6 +101,9 @@ internal static class PipeServer
             case WindowsPipeCommand.Status:
                 result = engine.Snapshot;
                 break;
+            case WindowsPipeCommand.MeasureTunnelLatency:
+                result = await engine.MeasureTunnelLatencyAsync(cancellationToken).ConfigureAwait(false);
+                break;
             case WindowsPipeCommand.Disconnect:
                 engine.Stop();
                 result = engine.Snapshot;
@@ -137,7 +140,8 @@ internal static class PipeServer
             result.ConnectedAt, result.ProbeResults?.Select(probe => new WindowsRouteProbeResult(
                 probe.RouteTag, probe.LatencyMilliseconds, probe.BytesPerSecond, probe.Error,
                 probe.Stage, probe.Attempt, probe.BytesReceived, probe.TotalBytes)).ToArray(),
-            result.HealthCheckedAt, result.ActiveRouteTag);
+            result.HealthCheckedAt, result.ActiveRouteTag, result.TunnelLatencyMilliseconds,
+            result.TunnelLatencyError);
         var responsePayload = WindowsPipeProtocol.SerializeResponse(response);
         await WindowsPipeProtocol.WriteFrameAsync(pipe, responsePayload, WindowsPipeProtocol.MaximumResponseBytes,
             cancellationToken).ConfigureAwait(false);

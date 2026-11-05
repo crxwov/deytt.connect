@@ -9,7 +9,9 @@ public sealed record WindowsPreferences(
     bool MapRegionEnabled = false,
     bool ReduceMotion = false,
     bool MapRegionConsentGranted = false,
-    bool MapRegionConsentAsked = false);
+    bool MapRegionConsentAsked = false,
+    string ThemePreference = "system",
+    string WindowChromePreference = "deytt");
 
 public static class WindowsPreferencesStore
 {
@@ -39,7 +41,9 @@ public static class WindowsPreferencesStore
                 value.MapRegionEnabled && value.MapRegionConsentGranted,
                 value.ReduceMotion,
                 value.MapRegionConsentGranted,
-                value.MapRegionConsentAsked);
+                value.MapRegionConsentAsked,
+                value.ThemePreference is "system" or "light" or "dark" ? value.ThemePreference : "system",
+                value.WindowChromePreference is "deytt" or "system" ? value.WindowChromePreference : "deytt");
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -57,7 +61,9 @@ public static class WindowsPreferencesStore
             preferences.MapRegionEnabled,
             preferences.ReduceMotion,
             preferences.MapRegionConsentGranted,
-            preferences.MapRegionConsentAsked);
+            preferences.MapRegionConsentAsked,
+            preferences.ThemePreference is "system" or "light" or "dark" ? preferences.ThemePreference : "system",
+            preferences.WindowChromePreference is "deytt" or "system" ? preferences.WindowChromePreference : "deytt");
         var path = PreferencesPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -83,13 +89,13 @@ public static class WindowsPreferencesStore
         ProductFolder,
         PreferencesFileName);
 
-    internal static bool IsKnownRoute(string route) => route is "auto" or "ru-de" ||
+    internal static bool IsKnownRoute(string route) => route is "auto" or "ru-de" or "route:DE:LTE" ||
         System.Text.RegularExpressions.Regex.IsMatch(route,
             "^route:(NL|RU|DE|FI|IT):(VLESS|TROJAN|HYSTERIA2|TUIC)$",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant) ||
-        route is "awg15" or "awg31" ||
+        route == "awg31" ||
         System.Text.RegularExpressions.Regex.IsMatch(route,
-            "^awg(15|31):[A-Za-z0-9_-]{1,172}$",
+            "^awg31:[A-Za-z0-9_-]{1,172}$",
             System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     private static void EnsureWindows()

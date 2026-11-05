@@ -5,7 +5,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using DeyttConnect.Protocol;
@@ -13,19 +13,163 @@ using DeyttConnect.Windows;
 using DeyttConnect.Windows.Views;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.Controls;
+using System.Reflection;
 using Xunit;
 
 namespace DeyttConnect.Windows.HeadlessTests;
 
 public sealed class HomeWindowTests
 {
+    [Theory]
+    [InlineData("ru", "Мбит/с")]
+    [InlineData("en", "Mbit/s")]
+    public void Speed_units_preserve_the_same_notation_across_pages(string language, string expected) =>
+        Assert.Equal(expected, MainWindow.LocalizedSpeedUnit(language));
+
     [AvaloniaTheory]
-    [InlineData("disconnected", "не подключено", "не подключено", "подключиться")]
-    [InlineData("connecting", "подключаемся…", "подключаем vpn…", "отменить подключение")]
-    [InlineData("error", "ошибка vpn", "ошибка vpn", "подключиться")]
-    [InlineData("connected", "vpn подключён", "подключено", "отключить")]
-    public void Vpn_fixture_renders_truthful_state_across_header_home_and_action(
-        string state, string expectedHeader, string expectedHome, string expectedAction)
+    [InlineData(34)]
+    [InlineData(42)]
+    public void Chained_route_flags_fit_inside_their_frame(double width)
+    {
+        var flag = DeyttConnect.Windows.UI.RouteFlagVisual.Create("RU-DE", width, 28);
+        var window = new Window { Content = flag, Width = 100, Height = 100 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            foreach (var child in Descendants(flag))
+            {
+                var position = child.TranslatePoint(new Point(0, 0), flag);
+                Assert.NotNull(position);
+                Assert.InRange(position.Value.X, -1, width);
+                Assert.True(position.Value.X + child.Bounds.Width <= width + 1);
+            }
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void Window_commands_minimize_restore_and_close()
+    {
+        var window = new MainWindow(Fixture(tab: "settings")) { Width = 1360, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            Required<Button>(window, "MinimizeWindowButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(WindowState.Minimized, window.WindowState);
+            window.WindowState = WindowState.Normal;
+            var maximize = Required<Button>(window, "MaximizeWindowButton");
+            maximize.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(WindowState.Maximized, window.WindowState);
+            maximize.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.Equal(WindowState.Normal, window.WindowState);
+            Required<Button>(window, "CloseWindowButton").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Assert.False(window.IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public async Task Repeated_key_reset_click_opens_one_flow_and_cancel_releases_it()
+    {
+        var window = new MainWindow(Fixture(tab: "settings", signedIn: true));
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var method = typeof(MainWindow).GetMethod("ShowResetChoicesAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var first = (Task)method.Invoke(window, null)!;
+            var second = (Task)method.Invoke(window, null)!;
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(second.IsCompletedSuccessfully);
+            Assert.False(first.IsCompleted);
+            var host = Required<Grid>(window, "ModalOverlayHost");
+            Assert.Single(host.Children);
+            Descendants(host).OfType<Button>().Single(button =>
+                AutomationProperties.GetAutomationId(button) == "DialogCloseButton")
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await first.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.False((bool)typeof(MainWindow).GetField("_keyResetInFlight",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("home", "TopHomeNav")]
+    [InlineData("routes", "TopRoutesNav")]
+    [InlineData("profile", "TopProfileNav")]
+    [InlineData("settings", "TopSettingsNav")]
+    public void Regular_pages_keep_their_view_instance_across_navigation_when_inputs_are_unchanged(
+        string tab, string navigationAutomationId)
+    {
+        var window = new MainWindow(Fixture(tab: tab, signedIn: true)) { Width = 1360, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var pageHost = Required<Grid>(window, "PageHost");
+            var originalPage = ActivePage(pageHost);
+            var originalContent = Assert.Single(Assert.IsType<Grid>(originalPage).Children);
+
+            var alternateNavigationId = tab == "settings" ? "TopRoutesNav" : "TopSettingsNav";
+            Required<Button>(window, alternateNavigationId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Required<Button>(window, navigationAutomationId).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Same(originalPage, ActivePage(pageHost));
+            Assert.Same(originalContent, Assert.Single(Assert.IsType<Grid>(originalPage).Children));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public void Persistent_routes_page_refreshes_measurement_data_without_replacing_page()
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true)) { Width = 1360, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var pageHost = Required<Grid>(window, "PageHost");
+            var originalPage = ActivePage(pageHost);
+            var pageViewModel = Assert.IsType<RoutesViewModel>(originalPage.DataContext);
+
+            Required<Button>(window, "TopSettingsNav").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            pageViewModel.ProbeResults = new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal)
+                {
+                    ["qa:nl-vless"] = new("qa:nl-vless", 42, null, null, "waiting_speed"),
+                };
+
+            Required<Button>(window, "TopRoutesNav").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            var refreshedPage = ActivePage(pageHost);
+
+            Assert.Same(originalPage, refreshedPage);
+            Assert.Same(pageViewModel, refreshedPage.DataContext);
+            Assert.Contains(Descendants(refreshedPage).OfType<TextBlock>(), text => text.Text == "42 мс");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("disconnected", "не подключено", "подключиться")]
+    [InlineData("connecting", "подключаемся…", "отменить подключение")]
+    [InlineData("error", "не удалось подключиться", "повторить")]
+    [InlineData("connected", "подключено", "отключить")]
+    public void Vpn_fixture_renders_truthful_state_in_home_presentation(
+        string state, string expectedStatus, string expectedAction)
     {
         var window = new MainWindow(Fixture(signedIn: true, state: state)) { Width = 1360, Height = 820 };
         try
@@ -33,13 +177,14 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Equal(expectedHeader, Required<TextBlock>(window, "HeaderStatusText").Text);
             Assert.False(Required<Control>(window, "SidebarPanel").IsVisible);
-            Assert.True(Required<Control>(window, "BottomNavigationPanel").IsVisible);
-            var pageText = Descendants(Required<Grid>(window, "PageHost")).OfType<TextBlock>()
-                .Select(text => text.Text).ToArray();
-            Assert.Contains(expectedHome, pageText);
-            Assert.Contains(expectedAction, pageText);
+            Assert.False(Required<Control>(window, "BottomNavigationPanel").IsVisible);
+            var map = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>());
+            Assert.Equal(expectedStatus, map.HomePresentation?.Status);
+            Assert.Equal(expectedAction, map.HomePresentation?.ActionLabel);
+            if (state == "error")
+                Assert.Equal("Synthetic VPN error", map.HomePresentation?.Message);
         }
         finally
         {
@@ -52,20 +197,20 @@ public sealed class HomeWindowTests
     [InlineData(1360d)]
     public void Home_navigation_and_controls_remain_reachable_at_supported_widths(double width)
     {
-        var window = new MainWindow(Fixture(tab: "settings")) { Width = width, Height = 820 };
+        var window = new MainWindow(Fixture(tab: "settings", signedIn: true)) { Width = width, Height = 820 };
         try
         {
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
             var sidebar = Required<Control>(window, "SidebarPanel");
+            var topNavigation = Required<StackPanel>(window, "HeaderNavigation");
             var bottomNavigation = Required<Control>(window, "BottomNavigationPanel");
             Assert.False(sidebar.IsVisible);
-            Assert.True(bottomNavigation.IsVisible);
-            Assert.True(bottomNavigation.Bounds.Height >= 60,
-                $"Bottom navigation did not reserve space: {bottomNavigation.Bounds}");
+            Assert.False(bottomNavigation.IsVisible);
+            Assert.True(topNavigation.IsEffectivelyVisible);
 
-            var homeButton = Required<Button>(window, "BottomHomeNav");
+            var homeButton = Required<Button>(window, "TopHomeNav");
             Assert.True(homeButton.IsEffectivelyVisible);
             Assert.True(homeButton.Focus());
             Assert.True(homeButton.IsFocused);
@@ -73,10 +218,11 @@ public sealed class HomeWindowTests
             window.KeyReleaseQwerty(PhysicalKey.Space, RawInputModifiers.None);
             Dispatcher.UIThread.RunJobs();
 
-            Assert.Equal("ваше подключение", Required<TextBlock>(window, "WorkspaceTitle").Text);
+            Assert.True(Required<Control>(window, "WorkspaceHeader").IsVisible);
             var pageHost = Required<Grid>(window, "PageHost");
-            Assert.Single(pageHost.Children);
-            Assert.Contains(Descendants(pageHost).OfType<Button>(), button => button.IsEffectivelyVisible && button.IsEnabled);
+            Assert.NotNull(ActivePage(pageHost));
+            var homeMap = Assert.Single(Descendants(pageHost).OfType<RouteGlobeWebView>());
+            Assert.True(homeMap.HomePresentation?.ActionEnabled);
         }
         finally
         {
@@ -87,7 +233,7 @@ public sealed class HomeWindowTests
     [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
-    public void Home_connection_action_keeps_a_usable_hit_target(double width)
+    public void Home_presentation_exposes_a_real_enabled_connection_action(double width)
     {
         var window = new MainWindow(Fixture(signedIn: true)) { Width = width, Height = 820 };
         try
@@ -95,35 +241,15 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var page = Required<Grid>(window, "PageHost");
-            var action = Assert.Single(Descendants(page)
-                .OfType<Button>(), button => AutomationProperties.GetAutomationId(button) == "HomeConnectionAction");
-            var hitTarget = Assert.Single(Descendants(page).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "HomeConnectionActionTile");
-            var status = Assert.Single(Descendants(page).OfType<Grid>(), grid =>
-                AutomationProperties.GetAutomationId(grid) == "HomeConnectionStatus");
-            var actionLabels = Descendants(action).OfType<TextBlock>().ToArray();
-            var actionLabel = Assert.Single(actionLabels);
-            var labelCenter = actionLabel.TranslatePoint(
-                new Point(actionLabel.Bounds.Width / 2, actionLabel.Bounds.Height / 2), action)!.Value;
-            var tileText = Descendants(hitTarget).OfType<TextBlock>().Select(text => text.Text).ToArray();
-            var statusText = Descendants(status).OfType<TextBlock>().Select(text => text.Text).ToArray();
-
-            Assert.True(action.IsEffectivelyVisible);
-            Assert.True(action.IsEnabled);
-            Assert.True(hitTarget.Bounds.Width >= 320);
-            Assert.InRange(hitTarget.Height, 72, 90);
-            Assert.Equal("подключиться", actionLabel.Text);
-            Assert.InRange(Math.Abs(labelCenter.X - action.Bounds.Width / 2), 0, 1.5);
-            Assert.InRange(Math.Abs(labelCenter.Y - action.Bounds.Height / 2), 0, 1.5);
-            Assert.Single(tileText);
-            Assert.Equal("подключиться", tileText[0]!);
-            Assert.Contains("не подключено", statusText);
-            Assert.Contains("подписка готова · выберите маршрут и подключитесь", statusText);
-            Assert.DoesNotContain(status, Descendants(hitTarget));
-            Assert.DoesNotContain("не подключено", actionLabels.Select(text => text.Text));
-            Assert.True(action.Focus());
-            Assert.True(action.IsFocused);
+            var map = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>());
+            var presentation = Assert.IsType<HomePresentationSnapshot>(map.HomePresentation);
+            Assert.Equal("не подключено", presentation.Status);
+            Assert.Equal("подключиться", presentation.ActionLabel);
+            Assert.Equal("home-connect", presentation.Action);
+            Assert.True(presentation.ActionEnabled);
+            Assert.True(map.Bounds.Width > 300);
+            Assert.True(map.Bounds.Height > 500);
         }
         finally
         {
@@ -134,7 +260,7 @@ public sealed class HomeWindowTests
     [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
-    public void Home_panel_matches_protocol_path_measurements_and_compact_action_order(double width)
+    public void Home_panel_presentation_uses_real_selected_route_and_measurement_state(double width)
     {
         var window = new MainWindow(Fixture(signedIn: true)) { Width = width, Height = 820 };
         try
@@ -142,31 +268,190 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var page = Required<Grid>(window, "PageHost");
-            var protocol = Assert.Single(Descendants(page).OfType<TextBlock>(), text => text.Text == "./hysteria2");
-            var path = Assert.Single(Descendants(page).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "HomeTrafficPath");
-            var measurements = Assert.Single(Descendants(page).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "HomeRouteMeasurements");
-            var status = Assert.Single(Descendants(page).OfType<Grid>(), grid =>
-                AutomationProperties.GetAutomationId(grid) == "HomeConnectionStatus");
-            var tile = Assert.Single(Descendants(page).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "HomeConnectionActionTile");
-            var pathText = Descendants(path).OfType<TextBlock>().Select(text => text.Text).ToArray();
-            Assert.Contains("регион скрыт", pathText);
-            Assert.Contains("амстердам", pathText);
-
-            static double Top(Control control, Control relativeTo) =>
-                control.TranslatePoint(new Point(0, 0), relativeTo)?.Y ?? double.NaN;
-            Assert.True(Top(protocol, page) < Top(path, page));
-            Assert.True(Top(path, page) < Top(measurements, page));
-            Assert.False(status.IsVisible);
-            Assert.True(Top(measurements, page) < Top(tile, page));
+            var map = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>());
+            var presentation = Assert.IsType<HomePresentationSnapshot>(map.HomePresentation);
+            Assert.Equal("нидерланды", presentation.Country);
+            Assert.Equal("амстердам", presentation.City);
+            Assert.Equal("./hysteria", presentation.Protocol);
+            Assert.Null(presentation.Latency);
+            Assert.Null(presentation.Speed);
+            Assert.Equal("nl", map.SelectedRoute);
         }
         finally
         {
             window.Close();
         }
+    }
+
+    [AvaloniaFact]
+    public void Globe_protocol_message_selects_route_and_updates_home_presentation()
+    {
+        var window = new MainWindow(Fixture(signedIn: true)) { Width = 900, Height = 820 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var globe = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>());
+            string? emittedRoute = null;
+            globe.RouteSelected += value => emittedRoute = value;
+            var webView = new NativeWebView();
+            typeof(RouteGlobeWebView).GetField("_webView", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(globe, webView);
+            typeof(RouteGlobeWebView).GetField("_pageReady", BindingFlags.Instance | BindingFlags.NonPublic)!
+                .SetValue(globe, true);
+
+            typeof(RouteGlobeWebView).GetMethod("OnWebMessageReceived",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(globe,
+                [webView, new WebMessageReceivedEventArgs { Body = "\"route:select:de-hy2\"" }]);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal("de-hy2", emittedRoute);
+            Assert.Equal("de-hysteria2", typeof(MainWindow).GetProperty("_selectedRoute",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            Assert.Equal("de", globe.SelectedRoute);
+            Assert.Equal("германия", globe.HomePresentation?.Country);
+            Assert.Equal("франкфурт", globe.HomePresentation?.City);
+            Assert.Equal("./hysteria", globe.HomePresentation?.Protocol);
+            Assert.True(globe.HostActive);
+
+            Required<Button>(window, "TopRoutesNav").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("de-hysteria2", typeof(MainWindow).GetProperty("_selectedRoute",
+                BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            Required<Button>(window, "TopHomeNav").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(globe, Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>()));
+            Assert.Equal("de", globe.SelectedRoute);
+            Assert.Equal("./hysteria", globe.HomePresentation?.Protocol);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData("vless", "./vless+ws")]
+    [InlineData("trojan", "./trojan")]
+    [InlineData("hysteria", "./hysteria")]
+    [InlineData("awg31", "./amnezia3.1")]
+    public void Home_protocol_uses_the_short_transport_label(string protocol, string expected)
+    {
+        var selectedRoute = protocol switch
+        {
+            "vless" => "nl-vless",
+            "trojan" => "nl-trojan",
+            "awg31" => "de-awg31",
+            _ => "nl-hysteria2",
+        };
+        var window = new MainWindow(Fixture(signedIn: true, selectedRoute: selectedRoute,
+            includeAmneziaRoute: protocol == "awg31"))
+        {
+            Width = 1360,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var map = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>());
+            Assert.Equal(expected, map.HomePresentation?.Protocol);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(0, null)]
+    [InlineData(-1, null)]
+    [InlineData(12, "12")]
+    public void Connected_home_never_presents_nonpositive_latency(long latency, string? expected)
+    {
+        var fixture = Fixture(signedIn: true, state: "connected");
+        fixture = fixture with
+        {
+            Tunnel = fixture.Tunnel with { TunnelLatencyMilliseconds = latency },
+            ProbeResult = new WindowsRouteProbeResult("qa:nl-vless", latency, null, null, "complete"),
+        };
+        var window = new MainWindow(fixture);
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var map = Assert.Single(Descendants(Required<Grid>(window, "PageHost")).OfType<RouteGlobeWebView>());
+            Assert.Equal(expected, map.HomePresentation?.Latency);
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void Initial_route_probe_uses_an_available_country_when_Netherlands_is_absent()
+    {
+        var routes = Fixture().Routes;
+        Assert.Equal("NL", MainWindow.InitialProbeCountry(routes));
+        Assert.Equal("DE", MainWindow.InitialProbeCountry(routes.Where(route => route.CountryCode is "AUTO" or "DE").ToArray()));
+        Assert.Null(MainWindow.InitialProbeCountry(routes.Where(route => route.CountryCode == "AUTO").ToArray()));
+    }
+
+    [Theory]
+    [InlineData(-1, -1)]
+    [InlineData(0, -1)]
+    [InlineData(1, 1)]
+    [InlineData(73, 73)]
+    public void Latency_requires_a_positive_measurement(long input, long expected) =>
+        Assert.Equal(expected > 0 ? expected : (long?)null, MainWindow.PositiveLatency(input));
+
+    [Fact]
+    public void Best_route_never_prefers_an_invalid_zero_latency_sample()
+    {
+        var samples = new[]
+        {
+            new WindowsRouteProbeResult("invalid", 0, 100_000_000, null),
+            new WindowsRouteProbeResult("valid", 71, 1_000_000, null),
+        };
+        Assert.Equal("valid", MainWindow.SelectBestMeasuredRoute(samples));
+    }
+
+    [AvaloniaFact]
+    public void Route_progress_rejects_zero_latency_but_preserves_measured_speed()
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true));
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var sample = new WindowsRouteProbeResult("qa:nl-vless", 0, 1_000_000, null, "complete");
+            Assert.True(window.ApplyProbeProgress([sample], [sample.RouteTag]));
+            Assert.False(window.ApplyProbeProgress([sample with { LatencyMilliseconds = null }], [sample.RouteTag]));
+        }
+        finally { window.Close(); }
+    }
+
+    [Fact]
+    public void Best_route_prefers_speed_when_latency_is_within_a_small_tolerance()
+    {
+        var samples = new[]
+        {
+            new WindowsRouteProbeResult("qa:nl-vless", 71, 6_837_500, null),
+            new WindowsRouteProbeResult("qa:nl-trojan", 71, 9_337_500, null),
+            new WindowsRouteProbeResult("qa:nl-hysteria2", 72, 10_362_500, null),
+            new WindowsRouteProbeResult("qa:nl-slow-latency", 100, 100_000_000, null),
+        };
+
+        Assert.Equal("qa:nl-hysteria2", MainWindow.SelectBestMeasuredRoute(samples));
+    }
+
+    [Fact]
+    public void Best_route_uses_lowest_latency_to_break_equal_speed_ties()
+    {
+        var samples = new[]
+        {
+            new WindowsRouteProbeResult("qa:nl-trojan", 72, 10_000_000, null),
+            new WindowsRouteProbeResult("qa:nl-hysteria2", 71, 10_000_000, null),
+        };
+
+        Assert.Equal("qa:nl-hysteria2", MainWindow.SelectBestMeasuredRoute(samples));
     }
 
     [AvaloniaFact]
@@ -182,17 +467,10 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var page = Required<Grid>(window, "PageHost");
-            var path = Assert.Single(Descendants(page).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "HomeTrafficPath");
-            var pathText = Descendants(path).OfType<TextBlock>().Select(text => text.Text).ToArray();
-            var normalizedPathText = string.Join(" ", pathText).ToLowerInvariant();
-            Assert.Contains("россия → германия · ru → de",
-                Descendants(page).OfType<TextBlock>().Select(text => text.Text));
-            Assert.Contains("регион скрыт", normalizedPathText);
-            Assert.Contains("россия", normalizedPathText);
-            Assert.Contains("франкфурт", normalizedPathText);
-            Assert.DoesNotContain("санкт-петербург", normalizedPathText);
+            var map = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>());
+            Assert.Equal("ru-de", map.SelectedRoute);
+            Assert.Equal("lte · белые списки", map.HomePresentation?.Country);
         }
         finally
         {
@@ -250,7 +528,7 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaFact]
-    public void Short_compact_home_keeps_globe_and_route_actions_above_bottom_navigation()
+    public void Compact_home_uses_one_scrollable_web_surface_below_the_top_navigation()
     {
         var window = new MainWindow(Fixture(signedIn: true)) { Width = 900, Height = 650 };
         try
@@ -258,15 +536,12 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var page = Descendants(Required<Grid>(window, "PageHost")).ToArray();
-            var map = Assert.Single(page.OfType<RouteGlobeWebView>());
+            var page = Required<Grid>(window, "PageHost");
+            var map = Assert.Single(Descendants(page).OfType<RouteGlobeWebView>());
             Assert.True(map.Bounds.Height > 450);
-            var overview = Assert.IsType<Grid>(Assert.Single(Required<Grid>(window, "PageHost").Children));
-            Assert.Equal(2, overview.ColumnDefinitions.Count);
-            Assert.InRange(Math.Abs(overview.Children[0].Bounds.Width - overview.Children[1].Bounds.Width), 0, 32);
-            Assert.Contains(page.OfType<TextBlock>(), text => text.Text == "./hysteria2");
-            Assert.DoesNotContain(page.OfType<TextBlock>(), text => text.Text == "QA Demo");
-            Assert.True(Required<Control>(window, "BottomNavigationPanel").IsVisible);
+            Assert.Single(page.Children);
+            Assert.True(Required<Control>(window, "WorkspaceHeader").IsVisible);
+            Assert.False(Required<Control>(window, "BottomNavigationPanel").IsVisible);
         }
         finally
         {
@@ -275,7 +550,7 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaFact]
-    public void Wide_home_limits_vertical_stretch_and_keeps_bottom_navigation()
+    public void Wide_home_limits_vertical_stretch_and_keeps_top_navigation()
     {
         var window = new MainWindow(Fixture(signedIn: true)) { Width = 1360, Height = 820 };
         try
@@ -283,11 +558,12 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            var page = Required<Grid>(window, "PageHost");
-            var overview = Assert.IsType<Grid>(Assert.Single(page.Children));
-            Assert.InRange(overview.Bounds.Height, 480, 520);
+            var map = Assert.Single(Descendants(Required<Grid>(window, "PageHost"))
+                .OfType<RouteGlobeWebView>());
+            Assert.InRange(map.Bounds.Height, 520, 1000);
             Assert.False(Required<Control>(window, "SidebarPanel").IsVisible);
-            Assert.True(Required<Control>(window, "BottomNavigationPanel").IsVisible);
+            Assert.True(Required<Control>(window, "WorkspaceHeader").IsVisible);
+            Assert.False(Required<Control>(window, "BottomNavigationPanel").IsVisible);
         }
         finally
         {
@@ -296,7 +572,7 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaFact]
-    public void Wide_home_splits_map_and_connection_panel_evenly()
+    public void Medium_home_keeps_connection_and_globe_in_the_same_local_surface()
     {
         var window = new MainWindow(Fixture(signedIn: true)) { Width = 900, Height = 830 };
         try
@@ -305,13 +581,9 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var host = Required<Grid>(window, "PageHost");
-            var layout = Assert.IsType<Grid>(Assert.Single(host.Children));
-            Assert.Equal(2, layout.ColumnDefinitions.Count);
-            Assert.Equal(2, layout.Children.Count);
-            var mapPanel = layout.Children[0];
-            var connectionPanel = layout.Children[1];
-            Assert.InRange(Math.Abs(mapPanel.Bounds.Width - connectionPanel.Bounds.Width), 0, 32);
-            Assert.Single(Descendants(mapPanel).OfType<RouteGlobeWebView>());
+            var map = Assert.Single(Descendants(host).OfType<RouteGlobeWebView>());
+            Assert.True(map.Bounds.Width > 500);
+            Assert.True(map.Bounds.Height >= 720);
         }
         finally
         {
@@ -320,7 +592,7 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaFact]
-    public void Home_hides_the_extra_header_and_uses_wheel_only_map_controls()
+    public void Home_keeps_the_shared_header_outside_the_globe_surface()
     {
         var window = new MainWindow(Fixture(signedIn: true)) { Width = 900, Height = 830 };
         try
@@ -328,15 +600,12 @@ public sealed class HomeWindowTests
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
-            Assert.False(Required<Control>(window, "WorkspaceHeader").IsVisible);
+            Assert.True(Required<Control>(window, "WorkspaceHeader").IsVisible);
             var page = Required<Grid>(window, "PageHost");
             var map = Assert.Single(Descendants(page).OfType<RouteGlobeWebView>());
-            var mapPanel = Assert.IsType<Border>(map.Parent?.Parent);
-            Assert.Empty(Descendants(mapPanel).OfType<Button>());
-            Assert.DoesNotContain(Descendants(page).OfType<TextBlock>(), text =>
-                text.Text is "карта сети" or "NETWORK MAP" or "1:1");
-            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "пинг");
-            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "скорость");
+            var persistentPage = Assert.IsType<Grid>(Assert.Single(page.Children));
+            Assert.Contains(map, Descendants(persistentPage).OfType<RouteGlobeWebView>());
+            Assert.Equal("интерактивный глобус маршрута deytt.", AutomationProperties.GetName(map));
         }
         finally
         {
@@ -345,9 +614,10 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaFact]
-    public void Expanded_route_country_shows_flags_and_readable_ping_and_speed_fields()
+    public void Expanded_route_country_shows_flags_and_readable_response_and_speed_fields()
     {
-        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, routeProbeInProgress: true))
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, routeProbeInProgress: true,
+            selectedRoute: "de-hysteria2"))
         {
             Width = 900,
             Height = 830,
@@ -366,23 +636,34 @@ public sealed class HomeWindowTests
             var expanded = Required<Grid>(window, "PageHost");
             Assert.Contains(Descendants(expanded).OfType<Border>(), flag =>
                 AutomationProperties.GetName(flag) == "флаг нидерландов");
-            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "пинг");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "отклик");
             Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "скорость");
-            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— ms");
-            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "— mbps");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "не измерено");
+            Assert.Contains(Descendants(expanded).OfType<TextBlock>(), text => text.Text == "не измерено");
 
             var routeOptions = Descendants(expanded).OfType<Button>()
                 .Where(button => AutomationProperties.GetAutomationId(button)?.StartsWith(
                     "RouteOption-nl-", StringComparison.Ordinal) == true)
                 .ToArray();
             Assert.Equal(3, routeOptions.Length);
-            Assert.Contains(Descendants(routeOptions[0]), control =>
-                AutomationProperties.GetName(control) == "VLESS");
+            var routeRows = routeOptions.Select(option => Assert.IsType<Border>(option.GetVisualParent())).ToArray();
+            Assert.All(routeRows, row => Assert.Equal(routeRows[0].Bounds.Height, row.Bounds.Height));
+            var protocolLogos = routeOptions.SelectMany(Descendants)
+                .OfType<DeyttConnect.Windows.UI.ProtocolLogo>().ToArray();
+            Assert.Equal(3, protocolLogos.Length);
+            Assert.All(protocolLogos, logo =>
+            {
+                Assert.Equal(36, logo.Bounds.Width);
+                Assert.Equal(36, logo.Bounds.Height);
+            });
             Assert.All(routeOptions, option =>
             {
                 Assert.True(option.Bounds.Width > 300);
-                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "пинг");
-                Assert.Contains(Descendants(option).OfType<TextBlock>(), text => text.Text == "скорость");
+                var optionText = Descendants(option).OfType<TextBlock>().Select(text => text.Text).ToArray();
+                Assert.Contains("не измерено", optionText);
+                Assert.Contains("не измерено", optionText);
+                Assert.DoesNotContain("отклик", optionText);
+                Assert.DoesNotContain("скорость", optionText);
             });
 
             Assert.True(window.ApplyProbeProgress(
@@ -392,84 +673,14 @@ public sealed class HomeWindowTests
             var pendingOption = Descendants(Required<Grid>(window, "PageHost")).OfType<Button>()
                 .Single(button => AutomationProperties.GetAutomationId(button) == "RouteOption-nl-vless");
             var pendingTexts = Descendants(pendingOption).OfType<TextBlock>().ToArray();
-            var pingLabel = Assert.Single(pendingTexts, text => text.Text == "пинг");
-            var labelLeft = pingLabel.TranslatePoint(new Point(0, 0), pendingOption)?.X;
             var pendingDots = pendingTexts
                 .Where(text => text.Text is "·" or "··" or "···")
                 .Select(text => (Text: text, Point: text.TranslatePoint(new Point(0, 0), pendingOption)))
                 .Where(item => item.Point is not null)
                 .ToArray();
-            Assert.NotEmpty(pendingDots);
-            var pendingDot = pendingDots.OrderBy(item => Math.Abs(
-                labelLeft!.Value - item.Point!.Value.X)).First();
-            var dotsLeft = pendingDot.Point?.X;
-            Assert.NotNull(labelLeft);
-            Assert.NotNull(dotsLeft);
-            Assert.InRange(Math.Abs(labelLeft.Value - dotsLeft.Value), 0, 0.5);
+            Assert.Single(pendingDots);
+            Assert.True(pendingDots[0].Point!.Value.X > 0);
 
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
-    [AvaloniaTheory]
-    [InlineData(0L)]
-    [InlineData(-1L)]
-    public void Route_diagnostics_do_not_render_nonpositive_ping_as_measured(long latency)
-    {
-        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, expandedRouteCountry: "NL"))
-        {
-            Width = 900,
-            Height = 830,
-        };
-        try
-        {
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(window.ApplyProbeProgress(
-                [new WindowsRouteProbeResult("qa:nl-vless", latency, 1_000_000, null, "complete", 1)],
-                ["qa:nl-vless"]));
-            Dispatcher.UIThread.RunJobs();
-
-            var page = Required<Grid>(window, "PageHost");
-            var option = Assert.Single(Descendants(page).OfType<Button>(), button =>
-                AutomationProperties.GetAutomationId(button) == "RouteOption-nl-vless");
-            var metrics = Descendants(option).OfType<TextBlock>().Select(text => text.Text).ToArray();
-            Assert.Contains("— ms", metrics);
-            Assert.DoesNotContain($"{latency} ms", metrics);
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
-    [AvaloniaTheory]
-    [InlineData(0L)]
-    [InlineData(-1L)]
-    public void Home_diagnostics_do_not_render_nonpositive_ping_as_measured(long latency)
-    {
-        var window = new MainWindow(Fixture(signedIn: true, selectedRoute: "nl-vless"))
-        {
-            Width = 900,
-            Height = 830,
-        };
-        try
-        {
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-            Assert.True(window.ApplyProbeProgress(
-                [new WindowsRouteProbeResult("qa:nl-vless", latency, 1_000_000, null, "complete", 1)],
-                ["qa:nl-vless"]));
-            Dispatcher.UIThread.RunJobs();
-
-            var measurement = Assert.Single(Descendants(Required<Grid>(window, "PageHost")).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "HomeRouteMeasurements");
-            var metrics = Descendants(measurement).OfType<TextBlock>().Select(text => text.Text).ToArray();
-            Assert.Contains("— ms", metrics);
-            Assert.DoesNotContain($"{latency} ms", metrics);
         }
         finally
         {
@@ -478,88 +689,38 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaFact]
-    public void Signed_out_route_page_explains_speed_authentication_without_hiding_ping_checks()
+    public void Unmeasured_routes_show_localized_state_and_a_measure_action()
     {
-        var window = new MainWindow(Fixture(tab: "routes")) { Width = 900, Height = 830 };
-        try
-        {
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-
-            var copy = string.Join(" ", Descendants(Required<Grid>(window, "PageHost"))
-                .OfType<TextBlock>().Select(text => text.Text));
-            Assert.Contains("пинг можно проверить без входа", copy);
-            Assert.Contains("telegram", copy);
-            Assert.Contains("скорости", copy);
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
-    [AvaloniaTheory]
-    [InlineData("connected")]
-    [InlineData("error")]
-    public void Connection_action_uses_a_phase_aware_glass_surface(string state)
-    {
-        var window = new MainWindow(Fixture(signedIn: true, state: state)) { Width = 900, Height = 830 };
-        try
-        {
-            window.Show();
-            Dispatcher.UIThread.RunJobs();
-
-            var tile = Assert.Single(Descendants(Required<Grid>(window, "PageHost")).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "HomeConnectionActionTile");
-            Assert.IsType<LinearGradientBrush>(tile.Background);
-            Assert.IsType<LinearGradientBrush>(tile.BorderBrush);
-            var sheen = Assert.Single(Descendants(tile).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "ConnectionGlassSheen");
-            Assert.False(sheen.IsHitTestVisible);
-        }
-        finally
-        {
-            window.Close();
-        }
-    }
-
-    [AvaloniaFact]
-    public void Profile_subscription_uses_the_shared_glass_surface()
-    {
-        var window = new MainWindow(Fixture(tab: "profile", signedIn: true)) { Width = 1360, Height = 820 };
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true,
+            expandedRouteCountry: "NL")) { Width = 900, Height = 830 };
         try
         {
             window.Show();
             Dispatcher.UIThread.RunJobs();
 
             var page = Required<Grid>(window, "PageHost");
-            var subscription = Assert.Single(Descendants(page).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "ProfileSubscriptionCard");
-            Assert.IsType<LinearGradientBrush>(subscription.Background);
-            Assert.IsType<LinearGradientBrush>(subscription.BorderBrush);
-            Assert.Single(Descendants(subscription), control =>
-                AutomationProperties.GetAutomationId(control) == "ProfileSubscriptionStarfield");
-            Assert.Single(Descendants(subscription), control =>
-                AutomationProperties.GetAutomationId(control) == "ProfileSubscriptionInfinity");
-            var renewal = Assert.Single(Descendants(page), control =>
-                AutomationProperties.GetAutomationId(control) == "ProfileRenewalRow");
-            var support = Assert.Single(Descendants(page), control =>
-                AutomationProperties.GetAutomationId(control) == "ProfileSupportRow");
-            var subscriptionY = subscription.TranslatePoint(new Point(0, 0), page)?.Y
-                ?? throw new Xunit.Sdk.XunitException("Subscription card is not arranged.");
-            var renewalY = renewal.TranslatePoint(new Point(0, 0), page)?.Y
-                ?? throw new Xunit.Sdk.XunitException("Renewal row is not arranged.");
-            var supportY = support.TranslatePoint(new Point(0, 0), page)?.Y
-                ?? throw new Xunit.Sdk.XunitException("Support row is not arranged.");
-            Assert.True(subscriptionY < renewalY && renewalY < supportY,
-                "Profile actions should follow the subscription card in Android release order.");
-            Assert.Contains("продлить подписку", Descendants(renewal).OfType<TextBlock>()
-                .Select(text => text.Text));
+            Assert.Contains(Descendants(page).OfType<TextBlock>(), text => text.Text == "не измерено");
+            var measure = Descendants(page).OfType<Button>().Single(button =>
+                AutomationProperties.GetAutomationId(button) == "RouteCountryRefresh-NL");
+            Assert.Contains(Descendants(measure).OfType<TextBlock>(), text => text.Text == "обновить замеры");
         }
         finally
         {
             window.Close();
         }
+    }
+
+    [Fact]
+    public void Leftover_provider_adapter_does_not_report_a_stopped_service_as_running()
+    {
+        var runningServices = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        Assert.Null(WindowsExternalVpnDetector.GetRunningServiceForAdapter(
+            "WireGuardManager", runningServices));
+
+        runningServices.Add("WireGuardManager");
+        Assert.Equal("WireGuardManager", WindowsExternalVpnDetector.GetRunningServiceForAdapter(
+            "WireGuardManager", runningServices));
     }
 
     [AvaloniaFact]
@@ -573,11 +734,17 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var page = Required<Grid>(window, "PageHost");
+            var privacyHeader = Descendants(page).OfType<Button>().Single(button =>
+                Descendants(button).OfType<TextBlock>().Any(text => text.Text == "приватность"));
+            privacyHeader.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            page = Required<Grid>(window, "PageHost");
             var toggle = Assert.Single(Descendants(page).OfType<Button>(), button =>
                 Descendants(button).OfType<TextBlock>().Any(text => text.Text == "показывать мой регион"));
             var content = Assert.IsType<Grid>(toggle.Content);
             var track = Assert.Single(content.Children.OfType<Border>());
-            Assert.Equal(27, track.Height);
+            Assert.Equal(28, track.Height);
             Assert.True(content.Bounds.Width > 600);
             Assert.True(track.Bounds.X > content.Bounds.Width - 80);
         }
@@ -608,14 +775,14 @@ public sealed class HomeWindowTests
             var snapshot = new WindowsRouteProbeResult("qa:nl-vless", null, null, null, "retry", 2);
             Assert.True(window.ApplyProbeProgress([snapshot], [snapshot.RouteTag]));
             Dispatcher.UIThread.RunJobs();
-            var changedPage = Assert.Single(pageHost.Children);
+            var changedPage = ActivePage(pageHost);
             var focusedAfterChange = Assert.IsType<Button>(window.FocusManager?.GetFocusedElement());
             var buttonsAfterChange = Descendants(pageHost).OfType<Button>()
                 .Where(button => button.IsEnabled && button.IsEffectivelyVisible).ToArray();
             Assert.True(buttonsAfterChange[focusIndex].IsFocused);
 
             Assert.False(window.ApplyProbeProgress([snapshot], [snapshot.RouteTag]));
-            Assert.Same(changedPage, Assert.Single(pageHost.Children));
+            Assert.Same(changedPage, ActivePage(pageHost));
             Assert.Same(focusedAfterChange, window.FocusManager?.GetFocusedElement());
         }
         finally
@@ -683,8 +850,12 @@ public sealed class HomeWindowTests
 
             var country = Assert.Single(Descendants(page).OfType<Button>(), button =>
                 AutomationProperties.GetAutomationId(button) == "RouteCountry-NL");
-            country.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Dispatcher.UIThread.RunJobs();
+            if (!Descendants(page).OfType<Button>().Any(button =>
+                    AutomationProperties.GetAutomationId(button) == "RouteCountryRefresh-NL"))
+            {
+                country.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Dispatcher.UIThread.RunJobs();
+            }
 
             var refresh = Assert.Single(Descendants(Required<Grid>(window, "PageHost")).OfType<Button>(), button =>
                 AutomationProperties.GetAutomationId(button) == "RouteCountryRefresh-NL");
@@ -699,8 +870,276 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaTheory]
-    [InlineData(720d, "BottomHomeNav")]
-    [InlineData(1360d, "BottomHomeNav")]
+    [InlineData(720d, false, 0)]
+    [InlineData(1360d, true, 2)]
+    public void Routes_explain_when_Amnezia_profile_is_missing(double width, bool amneziaActive,
+        int activeAmneziaClients)
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, amneziaActive: amneziaActive,
+            amneziaClients: activeAmneziaClients))
+        {
+            Width = width,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            var pageText = string.Join(" | ", Descendants(page).OfType<TextBlock>().Select(text => text.Text));
+            Assert.Contains("amneziawg", pageText.ToLowerInvariant());
+            Assert.Contains(Descendants(page).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "AmneziaRefreshProfile");
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d)]
+    [InlineData(1360d)]
+    public void Routes_do_not_repeat_Amnezia_status_card_when_profile_is_available(double width)
+    {
+        var window = new MainWindow(Fixture(tab: "routes", signedIn: true, includeAmneziaRoute: true))
+        {
+            Width = width,
+            Height = 820,
+        };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var page = Required<Grid>(window, "PageHost");
+            var pageText = string.Join(" | ", Descendants(page).OfType<TextBlock>().Select(text => text.Text));
+            Assert.DoesNotContain(Descendants(page).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "AmneziaRefreshProfile");
+            Assert.DoesNotContain("профиль amneziawg доступен в списке маршрутов ниже", pageText.ToLowerInvariant());
+            var germanyHeader = Descendants(page).OfType<Button>().Single(button =>
+                AutomationProperties.GetAutomationId(button) == "RouteCountry-DE");
+            germanyHeader.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            page = Required<Grid>(window, "PageHost");
+            Assert.Contains(Descendants(page).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "RouteOption-de-awg31");
+            Assert.Contains(Descendants(page).OfType<TextBlock>(), text =>
+                text.Text?.Contains("amneziawg 3.1", StringComparison.OrdinalIgnoreCase) == true);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(520d, 480d)]
+    [InlineData(1360d, 820d)]
+    public async Task Information_dialog_uses_compact_acknowledgement_and_restores_focus(double width, double height)
+    {
+        var window = new MainWindow(Fixture()) { Width = width, Height = height };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var homeButton = Required<Button>(window, "TopHomeNav");
+            Assert.True(homeButton.Focus());
+
+            var showInfo = typeof(MainWindow).GetMethod("ShowInfoInShellAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(showInfo);
+            var dialogTask = showInfo!.Invoke(window,
+                ["Текущее подключение", "Проверка подключения завершена. Диагностика показывает доступность выбранного маршрута, но не гарантирует доступ к каждому сайту. Текущий внешний IP: 203.0.113.8. Если соединение не работает, выберите другой маршрут и повторите проверку.", null]) as Task
+                ?? throw new InvalidOperationException("ShowInfoInShellAsync did not return a task.");
+            Dispatcher.UIThread.RunJobs();
+
+            var overlay = Required<Grid>(window, "ModalOverlayHost");
+            var closeAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "DialogCloseAction");
+            var card = Assert.Single(Descendants(overlay).OfType<Border>(), border =>
+                border.Child is StackPanel);
+            Assert.InRange(card.Bounds.Width, 300, 456);
+            Assert.Equal(44, closeAction.Bounds.Height);
+            Assert.True(closeAction.IsFocused);
+            Assert.Contains(Descendants(overlay).OfType<TextBlock>(), text =>
+                text.Text?.Contains("не гарантирует доступ к каждому сайту", StringComparison.OrdinalIgnoreCase) == true &&
+                text.TextWrapping == Avalonia.Media.TextWrapping.Wrap);
+
+            SaveSnapshotIfRequested(window, $"connection-info-{(int)width}.png");
+
+            closeAction.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await dialogTask.WaitAsync(TimeSpan.FromSeconds(3));
+
+            Assert.False(overlay.IsVisible);
+            Assert.True(homeButton.IsFocused);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(520d, false)]
+    [InlineData(1360d, true)]
+    public async Task Confirmation_dialog_preserves_cancel_and_confirm_results(double width, bool accept)
+    {
+        var window = new MainWindow(Fixture()) { Width = width, Height = 540 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var showConfirm = typeof(MainWindow).GetMethod("ConfirmInShellAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(showConfirm);
+            var dialogTask = showConfirm!.Invoke(window,
+                ["Показывать ваш примерный регион?", "Точка определяется по публичному IP и не влияет на выбор маршрута.",
+                    "Показывать на карте", "не сейчас"]) as Task<bool>
+                ?? throw new InvalidOperationException("ConfirmInShellAsync did not return a task.");
+            Dispatcher.UIThread.RunJobs();
+
+            var overlay = Required<Grid>(window, "ModalOverlayHost");
+            var cancelAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "DialogCancelAction");
+            var confirmAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "DialogConfirmAction");
+            Assert.True(cancelAction.IsFocused);
+            (accept ? confirmAction : cancelAction).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(accept, await dialogTask.WaitAsync(TimeSpan.FromSeconds(3)));
+            Assert.False(overlay.IsVisible);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaTheory]
+    [InlineData(520d, 480d)]
+    [InlineData(1360d, 820d)]
+    public async Task Active_vpn_notice_uses_responsive_actions_and_scrollable_copy(double width, double height)
+    {
+        var window = new MainWindow(Fixture()) { Width = width, Height = height };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var detected = new[]
+            {
+                new WindowsExternalVpnObservation("WireGuard", ["VPN interface detected"], ["WireGuardManager"]),
+            };
+            var layout = window.BuildActiveVpnNoticeContent(detected, includeStopButton: true,
+                includeWindowsSettingsButton: true);
+            var pageHost = Required<Grid>(window, "PageHost");
+            var homeMap = Assert.Single(Descendants(pageHost).OfType<RouteGlobeWebView>());
+            var showContent = typeof(MainWindow).GetMethod("ShowContentInShellAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(showContent);
+            var dialogTask = showContent!.Invoke(window,
+                ["Активные VPN-службы", layout.Content, 560d, null, layout.Actions]) as Task<object?>
+                ?? throw new InvalidOperationException("ShowContentInShellAsync did not return a task.");
+            Dispatcher.UIThread.RunJobs();
+
+            var overlay = Required<Grid>(window, "ModalOverlayHost");
+            var header = Required<Border>(window, "WorkspaceHeader");
+            var closeWindow = Required<Button>(window, "CloseWindowButton");
+            var card = Assert.Single(Descendants(overlay).OfType<Border>(), border =>
+                border.Child is StackPanel);
+            var closeAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "DialogCloseButton");
+            var stopAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "ExternalVpnStop");
+            var settingsAction = Assert.Single(Descendants(overlay).OfType<Button>(), button =>
+                AutomationProperties.GetAutomationId(button) == "ExternalVpnSettings");
+            var body = Assert.Single(Descendants(overlay).OfType<ScrollViewer>());
+            Assert.InRange(card.Bounds.Width, 300, 560);
+            Assert.True(overlay.Bounds.Height > 0, $"Modal host has no visible area: {overlay.Bounds}.");
+            Assert.True(card.Bounds.Height > 0, $"Modal card has no visible area: {card.Bounds}.");
+            Assert.True(header.IsEffectivelyVisible);
+            Assert.True(closeWindow.IsEffectivelyVisible);
+            Assert.True(closeWindow.IsEnabled);
+            Assert.Equal(44, stopAction.Bounds.Height);
+            Assert.Equal(44, settingsAction.Bounds.Height);
+            Assert.Equal(Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                body.HorizontalScrollBarVisibility);
+            Assert.Contains(Descendants(overlay).OfType<TextBlock>(), text =>
+                text.Text?.Contains("не отключает службы без вашего выбора", StringComparison.OrdinalIgnoreCase) == true);
+            Assert.True(layout.ContinueButton.IsEnabled);
+            Assert.True(layout.ContinueButton.IsEffectivelyVisible);
+            Assert.True(stopAction.IsEffectivelyVisible);
+            Assert.True(settingsAction.IsEffectivelyVisible);
+            if (height < 600)
+                Assert.True(body.MaxHeight <= 200, $"Dialog body did not reserve footer space: {body.MaxHeight}.");
+            Assert.True(closeAction.IsFocused);
+            SaveSnapshotIfRequested(window, $"active-vpn-notice-{(int)width}.png");
+
+            closeAction.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await dialogTask.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.False(overlay.IsVisible);
+            Assert.Same(homeMap, Assert.Single(Descendants(pageHost).OfType<RouteGlobeWebView>()));
+            Assert.True(homeMap.HostActive);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Short_window_dialog_keeps_footer_reachable_by_scrolling()
+    {
+        var window = new MainWindow(Fixture(tab: "settings"))
+            { Width = 520, MinHeight = 320, Height = 320 };
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+            var method = typeof(MainWindow).GetMethod("ShowInfoInShellAsync",
+                BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var task = (Task)method.Invoke(window,
+                ["Подробности", string.Join("\n", Enumerable.Repeat("Длинное описание ошибки подключения.", 30)), "Закрыть"] )!;
+            Dispatcher.UIThread.RunJobs();
+            var overlay = Required<Grid>(window, "ModalOverlayHost");
+            var footer = Descendants(overlay).OfType<Button>().Single(button =>
+                AutomationProperties.GetAutomationId(button) == "DialogCloseAction");
+            var scroller = footer.GetVisualAncestors().OfType<ScrollViewer>().First();
+            Assert.True(scroller.Bounds.Height <= window.Bounds.Height - 44);
+            scroller.ScrollToEnd();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(IsFullyWithinViewport(footer, scroller));
+            footer.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+            await task.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.False(overlay.IsVisible);
+        }
+        finally { window.Close(); }
+    }
+
+    private static void SaveSnapshotIfRequested(Window window, string fileName)
+    {
+        if (Environment.GetEnvironmentVariable("DEYTT_UI_SNAPSHOT_DIR") is not { Length: > 0 } snapshotDirectory)
+            return;
+
+        Directory.CreateDirectory(snapshotDirectory);
+        AvaloniaHeadlessPlatform.ForceRenderTimerTick(2);
+        Dispatcher.UIThread.RunJobs();
+        using var bitmap = window.GetLastRenderedFrame()
+            ?? throw new InvalidOperationException("The headless window did not render a frame.");
+        var snapshotPath = Path.Combine(snapshotDirectory, fileName);
+        using (var file = File.Create(snapshotPath))
+            bitmap.Save(file, PngBitmapEncoderOptions.Default);
+        Assert.True(new FileInfo(snapshotPath).Length > 0, "The headless snapshot was empty.");
+    }
+
+    [AvaloniaTheory]
+    [InlineData(720d, "TopHomeNav")]
+    [InlineData(1360d, "TopHomeNav")]
     public void Pending_route_focus_restore_does_not_override_navigation(double width, string homeNavigationName)
     {
         var window = new MainWindow(Fixture(tab: "routes", signedIn: true)) { Width = width, Height = 820 };
@@ -728,7 +1167,7 @@ public sealed class HomeWindowTests
     [AvaloniaTheory]
     [InlineData(720d, 520d)]
     [InlineData(1440d, 900d)]
-    public void Signed_in_profile_renews_after_the_subscription_card_at_supported_widths(
+    public void Signed_in_profile_keeps_one_tariff_action_in_the_expected_hierarchy(
         double width, double height)
     {
         var window = new MainWindow(Fixture(tab: "profile", signedIn: true))
@@ -742,19 +1181,23 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var pageHost = Required<Grid>(window, "PageHost");
-            var renewalRow = Assert.Single(Descendants(pageHost).OfType<Border>(), border =>
-                AutomationProperties.GetAutomationId(border) == "ProfileRenewalRow");
-            Assert.Contains(Descendants(renewalRow).OfType<TextBlock>(),
-                text => text.Text == "продлить подписку");
+            var tariffActions = Descendants(pageHost).OfType<Button>()
+                .Where(button => Descendants(button).OfType<TextBlock>()
+                    .Any(text => text.Text == "тарифы и оплата"))
+                .ToArray();
+            var tariffAction = Assert.Single(tariffActions);
+            var tariffRow = Assert.IsType<Border>(tariffAction.GetVisualParent());
             var subscriptionHeading = Descendants(pageHost).OfType<TextBlock>()
                 .Single(text => text.Text == "подписка");
             var pageScroll = Required<ScrollViewer>(window, "PageScroll");
-            var renewalTop = renewalRow.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
+            var tariffTop = tariffRow.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
             var subscriptionTop = subscriptionHeading.TranslatePoint(new Point(0, 0), pageScroll)!.Value.Y;
 
-            Assert.True(renewalRow.IsEffectivelyVisible);
-            Assert.True(IsFullyWithinViewport(renewalRow, pageScroll));
-            Assert.True(renewalTop > subscriptionTop);
+            Assert.True(tariffAction.IsEffectivelyVisible);
+            pageScroll.ScrollToEnd();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(IsFullyWithinViewport(tariffRow, pageScroll));
+            Assert.True(subscriptionTop < tariffTop);
         }
         finally
         {
@@ -774,11 +1217,16 @@ public sealed class HomeWindowTests
             var pageScroll = Required<ScrollViewer>(window, "PageScroll");
             Assert.True(pageScroll.BringIntoViewOnFocusChange);
             var pageHost = Required<Grid>(window, "PageHost");
+            var subscriptionHeader = Descendants(pageHost).OfType<Button>().Single(button =>
+                Descendants(button).OfType<TextBlock>().Any(text => text.Text == "подписка"));
+            subscriptionHeader.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Dispatcher.UIThread.RunJobs();
+
+            pageHost = Required<Grid>(window, "PageHost");
             var loginAction = Descendants(pageHost).OfType<Button>()
                 .Single(button => Descendants(button).OfType<TextBlock>()
                     .Any(text => text.Text == "войти через telegram"));
             var loginRow = Assert.IsType<Border>(loginAction.GetVisualParent());
-            Assert.True(IsFullyWithinViewport(loginRow, pageScroll), "Login action should start fully visible at 720x520.");
             pageScroll.ScrollToEnd();
             Dispatcher.UIThread.RunJobs();
             Assert.True(pageScroll.Offset.Y > 0);
@@ -801,7 +1249,7 @@ public sealed class HomeWindowTests
     [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
-    public void Unlimited_profile_shows_total_transferred_without_quota_usage_or_percentage(double width)
+    public void Unlimited_profile_shows_used_traffic_without_quota_or_percentage(double width)
     {
         var subscription = ProfileSubscription(trafficLimit: null, trafficUsed: 64L * 1024 * 1024,
             trafficTotal: 128L * 1024 * 1024);
@@ -816,9 +1264,10 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var summary = ProfileSummary(window);
-            Assert.Contains("передано: 128 mb", summary);
-            Assert.Contains("без установленного лимита", summary);
-            Assert.DoesNotContain("64 mb /", summary);
+            Assert.Contains("использовано 64 мб", summary);
+            Assert.Contains("без лимита", summary);
+            Assert.DoesNotContain("128 мб", summary);
+            Assert.DoesNotContain("64 мб из", summary);
             Assert.DoesNotContain('%', summary);
         }
         finally
@@ -830,7 +1279,7 @@ public sealed class HomeWindowTests
     [AvaloniaTheory]
     [InlineData(720d)]
     [InlineData(1360d)]
-    public void Unlimited_profile_hides_transfer_line_when_usage_is_zero(double width)
+    public void Unlimited_profile_shows_zero_used_traffic_and_no_quota(double width)
     {
         var subscription = ProfileSubscription(trafficLimit: null, trafficUsed: 0, trafficTotal: null);
         var window = new MainWindow(Fixture(tab: "profile", signedIn: true, profileSubscription: subscription))
@@ -844,8 +1293,10 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var summary = ProfileSummary(window);
+            Assert.Contains("трафик", summary);
+            Assert.Contains("использовано 0 б", summary);
+            Assert.Contains("без лимита", summary);
             Assert.DoesNotContain("передано:", summary);
-            Assert.DoesNotContain("без установленного лимита", summary);
         }
         finally
         {
@@ -871,8 +1322,8 @@ public sealed class HomeWindowTests
             Dispatcher.UIThread.RunJobs();
 
             var summary = ProfileSummary(window);
-            Assert.Contains("512 mb / 1 gb", summary);
-            Assert.DoesNotContain("без установленного лимита", summary);
+            Assert.Contains("использовано 512 мб из 1 гб", summary);
+            Assert.DoesNotContain("без лимита", summary);
             Assert.DoesNotContain('%', summary);
         }
         finally
@@ -881,12 +1332,44 @@ public sealed class HomeWindowTests
         }
     }
 
+    [Fact]
+    public void Subscription_expiry_highlight_includes_exactly_eight_days()
+    {
+        var now = DateTimeOffset.Parse("2026-10-11T12:00:00Z");
+
+        Assert.True(MainWindow.SubscriptionExpiryNeedsHighlight(now.AddDays(8), now));
+        Assert.False(MainWindow.SubscriptionExpiryNeedsHighlight(now.AddDays(8).AddTicks(1), now));
+        Assert.True(MainWindow.SubscriptionExpiryNeedsHighlight(now.AddTicks(-1), now));
+        Assert.False(MainWindow.SubscriptionExpiryNeedsHighlight(null, now));
+    }
+
+    [Fact]
+    public void Device_limit_highlight_requires_a_positive_reached_limit()
+    {
+        Assert.True(MainWindow.SubscriptionDeviceLimitReached(10, 10));
+        Assert.True(MainWindow.SubscriptionDeviceLimitReached(11, 10));
+        Assert.False(MainWindow.SubscriptionDeviceLimitReached(9, 10));
+        Assert.False(MainWindow.SubscriptionDeviceLimitReached(10, null));
+        Assert.False(MainWindow.SubscriptionDeviceLimitReached(10, 0));
+    }
+
+    [Theory]
+    [InlineData("ultra", "deytt. ultra")]
+    [InlineData("DEYTT.Ultra", "deytt. ultra")]
+    [InlineData(" deytt./ultra ", "deytt. ultra")]
+    [InlineData("Standard", "Standard")]
+    public void Tariff_display_name_normalizes_ultra_aliases(string input, string expected)
+    {
+        Assert.Equal(expected, MainWindow.NormalizeTariffDisplayName(input));
+    }
+
     private static QaHomeFixture Fixture(string tab = "home", bool signedIn = false,
         bool routeProbeInProgress = false, TelegramSubscription? profileSubscription = null,
         string selectedRoute = "nl-hysteria2",
-        string state = "disconnected", string? expandedRouteCountry = null)
+        string state = "disconnected", string? expandedRouteCountry = null,
+        bool amneziaActive = false, int amneziaClients = 0, bool includeAmneziaRoute = false)
     {
-        var routes = new[]
+        var routes = new List<WindowsRoute>
         {
             new WindowsRoute("auto", "qa:auto", "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
             new WindowsRoute("ru-de", "qa:ru-de", "RU-DE", "Россия → Германия", "🇷🇺→🇩🇪", "CHAIN", "RU → DE"),
@@ -903,12 +1386,15 @@ public sealed class HomeWindowTests
             new WindowsRoute("fi-trojan", "qa:fi-trojan", "FI", "Финляндия", "🇫🇮", "TROJAN", "Trojan"),
             new WindowsRoute("fi-hysteria2", "qa:fi-hysteria2", "FI", "Финляндия", "🇫🇮", "HYSTERIA2", "Hysteria 2"),
         };
+        if (includeAmneziaRoute)
+            routes.Add(new WindowsRoute("de-awg31", "qa:de-awg31", "DE", "Германия", "🇩🇪", "AWG31",
+                "AmneziaWG 3.1"));
         var account = signedIn
             ? new TelegramAccount("qa_fixture", "QA Demo", false,
                 profileSubscription ?? ProfileSubscription(trafficLimit: null, trafficUsed: null, trafficTotal: null))
             : null;
         var subscription = signedIn
-            ? new TelegramKeysSnapshot(true, false, 0,
+            ? new TelegramKeysSnapshot(true, amneziaActive, amneziaClients,
                 [new TelegramHappDevice(0, false, "QA fixture", "Synthetic desktop", "now")],
                 "{\"qa_fixture\":true}", routes, [])
             : null;
@@ -937,6 +1423,9 @@ public sealed class HomeWindowTests
     private static string ProfileSummary(MainWindow window) => string.Join(" ",
         Descendants(Required<Grid>(window, "PageHost")).OfType<TextBlock>().Select(text => text.Text));
 
+    private static Control ActivePage(Grid pageHost) => Assert.Single(pageHost.Children.OfType<Control>(),
+        child => child.IsVisible && child.IsHitTestVisible);
+
     private static T Required<T>(Control control, string name) where T : Control =>
         control.FindControl<T>(name) ?? throw new Xunit.Sdk.XunitException($"Missing control: {name}");
 
@@ -957,3 +1446,4 @@ public sealed class HomeWindowTests
         }
     }
 }
+

@@ -1,0 +1,6 @@
+<Include xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Control Id="BrandArt" Type="Bitmap" X="0" Y="0" Width="224" Height="348" Text="SetupSidebar" TabSkip="yes" />
+  <Control Id="Brand" Type="Text" X="62" Y="159" Width="100" Height="30" Text="{\SetupBrand}./connect" Transparent="yes" NoPrefix="yes" />
+  <Control Id="Platform" Type="Text" X="20" Y="316" Width="184" Height="16" Text="{\SetupMutedWhite}WINDOWS · X64" Transparent="yes" NoPrefix="yes" />
+  <Control Id="Divider" Type="Line" X="224" Y="302" Width="344" Height="0" />
+</Include>

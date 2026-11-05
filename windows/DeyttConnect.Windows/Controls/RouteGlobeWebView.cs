@@ -5,13 +5,35 @@ using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
+using DeyttConnect.Protocol;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
 using Microsoft.Web.WebView2.Core;
 
 namespace DeyttConnect.Windows.Controls;
+
+public sealed record HomePresentationSnapshot(
+    string Status,
+    string StatusTone,
+    string? Message,
+    string Country,
+    string City,
+    string Protocol,
+    string CountryCode,
+    string ActionLabel,
+    string Action,
+    bool ActionEnabled,
+    string ActionTone,
+    string? Latency,
+    string? LatencyTone,
+    string? Speed,
+    string? SpeedTone,
+    string? MeasurementLabel,
+    bool MeasurementEnabled = true,
+    string? MeasurementActionLabel = null);
 
 /// <summary>
 /// Hosts the same bundled offline network atlas as Android in a native WebView.
@@ -20,7 +42,7 @@ public sealed class RouteGlobeWebView : ContentControl
 {
     private const string AssetHost = "deytt-atlas.example";
     private static readonly Uri AtlasUri = new($"https://{AssetHost}/index.html");
-    private static readonly Uri WindowsAtlasUri = new($"https://{AssetHost}/index.html?profile=windows");
+    private static readonly Uri WindowsAtlasUri = new($"https://{AssetHost}/index.html?profile=windows&v={typeof(RouteGlobeWebView).Assembly.GetName().Version}");
     private const int MaximumAutomaticRetries = 2;
     private readonly bool _disableNativeInitialization;
     private static readonly string[] RequiredAtlasAssets =
@@ -49,7 +71,13 @@ public sealed class RouteGlobeWebView : ContentControl
     private string? _egressCountryCode;
     private string? _activeAutoRouteKey;
     private bool _trafficActive;
+    private bool _hostActive = true;
     private bool _reducedMotion;
+    private bool _immersiveMode;
+    private bool _darkTheme = true;
+    private HomePresentationSnapshot? _homePresentation;
+    private IReadOnlyList<WindowsRoute>? _routesCatalog;
+    private IReadOnlyDictionary<string, WindowsRouteProbeResult>? _probesCatalog;
     private bool _atlasFailed;
     private string? _atlasErrorReason;
     private bool _attachedToVisualTree;
@@ -57,6 +85,7 @@ public sealed class RouteGlobeWebView : ContentControl
     private bool _statePushQueued;
     private bool _mapRegionUpdateQueued;
     private IntPtr _nativeMapWindowHandle;
+    private CoreWebView2? _coreWebView2;
     private int _appliedMapRegionWidth;
     private int _appliedMapRegionHeight;
     private uint _appliedMapRegionDpi;
@@ -66,6 +95,12 @@ public sealed class RouteGlobeWebView : ContentControl
     private int _webViewGeneration;
     private bool _retryPending;
     private CancellationTokenSource? _atlasReadyTimeout;
+    private CancellationTokenSource? _statePushCancellation;
+    private int _homeResumeRevision;
+    private int _appliedHomeResumeRevision = -1;
+
+    // Allows lifecycle tests to defer a backend response without blocking Chromium.
+    internal Func<string, Task>? StateScriptExecutor { get; set; }
 
     public RouteGlobeWebView() : this(false)
     {
@@ -77,7 +112,6 @@ public sealed class RouteGlobeWebView : ContentControl
         MinHeight = 230;
         ClipToBounds = true;
         Background = Brushes.Transparent;
-        SizeChanged += OnMapSizeChanged;
         AttachedToVisualTree += (_, _) =>
         {
             _attachedToVisualTree = true;
@@ -93,6 +127,8 @@ public sealed class RouteGlobeWebView : ContentControl
         DetachedFromVisualTree += (_, _) =>
         {
             _attachedToVisualTree = false;
+            CancelPendingStatePush();
+            _homeResumeRevision++;
             StopAtlasReadyTimeout();
         };
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
@@ -102,6 +138,230 @@ public sealed class RouteGlobeWebView : ContentControl
 
     /// <summary>Raised when the atlas reports a selectable node code.</summary>
     public event Action<string>? NodeTapped;
+
+    /// <summary>Raised for a small allow-listed set of home-screen actions.</summary>
+    public event Action<string>? HomeActionRequested;
+
+    /// <summary>Raised when the atlas asks the host to enter or leave immersive map mode.</summary>
+    public event Action<bool>? ImmersiveModeRequested;
+
+    /// <summary>Raised when the user switches tabs inside the web presentation.</summary>
+    public event Action<string>? TabChanged;
+
+    /// <summary>Raised when the user selects a route inside the web presentation.</summary>
+    public event Action<string>? RouteSelected;
+
+    /// <summary>Raised when the user requests a route probe for a country.</summary>
+        /// <summary>Raised when the user requests a route probe for a country.</summary>
+    public event Action<string>? CountryProbeRequested;
+
+    public event Action<long>? HappDeviceManagementRequested;
+    public event Action<string>? TelegramSessionManagementRequested;
+    public event Action? SubscriptionKeyCopyRequested;
+    public event Action? SubscriptionRefreshRequested;
+    public event Action? ExitRequested;
+
+    /// <summary>Raised when the user toggles a client setting in the web presentation.</summary>
+    public event Action<string, bool>? SettingToggled;
+
+    /// <summary>Raised when the user clicks check for updates in the web presentation.</summary>
+    public event Action? CheckUpdatesRequested;
+
+    public event Action? SignInRequested;
+    public event Action? RenewRequested;
+    public event Action? SupportRequested;
+    public event Action? ImportRequested;
+    public event Action? LanguagePickerRequested;
+    public event Action? SplitTunnelRequested;
+    public event Action? ProbeMethodRequested;
+    public event Action? ServiceCheckRequested;
+    public event Action? BotRequested;
+
+    internal bool IsNativeInitializationDisabled => _disableNativeInitialization;
+
+    private string _activeTabName = "home";
+
+    public void SetActiveTab(string tab)
+    {
+        if (string.IsNullOrWhiteSpace(tab)) return;
+        _activeTabName = tab.ToLowerInvariant();
+        _ = ExecuteScriptAsync($"window.deyttSwitchStage && window.deyttSwitchStage('{_activeTabName}');");
+    }
+
+    public void UpdateRoutesAndProbes(IReadOnlyList<WindowsRoute>? routes, IReadOnlyDictionary<string, WindowsRouteProbeResult>? probes, string? selectedRouteId)
+    {
+        _routesCatalog = routes;
+        _probesCatalog = probes;
+        if (!string.IsNullOrEmpty(selectedRouteId))
+            _selectedRoute = RouteKeyFor(selectedRouteId);
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null || routes is null) return;
+        var items = routes.Select(r => new
+        {
+            id = r.Id,
+            tag = r.Tag,
+            countryCode = r.CountryCode,
+            countryName = r.CountryName,
+            protocol = r.Protocol,
+            protocolName = r.ProtocolName,
+            latency = probes != null && probes.TryGetValue(r.Tag, out var p) ? p.LatencyMilliseconds : null,
+            speed = probes != null && probes.TryGetValue(r.Tag, out var p2) && p2.BytesPerSecond > 0 ? (long?)(p2.BytesPerSecond.Value * 8 / 1_000_000.0) : null,
+            stage = probes != null && probes.TryGetValue(r.Tag, out var p3) ? p3.Stage : null,
+            error = probes != null && probes.TryGetValue(r.Tag, out var p4) ? p4.Error : null,
+            isSelected = string.Equals(r.Id, selectedRouteId, StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(r.Tag, selectedRouteId, StringComparison.OrdinalIgnoreCase)
+        });
+        var script = $"window.deyttSetRoutesData && window.deyttSetRoutesData({JsonSerializer.Serialize(items)});";
+        _ = ExecuteScriptAsync(script);
+    }
+
+    private string? _profileDataJson;
+    private string? _settingsDataJson;
+    private string? _profileAvatarDataUrl;
+
+    public void UpdateProfileAvatar(string? dataUrl)
+    {
+        if (string.Equals(_profileAvatarDataUrl, dataUrl, StringComparison.Ordinal))
+            return;
+        _profileAvatarDataUrl = dataUrl;
+        PushProfileAvatar();
+    }
+
+    private void PushProfileAvatar()
+    {
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null)
+            return;
+        _ = ExecuteScriptAsync($"window.deyttSetProfileAvatar && window.deyttSetProfileAvatar({JsonSerializer.Serialize(_profileAvatarDataUrl)});");
+    }
+
+    public void UpdateProfileData(
+        bool isSignedIn,
+        string? username,
+        string? displayName,
+        long? telegramId,
+        bool subscriptionActive,
+        string? tariffName,
+        string? expiresFormatted,
+        int? daysRemaining,
+        string? subscriptionKey,
+        IReadOnlyList<object>? devices,
+        IReadOnlyList<object>? sessions,
+        string? sessionsLoadIssue,
+        object mainQuota,
+        object awgQuota)
+    {
+        var payload = new
+        {
+            isSignedIn,
+            username,
+            displayName,
+            telegramId,
+            subscriptionActive,
+            tariffName,
+            expiresFormatted,
+            daysRemaining,
+            subscriptionKey,
+            devices,
+            sessions,
+            sessionsLoadIssue,
+            mainQuota,
+            awgQuota
+        };
+        _profileDataJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        _ = ExecuteScriptAsync($"window.deyttSetProfileData && window.deyttSetProfileData({_profileDataJson});");
+    }
+
+    public void UpdateSettingsData(
+        string language,
+        string? accountUsername,
+        string splitTunnelSummary,
+        string probeMethod,
+        bool vpnServiceAvailable,
+        bool mapRegionEnabled,
+        bool reduceMotion,
+        string appVersion)
+    {
+        var payload = new
+        {
+            language,
+            accountUsername,
+            splitTunnelSummary,
+            probeMethod,
+            vpnServiceAvailable,
+            mapRegionEnabled,
+            reduceMotion,
+            appVersion
+        };
+        _settingsDataJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        _ = ExecuteScriptAsync($"window.deyttSetSettingsData && window.deyttSetSettingsData({_settingsDataJson});");
+    }
+
+    public void PushRouteProbeProgress(WindowsRouteProbeResult probe)
+    {
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null) return;
+        var speedMbps = probe.BytesPerSecond is > 0 ? (long?)(probe.BytesPerSecond.Value * 8 / 1_000_000.0) : null;
+        var script = $"window.deyttUpdateRouteProbe && window.deyttUpdateRouteProbe({JsonSerializer.Serialize(probe.RouteTag)}, {JsonSerializer.Serialize(probe.LatencyMilliseconds)}, {JsonSerializer.Serialize(speedMbps)}, {JsonSerializer.Serialize(probe.Stage)}, {JsonSerializer.Serialize(probe.Error)});";
+        _ = ExecuteScriptAsync(script);
+    }
+
+    public async Task ExecuteScriptAsync(string script)
+    {
+        if (_webView is null) return;
+        try
+        {
+            if (_coreWebView2 is not null)
+                await _coreWebView2.ExecuteScriptAsync(script);
+            else
+                await _webView.InvokeScript(script);
+        }
+        catch
+        {
+            // ignored
+        }
+    }
+
+    public async Task<Bitmap?> CapturePreviewAsync()
+    {
+        if (!OperatingSystem.IsWindows() || !_pageReady || _coreWebView2 is null)
+            return null;
+        try
+        {
+            using var stream = new MemoryStream();
+            await _coreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, stream);
+            stream.Position = 0;
+            return new Bitmap(stream);
+        }
+        catch (Exception error) when (error is InvalidOperationException or IOException or COMException)
+        {
+            System.Diagnostics.Trace.TraceError("Home WebView preview failed: {0}", error.GetType().Name);
+            return null;
+        }
+    }
+
+    public bool DarkTheme
+    {
+        get => _darkTheme;
+        set
+        {
+            if (_darkTheme == value) return;
+            _darkTheme = value;
+            QueueStateUpdate();
+        }
+    }
+
+    /// <summary>Serializable display-only state. Never place credentials or tunnel profiles here.</summary>
+    public HomePresentationSnapshot? HomePresentation
+    {
+        get => _homePresentation;
+        set
+        {
+            if (_homePresentation == value)
+                return;
+            _homePresentation = value;
+            QueueStateUpdate();
+            if (_atlasFailed)
+                ShowAtlasError(_atlasErrorReason ?? "load");
+        }
+    }
 
     /// <summary>Selected atlas route: auto, nl, de, fi, ru, it, or ru-de.</summary>
     public string SelectedRoute
@@ -227,6 +487,30 @@ public sealed class RouteGlobeWebView : ContentControl
         }
     }
 
+    /// <summary>Pauses rendering while the retained home page is hidden.</summary>
+    public bool HostActive
+    {
+        get => _hostActive;
+        set
+        {
+            if (_hostActive == value)
+                return;
+            CancelPendingStatePush();
+            _hostActive = value;
+            if (value) _homeResumeRevision++;
+            QueueStateUpdate();
+        }
+    }
+
+    /// <summary>Resumes the visible Home surface, including a lost backend response.</summary>
+    public void ResumeHost()
+    {
+        CancelPendingStatePush();
+        _hostActive = true;
+        _homeResumeRevision++;
+        QueueStateUpdate();
+    }
+
     /// <summary>Stops atlas traffic motion and camera easing while enabled.</summary>
     public bool ReducedMotion
     {
@@ -236,6 +520,18 @@ public sealed class RouteGlobeWebView : ContentControl
             if (_reducedMotion == value)
                 return;
             _reducedMotion = value;
+            QueueStateUpdate();
+        }
+    }
+
+    public bool ImmersiveMode
+    {
+        get => _immersiveMode;
+        set
+        {
+            if (_immersiveMode == value)
+                return;
+            _immersiveMode = value;
             QueueStateUpdate();
         }
     }
@@ -325,7 +621,10 @@ public sealed class RouteGlobeWebView : ContentControl
                     return;
                 }
 
-                webView2UserDataFolder = Path.Combine(localAppData, "DEYTT", "Connect", "WebView2");
+var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USER_DATA_FOLDER");
+                webView2UserDataFolder = string.IsNullOrWhiteSpace(qaUserDataFolder)
+                    ? Path.Combine(localAppData, "DEYTT", "Connect", "WebView2")
+                    : Path.GetFullPath(qaUserDataFolder);
                 Directory.CreateDirectory(webView2UserDataFolder);
             }
 
@@ -389,9 +688,9 @@ public sealed class RouteGlobeWebView : ContentControl
                 _appliedMapRegionWidth = 0;
                 _appliedMapRegionHeight = 0;
                 _appliedMapRegionDpi = 0;
-                QueueRoundedMapRegionUpdate();
                 SetTransparentWebViewBackground(handle.CoreWebView2Controller);
                 var coreWebView2 = CoreWebView2.CreateFromComICoreWebView2(handle.CoreWebView2);
+                _coreWebView2 = coreWebView2;
                 coreWebView2.SetVirtualHostNameToFolderMapping(
                     AssetHost,
                     AtlasAssetDirectory,
@@ -532,6 +831,7 @@ public sealed class RouteGlobeWebView : ContentControl
     {
         if (ReferenceEquals(sender, _webView))
         {
+            CancelPendingStatePush();
             _nativeMapWindowHandle = IntPtr.Zero;
             _mapRegionUpdateQueued = false;
             _appliedMapRegionWidth = 0;
@@ -561,6 +861,8 @@ public sealed class RouteGlobeWebView : ContentControl
             args.Cancel = true;
         else if (request == _atlasUri)
         {
+            CancelPendingStatePush();
+            _appliedHomeResumeRevision = -1;
             _pageReady = false;
             StopAtlasReadyTimeout();
         }
@@ -591,7 +893,7 @@ public sealed class RouteGlobeWebView : ContentControl
     private void OnWebMessageReceived(object? sender, WebMessageReceivedEventArgs args)
     {
         var body = args.Body;
-        if (_atlasFailed || !ReferenceEquals(sender, _webView) || body is null || body.Length > 128)
+        if (_atlasFailed || !ReferenceEquals(sender, _webView) || body is null || body.Length > 4096)
             return;
 
         var node = body.Trim();
@@ -607,7 +909,8 @@ public sealed class RouteGlobeWebView : ContentControl
             }
         }
 
-        node = node.Trim().ToLowerInvariant();
+        var originalNode = node.Trim();
+        node = originalNode.ToLowerInvariant();
         if (node == "atlas-ready")
         {
             Dispatcher.UIThread.Post(() =>
@@ -618,6 +921,7 @@ public sealed class RouteGlobeWebView : ContentControl
                 StopAtlasReadyTimeout();
                 _pageReady = true;
                 QueueStateUpdate();
+                PushProfileAvatar();
             });
             return;
         }
@@ -626,12 +930,211 @@ public sealed class RouteGlobeWebView : ContentControl
             Dispatcher.UIThread.Post(() => HandleAtlasFailure("load"));
             return;
         }
+        if (node is "deytt:immersive:enter" or "deytt:immersive:exit")
+        {
+            var enabled = node.EndsWith(":enter", StringComparison.Ordinal);
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    ImmersiveModeRequested?.Invoke(enabled);
+            });
+            return;
+        }
+        if (node is "home-connect" or "home-disconnect" or "home-cancel" or "home-routes" or "home-profile" or "home-settings" or "home-measure")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    HomeActionRequested?.Invoke(node);
+            });
+            return;
+        }
+        if (node == "window:minimize")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (TopLevel.GetTopLevel(this) is Window window)
+                    window.WindowState = WindowState.Minimized;
+            });
+            return;
+        }
+        if (node == "window:maximize")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (TopLevel.GetTopLevel(this) is Window window)
+                    window.WindowState = window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+            });
+            return;
+        }
+        if (node == "window:close")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_atlasFailed || !ReferenceEquals(sender, _webView))
+                    return;
+                if (TopLevel.GetTopLevel(this) is Window window)
+                {
+                    if (ExitRequested is { } exitRequested)
+                        exitRequested();
+                    else
+                        window.Close();
+                }
+            });
+            return;
+        }
+        if (node.StartsWith("tab:", StringComparison.Ordinal))
+        {
+            var tabName = node["tab:".Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    TabChanged?.Invoke(tabName);
+            });
+            return;
+        }
+        if (node.StartsWith("route:select:", StringComparison.Ordinal))
+        {
+            var routeKey = node["route:select:".Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    RouteSelected?.Invoke(routeKey);
+            });
+            return;
+        }
+        if (node.StartsWith("route:probe:country:", StringComparison.Ordinal))
+        {
+            var countryCode = node["route:probe:country:".Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    CountryProbeRequested?.Invoke(countryCode);
+            });
+            return;
+        }
+                if (node == "profile:signin" || node == "settings:signin")
+        {
+            Dispatcher.UIThread.Post(() => SignInRequested?.Invoke());
+            return;
+        }
+        if (node == "profile:support")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SupportRequested?.Invoke();
+            });
+            return;
+        }
+        if (node is "routes:refresh:subscription" or "subscription:refresh" or "routes-refresh-subscription")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SubscriptionRefreshRequested?.Invoke();
+            });
+            return;
+        }
+        if (node == "profile:renew")
+        {
+            Dispatcher.UIThread.Post(() => RenewRequested?.Invoke());
+            return;
+        }
+        if (node == "profile:copy_key")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SubscriptionKeyCopyRequested?.Invoke();
+            });
+            return;
+        }
+        const string deviceManagementPrefix = "profile:device:manage:";
+        if (node.StartsWith(deviceManagementPrefix, StringComparison.Ordinal) &&
+            long.TryParse(node.AsSpan(deviceManagementPrefix.Length), out var deviceId) && deviceId > 0)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    HappDeviceManagementRequested?.Invoke(deviceId);
+            });
+            return;
+        }
+        const string sessionManagementPrefix = "profile:session:manage:";
+        if (node.StartsWith(sessionManagementPrefix, StringComparison.Ordinal))
+        {
+            // Session identifiers are opaque server values; keep their original casing.
+            var sessionId = originalNode[sessionManagementPrefix.Length..];
+            if (sessionId.Length is > 0 and <= 256)
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                        TelegramSessionManagementRequested?.Invoke(sessionId);
+                });
+            return;
+        }
+        if (node == "profile:import" || node == "settings:import")
+        {
+            Dispatcher.UIThread.Post(() => ImportRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:language")
+        {
+            Dispatcher.UIThread.Post(() => LanguagePickerRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:splittunnel")
+        {
+            Dispatcher.UIThread.Post(() => SplitTunnelRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:probemethod")
+        {
+            Dispatcher.UIThread.Post(() => ProbeMethodRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:service")
+        {
+            Dispatcher.UIThread.Post(() => ServiceCheckRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:bot")
+        {
+            Dispatcher.UIThread.Post(() => BotRequested?.Invoke());
+            return;
+        }
+        if (node == "settings:check_updates")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    CheckUpdatesRequested?.Invoke();
+            });
+            return;
+        }
+        if (node.StartsWith("settings:set:", StringComparison.Ordinal))
+        {
+            var payload = node["settings:set:".Length..];
+            var colon = payload.IndexOf(':');
+            if (colon > 0)
+            {
+                var key = payload[..colon];
+                var val = bool.TryParse(payload[(colon + 1)..], out var b) && b;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                        SettingToggled?.Invoke(key, val);
+                });
+            }
+            return;
+        }
         if (!TapKeys.Contains(node))
             return;
 
         Dispatcher.UIThread.Post(() =>
         {
-            if (!_atlasFailed)
+            if (!_atlasFailed && ReferenceEquals(sender, _webView))
                 NodeTapped?.Invoke(node);
         });
     }
@@ -642,24 +1145,42 @@ public sealed class RouteGlobeWebView : ContentControl
         if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null || _statePushQueued)
             return;
 
+        var webView = _webView;
+        var core = _coreWebView2;
+        var generation = _webViewGeneration;
+        var cancellation = new CancellationTokenSource();
+        var token = cancellation.Token;
+        _statePushCancellation = cancellation;
         _statePushQueued = true;
+        bool Current() => ReferenceEquals(_statePushCancellation, cancellation) &&
+            ReferenceEquals(_webView, webView) && generation == _webViewGeneration &&
+            !_atlasFailed && _attachedToVisualTree && _pageReady;
         Dispatcher.UIThread.Post(async () =>
         {
             try
             {
-                var webView = _webView;
-                while (webView is not null && !_atlasFailed && _attachedToVisualTree && _pageReady)
+                while (Current())
                 {
                     var revision = _stateRevision;
-                    await webView.InvokeScript(BuildStateScript());
+                    var resumeRevision = _homeResumeRevision;
+                    var script = BuildStateScript();
+                    // Use the current Windows core directly; a framework bridge
+                    // response from a hidden/destroyed adapter must not block Home.
+                    Task invocation = StateScriptExecutor is { } executor ? executor(script)
+                        : core is not null ? core.ExecuteScriptAsync(script)
+                        : webView.InvokeScript(script);
+                    await invocation.WaitAsync(TimeSpan.FromSeconds(2), token);
+                    if (!Current()) return;
                     _appliedRevision = revision;
+                    _appliedHomeResumeRevision = resumeRevision;
                     if (revision == _stateRevision)
                         break;
                 }
             }
+            catch (OperationCanceledException) when (token.IsCancellationRequested) { }
             catch (Exception exception)
             {
-                if (_attachedToVisualTree && _pageReady)
+                if (Current())
                 {
                     System.Diagnostics.Trace.TraceError("Atlas state update failed: {0}", exception.GetType().Name);
                     HandleAtlasFailure("load");
@@ -667,11 +1188,24 @@ public sealed class RouteGlobeWebView : ContentControl
             }
             finally
             {
-                _statePushQueued = false;
-                if (_attachedToVisualTree && _pageReady && _appliedRevision != _stateRevision)
-                    QueueStateUpdate();
+                if (ReferenceEquals(_statePushCancellation, cancellation))
+                {
+                    _statePushCancellation = null;
+                    _statePushQueued = false;
+                    if (_attachedToVisualTree && _pageReady && _appliedRevision != _stateRevision)
+                        QueueStateUpdate();
+                }
+                cancellation.Dispose();
             }
         });
+    }
+
+    private void CancelPendingStatePush()
+    {
+        var cancellation = _statePushCancellation;
+        _statePushCancellation = null;
+        _statePushQueued = false;
+        cancellation?.Cancel();
     }
 
     private void StartAtlasReadyTimeout(NativeWebView webView)
@@ -754,6 +1288,8 @@ public sealed class RouteGlobeWebView : ContentControl
 
     private void DetachCurrentWebView()
     {
+        CancelPendingStatePush();
+        _appliedHomeResumeRevision = -1;
         StopAtlasReadyTimeout();
         if (_webView is not { } webView)
             return;
@@ -767,14 +1303,19 @@ public sealed class RouteGlobeWebView : ContentControl
         if (ReferenceEquals(Content, webView))
             Content = null;
         _webView = null;
+        _coreWebView2 = null;
         _pageReady = false;
     }
 
     private string BuildStateScript()
     {
         var script = new StringBuilder();
+        if (!_hostActive)
+            return "window.deyttSetMapHostActive && window.deyttSetMapHostActive(false);";
         if (OperatingSystem.IsWindows())
             script.AppendLine("window.invokeCSharpAction = function(node) { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(String(node || '')); };");
+        script.Append("window.deyttSetMapTheme && window.deyttSetMapTheme(")
+            .Append(JsonSerializer.Serialize(_darkTheme ? "dark" : "light")).AppendLine(");");
         script.Append("window.deyttSetMapRoute && window.deyttSetMapRoute(")
             .Append(JsonSerializer.Serialize(_selectedRoute)).AppendLine(");");
         script.Append("window.deyttSetMapLanguage && window.deyttSetMapLanguage(")
@@ -806,6 +1347,40 @@ public sealed class RouteGlobeWebView : ContentControl
             .Append(_trafficActive ? "true" : "false").AppendLine(");");
         script.Append("window.deyttSetMapReducedMotion && window.deyttSetMapReducedMotion(")
             .Append(_reducedMotion ? "true" : "false").AppendLine(");");
+        script.Append("window.deyttSetMapImmersive && window.deyttSetMapImmersive(")
+            .Append(_immersiveMode ? "true" : "false").AppendLine(");");
+        script.Append("window.deyttSetHomePresentation && window.deyttSetHomePresentation(")
+            .Append(JsonSerializer.Serialize(_homePresentation, new JsonSerializerOptions(JsonSerializerDefaults.Web)))
+            .AppendLine(");");
+        if (_routesCatalog is { } catalog)
+        {
+            var items = catalog.Select(r => new
+            {
+                id = r.Id,
+                tag = r.Tag,
+                countryCode = r.CountryCode,
+                countryName = r.CountryName,
+                protocol = r.Protocol,
+                protocolName = r.ProtocolName,
+                latency = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p) ? p.LatencyMilliseconds : null,
+                speed = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p2) && p2.BytesPerSecond > 0 ? (long?)(p2.BytesPerSecond.Value * 8 / 1_000_000.0) : null,
+                stage = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p3) ? p3.Stage : null,
+                error = _probesCatalog != null && _probesCatalog.TryGetValue(r.Tag, out var p4) ? p4.Error : null,
+                isSelected = string.Equals(r.Id, _selectedRoute, StringComparison.OrdinalIgnoreCase) ||
+                             string.Equals(r.Tag, _selectedRoute, StringComparison.OrdinalIgnoreCase)
+            });
+            script.Append("window.deyttSetRoutesData && window.deyttSetRoutesData(")
+                .Append(JsonSerializer.Serialize(items)).AppendLine(");");
+        }
+                if (!string.IsNullOrEmpty(_profileDataJson))
+            script.AppendLine($"window.deyttSetProfileData && window.deyttSetProfileData({_profileDataJson});");
+        if (!string.IsNullOrEmpty(_settingsDataJson))
+            script.AppendLine($"window.deyttSetSettingsData && window.deyttSetSettingsData({_settingsDataJson});");
+        script.AppendLine("window.deyttSetMapHostActive && window.deyttSetMapHostActive(true);");
+        if (_homeResumeRevision != _appliedHomeResumeRevision)
+            script.AppendLine("window.deyttResumeMap && window.deyttResumeMap();");
+        script.Append("window.deyttSwitchStage && window.deyttSwitchStage(")
+            .Append(JsonSerializer.Serialize(_activeTabName)).AppendLine(");");
         return script.ToString();
     }
 
@@ -839,9 +1414,9 @@ public sealed class RouteGlobeWebView : ContentControl
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
             Padding = new Avalonia.Thickness(13, 7),
             CornerRadius = new Avalonia.CornerRadius(10),
-            Foreground = Brushes.White,
-            Background = new SolidColorBrush(Avalonia.Media.Color.Parse("#24354B")),
-            BorderBrush = new SolidColorBrush(Avalonia.Media.Color.Parse("#49627E")),
+            Foreground = DeyttTheme.Brush(DeyttTheme.Text),
+            Background = DeyttTheme.Brush(DeyttTheme.Surface2),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
             BorderThickness = new Avalonia.Thickness(1),
         };
         retry.Click += (_, _) => RetryAtlasManually();
@@ -853,23 +1428,23 @@ public sealed class RouteGlobeWebView : ContentControl
         };
         caption.Children.Add(new TextBlock
         {
-            Text = english ? "DEYTT NETWORK ATLAS" : "АТЛАС СЕТИ DEYTT",
-            FontSize = 10,
+            Text = english ? "deytt. · route globe" : "deytt. · глобус маршрута",
+            FontSize = 14,
             FontFamily = DeyttTheme.JetBrainsMono,
-            Foreground = DeyttTheme.Brush(DeyttTheme.Sky),
+            Foreground = DeyttTheme.Brush(DeyttTheme.Muted),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
         });
         caption.Children.Add(new TextBlock
         {
-            Text = summary,
+            Text = _homePresentation?.Status ?? (english ? "the globe could not be shown" : "не удалось показать глобус"),
             TextWrapping = TextWrapping.Wrap,
             FontWeight = FontWeight.SemiBold,
-            Foreground = Brushes.White,
+            Foreground = DeyttTheme.Brush(DeyttTheme.Text),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
         });
         caption.Children.Add(new TextBlock
         {
-            Text = english ? "Your route remains available." : "Маршрут остаётся доступен.",
+            Text = _homePresentation?.Message ?? summary,
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
             Foreground = DeyttTheme.Brush(DeyttTheme.Muted),
@@ -884,13 +1459,29 @@ public sealed class RouteGlobeWebView : ContentControl
             Foreground = DeyttTheme.Brush(DeyttTheme.Muted),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
         });
+        if (_homePresentation is { } home)
+        {
+            var action = new Button
+            {
+                Content = home.ActionLabel,
+                MinHeight = 48,
+                Padding = new Avalonia.Thickness(18, 10),
+                CornerRadius = new Avalonia.CornerRadius(12),
+                Foreground = Brushes.White,
+                Background = DeyttTheme.Brush(home.ActionTone == "error" ? DeyttTheme.Coral : DeyttTheme.BlueDeep),
+                BorderThickness = new Avalonia.Thickness(0),
+                IsEnabled = home.ActionEnabled,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            };
+            Avalonia.Automation.AutomationProperties.SetName(action, home.ActionLabel);
+            action.Click += (_, _) => HomeActionRequested?.Invoke(home.Action);
+            caption.Children.Add(action);
+        }
         caption.Children.Add(retry);
         Content = new Border
         {
-            Background = DeyttTheme.Brush(DeyttTheme.MapSurface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Avalonia.Thickness(1),
-            CornerRadius = new Avalonia.CornerRadius(18),
+            Background = DeyttTheme.Brush(DeyttTheme.Background),
+            BorderThickness = new Avalonia.Thickness(0),
             Padding = new Avalonia.Thickness(24),
             Child = caption,
         };

@@ -39,6 +39,7 @@ shopt -u dotglob nullglob
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -buildvcs=false \
   -ldflags '-s -w -H windowsgui -buildid=' \
   -o "$stage_dir/deyttconnect.exe" "$repo_root/windows/launcher/main_windows.go"
+cp "$repo_root/windows/scripts/Uninstall-Portable.cmd" "$stage_dir/uninstall.cmd"
 
 cat > "$stage_dir/docs/README.txt" <<'EOF'
 DEYTT Connect for Windows 10 x64 — portable package
@@ -49,6 +50,11 @@ The app runs without administrator rights. Installing the VPN service from
 Settings requests Windows administrator approval. The interactive country map
 uses the same offline DEYTT atlas as Android; it downloads no map tiles. The
 Microsoft Edge WebView2 Runtime is required by the portable build.
+
+Close the app and run uninstall.cmd to remove the installed VPN service and
+known local app data. The service is also registered in Windows Apps after
+installation. Then delete this extracted folder. Server device slots remain
+in the account and can be released in the bot.
 
 The VPN engine source and license are in docs/source/. See
 docs/THIRD-PARTY-NOTICES.md for attribution. This portable package is unsigned.

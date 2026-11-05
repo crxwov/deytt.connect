@@ -20,6 +20,7 @@ public sealed class EngineProcessLifetimeTests
             unrelated = StartSleeper();
             attached = StartSleeper();
             lifetime = EngineProcessLifetime.Attach(attached);
+
             lifetime.Dispose();
             lifetime = null;
 
@@ -71,9 +72,9 @@ public sealed class EngineProcessLifetimeTests
                 process.WaitForExit(5_000);
             }
         }
-        catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException)
+        catch (Exception error) when (error is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            // Cleanup targets only sleeper processes started by this test.
+            // Cleanup applies only to the sleeper started by this test.
         }
     }
 }

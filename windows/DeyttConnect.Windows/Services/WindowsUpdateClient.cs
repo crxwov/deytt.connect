@@ -15,7 +15,8 @@ public sealed record WindowsUpdateRelease(
     string AssetName,
     string? AssetUrl,
     long? AssetSize,
-    string? AssetDigest)
+    string? AssetDigest,
+    WindowsUpdatePackageKind PackageKind)
 {
     public bool CanDownloadVerifiedPackage =>
         AssetSize is > 0 and <= WindowsUpdateClient.MaximumPackageSizeBytes &&
@@ -23,13 +24,18 @@ public sealed record WindowsUpdateRelease(
         Uri.TryCreate(AssetUrl, UriKind.Absolute, out var uri) &&
         WindowsUpdateClient.IsOfficialReleaseUrl(uri, "download", Tag, AssetName);
 }
+public enum WindowsUpdatePackageKind
+{
+    PortableZip,
+    Msi,
+}
+
 public sealed record VerifiedWindowsUpdatePackage(string FilePath, string Sha256, long Size);
 
 public static class WindowsUpdateClient
 {
     public const long MaximumPackageSizeBytes = 512L * 1024 * 1024;
-    private const string ExpectedWindowsAssetName = "deytt-connect-windows-x64.zip";
-    private const string ServerUpdateUrl = "https://deytt.space/connect/releases/update.json";
+    private const string LegacyWindowsAssetName = "deytt-connect-windows-x64.zip";
 
     private const int MaximumReleaseResponseBytes = 2 * 1024 * 1024;
     private const int MaximumRedirects = 5;
@@ -41,26 +47,19 @@ public static class WindowsUpdateClient
         AllowAutoRedirect = false,
         ConnectTimeout = TimeSpan.FromSeconds(15),
         UseCookies = false,
+        SslOptions = new System.Net.Security.SslClientAuthenticationOptions
+        {
+            CertificateRevocationCheckMode = System.Security.Cryptography.X509Certificates.X509RevocationMode.NoCheck,
+        },
     })
     {
         Timeout = Timeout.InfiniteTimeSpan,
     };
 
     public static async Task<WindowsUpdateRelease?> FindLatestWindowsReleaseAsync(
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        WindowsUpdatePackageKind? preferredKind = null)
     {
-        // 1. Try dedicated high-speed server mirror first (no rate-limits, no DPI drops)
-        try
-        {
-            var serverRelease = await FetchServerReleaseAsync(cancellationToken);
-            if (serverRelease != null) return serverRelease;
-        }
-        catch
-        {
-            // Fall back to GitHub
-        }
-
-        // 2. Fall back to GitHub releases
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(ReleaseCheckTimeout);
 
@@ -72,50 +71,19 @@ public static class WindowsUpdateClient
         response.EnsureSuccessStatusCode();
 
         var json = await ReadBoundedTextAsync(response.Content, MaximumReleaseResponseBytes, timeout.Token);
-        return ParseLatestWindowsReleaseResponse(json);
+        return ParseLatestWindowsReleaseResponse(json, preferredKind);
     }
 
-    private static async Task<WindowsUpdateRelease?> FetchServerReleaseAsync(CancellationToken cancellationToken)
-    {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(6));
-
-        using var request = new HttpRequestMessage(HttpMethod.Get, ServerUpdateUrl);
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
-        using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-        if (!response.IsSuccessStatusCode) return null;
-
-        var json = await ReadBoundedTextAsync(response.Content, MaximumReleaseResponseBytes, timeout.Token);
-        using var doc = JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        var tag = GetJsonString(root, "tag") ?? GetJsonString(root, "version");
-        if (tag is null) return null;
-
-        var zipUrl = GetJsonString(root, "windows_zip_url");
-        var zipSize = GetJsonInt64(root, "windows_zip_size");
-        var zipDigest = GetJsonString(root, "windows_zip_sha256");
-
-        if (zipUrl is not null && zipSize is > 0 && zipDigest is not null)
-        {
-            return new WindowsUpdateRelease(
-                tag,
-                $"connect./{tag.Replace("connect./", "").Replace("v", "")}",
-                "",
-                ExpectedWindowsAssetName,
-                zipUrl,
-                zipSize,
-                zipDigest.StartsWith("sha256:", StringComparison.OrdinalIgnoreCase) ? zipDigest : $"sha256:{zipDigest}");
-        }
-        return null;
-    }
-
-    internal static WindowsUpdateRelease? ParseLatestWindowsReleaseResponse(string json)
+    internal static WindowsUpdateRelease? ParseLatestWindowsReleaseResponse(
+        string json,
+        WindowsUpdatePackageKind? preferredKind = null)
     {
         using var releases = JsonDocument.Parse(json);
         if (releases.RootElement.ValueKind != JsonValueKind.Array)
             throw new JsonException("The GitHub release response was not a list.");
 
+        WindowsUpdateRelease? latestCandidate = null;
+        Version? latestVersion = null;
         foreach (var release in releases.RootElement.EnumerateArray())
         {
             // Stable-channel selection fails closed when GitHub omits or malforms channel metadata.
@@ -123,7 +91,8 @@ public static class WindowsUpdateClient
                 continue;
 
             var tag = GetJsonString(release, "tag_name");
-            if (tag is null || !IsOfficialReleaseUrl(GetJsonString(release, "html_url"), "tag", tag))
+            if (tag is null || !TryParseReleaseVersion(tag, out var releaseVersion) ||
+                !IsOfficialReleaseUrl(GetJsonString(release, "html_url"), "tag", tag))
                 continue;
             if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
                 continue;
@@ -131,24 +100,114 @@ public static class WindowsUpdateClient
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = GetJsonString(asset, "name");
-                if (name is null || !string.Equals(name, ExpectedWindowsAssetName, StringComparison.Ordinal))
+                if (name is null || !TryGetSupportedWindowsAsset(tag, name, out var packageKind))
                     continue;
 
                 var rawUrl = GetJsonString(asset, "browser_download_url");
                 var size = GetJsonInt64(asset, "size");
-                return new WindowsUpdateRelease(
+                var candidate = new WindowsUpdateRelease(
                     tag,
                     GetJsonString(release, "name") ?? tag,
                     GetJsonString(release, "body") is { } body ? TrimReleaseNotes(body) : "",
                     name,
                     IsOfficialReleaseUrl(rawUrl, "download", tag, name) ? rawUrl : null,
                     size,
-                    GetJsonString(asset, "digest"));
+                    GetJsonString(asset, "digest"),
+                    packageKind);
+                if (preferredKind is not null && packageKind != preferredKind)
+                    continue;
+
+                if (latestVersion is null || CompareReleaseVersions(releaseVersion, latestVersion) > 0)
+                {
+                    latestVersion = releaseVersion;
+                    latestCandidate = candidate;
+                }
             }
         }
 
-        return null;
+        return latestCandidate;
     }
+
+    internal static bool TryParseReleaseVersion(string? value, out Version version)
+    {
+        version = new Version(0, 0, 0);
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var normalized = value.Trim();
+        if (normalized.StartsWith('v') || normalized.StartsWith('V'))
+            normalized = normalized[1..];
+        if (normalized.Contains('-') || normalized.Contains('+'))
+            return false;
+
+        var components = normalized.Split('.');
+        if (components.Length is < 3 or > 4)
+            return false;
+        var parts = new int[components.Length];
+        for (var index = 0; index < components.Length; index++)
+        {
+            var component = components[index];
+            if (component.Length == 0 || component.Any(character => !char.IsAsciiDigit(character)) ||
+                !int.TryParse(component, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out parts[index]))
+                return false;
+        }
+        version = parts.Length == 3
+            ? new Version(parts[0], parts[1], parts[2])
+            : new Version(parts[0], parts[1], parts[2], parts[3]);
+        return true;
+    }
+
+    internal static bool IsNewerThan(string? releaseTag, Version? installedVersion) =>
+        installedVersion is not null && TryParseReleaseVersion(releaseTag, out var releaseVersion) &&
+        CompareReleaseVersions(releaseVersion, installedVersion) > 0;
+
+    private static int CompareReleaseVersions(Version left, Version right)
+    {
+        var leftParts = new[] { left.Major, left.Minor, Math.Max(left.Build, 0), Math.Max(left.Revision, 0) };
+        var rightParts = new[] { right.Major, right.Minor, Math.Max(right.Build, 0), Math.Max(right.Revision, 0) };
+        for (var index = 0; index < leftParts.Length; index++)
+        {
+            var comparison = leftParts[index].CompareTo(rightParts[index]);
+            if (comparison != 0)
+                return comparison;
+        }
+        return 0;
+    }
+
+    private static bool TryGetSupportedWindowsAsset(
+        string tag,
+        string name,
+        out WindowsUpdatePackageKind packageKind)
+    {
+        packageKind = WindowsUpdatePackageKind.PortableZip;
+        if (!TryParseReleaseVersion(tag, out var version))
+            return false;
+        var normalized = $"{version.Major}.{version.Minor}.{version.Build}";
+        if (version.Revision >= 0)
+            normalized += $".{version.Revision}";
+
+        if (string.Equals(name, LegacyWindowsAssetName, StringComparison.Ordinal))
+            return true;
+        if (string.Equals(name, $"deytt-connect-{normalized}-portable.zip", StringComparison.Ordinal))
+            return true;
+        if (string.Equals(name, $"deytt-connect-{normalized}.msi", StringComparison.Ordinal))
+        {
+            packageKind = WindowsUpdatePackageKind.Msi;
+            return true;
+        }
+        return false;
+    }
+
+    internal static WindowsUpdatePackageKind GetCurrentInstallationKind(string appBaseDirectory) =>
+        WindowsPortableLayout.FindPortableRoot(appBaseDirectory) is null
+            ? WindowsUpdatePackageKind.Msi
+            : WindowsUpdatePackageKind.PortableZip;
+
+    internal static Version? GetInstalledVersion() => typeof(WindowsUpdateClient).Assembly.GetName().Version;
+
+    internal static bool IsReleaseForInstallation(WindowsUpdateRelease release, WindowsUpdatePackageKind kind) =>
+        release.PackageKind == kind && IsNewerThan(release.Tag, GetInstalledVersion());
 
     public static async Task<VerifiedWindowsUpdatePackage> DownloadAndVerifyAsync(
         WindowsUpdateRelease release,
@@ -159,7 +218,7 @@ public static class WindowsUpdateClient
             !Uri.TryCreate(release.AssetUrl, UriKind.Absolute, out var assetUri) ||
             !TryParseSha256Digest(release.AssetDigest, out var expectedDigest) ||
             release.AssetSize is not { } expectedSize)
-            throw new InvalidDataException("The release does not include a verifiable Windows ZIP.");
+            throw new InvalidDataException("The release does not include a verifiable Windows package.");
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(DownloadTimeout);
@@ -167,7 +226,8 @@ public static class WindowsUpdateClient
         var updatesDirectory = GetUpdatesDirectory();
         Directory.CreateDirectory(updatesDirectory);
         var safeTag = SanitizeTag(release.Tag);
-        var outputPath = Path.Combine(updatesDirectory, $"deytt-connect-windows-x64-{safeTag}.zip");
+        var extension = release.PackageKind == WindowsUpdatePackageKind.Msi ? ".msi" : ".zip";
+        var outputPath = Path.Combine(updatesDirectory, $"deytt-connect-windows-x64-{safeTag}{extension}");
         var partialPath = outputPath + ".part";
 
         try
@@ -193,7 +253,7 @@ public static class WindowsUpdateClient
 
                         received += count;
                         if (received > expectedSize || received > MaximumPackageSizeBytes)
-                            throw new InvalidDataException("The Windows ZIP exceeded its declared size limit.");
+                            throw new InvalidDataException("The Windows package exceeded its declared size limit.");
 
                         hash.AppendData(buffer, 0, count);
                         await destination.WriteAsync(buffer.AsMemory(0, count), timeout.Token);
@@ -210,7 +270,7 @@ public static class WindowsUpdateClient
                 throw new InvalidDataException("The downloaded ZIP size does not match GitHub metadata.");
             if (!CryptographicOperations.FixedTimeEquals(
                     Convert.FromHexString(actualDigest), Convert.FromHexString(expectedDigest)))
-                throw new InvalidDataException("The Windows ZIP SHA-256 does not match GitHub metadata.");
+                throw new InvalidDataException("The Windows package SHA-256 does not match GitHub metadata.");
 
             timeout.Token.ThrowIfCancellationRequested();
             File.Move(partialPath, outputPath, overwrite: true);
@@ -251,6 +311,44 @@ public static class WindowsUpdateClient
         Process.Start(start);
     }
 
+    public static async Task LaunchVerifiedMsiInstallerAsync(
+        VerifiedWindowsUpdatePackage package,
+        CancellationToken cancellationToken)
+    {
+        if (!OperatingSystem.IsWindows())
+            throw new PlatformNotSupportedException("Windows Installer is available only on Windows.");
+        if (!string.Equals(Path.GetExtension(package.FilePath), ".msi", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("The verified update package is not an MSI.");
+
+        await VerifySavedPackageAsync(package, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        var start = new ProcessStartInfo("msiexec.exe")
+        {
+            UseShellExecute = true,
+            Verb = "runas",
+            WindowStyle = ProcessWindowStyle.Normal,
+        };
+        start.ArgumentList.Add("/i");
+        start.ArgumentList.Add(package.FilePath);
+        _ = Process.Start(start) ?? throw new InvalidOperationException("Windows Installer did not start.");
+    }
+
+    private static async Task VerifySavedPackageAsync(
+        VerifiedWindowsUpdatePackage package,
+        CancellationToken cancellationToken)
+    {
+        if (!File.Exists(package.FilePath))
+            throw new FileNotFoundException("The verified Windows package is no longer available.", package.FilePath);
+        await using var archive = new FileStream(package.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read,
+            64 * 1024, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        if (archive.Length != package.Size)
+            throw new InvalidDataException("The verified Windows package changed after download.");
+        var actualDigest = await SHA256.HashDataAsync(archive, cancellationToken);
+        if (!TryParseSha256Digest($"sha256:{package.Sha256}", out var expectedDigest) ||
+            !CryptographicOperations.FixedTimeEquals(actualDigest, Convert.FromHexString(expectedDigest)))
+            throw new InvalidDataException("The verified Windows package changed after download.");
+    }
+
     internal static bool TryParseSha256Digest(string? digest, out string normalizedDigest)
     {
         normalizedDigest = "";
@@ -279,19 +377,8 @@ public static class WindowsUpdateClient
         string? expectedTag,
         string? expectedAssetName = null)
     {
-        if (uri.Scheme != Uri.UriSchemeHttps || uri.UserInfo.Length != 0 || uri.Port != 443 ||
-            uri.Query.Length != 0 || uri.Fragment.Length != 0)
-            return false;
-
-        if (uri.Host.Equals("deytt.space", StringComparison.OrdinalIgnoreCase) ||
-            uri.Host.Equals("ru.deytt.space", StringComparison.OrdinalIgnoreCase))
-        {
-            return uri.AbsolutePath.StartsWith("/connect/releases/", StringComparison.OrdinalIgnoreCase) &&
-                   (expectedAssetName == null || uri.AbsolutePath.EndsWith(expectedAssetName, StringComparison.OrdinalIgnoreCase) ||
-                    uri.AbsolutePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.EndsWith(".msi", StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (!uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+        if (uri.Scheme != Uri.UriSchemeHttps || !uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+            uri.UserInfo.Length != 0 || uri.Port != 443 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
             return false;
 
         var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
@@ -312,13 +399,13 @@ public static class WindowsUpdateClient
         CancellationToken cancellationToken)
     {
         if (!IsOfficialReleaseUrl(initialUri, "download", expectedTag, expectedAssetName))
-            throw new InvalidDataException("The Windows ZIP URL is not an official GitHub release asset.");
+            throw new InvalidDataException("The Windows package URL is not an official GitHub release asset.");
 
         var currentUri = initialUri;
         for (var redirect = 0; redirect <= MaximumRedirects; redirect++)
         {
             if (!IsAllowedAssetUri(currentUri))
-                throw new InvalidDataException("GitHub redirected the Windows ZIP to an untrusted host.");
+                throw new InvalidDataException("GitHub redirected the Windows package to an untrusted host.");
 
             using var request = new HttpRequestMessage(HttpMethod.Get, currentUri);
             request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
@@ -333,23 +420,21 @@ public static class WindowsUpdateClient
                 var nextUri = location.IsAbsoluteUri ? location : new Uri(currentUri, location);
                 response.Dispose();
                 if (!IsAllowedAssetUri(nextUri))
-                    throw new InvalidDataException("GitHub redirected the Windows ZIP to an untrusted host.");
+                    throw new InvalidDataException("GitHub redirected the Windows package to an untrusted host.");
                 currentUri = nextUri;
                 continue;
             }
 
             response.Dispose();
-            throw new HttpRequestException("GitHub did not return the Windows ZIP asset.");
+            throw new HttpRequestException("GitHub did not return the Windows package asset.");
         }
 
-        throw new HttpRequestException("The Windows ZIP download used too many redirects.");
+        throw new HttpRequestException("The Windows package download used too many redirects.");
     }
 
     private static bool IsAllowedAssetUri(Uri uri) =>
         uri.Scheme == Uri.UriSchemeHttps && uri.UserInfo.Length == 0 && uri.Port == 443 &&
-        (uri.Host.Equals("deytt.space", StringComparison.OrdinalIgnoreCase) ||
-         uri.Host.Equals("ru.deytt.space", StringComparison.OrdinalIgnoreCase) ||
-         uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
+        (uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) ||
          uri.Host.Equals("githubusercontent.com", StringComparison.OrdinalIgnoreCase) ||
          uri.Host.EndsWith(".githubusercontent.com", StringComparison.OrdinalIgnoreCase));
 

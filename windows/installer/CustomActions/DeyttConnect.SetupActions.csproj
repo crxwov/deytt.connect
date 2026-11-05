@@ -6,6 +6,7 @@
     <Nullable>disable</Nullable>
     <LangVersion>latest</LangVersion>
     <Deterministic>true</Deterministic>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WixToolset.Dtf.CustomAction" Version="6.0.0" />
