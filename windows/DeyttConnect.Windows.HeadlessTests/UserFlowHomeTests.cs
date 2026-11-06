@@ -77,7 +77,7 @@ public sealed class UserFlowHomeTests
             Assert.Equal(countryCode, presentation.CountryCode);
             Assert.Equal(city, presentation.City);
             Assert.Equal(protocol, presentation.Protocol);
-            Assert.Equal("отключить", presentation.ActionLabel);
+            Assert.Equal("подключено", presentation.ActionLabel);
             var key = typeof(MainWindow).GetMethod("ConfirmedHomeRouteKey", BindingFlags.NonPublic | BindingFlags.Instance)!.Invoke(window, null);
             Assert.Equal(countryCode == "FI" ? "fi" : null, key);
         }

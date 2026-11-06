@@ -9,23 +9,25 @@
   const panelTiltRampZoom = 0.25;
   const panelTiltMaxDegrees = 20;
     function getSpokeSpinnerSvg(size = 16) {
+    // 16 спиц, радиусы 0.29d–0.47d, толщина 0.065d, альфа .12+.76*(1-age/16) —
+    // точная копия InlineMetricProgress из Android-приложения.
     return `<svg class="metric-spoke-spinner" viewBox="0 0 20 20" width="${size}" height="${size}" aria-hidden="true">
-      <line x1="10" y1="2" x2="10" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.88"/>
-      <line x1="13.06" y1="2.62" x2="11.91" y2="5.39" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.83"/>
-      <line x1="15.66" y1="4.34" x2="13.54" y2="6.46" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.78"/>
-      <line x1="17.38" y1="6.94" x2="14.61" y2="8.09" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.73"/>
-      <line x1="18" y1="10" x2="15" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.68"/>
-      <line x1="17.38" y1="13.06" x2="14.61" y2="11.91" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.63"/>
-      <line x1="15.66" y1="15.66" x2="13.54" y2="13.54" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.58"/>
-      <line x1="13.06" y1="17.38" x2="11.91" y2="14.61" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.53"/>
-      <line x1="10" y1="18" x2="10" y2="15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.48"/>
-      <line x1="6.94" y1="17.38" x2="8.09" y2="14.61" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.43"/>
-      <line x1="4.34" y1="15.66" x2="6.46" y2="13.54" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.38"/>
-      <line x1="2.62" y1="13.06" x2="5.39" y2="11.91" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.33"/>
-      <line x1="2" y1="10" x2="5" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.28"/>
-      <line x1="2.62" y1="6.94" x2="5.39" y2="8.09" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.23"/>
-      <line x1="4.34" y1="4.34" x2="6.46" y2="6.46" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.18"/>
-      <line x1="6.94" y1="2.62" x2="8.09" y2="5.39" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.12"/>
+      <line x1="10" y1="0.6" x2="10" y2="4.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.88"/>
+      <line x1="13.6" y1="1.31" x2="12.22" y2="4.64" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.17"/>
+      <line x1="16.65" y1="3.35" x2="14.1" y2="5.9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.21"/>
+      <line x1="18.69" y1="6.4" x2="15.36" y2="7.78" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.26"/>
+      <line x1="19.4" y1="10" x2="15.8" y2="10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.31"/>
+      <line x1="18.69" y1="13.6" x2="15.36" y2="12.22" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.36"/>
+      <line x1="16.65" y1="16.65" x2="14.1" y2="14.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.41"/>
+      <line x1="13.6" y1="18.69" x2="12.22" y2="15.36" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.45"/>
+      <line x1="10" y1="19.4" x2="10" y2="15.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/>
+      <line x1="6.4" y1="18.69" x2="7.78" y2="15.36" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/>
+      <line x1="3.35" y1="16.65" x2="5.9" y2="14.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.59"/>
+      <line x1="1.31" y1="13.6" x2="4.64" y2="12.22" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.64"/>
+      <line x1="0.6" y1="10" x2="4.2" y2="10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.69"/>
+      <line x1="1.31" y1="6.4" x2="4.64" y2="7.78" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.74"/>
+      <line x1="3.35" y1="3.35" x2="5.9" y2="5.9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.79"/>
+      <line x1="6.4" y1="1.31" x2="7.78" y2="4.64" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.83"/>
     </svg>`;
   }
   window.getSpokeSpinnerSvg = getSpokeSpinnerSvg;
@@ -176,9 +178,9 @@
     button.disabled = !enabled;
     button.dataset.tone = tone || "normal";
     const accessibleLabel = action === "home-disconnect"
-      ? (label === "Connected" ? "disconnect vpn" : "отключить vpn")
+      ? (language === "en" ? "disconnect vpn" : "отключить vpn")
       : action === "home-cancel"
-        ? (label === "Connecting" ? "cancel connection" : "отменить подключение")
+        ? (language === "en" ? "cancel connection" : "отменить подключение")
         : label || "";
     button.setAttribute("aria-label", accessibleLabel);
     button.title = accessibleLabel;
@@ -324,17 +326,20 @@
       el.hidden = state.statusTone !== "good";
       el.textContent = language === "en" ? "connected" : "подключено";
     });
-    const isVpnConnected = state.statusTone === "good";
     const isMeasuring = state.measuring === true || state.latency === "…" || state.speed === "…";
+    // Значение важнее статуса подключения: измеренные данные остаются на экране
+    // до перезамера, спиннер — только когда измерять ещё нечего.
+    const hasLatencyValue = state.latency != null && state.latency !== "" && state.latency !== "—" && state.latency !== "…";
+    const hasSpeedValue = state.speed != null && state.speed !== "" && state.speed !== "—" && state.speed !== "…";
     const latencyUnit = root.querySelector("#home-latency-unit");
     if (latency) {
-      if (isVpnConnected && state.latency != null && state.latency !== "" && state.latency !== "—" && state.latency !== "…") {
+      if (hasLatencyValue) {
         latency.classList.remove("is-empty");
         latency.textContent = state.latency + " " + (language === "en" ? "ms" : "мс");
         if (latencyUnit) latencyUnit.hidden = true;
-      } else if (isVpnConnected && isMeasuring) {
+      } else if (state.latency === "…" || isMeasuring) {
         latency.classList.add("is-empty");
-        latency.innerHTML = getSpokeSpinnerSvg(22);
+        latency.innerHTML = getSpokeSpinnerSvg(24);
         if (latencyUnit) latencyUnit.hidden = true;
       } else {
         latency.classList.remove("is-empty");
@@ -344,13 +349,13 @@
     }
     const speedUnit = root.querySelector("#home-speed-unit");
     if (speed) {
-      if (isVpnConnected && state.speed != null && state.speed !== "" && state.speed !== "—" && state.speed !== "…") {
+      if (hasSpeedValue) {
         speed.classList.remove("is-empty");
         speed.textContent = state.speed + " " + (language === "en" ? "Mbps" : "мбит/с");
         if (speedUnit) speedUnit.hidden = true;
-      } else if (isVpnConnected && isMeasuring) {
+      } else if (state.speed === "…" || isMeasuring) {
         speed.classList.add("is-empty");
-        speed.innerHTML = getSpokeSpinnerSvg(22);
+        speed.innerHTML = getSpokeSpinnerSvg(24);
         if (speedUnit) speedUnit.hidden = true;
       } else {
         speed.classList.remove("is-empty");
@@ -363,8 +368,8 @@
       if (state.message) homeRouteSubtitle.textContent = state.message;
       else if (state.statusTone === "good") homeRouteSubtitle.textContent = language === "en" ? "secure tunnel active" : "защищенный туннель активен";
     }
-    root.querySelector("#compact-latency").textContent = (!isVpnConnected || state.latency == null || state.latency === "" ? "—" : state.latency + " " + (language === "en" ? "ms" : "мс"));
-    root.querySelector("#compact-speed").textContent = (!isVpnConnected || state.speed == null || state.speed === "" ? "—" : state.speed + " " + (language === "en" ? "mbit/s" : "мбит/с"));
+    root.querySelector("#compact-latency").textContent = (hasLatencyValue ? state.latency + " " + (language === "en" ? "ms" : "мс") : "—");
+    root.querySelector("#compact-speed").textContent = (hasSpeedValue ? state.speed + " " + (language === "en" ? "mbit/s" : "мбит/с") : "—");
     latencyMetric.dataset.tone = state.latencyTone || "normal";
     speedMetric.dataset.tone = state.speedTone || "normal";
     note.textContent = state.measurementLabel || "";
