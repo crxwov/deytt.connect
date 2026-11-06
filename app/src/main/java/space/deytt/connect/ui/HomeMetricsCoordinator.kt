@@ -16,6 +16,8 @@ import android.widget.TextView
 import androidx.core.widget.doAfterTextChanged
 import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.pressFeedback
+import space.deytt.connect.AppLanguage.uiCopy
+import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.text
 import java.util.Locale
@@ -47,8 +49,8 @@ internal class HomeMetricsCoordinator(
         const val MAP_TRAFFIC_GRACE_MS = 2_800L
     }
 
-    private fun dp(value: Int): Int = with(host) { dp(value) }
-    private fun uiCopy(value: String): String = with(host) { uiCopy(value) }
+    private fun dp(value: Int): Int = host.dp(value)
+    private fun uiCopy(value: String): String = host.uiCopy(value)
 
     lateinit var latencyText: TextView
     lateinit var downloadText: TextView

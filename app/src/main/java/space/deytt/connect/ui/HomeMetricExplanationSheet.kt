@@ -11,6 +11,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import androidx.core.view.ViewCompat
 import space.deytt.connect.DeyttUi.button
+import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.text
 
@@ -22,7 +23,7 @@ internal class HomeMetricExplanationSheet(
     private val onDismissed: () -> Unit,
     private val selectTrafficFlow: ((String?) -> Unit)? = null,
 ) {
-    private fun dp(value: Int): Int = with(host) { dp(value) }
+    private fun dp(value: Int): Int = host.dp(value)
 
     var currentTrafficExplanation: Dialog? = null
 

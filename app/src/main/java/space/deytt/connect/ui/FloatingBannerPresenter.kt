@@ -29,8 +29,8 @@ internal class FloatingBannerPresenter(
     private val floatingBannerHandler = Handler(Looper.getMainLooper())
     private var floatingBannerDismissRunnable: Runnable? = null
 
-    private fun dp(value: Int): Int = with(host) { dp(value) }
-    private fun uiCopy(value: String): String = with(host) { uiCopy(value) }
+    private fun dp(value: Int): Int = host.dp(value)
+    private fun uiCopy(value: String): String = host.uiCopy(value)
 
     fun showFloatingBanner(title: String, subtitle: String? = null, isSuccess: Boolean = true) {
         android.util.Log.i("DeyttBanner", "showFloatingBanner: title=$title isSuccess=$isSuccess")
