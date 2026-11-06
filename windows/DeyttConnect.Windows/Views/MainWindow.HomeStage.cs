@@ -761,6 +761,7 @@ public partial class MainWindow
     private void HandleCountryProbeRequested(string countryCode)
     {
         countryCode = countryCode.ToUpperInvariant();
+        Services.UiDiagnostics.Log($"country probe requested: {countryCode} routes={_routes.Count} tab={_activeTab} service={_vpnServiceAvailable} tunnel={_vpnSnapshot.State}");
         _expandedRouteCountries.Add(countryCode);
         _activeTab = MainTab.Routes;
 
@@ -978,6 +979,9 @@ public partial class MainWindow
         var route = _routes.FirstOrDefault(candidate => candidate.Tag == activeTag && candidate.CountryCode != "AUTO");
         return route is null ? null : RouteGlobeWebView.RouteKeyFor(route.CountryCode);
     }
+
+    private void InstrumentProbeChain(string message) =>
+        Services.UiDiagnostics.Log(message);
 
     private void HandleHomeActionRequested(string action)
     {

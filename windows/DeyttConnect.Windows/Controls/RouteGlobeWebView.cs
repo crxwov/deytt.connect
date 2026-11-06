@@ -298,6 +298,7 @@ public sealed class RouteGlobeWebView : ContentControl
 
     public void PushRouteProbeProgress(WindowsRouteProbeResult probe)
     {
+        Services.UiDiagnostics.Log($"push probe: {probe.RouteTag} stage={probe.Stage} latency={probe.LatencyMilliseconds?.ToString() ?? "null"} ready={_pageReady} atlasFailed={_atlasFailed}");
         if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null) return;
         var speedMbps = probe.BytesPerSecond is > 0 ? (long?)(probe.BytesPerSecond.Value * 8 / 1_000_000.0) : null;
         var script = $"window.deyttUpdateRouteProbe && window.deyttUpdateRouteProbe({JsonSerializer.Serialize(probe.RouteTag)}, {JsonSerializer.Serialize(probe.LatencyMilliseconds)}, {JsonSerializer.Serialize(speedMbps)}, {JsonSerializer.Serialize(probe.Stage)}, {JsonSerializer.Serialize(probe.Error)});";
@@ -307,6 +308,7 @@ public sealed class RouteGlobeWebView : ContentControl
     /// <summary>Shows or hides the truthful reason why country measurements are not running.</summary>
     public void PushProbeHint(string? text)
     {
+        Services.UiDiagnostics.Log($"push hint: {text ?? "(clear)"} ready={_pageReady} atlasFailed={_atlasFailed}");
         if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null) return;
         if (string.Equals(_lastProbeHint, text, StringComparison.Ordinal)) return;
         _lastProbeHint = text;
@@ -923,6 +925,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         node = originalNode.ToLowerInvariant();
         if (node == "atlas-ready")
         {
+            Services.UiDiagnostics.Log("webview atlas-ready");
             Dispatcher.UIThread.Post(() =>
             {
                 if (_atlasFailed || !ReferenceEquals(sender, _webView))
@@ -952,6 +955,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         }
         if (node is "home-connect" or "home-disconnect" or "home-cancel" or "home-routes" or "home-profile" or "home-settings" or "home-measure")
         {
+            Services.UiDiagnostics.Log($"webview action: {node}");
             Dispatcher.UIThread.Post(() =>
             {
                 if (!_atlasFailed && ReferenceEquals(sender, _webView))
@@ -1016,6 +1020,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         if (node.StartsWith("route:probe:country:", StringComparison.Ordinal))
         {
             var countryCode = node["route:probe:country:".Length..];
+            Services.UiDiagnostics.Log($"webview probe request: {countryCode}");
             Dispatcher.UIThread.Post(() =>
             {
                 if (!_atlasFailed && ReferenceEquals(sender, _webView))

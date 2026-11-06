@@ -3248,21 +3248,27 @@ public partial class MainWindow : Window
 
     private void QueueRouteCountryProbe(string countryCode, string[] routeTags)
     {
+        Services.UiDiagnostics.Log($"queue probe: {countryCode} tags={routeTags.Length}");
         if (routeTags.Length == 0)
             return;
 
         if (_activeRouteProbeCountry == countryCode)
         {
             if (!_routeProbeCancelRequested)
+            {
+                Services.UiDiagnostics.Log($"queue probe: {countryCode} skipped (already active)");
                 return;
+            }
         }
         else if (_pendingRouteProbeNodes.ContainsKey(countryCode))
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} skipped (already queued)");
             return;
         }
 
         if (_keysSnapshot?.ProfileJson is not { Length: > 0 } || _routes.Count == 0)
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} blocked (no profile/routes)");
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Failed;
             MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
             RenderActiveTabPreservingScroll();
@@ -3270,6 +3276,7 @@ public partial class MainWindow : Window
         }
         if (!_vpnServiceAvailable)
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} blocked (service unavailable)");
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.ServiceUnavailable;
             MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
             PushRouteProbeHint(RouteCountryProbeState.ServiceUnavailable);
@@ -3278,6 +3285,7 @@ public partial class MainWindow : Window
         }
         if (_vpnActionInProgress || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} blocked (tunnel={_vpnSnapshot.State} actionInProgress={_vpnActionInProgress})");
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.NeedsDisconnect;
             MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
             PushRouteProbeHint(RouteCountryProbeState.NeedsDisconnect);
@@ -3301,6 +3309,7 @@ public partial class MainWindow : Window
         _routeGlobe?.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
         var node = _pendingRouteProbeQueue.AddLast(request);
         _pendingRouteProbeNodes[countryCode] = node;
+        Services.UiDiagnostics.Log($"queue probe: {countryCode} queued (queue={_pendingRouteProbeQueue.Count})");
         _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Queued;
         RenderActiveTabPreservingScroll();
         StartNextCountryProbe();
@@ -3366,7 +3375,10 @@ public partial class MainWindow : Window
         if (_activeTab != MainTab.Routes || _routeProbeInProgress || _vpnActionInProgress ||
             _activeRouteProbeCountry is not null ||
             _pendingRouteProbeQueue.Count == 0)
+        {
+            Services.UiDiagnostics.Log($"start probe: idle (tab={_activeTab} running={_routeProbeInProgress} action={_vpnActionInProgress} active={_activeRouteProbeCountry ?? "-"} queue={_pendingRouteProbeQueue.Count})");
             return;
+        }
 
         if (!_vpnServiceAvailable || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
@@ -3397,6 +3409,7 @@ public partial class MainWindow : Window
 
             _activeRouteProbeCountry = node.Value.CountryCode;
             _routeCountryProbeStates[node.Value.CountryCode] = RouteCountryProbeState.Running;
+            Services.UiDiagnostics.Log($"start probe: {node.Value.CountryCode} tags={node.Value.RouteTags.Length}");
             _ = ProbeRoutesAsync(node.Value.RouteTags, node.Value.CountryCode);
             return;
         }
@@ -3409,6 +3422,7 @@ public partial class MainWindow : Window
         if (_routeProbeInProgress || _vpnActionInProgress ||
             WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
+            Services.UiDiagnostics.Log($"probe async: skipped (running={_routeProbeInProgress} action={_vpnActionInProgress} tunnel={_vpnSnapshot.State})");
             if (WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) && !_routeProbeInProgress && !_vpnActionInProgress)
                 PushRouteProbeHint(RouteCountryProbeState.NeedsDisconnect);
             return;
@@ -3484,6 +3498,7 @@ public partial class MainWindow : Window
                 RestoreProbeResults(routeTags, previousRouteResults);
                 return;
             }
+            Services.UiDiagnostics.Log($"probe async: service returned state={result.State} detail={(result.Detail ?? "-")}");
             if (result.State == "probe_complete" && result.ProbeResults is { } probes)
             {
                 var updatedResults = requestedRouteTags is null
@@ -3582,7 +3597,10 @@ public partial class MainWindow : Window
         {
             var item = sample with { LatencyMilliseconds = PositiveLatency(sample.LatencyMilliseconds) };
             if (!requestedRouteTags.Contains(item.RouteTag, StringComparer.Ordinal))
+            {
+                Services.UiDiagnostics.Log($"apply probe: dropped {item.RouteTag} (not in requested set)");
                 continue;
+            }
             if (updated.TryGetValue(item.RouteTag, out var previous) && previous == item)
                 continue;
             updated[item.RouteTag] = item;
