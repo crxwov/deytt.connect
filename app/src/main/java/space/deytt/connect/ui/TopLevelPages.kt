@@ -109,9 +109,10 @@ internal class TopLevelViewPagerAdapter(
     class PageHolder(val container: FrameLayout) : RecyclerView.ViewHolder(container)
 
     companion object {
-        const val PAGE_COUNT = 3
+        const val PAGE_COUNT = 4
         const val ROUTE_PAGE = 1
         const val PROFILE_PAGE = 2
+        const val SETTINGS_PAGE = 3
     }
 }
 
