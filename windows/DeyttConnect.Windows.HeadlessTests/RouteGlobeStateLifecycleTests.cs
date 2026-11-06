@@ -18,18 +18,21 @@ public sealed class RouteGlobeStateLifecycleTests
         {
             var mainQuota = new { state = "ready", usedBytes = 25L, limitBytes = 100L, expiresAt = "2026-11-11T00:00:00Z" };
             var awgQuota = new { state = "ready", usedBytes = 75L, limitBytes = 200L, expiresAt = "2026-10-29T00:00:00Z" };
-            globe.UpdateProfileData(true, "qa", "qa", 1, true, "ultra", null, null, null, [], [], null, mainQuota, awgQuota);
+            var proxyQuota = new { state = "ready", usedBytes = 45L, limitBytes = 300L, expiresAt = "2026-11-01T00:00:00Z" };
+            globe.UpdateProfileData(true, "qa", "qa", 1, true, "ultra", null, null, null, [], [], null, mainQuota, awgQuota, proxyQuota);
             using var profile = JsonDocument.Parse(Field<string>(globe, "_profileDataJson"));
             Assert.Equal(25, profile.RootElement.GetProperty("mainQuota").GetProperty("usedBytes").GetInt64());
             Assert.Equal(75, profile.RootElement.GetProperty("awgQuota").GetProperty("usedBytes").GetInt64());
+            Assert.Equal(45, profile.RootElement.GetProperty("proxyQuota").GetProperty("usedBytes").GetInt64());
             Assert.NotEqual(profile.RootElement.GetProperty("mainQuota").GetProperty("expiresAt").GetString(),
                 profile.RootElement.GetProperty("awgQuota").GetProperty("expiresAt").GetString());
             var script = (string)typeof(RouteGlobeWebView).GetMethod("BuildStateScript", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(globe, null)!;
             Assert.Contains("\"usedBytes\":25", script);
             Assert.Contains("\"usedBytes\":75", script);
+            Assert.Contains("\"usedBytes\":45", script);
 
             globe.UpdateProfileData(false, null, null, null, false, null, null, null, null, [], [], null,
-                new { state = "absent" }, new { state = "absent" });
+                new { state = "absent" }, new { state = "absent" }, new { state = "absent" });
             using var signedOut = JsonDocument.Parse(Field<string>(globe, "_profileDataJson"));
             Assert.False(signedOut.RootElement.GetProperty("isSignedIn").GetBoolean());
             Assert.False(signedOut.RootElement.GetProperty("awgQuota").TryGetProperty("usedBytes", out _));

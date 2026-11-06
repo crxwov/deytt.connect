@@ -248,7 +248,8 @@ public sealed class RouteGlobeWebView : ContentControl
         IReadOnlyList<object>? sessions,
         string? sessionsLoadIssue,
         object mainQuota,
-        object awgQuota)
+        object awgQuota,
+        object proxyQuota)
     {
         var payload = new
         {
@@ -265,7 +266,8 @@ public sealed class RouteGlobeWebView : ContentControl
             sessions,
             sessionsLoadIssue,
             mainQuota,
-            awgQuota
+            awgQuota,
+            proxyQuota
         };
         _profileDataJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         _ = ExecuteScriptAsync($"window.deyttSetProfileData && window.deyttSetProfileData({_profileDataJson});");

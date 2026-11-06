@@ -3782,7 +3782,7 @@
             <div>
               <strong class="quick-select-title">lte · белые списки</strong>
               <div class="lte-progress-bar" style="background: rgba(255,255,255,0.12); height: 4px; border-radius: 9999px; overflow: hidden; margin: 4px 0;"><div class="lte-progress-fill" style="width: 0%; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #38BDF8 0%, #10B981 100%);"></div></div>
-              <span class="quick-select-sub" id="lte-quota-sub">—</span>
+              <span class="quick-select-sub" id="lte-quota-sub"></span>
             </div>
           </div>
           <button class="btn-select-route is-selected" data-action-route="ru-de" type="button">выбрано</button>
@@ -5196,12 +5196,12 @@
       const sessions = Array.isArray(data.sessions) ? data.sessions : [];
       setText("profile-devices-count", copy(`${devices.length} устройств · ${sessions.length} сессий`, `${devices.length} devices · ${sessions.length} sessions`));
 
-      // Quotas / LTE progress — the personal LTE route quota served by /api/tg/traffic
-      // (awgQuota), with the real expiry date; never hardcoded demo values.
+      // The LTE • whitelist card shows the quota of the proxy plan that carries the
+      // whitelist key (/api/tg/traffic → proxy), the same plan the route rides on.
       const lteFill = document.querySelector(".lte-progress-fill, .lte-quota-fill");
       const lteText = document.getElementById("lte-quota-sub") || document.getElementById("lte-quota-text");
       if (lteFill && lteText) {
-        const quota = data.awgQuota && data.awgQuota.state === "ready" ? data.awgQuota : null;
+        const quota = data.proxyQuota && data.proxyQuota.state === "ready" ? data.proxyQuota : null;
         const used = quota && Number.isFinite(quota.usedBytes) && quota.usedBytes >= 0 ? quota.usedBytes : null;
         const limit = quota && Number.isFinite(quota.limitBytes) && quota.limitBytes > 0 ? quota.limitBytes : null;
         if (quota && quota.unlimitedTraffic) {

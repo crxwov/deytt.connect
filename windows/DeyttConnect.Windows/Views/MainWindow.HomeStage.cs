@@ -30,6 +30,8 @@ public partial class MainWindow
         routes.FirstOrDefault(route => route.CountryCode != "AUTO")?.CountryCode;
     private TelegramAwgTraffic? _awgTraffic;
     private string _awgTrafficState = "absent";
+    private TelegramAwgTraffic? _proxyTraffic;
+    private string _proxyTrafficState = "absent";
 
     private void RefreshHomeConnectionMeasurement(bool forceRefresh = false)
     {
@@ -840,6 +842,15 @@ public partial class MainWindow
             expiresAt = signedIn && _awgTrafficState == "ready" ? ToUtcIso(_awgTraffic?.ExpiresAt) : null,
             unlimitedTime = signedIn && _awgTrafficState == "ready" && _awgTraffic?.ExpiresAt is null,
         };
+        var proxyQuota = new
+        {
+            state = signedIn ? _proxyTrafficState : "absent",
+            usedBytes = signedIn && _proxyTrafficState == "ready" ? _proxyTraffic?.UsedBytes : null,
+            limitBytes = signedIn && _proxyTrafficState == "ready" ? _proxyTraffic?.QuotaBytes : null,
+            unlimitedTraffic = signedIn && _proxyTrafficState == "ready" && _proxyTraffic?.QuotaBytes == 0,
+            expiresAt = signedIn && _proxyTrafficState == "ready" ? ToUtcIso(_proxyTraffic?.ExpiresAt) : null,
+            unlimitedTime = signedIn && _proxyTrafficState == "ready" && _proxyTraffic?.ExpiresAt is null,
+        };
         string? expiresFormatted = null;
         int? daysRemaining = null;
         if (!string.IsNullOrEmpty(sub?.ExpiresAt) && DateTimeOffset.TryParse(ToUtcIso(sub.ExpiresAt), out var parsedExpiry))
@@ -896,7 +907,8 @@ public partial class MainWindow
             sessions,
             _sessionLoadIssue,
             mainQuota,
-            awgQuota
+            awgQuota,
+            proxyQuota
         );
 
         if (!string.IsNullOrEmpty(_telegramAvatarDataUrl))
@@ -932,6 +944,8 @@ public partial class MainWindow
     {
         _awgTraffic = null;
         _awgTrafficState = state;
+        _proxyTraffic = null;
+        _proxyTrafficState = state;
     }
 
     private async Task CopySubscriptionKeyToClipboardAsync()

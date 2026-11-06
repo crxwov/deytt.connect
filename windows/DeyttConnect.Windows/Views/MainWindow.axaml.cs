@@ -369,6 +369,8 @@ public partial class MainWindow : Window
 
         _activeTab = tab;
         _shellViewModel.ActivePage = tab.ToString();
+        if (tab == MainTab.Routes)
+            StartNextCountryProbe();
         var pageFingerprint = GetPageStateFingerprint(tab);
         Control page;
         if (IsPersistentPage(tab) && _pageViews.TryGetValue(tab, out var cachedPage))
@@ -2916,7 +2918,9 @@ public partial class MainWindow : Window
     {
         _selectedRoute = route.Id;
         SavePreferences();
-        ShowTab(MainTab.Home);
+        // The atlas keeps its own visible stage; forcing the native tab back to Home here
+        // desynced _activeTab from the stage the user actually sees and froze route probing.
+        RenderActiveTabPreservingScroll();
         if (!IsVisible || WindowState == Avalonia.Controls.WindowState.Minimized)
             ShowFromTray();
     }
@@ -4045,6 +4049,7 @@ public partial class MainWindow : Window
             : Task.FromResult(verifiedAccount);
         var subscriptionTask = _telegramApi.GetSubscriptionAsync(token, cancellationToken, progress);
         var awgTrafficTask = LoadAwgTrafficForRefreshAsync(token, cancellationToken);
+        var proxyTrafficTask = LoadProxyTrafficForRefreshAsync(token, cancellationToken);
         var avatarTask = RefreshTelegramAvatarAsync(token, cancellationToken);
         var sessionsTask = LoadSessionsForRefreshAsync(token, cancellationToken);
         if (verifiedAccount is not null)
@@ -4056,7 +4061,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await Task.WhenAll(accountTask, subscriptionTask, awgTrafficTask, avatarTask, sessionsTask);
+            await Task.WhenAll(accountTask, subscriptionTask, awgTrafficTask, proxyTrafficTask, avatarTask, sessionsTask);
             if (_sessionToken != token)
                 return false;
             _account = await accountTask;
@@ -4064,6 +4069,9 @@ public partial class MainWindow : Window
             var awgTraffic = await awgTrafficTask;
             _awgTraffic = awgTraffic.Traffic;
             _awgTrafficState = awgTraffic.State;
+            var proxyTraffic = await proxyTrafficTask;
+            _proxyTraffic = proxyTraffic.Traffic;
+            _proxyTrafficState = proxyTraffic.State;
             _sessions = await sessionsTask ?? [];
             _routes = _keysSnapshot.Routes;
             _profileLoadIssue = _keysSnapshot.HappAvailable
@@ -4111,6 +4119,29 @@ public partial class MainWindow : Window
                 : Copy("Не удалось загрузить маршруты. Повтори обновление позже.",
                     "Could not load routes. Try refreshing again later.");
             return false;
+        }
+    }
+
+    private async Task<(string State, TelegramAwgTraffic? Traffic)> LoadProxyTrafficForRefreshAsync(
+        string token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var traffic = await _telegramApi.GetProxyTrafficAsync(token, cancellationToken);
+            return (traffic is null ? "absent" : "ready", traffic);
+        }
+        catch (TelegramApiException error) when (error.IsUnauthorized)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
+        {
+            return ("error", null);
         }
     }
 
@@ -4165,11 +4196,13 @@ public partial class MainWindow : Window
 
     private async Task RefreshSignedInAccountAsync()
     {
+        Services.UiDiagnostics.Log($"subscription refresh requested (inProgress={_profileRefreshInProgress})");
         if (_profileRefreshInProgress)
             return;
         var token = _sessionToken;
         if (token is null)
         {
+            Services.UiDiagnostics.Log("subscription refresh blocked (no session)");
             ShowSignInDialog();
             return;
         }

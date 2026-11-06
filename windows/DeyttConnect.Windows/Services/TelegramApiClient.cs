@@ -138,6 +138,38 @@ public sealed class TelegramApiClient
         return new TelegramAwgTraffic(quotaBytes, usedBytes, expiresAt, daysLeft);
     }
 
+    /// <summary>Traffic of the proxy plan that carries the CDN LTE whitelist key.</summary>
+    public async Task<TelegramAwgTraffic?> GetProxyTrafficAsync(
+        string token,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await SendJsonAsync(
+            "/api/tg/traffic", HttpMethod.Get, null, token, cancellationToken);
+        var root = response.RootElement;
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("proxy", out var proxy))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        if (proxy.ValueKind == JsonValueKind.Null)
+            return null;
+        if (proxy.ValueKind != JsonValueKind.Object ||
+            !proxy.TryGetProperty("quota_bytes", out var quota) || quota.ValueKind != JsonValueKind.Number ||
+            !quota.TryGetInt64(out var quotaBytes) || quotaBytes < 0 ||
+            !proxy.TryGetProperty("used_bytes", out var used) || used.ValueKind != JsonValueKind.Number ||
+            !used.TryGetInt64(out var usedBytes) || usedBytes < 0)
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+
+        if (!proxy.TryGetProperty("expires_at", out var expiry) ||
+            expiry.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        var expiresAt = expiry.ValueKind == JsonValueKind.String ? expiry.GetString() : null;
+        if (expiresAt is not null && !TryParseUtc(expiresAt, out expiresAt))
+            throw new TelegramApiException("invalid_response", HttpStatusCode.BadGateway);
+        var daysLeft = proxy.TryGetProperty("days_left", out var days) && days.ValueKind == JsonValueKind.Number &&
+                       days.TryGetInt32(out var value)
+            ? value
+            : (int?)null;
+        return new TelegramAwgTraffic(quotaBytes, usedBytes, expiresAt, daysLeft);
+    }
+
     public async Task<byte[]?> GetAvatarAsync(string token, CancellationToken cancellationToken = default)
     {
         if (token.Length is < 32 or > 256)
