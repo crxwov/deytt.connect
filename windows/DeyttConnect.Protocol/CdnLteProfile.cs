@@ -9,7 +9,6 @@ public static class CdnLteProfile
 {
     public const string RouteTag = "route:DE:LTE";
     private const string Host = "front.deytt.space";
-    private const string Path = "/api/v2/cdn-lte-stream/";
 
     public static string Attach(string profile, string? encodedMetadata)
     {
@@ -194,10 +193,13 @@ public static class CdnLteProfile
             !Guid.TryParseExact(ReadString(user, "id"), "D", out _) || ReadString(user, "encryption") != "none" ||
             outbound["streamSettings"] is not JsonObject stream || ReadString(stream, "network") != "xhttp" ||
             ReadString(stream, "security") != "tls" || stream["tlsSettings"] is not JsonObject tls ||
-            ReadString(tls, "serverName") != Host || ReadString(tls, "fingerprint") != "chrome" ||
+            ReadString(tls, "serverName") != Host ||
+            (ReadString(tls, "fingerprint") != "chrome" && ReadString(tls, "fingerprint") != "firefox" &&
+             ReadString(tls, "fingerprint") != "random" && ReadString(tls, "fingerprint") != "ios" &&
+             ReadString(tls, "fingerprint") != "safari") ||
             tls["alpn"] is not JsonArray alpn || !alpn.Any(item => ReadString(item) == "h2") ||
             !alpn.Any(item => ReadString(item) == "http/1.1") ||
-            stream["xhttpSettings"] is not JsonObject xhttp || ReadString(xhttp, "path") != Path ||
+            stream["xhttpSettings"] is not JsonObject xhttp || !IsValidXhttpPath(ReadString(xhttp, "path")) ||
             ReadString(xhttp, "mode") != "packet-up" || xhttp["extra"] is not JsonObject extra ||
             ReadString(extra, "uplinkHTTPMethod") != "GET" || ReadString(extra, "uplinkDataPlacement") != "header" ||
             ReadString(extra, "uplinkDataKey") != "data" || ReadInt(extra, "scMaxEachPostBytes") != 4096 ||
@@ -205,6 +207,11 @@ public static class CdnLteProfile
             ReadBool(extra, "noSSEHeader") != true)
             throw new InvalidDataException("CDN LTE XHTTP metadata is invalid.");
     }
+
+    // Сервер ротирует xhttp-маршрут, чтобы он не попадал в публичные конфиги,
+    // поэтому проверяем форму пути, а не пиним секретную константу в клиенте.
+    private static bool IsValidXhttpPath(string? path) =>
+        path is { Length: >= 2 and <= 256 } && path.StartsWith('/');
 
     private static string? ReadString(JsonObject source, string key) =>
         source[key] is JsonValue value && value.TryGetValue<string>(out var text) ? text : null;
