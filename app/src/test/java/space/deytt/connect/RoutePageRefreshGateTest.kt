@@ -9,18 +9,18 @@ class RoutePageRefreshGateTest {
     fun refreshWaitsForActiveAndQueuedDiagnosticsThenRunsOnce() {
         val gate = RoutePageRefreshGate()
 
-        assertFalse(gate.request(busy = true))
-        assertFalse(gate.takeIfReady(busy = true))
-        assertTrue(gate.takeIfReady(busy = false))
-        assertFalse(gate.takeIfReady(busy = false))
+        assertFalse(gate.request(shouldDefer = true))
+        assertFalse(gate.takeIfReady(shouldDefer = true))
+        assertTrue(gate.takeIfReady(shouldDefer = false))
+        assertFalse(gate.takeIfReady(shouldDefer = false))
     }
 
     @Test
     fun idleRefreshIsImmediateAndDoesNotLeaveDeferredWork() {
         val gate = RoutePageRefreshGate()
 
-        assertFalse(gate.request(busy = true))
-        assertTrue(gate.request(busy = false))
-        assertFalse(gate.takeIfReady(busy = false))
+        assertFalse(gate.request(shouldDefer = true))
+        assertTrue(gate.request(shouldDefer = false))
+        assertFalse(gate.takeIfReady(shouldDefer = false))
     }
 }

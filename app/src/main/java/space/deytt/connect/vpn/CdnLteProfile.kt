@@ -1,6 +1,5 @@
 package space.deytt.connect
 
-import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.ServerSocket
@@ -9,13 +8,12 @@ import java.util.UUID
 internal object CdnLteProfile {
     const val ROUTE_TAG = "route:DE:LTE"
     private const val HOST = "front.deytt.space"
-    private const val PATH = "/api/v2/cdn-lte-stream/"
     private const val SOCKS_TAG = ROUTE_TAG
 
     fun attach(profile: String, encodedMetadata: String?): String {
         if (encodedMetadata.isNullOrBlank()) return profile
         require(encodedMetadata.length <= 8192) { "Метаданные LTE-маршрута слишком велики" }
-        val metadata = JSONObject(String(Base64.decode(encodedMetadata, Base64.DEFAULT), Charsets.UTF_8))
+        val metadata = JSONObject(String(LocalBase64.decode(encodedMetadata), Charsets.UTF_8))
         require(metadata.optInt("version") == 1) { "Неизвестная версия LTE-маршрута" }
         val outbound = metadata.getJSONObject("outbound")
         validateOutbound(outbound)
@@ -166,7 +164,10 @@ internal object CdnLteProfile {
         val alpn = tls.getJSONArray("alpn")
         require((0 until alpn.length()).map { alpn.optString(it) }.containsAll(listOf("h2", "http/1.1")))
         val xhttp = stream.getJSONObject("xhttpSettings")
-        require(xhttp.optString("path") == PATH && xhttp.optString("mode") == "packet-up")
+        require(xhttp.optString("mode") == "packet-up")
+        // The server rotates the xhttp route to keep it out of public configs, so
+        // validate the path shape instead of pinning a secret constant in the client.
+        requireValidXhttpPath(xhttp.optString("path"))
         val extra = xhttp.getJSONObject("extra")
         require(extra.optString("uplinkHTTPMethod") == "GET")
         require(extra.optString("uplinkDataPlacement") == "header")
@@ -175,5 +176,11 @@ internal object CdnLteProfile {
         require(extra.optInt("scMinPostsIntervalMs") == 30)
         require(extra.optInt("serverMaxHeaderBytes") == 32768)
         require(extra.optBoolean("noSSEHeader"))
+    }
+
+    private fun requireValidXhttpPath(path: String) {
+        require(path.length in 2..256 && path.startsWith("/")) {
+            "LTE-маршрут имеет недопустимый путь"
+        }
     }
 }
