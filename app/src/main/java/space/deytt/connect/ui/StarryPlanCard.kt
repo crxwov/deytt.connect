@@ -6,6 +6,7 @@ import android.content.Context
 import android.graphics.*
 import android.os.Build
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.animation.LinearInterpolator
@@ -101,7 +102,11 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
         setBackgroundColor(Color.BLACK)
 
         // 1. WebGL 2.0 Galaxy Background from React Bits
-        galaxyView = WebView(context).apply {
+        galaxyView = object : WebView(context) {
+            // Purely decorative background: never claim touch gestures, otherwise
+            // the card eats horizontal swipes and the pager cannot change pages.
+            override fun onTouchEvent(event: MotionEvent): Boolean = false
+        }.apply {
             layoutParams = LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             setBackgroundColor(Color.BLACK)
             isVerticalScrollBarEnabled = false
