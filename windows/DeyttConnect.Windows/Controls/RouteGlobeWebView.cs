@@ -70,6 +70,7 @@ public sealed class RouteGlobeWebView : ContentControl
     private WindowsNetworkLocation? _originLocation;
     private string? _egressCountryCode;
     private string? _activeAutoRouteKey;
+    private string? _lastProbeHint;
     private bool _trafficActive;
     private bool _hostActive = true;
     private bool _reducedMotion;
@@ -301,6 +302,15 @@ public sealed class RouteGlobeWebView : ContentControl
         var speedMbps = probe.BytesPerSecond is > 0 ? (long?)(probe.BytesPerSecond.Value * 8 / 1_000_000.0) : null;
         var script = $"window.deyttUpdateRouteProbe && window.deyttUpdateRouteProbe({JsonSerializer.Serialize(probe.RouteTag)}, {JsonSerializer.Serialize(probe.LatencyMilliseconds)}, {JsonSerializer.Serialize(speedMbps)}, {JsonSerializer.Serialize(probe.Stage)}, {JsonSerializer.Serialize(probe.Error)});";
         _ = ExecuteScriptAsync(script);
+    }
+
+    /// <summary>Shows or hides the truthful reason why country measurements are not running.</summary>
+    public void PushProbeHint(string? text)
+    {
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null) return;
+        if (string.Equals(_lastProbeHint, text, StringComparison.Ordinal)) return;
+        _lastProbeHint = text;
+        _ = ExecuteScriptAsync($"window.deyttSetProbeHint && window.deyttSetProbeHint({JsonSerializer.Serialize(text)});");
     }
 
     public async Task ExecuteScriptAsync(string script)

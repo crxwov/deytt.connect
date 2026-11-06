@@ -836,7 +836,7 @@ public partial class MainWindow
             usedBytes = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.UsedBytes : null,
             limitBytes = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.QuotaBytes : null,
             unlimitedTraffic = signedIn && _awgTrafficState == "ready" && _awgTraffic?.QuotaBytes == 0,
-            expiresAt = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.ExpiresAt : null,
+            expiresAt = signedIn && _awgTrafficState == "ready" ? ToUtcIso(_awgTraffic?.ExpiresAt) : null,
             unlimitedTime = signedIn && _awgTrafficState == "ready" && _awgTraffic?.ExpiresAt is null,
         };
         string? expiresFormatted = null;

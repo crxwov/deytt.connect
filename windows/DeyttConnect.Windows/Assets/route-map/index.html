@@ -3790,6 +3790,7 @@
 
         <!-- Секция: страны -->
         <span class="routes-section-label">страны</span>
+        <div id="probe-hint" class="routes-section-label" hidden style="color:#F0B851; text-transform:none; letter-spacing:0; margin-top:4px;"></div>
         <div class="countries-accordion-group" id="countries-list">
           <!-- нидерланды -->
           <div class="liquid-glass-card country-accordion is-expanded is-open" data-country-key="nl" id="card-route-nl">
@@ -5066,6 +5067,20 @@
 
     let currentSubscriptionKey = "";
 
+    // Truthful hint for why country measurements are not running
+    // (the VPN service refuses to probe while the tunnel is connected).
+    window.deyttSetProbeHint = function(text) {
+      const el = document.getElementById("probe-hint");
+      if (!el) return;
+      if (typeof text === "string" && text.length > 0) {
+        el.textContent = text;
+        el.hidden = false;
+      } else {
+        el.textContent = "";
+        el.hidden = true;
+      }
+    };
+
     window.deyttSetProfileAvatar = function(dataUrl) {
       const avatar = document.getElementById("profile-avatar");
       const image = document.getElementById("profile-avatar-image");
@@ -5181,12 +5196,12 @@
       const sessions = Array.isArray(data.sessions) ? data.sessions : [];
       setText("profile-devices-count", copy(`${devices.length} устройств · ${sessions.length} сессий`, `${devices.length} devices · ${sessions.length} sessions`));
 
-      // Quotas / LTE progress — the subscription-wide traffic quota (like the phone app),
-      // never the AmneziaWG adapter stats and never hardcoded demo values.
+      // Quotas / LTE progress — the personal LTE route quota served by /api/tg/traffic
+      // (awgQuota), with the real expiry date; never hardcoded demo values.
       const lteFill = document.querySelector(".lte-progress-fill, .lte-quota-fill");
       const lteText = document.getElementById("lte-quota-sub") || document.getElementById("lte-quota-text");
       if (lteFill && lteText) {
-        const quota = data.mainQuota;
+        const quota = data.awgQuota && data.awgQuota.state === "ready" ? data.awgQuota : null;
         const used = quota && Number.isFinite(quota.usedBytes) && quota.usedBytes >= 0 ? quota.usedBytes : null;
         const limit = quota && Number.isFinite(quota.limitBytes) && quota.limitBytes > 0 ? quota.limitBytes : null;
         if (quota && quota.unlimitedTraffic) {
@@ -5206,7 +5221,7 @@
           lteText.textContent = copy(`${usedGb} / ${limitGb} гб`, `${usedGb} / ${limitGb} gb`) + until;
         } else {
           lteFill.style.width = "0%";
-          lteText.textContent = copy("трафик недоступен", "traffic unavailable");
+          lteText.textContent = "—";
         }
       }
 

@@ -3272,6 +3272,7 @@ public partial class MainWindow : Window
         {
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.ServiceUnavailable;
             MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
+            PushRouteProbeHint(RouteCountryProbeState.ServiceUnavailable);
             RenderActiveTabPreservingScroll();
             return;
         }
@@ -3279,6 +3280,7 @@ public partial class MainWindow : Window
         {
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.NeedsDisconnect;
             MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
+            PushRouteProbeHint(RouteCountryProbeState.NeedsDisconnect);
             RenderActiveTabPreservingScroll();
             return;
         }
@@ -3303,6 +3305,24 @@ public partial class MainWindow : Window
         RenderActiveTabPreservingScroll();
         StartNextCountryProbe();
     }
+
+    /// <summary>Surfaces the truthful reason why route measurements are not running.</summary>
+    private void PushRouteProbeHint(RouteCountryProbeState state)
+    {
+        var text = state switch
+        {
+            RouteCountryProbeState.NeedsDisconnect => Copy(
+                "подключён vpn — отключи его, чтобы замерить маршруты",
+                "vpn is connected — disconnect it to measure routes"),
+            RouteCountryProbeState.ServiceUnavailable => Copy(
+                "служба vpn недоступна — установи её в настройках",
+                "vpn service is unavailable — install it in settings"),
+            _ => null,
+        };
+        _routeGlobe?.PushProbeHint(text);
+    }
+
+    private void ClearRouteProbeHint() => _routeGlobe?.PushProbeHint(null);
 
     private void CollapseRouteCountryProbe(string countryCode)
     {
@@ -3356,6 +3376,7 @@ public partial class MainWindow : Window
             var blockedRequests = _pendingRouteProbeQueue.ToArray();
             foreach (var request in blockedRequests)
                 _routeCountryProbeStates[request.CountryCode] = blockedState;
+            PushRouteProbeHint(blockedState);
             _pendingRouteProbeQueue.Clear();
             _pendingRouteProbeNodes.Clear();
             MarkRouteProbeFailure(blockedRequests.SelectMany(request => request.RouteTags),
@@ -3387,7 +3408,11 @@ public partial class MainWindow : Window
         var countryProbeGeneration = _routeCountryProbeGeneration;
         if (_routeProbeInProgress || _vpnActionInProgress ||
             WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
+        {
+            if (WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) && !_routeProbeInProgress && !_vpnActionInProgress)
+                PushRouteProbeHint(RouteCountryProbeState.NeedsDisconnect);
             return;
+        }
         if (_keysSnapshot?.ProfileJson is not { Length: > 0 } profile || _routes.Count == 0)
             return;
         if (!_vpnServiceAvailable)
@@ -3404,6 +3429,7 @@ public partial class MainWindow : Window
 
         _routeProbeInProgress = true;
         _routeProbeCancelRequested = false;
+        ClearRouteProbeHint();
         string[]? activeRouteTags = null;
         var previousRouteResults = new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal);
         try
@@ -3676,6 +3702,8 @@ public partial class MainWindow : Window
                 return;
             _vpnSnapshot = currentSnapshot;
             _vpnServiceAvailable = true;
+            if (!WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) && !_routeProbeInProgress)
+                ClearRouteProbeHint();
             RefreshHomeConnectionMeasurement();
             UpdateMapLocationForVpnState(previousSnapshot.State, _vpnSnapshot.State);
             if (previousSnapshot != _vpnSnapshot || wasAvailable != _vpnServiceAvailable ||
