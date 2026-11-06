@@ -3410,9 +3410,14 @@ public partial class MainWindow : Window
         {
             RenderProbeProgressPreservingFocus();
             var availableTags = _routes.Select(route => route.Tag).ToHashSet(StringComparer.Ordinal);
+            // The CDN LTE route is a local socks placeholder that only works through the
+            // tunnel's own Xray port; including it in a probe batch makes the service
+            // reject the whole request, so it never takes part in measurements.
+            var probeableTags = new HashSet<string>(availableTags, StringComparer.Ordinal);
+            probeableTags.Remove(DeyttConnect.Protocol.CdnLteProfile.RouteTag);
             var routeTags = requestedRouteTags is { Count: > 0 }
-                ? requestedRouteTags.Where(availableTags.Contains).Distinct(StringComparer.Ordinal).ToArray()
-                : availableTags.ToArray();
+                ? requestedRouteTags.Where(probeableTags.Contains).Distinct(StringComparer.Ordinal).ToArray()
+                : probeableTags.ToArray();
             if (routeTags.Length == 0)
                 return;
             activeRouteTags = routeTags;

@@ -618,13 +618,15 @@ public partial class MainWindow
         displayedRoute ??= _routes.FirstOrDefault(route => route.Id == _selectedRoute);
         var destination = GetHomeDestinationParts(displayedRoute);
         var automatic = _selectedRoute == "auto";
-        var country = automatic ? "" : displayedRoute?.CountryCode switch
-        {
-            "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
-            "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
-            "AUTO" or null => Copy("автоподбор", "auto-select"),
-            _ => RouteCountryName(displayedRoute!).ToLowerInvariant(),
-        };
+        var country = automatic
+            ? Copy("автоподбор", "auto-select")
+            : displayedRoute?.CountryCode switch
+            {
+                "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
+                "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
+                "AUTO" or null => Copy("автоподбор", "auto-select"),
+                _ => RouteCountryName(displayedRoute!).ToLowerInvariant(),
+            };
         var protocol = displayedRoute?.CountryCode is null or "AUTO" ? "" : ProtocolDescriptor(displayedRoute).ToLowerInvariant();
         var city = displayedRoute?.CountryCode is null or "AUTO"
             ? connected ? Copy("уточняем выбранный выход…", "confirming the selected exit…")
@@ -674,7 +676,7 @@ public partial class MainWindow
                 : canCancel
                     ? CopyExact("отменить подключение", "cancel connection")
                     : tunnelActive
-                        ? CopyExact("подключено", "connected")
+                        ? CopyExact("отключить", "disconnect")
                         : connecting || _vpnActionInProgress
                             ? CopyExact("подключаемся…", "connecting…")
                             : routeProbeActive
@@ -999,7 +1001,8 @@ public partial class MainWindow
                 break;
             case "home-measure":
                 if (IsVpnDisplayConnected()) RefreshHomeConnectionMeasurement(true);
-                else if (_routes.FirstOrDefault(route => route.Id == _selectedRoute) is { Id: not "auto" } route)
+                else if (_routes.FirstOrDefault(route => route.Id == _selectedRoute) is { Id: not "auto" } route &&
+                         route.Tag != DeyttConnect.Protocol.CdnLteProfile.RouteTag)
                     _ = ProbeRoutesAsync([route.Tag]);
                 else
                 {

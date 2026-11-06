@@ -665,18 +665,7 @@
       text-shadow: none !important;
     }
 
-    .home-action::before {
-      content: "" !important;
-      display: block !important;
-      position: absolute !important;
-      inset: 0 auto 0 -42% !important;
-      width: 36% !important;
-      pointer-events: none !important;
-      background: linear-gradient(105deg, transparent, rgba(255, 255, 255, .05) 24%, rgba(255, 255, 255, .28) 50%, rgba(255, 255, 255, .05) 76%, transparent) !important;
-      opacity: 0 !important;
-      transform: skewX(-18deg) !important;
-      animation: none !important;
-    }
+    .home-action::before { display: none !important; }
 
     .home-action:hover {
       background: linear-gradient(145deg, rgba(89, 166, 255, .94), rgba(35, 112, 222, .84)) !important;
@@ -3793,7 +3782,7 @@
             <div>
               <strong class="quick-select-title">lte · белые списки</strong>
               <div class="lte-progress-bar" style="background: rgba(255,255,255,0.12); height: 4px; border-radius: 9999px; overflow: hidden; margin: 4px 0;"><div class="lte-progress-fill" style="width: 0%; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #38BDF8 0%, #10B981 100%);"></div></div>
-              <span class="quick-select-sub" id="lte-quota-sub">0 / 10 gb · until dec 1</span>
+              <span class="quick-select-sub" id="lte-quota-sub">—</span>
             </div>
           </div>
           <button class="btn-select-route is-selected" data-action-route="ru-de" type="button">выбрано</button>
@@ -4226,7 +4215,7 @@
               </div>
               <div class="starry-metric-col">
                 <span class="starry-metric-label" id="profile-traffic-label">трафик</span>
-                <strong class="starry-metric-val" id="profile-traffic-val">299.5 гб</strong>
+                <strong class="starry-metric-val" id="profile-traffic-val">—</strong>
               </div>
             </div>
           </div>
@@ -5179,7 +5168,7 @@
       setText("profile-devices-val", "10");
       setText("profile-traffic-label", copy("трафик", "traffic"));
 
-      let trafficStr = "299.3 " + copy("гб", "gb");
+      let trafficStr = copy("—", "—");
       if (data.mainQuota && data.mainQuota.limitBytes) {
         const gb = (data.mainQuota.limitBytes / (1024 * 1024 * 1024)).toFixed(1);
         trafficStr = `${gb} ` + copy("гб", "gb");
@@ -5192,17 +5181,33 @@
       const sessions = Array.isArray(data.sessions) ? data.sessions : [];
       setText("profile-devices-count", copy(`${devices.length} устройств · ${sessions.length} сессий`, `${devices.length} devices · ${sessions.length} sessions`));
 
-      // Quotas / LTE progress
+      // Quotas / LTE progress — the subscription-wide traffic quota (like the phone app),
+      // never the AmneziaWG adapter stats and never hardcoded demo values.
       const lteFill = document.querySelector(".lte-progress-fill, .lte-quota-fill");
       const lteText = document.getElementById("lte-quota-sub") || document.getElementById("lte-quota-text");
-      if (data.awgQuota && lteFill && lteText) {
-        const used = data.awgQuota.usedBytes || 0;
-        const limit = data.awgQuota.limitBytes || (10 * 1024 * 1024 * 1024);
-        const pct = Math.min(100, Math.round((used / limit) * 100));
-        lteFill.style.width = pct + "%";
-        const usedGb = (used / 1e9).toFixed(1);
-        const limitGb = (limit / 1e9).toFixed(0);
-        lteText.textContent = copy(`${usedGb} / ${limitGb} гб · до 1 дек`, `${usedGb} / ${limitGb} gb · until dec 1`);
+      if (lteFill && lteText) {
+        const quota = data.mainQuota;
+        const used = quota && Number.isFinite(quota.usedBytes) && quota.usedBytes >= 0 ? quota.usedBytes : null;
+        const limit = quota && Number.isFinite(quota.limitBytes) && quota.limitBytes > 0 ? quota.limitBytes : null;
+        if (quota && quota.unlimitedTraffic) {
+          lteFill.style.width = "0%";
+          lteText.textContent = copy("трафик без лимита", "unlimited traffic");
+        } else if (used !== null && limit !== null) {
+          const pct = Math.min(100, Math.round((used / limit) * 100));
+          lteFill.style.width = pct + "%";
+          const usedGb = (used / 1e9).toFixed(1);
+          const limitGb = (limit / 1e9).toFixed(0);
+          const end = quota.expiresAt ? new Date(quota.expiresAt) : null;
+          let until = "";
+          if (end && Number.isFinite(end.getTime())) {
+            const date = new Intl.DateTimeFormat(english ? "en-US" : "ru-RU", { day: "numeric", month: "short" }).format(end);
+            until = copy(` · до ${date}`, ` · until ${date}`);
+          }
+          lteText.textContent = copy(`${usedGb} / ${limitGb} гб`, `${usedGb} / ${limitGb} gb`) + until;
+        } else {
+          lteFill.style.width = "0%";
+          lteText.textContent = copy("трафик недоступен", "traffic unavailable");
+        }
       }
 
       const list = document.getElementById("profile-devices-list");
