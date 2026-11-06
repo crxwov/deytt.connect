@@ -223,6 +223,7 @@ class MainActivity : Activity() {
         StartupAnimationView.configureSystemSplash(this); migrateRemovedSelectedRoute()
         initialPage = savedInstanceState?.getInt(STATE_SELECTED_TAB) ?: intent?.getIntExtra(EXTRA_START_TAB, 0)?.coerceIn(0, 3) ?: 0
         IpNetworkLocationStore(this).clear(); buildScreen()
+        SubscriptionRefreshWorker.schedule(this)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) showStartupAnimation()
         window.decorView.post { networkLocationCoordinator.showNetworkLocationConsentIfNeeded() }
         requestNotificationPermissionIfNeeded()

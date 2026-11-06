@@ -30,8 +30,8 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        } else 143
-        versionName = "0.11.113"
+        } else 144
+        versionName = "0.11.114"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }
@@ -75,6 +75,7 @@ dependencies {
     implementation(project(":openflux-tunnel"))
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.viewpager2:viewpager2:1.1.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }
