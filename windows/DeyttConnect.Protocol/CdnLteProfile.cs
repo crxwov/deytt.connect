@@ -194,7 +194,10 @@ public static class CdnLteProfile
             !Guid.TryParseExact(ReadString(user, "id"), "D", out _) || ReadString(user, "encryption") != "none" ||
             outbound["streamSettings"] is not JsonObject stream || ReadString(stream, "network") != "xhttp" ||
             ReadString(stream, "security") != "tls" || stream["tlsSettings"] is not JsonObject tls ||
-            ReadString(tls, "serverName") != Host || ReadString(tls, "fingerprint") != "chrome" ||
+            ReadString(tls, "serverName") != Host ||
+            (ReadString(tls, "fingerprint") != "chrome" && ReadString(tls, "fingerprint") != "firefox" &&
+             ReadString(tls, "fingerprint") != "random" && ReadString(tls, "fingerprint") != "ios" &&
+             ReadString(tls, "fingerprint") != "safari") ||
             tls["alpn"] is not JsonArray alpn || !alpn.Any(item => ReadString(item) == "h2") ||
             !alpn.Any(item => ReadString(item) == "http/1.1") ||
             stream["xhttpSettings"] is not JsonObject xhttp || ReadString(xhttp, "path") != Path ||
