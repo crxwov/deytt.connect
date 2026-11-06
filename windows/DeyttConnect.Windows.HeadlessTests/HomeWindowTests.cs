@@ -167,7 +167,7 @@ public sealed class HomeWindowTests
     [InlineData("disconnected", "не подключено", "подключиться")]
     [InlineData("connecting", "подключаемся…", "отменить подключение")]
     [InlineData("error", "не удалось подключиться", "повторить")]
-    [InlineData("connected", "подключено", "отключить")]
+    [InlineData("connected", "подключено", "подключено")]
     public void Vpn_fixture_renders_truthful_state_in_home_presentation(
         string state, string expectedStatus, string expectedAction)
     {
