@@ -135,6 +135,90 @@ public sealed class WindowsRouteCatalogTests
         Assert.Equal("EU", lte.CountryCode);
     }
 
+    [Theory]
+    [InlineData("/api/v2/cdn-lte-stream/")]
+    [InlineData("/api/v2/lte-9f2c1b7a4e/")]
+    public void LteAttachAcceptsRotatedXhttpPathShapes(string path)
+    {
+        const string baseProfile = """
+            {
+              "inbounds": [{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
+              "outbounds": [
+                {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:DE:VLESS"]},
+                {"type":"vless","tag":"route:DE:VLESS"}
+              ],
+              "route": {"final":"🇪🇺 автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}
+            }
+            """;
+
+        var attached = CdnLteProfile.Attach(
+            baseProfile,
+            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(LteMetadataJson(path))));
+
+        using var profile = JsonDocument.Parse(attached);
+        Assert.True(CdnLteProfile.HasValidMetadata(attached));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("api/v2/cdn-lte-stream/")]
+    public void LteAttachRejectsMalformedXhttpPath(string path)
+    {
+        const string baseProfile = """
+            {
+              "inbounds": [{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
+              "outbounds": [
+                {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:DE:VLESS"]},
+                {"type":"vless","tag":"route:DE:VLESS"}
+              ],
+              "route": {"final":"🇪🇺 автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}
+            }
+            """;
+
+        Assert.Throws<InvalidDataException>(() => CdnLteProfile.Attach(
+            baseProfile,
+            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(LteMetadataJson(path)))));
+    }
+
+    private static string LteMetadataJson(string path) => $"""
+        {{
+          "version": 1,
+          "outbound": {{
+            "tag": "route:DE:LTE",
+            "protocol": "vless",
+            "settings": {{
+              "vnext": [{{
+                "address": "front.deytt.space",
+                "port": 443,
+                "users": [{{"id":"00000000-0000-4000-8000-000000000000","encryption":"none"}}]
+              }}]
+            }},
+            "streamSettings": {{
+              "network": "xhttp",
+              "security": "tls",
+              "tlsSettings": {{
+                "serverName": "front.deytt.space",
+                "alpn": ["h2", "http/1.1"],
+                "fingerprint": "chrome"
+              }},
+              "xhttpSettings": {{
+                "path": "{path}",
+                "mode": "packet-up",
+                "extra": {{
+                  "uplinkHTTPMethod": "GET",
+                  "uplinkDataPlacement": "header",
+                  "uplinkDataKey": "data",
+                  "noSSEHeader": true,
+                  "scMaxEachPostBytes": 4096,
+                  "scMinPostsIntervalMs": 30,
+                  "serverMaxHeaderBytes": 32768
+                }}
+              }}
+            }}
+          }}
+        }}
+        """;
+
 
     [Fact]
     public void DuplicateTagsAcrossOutboundsAndEndpointsAreRejected()
