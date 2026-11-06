@@ -204,6 +204,7 @@ public sealed class RouteGlobeWebView : ContentControl
             countryName = r.CountryName,
             protocol = r.Protocol,
             protocolName = r.ProtocolName,
+            detail = r.Detail,
             latency = probes != null && probes.TryGetValue(r.Tag, out var p) ? p.LatencyMilliseconds : null,
             speed = probes != null && probes.TryGetValue(r.Tag, out var p2) && p2.BytesPerSecond > 0 ? (long?)(p2.BytesPerSecond.Value * 8 / 1_000_000.0) : null,
             stage = probes != null && probes.TryGetValue(r.Tag, out var p3) ? p3.Stage : null,

@@ -14,7 +14,8 @@ public sealed record WindowsRoute(
     string Protocol,
     string ProtocolName,
     string? ProfileId = null,
-    string? ProfileName = null);
+    string? ProfileName = null,
+    string? Detail = null);
 
 public static class WindowsRouteCatalog
 {
@@ -87,6 +88,11 @@ public static class WindowsRouteCatalog
         if (autoTag is null)
             throw new InvalidDataException("The subscription is missing the automatic route.");
 
+        var outboundByTag = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var item in outboundItems)
+            if (ReadString(item, "tag") is { Length: > 0 } itemTag)
+                outboundByTag[itemTag] = item;
+
         var routes = new List<WindowsRoute>
         {
             new("auto", autoTag, "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
@@ -102,7 +108,10 @@ public static class WindowsRouteCatalog
             var tag = $"route:{country.Code}:{protocol.Code}";
             if (outboundTags.Contains(tag))
                 routes.Add(new WindowsRoute(tag, tag, country.Code, country.Name, country.Flag,
-                    protocol.Code, protocol.Name));
+                    protocol.Code, protocol.Name,
+                    Detail: outboundByTag.TryGetValue(tag, out var outbound)
+                        ? DescribeTransport(outbound)
+                        : null));
         }
 
         foreach (var awgProfile in (awgProfiles ?? []).Take(32))
@@ -154,6 +163,25 @@ public static class WindowsRouteCatalog
         value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+
+    /// <summary>
+    /// Human-readable transport/security summary taken from the subscription outbound
+    /// itself (e.g. "reality" for VLESS Reality), never a hardcoded protocol label.
+    /// </summary>
+    private static string? DescribeTransport(JsonElement outbound)
+    {
+        if (ReadString(outbound, "type") is not ("vless" or "trojan"))
+            return null;
+        var hasTls = outbound.TryGetProperty("tls", out var tls) && tls.ValueKind == JsonValueKind.Object;
+        if (hasTls &&
+            (!tls.TryGetProperty("reality", out var reality) || reality.ValueKind != JsonValueKind.Object ||
+             !reality.TryGetProperty("enabled", out var enabled) || enabled.ValueKind != JsonValueKind.False))
+            return "reality";
+        if (outbound.TryGetProperty("transport", out var transport) &&
+            ReadString(transport, "type") is { Length: > 0 } transportType)
+            return transportType == "ws" ? "websocket + tls" : transportType;
+        return hasTls ? "tls" : null;
+    }
 
     private static HashSet<string> CollectTags(IEnumerable<JsonElement> items)
     {

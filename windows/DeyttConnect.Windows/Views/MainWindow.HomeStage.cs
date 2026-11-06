@@ -373,6 +373,7 @@ public partial class MainWindow
             return Copy("Автоматически", "Automatic");
         return route.Protocol switch
         {
+            "VLESS" when route.Detail is "reality" => "./vless+reality",
             "VLESS" => "./vless+ws",
             "TROJAN" => "./trojan",
             "HYSTERIA2" => "./hysteria",
