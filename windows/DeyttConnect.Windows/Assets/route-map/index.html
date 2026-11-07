@@ -3743,6 +3743,315 @@
         color: #38BDF8 !important;
       }
 
+      /* ================================================================
+         PHONE-PARITY LIQUIDGLASS v2 — кодовый порт DeyttUi.kt (0.11.127)
+         Слои телефона (LiquidGlassDrawable): fill → gloss (верх 40%) →
+         inner lip → rim. Обод = фон border-box под прозрачной рамкой,
+         fill = padding-box; связка mask+conic на ::before рендерилась
+         с артефактом «второй таблетки» и полностью убрана.
+         Никакого неона, блюра и hover-подъёма — на телефоне их нет.
+         ================================================================ */
+      @property --glass-rim { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+      @property --glass-fill { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+      @keyframes glass-rim-spin { to { --glass-rim: 360deg; } }
+      @keyframes glass-fill-spin { to { --glass-fill: -216deg; } }
+
+      /* --- мёртвые псевдоэлементы прошлых версий (источник артефакта) --- */
+      #home-action::before, .home-action::before,
+      #compact-action::before, .compact-action::before,
+      #home-action::after, .home-action::after,
+      #compact-action::after, .compact-action::after,
+      #home-measure::before, .home-measure::before,
+      #home-measure::after, .home-measure::after {
+        content: none !important;
+        display: none !important;
+      }
+
+      /* --- «подключиться»: connectionGlassBackground(IDLE)
+             fill-shimmer 0x481E3854…, rim-shimmer 0xEEFFFFFF→0x300369A1,
+             обод 1.35dp, gloss 0x18, lip 0x18FFFFFF/0x12000000 --- */
+      #home-action, .home-action, #compact-action, .compact-action {
+        height: 56px !important;
+        min-height: 56px !important;
+        padding: 0 14px !important;
+        border-radius: 28px !important;
+        border: 1.35px solid transparent !important;
+        font-family: "Inter Tight", sans-serif !important;
+        font-size: 13.5px !important;
+        font-weight: 620 !important;
+        letter-spacing: 0 !important;
+        color: #F2F5FC !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(30, 56, 84, 0.28) 0%, rgba(18, 36, 56, 0.16) 25%,
+            rgba(24, 50, 76, 0.22) 50%, rgba(18, 36, 56, 0.16) 75%,
+            rgba(30, 56, 84, 0.28) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(255, 255, 255, 0.93) 0%, rgba(56, 189, 248, 0.84) 16.7%,
+            rgba(2, 132, 199, 0.44) 33.3%, rgba(3, 105, 161, 0.19) 50%,
+            rgba(2, 132, 199, 0.44) 66.7%, rgba(56, 189, 248, 0.84) 83.3%,
+            rgba(255, 255, 255, 0.93) 100%) border-box !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        text-shadow: none !important;
+        overflow: hidden !important;
+        animation: glass-rim-spin 5.5s linear infinite,
+          glass-fill-spin 5.5s linear infinite !important;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease !important;
+      }
+      #home-action:hover, .home-action:hover,
+      #compact-action:hover, .compact-action:hover {
+        filter: brightness(1.07) !important;
+      }
+      #home-action:active, .home-action:active,
+      #compact-action:active, .compact-action:active {
+        transform: scale(0.985) !important;
+        transition-duration: 120ms, 160ms !important;
+      }
+
+      /* CONNECTED: изумруд 0x351F3A30→0x2010201A, shimmer 0xD834D399 */
+      #home-action[data-tone="connected"], .home-action[data-tone="connected"],
+      #home-action[data-tone="good"], .home-action[data-tone="good"],
+      #compact-action[data-tone="connected"], .compact-action[data-tone="connected"],
+      #compact-action[data-tone="good"], .compact-action[data-tone="good"] {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(26, 62, 46, 0.27) 0%, rgba(15, 36, 26, 0.14) 25%,
+            rgba(22, 52, 36, 0.21) 50%, rgba(15, 36, 26, 0.14) 75%,
+            rgba(26, 62, 46, 0.27) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(255, 255, 255, 0.93) 0%, rgba(52, 211, 153, 0.85) 16.7%,
+            rgba(5, 150, 105, 0.46) 33.3%, rgba(4, 120, 87, 0.16) 50%,
+            rgba(5, 150, 105, 0.46) 66.7%, rgba(52, 211, 153, 0.85) 83.3%,
+            rgba(255, 255, 255, 0.93) 100%) border-box !important;
+      }
+
+      /* CONNECTING: fill как в покое, блик 0xF0FFFFFF→0x280369A1 */
+      #home-action[data-tone="connecting"], .home-action[data-tone="connecting"],
+      #compact-action[data-tone="connecting"], .compact-action[data-tone="connecting"] {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(30, 56, 84, 0.28) 0%, rgba(18, 36, 56, 0.16) 25%,
+            rgba(24, 50, 76, 0.22) 50%, rgba(18, 36, 56, 0.16) 75%,
+            rgba(30, 56, 84, 0.28) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(240, 255, 255, 0.94) 0%, rgba(56, 189, 248, 0.85) 16.7%,
+            rgba(2, 132, 199, 0.38) 33.3%, rgba(3, 105, 161, 0.16) 50%,
+            rgba(2, 132, 199, 0.38) 66.7%, rgba(56, 189, 248, 0.85) 83.3%,
+            rgba(240, 255, 255, 0.94) 100%) border-box !important;
+      }
+
+      /* ERROR: 0x38352630→0x221E141C, блик 0xD8F43F5E */
+      #home-action[data-tone="error"], .home-action[data-tone="error"],
+      #compact-action[data-tone="error"], .compact-action[data-tone="error"] {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(62, 26, 34, 0.27) 0%, rgba(36, 16, 22, 0.16) 25%,
+            rgba(48, 20, 28, 0.21) 50%, rgba(36, 16, 22, 0.16) 75%,
+            rgba(62, 26, 34, 0.27) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(240, 255, 255, 0.94) 0%, rgba(244, 63, 94, 0.85) 16.7%,
+            rgba(190, 18, 60, 0.44) 33.3%, rgba(136, 19, 55, 0.19) 50%,
+            rgba(190, 18, 60, 0.44) 66.7%, rgba(244, 63, 94, 0.85) 83.3%,
+            rgba(240, 255, 255, 0.94) 100%) border-box !important;
+      }
+
+      /* STOPPING/disabled: глухое стекло без блика (на телефоне shimmerStroke=null) */
+      #home-action[data-tone="stopping"], .home-action[data-tone="stopping"],
+      #compact-action[data-tone="stopping"], .compact-action[data-tone="stopping"],
+      #home-action:disabled, .home-action:disabled,
+      #compact-action:disabled, .compact-action:disabled {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(43, 57, 75, 0.21), rgba(19, 28, 41, 0.13)) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.31) 0%, rgba(60, 82, 104, 0.19) 34%,
+            rgba(82, 98, 122, 0.15) 72%, rgba(255, 255, 255, 0.16) 100%) border-box !important;
+        animation: none !important;
+      }
+
+      /* --- «обновить замер»: glassButtonBackground(0x40364C68→0x22121E2E),
+             r24, обод 0.85dp [#2CFFFFFF,#12FFFFFF,#0C82B4E8,#12FFFFFF], gloss 0x12 --- */
+      #home-measure, .home-measure {
+        height: 48px !important;
+        min-height: 48px !important;
+        border-radius: 24px !important;
+        border: 0.85px solid transparent !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0 !important;
+        color: #F2F5FC !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(54, 76, 104, 0.25), rgba(18, 30, 46, 0.13)) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.07) 34%,
+            rgba(130, 180, 232, 0.05) 72%, rgba(255, 255, 255, 0.07) 100%) border-box !important;
+        box-shadow: 0 2px 6px rgba(8, 14, 26, 0.3) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        animation: none !important;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease !important;
+      }
+      #home-measure:hover, .home-measure:hover {
+        filter: brightness(1.07) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(54, 76, 104, 0.25), rgba(18, 30, 46, 0.13)) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.07) 34%,
+            rgba(130, 180, 232, 0.05) 72%, rgba(255, 255, 255, 0.07) 100%) border-box !important;
+      }
+      #home-measure:active, .home-measure:active {
+        transform: scale(0.985) !important;
+        transition-duration: 120ms, 160ms !important;
+      }
+
+      /* --- «выбрать/выбрано»: пилюля строки телефона 60×36dp, r18 --- */
+      .btn-select-route {
+        min-width: 60px !important;
+        min-height: 36px !important;
+        padding: 6px 8px !important;
+        border-radius: 18px !important;
+        border: 0.95px solid transparent !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        color: #F2F5FC !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 50%, rgba(12, 19, 29, 0.12) 100%) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.165) 0%, rgba(112, 168, 224, 0.07) 34%,
+            rgba(80, 128, 184, 0.04) 72%, rgba(255, 255, 255, 0.08) 100%) border-box !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 6px rgba(8, 14, 26, 0.3) !important;
+        animation: none !important;
+      }
+      .btn-select-route:hover { filter: brightness(1.07) !important; }
+      .btn-select-route:active { transform: scale(0.99) !important; }
+      /* emphasis: glassRowBackground(true, 18), текст SKY 0xFF29B9F0 */
+      .btn-select-route.is-selected {
+        color: #29B9F0 !important;
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 6px rgba(8, 14, 26, 0.3) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.086), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 50%, rgba(15, 25, 38, 0.17) 100%) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.27) 0%, rgba(120, 186, 240, 0.125) 34%,
+            rgba(88, 156, 216, 0.07) 72%, rgba(255, 255, 255, 0.12) 100%) border-box !important;
+      }
+
+      /* --- карточки маршрутов: glassRowBackground(false, 22) на всех
+             (телефон рисует одно и то же стекло у подписки, автоподбора,
+             lte и стран); без блюра и неона --- */
+      .liquid-glass-card {
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 50%, rgba(12, 19, 29, 0.12) 100%) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.165) 0%, rgba(112, 168, 224, 0.07) 34%,
+            rgba(80, 128, 184, 0.04) 72%, rgba(255, 255, 255, 0.08) 100%) border-box !important;
+        border: 0.95px solid transparent !important;
+        border-radius: 22px !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 10px rgba(8, 14, 26, 0.35) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+      .liquid-glass-card:active { transform: scale(0.99) !important; }
+      /* emphasis: glassRowBackground(true, 22), обод 1dp */
+      .liquid-glass-card.is-selected {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        border-width: 1px !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 10px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.086), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 50%, rgba(15, 25, 38, 0.17) 100%) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.27) 0%, rgba(120, 186, 240, 0.125) 34%,
+            rgba(88, 156, 216, 0.07) 72%, rgba(255, 255, 255, 0.12) 100%) border-box !important;
+      }
+      .country-accordion-header:hover { background: transparent !important; }
+
+      /* --- список стран: телефон кладёт spacer(8) между карточками --- */
+      .countries-accordion-group {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+      }
+
+      /* --- единые размеры блоков: все строки телефона 64dp --- */
+      .country-accordion-header {
+        min-height: 64px !important;
+        box-sizing: border-box !important;
+        padding: 10px 16px !important;
+        align-items: center !important;
+      }
+      .routes-refresh-banner, .quick-select-card {
+        min-height: 64px !important;
+        box-sizing: border-box !important;
+        padding: 12px 16px !important;
+      }
+      .country-flag-wrap { width: 44px !important; height: 30px !important; }
+      .country-header-left { gap: 10px !important; }
+      /* перед «страны» телефон держит spacer(24): 14 flex-gap + 10 */
+      #card-route-ru-de { margin-bottom: 10px !important; }
+      .routes-section-label { margin: 0 0 0 2px !important; }
+
+      .network-atlas.reduce-motion #home-action, .network-atlas.reduce-motion .home-action,
+      .network-atlas.reduce-motion #compact-action, .network-atlas.reduce-motion .compact-action,
+      .network-atlas.reduce-motion #home-measure, .network-atlas.reduce-motion .home-measure {
+        animation: none !important;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #home-action, .home-action, #compact-action, .compact-action,
+        #home-measure, .home-measure { animation: none !important; }
+      }
+
     </style>
 </head>
 <body>
