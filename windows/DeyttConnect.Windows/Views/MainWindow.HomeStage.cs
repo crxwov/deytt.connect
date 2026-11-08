@@ -141,6 +141,8 @@ public partial class MainWindow
                 routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
             if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
             {
+                latency = latency ?? PositiveLatency(result.LatencyMilliseconds) ?? storedLatency;
+                if (latency is not null) latencyError = null;
                 _homeLiveProbe = result with
                 {
                     LatencyMilliseconds = latency,
@@ -743,7 +745,7 @@ public partial class MainWindow
             {
                 LatencyMilliseconds = _homeLiveProbe.Stage == "latency"
                     ? PositiveLatency(_homeLiveProbe.LatencyMilliseconds) : PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds) ?? PositiveLatency(_homeLiveProbe.LatencyMilliseconds),
-                Error = _vpnSnapshot.TunnelLatencyError is null ? _homeLiveProbe.Error :
+                Error = _vpnSnapshot.TunnelLatencyError is null || PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds) is not null || PositiveLatency(_homeLiveProbe.LatencyMilliseconds) is not null ? _homeLiveProbe.Error :
                     Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."),
             };
         }

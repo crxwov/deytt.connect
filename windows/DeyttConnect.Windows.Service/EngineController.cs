@@ -28,7 +28,7 @@ internal sealed class EngineController
     private const int MaximumAwgProfilesTotalBytes = 4 * 1024 * 1024;
     private static readonly (string Url, HttpStatusCode? ExpectedStatus)[] TunnelCanaries =
     [
-        ("https://www.cloudflare.com/cdn-cgi/trace", null),
+        ("https://cp.cloudflare.com/generate_204", HttpStatusCode.NoContent),
         ("https://www.gstatic.com/generate_204", HttpStatusCode.NoContent),
     ];
     private readonly SemaphoreSlim _gate = new(1, 1);
@@ -103,6 +103,17 @@ internal sealed class EngineController
                 timeouts: RouteLatencyProbe.ProductionTimeouts,
                 targets: targets,
                 expectedStatuses: expectedStatuses).ConfigureAwait(false);
+            if (result.LatencyMilliseconds is null)
+            {
+                try
+                {
+                    var fallbackLatency = await VerifyHttpsThroughTunAsync(tunnelInterface,
+                        TimeSpan.FromSeconds(3), cancellationToken, canaryAddresses).ConfigureAwait(false);
+                    if (fallbackLatency > 0)
+                        result = new RouteLatencyProbeResult(fallbackLatency, null);
+                }
+                catch { }
+            }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
         catch (Exception error)
@@ -195,6 +206,7 @@ internal sealed class EngineController
             {
                 canaryAddresses = new Dictionary<string, IPAddress[]>(StringComparer.OrdinalIgnoreCase)
                 {
+                    ["cp.cloudflare.com"] = [IPAddress.Parse("104.16.132.229"), IPAddress.Parse("104.16.133.229")],
                     ["www.cloudflare.com"] = [IPAddress.Parse("104.16.123.96"), IPAddress.Parse("104.16.124.96")],
                     ["www.gstatic.com"] = [IPAddress.Parse("142.251.20.94"), IPAddress.Parse("172.217.16.227")]
                 };
@@ -203,6 +215,7 @@ internal sealed class EngineController
             {
                 canaryAddresses = new Dictionary<string, IPAddress[]>(StringComparer.OrdinalIgnoreCase)
                 {
+                    ["cp.cloudflare.com"] = [IPAddress.Parse("104.16.132.229"), IPAddress.Parse("104.16.133.229")],
                     ["www.cloudflare.com"] = [IPAddress.Parse("104.16.123.96"), IPAddress.Parse("104.16.124.96")],
                     ["www.gstatic.com"] = [IPAddress.Parse("142.251.20.94"), IPAddress.Parse("172.217.16.227")]
                 };
