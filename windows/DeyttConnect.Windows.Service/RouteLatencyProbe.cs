@@ -14,8 +14,8 @@ internal static class RouteLatencyProbe
     ];
 
     internal static readonly RouteLatencyProbeTimeouts ProductionTimeouts = new(
-        Overall: TimeSpan.FromSeconds(3),
-        Individual: TimeSpan.FromMilliseconds(1500));
+        Overall: TimeSpan.FromSeconds(5),
+        Individual: TimeSpan.FromMilliseconds(2500));
 
     internal static async Task<RouteLatencyProbeResult> MeasureServerAsync(IPAddress serverAddress,
         CancellationToken cancellationToken)
@@ -116,25 +116,36 @@ internal static class RouteLatencyProbe
                 Failure: DescribeFailure(coldOutcomes));
         }
 
-        // One to two warm samples over the established keep-alive connection measure the true network RTT latency,
-        // avoiding cold TLS+TCP handshake overhead that produced nonsensical 800-1500ms pings.
-        var warmLatencies = new List<long>(capacity: 2);
-        for (var sample = 1; sample <= 2 && !overallCancellation.IsCancellationRequested; sample++)
+        // Measure a warm sample over the established keep-alive connection for true RTT latency.
+        long? finalLatency = selectedCold.LatencyMilliseconds;
+        try
         {
-            var outcome = await MeasureRequestAsync(
-                proxyClient,
-                selectedCold.Target,
-                ExpectedStatus(selectedCold.Target),
-                overallCancellation.Token,
-                cancellationToken,
-                overallCancellation.Token,
-                limits.Individual).ConfigureAwait(false);
+            if (!overallCancellation.IsCancellationRequested)
+            {
+                var warmOutcome = await MeasureRequestAsync(
+                    proxyClient,
+                    selectedCold.Target,
+                    ExpectedStatus(selectedCold.Target),
+                    overallCancellation.Token,
+                    cancellationToken,
+                    overallCancellation.Token,
+                    limits.Individual).ConfigureAwait(false);
 
-            if (outcome.LatencyMilliseconds is long latency && latency > 0)
-                warmLatencies.Add(latency);
+                if (warmOutcome.LatencyMilliseconds is long warm && warm > 0)
+                {
+                    finalLatency = warm;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // If warm sample fails or times out, safely fall back to the successful cold latency.
         }
 
-        var finalLatency = warmLatencies.Count > 0 ? warmLatencies.Min() : selectedCold.LatencyMilliseconds;
         reportProgress?.Invoke(new RouteLatencyProbeObservation(
             Attempt: 1,
             Phase: RouteLatencyProbePhase.WarmSample,

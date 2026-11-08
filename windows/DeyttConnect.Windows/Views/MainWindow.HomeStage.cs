@@ -122,9 +122,9 @@ public partial class MainWindow
                         TunnelLatencyError = measuredTunnel.TunnelLatencyError,
                         HealthCheckedAt = measuredTunnel.HealthCheckedAt,
                     };
-                    latency = PositiveLatency(measuredTunnel.TunnelLatencyMilliseconds);
-                    latencyError = measuredTunnel.TunnelLatencyError is null ? null :
-                        Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route.");
+                    latency = PositiveLatency(measuredTunnel.TunnelLatencyMilliseconds) ?? latency ?? storedLatency;
+                    latencyError = latency is not null ? null : (measuredTunnel.TunnelLatencyError is null ? null :
+                        Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."));
                     if (latency is not null) StoreHomeMeasuredValues(routeTag, latency, null);
                     UpdateHomeGlobePresentation();
                 }
