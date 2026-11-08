@@ -2824,13 +2824,14 @@
       transform: scale(0.985) !important;
     }
 
-    /* Disconnected / Idle State */
+    /* Disconnected / Idle State - Clean dark glass without neon glow or colored outline */
     .home-action, #home-action,
     .home-action[data-tone="idle"], #home-action[data-tone="idle"],
     .compact-action[data-tone="idle"] {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(20, 28, 40, 0.55) 100%) !important;
-      border: 1.5px solid rgba(107, 221, 242, 0.65) !important;
-      box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.8), 0 0 22px rgba(107, 221, 242, 0.22) !important;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(20, 28, 40, 0.60) 100%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.16) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.32) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 16px rgba(0, 0, 0, 0.35) !important;
       color: #FFFFFF !important;
     }
 
@@ -2847,9 +2848,10 @@
     /* Connecting / Checking State */
     .home-action[data-tone="connecting"], #home-action[data-tone="connecting"],
     .compact-action[data-tone="connecting"] {
-      background: linear-gradient(180deg, rgba(107, 221, 242, 0.16) 0%, rgba(20, 35, 55, 0.55) 100%) !important;
-      border: 1.5px solid rgba(107, 221, 242, 0.85) !important;
-      box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.85), 0 0 28px rgba(107, 221, 242, 0.35) !important;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(20, 35, 55, 0.60) 100%) !important;
+      border: 1px solid rgba(120, 175, 235, 0.45) !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.35) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 16px rgba(0, 0, 0, 0.35) !important;
       color: #FFFFFF !important;
     }
 
@@ -3286,11 +3288,9 @@
         background: linear-gradient(180deg, rgba(45, 66, 90, 0.50) 0%, rgba(19, 31, 46, 0.72) 100%) !important;
         backdrop-filter: blur(24px) saturate(190%) !important;
         -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
-        box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.65),
+        box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.35),
                     inset 0 -1px 2px rgba(0, 0, 0, 0.35),
-                    0 0 24px rgba(56, 189, 248, 0.45),
-                    0 8px 24px -4px rgba(2, 132, 199, 0.35),
-                    0 2px 6px rgba(0, 0, 0, 0.32) !important;
+                    0 4px 16px rgba(0, 0, 0, 0.35) !important;
         color: #FFFFFF !important;
         display: flex !important;
         align-items: center !important;
@@ -3299,31 +3299,10 @@
         transition: transform 150ms ease, box-shadow 250ms ease, background 250ms ease, border-color 250ms ease !important;
       }
 
-      /* Animated Chromatic Iridescent Rim Shimmer (Angular rotation without shape distortion) */
+      /* Disabled artificial glowing rim shimmer */
       .home-action::before, #home-action::before,
       .compact-action::before, #compact-action::before {
-        content: "" !important;
-        position: absolute !important;
-        inset: 0 !important;
-        border-radius: 9999px !important;
-        padding: 1.5px !important;
-        background: conic-gradient(from var(--shimmer-angle),
-          rgba(255, 255, 255, 0.95),
-          rgba(56, 189, 248, 0.85),
-          rgba(2, 132, 199, 0.45),
-          rgba(3, 105, 161, 0.20),
-          rgba(2, 132, 199, 0.45),
-          rgba(56, 189, 248, 0.85),
-          rgba(255, 255, 255, 0.95)
-        ) !important;
-        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0) !important;
-        -webkit-mask-composite: xor !important;
-        mask-composite: exclude !important;
-        pointer-events: none !important;
-        animation: liquid-conic-spin 5.5s linear infinite !important;
-        opacity: 0.85 !important;
-        z-index: 1 !important;
-        transition: opacity 250ms ease !important;
+        display: none !important;
       }
 
       /* Disabled artificial curved lens division to preserve pure LiquidGlass */
@@ -3335,11 +3314,9 @@
       .home-action:hover, #home-action:hover,
       .compact-action:hover, #compact-action:hover {
         transform: translateY(-1px) !important;
-        box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.8),
+        box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.45),
                     inset 0 -1px 2px rgba(0, 0, 0, 0.35),
-                    0 0 32px rgba(56, 189, 248, 0.65),
-                    0 12px 32px -4px rgba(2, 132, 199, 0.50),
-                    0 4px 10px rgba(0, 0, 0, 0.35) !important;
+                    0 6px 20px rgba(0, 0, 0, 0.45) !important;
       }
       .home-action:hover::before, #home-action:hover::before {
         opacity: 1 !important;
@@ -3348,8 +3325,7 @@
       .home-action:active, #home-action:active,
       .compact-action:active, #compact-action:active {
         transform: translateY(1px) scale(0.985) !important;
-        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4),
-                    0 0 16px rgba(56, 189, 248, 0.3) !important;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4) !important;
       }
 
       /* Connected State: True Translucent Emerald Glass + Emerald Halo */
@@ -3791,11 +3767,7 @@
             rgba(30, 56, 84, 0.28) 100%) padding-box,
           linear-gradient(180deg, #10161F, #0A0F16) padding-box,
           linear-gradient(180deg, #10161F, #0A0F16) padding-box,
-          conic-gradient(from var(--glass-rim) at 50% 50%,
-            rgba(255, 255, 255, 0.93) 0%, rgba(56, 189, 248, 0.84) 16.7%,
-            rgba(2, 132, 199, 0.44) 33.3%, rgba(3, 105, 161, 0.19) 50%,
-            rgba(2, 132, 199, 0.44) 66.7%, rgba(56, 189, 248, 0.84) 83.3%,
-            rgba(255, 255, 255, 0.93) 100%) border-box !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08)) border-box !important;
         box-shadow:
           inset 0 1px 0 rgba(255, 255, 255, 0.09),
           inset 0 -1px 0 rgba(0, 0, 0, 0.07),
