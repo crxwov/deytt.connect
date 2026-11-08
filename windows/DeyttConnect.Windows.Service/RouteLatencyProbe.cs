@@ -116,18 +116,10 @@ internal static class RouteLatencyProbe
                 Failure: DescribeFailure(coldOutcomes));
         }
 
-        if (selectedCold.LatencyMilliseconds is long coldMs)
-        {
-            reportProgress?.Invoke(new RouteLatencyProbeObservation(
-                Attempt: 1,
-                Phase: RouteLatencyProbePhase.WarmSample,
-                LatencyMilliseconds: coldMs));
-            return new RouteLatencyProbeResult(coldMs, null);
-        }
-
-        var warmLatencies = new List<long>(capacity: 3);
-
-        for (var sample = 1; sample <= 3 && !overallCancellation.IsCancellationRequested; sample++)
+        // One to two warm samples over the established keep-alive connection measure the true network RTT latency,
+        // avoiding cold TLS+TCP handshake overhead that produced nonsensical 800-1500ms pings.
+        var warmLatencies = new List<long>(capacity: 2);
+        for (var sample = 1; sample <= 2 && !overallCancellation.IsCancellationRequested; sample++)
         {
             var outcome = await MeasureRequestAsync(
                 proxyClient,
@@ -138,31 +130,16 @@ internal static class RouteLatencyProbe
                 overallCancellation.Token,
                 limits.Individual).ConfigureAwait(false);
 
-            cancellationToken.ThrowIfCancellationRequested();
-            reportProgress?.Invoke(new RouteLatencyProbeObservation(
-                Attempt: sample,
-                Phase: RouteLatencyProbePhase.WarmSample,
-                LatencyMilliseconds: outcome.LatencyMilliseconds));
-
-            if (outcome.LatencyMilliseconds is long latency)
+            if (outcome.LatencyMilliseconds is long latency && latency > 0)
                 warmLatencies.Add(latency);
         }
 
-        if (warmLatencies.Count == 0)
-        {
-            return new RouteLatencyProbeResult(
-                LatencyMilliseconds: null,
-                Failure: "Не удалось получить повторный HTTPS-отклик через маршрут.");
-        }
-
-        warmLatencies.Sort();
-        var middle = warmLatencies.Count / 2;
-        var median = warmLatencies.Count % 2 == 1
-            ? warmLatencies[middle]
-            : (long)Math.Round((warmLatencies[middle - 1] + warmLatencies[middle]) / 2d, MidpointRounding.AwayFromZero);
-        return new RouteLatencyProbeResult(
-            LatencyMilliseconds: median,
-            Failure: null);
+        var finalLatency = warmLatencies.Count > 0 ? warmLatencies.Min() : selectedCold.LatencyMilliseconds;
+        reportProgress?.Invoke(new RouteLatencyProbeObservation(
+            Attempt: 1,
+            Phase: RouteLatencyProbePhase.WarmSample,
+            LatencyMilliseconds: finalLatency));
+        return new RouteLatencyProbeResult(finalLatency, null);
     }
 
     private static async Task<RouteLatencyProbeAttempt> MeasureRequestAsync(
