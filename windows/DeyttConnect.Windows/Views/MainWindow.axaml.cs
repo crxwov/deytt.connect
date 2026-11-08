@@ -3548,7 +3548,17 @@ public partial class MainWindow : Window
                     ? new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal)
                     : new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal);
                 foreach (var probe in probes)
-                    updatedResults[probe.RouteTag] = probe with { LatencyMilliseconds = PositiveLatency(probe.LatencyMilliseconds) };
+                {
+                    var existing = previousRouteResults.GetValueOrDefault(probe.RouteTag);
+                    var latency = PositiveLatency(probe.LatencyMilliseconds) ?? PositiveLatency(existing?.LatencyMilliseconds);
+                    var speed = probe.BytesPerSecond ?? existing?.BytesPerSecond;
+                    updatedResults[probe.RouteTag] = probe with
+                    {
+                        LatencyMilliseconds = latency,
+                        BytesPerSecond = speed,
+                        Error = latency is not null ? null : probe.Error
+                    };
+                }
                 foreach (var routeTag in routeTags)
                     if (!updatedResults.ContainsKey(routeTag))
                         updatedResults[routeTag] = new WindowsRouteProbeResult(routeTag, null, null,

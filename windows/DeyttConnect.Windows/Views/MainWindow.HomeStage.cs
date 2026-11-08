@@ -736,9 +736,9 @@ public partial class MainWindow
 
         var probe = displayedRoute is null ? null : _routeProbeResults.GetValueOrDefault(displayedRoute.Tag);
         var displayedTag = displayedRoute?.Tag;
-        var liveMeasurement = (_homeLiveProbe is not null && displayedTag is not null && _homeLiveProbe.RouteTag == displayedTag)
-            || (connected && _homeLiveProbe?.RouteTag == _vpnSnapshot.RouteTag);
+        var liveMeasurement = connected && _homeLiveProbe is not null && _vpnSnapshot.RouteTag == displayedTag;
         if (liveMeasurement)
+        {
             probe = _homeLiveProbe! with
             {
                 LatencyMilliseconds = _homeLiveProbe.Stage == "latency"
@@ -746,6 +746,11 @@ public partial class MainWindow
                 Error = _vpnSnapshot.TunnelLatencyError is null ? _homeLiveProbe.Error :
                     Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."),
             };
+        }
+        else if (!connected)
+        {
+            _homeLiveProbe = null;
+        }
         // Данные, измеренные ранее на этом маршруте, остаются видимыми до перезамера:
         // ни дисконнект, ни смена сессии не превращают их в прочерк.
         if (probe is null || PositiveLatency(probe.LatencyMilliseconds) is null && probe.BytesPerSecond is not > 0)

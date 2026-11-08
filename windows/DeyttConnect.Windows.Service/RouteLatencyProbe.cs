@@ -14,8 +14,8 @@ internal static class RouteLatencyProbe
     ];
 
     internal static readonly RouteLatencyProbeTimeouts ProductionTimeouts = new(
-        Overall: TimeSpan.FromSeconds(5),
-        Individual: TimeSpan.FromMilliseconds(2500));
+        Overall: TimeSpan.FromSeconds(8),
+        Individual: TimeSpan.FromMilliseconds(4000));
 
     internal static async Task<RouteLatencyProbeResult> MeasureServerAsync(IPAddress serverAddress,
         CancellationToken cancellationToken)
@@ -116,13 +116,12 @@ internal static class RouteLatencyProbe
                 Failure: DescribeFailure(coldOutcomes));
         }
 
-        // Measure a warm sample over the established keep-alive connection for true RTT latency.
-        long? finalLatency = selectedCold.LatencyMilliseconds;
-        try
+        var warmLatencies = new List<long>(capacity: 3);
+        for (var sample = 1; sample <= 3 && !overallCancellation.IsCancellationRequested; sample++)
         {
-            if (!overallCancellation.IsCancellationRequested)
+            try
             {
-                var warmOutcome = await MeasureRequestAsync(
+                var outcome = await MeasureRequestAsync(
                     proxyClient,
                     selectedCold.Target,
                     ExpectedStatus(selectedCold.Target),
@@ -131,25 +130,23 @@ internal static class RouteLatencyProbe
                     overallCancellation.Token,
                     limits.Individual).ConfigureAwait(false);
 
-                if (warmOutcome.LatencyMilliseconds is long warm && warm > 0)
+                if (outcome.LatencyMilliseconds is long latency && latency > 0)
                 {
-                    finalLatency = warm;
+                    warmLatencies.Add(latency);
+                    reportProgress?.Invoke(new RouteLatencyProbeObservation(
+                        Attempt: sample,
+                        Phase: RouteLatencyProbePhase.WarmSample,
+                        LatencyMilliseconds: latency));
                 }
             }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch
-        {
-            // If warm sample fails or times out, safely fall back to the successful cold latency.
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch { }
         }
 
-        reportProgress?.Invoke(new RouteLatencyProbeObservation(
-            Attempt: 1,
-            Phase: RouteLatencyProbePhase.WarmSample,
-            LatencyMilliseconds: finalLatency));
+        var finalLatency = warmLatencies.Count > 0 ? warmLatencies.Min() : selectedCold.LatencyMilliseconds;
         return new RouteLatencyProbeResult(finalLatency, null);
     }
 
@@ -182,7 +179,7 @@ internal static class RouteLatencyProbe
 
             var elapsedMilliseconds = (long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             var isOriginalTarget = response.RequestMessage?.RequestUri == target;
-            var isExpectedResponse = response.StatusCode == expectedStatus;
+            var isExpectedResponse = response.IsSuccessStatusCode || response.StatusCode == expectedStatus || response.StatusCode == HttpStatusCode.NoContent || response.StatusCode == HttpStatusCode.OK;
 
             if (isOriginalTarget && isExpectedResponse)
             {
