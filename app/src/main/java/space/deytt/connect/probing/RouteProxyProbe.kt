@@ -185,15 +185,17 @@ object RouteProxyProbe {
         onSample: (index: Int, milliseconds: Long?) -> Unit = { _, _ -> },
     ): Long {
         val deadline = SystemClock.elapsedRealtime() + timeoutMillis
-        val samples = ArrayList<Long>(LATENCY_SAMPLE_COUNT)
+        val samples = ArrayList<Long>(2)
         var lastFailure: Exception? = null
-        for (index in 1..LATENCY_SAMPLE_COUNT) {
+        for (index in 1..2) {
             cancellation?.check()
             if (SystemClock.elapsedRealtime() >= deadline) break
             try {
                 val sample = measureProxySample(session, method, deadline, cancellation)
-                samples += sample
-                onSample(index, sample)
+                if (sample in 5..3000) {
+                    samples += sample
+                    onSample(index, sample)
+                }
             } catch (failure: Exception) {
                 cancellation?.check()
                 if (Thread.currentThread().isInterrupted) throw failure
@@ -201,7 +203,7 @@ object RouteProxyProbe {
                 onSample(index, null)
             }
         }
-        return RouteProbeStatistics.medianLatencyMillis(samples)
+        return samples.minOrNull()
             ?: throw (lastFailure ?: SocketTimeoutException("Проверка маршрута превысила $timeoutMillis мс"))
     }
 

@@ -461,7 +461,7 @@
           : event.deltaMode === 2 ? event.deltaY * this.height : event.deltaY;
         const detents = clamp(delta / 120, -2, 2);
         this.targetZoom = clamp(this.targetZoom * Math.pow(1.18, -detents), .82, MAX_ZOOM);
-        this.markMapDirty();
+        this.overlayDirty = true;
         this.start();
       }, { passive: false });
       const release = (event) => {
@@ -1800,16 +1800,6 @@
       const cameraMoving = this.dragging || Math.abs(this.velocityLon) > .001 || Math.abs(this.velocityLat || 0) > .001 || Math.abs(this.targetCenterY - this.centerY) > .5 || Math.abs(this.targetCenterX - this.centerX) > .5 || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
       if (cameraMoving !== this.interactionQuality) this.setInteractionQuality(cameraMoving);
-      // When idle (camera settled and not dragging), throttle traffic particle animation to ~30 FPS to reduce GPU load and power draw.
-      if (!cameraMoving && !this.dragging && this.trafficActive && !this.autoSelecting) {
-        if (this.lastTrafficFrame && time - this.lastTrafficFrame < 32) {
-          if (!this.frame && this.hostActive && this.visible && !document.hidden) {
-            this.frame = requestAnimationFrame((t) => this.render(t));
-          }
-          return;
-        }
-        this.lastTrafficFrame = time;
-      }
       const elapsed = this.lastFrame ? time - this.lastFrame : 16;
       const delta = Math.min(48, elapsed);
       this.lastFrame = time;
@@ -1856,27 +1846,22 @@
       // tolerances. Snap the final sub-pixel remainder now so the next hover
       // cannot wake the camera and force a needless geography redraw.
       if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
-      if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 ||
-          Math.abs(this.centerY - previousCenterY) > .001 || Math.abs(this.centerX - previousCenterX) > .001 ||
-          Math.abs(this.zoom - previousZoom) > .0001) {
+      // Rotation changes the 3D perspective, so it requires static geography redraw.
+      if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001) {
         this.markMapDirty();
+      } else if (Math.abs(this.centerY - previousCenterY) > .001 || Math.abs(this.centerX - previousCenterX) > .001 || Math.abs(this.zoom - previousZoom) > .0001) {
+        // Zoom and pan are smoothly handled by GPU CSS transform in placeStaticCanvas(); only the overlay labels/particles update.
+        this.overlayDirty = true;
       }
-      if (this.staticCamera && this.targetZoom < this.staticCamera.zoom - .01) this.staticDirty = true;
       if (this.staticCamera) {
         const scale = this.zoom / this.staticCamera.zoom;
         const x = this.centerX - this.staticCamera.x * scale;
         const y = this.centerY - this.staticCamera.y * scale;
-        const padding = (this.staticPadding || 0) * scale;
-        const radius = this.radius * this.zoom + 2;
-        const left = Math.max(0, this.centerX - radius), right = Math.min(this.width, this.centerX + radius);
-        const top = Math.max(0, this.centerY - radius), bottom = Math.min(this.height, this.centerY + radius);
-        // Center motion can uncover a bitmap edge even while scale increases.
-        // Check in scene coordinates, without layout reads in the frame loop.
-        if (x - padding > left + .25 || y - padding > top + .25 || x + this.width * scale + padding < right - .25 || y + this.height * scale + padding < bottom - .25)
+        const affineSettled = Math.abs(this.targetZoom - this.zoom) < 0.002 && Math.abs(this.targetCenterX - this.centerX) < 0.1 && Math.abs(this.targetCenterY - this.centerY) < 0.1;
+        // Re-rasterize static layer crisply once zoom/pan settles, or if scale deviation is large
+        if ((affineSettled && (scale !== 1 || x !== 0 || y !== 0)) || (wasCameraMoving && !cameraMoving) || scale < 0.65 || scale > 1.45) {
           this.staticDirty = true;
-        const affineSettled = this.zoom === this.targetZoom && this.centerX === this.targetCenterX && this.centerY === this.targetCenterY;
-        if ((affineSettled && (scale !== 1 || x !== 0 || y !== 0)) || (wasCameraMoving && !cameraMoving))
-          this.staticDirty = true;
+        }
       }
       this.currentBasis = this.basis();
       this.context.clearRect(0, 0, this.width, this.height);

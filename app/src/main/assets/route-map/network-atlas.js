@@ -1434,16 +1434,6 @@
       this.idleMotionLatOffset = nextIdleLatOffset;
       const cameraMoving = idleActive || this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
-      // When idle (camera settled and not dragging), throttle traffic particle animation to ~30 FPS to reduce GPU load and power draw.
-      if (!cameraMoving && !this.dragging && this.trafficActive && !this.connectionAnimationActive(time)) {
-        if (this.lastTrafficFrame && time - this.lastTrafficFrame < 32) {
-          if (!this.frame && this.visible && !document.hidden) {
-            this.frame = requestAnimationFrame((t) => this.render(t));
-          }
-          return;
-        }
-        this.lastTrafficFrame = time;
-      }
       // Static geography and route overlays stay cached; only packets change each frame.
       const elapsed = this.lastFrame ? time - this.lastFrame : 16;
       const delta = Math.min(48, elapsed);
@@ -1469,7 +1459,9 @@
       if (Math.abs(this.targetLon - this.centerLon) < .01) this.centerLon = this.targetLon;
       if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
       if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
-      if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 || Math.abs(this.zoom - previousZoom) > .0001) {
+      if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001) {
+        this.staticDirty = true;
+      } else if (Math.abs(this.zoom - previousZoom) > .0001 && (!this.staticCamera || Math.abs(this.zoom - this.staticCamera.zoom) > 0.25)) {
         this.staticDirty = true;
       }
       const cameraSettled = !idleActive && !this.dragging && Math.abs(this.targetLon - this.centerLon) <= .01 &&
