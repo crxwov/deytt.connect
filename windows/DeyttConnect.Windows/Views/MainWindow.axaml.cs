@@ -91,6 +91,8 @@ public partial class MainWindow : Window
     public MainWindow(string? initialImportUrl)
     {
         InitializeComponent();
+        WorkspaceHeader.PointerPressed += OnWorkspaceHeaderPointerPressed;
+        HeaderContentGrid.PointerPressed += OnWorkspaceHeaderPointerPressed;
         HeaderDragRegion.PointerPressed += OnWorkspaceHeaderPointerPressed;
         WorkspaceBrand.PointerPressed += OnWorkspaceHeaderPointerPressed;
         MinimizeWindowButton.Click += (_, _) => WindowState = Avalonia.Controls.WindowState.Minimized;
@@ -315,11 +317,24 @@ public partial class MainWindow : Window
         var label = maximized ? Copy("восстановить", "restore") : Copy("развернуть", "maximize");
         ToolTip.SetTip(MaximizeWindowButton, label);
         AutomationProperties.SetName(MaximizeWindowButton, label);
+        if (WindowState == Avalonia.Controls.WindowState.Minimized)
+        {
+            if (_routeGlobe != null) _routeGlobe.HostActive = false;
+            GC.Collect(2, GCCollectionMode.Aggressive, false, true);
+        }
+        else if (IsVisible)
+        {
+            if (_routeGlobe != null) _routeGlobe.HostActive = true;
+        }
     }
 
     private void OnWorkspaceHeaderPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(WorkspaceHeader).Properties.IsLeftButtonPressed)
+        if (e.Source is Avalonia.Controls.Button ||
+            (e.Source as Avalonia.Visual)?.FindAncestorOfType<Avalonia.Controls.Button>() != null)
+            return;
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
 
         if (e.ClickCount == 2)

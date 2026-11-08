@@ -14,8 +14,8 @@ internal static class RouteLatencyProbe
     ];
 
     internal static readonly RouteLatencyProbeTimeouts ProductionTimeouts = new(
-        Overall: TimeSpan.FromSeconds(12),
-        Individual: TimeSpan.FromSeconds(6));
+        Overall: TimeSpan.FromSeconds(3),
+        Individual: TimeSpan.FromMilliseconds(1500));
 
     internal static async Task<RouteLatencyProbeResult> MeasureServerAsync(IPAddress serverAddress,
         CancellationToken cancellationToken)
@@ -114,6 +114,15 @@ internal static class RouteLatencyProbe
             return new RouteLatencyProbeResult(
                 LatencyMilliseconds: null,
                 Failure: DescribeFailure(coldOutcomes));
+        }
+
+        if (selectedCold.LatencyMilliseconds is long coldMs)
+        {
+            reportProgress?.Invoke(new RouteLatencyProbeObservation(
+                Attempt: 1,
+                Phase: RouteLatencyProbePhase.WarmSample,
+                LatencyMilliseconds: coldMs));
+            return new RouteLatencyProbeResult(coldMs, null);
         }
 
         var warmLatencies = new List<long>(capacity: 3);

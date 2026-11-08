@@ -1800,8 +1800,16 @@
       const cameraMoving = this.dragging || Math.abs(this.velocityLon) > .001 || Math.abs(this.velocityLat || 0) > .001 || Math.abs(this.targetCenterY - this.centerY) > .5 || Math.abs(this.targetCenterX - this.centerX) > .5 || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
       if (cameraMoving !== this.interactionQuality) this.setInteractionQuality(cameraMoving);
-      // Let requestAnimationFrame follow the display refresh rate so the traffic
-      // and camera never fall to the old 30 fps idle-animation cap.
+      // When idle (camera settled and not dragging), throttle traffic particle animation to ~30 FPS to reduce GPU load and power draw.
+      if (!cameraMoving && !this.dragging && this.trafficActive && !this.autoSelecting) {
+        if (this.lastTrafficFrame && time - this.lastTrafficFrame < 32) {
+          if (!this.frame && this.hostActive && this.visible && !document.hidden) {
+            this.frame = requestAnimationFrame((t) => this.render(t));
+          }
+          return;
+        }
+        this.lastTrafficFrame = time;
+      }
       const elapsed = this.lastFrame ? time - this.lastFrame : 16;
       const delta = Math.min(48, elapsed);
       this.lastFrame = time;

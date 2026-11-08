@@ -514,6 +514,16 @@ public sealed class RouteGlobeWebView : ContentControl
                 return;
             CancelPendingStatePush();
             _hostActive = value;
+            if (OperatingSystem.IsWindows() && _coreWebView2 != null)
+            {
+                try
+                {
+                    _coreWebView2.MemoryUsageTargetLevel = value
+                        ? CoreWebView2MemoryUsageTargetLevel.Normal
+                        : CoreWebView2MemoryUsageTargetLevel.Low;
+                }
+                catch { }
+            }
             if (value) _homeResumeRevision++;
             QueueStateUpdate();
         }

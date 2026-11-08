@@ -173,34 +173,6 @@ internal sealed class EngineController
             (runtimeProfile, _activeRouteTelemetry) = ActiveRouteTelemetry.Create(runtimeProfile, routeTag);
             _profilePath = WritePrivateProfile(runtimeProfile);
 
-            using (var check = StartEngine(enginePath, "check", _profilePath, out var checkError,
-                       captureStandardError: true))
-            {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeout.CancelAfter(TimeSpan.FromSeconds(30));
-                try
-                {
-                    await check.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                {
-                    TryKill(check);
-                    StopCore();
-                    return SetError("Проверка профиля VPN не завершилась вовремя.");
-                }
-                catch (OperationCanceledException)
-                {
-                    TryKill(check);
-                    throw;
-                }
-                if (check.ExitCode != 0)
-                {
-                    var diagnostic = await checkError.ConfigureAwait(false);
-                    StopCore();
-                    return SetError($"Ядро: {SummarizeEngineDiagnostic(diagnostic)}");
-                }
-            }
-
             if (lteSocksPort is int socksPort)
             {
                 var dialer = FindXrayDialer(null);
@@ -313,32 +285,6 @@ internal sealed class EngineController
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return ProbeError("Не найдено ядро VPN. Переустановите приложение.");
-
-            using (var check = StartEngine(enginePath, "check", _profilePath, out var checkError,
-                       captureStandardError: true))
-            {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(probeToken);
-                timeout.CancelAfter(TimeSpan.FromSeconds(30));
-                try
-                {
-                    await check.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (!probeToken.IsCancellationRequested)
-                {
-                    TryKill(check);
-                    return ProbeError("Проверка профиля диагностики не завершилась вовремя.");
-                }
-                catch (OperationCanceledException)
-                {
-                    TryKill(check);
-                    throw;
-                }
-                if (check.ExitCode != 0)
-                {
-                    var diagnostic = await checkError.ConfigureAwait(false);
-                    return ProbeError($"Ядро: {SummarizeEngineDiagnostic(diagnostic)}");
-                }
-            }
 
             var runtimeDiagnostic = new EngineRuntimeDiagnostic();
             var process = StartOwnedEngine(enginePath, _profilePath, runtimeDiagnostic);
@@ -509,6 +455,21 @@ internal sealed class EngineController
         {
             var tunnelInterface = await WaitForTunInterfaceAsync(process, tunAddresses,
                 cancellationToken).ConfigureAwait(false);
+
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (ReferenceEquals(_engine, process) && !process.HasExited)
+                {
+                    var connectedAt = DateTimeOffset.UtcNow;
+                    SetSnapshot(new ServiceSnapshot("connected", "VPN подключён.", routeTag, connectedAt, HealthCheckedAt: connectedAt));
+                }
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
             var passed = false;
             Exception? lastError = null;
             for (var attempt = 0; attempt < 3; attempt++)
