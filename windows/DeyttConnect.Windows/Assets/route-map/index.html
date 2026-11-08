@@ -88,7 +88,9 @@
       -webkit-backdrop-filter: none;
       z-index: 100;
       pointer-events: auto;
-      -webkit-app-region: drag;
+      cursor: default;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .brand-area,
@@ -6296,6 +6298,11 @@
     window.addEventListener("resize", () => {
       const activeTab = document.querySelector(".nav-item.is-active");
       if (activeTab) updatePillPosition(activeTab, false);
+    });
+    document.querySelector(".desktop-header")?.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest(".nav-container, .window-controls, button, a, input, select, textarea")) return;
+      postHost("window:drag");
     });
     document.getElementById("win-minimize")?.addEventListener("click", (e) => {
       e.stopPropagation();

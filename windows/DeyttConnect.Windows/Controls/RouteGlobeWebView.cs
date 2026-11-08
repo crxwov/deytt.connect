@@ -514,16 +514,6 @@ public sealed class RouteGlobeWebView : ContentControl
                 return;
             CancelPendingStatePush();
             _hostActive = value;
-            if (OperatingSystem.IsWindows() && _coreWebView2 != null)
-            {
-                try
-                {
-                    _coreWebView2.MemoryUsageTargetLevel = value
-                        ? CoreWebView2MemoryUsageTargetLevel.Normal
-                        : CoreWebView2MemoryUsageTargetLevel.Low;
-                }
-                catch { }
-            }
             if (value) _homeResumeRevision++;
             QueueStateUpdate();
         }
@@ -718,6 +708,21 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
                 SetTransparentWebViewBackground(handle.CoreWebView2Controller);
                 var coreWebView2 = CoreWebView2.CreateFromComICoreWebView2(handle.CoreWebView2);
                 _coreWebView2 = coreWebView2;
+                coreWebView2.ProcessFailed += (s, e) =>
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.GpuProcessExited)
+                        {
+                            ResumeHost();
+                        }
+                        else
+                        {
+                            try { _coreWebView2?.Reload(); }
+                            catch { RetryAtlasManually(); }
+                        }
+                    });
+                };
                 coreWebView2.SetVirtualHostNameToFolderMapping(
                     AssetHost,
                     AtlasAssetDirectory,
@@ -800,6 +805,16 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         _appliedMapRegionHeight = height;
         _appliedMapRegionDpi = dpi;
     }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private const int WmNcLButtonDown = 0x00A1;
+    private const int HtCaption = 0x0002;
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr GetAncestor(IntPtr windowHandle, uint flags);
@@ -975,6 +990,21 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
             {
                 if (!_atlasFailed && ReferenceEquals(sender, _webView))
                     HomeActionRequested?.Invoke(node);
+            });
+            return;
+        }
+        if (node == "window:drag")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (TopLevel.GetTopLevel(this) is Window window)
+                {
+                    if (OperatingSystem.IsWindows() && window.TryGetPlatformHandle()?.Handle is { } hwnd && hwnd != IntPtr.Zero)
+                    {
+                        ReleaseCapture();
+                        SendMessage(hwnd, WmNcLButtonDown, (IntPtr)HtCaption, IntPtr.Zero);
+                    }
+                }
             });
             return;
         }

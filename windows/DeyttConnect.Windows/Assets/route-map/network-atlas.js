@@ -1958,17 +1958,15 @@
 
     resumeHost() {
       this.setHostActive(true);
-      // A native view can return before its intersection notification. Clear
-      // a stale RAF handle and trust the explicitly shown Windows host surface.
       if (this.frame) cancelAnimationFrame(this.frame);
       this.frame = 0;
       this.lastFrame = 0;
-      if (this.options.stableGeography) {
-        const bounds = this.canvas.getBoundingClientRect();
-        this.visible = bounds.width > 0 && bounds.height > 0;
-      }
+      this.visible = true;
+      this.staticDirty = true;
+      this.overlayDirty = true;
       this.resize();
       this.start();
+      this.render(performance.now());
     }
 
     updateHover(pointer) {

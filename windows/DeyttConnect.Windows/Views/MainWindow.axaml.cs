@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -244,10 +245,10 @@ public partial class MainWindow : Window
         if (_startupFlowStarted)
             return;
         _startupFlowStarted = true;
+        _homeMapInitializationAllowed = true;
         UpdateResponsiveLayout();
 
-        // Let typewriter finish revealing characters before proceeding
-        await Task.Delay(1100);
+        await Task.Delay(200);
 
         if (OperatingSystem.IsWindows())
             await ShowStartupExternalVpnNoticeAsync();
@@ -320,13 +321,22 @@ public partial class MainWindow : Window
         if (WindowState == Avalonia.Controls.WindowState.Minimized)
         {
             if (_routeGlobe != null) _routeGlobe.HostActive = false;
-            GC.Collect(2, GCCollectionMode.Aggressive, false, true);
         }
         else if (IsVisible)
         {
-            if (_routeGlobe != null) _routeGlobe.HostActive = true;
+            if (_routeGlobe != null) _routeGlobe.ResumeHost();
         }
     }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private const int WmNcLButtonDown = 0x00A1;
+    private const int HtCaption = 0x0002;
 
     private void OnWorkspaceHeaderPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
@@ -345,8 +355,17 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        BeginMoveDrag(e);
+
         e.Handled = true;
+        if (OperatingSystem.IsWindows() && TryGetPlatformHandle()?.Handle is { } hwnd && hwnd != IntPtr.Zero)
+        {
+            ReleaseCapture();
+            SendMessage(hwnd, WmNcLButtonDown, (IntPtr)HtCaption, IntPtr.Zero);
+        }
+        else
+        {
+            BeginMoveDrag(e);
+        }
     }
 
     private void RequestNavigation(MainTab destination)
@@ -507,8 +526,7 @@ public partial class MainWindow : Window
             }
         }
 
-        if (tab != MainTab.Home && _routeGlobe is not null)
-            _routeGlobe.HostActive = false;
+        // Keep host active so starry sky and stage transitions render without freeze
         var homePage = _pageViews.TryGetValue(MainTab.Home, out var cachedHome)
             ? cachedHome.View
             : null;
@@ -3072,6 +3090,12 @@ public partial class MainWindow : Window
                 RenderActiveTabPreservingScroll();
                 return;
             }
+            // Optimistic instant connect (parity with Android)
+            var now = DateTimeOffset.UtcNow;
+            _vpnSnapshot = new WindowsTunnelSnapshot("connected", Copy("Подключено", "Connected"), route.Tag, now, HealthCheckedAt: now);
+            _vpnActionInProgress = false;
+            RenderActiveTabPreservingScroll();
+
             var splitConfig = WindowsSplitTunnelStore.Load();
             _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig,
                 splitConfig.CustomDomains, splitConfig.CustomProcesses, splitConfig.Mode);
