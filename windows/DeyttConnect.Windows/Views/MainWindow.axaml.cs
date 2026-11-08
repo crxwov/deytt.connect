@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -91,6 +92,8 @@ public partial class MainWindow : Window
     public MainWindow(string? initialImportUrl)
     {
         InitializeComponent();
+        WorkspaceHeader.PointerPressed += OnWorkspaceHeaderPointerPressed;
+        HeaderContentGrid.PointerPressed += OnWorkspaceHeaderPointerPressed;
         HeaderDragRegion.PointerPressed += OnWorkspaceHeaderPointerPressed;
         WorkspaceBrand.PointerPressed += OnWorkspaceHeaderPointerPressed;
         MinimizeWindowButton.Click += (_, _) => WindowState = Avalonia.Controls.WindowState.Minimized;
@@ -242,10 +245,10 @@ public partial class MainWindow : Window
         if (_startupFlowStarted)
             return;
         _startupFlowStarted = true;
+        _homeMapInitializationAllowed = true;
         UpdateResponsiveLayout();
 
-        // Let typewriter finish revealing characters before proceeding
-        await Task.Delay(1100);
+        await Task.Delay(200);
 
         if (OperatingSystem.IsWindows())
             await ShowStartupExternalVpnNoticeAsync();
@@ -315,11 +318,33 @@ public partial class MainWindow : Window
         var label = maximized ? Copy("восстановить", "restore") : Copy("развернуть", "maximize");
         ToolTip.SetTip(MaximizeWindowButton, label);
         AutomationProperties.SetName(MaximizeWindowButton, label);
+        if (WindowState == Avalonia.Controls.WindowState.Minimized)
+        {
+            if (_routeGlobe != null) _routeGlobe.HostActive = false;
+        }
+        else if (IsVisible)
+        {
+            if (_routeGlobe != null) _routeGlobe.ResumeHost();
+        }
     }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private const int WmNcLButtonDown = 0x00A1;
+    private const int HtCaption = 0x0002;
 
     private void OnWorkspaceHeaderPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(WorkspaceHeader).Properties.IsLeftButtonPressed)
+        if (e.Source is Avalonia.Controls.Button ||
+            (e.Source as Avalonia.Visual)?.FindAncestorOfType<Avalonia.Controls.Button>() != null)
+            return;
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
 
         if (e.ClickCount == 2)
@@ -330,8 +355,17 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        BeginMoveDrag(e);
+
         e.Handled = true;
+        if (OperatingSystem.IsWindows() && TryGetPlatformHandle()?.Handle is { } hwnd && hwnd != IntPtr.Zero)
+        {
+            ReleaseCapture();
+            SendMessage(hwnd, WmNcLButtonDown, (IntPtr)HtCaption, IntPtr.Zero);
+        }
+        else
+        {
+            BeginMoveDrag(e);
+        }
     }
 
     private void RequestNavigation(MainTab destination)
@@ -369,6 +403,8 @@ public partial class MainWindow : Window
 
         _activeTab = tab;
         _shellViewModel.ActivePage = tab.ToString();
+        if (tab == MainTab.Routes)
+            StartNextCountryProbe();
         var pageFingerprint = GetPageStateFingerprint(tab);
         Control page;
         if (IsPersistentPage(tab) && _pageViews.TryGetValue(tab, out var cachedPage))
@@ -490,8 +526,7 @@ public partial class MainWindow : Window
             }
         }
 
-        if (tab != MainTab.Home && _routeGlobe is not null)
-            _routeGlobe.HostActive = false;
+        // Keep host active so starry sky and stage transitions render without freeze
         var homePage = _pageViews.TryGetValue(MainTab.Home, out var cachedHome)
             ? cachedHome.View
             : null;
@@ -2916,7 +2951,9 @@ public partial class MainWindow : Window
     {
         _selectedRoute = route.Id;
         SavePreferences();
-        ShowTab(MainTab.Home);
+        // The atlas keeps its own visible stage; forcing the native tab back to Home here
+        // desynced _activeTab from the stage the user actually sees and froze route probing.
+        RenderActiveTabPreservingScroll();
         if (!IsVisible || WindowState == Avalonia.Controls.WindowState.Minimized)
             ShowFromTray();
     }
@@ -3053,6 +3090,12 @@ public partial class MainWindow : Window
                 RenderActiveTabPreservingScroll();
                 return;
             }
+            // Optimistic instant connect (parity with Android)
+            var now = DateTimeOffset.UtcNow;
+            _vpnSnapshot = new WindowsTunnelSnapshot("connected", Copy("Подключено", "Connected"), route.Tag, now, HealthCheckedAt: now);
+            _vpnActionInProgress = false;
+            RenderActiveTabPreservingScroll();
+
             var splitConfig = WindowsSplitTunnelStore.Load();
             _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig,
                 splitConfig.CustomDomains, splitConfig.CustomProcesses, splitConfig.Mode);
@@ -3248,21 +3291,27 @@ public partial class MainWindow : Window
 
     private void QueueRouteCountryProbe(string countryCode, string[] routeTags)
     {
+        Services.UiDiagnostics.Log($"queue probe: {countryCode} tags={routeTags.Length}");
         if (routeTags.Length == 0)
             return;
 
         if (_activeRouteProbeCountry == countryCode)
         {
             if (!_routeProbeCancelRequested)
+            {
+                Services.UiDiagnostics.Log($"queue probe: {countryCode} skipped (already active)");
                 return;
+            }
         }
         else if (_pendingRouteProbeNodes.ContainsKey(countryCode))
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} skipped (already queued)");
             return;
         }
 
         if (_keysSnapshot?.ProfileJson is not { Length: > 0 } || _routes.Count == 0)
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} blocked (no profile/routes)");
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Failed;
             MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
             RenderActiveTabPreservingScroll();
@@ -3270,15 +3319,19 @@ public partial class MainWindow : Window
         }
         if (!_vpnServiceAvailable)
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} blocked (service unavailable)");
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.ServiceUnavailable;
             MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
+            PushRouteProbeHint(RouteCountryProbeState.ServiceUnavailable);
             RenderActiveTabPreservingScroll();
             return;
         }
         if (_vpnActionInProgress || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} blocked (tunnel={_vpnSnapshot.State} actionInProgress={_vpnActionInProgress})");
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.NeedsDisconnect;
             MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
+            PushRouteProbeHint(RouteCountryProbeState.NeedsDisconnect);
             RenderActiveTabPreservingScroll();
             return;
         }
@@ -3299,10 +3352,29 @@ public partial class MainWindow : Window
         _routeGlobe?.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
         var node = _pendingRouteProbeQueue.AddLast(request);
         _pendingRouteProbeNodes[countryCode] = node;
+        Services.UiDiagnostics.Log($"queue probe: {countryCode} queued (queue={_pendingRouteProbeQueue.Count})");
         _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Queued;
         RenderActiveTabPreservingScroll();
         StartNextCountryProbe();
     }
+
+    /// <summary>Surfaces the truthful reason why route measurements are not running.</summary>
+    private void PushRouteProbeHint(RouteCountryProbeState state)
+    {
+        var text = state switch
+        {
+            RouteCountryProbeState.NeedsDisconnect => Copy(
+                "подключён vpn — отключи его, чтобы замерить маршруты",
+                "vpn is connected — disconnect it to measure routes"),
+            RouteCountryProbeState.ServiceUnavailable => Copy(
+                "служба vpn недоступна — установи её в настройках",
+                "vpn service is unavailable — install it in settings"),
+            _ => null,
+        };
+        _routeGlobe?.PushProbeHint(text);
+    }
+
+    private void ClearRouteProbeHint() => _routeGlobe?.PushProbeHint(null);
 
     private void CollapseRouteCountryProbe(string countryCode)
     {
@@ -3346,7 +3418,10 @@ public partial class MainWindow : Window
         if (_activeTab != MainTab.Routes || _routeProbeInProgress || _vpnActionInProgress ||
             _activeRouteProbeCountry is not null ||
             _pendingRouteProbeQueue.Count == 0)
+        {
+            Services.UiDiagnostics.Log($"start probe: idle (tab={_activeTab} running={_routeProbeInProgress} action={_vpnActionInProgress} active={_activeRouteProbeCountry ?? "-"} queue={_pendingRouteProbeQueue.Count})");
             return;
+        }
 
         if (!_vpnServiceAvailable || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
@@ -3356,6 +3431,7 @@ public partial class MainWindow : Window
             var blockedRequests = _pendingRouteProbeQueue.ToArray();
             foreach (var request in blockedRequests)
                 _routeCountryProbeStates[request.CountryCode] = blockedState;
+            PushRouteProbeHint(blockedState);
             _pendingRouteProbeQueue.Clear();
             _pendingRouteProbeNodes.Clear();
             MarkRouteProbeFailure(blockedRequests.SelectMany(request => request.RouteTags),
@@ -3376,6 +3452,7 @@ public partial class MainWindow : Window
 
             _activeRouteProbeCountry = node.Value.CountryCode;
             _routeCountryProbeStates[node.Value.CountryCode] = RouteCountryProbeState.Running;
+            Services.UiDiagnostics.Log($"start probe: {node.Value.CountryCode} tags={node.Value.RouteTags.Length}");
             _ = ProbeRoutesAsync(node.Value.RouteTags, node.Value.CountryCode);
             return;
         }
@@ -3387,7 +3464,12 @@ public partial class MainWindow : Window
         var countryProbeGeneration = _routeCountryProbeGeneration;
         if (_routeProbeInProgress || _vpnActionInProgress ||
             WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
+        {
+            Services.UiDiagnostics.Log($"probe async: skipped (running={_routeProbeInProgress} action={_vpnActionInProgress} tunnel={_vpnSnapshot.State})");
+            if (WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) && !_routeProbeInProgress && !_vpnActionInProgress)
+                PushRouteProbeHint(RouteCountryProbeState.NeedsDisconnect);
             return;
+        }
         if (_keysSnapshot?.ProfileJson is not { Length: > 0 } profile || _routes.Count == 0)
             return;
         if (!_vpnServiceAvailable)
@@ -3404,15 +3486,21 @@ public partial class MainWindow : Window
 
         _routeProbeInProgress = true;
         _routeProbeCancelRequested = false;
+        ClearRouteProbeHint();
         string[]? activeRouteTags = null;
         var previousRouteResults = new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal);
         try
         {
             RenderProbeProgressPreservingFocus();
             var availableTags = _routes.Select(route => route.Tag).ToHashSet(StringComparer.Ordinal);
+            // The CDN LTE route is a local socks placeholder that only works through the
+            // tunnel's own Xray port; including it in a probe batch makes the service
+            // reject the whole request, so it never takes part in measurements.
+            var probeableTags = new HashSet<string>(availableTags, StringComparer.Ordinal);
+            probeableTags.Remove(DeyttConnect.Protocol.CdnLteProfile.RouteTag);
             var routeTags = requestedRouteTags is { Count: > 0 }
-                ? requestedRouteTags.Where(availableTags.Contains).Distinct(StringComparer.Ordinal).ToArray()
-                : availableTags.ToArray();
+                ? requestedRouteTags.Where(probeableTags.Contains).Distinct(StringComparer.Ordinal).ToArray()
+                : probeableTags.ToArray();
             if (routeTags.Length == 0)
                 return;
             activeRouteTags = routeTags;
@@ -3453,6 +3541,7 @@ public partial class MainWindow : Window
                 RestoreProbeResults(routeTags, previousRouteResults);
                 return;
             }
+            Services.UiDiagnostics.Log($"probe async: service returned state={result.State} detail={(result.Detail ?? "-")}");
             if (result.State == "probe_complete" && result.ProbeResults is { } probes)
             {
                 var updatedResults = requestedRouteTags is null
@@ -3551,7 +3640,10 @@ public partial class MainWindow : Window
         {
             var item = sample with { LatencyMilliseconds = PositiveLatency(sample.LatencyMilliseconds) };
             if (!requestedRouteTags.Contains(item.RouteTag, StringComparer.Ordinal))
+            {
+                Services.UiDiagnostics.Log($"apply probe: dropped {item.RouteTag} (not in requested set)");
                 continue;
+            }
             if (updated.TryGetValue(item.RouteTag, out var previous) && previous == item)
                 continue;
             updated[item.RouteTag] = item;
@@ -3671,6 +3763,8 @@ public partial class MainWindow : Window
                 return;
             _vpnSnapshot = currentSnapshot;
             _vpnServiceAvailable = true;
+            if (!WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) && !_routeProbeInProgress)
+                ClearRouteProbeHint();
             RefreshHomeConnectionMeasurement();
             UpdateMapLocationForVpnState(previousSnapshot.State, _vpnSnapshot.State);
             if (previousSnapshot != _vpnSnapshot || wasAvailable != _vpnServiceAvailable ||
@@ -3994,6 +4088,7 @@ public partial class MainWindow : Window
             : Task.FromResult(verifiedAccount);
         var subscriptionTask = _telegramApi.GetSubscriptionAsync(token, cancellationToken, progress);
         var awgTrafficTask = LoadAwgTrafficForRefreshAsync(token, cancellationToken);
+        var proxyTrafficTask = LoadProxyTrafficForRefreshAsync(token, cancellationToken);
         var avatarTask = RefreshTelegramAvatarAsync(token, cancellationToken);
         var sessionsTask = LoadSessionsForRefreshAsync(token, cancellationToken);
         if (verifiedAccount is not null)
@@ -4005,7 +4100,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await Task.WhenAll(accountTask, subscriptionTask, awgTrafficTask, avatarTask, sessionsTask);
+            await Task.WhenAll(accountTask, subscriptionTask, awgTrafficTask, proxyTrafficTask, avatarTask, sessionsTask);
             if (_sessionToken != token)
                 return false;
             _account = await accountTask;
@@ -4013,6 +4108,9 @@ public partial class MainWindow : Window
             var awgTraffic = await awgTrafficTask;
             _awgTraffic = awgTraffic.Traffic;
             _awgTrafficState = awgTraffic.State;
+            var proxyTraffic = await proxyTrafficTask;
+            _proxyTraffic = proxyTraffic.Traffic;
+            _proxyTrafficState = proxyTraffic.State;
             _sessions = await sessionsTask ?? [];
             _routes = _keysSnapshot.Routes;
             _profileLoadIssue = _keysSnapshot.HappAvailable
@@ -4060,6 +4158,29 @@ public partial class MainWindow : Window
                 : Copy("Не удалось загрузить маршруты. Повтори обновление позже.",
                     "Could not load routes. Try refreshing again later.");
             return false;
+        }
+    }
+
+    private async Task<(string State, TelegramAwgTraffic? Traffic)> LoadProxyTrafficForRefreshAsync(
+        string token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var traffic = await _telegramApi.GetProxyTrafficAsync(token, cancellationToken);
+            return (traffic is null ? "absent" : "ready", traffic);
+        }
+        catch (TelegramApiException error) when (error.IsUnauthorized)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
+        {
+            return ("error", null);
         }
     }
 
@@ -4114,11 +4235,13 @@ public partial class MainWindow : Window
 
     private async Task RefreshSignedInAccountAsync()
     {
+        Services.UiDiagnostics.Log($"subscription refresh requested (inProgress={_profileRefreshInProgress})");
         if (_profileRefreshInProgress)
             return;
         var token = _sessionToken;
         if (token is null)
         {
+            Services.UiDiagnostics.Log("subscription refresh blocked (no session)");
             ShowSignInDialog();
             return;
         }

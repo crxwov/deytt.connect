@@ -70,6 +70,7 @@ public sealed class RouteGlobeWebView : ContentControl
     private WindowsNetworkLocation? _originLocation;
     private string? _egressCountryCode;
     private string? _activeAutoRouteKey;
+    private string? _lastProbeHint;
     private bool _trafficActive;
     private bool _hostActive = true;
     private bool _reducedMotion;
@@ -203,6 +204,7 @@ public sealed class RouteGlobeWebView : ContentControl
             countryName = r.CountryName,
             protocol = r.Protocol,
             protocolName = r.ProtocolName,
+            detail = r.Detail,
             latency = probes != null && probes.TryGetValue(r.Tag, out var p) ? p.LatencyMilliseconds : null,
             speed = probes != null && probes.TryGetValue(r.Tag, out var p2) && p2.BytesPerSecond > 0 ? (long?)(p2.BytesPerSecond.Value * 8 / 1_000_000.0) : null,
             stage = probes != null && probes.TryGetValue(r.Tag, out var p3) ? p3.Stage : null,
@@ -242,12 +244,14 @@ public sealed class RouteGlobeWebView : ContentControl
         string? tariffName,
         string? expiresFormatted,
         int? daysRemaining,
+        int? deviceLimit,
         string? subscriptionKey,
         IReadOnlyList<object>? devices,
         IReadOnlyList<object>? sessions,
         string? sessionsLoadIssue,
         object mainQuota,
-        object awgQuota)
+        object awgQuota,
+        object proxyQuota)
     {
         var payload = new
         {
@@ -259,12 +263,14 @@ public sealed class RouteGlobeWebView : ContentControl
             tariffName,
             expiresFormatted,
             daysRemaining,
+            deviceLimit,
             subscriptionKey,
             devices,
             sessions,
             sessionsLoadIssue,
             mainQuota,
-            awgQuota
+            awgQuota,
+            proxyQuota
         };
         _profileDataJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         _ = ExecuteScriptAsync($"window.deyttSetProfileData && window.deyttSetProfileData({_profileDataJson});");
@@ -297,10 +303,21 @@ public sealed class RouteGlobeWebView : ContentControl
 
     public void PushRouteProbeProgress(WindowsRouteProbeResult probe)
     {
+        Services.UiDiagnostics.Log($"push probe: {probe.RouteTag} stage={probe.Stage} latency={probe.LatencyMilliseconds?.ToString() ?? "null"} ready={_pageReady} atlasFailed={_atlasFailed}");
         if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null) return;
         var speedMbps = probe.BytesPerSecond is > 0 ? (long?)(probe.BytesPerSecond.Value * 8 / 1_000_000.0) : null;
         var script = $"window.deyttUpdateRouteProbe && window.deyttUpdateRouteProbe({JsonSerializer.Serialize(probe.RouteTag)}, {JsonSerializer.Serialize(probe.LatencyMilliseconds)}, {JsonSerializer.Serialize(speedMbps)}, {JsonSerializer.Serialize(probe.Stage)}, {JsonSerializer.Serialize(probe.Error)});";
         _ = ExecuteScriptAsync(script);
+    }
+
+    /// <summary>Shows or hides the truthful reason why country measurements are not running.</summary>
+    public void PushProbeHint(string? text)
+    {
+        Services.UiDiagnostics.Log($"push hint: {text ?? "(clear)"} ready={_pageReady} atlasFailed={_atlasFailed}");
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null) return;
+        if (string.Equals(_lastProbeHint, text, StringComparison.Ordinal)) return;
+        _lastProbeHint = text;
+        _ = ExecuteScriptAsync($"window.deyttSetProbeHint && window.deyttSetProbeHint({JsonSerializer.Serialize(text)});");
     }
 
     public async Task ExecuteScriptAsync(string script)
@@ -691,6 +708,21 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
                 SetTransparentWebViewBackground(handle.CoreWebView2Controller);
                 var coreWebView2 = CoreWebView2.CreateFromComICoreWebView2(handle.CoreWebView2);
                 _coreWebView2 = coreWebView2;
+                coreWebView2.ProcessFailed += (s, e) =>
+                {
+                    Dispatcher.UIThread.Post(() =>
+                    {
+                        if (e.ProcessFailedKind == CoreWebView2ProcessFailedKind.GpuProcessExited)
+                        {
+                            ResumeHost();
+                        }
+                        else
+                        {
+                            try { _coreWebView2?.Reload(); }
+                            catch { RetryAtlasManually(); }
+                        }
+                    });
+                };
                 coreWebView2.SetVirtualHostNameToFolderMapping(
                     AssetHost,
                     AtlasAssetDirectory,
@@ -773,6 +805,16 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         _appliedMapRegionHeight = height;
         _appliedMapRegionDpi = dpi;
     }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    private const int WmNcLButtonDown = 0x00A1;
+    private const int HtCaption = 0x0002;
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr GetAncestor(IntPtr windowHandle, uint flags);
@@ -913,6 +955,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         node = originalNode.ToLowerInvariant();
         if (node == "atlas-ready")
         {
+            Services.UiDiagnostics.Log("webview atlas-ready");
             Dispatcher.UIThread.Post(() =>
             {
                 if (_atlasFailed || !ReferenceEquals(sender, _webView))
@@ -942,10 +985,26 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         }
         if (node is "home-connect" or "home-disconnect" or "home-cancel" or "home-routes" or "home-profile" or "home-settings" or "home-measure")
         {
+            Services.UiDiagnostics.Log($"webview action: {node}");
             Dispatcher.UIThread.Post(() =>
             {
                 if (!_atlasFailed && ReferenceEquals(sender, _webView))
                     HomeActionRequested?.Invoke(node);
+            });
+            return;
+        }
+        if (node == "window:drag")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (TopLevel.GetTopLevel(this) is Window window)
+                {
+                    if (OperatingSystem.IsWindows() && window.TryGetPlatformHandle()?.Handle is { } hwnd && hwnd != IntPtr.Zero)
+                    {
+                        ReleaseCapture();
+                        SendMessage(hwnd, WmNcLButtonDown, (IntPtr)HtCaption, IntPtr.Zero);
+                    }
+                }
             });
             return;
         }
@@ -1006,6 +1065,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         if (node.StartsWith("route:probe:country:", StringComparison.Ordinal))
         {
             var countryCode = node["route:probe:country:".Length..];
+            Services.UiDiagnostics.Log($"webview probe request: {countryCode}");
             Dispatcher.UIThread.Post(() =>
             {
                 if (!_atlasFailed && ReferenceEquals(sender, _webView))

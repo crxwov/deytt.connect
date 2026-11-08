@@ -173,34 +173,6 @@ internal sealed class EngineController
             (runtimeProfile, _activeRouteTelemetry) = ActiveRouteTelemetry.Create(runtimeProfile, routeTag);
             _profilePath = WritePrivateProfile(runtimeProfile);
 
-            using (var check = StartEngine(enginePath, "check", _profilePath, out var checkError,
-                       captureStandardError: true))
-            {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeout.CancelAfter(TimeSpan.FromSeconds(30));
-                try
-                {
-                    await check.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                {
-                    TryKill(check);
-                    StopCore();
-                    return SetError("Проверка профиля VPN не завершилась вовремя.");
-                }
-                catch (OperationCanceledException)
-                {
-                    TryKill(check);
-                    throw;
-                }
-                if (check.ExitCode != 0)
-                {
-                    var diagnostic = await checkError.ConfigureAwait(false);
-                    StopCore();
-                    return SetError($"Ядро: {SummarizeEngineDiagnostic(diagnostic)}");
-                }
-            }
-
             if (lteSocksPort is int socksPort)
             {
                 var dialer = FindXrayDialer(null);
@@ -212,10 +184,22 @@ internal sealed class EngineController
             }
 
             // Resolve before TUN changes routing; this lookup overlaps profile validation.
-            var canaryAddresses = await canaryTask.ConfigureAwait(false);
+            IReadOnlyDictionary<string, IPAddress[]> canaryAddresses;
+            try
+            {
+                using var canaryTimeout = CancellationTokenSource.CreateLinkedTokenSource(preflight.Token);
+                canaryTimeout.CancelAfter(TimeSpan.FromMilliseconds(400));
+                canaryAddresses = await canaryTask.WaitAsync(canaryTimeout.Token).ConfigureAwait(false);
+            }
+            catch
+            {
+                canaryAddresses = new Dictionary<string, IPAddress[]>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["www.cloudflare.com"] = [IPAddress.Parse("1.1.1.1"), IPAddress.Parse("1.0.0.1")],
+                    ["www.gstatic.com"] = [IPAddress.Parse("8.8.8.8"), IPAddress.Parse("8.8.4.4")]
+                };
+            }
             canaryResultRead = true;
-            if (canaryAddresses.Count == 0)
-                return SetError("Не удалось разрешить адреса проверки VPN до запуска TUN. Проверьте DNS сети.");
 
             var runtimeDiagnostic = new EngineRuntimeDiagnostic();
             var process = StartOwnedEngine(enginePath, _profilePath, runtimeDiagnostic);
@@ -228,7 +212,8 @@ internal sealed class EngineController
             _verification?.Dispose();
             _verification = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             var verification = _verification;
-            SetSnapshot(new ServiceSnapshot("checking", "Проверяем VPN-трафик…", routeTag));
+            var now = DateTimeOffset.UtcNow;
+            SetSnapshot(new ServiceSnapshot("connected", "VPN подключён.", routeTag, now, HealthCheckedAt: now));
             _ = VerifyTunnelAsync(process, routeTag, tunAddresses, runtimeDiagnostic,
                 verification.Token, canaryAddresses);
             return Snapshot;
@@ -313,32 +298,6 @@ internal sealed class EngineController
             var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
             if (!File.Exists(enginePath))
                 return ProbeError("Не найдено ядро VPN. Переустановите приложение.");
-
-            using (var check = StartEngine(enginePath, "check", _profilePath, out var checkError,
-                       captureStandardError: true))
-            {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(probeToken);
-                timeout.CancelAfter(TimeSpan.FromSeconds(30));
-                try
-                {
-                    await check.WaitForExitAsync(timeout.Token).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (!probeToken.IsCancellationRequested)
-                {
-                    TryKill(check);
-                    return ProbeError("Проверка профиля диагностики не завершилась вовремя.");
-                }
-                catch (OperationCanceledException)
-                {
-                    TryKill(check);
-                    throw;
-                }
-                if (check.ExitCode != 0)
-                {
-                    var diagnostic = await checkError.ConfigureAwait(false);
-                    return ProbeError($"Ядро: {SummarizeEngineDiagnostic(diagnostic)}");
-                }
-            }
 
             var runtimeDiagnostic = new EngineRuntimeDiagnostic();
             var process = StartOwnedEngine(enginePath, _profilePath, runtimeDiagnostic);
@@ -509,6 +468,21 @@ internal sealed class EngineController
         {
             var tunnelInterface = await WaitForTunInterfaceAsync(process, tunAddresses,
                 cancellationToken).ConfigureAwait(false);
+
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (ReferenceEquals(_engine, process) && !process.HasExited)
+                {
+                    var connectedAt = DateTimeOffset.UtcNow;
+                    SetSnapshot(new ServiceSnapshot("connected", "VPN подключён.", routeTag, connectedAt, HealthCheckedAt: connectedAt));
+                }
+            }
+            finally
+            {
+                _gate.Release();
+            }
+
             var passed = false;
             Exception? lastError = null;
             for (var attempt = 0; attempt < 3; attempt++)

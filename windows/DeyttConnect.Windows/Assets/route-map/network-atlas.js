@@ -1800,8 +1800,16 @@
       const cameraMoving = this.dragging || Math.abs(this.velocityLon) > .001 || Math.abs(this.velocityLat || 0) > .001 || Math.abs(this.targetCenterY - this.centerY) > .5 || Math.abs(this.targetCenterX - this.centerX) > .5 || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
       if (cameraMoving !== this.interactionQuality) this.setInteractionQuality(cameraMoving);
-      // Let requestAnimationFrame follow the display refresh rate so the traffic
-      // and camera never fall to the old 30 fps idle-animation cap.
+      // When idle (camera settled and not dragging), throttle traffic particle animation to ~30 FPS to reduce GPU load and power draw.
+      if (!cameraMoving && !this.dragging && this.trafficActive && !this.autoSelecting) {
+        if (this.lastTrafficFrame && time - this.lastTrafficFrame < 32) {
+          if (!this.frame && this.hostActive && this.visible && !document.hidden) {
+            this.frame = requestAnimationFrame((t) => this.render(t));
+          }
+          return;
+        }
+        this.lastTrafficFrame = time;
+      }
       const elapsed = this.lastFrame ? time - this.lastFrame : 16;
       const delta = Math.min(48, elapsed);
       this.lastFrame = time;
@@ -1950,17 +1958,15 @@
 
     resumeHost() {
       this.setHostActive(true);
-      // A native view can return before its intersection notification. Clear
-      // a stale RAF handle and trust the explicitly shown Windows host surface.
       if (this.frame) cancelAnimationFrame(this.frame);
       this.frame = 0;
       this.lastFrame = 0;
-      if (this.options.stableGeography) {
-        const bounds = this.canvas.getBoundingClientRect();
-        this.visible = bounds.width > 0 && bounds.height > 0;
-      }
+      this.visible = true;
+      this.staticDirty = true;
+      this.overlayDirty = true;
       this.resize();
       this.start();
+      this.render(performance.now());
     }
 
     updateHover(pointer) {

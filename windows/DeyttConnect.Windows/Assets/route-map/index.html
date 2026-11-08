@@ -4,24 +4,26 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>./connect · подключение</title>
-  <link rel="stylesheet" href="network-atlas.css?v=20261022_46">
-  <script defer src="network-atlas.js?v=20261022_46"></script>
-  <script defer src="atlas-init.js?v=20261022_46"></script>
+  <link rel="stylesheet" href="network-atlas.css?v=20261107_48">
+  <script defer src="network-atlas.js?v=20261107_48"></script>
+  <script defer src="atlas-init.js?v=20261107_48"></script>
 
   <style>
     :root {
       --header-bg: transparent;
       --header-border: transparent;
-      --nav-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(10, 16, 28, 0.45);
-      --nav-border: rgba(255, 255, 255, 0.12);
-      --nav-border-top: rgba(255, 255, 255, 0.42);
-      --nav-border-bottom: rgba(0, 0, 0, 0.35);
-      --nav-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.25);
-      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.04) 100%);
-      --nav-pill-border: rgba(255, 255, 255, 0.22);
-      --nav-pill-border-top: rgba(255, 255, 255, 0.62);
-      --nav-pill-border-bottom: rgba(0, 0, 0, 0.25);
-      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 1px 0 rgba(255, 255, 255, 0.45);
+      /* Навбар: стекло телефона glassRowBackground(false, 28) */
+      --nav-bg: linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 55%, rgba(12, 19, 29, 0.12) 100%);
+      --nav-border: rgba(255, 255, 255, 0.165);
+      --nav-border-top: rgba(255, 255, 255, 0.30);
+      --nav-border-bottom: rgba(80, 128, 184, 0.14);
+      --nav-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+      /* Выбранный пункт: glassRowBackground(true, 20) */
+      --nav-pill-bg: linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 55%, rgba(15, 25, 38, 0.17) 100%);
+      --nav-pill-border: rgba(255, 255, 255, 0.27);
+      --nav-pill-border-top: rgba(255, 255, 255, 0.44);
+      --nav-pill-border-bottom: rgba(88, 156, 216, 0.20);
+      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(112, 168, 224, 0.10);
       --text: #F8FAFC;
       --text-muted: #8E9EAF;
 
@@ -86,7 +88,9 @@
       -webkit-backdrop-filter: none;
       z-index: 100;
       pointer-events: auto;
-      -webkit-app-region: drag;
+      cursor: default;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     .brand-area,
@@ -637,110 +641,256 @@
     }
 
     /* Modern Precision Connect Action Button */
+    @property --home-glint { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+    @property --home-shimmer { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+
+    /* Connection button: точный порт connectionGlassBackground из DeyttUi.kt.
+       Слои телефона: стеклянный fill + вращающийся блик по ободу (glint, 5.5s)
+       + встречный shimmer fill (0.6×) + верхний gloss + внутренняя кромка. */
     .home-action {
-      min-height: 52px !important;
+      min-height: 56px !important;
       width: 100% !important;
-      border-radius: 17px !important;
+      border-radius: 28px !important;
       font-family: inherit !important;
-      font-size: 15.5px !important;
+      font-size: 14.5px !important;
       font-weight: 700 !important;
       text-transform: lowercase !important;
       letter-spacing: -0.015em !important;
       cursor: pointer !important;
       position: relative !important;
-      background: linear-gradient(145deg, rgba(71, 151, 255, .88), rgba(29, 99, 210, .76)) !important;
-      backdrop-filter: blur(22px) saturate(175%) !important;
-      -webkit-backdrop-filter: blur(22px) saturate(175%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.2) !important;
-      border-top: 1px solid rgba(255, 255, 255, 0.52) !important;
-      box-shadow: 0 8px 24px -4px rgba(29, 140, 248, 0.3),
-                  0 2px 6px rgba(0, 0, 0, 0.24),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
-      color: #FFFFFF !important;
+      isolation: isolate !important;
+      overflow: hidden !important;
+      color: #F2F5FC !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
       gap: 10px !important;
-      transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+      background:
+        conic-gradient(from var(--home-shimmer) at 50% 50%,
+          rgba(30, 56, 84, 0.26) 0%, rgba(18, 36, 56, 0.15) 20%,
+          rgba(24, 50, 76, 0.21) 40%, rgba(18, 36, 56, 0.15) 60%,
+          rgba(30, 56, 84, 0.26) 80%, rgba(18, 36, 56, 0.15) 100%),
+        linear-gradient(180deg, rgba(58, 84, 114, 0.44) 0%, rgba(30, 48, 68, 0.30) 46%, rgba(16, 26, 40, 0.26) 100%) !important;
+      backdrop-filter: blur(18px) saturate(170%) !important;
+      -webkit-backdrop-filter: blur(18px) saturate(170%) !important;
+      /* Обод телефона: линейный градиент TL→BR — свет бьёт в верхнюю кромку */
+      border: 1.35px solid rgba(120, 175, 235, 0.34) !important;
+      border-top-color: rgba(240, 249, 255, 0.58) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.16) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.20),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.30),
+        inset 0 0 0 0.5px rgba(255, 255, 255, 0.05),
+        0 10px 26px -8px rgba(8, 14, 26, 0.65) !important;
+      transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms ease, filter 180ms ease !important;
       text-shadow: none !important;
+      animation: home-shimmer-rotate 9.16s linear infinite;
     }
 
     .home-action::before {
       content: "" !important;
-      display: block !important;
       position: absolute !important;
-      inset: 0 auto 0 -42% !important;
-      width: 36% !important;
+      inset: 0 !important;
+      border-radius: 28px !important;
+      padding: 1.4px !important;
+      /* Одиночный яркий пробег, как SweepGradient в LiquidGlassDrawable */
+      background: conic-gradient(from var(--home-glint) at 50% 50%,
+        rgba(255, 255, 255, 0.95) 0deg,
+        rgba(56, 189, 248, 0.80) 26deg,
+        rgba(2, 132, 199, 0.40) 60deg,
+        rgba(3, 105, 161, 0.16) 105deg,
+        rgba(56, 189, 248, 0.22) 170deg,
+        rgba(3, 105, 161, 0.12) 235deg,
+        rgba(56, 189, 248, 0.26) 300deg,
+        rgba(56, 189, 248, 0.72) 338deg,
+        rgba(255, 255, 255, 0.95) 360deg) !important;
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
+      -webkit-mask-composite: xor !important;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
+      mask-composite: exclude !important;
       pointer-events: none !important;
-      background: linear-gradient(105deg, transparent, rgba(255, 255, 255, .05) 24%, rgba(255, 255, 255, .28) 50%, rgba(255, 255, 255, .05) 76%, transparent) !important;
-      opacity: 0 !important;
-      transform: skewX(-18deg) !important;
-      animation: none !important;
+      animation: home-glint-rotate 5.5s linear infinite !important;
     }
+
+    .home-action::after {
+      content: "" !important;
+      position: absolute !important;
+      top: 1px !important;
+      left: 14px !important;
+      right: 14px !important;
+      height: 42% !important;
+      border-radius: 9999px !important;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0)) !important;
+      pointer-events: none !important;
+    }
+
+    @keyframes home-glint-rotate { to { --home-glint: 360deg; } }
+    @keyframes home-shimmer-rotate { to { --home-shimmer: -216deg; } }
 
     .home-action:hover {
-      background: linear-gradient(145deg, rgba(89, 166, 255, .94), rgba(35, 112, 222, .84)) !important;
-      border-top-color: rgba(255, 255, 255, 0.62) !important;
-      box-shadow: 0 12px 32px -2px rgba(29, 140, 248, 0.45),
-                  0 2px 8px rgba(0, 0, 0, 0.28),
-                  inset 0 1px 0 rgba(255, 255, 255, 0.42) !important;
-      transform: translateY(-1.5px) !important;
+      filter: brightness(1.16) !important;
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+        0 12px 30px -8px rgba(8, 14, 26, 0.7) !important;
     }
-
-    .home-action:hover::before { opacity: .8 !important; animation: action-sheen 1.1s ease-out 1 !important; }
 
     .home-action:active {
-      transform: translateY(1px) scale(0.985) !important;
-      box-shadow: 0 3px 10px rgba(17, 112, 220, 0.4), inset 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+      transform: scale(0.985) !important;
     }
 
+    /* CONNECTED: изумрудное стекло телефона (0x351F3A30 → 0x2010201A) */
     .home-action[data-tone="connected"], .home-action[data-tone="good"] {
-      background: linear-gradient(145deg, rgba(57, 232, 189, .72), rgba(16, 139, 122, .78)) !important;
-      border-color: rgba(128, 255, 221, .4) !important;
-      border-top-color: rgba(232, 255, 248, .68) !important;
-      box-shadow: 0 8px 24px -4px rgba(16, 185, 150, .28), inset 0 1px 0 rgba(255, 255, 255, .3) !important;
+      background:
+        conic-gradient(from var(--home-shimmer) at 50% 50%,
+          rgba(26, 62, 46, 0.28) 0%, rgba(15, 36, 26, 0.16) 20%,
+          rgba(22, 52, 36, 0.22) 40%, rgba(15, 36, 26, 0.16) 60%,
+          rgba(26, 62, 46, 0.28) 80%, rgba(15, 36, 26, 0.16) 100%),
+        linear-gradient(180deg, rgba(40, 74, 60, 0.38) 0%, rgba(22, 44, 36, 0.26) 46%, rgba(10, 22, 18, 0.22) 100%) !important;
+      border-color: rgba(52, 211, 153, 0.30) !important;
+      border-top-color: rgba(246, 255, 252, 0.55) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.15) !important;
     }
     .home-action[data-tone="connected"]::before, .home-action[data-tone="good"]::before {
-      opacity: .9 !important;
-      animation: action-sheen 1.1s ease-out 1 !important;
+      background: conic-gradient(from var(--home-glint) at 50% 50%,
+        rgba(255, 255, 255, 0.95) 0deg,
+        rgba(52, 211, 153, 0.82) 26deg,
+        rgba(5, 150, 105, 0.42) 60deg,
+        rgba(4, 120, 87, 0.15) 105deg,
+        rgba(52, 211, 153, 0.20) 170deg,
+        rgba(4, 120, 87, 0.11) 235deg,
+        rgba(52, 211, 153, 0.24) 300deg,
+        rgba(52, 211, 153, 0.70) 338deg,
+        rgba(255, 255, 255, 0.95) 360deg) !important;
     }
+
+    /* STARTING/CHECKING: стекло как в покое, блик — белый/голубой */
     .home-action[data-tone="connecting"] {
-      background: linear-gradient(145deg, rgba(92, 164, 255, .78), rgba(63, 91, 202, .82)) !important;
-      border-color: rgba(165, 202, 255, .42) !important;
+      border-top-color: rgba(244, 251, 255, 0.58) !important;
     }
+    .home-action[data-tone="connecting"]::before {
+      background: conic-gradient(from var(--home-glint) at 50% 50%,
+        rgba(240, 255, 255, 0.96) 0deg,
+        rgba(56, 189, 248, 0.84) 26deg,
+        rgba(2, 132, 199, 0.42) 60deg,
+        rgba(3, 105, 161, 0.16) 105deg,
+        rgba(56, 189, 248, 0.22) 170deg,
+        rgba(3, 105, 161, 0.11) 235deg,
+        rgba(56, 189, 248, 0.26) 300deg,
+        rgba(56, 189, 248, 0.74) 338deg,
+        rgba(240, 255, 255, 0.96) 360deg) !important;
+    }
+
     .home-action[data-tone="error"] {
-      background: linear-gradient(145deg, rgba(246, 112, 133, .78), rgba(190, 55, 88, .82)) !important;
-      border-color: rgba(255, 191, 201, .4) !important;
+      background:
+        conic-gradient(from var(--home-shimmer) at 50% 50%,
+          rgba(62, 26, 34, 0.28) 0%, rgba(36, 16, 22, 0.16) 20%,
+          rgba(48, 20, 28, 0.22) 40%, rgba(36, 16, 22, 0.16) 60%,
+          rgba(62, 26, 34, 0.28) 80%, rgba(36, 16, 22, 0.16) 100%),
+        linear-gradient(180deg, rgba(64, 44, 52, 0.38) 0%, rgba(40, 26, 34, 0.26) 46%, rgba(22, 14, 20, 0.22) 100%) !important;
+      border-color: rgba(244, 63, 94, 0.34) !important;
+      border-top-color: rgba(255, 241, 242, 0.55) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.15) !important;
     }
-    .home-action[data-tone="warn"] {
-      background: linear-gradient(145deg, rgba(244, 181, 75, .78), rgba(180, 112, 27, .82)) !important;
-      border-color: rgba(255, 226, 166, .4) !important;
+    .home-action[data-tone="error"]::before {
+      background: conic-gradient(from var(--home-glint) at 50% 50%,
+        rgba(240, 255, 255, 0.96) 0deg,
+        rgba(244, 63, 94, 0.82) 26deg,
+        rgba(190, 18, 60, 0.42) 60deg,
+        rgba(136, 19, 55, 0.15) 105deg,
+        rgba(244, 63, 94, 0.20) 170deg,
+        rgba(136, 19, 55, 0.11) 235deg,
+        rgba(244, 63, 94, 0.24) 300deg,
+        rgba(244, 63, 94, 0.70) 338deg,
+        rgba(240, 255, 255, 0.96) 360deg) !important;
     }
-    .home-action[data-tone="connecting"]::before { opacity: .75 !important; animation: action-sheen 1.8s cubic-bezier(.4,0,.2,1) infinite !important; }
+
+    /* STOPPING: глухое стекло без блика (телефон: shimmerStroke = null) */
+    .home-action[data-tone="stopping"], .home-action:disabled {
+      animation: none !important;
+      background: linear-gradient(180deg, rgba(43, 57, 75, 0.21) 0%, rgba(19, 28, 41, 0.125) 100%) !important;
+      border-color: rgba(255, 255, 255, 0.14) !important;
+    }
+    .home-action[data-tone="stopping"]::before, .home-action:disabled::before {
+      animation: none !important;
+      opacity: .45 !important;
+    }
     .compact-action {
       position: relative !important;
       overflow: hidden !important;
       isolation: isolate !important;
-      border-radius: 16px !important;
-      backdrop-filter: blur(20px) saturate(165%) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(165%) !important;
-      border: 1px solid rgba(255,255,255,.2) !important;
-      border-top-color: rgba(255,255,255,.48) !important;
-      box-shadow: 0 8px 22px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.26) !important;
+      border-radius: 22px !important;
+      border: 1.2px solid rgba(120, 175, 235, 0.32) !important;
+      border-top-color: rgba(240, 249, 255, 0.55) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.15) !important;
+      background:
+        conic-gradient(from var(--home-shimmer) at 50% 50%,
+          rgba(30, 56, 84, 0.26) 0%, rgba(18, 36, 56, 0.15) 20%,
+          rgba(24, 50, 76, 0.21) 40%, rgba(18, 36, 56, 0.15) 60%,
+          rgba(30, 56, 84, 0.26) 80%, rgba(18, 36, 56, 0.15) 100%),
+        linear-gradient(180deg, rgba(58, 84, 114, 0.40) 0%, rgba(30, 48, 68, 0.27) 46%, rgba(16, 26, 40, 0.24) 100%) !important;
+      backdrop-filter: blur(18px) saturate(170%) !important;
+      -webkit-backdrop-filter: blur(18px) saturate(170%) !important;
+      box-shadow: 0 8px 22px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.18), inset 0 -1px 0 rgba(0,0,0,.26) !important;
+      animation: home-shimmer-rotate 9.16s linear infinite;
     }
-    .compact-action[data-tone="idle"] { background: linear-gradient(145deg, rgba(71,151,255,.86), rgba(29,99,210,.78)) !important; }
-    .compact-action[data-tone="connected"], .compact-action[data-tone="good"] { background: linear-gradient(145deg, rgba(57,232,189,.72), rgba(16,139,122,.8)) !important; border-color: rgba(128,255,221,.4) !important; }
-    .compact-action[data-tone="connecting"] { background: linear-gradient(145deg, rgba(92,164,255,.78), rgba(63,91,202,.82)) !important; border-color: rgba(165,202,255,.42) !important; }
-    .compact-action[data-tone="error"] { background: linear-gradient(145deg, rgba(246,112,133,.78), rgba(190,55,88,.82)) !important; border-color: rgba(255,191,201,.4) !important; }
-    .compact-action[data-tone="warn"] { background: linear-gradient(145deg, rgba(244,181,75,.78), rgba(180,112,27,.82)) !important; border-color: rgba(255,226,166,.4) !important; }
-    .compact-action[data-tone="connected"]::before, .compact-action[data-tone="good"]::before { opacity: .8 !important; }
-    .compact-action[data-tone="connecting"]::before { opacity: .7 !important; animation: action-sheen 1.8s cubic-bezier(.4,0,.2,1) infinite !important; }
-    .compact-action[data-tone="idle"]:hover::before { opacity: .75 !important; animation: action-sheen 1.1s ease-out 1 !important; }
+    .compact-action::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      border-radius: 22px !important;
+      padding: 1.2px !important;
+      background: conic-gradient(from var(--home-glint) at 50% 50%,
+        rgba(255, 255, 255, 0.92) 0deg,
+        rgba(56, 189, 248, 0.78) 26deg,
+        rgba(2, 132, 199, 0.38) 60deg,
+        rgba(3, 105, 161, 0.15) 105deg,
+        rgba(56, 189, 248, 0.20) 170deg,
+        rgba(3, 105, 161, 0.10) 235deg,
+        rgba(56, 189, 248, 0.24) 300deg,
+        rgba(56, 189, 248, 0.68) 338deg,
+        rgba(255, 255, 255, 0.92) 360deg) !important;
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
+      -webkit-mask-composite: xor !important;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
+      mask-composite: exclude !important;
+      pointer-events: none !important;
+      animation: home-glint-rotate 5.5s linear infinite !important;
+    }
+    .compact-action[data-tone="connected"], .compact-action[data-tone="good"] {
+      background:
+        conic-gradient(from var(--home-shimmer) at 50% 50%,
+          rgba(26, 62, 46, 0.26) 0%, rgba(15, 36, 26, 0.14) 20%,
+          rgba(22, 52, 36, 0.20) 40%, rgba(15, 36, 26, 0.14) 60%,
+          rgba(26, 62, 46, 0.26) 80%, rgba(15, 36, 26, 0.14) 100%),
+        linear-gradient(180deg, rgba(40, 74, 60, 0.34) 0%, rgba(22, 44, 36, 0.24) 46%, rgba(10, 22, 18, 0.20) 100%) !important;
+      border-color: rgba(52, 211, 153, 0.30) !important;
+      border-top-color: rgba(246, 255, 252, 0.52) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.14) !important;
+    }
+    .compact-action[data-tone="connected"]::before, .compact-action[data-tone="good"]::before {
+      background: conic-gradient(from var(--home-glint) at 50% 50%,
+        rgba(255, 255, 255, 0.92) 0deg,
+        rgba(52, 211, 153, 0.80) 26deg,
+        rgba(5, 150, 105, 0.40) 60deg,
+        rgba(4, 120, 87, 0.14) 105deg,
+        rgba(52, 211, 153, 0.18) 170deg,
+        rgba(4, 120, 87, 0.10) 235deg,
+        rgba(52, 211, 153, 0.22) 300deg,
+        rgba(52, 211, 153, 0.68) 338deg,
+        rgba(255, 255, 255, 0.92) 360deg) !important;
+    }
+    .compact-action[data-tone="error"] {
+      background: linear-gradient(180deg, rgba(64, 44, 52, 0.34) 0%, rgba(22, 14, 20, 0.20) 100%) !important;
+      border-color: rgba(244, 63, 94, 0.34) !important;
+      border-top-color: rgba(255, 241, 242, 0.52) !important;
+    }
+    .compact-action[data-tone="warn"] { border-color: rgba(244, 181, 75, 0.3) !important; }
     .network-atlas.reduce-motion .home-action,
     .network-atlas.reduce-motion .compact-action,
     .network-atlas.reduce-motion .profile-action-row,
     .network-atlas.reduce-motion .profile-action-row:hover,
-    .network-atlas.reduce-motion .profile-action-row:active { transition: none !important; transform: none !important; }
+    .network-atlas.reduce-motion .profile-action-row:active { transition: none !important; transform: none !important; animation: none !important; }
     .network-atlas.reduce-motion .home-action::before,
     .network-atlas.reduce-motion .compact-action::before,
     .network-atlas.reduce-motion .action-dots i { animation: none !important; opacity: .16 !important; }
@@ -749,7 +899,7 @@
       .network-atlas .compact-action,
       .network-atlas .profile-action-row,
       .network-atlas .profile-action-row:hover,
-      .network-atlas .profile-action-row:active { transition: none !important; transform: none !important; }
+      .network-atlas .profile-action-row:active { transition: none !important; transform: none !important; animation: none !important; }
       .network-atlas .home-action::before,
       .network-atlas .compact-action::before,
       .network-atlas .action-dots i { animation: none !important; opacity: .16 !important; }
@@ -778,6 +928,7 @@
       flex-direction: column !important;
       gap: 4px !important;
       align-items: flex-start !important;
+      min-width: 0 !important;
     }
 
     .home-metrics .metric-label {
@@ -792,10 +943,12 @@
 
     .home-metrics .metric strong {
       font-family: "Unbounded", -apple-system, sans-serif !important;
-      font-size: 24px !important;
+      font-size: 21px !important;
       font-weight: 700 !important;
       color: #FFFFFF !important;
-      line-height: 1.1 !important;
+      line-height: 1.15 !important;
+      white-space: nowrap !important;
+      letter-spacing: -0.02em !important;
     }
 
     .home-metrics .metric strong.is-empty {
@@ -819,40 +972,41 @@
       display: none !important;
     }
 
-    /* Elevated Interactive Measure Button Pill */
+    /* Elevated Interactive Measure Button Pill — вторичное стекло телефона
+       (glassButtonBackground: 0x40364C68 → 0x22121E2E, обод 0.85dp) */
     .home-measure {
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 100%), rgba(15, 23, 40, 0.4) !important;
+      background: linear-gradient(180deg, rgba(62, 86, 116, 0.34) 0%, rgba(30, 46, 66, 0.24) 46%, rgba(14, 24, 38, 0.20) 100%) !important;
       backdrop-filter: blur(16px) saturate(190%) !important;
       -webkit-backdrop-filter: blur(16px) saturate(190%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.15) !important;
-      border-top-color: rgba(255, 255, 255, 0.48) !important;
-      border-bottom-color: rgba(0, 0, 0, 0.3) !important;
-      border-radius: 12px !important;
-      color: #E2E8F0 !important;
-      font-size: 13px !important;
+      border: 1px solid rgba(120, 175, 235, 0.28) !important;
+      border-top-color: rgba(240, 249, 255, 0.50) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.13) !important;
+      border-radius: 24px !important;
+      color: #F2F5FC !important;
+      font-size: 13.5px !important;
       font-weight: 600 !important;
       text-transform: lowercase !important;
       cursor: pointer !important;
       display: inline-flex !important;
       align-items: center !important;
+      justify-content: center !important;
       gap: 8px !important;
+      min-height: 48px !important;
+      width: 100% !important;
       padding: 8px 18px !important;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3), inset 0 1px 1px 0 rgba(255, 255, 255, 0.35) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 14px rgba(0, 0, 0, 0.3) !important;
       transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
-      width: fit-content !important;
     }
 
     .home-measure:hover {
       color: #FFFFFF !important;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.06) 100%), rgba(22, 34, 58, 0.5) !important;
-      border-color: rgba(255, 255, 255, 0.25) !important;
-      border-top-color: rgba(255, 255, 255, 0.75) !important;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4), inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.55) !important;
-      transform: translateY(-1px) !important;
+      filter: brightness(1.18) !important;
+      border-top-color: rgba(255, 255, 255, 0.5) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 6px 20px rgba(0, 0, 0, 0.4) !important;
     }
 
     .home-measure:active {
-      transform: translateY(1px) scale(0.98) !important;
+      transform: scale(0.98) !important;
     }
 
     .home-measure svg {
@@ -1100,7 +1254,7 @@
       color: #64748B;
       letter-spacing: 0.06em;
       text-transform: lowercase;
-      margin: 18px 4px 6px;
+      margin: 6px 4px 2px;
     }
 
     /* Accordion Country List & Inner Protocols (обходы) */
@@ -1943,7 +2097,7 @@
     /* Compact glass route groups, closer to the touch layout. */
     .countries-list { gap: 8px; }
     .country-accordion { border-radius: 22px; }
-    .country-accordion-header { min-height: 64px; box-sizing: border-box; padding: 10px 16px; }
+    .country-accordion-header { min-height: 64px; box-sizing: border-box; padding: 14px 18px; }
     .country-accordion-header:focus-visible { outline: 2px solid #7ec9ff; outline-offset: -3px; border-radius: inherit; }
     .country-header-left, .country-header-right { gap: 10px; }
     .country-name { font-size: 15px; }
@@ -2041,8 +2195,8 @@
       display: inline-block;
       vertical-align: middle;
       transform-origin: center center;
-      animation: spoke-wheel-spin 1s steps(16) infinite;
-      color: #94A3B8;
+      animation: spoke-wheel-spin 1s linear infinite;
+      color: #F2F5FC;
       flex-shrink: 0;
     }
     .metric-spoke-spinner--lg {
@@ -2095,17 +2249,18 @@
       position: relative !important;
     }
 
-    /* Clean LiquidGlass Pill Button (NO weird blurry gradients, crisp specular edge) */
+    /* Clean LiquidGlass Pill Button — вторичное стекло телефона
+       (glassButtonBackground: 0x40364C68 → 0x22121E2E, обод [#2CFFFFFF,#12FFFFFF,#0C82B4E8,#12FFFFFF]) */
     .btn-select-route, .home-measure, .btn-action-glass {
-      background: var(--liquid-glass-pill-bg) !important;
-      backdrop-filter: blur(16px) saturate(150%) !important;
-      -webkit-backdrop-filter: blur(16px) saturate(150%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.16) !important;
-      border-top-color: rgba(255, 255, 255, 0.34) !important;
-      border-bottom-color: rgba(0, 0, 0, 0.25) !important;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+      background: linear-gradient(180deg, rgba(62, 86, 116, 0.34) 0%, rgba(30, 46, 66, 0.24) 46%, rgba(14, 24, 38, 0.20) 100%) !important;
+      backdrop-filter: blur(16px) saturate(160%) !important;
+      -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
+      border: 1px solid rgba(120, 175, 235, 0.28) !important;
+      border-top-color: rgba(240, 249, 255, 0.50) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.13) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(0, 0, 0, 0.26), 0 4px 12px rgba(0, 0, 0, 0.25) !important;
       border-radius: 9999px !important;
-      color: #F8FAFC !important;
+      color: #F2F5FC !important;
       font-weight: 600 !important;
       font-size: 13px !important;
       padding: 7px 18px !important;
@@ -2118,13 +2273,11 @@
       text-transform: lowercase !important;
     }
     .btn-select-route:hover, .home-measure:hover, .btn-action-glass:hover {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 40%),
-                  linear-gradient(180deg, rgba(55, 80, 110, 0.45) 0%, rgba(25, 40, 60, 0.28) 100%) !important;
-      border-top-color: rgba(255, 255, 255, 0.50) !important;
-      transform: translateY(-1px) !important;
+      filter: brightness(1.18) !important;
+      border-top-color: rgba(255, 255, 255, 0.5) !important;
     }
     .btn-select-route:active, .home-measure:active, .btn-action-glass:active {
-      transform: translateY(1px) scale(0.985) !important;
+      transform: scale(0.985) !important;
     }
     .btn-select-route.is-selected {
       border-color: rgba(56, 189, 248, 0.45) !important;
@@ -2139,9 +2292,8 @@
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      padding: 16px 20px;
+      padding: 18px 20px;
       cursor: pointer;
-      margin-bottom: 8px;
       transition: all 220ms ease;
     }
     .routes-refresh-banner:hover {
@@ -2194,14 +2346,13 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      margin-bottom: 12px;
     }
     .quick-select-card {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 14px;
-      padding: 16px 20px;
+      padding: 18px 20px;
       cursor: pointer;
       transition: all 220ms ease;
     }
@@ -2267,14 +2418,14 @@
       color: #64748B;
       text-transform: lowercase;
       letter-spacing: 0.04em;
-      margin: 10px 0 6px 4px;
+      margin: 8px 0 2px 4px;
     }
 
     /* Country Accordion Cards */
     .countries-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
     }
     .country-accordion {
       transition: all 220ms ease;
@@ -2716,14 +2867,19 @@
       width: 100% !important;
       height: 48px !important;
       border-radius: 9999px !important;
-      background: linear-gradient(180deg, rgba(64, 76, 104, 0.28) 0%, rgba(18, 30, 46, 0.48) 100%) !important;
-      backdrop-filter: blur(20px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.16) !important;
-      border-top: 1px solid rgba(255, 255, 255, 0.38) !important;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35),
-                  inset 0 -1px 1px rgba(0, 0, 0, 0.20),
-                  0 4px 16px rgba(0, 0, 0, 0.25) !important;
+      background:
+        radial-gradient(130% 100% at 20% 0%, rgba(112, 182, 255, .16) 0%, rgba(112, 182, 255, 0) 56%),
+        linear-gradient(180deg, rgba(52, 70, 104, 0.42) 0%, rgba(14, 26, 44, 0.6) 100%) !important;
+      backdrop-filter: blur(26px) saturate(190%) !important;
+      -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+      border: 1px solid rgba(129, 212, 250, 0.38) !important;
+      border-top: 1px solid rgba(226, 244, 255, 0.42) !important;
+      box-shadow:
+        0 0 0 1px rgba(6, 16, 38, 0.55),
+        0 0 18px -4px rgba(87, 199, 255, 0.38),
+        0 6px 20px rgba(0, 0, 0, 0.3),
+        inset 0 1px 1px rgba(255, 255, 255, 0.35),
+        inset 0 -8px 18px -10px rgba(0, 12, 34, 0.65) !important;
       display: flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -2771,7 +2927,7 @@
       to { transform: rotate(360deg); }
     }
     .inline-spoke-spinner {
-      animation: spoke-spin 0.9s steps(16, end) infinite;
+      animation: spoke-spin 1s linear infinite;
       display: inline-block;
       vertical-align: middle;
       width: 15px;
@@ -2797,12 +2953,13 @@
     .routes-view-wrap, .profile-view-wrap, .settings-view-wrap {
       max-width: 620px !important;
       margin: 0 auto !important;
-      padding: 0 12px 48px 12px !important;
+      padding: 4px 12px 48px 12px !important;
       display: flex !important;
       flex-direction: column !important;
+      gap: 14px !important;
     }
     .proto-row {
-      padding: 14px 20px !important;
+      padding: 18px 20px !important;
       display: flex !important;
       align-items: center !important;
       gap: 16px !important;
@@ -2930,19 +3087,44 @@
     }
 
     /* Profile: Starry Plan Card (1:1 with mobile StarryPlanCard.kt) */
+    @property --starry-glint { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
     .profile-starry-card {
       position: relative !important;
       border-radius: 24px !important;
       overflow: hidden !important;
-      padding: 24px 26px !important;
-      min-height: 250px !important;
+      padding: 26px 28px !important;
+      min-height: 260px !important;
       box-sizing: border-box !important;
       background: #040810 !important;
-      border: 1.2px solid rgba(255, 255, 255, 0.22) !important;
-      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+      border: 1.2px solid rgba(255, 255, 255, 0.10) !important;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
       display: flex !important;
       flex-direction: column !important;
       justify-content: flex-start !important;
+    }
+    /* Вращающаяся переливающаяся рамка карточки — dispatchDraw StarryPlanCard (7.5s sweep) */
+    .profile-starry-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1.2px;
+      background: conic-gradient(from var(--starry-glint) at 50% 50%,
+        rgba(30, 58, 95, 0.13) 0%, rgba(56, 189, 248, 0.40) 25%,
+        rgba(129, 140, 248, 0.20) 50%, rgba(56, 189, 248, 0.40) 75%,
+        rgba(30, 58, 95, 0.13) 100%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      pointer-events: none;
+      z-index: 3;
+      animation: starry-border-rotate 7.5s linear infinite;
+    }
+    @keyframes starry-border-rotate { to { --starry-glint: 360deg; } }
+    .network-atlas.reduce-motion .profile-starry-card::after { animation: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .profile-starry-card::after { animation: none; }
     }
     .profile-galaxy-canvas {
       position: absolute !important;
@@ -2975,20 +3157,20 @@
     }
     .starry-card-plan-title {
       font-family: 'Unbounded', sans-serif !important;
-      font-size: clamp(26px, 2.8vw, 30px) !important;
-      font-weight: 800 !important;
+      font-size: clamp(26px, 3vw, 32px) !important;
+      font-weight: 700 !important;
       color: #FFFFFF !important;
       letter-spacing: -0.025em !important;
-      margin: 2px 0 8px 0 !important;
+      margin: 3px 0 0 0 !important;
       line-height: 1.15 !important;
     }
     .starry-hero-middle {
-      margin: 0 0 14px 0 !important;
+      margin: 24px 0 20px 0 !important;
     }
     .starry-hero-status {
       font-family: 'Unbounded', sans-serif !important;
       font-size: 22px !important;
-      font-weight: 800 !important;
+      font-weight: 700 !important;
       color: #FFFFFF !important;
       letter-spacing: -0.02em !important;
       line-height: 1.1 !important;
@@ -2996,18 +3178,18 @@
     .starry-card-divider {
       height: 1px !important;
       background: rgba(255, 255, 255, 0.12) !important;
-      margin-bottom: 14px !important;
+      margin-bottom: 16px !important;
       width: 100% !important;
     }
     .starry-card-metrics {
       display: grid !important;
       grid-template-columns: 1fr 1.25fr !important;
-      gap: 16px !important;
+      gap: 18px !important;
     }
     .starry-metric-col {
       display: flex !important;
       flex-direction: column !important;
-      gap: 4px !important;
+      gap: 5px !important;
     }
     .starry-metric-label {
       font-size: 12.5px !important;
@@ -3017,16 +3199,17 @@
     .starry-metric-val {
       font-family: 'Unbounded', sans-serif !important;
       font-size: 28px !important;
-      font-weight: 800 !important;
+      font-weight: 700 !important;
       color: #FFFFFF !important;
       letter-spacing: -0.02em !important;
       line-height: 1.15 !important;
+      white-space: nowrap !important;
     }
     .starry-card-caption {
       text-align: center !important;
       font-size: 12.5px !important;
       color: #94A3B8 !important;
-      margin-top: 10px !important;
+      margin-top: 12px !important;
     }
 
     /* Action Cards List (Renew, Support, Devices) */
@@ -3037,7 +3220,7 @@
       margin-top: 4px !important;
     }
     .profile-action-card {
-      padding: 14px 20px !important;
+      padding: 18px 20px !important;
       display: flex !important;
       align-items: center !important;
       justify-content: space-between !important;
@@ -3562,6 +3745,315 @@
         color: #38BDF8 !important;
       }
 
+      /* ================================================================
+         PHONE-PARITY LIQUIDGLASS v2 — кодовый порт DeyttUi.kt (0.11.127)
+         Слои телефона (LiquidGlassDrawable): fill → gloss (верх 40%) →
+         inner lip → rim. Обод = фон border-box под прозрачной рамкой,
+         fill = padding-box; связка mask+conic на ::before рендерилась
+         с артефактом «второй таблетки» и полностью убрана.
+         Никакого неона, блюра и hover-подъёма — на телефоне их нет.
+         ================================================================ */
+      @property --glass-rim { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+      @property --glass-fill { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+      @keyframes glass-rim-spin { to { --glass-rim: 360deg; } }
+      @keyframes glass-fill-spin { to { --glass-fill: -216deg; } }
+
+      /* --- мёртвые псевдоэлементы прошлых версий (источник артефакта) --- */
+      #home-action::before, .home-action::before,
+      #compact-action::before, .compact-action::before,
+      #home-action::after, .home-action::after,
+      #compact-action::after, .compact-action::after,
+      #home-measure::before, .home-measure::before,
+      #home-measure::after, .home-measure::after {
+        content: none !important;
+        display: none !important;
+      }
+
+      /* --- «подключиться»: connectionGlassBackground(IDLE)
+             fill-shimmer 0x481E3854…, rim-shimmer 0xEEFFFFFF→0x300369A1,
+             обод 1.35dp, gloss 0x18, lip 0x18FFFFFF/0x12000000 --- */
+      #home-action, .home-action, #compact-action, .compact-action {
+        height: 56px !important;
+        min-height: 56px !important;
+        padding: 0 14px !important;
+        border-radius: 28px !important;
+        border: 1.35px solid transparent !important;
+        font-family: "Inter Tight", sans-serif !important;
+        font-size: 13.5px !important;
+        font-weight: 620 !important;
+        letter-spacing: 0 !important;
+        color: #F2F5FC !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(30, 56, 84, 0.28) 0%, rgba(18, 36, 56, 0.16) 25%,
+            rgba(24, 50, 76, 0.22) 50%, rgba(18, 36, 56, 0.16) 75%,
+            rgba(30, 56, 84, 0.28) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(255, 255, 255, 0.93) 0%, rgba(56, 189, 248, 0.84) 16.7%,
+            rgba(2, 132, 199, 0.44) 33.3%, rgba(3, 105, 161, 0.19) 50%,
+            rgba(2, 132, 199, 0.44) 66.7%, rgba(56, 189, 248, 0.84) 83.3%,
+            rgba(255, 255, 255, 0.93) 100%) border-box !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        text-shadow: none !important;
+        overflow: hidden !important;
+        animation: glass-rim-spin 5.5s linear infinite,
+          glass-fill-spin 5.5s linear infinite !important;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease !important;
+      }
+      #home-action:hover, .home-action:hover,
+      #compact-action:hover, .compact-action:hover {
+        filter: brightness(1.07) !important;
+      }
+      #home-action:active, .home-action:active,
+      #compact-action:active, .compact-action:active {
+        transform: scale(0.985) !important;
+        transition-duration: 120ms, 160ms !important;
+      }
+
+      /* CONNECTED: изумруд 0x351F3A30→0x2010201A, shimmer 0xD834D399 */
+      #home-action[data-tone="connected"], .home-action[data-tone="connected"],
+      #home-action[data-tone="good"], .home-action[data-tone="good"],
+      #compact-action[data-tone="connected"], .compact-action[data-tone="connected"],
+      #compact-action[data-tone="good"], .compact-action[data-tone="good"] {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(26, 62, 46, 0.27) 0%, rgba(15, 36, 26, 0.14) 25%,
+            rgba(22, 52, 36, 0.21) 50%, rgba(15, 36, 26, 0.14) 75%,
+            rgba(26, 62, 46, 0.27) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(255, 255, 255, 0.93) 0%, rgba(52, 211, 153, 0.85) 16.7%,
+            rgba(5, 150, 105, 0.46) 33.3%, rgba(4, 120, 87, 0.16) 50%,
+            rgba(5, 150, 105, 0.46) 66.7%, rgba(52, 211, 153, 0.85) 83.3%,
+            rgba(255, 255, 255, 0.93) 100%) border-box !important;
+      }
+
+      /* CONNECTING: fill как в покое, блик 0xF0FFFFFF→0x280369A1 */
+      #home-action[data-tone="connecting"], .home-action[data-tone="connecting"],
+      #compact-action[data-tone="connecting"], .compact-action[data-tone="connecting"] {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(30, 56, 84, 0.28) 0%, rgba(18, 36, 56, 0.16) 25%,
+            rgba(24, 50, 76, 0.22) 50%, rgba(18, 36, 56, 0.16) 75%,
+            rgba(30, 56, 84, 0.28) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(240, 255, 255, 0.94) 0%, rgba(56, 189, 248, 0.85) 16.7%,
+            rgba(2, 132, 199, 0.38) 33.3%, rgba(3, 105, 161, 0.16) 50%,
+            rgba(2, 132, 199, 0.38) 66.7%, rgba(56, 189, 248, 0.85) 83.3%,
+            rgba(240, 255, 255, 0.94) 100%) border-box !important;
+      }
+
+      /* ERROR: 0x38352630→0x221E141C, блик 0xD8F43F5E */
+      #home-action[data-tone="error"], .home-action[data-tone="error"],
+      #compact-action[data-tone="error"], .compact-action[data-tone="error"] {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(62, 26, 34, 0.27) 0%, rgba(36, 16, 22, 0.16) 25%,
+            rgba(48, 20, 28, 0.21) 50%, rgba(36, 16, 22, 0.16) 75%,
+            rgba(62, 26, 34, 0.27) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(240, 255, 255, 0.94) 0%, rgba(244, 63, 94, 0.85) 16.7%,
+            rgba(190, 18, 60, 0.44) 33.3%, rgba(136, 19, 55, 0.19) 50%,
+            rgba(190, 18, 60, 0.44) 66.7%, rgba(244, 63, 94, 0.85) 83.3%,
+            rgba(240, 255, 255, 0.94) 100%) border-box !important;
+      }
+
+      /* STOPPING/disabled: глухое стекло без блика (на телефоне shimmerStroke=null) */
+      #home-action[data-tone="stopping"], .home-action[data-tone="stopping"],
+      #compact-action[data-tone="stopping"], .compact-action[data-tone="stopping"],
+      #home-action:disabled, .home-action:disabled,
+      #compact-action:disabled, .compact-action:disabled {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(43, 57, 75, 0.21), rgba(19, 28, 41, 0.13)) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.31) 0%, rgba(60, 82, 104, 0.19) 34%,
+            rgba(82, 98, 122, 0.15) 72%, rgba(255, 255, 255, 0.16) 100%) border-box !important;
+        animation: none !important;
+      }
+
+      /* --- «обновить замер»: glassButtonBackground(0x40364C68→0x22121E2E),
+             r24, обод 0.85dp [#2CFFFFFF,#12FFFFFF,#0C82B4E8,#12FFFFFF], gloss 0x12 --- */
+      #home-measure, .home-measure {
+        height: 48px !important;
+        min-height: 48px !important;
+        border-radius: 24px !important;
+        border: 0.85px solid transparent !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        letter-spacing: 0 !important;
+        color: #F2F5FC !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(54, 76, 104, 0.25), rgba(18, 30, 46, 0.13)) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.07) 34%,
+            rgba(130, 180, 232, 0.05) 72%, rgba(255, 255, 255, 0.07) 100%) border-box !important;
+        box-shadow: 0 2px 6px rgba(8, 14, 26, 0.3) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        animation: none !important;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease !important;
+      }
+      #home-measure:hover, .home-measure:hover {
+        filter: brightness(1.07) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(54, 76, 104, 0.25), rgba(18, 30, 46, 0.13)) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.07) 34%,
+            rgba(130, 180, 232, 0.05) 72%, rgba(255, 255, 255, 0.07) 100%) border-box !important;
+      }
+      #home-measure:active, .home-measure:active {
+        transform: scale(0.985) !important;
+        transition-duration: 120ms, 160ms !important;
+      }
+
+      /* --- «выбрать/выбрано»: пилюля строки телефона 60×36dp, r18 --- */
+      .btn-select-route {
+        min-width: 60px !important;
+        min-height: 36px !important;
+        padding: 6px 8px !important;
+        border-radius: 18px !important;
+        border: 0.95px solid transparent !important;
+        font-size: 12px !important;
+        font-weight: 700 !important;
+        color: #F2F5FC !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 50%, rgba(12, 19, 29, 0.12) 100%) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.165) 0%, rgba(112, 168, 224, 0.07) 34%,
+            rgba(80, 128, 184, 0.04) 72%, rgba(255, 255, 255, 0.08) 100%) border-box !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 6px rgba(8, 14, 26, 0.3) !important;
+        animation: none !important;
+      }
+      .btn-select-route:hover { filter: brightness(1.07) !important; }
+      .btn-select-route:active { transform: scale(0.99) !important; }
+      /* emphasis: glassRowBackground(true, 18), текст SKY 0xFF29B9F0 */
+      .btn-select-route.is-selected {
+        color: #29B9F0 !important;
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 6px rgba(8, 14, 26, 0.3) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.086), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 50%, rgba(15, 25, 38, 0.17) 100%) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.27) 0%, rgba(120, 186, 240, 0.125) 34%,
+            rgba(88, 156, 216, 0.07) 72%, rgba(255, 255, 255, 0.12) 100%) border-box !important;
+      }
+
+      /* --- карточки маршрутов: glassRowBackground(false, 22) на всех
+             (телефон рисует одно и то же стекло у подписки, автоподбора,
+             lte и стран); без блюра и неона --- */
+      .liquid-glass-card {
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 50%, rgba(12, 19, 29, 0.12) 100%) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.165) 0%, rgba(112, 168, 224, 0.07) 34%,
+            rgba(80, 128, 184, 0.04) 72%, rgba(255, 255, 255, 0.08) 100%) border-box !important;
+        border: 0.95px solid transparent !important;
+        border-radius: 22px !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 10px rgba(8, 14, 26, 0.35) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+      .liquid-glass-card:active { transform: scale(0.99) !important; }
+      /* emphasis: glassRowBackground(true, 22), обод 1dp */
+      .liquid-glass-card.is-selected {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        border-width: 1px !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.06),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 10px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.086), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 50%, rgba(15, 25, 38, 0.17) 100%) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.27) 0%, rgba(120, 186, 240, 0.125) 34%,
+            rgba(88, 156, 216, 0.07) 72%, rgba(255, 255, 255, 0.12) 100%) border-box !important;
+      }
+      .country-accordion-header:hover { background: transparent !important; }
+
+      /* --- список стран: телефон кладёт spacer(8) между карточками --- */
+      .countries-accordion-group {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+      }
+
+      /* --- единые размеры блоков: все строки телефона 64dp --- */
+      .country-accordion-header {
+        min-height: 64px !important;
+        box-sizing: border-box !important;
+        padding: 10px 16px !important;
+        align-items: center !important;
+      }
+      .routes-refresh-banner, .quick-select-card {
+        min-height: 64px !important;
+        box-sizing: border-box !important;
+        padding: 12px 16px !important;
+      }
+      .country-flag-wrap { width: 44px !important; height: 30px !important; }
+      .country-header-left { gap: 10px !important; }
+      /* перед «страны» телефон держит spacer(24): 14 flex-gap + 10 */
+      #card-route-ru-de { margin-bottom: 10px !important; }
+      .routes-section-label { margin: 0 0 0 2px !important; }
+
+      .network-atlas.reduce-motion #home-action, .network-atlas.reduce-motion .home-action,
+      .network-atlas.reduce-motion #compact-action, .network-atlas.reduce-motion .compact-action,
+      .network-atlas.reduce-motion #home-measure, .network-atlas.reduce-motion .home-measure {
+        animation: none !important;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #home-action, .home-action, #compact-action, .compact-action,
+        #home-measure, .home-measure { animation: none !important; }
+      }
+
     </style>
 </head>
 <body>
@@ -3793,7 +4285,7 @@
             <div>
               <strong class="quick-select-title">lte · белые списки</strong>
               <div class="lte-progress-bar" style="background: rgba(255,255,255,0.12); height: 4px; border-radius: 9999px; overflow: hidden; margin: 4px 0;"><div class="lte-progress-fill" style="width: 0%; height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #38BDF8 0%, #10B981 100%);"></div></div>
-              <span class="quick-select-sub" id="lte-quota-sub">0 / 10 gb · until dec 1</span>
+              <span class="quick-select-sub" id="lte-quota-sub"></span>
             </div>
           </div>
           <button class="btn-select-route is-selected" data-action-route="ru-de" type="button">выбрано</button>
@@ -3801,10 +4293,11 @@
 
         <!-- Секция: страны -->
         <span class="routes-section-label">страны</span>
+        <div id="probe-hint" class="routes-section-label" hidden style="color:#F0B851; text-transform:none; letter-spacing:0; margin-top:4px;"></div>
         <div class="countries-accordion-group" id="countries-list">
           <!-- нидерланды -->
-          <div class="liquid-glass-card country-accordion is-expanded is-open" data-country-key="nl" id="card-route-nl">
-            <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="true">
+          <div class="liquid-glass-card country-accordion" data-country-key="nl" id="card-route-nl">
+            <div class="country-accordion-header" role="button" tabindex="0" aria-expanded="false">
               <div class="country-header-left">
                 <div class="country-flag-wrap">
                   <svg viewBox="0 0 44 30" width="44" height="30" class="svg-flag">
@@ -4205,7 +4698,7 @@
         </div>
 
         <!-- Секция подписки -->
-        <span class="routes-section-label">ваша подписка</span>
+        <span class="routes-section-label">твоя подписка</span>
 
         <!-- Звёздная карточка тарифа (1:1 со StarryPlanCard.kt) -->
         <div class="profile-starry-card" id="profile-subscription-card">
@@ -4226,7 +4719,7 @@
               </div>
               <div class="starry-metric-col">
                 <span class="starry-metric-label" id="profile-traffic-label">трафик</span>
-                <strong class="starry-metric-val" id="profile-traffic-val">299.5 гб</strong>
+                <strong class="starry-metric-val" id="profile-traffic-val">—</strong>
               </div>
             </div>
           </div>
@@ -4661,23 +5154,25 @@
 
     // Authentic 16-Spoke Wheel Indicator Generator
     function getSpokeSpinnerSvg(size = 14) {
+      // 16 спиц, радиусы 0.29d–0.47d, толщина 0.065d, альфа .12+.76*(1-age/16) —
+      // точная копия InlineMetricProgress из Android-приложения.
       return `<svg class="metric-spoke-spinner" viewBox="0 0 20 20" width="${size}" height="${size}" aria-hidden="true">
-        <line x1="10" y1="2" x2="10" y2="5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.88"/>
-        <line x1="13.06" y1="2.62" x2="11.91" y2="5.39" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.83"/>
-        <line x1="15.66" y1="4.34" x2="13.54" y2="6.46" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.78"/>
-        <line x1="17.38" y1="6.94" x2="14.61" y2="8.09" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.73"/>
-        <line x1="18" y1="10" x2="15" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.68"/>
-        <line x1="17.38" y1="13.06" x2="14.61" y2="11.91" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.63"/>
-        <line x1="15.66" y1="15.66" x2="13.54" y2="13.54" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.58"/>
-        <line x1="13.06" y1="17.38" x2="11.91" y2="14.61" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.53"/>
-        <line x1="10" y1="18" x2="10" y2="15" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.48"/>
-        <line x1="6.94" y1="17.38" x2="8.09" y2="14.61" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.43"/>
-        <line x1="4.34" y1="15.66" x2="6.46" y2="13.54" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.38"/>
-        <line x1="2.62" y1="13.06" x2="5.39" y2="11.91" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.33"/>
-        <line x1="2" y1="10" x2="5" y2="10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.28"/>
-        <line x1="2.62" y1="6.94" x2="5.39" y2="8.09" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.23"/>
-        <line x1="4.34" y1="4.34" x2="6.46" y2="6.46" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.18"/>
-        <line x1="6.94" y1="2.62" x2="8.09" y2="5.39" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" opacity="0.12"/>
+        <line x1="10" y1="0.6" x2="10" y2="4.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.88"/>
+        <line x1="13.6" y1="1.31" x2="12.22" y2="4.64" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.17"/>
+        <line x1="16.65" y1="3.35" x2="14.1" y2="5.9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.21"/>
+        <line x1="18.69" y1="6.4" x2="15.36" y2="7.78" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.26"/>
+        <line x1="19.4" y1="10" x2="15.8" y2="10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.31"/>
+        <line x1="18.69" y1="13.6" x2="15.36" y2="12.22" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.36"/>
+        <line x1="16.65" y1="16.65" x2="14.1" y2="14.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.41"/>
+        <line x1="13.6" y1="18.69" x2="12.22" y2="15.36" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.45"/>
+        <line x1="10" y1="19.4" x2="10" y2="15.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.5"/>
+        <line x1="6.4" y1="18.69" x2="7.78" y2="15.36" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.55"/>
+        <line x1="3.35" y1="16.65" x2="5.9" y2="14.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.59"/>
+        <line x1="1.31" y1="13.6" x2="4.64" y2="12.22" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.64"/>
+        <line x1="0.6" y1="10" x2="4.2" y2="10" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.69"/>
+        <line x1="1.31" y1="6.4" x2="4.64" y2="7.78" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.74"/>
+        <line x1="3.35" y1="3.35" x2="5.9" y2="5.9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.79"/>
+        <line x1="6.4" y1="1.31" x2="7.78" y2="4.64" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" opacity="0.83"/>
       </svg>`;
     }
     window.getSpokeSpinnerSvg = getSpokeSpinnerSvg;
@@ -4735,15 +5230,6 @@
         clearTimeout(subscriptionRefreshTimer);
         subscriptionRefreshTimer = setTimeout(() => {
           setSubscriptionRefreshState("idle");
-      // Attach click handler for routes-refresh-card
-      const routesRefreshCard = document.getElementById("routes-refresh-card");
-      if (routesRefreshCard) {
-        routesRefreshCard.addEventListener("click", () => {
-          setSubscriptionRefreshState("refreshing");
-          postHost("routes:refresh:subscription");
-        });
-      }
-
         }, 4000);
       } else if (phase === "error") {
         if (sub) {
@@ -4762,6 +5248,16 @@
         }
         if (chevron) chevron.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" stroke="currentColor" fill="none" stroke-width="2.2" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>`;
       }
+    }
+
+    // Attach click handler for routes-refresh-card. (It used to sit inside a
+    // setTimeout branch above, so the button never received its listener.)
+    const routesRefreshCard = document.getElementById("routes-refresh-card");
+    if (routesRefreshCard) {
+      routesRefreshCard.addEventListener("click", () => {
+        setSubscriptionRefreshState("refreshing");
+        postHost("routes:refresh:subscription");
+      });
     }
 
     // Zero-overhead static starry sky
@@ -5026,8 +5522,8 @@
         const dot = row.querySelector(".ping-dot, .grade-dot");
 
         if (stage === "latency" || stage === "waiting_speed" || stage === "download") {
-          if (latEl) latEl.textContent = latency != null ? `${latency} мс` : "…";
-          if (spdEl) spdEl.textContent = speedMbps != null ? `${speedMbps} мбит/с` : "…";
+          if (latEl) latEl.innerHTML = latency != null ? `${latency} мс` : getSpokeSpinnerSvg(13);
+          if (spdEl) spdEl.innerHTML = speedMbps != null ? `${speedMbps} мбит/с` : getSpokeSpinnerSvg(13);
           if (dot) dot.classList.add("is-probing");
         } else if (stage === "complete") {
           row.classList.remove("is-probing");
@@ -5076,6 +5572,20 @@
     };
 
     let currentSubscriptionKey = "";
+
+    // Truthful hint for why country measurements are not running
+    // (the VPN service refuses to probe while the tunnel is connected).
+    window.deyttSetProbeHint = function(text) {
+      const el = document.getElementById("probe-hint");
+      if (!el) return;
+      if (typeof text === "string" && text.length > 0) {
+        el.textContent = text;
+        el.hidden = false;
+      } else {
+        el.textContent = "";
+        el.hidden = true;
+      }
+    };
 
     window.deyttSetProfileAvatar = function(dataUrl) {
       const avatar = document.getElementById("profile-avatar");
@@ -5171,38 +5681,65 @@
       setText("profile-display-name", data.isSignedIn ? data.displayName || data.username || copy("hackov", "hackov") : copy("не подключен", "not connected"));
       setText("profile-username", data.isSignedIn ? (data.username ? "@" + data.username.replace(/^@/, "") : copy("Telegram подключен", "Telegram connected")) : copy("войти в telegram", "sign in with telegram"));
 
-      // Starry Plan Hero Card (1:1 with mobile)
+      // Starry Plan Hero Card (1:1 with mobile StarryPlanCard.kt)
       setText("profile-plan-label", copy("текущий тариф", "current plan"));
       setText("profile-tariff-title", data.subscriptionActive ? (data.tariffName || "deytt./ultra") : copy("нет подписки", "no subscription"));
-      setText("profile-plan-status", data.subscriptionActive ? copy("активен", "active") : copy("неактивен", "inactive"));
-      setText("profile-devices-label", copy("устройств включено", "devices included"));
-      setText("profile-devices-val", "10");
-      setText("profile-traffic-label", copy("трафик", "traffic"));
+      // Телефон в герое показывает срок, а не слово «активен».
+      setText("profile-plan-status", data.expiresFormatted
+        ? data.expiresFormatted
+        : data.subscriptionActive ? copy("активна", "active") : copy("неактивна", "inactive"));
+      setText("profile-devices-label", copy("устройств в тарифе", "devices included"));
+      setText("profile-devices-val", data.deviceLimit ? String(data.deviceLimit) : "∞");
 
-      let trafficStr = "299.3 " + copy("гб", "gb");
-      if (data.mainQuota && data.mainQuota.limitBytes) {
-        const gb = (data.mainQuota.limitBytes / (1024 * 1024 * 1024)).toFixed(1);
-        trafficStr = `${gb} ` + copy("гб", "gb");
-      }
-      setText("profile-traffic-val", trafficStr);
-      setText("profile-sub-manage-hint", copy("активная подписка · управление тарифом", "active subscription · manage plan"));
+      // Телефон показывает переданный трафик (использовано), а не лимит тарифа.
+      const formatTrafficBytes = bytes => {
+        if (!Number.isFinite(bytes) || bytes <= 0) return null;
+        const gb = bytes / (1024 * 1024 * 1024);
+        if (gb >= 1) return gb.toFixed(1).replace(".", ",") + " " + copy("гб", "gb");
+        return Math.round(bytes / (1024 * 1024)) + " " + copy("мб", "mb");
+      };
+      const trafficBytes = data.mainQuota && (data.mainQuota.totalBytes || data.mainQuota.usedBytes);
+      const trafficValue = formatTrafficBytes(Number(trafficBytes));
+      setText("profile-traffic-label", copy("трафик", "traffic"));
+      setText("profile-traffic-val", trafficValue || (data.mainQuota && data.mainQuota.state === "ready" ? "0 " + copy("мб", "mb") : copy("—", "—")));
+      setText("profile-sub-manage-hint", data.expiresFormatted
+        ? (data.daysRemaining != null
+          ? copy(`активная подписка · до ${data.expiresFormatted} · осталось ${data.daysRemaining} дн.`, `active subscription · until ${data.expiresFormatted} · ${data.daysRemaining} days left`)
+          : copy(`активная подписка · ${data.expiresFormatted}`, `active subscription · ${data.expiresFormatted}`))
+        : copy("активная подписка · управление тарифом", "active subscription · manage plan"));
 
       // Action Cards
       const devices = Array.isArray(data.devices) ? data.devices : [];
       const sessions = Array.isArray(data.sessions) ? data.sessions : [];
       setText("profile-devices-count", copy(`${devices.length} устройств · ${sessions.length} сессий`, `${devices.length} devices · ${sessions.length} sessions`));
 
-      // Quotas / LTE progress
+      // The LTE • whitelist card shows the quota of the proxy plan that carries the
+      // whitelist key (/api/tg/traffic → proxy), the same plan the route rides on.
       const lteFill = document.querySelector(".lte-progress-fill, .lte-quota-fill");
       const lteText = document.getElementById("lte-quota-sub") || document.getElementById("lte-quota-text");
-      if (data.awgQuota && lteFill && lteText) {
-        const used = data.awgQuota.usedBytes || 0;
-        const limit = data.awgQuota.limitBytes || (10 * 1024 * 1024 * 1024);
-        const pct = Math.min(100, Math.round((used / limit) * 100));
-        lteFill.style.width = pct + "%";
-        const usedGb = (used / 1e9).toFixed(1);
-        const limitGb = (limit / 1e9).toFixed(0);
-        lteText.textContent = copy(`${usedGb} / ${limitGb} гб · до 1 дек`, `${usedGb} / ${limitGb} gb · until dec 1`);
+      if (lteFill && lteText) {
+        const quota = data.proxyQuota && data.proxyQuota.state === "ready" ? data.proxyQuota : null;
+        const used = quota && Number.isFinite(quota.usedBytes) && quota.usedBytes >= 0 ? quota.usedBytes : null;
+        const limit = quota && Number.isFinite(quota.limitBytes) && quota.limitBytes > 0 ? quota.limitBytes : null;
+        if (quota && quota.unlimitedTraffic) {
+          lteFill.style.width = "0%";
+          lteText.textContent = copy("трафик без лимита", "unlimited traffic");
+        } else if (used !== null && limit !== null) {
+          const pct = Math.min(100, Math.round((used / limit) * 100));
+          lteFill.style.width = pct + "%";
+          const usedGb = (used / 1e9).toFixed(1);
+          const limitGb = (limit / 1e9).toFixed(0);
+          const end = quota.expiresAt ? new Date(quota.expiresAt) : null;
+          let until = "";
+          if (end && Number.isFinite(end.getTime())) {
+            const date = new Intl.DateTimeFormat(english ? "en-US" : "ru-RU", { day: "numeric", month: "short" }).format(end);
+            until = copy(` · до ${date}`, ` · until ${date}`);
+          }
+          lteText.textContent = copy(`${usedGb} / ${limitGb} гб`, `${usedGb} / ${limitGb} gb`) + until;
+        } else {
+          lteFill.style.width = "0%";
+          lteText.textContent = "—";
+        }
       }
 
       const list = document.getElementById("profile-devices-list");
@@ -5344,6 +5881,8 @@
         card.dataset.routeTag = route.tag || route.id || "";
         const label = card.querySelector(".proto-name");
         if (label && route.protocolName) label.textContent = route.protocolName;
+        const detail = card.querySelector(".proto-detail");
+        if (detail && route.detail) detail.textContent = route.detail;
         const selected = route.isSelected === true;
         card.classList.toggle("is-selected", selected);
         const button = card.querySelector(".btn-select-route");
@@ -5603,18 +6142,21 @@
         compactAction.disabled = state.actionEnabled === false;
       }
 
-      const isGoodConn = (typeof isGood !== "undefined" && isGood) || (state.statusTone === "good");
+      // Значение важнее статуса подключения: измеренные данные остаются на экране
+      // до перезамера, спиннер — только когда измерять ещё нечего.
       const isMeasuring = state.measuring === true || state.latency === "…" || state.speed === "…";
+      const hasLatencyValue = state.latency != null && state.latency !== "" && state.latency !== "—" && state.latency !== "…";
+      const hasSpeedValue = state.speed != null && state.speed !== "" && state.speed !== "—" && state.speed !== "…";
       const latencyEl = document.getElementById("home-latency");
       const latencyUnit = document.getElementById("home-latency-unit");
       if (latencyEl) {
-        if (isGoodConn && state.latency != null && state.latency !== "" && state.latency !== "—" && state.latency !== "…") {
+        if (hasLatencyValue) {
           latencyEl.classList.remove("is-empty");
           latencyEl.textContent = state.latency;
           if (latencyUnit) latencyUnit.hidden = false;
-        } else if (isGoodConn && isMeasuring) {
+        } else if (state.latency === "…" || isMeasuring) {
           latencyEl.classList.add("is-empty");
-          latencyEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(22) : "…";
+          latencyEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(24) : "…";
           if (latencyUnit) latencyUnit.hidden = true;
         } else {
           latencyEl.classList.remove("is-empty");
@@ -5626,13 +6168,13 @@
       const speedEl = document.getElementById("home-speed");
       const speedUnit = document.getElementById("home-speed-unit");
       if (speedEl) {
-        if (isGoodConn && state.speed != null && state.speed !== "" && state.speed !== "—" && state.speed !== "…") {
+        if (hasSpeedValue) {
           speedEl.classList.remove("is-empty");
           speedEl.textContent = state.speed;
           if (speedUnit) speedUnit.hidden = false;
-        } else if (isGoodConn && isMeasuring) {
+        } else if (state.speed === "…" || isMeasuring) {
           speedEl.classList.add("is-empty");
-          speedEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(22) : "…";
+          speedEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(24) : "…";
           if (speedUnit) speedUnit.hidden = true;
         } else {
           speedEl.classList.remove("is-empty");
@@ -5756,6 +6298,11 @@
     window.addEventListener("resize", () => {
       const activeTab = document.querySelector(".nav-item.is-active");
       if (activeTab) updatePillPosition(activeTab, false);
+    });
+    document.querySelector(".desktop-header")?.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest(".nav-container, .window-controls, button, a, input, select, textarea")) return;
+      postHost("window:drag");
     });
     document.getElementById("win-minimize")?.addEventListener("click", (e) => {
       e.stopPropagation();
