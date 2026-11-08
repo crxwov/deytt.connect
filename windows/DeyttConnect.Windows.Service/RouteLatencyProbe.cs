@@ -179,7 +179,7 @@ internal static class RouteLatencyProbe
 
             var elapsedMilliseconds = (long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             var isOriginalTarget = response.RequestMessage?.RequestUri == target;
-            var isExpectedResponse = response.IsSuccessStatusCode || response.StatusCode == expectedStatus || response.StatusCode == HttpStatusCode.NoContent || response.StatusCode == HttpStatusCode.OK;
+            var isExpectedResponse = response.IsSuccessStatusCode || response.StatusCode == expectedStatus || response.StatusCode == HttpStatusCode.NoContent || response.StatusCode == HttpStatusCode.OK || (int)response.StatusCode < 500;
 
             if (isOriginalTarget && isExpectedResponse)
             {

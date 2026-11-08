@@ -27,8 +27,11 @@ internal static class HomeConnectionProbe
         request.Headers.AcceptEncoding.ParseAdd("identity");
         request.Headers.CacheControl = new CacheControlHeaderValue { NoStore = true };
         report(result with { Stage = "waiting_speed" });
+        var latencyStarted = Stopwatch.GetTimestamp();
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead,
             cancellationToken).ConfigureAwait(false);
+        var measuredLatency = (long)Math.Max(1, Stopwatch.GetElapsedTime(latencyStarted).TotalMilliseconds);
+        result = result with { LatencyMilliseconds = measuredLatency };
         if (response.StatusCode != HttpStatusCode.OK)
             return result with { Error = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
                 ? "Обновите вход для замера скорости." : "Сервер скорости временно недоступен." };

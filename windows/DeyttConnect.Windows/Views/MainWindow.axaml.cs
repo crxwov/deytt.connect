@@ -3654,7 +3654,9 @@ public partial class MainWindow : Window
                 Services.UiDiagnostics.Log($"apply probe: dropped {item.RouteTag} (not in requested set)");
                 continue;
             }
-            if (updated.TryGetValue(item.RouteTag, out var previous) && previous == item)
+            updated.TryGetValue(item.RouteTag, out var previous);
+            item = item with { LatencyMilliseconds = item.LatencyMilliseconds ?? previous?.LatencyMilliseconds, BytesPerSecond = item.BytesPerSecond ?? previous?.BytesPerSecond };
+            if (previous == item)
                 continue;
             updated[item.RouteTag] = item;
             changed = true;

@@ -4,47 +4,41 @@
   const DEG = Math.PI / 180;
   const TAU = Math.PI * 2;
   const MAX_ZOOM = 32;
-  const SAVE_DATA_PIXEL_RATIO_CAP = 1.5;
-  const MOBILE_PIXEL_RATIO_CAP = 3;
-  const DESKTOP_PIXEL_RATIO_CAP = 2.25;
-  const ANDROID_GEOGRAPHY_PIXEL_RATIO_CAP = 2;
-  const ZOOM_EASE_MS = 120;
+  const ZOOM_EASE_MS = 115;
   const PAN_EASE_MS = 120;
-  const NODE_TAP_CORE_RADIUS = 12;
-  const LOCATION_ORDER = ["ru", "fi", "nl", "de", "it"];
-  const CONNECTED_LABEL_SIDE_PENALTY = 10000;
+  const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
   const LABEL_OFFSETS = {
-    nl: { x: -24, y: -42, align: "right" },
-    de: { x: -24, y: 54, align: "right" },
-    fi: { x: -22, y: -38, align: "right" },
-    it: { x: -24, y: 52, align: "right" },
-    ru: { x: 20, y: -84, align: "left" },
-    user: { x: 22, y: -38, align: "left" }
+    nl: { x: -28, y: -26, align: "right" },
+    de: { x: -28, y: 30, align: "right" },
+    fi: { x: -24, y: -42, align: "right" },
+    it: { x: 26, y: 32, align: "left" },
+    ru: { x: 26, y: -38, align: "left" },
+    user: { x: 26, y: -54, align: "left" }
   };
   const COMPACT_LABEL_OFFSETS = {
-    nl: { x: -20, y: -42, align: "right" },
-    de: { x: -20, y: 56, align: "right" },
-    fi: { x: -20, y: -38, align: "right" },
-    it: { x: -22, y: 54, align: "right" },
-    ru: { x: 18, y: -84, align: "left" },
-    user: { x: 18, y: 50, align: "left" }
+    nl: { x: -24, y: -26, align: "right" },
+    de: { x: -24, y: 30, align: "right" },
+    fi: { x: -20, y: -44, align: "right" },
+    it: { x: 22, y: 32, align: "left" },
+    ru: { x: 22, y: -38, align: "left" },
+    user: { x: 22, y: -54, align: "left" }
   };
   const LOCATIONS = {
-    nl: { code: "nl", city: "Амстердам", country: "Нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
-    de: { code: "de", city: "Франкфурт-на-Майне", country: "Германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
-    fi: { code: "fi", city: "Хельсинки", country: "Финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
-    ru: { code: "ru", city: "Санкт-Петербург", country: "Россия", countryId: "643", lat: 59.9311, lon: 30.3609 },
-    it: { code: "it", city: "Милан", country: "Италия", countryId: "380", lat: 45.4642, lon: 9.19 }
+    nl: { code: "nl", city: "амстердам", country: "нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
+    de: { code: "de", city: "франкфурт-на-майне", country: "германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
+    fi: { code: "fi", city: "хельсинки", country: "финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
+    ru: { code: "ru", city: "санкт-петербург", country: "россия", countryId: "643", lat: 59.9311, lon: 30.3609 },
+    it: { code: "it", city: "милан", country: "италия", countryId: "380", lat: 45.4642, lon: 9.1900 }
   };
   const COUNTRY_EXIT_KEYS = { NL: "nl", DE: "de", FI: "fi", RU: "ru", IT: "it" };
   const ROUTES = {
     auto: {
       title: "автоподбор",
-      eyebrow: "два доступных выхода",
-      nodes: ["nl", "de", "fi", "ru", "it"],
+      eyebrow: "европейские выходы",
+      nodes: ["nl", "de", "fi", "it"],
       links: [],
-      steps: [["вы", "устройство"], ["auto", "проверка точек"], ["nl / de / fi / ru / it", "доступные выходы"], ["web", "интернет"]],
-      description: "общий адрес выбирает доступный выход из амстердама, франкфурта, хельсинки, санкт-петербурга или милана по состоянию сети."
+      steps: [["вы", "устройство"], ["auto", "проверка точек"], ["nl / de / fi / it", "доступные выходы"], ["web", "интернет"]],
+      description: "автоподбор выбирает доступный европейский выход из амстердама, франкфурта, хельсинки или италии по состоянию сети."
     },
     nl: {
       title: "нидерланды",
@@ -78,8 +72,8 @@
       title: "италия",
       eyebrow: "прямой маршрут",
       nodes: ["it"], links: [],
-      steps: [["вы", "устройство"], ["it", "милан · италия"], ["web", "интернет"]],
-      description: "соединение входит в сеть и выходит в интернет через милан, италия."
+      steps: [["вы", "устройство"], ["it", "точка в италии"], ["web", "интернет"]],
+      description: "соединение входит в сеть и выходит в интернет через точку в италии."
     },
     "ru-de": {
       title: "россия + германия",
@@ -90,14 +84,15 @@
     }
   };
   const EN_COPY = {
+    "уфа": "Ufa",
     "амстердам": "Amsterdam",
     "нидерланды": "Netherlands",
     "франкфурт": "Frankfurt",
     "франкфурт-на-майне": "Frankfurt am Main",
     "германия": "Germany",
     "хельсинки": "Helsinki",
-    "милан": "Milan",
     "финляндия": "Finland",
+    "милан": "Milan",
     "италия": "Italy",
     "выход": "Exit",
     "санкт-петербург": "Saint Petersburg",
@@ -117,8 +112,8 @@
     auto: {
       title: "Auto-select",
       eyebrow: "available exits",
-      steps: [["you", "device"], ["auto", "checking nodes"], ["nl / de / fi / ru / it", "available exits"], ["web", "internet"]],
-      description: "The shared entry chooses an available exit in Amsterdam, Frankfurt, Helsinki, Saint Petersburg, or Milan based on network conditions."
+      steps: [["you", "device"], ["auto", "checking nodes"], ["nl / de / fi / it", "available exits"], ["web", "internet"]],
+      description: "Auto-select chooses an available European exit in Amsterdam, Frankfurt, Helsinki, or Italy based on network conditions."
     },
     nl: {
       title: "Netherlands",
@@ -147,8 +142,8 @@
     it: {
       title: "Italy",
       eyebrow: "direct route",
-      steps: [["you", "device"], ["it", "Milan · Italy"], ["web", "internet"]],
-      description: "Traffic enters the network and reaches the internet through Milan, Italy."
+      steps: [["you", "device"], ["it", "exit in Italy"], ["web", "internet"]],
+      description: "Traffic enters the network and reaches the internet through an exit in Italy."
     },
     "ru-de": {
       title: "Russia + Germany",
@@ -177,13 +172,6 @@
   function normalize(point) {
     const length = Math.hypot(point.x, point.y, point.z) || 1;
     return { x: point.x / length, y: point.y / length, z: point.z / length };
-  }
-  function cross(a, b) {
-    return {
-      x: a.y * b.z - a.z * b.y,
-      y: a.z * b.x - a.x * b.z,
-      z: a.x * b.y - a.y * b.x
-    };
   }
   function locationFromVector(point) {
     return { lat: Math.asin(clamp(point.y, -1, 1)) / DEG, lon: Math.atan2(point.z, point.x) / DEG };
@@ -280,16 +268,12 @@
   class NetworkAtlas {
     constructor(root, options) {
       this.root = root;
-      this.canvas = root.querySelector("canvas");
+      this.canvas = root.querySelector("canvas[data-atlas-interactive]") || root.querySelector("canvas");
       this.context = this.canvas.getContext("2d");
       this.tooltip = root.querySelector("[data-atlas-tooltip]");
       this.options = options || {};
       this.wheelZoomOnly = Boolean(this.options.wheelZoomOnly);
       this.variant = this.options.variant || "home";
-      this.idleMotionTimer = 0;
-      this.idleFrameTimer = 0;
-      this.idleMotionStart = 0;
-      this.idleMotionOffset = 0;
       this.selectOnTap = this.options.selectOnTap !== false;
       this.root.dataset.atlasVariant = this.variant;
       this.route = "auto";
@@ -302,14 +286,12 @@
       this.lastFocusSignature = null;
       this.availableLocationKeys = new Set(LOCATION_ORDER);
       this.showcaseFocused = false;
-      this.overviewMode = false;
-      this.connected = false;
       this.hovered = null;
+      this.hoveredTrafficStream = null;
+      this.inspectingStream = null;
       this.annotationFilter = null;
       this.dragging = false;
       this.activePointers = new Map();
-      this.gesturePointers = new Set();
-      this.gestureStartedInsideGlobe = false;
       this.pinchDistance = 0;
       this.centerLon = Number.isFinite(this.options.initialLon) ? this.options.initialLon : 15;
       this.centerLat = Number.isFinite(this.options.initialLat) ? this.options.initialLat : 50;
@@ -321,39 +303,56 @@
       this.velocityLon = 0;
       this.width = 0;
       this.height = 0;
-      this.centerX = 0;
-      this.centerY = 0;
-      this.viewportAnchor = null;
       this.radius = 0;
       this.lastFrame = 0;
       this.frame = 0;
       this.visible = true;
+      this.hostActive = true;
       this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       this.boundaryLines = [];
       this.targetBoundaryLines = [];
       this.landPolygons = [];
       this.pixelRatio = 1;
+      this.preferredPixelRatio = 1;
+      this.interactionQuality = false;
       this.staticCanvas = document.createElement("canvas");
       this.staticContext = this.staticCanvas.getContext("2d");
-      this.routeOverlayCanvas = document.createElement("canvas");
-      this.routeOverlayContext = this.routeOverlayCanvas.getContext("2d");
-      this.foregroundOverlayCanvas = document.createElement("canvas");
-      this.foregroundOverlayContext = this.foregroundOverlayCanvas.getContext("2d");
-      this.overlayCacheSignature = "";
-      this.overlayCacheBuildCount = 0;
-      this.cachedRouteLinks = [];
+      this.overlayCanvas = document.createElement("canvas");
+      this.overlayContext = this.overlayCanvas.getContext("2d");
+      [this.staticCanvas, this.overlayCanvas].forEach((layer) => {
+        layer.className = "network-atlas__cached-layer";
+        layer.setAttribute("aria-hidden", "true");
+        this.canvas.parentElement.insertBefore(layer, this.canvas);
+      });
+      this.packetSprites = new Map();
+      this.labelContainer = this.root.querySelector("[data-atlas-annotations]");
+      if (!this.labelContainer && this.canvas && this.canvas.parentElement) {
+        this.labelContainer = document.createElement("div");
+        this.labelContainer.className = "atlas-html-annotations";
+        this.labelContainer.setAttribute("data-atlas-annotations", "");
+        this.labelContainer.setAttribute("aria-hidden", "true");
+        this.canvas.parentElement.appendChild(this.labelContainer);
+      }
+      this.domLabels = new Map();
+      this.activeLabelsThisFrame = new Set();
       this.staticDirty = true;
+      this.overlayDirty = true;
       this.renderCount = 0;
       this.staticRenderCount = 0;
       this.cameraMoving = false;
       this.trafficActive = false;
       this.trafficStartedAt = 0;
-      this.selectedTrafficFlow = null;
-      this.routeHitSegments = [];
-      this.pointerDown = null;
-      this.suppressNextClick = false;
       this.projectedNodes = {};
-      this.routeSegments = [];
+      this.packetHits = [];
+      this.routeHitSegments = [];
+      this.trafficPausedAt = null;
+      this.lastTrafficSelection = null;
+      this.dragDistance = 0;
+      this.pendingDragDx = 0;
+      this.pendingDragDy = 0;
+      this.pointerHistory = [];
+      this.occupiedObstacles = null;
+      this.projectedRingScratch = [];
       this.bind();
     }
 
@@ -380,154 +379,201 @@
       this.root.classList.add("is-ready");
       this.resize();
       this.setRoute(this.options.route || "auto", false);
-      this.render(performance.now());
+      this.start();
       this.root.dispatchEvent(new CustomEvent("deytt:atlas-ready", { detail: { atlas: this } }));
       return this;
     }
 
     bind() {
       this.canvas.addEventListener("pointerdown", (event) => {
-        this.resetIdleMotion();
-        if (this.gesturePointers.size === 0) {
-          this.gestureStartedInsideGlobe = this.isInsideVisibleGlobe(event.clientX, event.clientY);
-        }
-        this.gesturePointers.add(event.pointerId);
-        if (!this.gestureStartedInsideGlobe) return;
-        this.pointerDown = { x: event.clientX, y: event.clientY };
-        this.suppressNextClick = false;
+        if (event.button !== 0) return;
+        this.canvas.focus({ preventScroll: true });
+        this.canvasRect = this.canvas.getBoundingClientRect();
+        this.setInteractionQuality(true);
+        this.canvas.style.cursor = "grabbing";
+        if (this.tooltip) this.tooltip.hidden = true;
         this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         this.dragging = true;
+        this.dragDistance = 0;
         this.velocityLon = 0;
-        this.lastPointer = { x: event.clientX, y: event.clientY };
+        this.velocityLat = 0;
+        const now = performance.now();
+        this.lastMoveTime = now;
+        this.pointerHistory = [{ time: now, x: event.clientX, y: event.clientY }];
+        this.targetLon = this.centerLon;
+        this.targetLat = this.centerLat;
+        this.lastFrame = 0;
+        this.lastPointer = { x: event.clientX, y: event.clientY, time: now };
         this.canvas.setPointerCapture(event.pointerId);
         this.root.classList.add("is-dragging");
         if (this.activePointers.size === 2) {
           const points = Array.from(this.activePointers.values());
           this.pinchDistance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
         }
+        this.start();
       });
       this.canvas.addEventListener("pointermove", (event) => {
-        if (this.gesturePointers.has(event.pointerId) && !this.gestureStartedInsideGlobe) return;
-        const box = this.canvas.getBoundingClientRect();
-        const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
         if (this.activePointers.has(event.pointerId)) this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         if (this.activePointers.size >= 2) {
           const points = Array.from(this.activePointers.values()).slice(0, 2);
           const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
           if (!this.wheelZoomOnly && this.pinchDistance > 0 && distance > 0) {
-            this.targetZoom = this.clampZoom(this.targetZoom * distance / this.pinchDistance);
-            this.staticDirty = true;
+            this.targetZoom = clamp(this.targetZoom * distance / this.pinchDistance, .82, MAX_ZOOM);
+            this.markMapDirty();
           }
           this.pinchDistance = distance;
           this.start();
           return;
         }
         if (this.dragging) {
-          if (this.pointerDown && Math.hypot(event.clientX - this.pointerDown.x, event.clientY - this.pointerDown.y) > 6)
-            this.suppressNextClick = true;
+          const now = performance.now();
           const dx = event.clientX - this.lastPointer.x;
           const dy = event.clientY - this.lastPointer.y;
-          // Use the intended zoom level so drag speed stays consistent while a
-          // wheel animation is still settling.
+          this.lastPointer = { x: event.clientX, y: event.clientY, time: now };
+          this.dragDistance += Math.hypot(dx, dy);
+
+          // 1:1 Instantaneous direct tracking with pointer (zero rubber-band lag)
           const dragScale = 1 / Math.max(1, this.targetZoom);
-          this.targetLon -= dx * 0.28 * dragScale;
-          this.targetLat = clamp(this.targetLat + dy * 0.2 * dragScale, -62, 72);
-          this.velocityLon = -dx * 0.018 * dragScale;
-          this.lastPointer = { x: event.clientX, y: event.clientY };
+          this.centerLon -= dx * 0.22 * dragScale;
+          this.centerLat = clamp(this.centerLat + dy * 0.16 * dragScale, -62, 72);
+          this.targetLon = this.centerLon;
+          this.targetLat = this.centerLat;
+
+          this.pointerHistory.push({ time: now, x: event.clientX, y: event.clientY });
+          while (this.pointerHistory.length > 2 && now - this.pointerHistory[0].time > 80) {
+            this.pointerHistory.shift();
+          }
+
+          this.markMapDirty();
+          this.start();
         } else if (event.pointerType !== "touch") {
+          const box = this.canvasRect || (this.canvasRect = this.canvas.getBoundingClientRect());
+          const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
           this.updateHover(pointer);
         }
         this.start();
       });
       this.canvas.addEventListener("wheel", (event) => {
-        if (!this.isInsideVisibleGlobe(event.clientX, event.clientY)) return;
-        this.resetIdleMotion();
         event.preventDefault();
-        const delta = event.deltaMode === 1 ? event.deltaY * 18 : event.deltaY;
-        // Normalize large mouse-wheel bursts so the camera never jumps between frames.
-        const normalizedDelta = clamp(delta, -160, 160);
-        this.targetZoom = this.clampZoom(this.targetZoom * Math.exp(-normalizedDelta * .00135));
-        this.staticDirty = true;
+        this.canvas.focus({ preventScroll: true });
+        this.setInteractionQuality(true);
+        const delta = event.deltaMode === 1 ? event.deltaY * 40
+          : event.deltaMode === 2 ? event.deltaY * this.height : event.deltaY;
+        const detents = clamp(delta / 120, -2, 2);
+        this.targetZoom = clamp(this.targetZoom * Math.pow(1.18, -detents), .82, MAX_ZOOM);
+        this.overlayDirty = true;
         this.start();
       }, { passive: false });
       const release = (event) => {
-        if (!this.gesturePointers.has(event.pointerId)) return;
-        this.gesturePointers.delete(event.pointerId);
-        if (event.type === "pointercancel") this.suppressNextClick = false;
-        if (!this.gestureStartedInsideGlobe) {
-          if (this.gesturePointers.size === 0) this.gestureStartedInsideGlobe = false;
-          return;
-        }
+        if (!this.activePointers.has(event.pointerId)) return;
         this.activePointers.delete(event.pointerId);
         this.pinchDistance = 0;
         this.dragging = this.activePointers.size > 0;
         const remaining = this.activePointers.values().next().value;
-        if (remaining) this.lastPointer = remaining;
-        else this.root.classList.remove("is-dragging");
+        if (remaining) {
+          this.lastPointer = remaining;
+        } else {
+          this.root.classList.remove("is-dragging");
+          this.canvas.style.cursor = "grab";
+          if (event.type === "pointerup" && this.pointerHistory && this.pointerHistory.length >= 2) {
+            const now = performance.now();
+            const newest = this.pointerHistory[this.pointerHistory.length - 1];
+            const timeSinceMove = now - newest.time;
+            if (timeSinceMove < 70) {
+              const oldest = this.pointerHistory[0];
+              const dt = Math.max(12, newest.time - oldest.time);
+              const dx = newest.x - oldest.x;
+              const dy = newest.y - oldest.y;
+              const dragScale = 1 / Math.max(1, this.targetZoom);
+              const vx = -(dx / dt) * 16.667 * 0.22 * dragScale;
+              const vy = (dy / dt) * 16.667 * 0.16 * dragScale;
+              if (Math.abs(vx) > 0.02) this.velocityLon = clamp(vx, -5.0, 5.0);
+              else this.velocityLon = 0;
+              if (Math.abs(vy) > 0.02) this.velocityLat = clamp(vy, -3.0, 3.0);
+              else this.velocityLat = 0;
+            } else {
+              this.velocityLon = 0;
+              this.velocityLat = 0;
+            }
+          }
+          this.pointerHistory = [];
+        }
         if (event.pointerType === "touch") this.setHovered(null);
-        if (this.gesturePointers.size === 0) this.gestureStartedInsideGlobe = false;
+        if (event.type !== "pointerup") {
+          this.velocityLon = 0;
+          this.velocityLat = 0;
+          this.dragDistance = 6;
+        }
         this.start();
       };
-      // An outside-start mouse drag is intentionally not captured, so finish
-      // its bookkeeping at document level if the pointer is released off-canvas.
-      document.addEventListener("pointerup", release);
-      document.addEventListener("pointercancel", release);
+      this.canvas.addEventListener("pointerup", release);
+      this.canvas.addEventListener("pointercancel", release);
+      this.canvas.addEventListener("lostpointercapture", release);
       this.canvas.addEventListener("pointerleave", () => {
-        if (!this.dragging) this.setHovered(null);
+        if (!this.dragging) {
+          this.setHovered(null);
+          this.setHoveredTrafficStream(null);
+          this.canvas.style.cursor = "grab";
+        }
       });
       this.canvas.addEventListener("click", (event) => {
-        if (this.suppressNextClick) { this.suppressNextClick = false; return; }
+        if (this.dragDistance > 5) return;
         const box = this.canvas.getBoundingClientRect();
         const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
-        this.updateHover(pointer);
-        const flow = this.findTrafficLineAt(pointer, 14);
-        const node = this.projectedNodes[this.hovered];
-        // Short links can lie entirely inside the nodes' generous touch padding.
-        if (flow && (!node || Math.hypot(pointer.x - node.x, pointer.y - node.y) > NODE_TAP_CORE_RADIUS)) {
-          try { window.DeyttAtlasBridge?.onTrafficTap?.(flow); } catch (_) { /* Native view may be closing. */ }
+        const line = this.findLineAt(pointer, 10);
+        if (line) {
+          this.lastTrafficSelection = line;
+          this.lastTrafficPointer = { ...pointer, time: performance.now() };
+          if (event.detail === 1) this.showTrafficHint();
           return;
         }
-        if (this.hovered && typeof window.deyttMapNodeTapped === "function") {
-          window.deyttMapNodeTapped(this.hovered);
-          return;
-        }
-        if (!this.selectOnTap || !this.hovered || this.hovered === "user") return;
-        this.setRoute(this.hovered === "ru" && this.route === "de" ? "ru-de" : this.hovered);
+        if (this.tooltip) this.tooltip.hidden = true;
+        // Clicking on the globe canvas should NOT select nodes or change routes/borders.
+      });
+      this.canvas.addEventListener("dblclick", (event) => {
+        if (this.dragDistance > 5) return;
+        const box = this.canvas.getBoundingClientRect();
+        const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
+        const recent = this.lastTrafficPointer && performance.now() - this.lastTrafficPointer.time < 700 && Math.hypot(pointer.x - this.lastTrafficPointer.x, pointer.y - this.lastTrafficPointer.y) < 25;
+        const line = this.findLineAt(pointer, 12) || (recent ? this.lastTrafficSelection : null);
+        if (!line?.isLine) return;
+        event.preventDefault();
+        clearTimeout(this.hintTimer);
+        this.inspectingStream = line.stream.id;
+        this.hoveredTrafficStream = line.stream.id;
+        this.overlayDirty = true;
+        this.showTrafficInspector(line);
+        this.start();
       });
       this.canvas.addEventListener("keydown", (event) => {
         if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "+", "=", "-", "_", "0"].includes(event.key)) return;
-        if (this.wheelZoomOnly && ["+", "=", "-", "_", "0"].includes(event.key)) {
-          event.preventDefault();
-          return;
-        }
         event.preventDefault();
         if (event.key === "ArrowLeft") this.targetLon -= 9;
         if (event.key === "ArrowRight") this.targetLon += 9;
         if (event.key === "ArrowUp") this.targetLat = clamp(this.targetLat + 7, -62, 72);
         if (event.key === "ArrowDown") this.targetLat = clamp(this.targetLat - 7, -62, 72);
-        if (event.key === "+" || event.key === "=") this.targetZoom = this.clampZoom(this.targetZoom * 1.2);
-        if (event.key === "-" || event.key === "_") this.targetZoom = this.clampZoom(this.targetZoom / 1.2);
-        if (event.key === "0") this.targetZoom = this.clampZoom(1);
-        this.staticDirty = true;
+        if (event.key === "+" || event.key === "=") this.targetZoom = clamp(this.targetZoom * 1.18, .82, MAX_ZOOM);
+        if (event.key === "-" || event.key === "_") this.targetZoom = clamp(this.targetZoom / 1.18, .82, MAX_ZOOM);
+        if (event.key === "0") this.targetZoom = 1;
+        this.setInteractionQuality(true);
+        this.markMapDirty();
         this.start();
       });
       new ResizeObserver(() => this.resize()).observe(this.canvas);
+      window.addEventListener("resize", () => this.resize());
       new IntersectionObserver((entries) => {
         this.visible = entries[0].isIntersecting;
-        this.resetIdleMotion();
         if (this.visible) this.start();
       }, { rootMargin: "180px 0px" }).observe(this.canvas);
       new MutationObserver(() => {
-        this.staticDirty = true;
+        this.markMapDirty();
         this.start();
       }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
       this.reducedMotion.addEventListener("change", () => {
-        this.staticDirty = true;
-        this.resetIdleMotion();
+        this.markMapDirty();
         this.start();
       });
       document.addEventListener("visibilitychange", () => {
-        this.resetIdleMotion();
         if (document.hidden && this.frame) {
           cancelAnimationFrame(this.frame);
           this.frame = 0;
@@ -538,59 +584,117 @@
       });
     }
 
+    updateOccupiedObstacles() {
+      const rectangle = this.canvas.getBoundingClientRect();
+      this.canvasRect = rectangle;
+      const occupied = [];
+      this.root.querySelectorAll(".home-panel-shell, .home-compact, [data-traffic-inspector]").forEach(control => {
+        if (control.hidden || control.getAttribute("aria-hidden") === "true" || getComputedStyle(control).display === "none" || getComputedStyle(control).visibility === "hidden") return;
+        const rect = control.getBoundingClientRect();
+        if (rect.width && rect.height) {
+          occupied.push({
+            left: rect.left - rectangle.left - 10,
+            top: rect.top - rectangle.top - 10,
+            width: rect.width + 20,
+            height: rect.height + 20
+          });
+        }
+      });
+      this.occupiedObstacles = occupied;
+      return occupied;
+    }
+
     resize() {
       const rectangle = this.canvas.getBoundingClientRect();
+      this.canvasRect = rectangle;
+      this.updateOccupiedObstacles();
+      // Retained native pages briefly report a zero-sized surface when hidden.
+      // Keep their geography bitmap instead of rebuilding a 1px globe and back.
+      if (rectangle.width < 1 || rectangle.height < 1 || !this.hostActive) return;
       const previousWidth = this.width;
       const previousHeight = this.height;
       const pixelRatioCap = this.options.pixelRatioCap ||
-        (navigator.connection && navigator.connection.saveData
-          ? SAVE_DATA_PIXEL_RATIO_CAP
-          : rectangle.width < 520 ? MOBILE_PIXEL_RATIO_CAP : DESKTOP_PIXEL_RATIO_CAP);
+        (rectangle.width < 520 || (navigator.connection && navigator.connection.saveData) ? 1.35 : 1.5);
       const pixelRatioFloor = Math.min(this.options.pixelRatioFloor || 1, pixelRatioCap);
-      const ratio = Math.min(Math.max(window.devicePixelRatio || 1, pixelRatioFloor), pixelRatioCap);
-      this.pixelRatio = ratio;
+      const preferredRatio = Math.min(Math.max(window.devicePixelRatio || 1, pixelRatioFloor), pixelRatioCap);
+      const layoutMode = [this.root.classList.contains("is-immersive"), this.root.classList.contains("is-zoomed")].join(":");
+      if (previousWidth === Math.round(rectangle.width) && previousHeight === Math.round(rectangle.height)
+        && this.preferredPixelRatio === preferredRatio && this.layoutMode === layoutMode) return;
+      this.layoutMode = layoutMode;
+      this.preferredPixelRatio = preferredRatio;
       this.width = Math.max(1, Math.round(rectangle.width));
       this.height = Math.max(1, Math.round(rectangle.height));
-      if ((!window.DeyttAtlasBridge && (this.width !== previousWidth || this.height !== previousHeight)) ||
-          (this.width < 520) !== (previousWidth < 520)) this.labelPlacements.clear();
-      this.canvas.width = Math.round(this.width * ratio);
-      this.canvas.height = Math.round(this.height * ratio);
-      this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      // Keep text at device resolution while limiting geography raster work on Android.
-      const geographyRatio = window.DeyttAtlasBridge ? Math.min(ratio, ANDROID_GEOGRAPHY_PIXEL_RATIO_CAP) : ratio;
-      this.staticCanvas.width = Math.round(this.width * geographyRatio);
-      this.staticCanvas.height = Math.round(this.height * geographyRatio);
-      this.staticContext.setTransform(geographyRatio, 0, 0, geographyRatio, 0, 0);
-      [this.routeOverlayCanvas, this.foregroundOverlayCanvas].forEach((canvas) => {
-        canvas.width = this.canvas.width;
-        canvas.height = this.canvas.height;
-      });
-      this.routeOverlayContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-      this.foregroundOverlayContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-      const anchor = this.viewportAnchor;
-      this.centerX = anchor ? anchor.x + anchor.width / 2 : this.width / 2;
-      this.centerY = anchor ? anchor.y + anchor.height / 2 : this.height / 2;
-      this.radius = Math.min(anchor ? anchor.width : this.width, anchor ? anchor.height : this.height) * (this.width < 520 ? 0.405 : 0.43);
-      this.staticDirty = true;
+      if (this.width !== previousWidth || this.height !== previousHeight) this.labelPlacements.clear();
+      this.setCanvasResolution(this.interactionQuality
+        ? this.options.stableGeography ? this.preferredPixelRatio : Math.min(this.preferredPixelRatio, this.options.interactionPixelRatio || .85)
+        : this.preferredPixelRatio);
+      this.radius = this.root.classList.contains("is-immersive")
+        ? Math.min(this.width, this.height) * 0.47
+        : this.width < 1180
+          ? Math.min(this.width, this.height) * 0.405
+          : Math.min(this.width * 0.33, this.height * 0.48);
+      this.targetCenterX = this.width * (this.width >= 1180 && !this.root.classList.contains("is-zoomed") && !this.root.classList.contains("is-immersive") ? .34 : .5);
+      if (!Number.isFinite(this.centerX) || previousWidth !== this.width) this.centerX = this.targetCenterX;
+      this.targetCenterY = this.height * (this.root.classList.contains("is-zoomed") || this.root.classList.contains("is-immersive") ? .62 : .5);
+      if (!Number.isFinite(this.centerY) || previousHeight !== this.height) this.centerY = this.targetCenterY;
+      this.markMapDirty();
+      if (this.currentBasis) {
+        // ResizeObserver runs after RAF and before paint. Replacing a canvas
+        // bitmap here clears it; waiting for the next RAF exposes a blank
+        // strip for one native resize frame. Paint the new geometry now.
+        this.currentBasis = this.basis();
+        const colors = this.colors();
+        this.renderStatic(colors);
+        this.placeStaticCanvas();
+        this.renderOverlay(colors);
+        this.context.clearRect(0, 0, this.width, this.height);
+        if (this.trafficActive) this.drawTraffic(colors, performance.now());
+      }
       this.start();
     }
 
-    setViewportAnchor(x, y, width, height) {
-      if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
-      this.viewportAnchor = { x, y, width, height };
-      this.resize();
+    setCanvasResolution(ratio) {
+      const detailRatio = this.preferredPixelRatio;
+      const padding = this.options.stableGeography ? 64 : 0;
+      const staticWidth = this.width + padding * 2, staticHeight = this.height + padding * 2;
+      if (Math.abs(this.pixelRatio - ratio) < .01 && this.staticCanvas.width === Math.round(staticWidth * ratio)
+        && this.staticCanvas.height === Math.round(staticHeight * ratio)
+        && this.canvas.width === Math.round(this.width * detailRatio)
+        && this.canvas.height === Math.round(this.height * detailRatio)) return;
+      this.pixelRatio = ratio;
+      const width = Math.round(this.width * detailRatio);
+      const height = Math.round(this.height * detailRatio);
+      this.canvas.width = width;
+      this.canvas.height = height;
+      this.context.setTransform(detailRatio, 0, 0, detailRatio, 0, 0);
+      // Geographic pixels may be lighter during motion; labels and packets
+      // retain their display resolution throughout the gesture.
+      // A small overscan keeps center easing on the compositor rather than
+      // repainting the entire geography for each newly exposed edge pixel.
+      this.staticPadding = padding;
+      this.staticCanvas.width = Math.round(staticWidth * ratio);
+      this.staticCanvas.height = Math.round(staticHeight * ratio);
+      Object.assign(this.staticCanvas.style, { left: -padding + "px", top: -padding + "px", right: "auto", bottom: "auto", width: staticWidth + "px", height: staticHeight + "px" });
+      this.staticContext.setTransform(ratio, 0, 0, ratio, padding * ratio, padding * ratio);
+      this.overlayCanvas.width = width;
+      this.overlayCanvas.height = height;
+      this.overlayContext.setTransform(detailRatio, 0, 0, detailRatio, 0, 0);
+      this.markMapDirty();
     }
 
-    isInsideVisibleGlobe(clientX, clientY) {
-      if (window.DeyttAtlasBridge) return true;
-      const box = this.canvas.getBoundingClientRect();
-      const radius = Math.max(0, this.radius * this.zoom - .5);
-      return Math.hypot(clientX - box.left - box.width / 2, clientY - box.top - box.height / 2) <= radius;
+    setInteractionQuality(active) {
+      this.interactionQuality = Boolean(active);
+      // Stable canvas resolution: keep resolution rock-solid at preferredPixelRatio to prevent GPU buffer reallocation hitches.
+    }
+
+    markMapDirty() {
+      this.staticDirty = true;
+      this.overlayDirty = true;
     }
 
     basis() {
-      const phi = (this.centerLat + (this.idleMotionLatOffset || 0)) * DEG;
-      const lambda = (this.centerLon + this.idleMotionOffset) * DEG;
+      const phi = this.centerLat * DEG;
+      const lambda = this.centerLon * DEG;
       return {
         east: { x: -Math.sin(lambda), y: 0, z: Math.cos(lambda) },
         north: { x: -Math.sin(phi) * Math.cos(lambda), y: Math.cos(phi), z: -Math.sin(phi) * Math.sin(lambda) },
@@ -600,43 +704,29 @@
 
     projectVector(point, lift) {
       const basis = this.currentBasis;
-      const l = lift || 1;
-      const scale = this.radius * this.zoom * l;
+      const scale = this.radius * this.zoom * (lift || 1);
       return {
         x: this.centerX + dot(point, basis.east) * scale,
         y: this.centerY - dot(point, basis.north) * scale,
         z: dot(point, basis.forward),
-        lift: l
+        lift: lift || 1
       };
     }
 
     projectLocation(location, lift) { return this.projectVector(vector(location.lat, location.lon), lift); }
 
-    clampZoom(value) { return clamp(value, .82, MAX_ZOOM); }
-
     colors() {
-      const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
-      const windowsDark = document.documentElement.dataset.theme !== "light";
-      if (windowsPalette) return windowsDark ? {
+      const windowsHome = document.documentElement.dataset.atlasProfile === "windows";
+      const observatory = this.variant === "observatory";
+      if (windowsHome) return {
         sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
-        sphereEdge: "rgba(80,100,130,.22)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+        sphereEdge: "rgba(141,161,185,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
         grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
         landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
         border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
         download: "#FFBD32", downloadHot: "#FFE08A", upload: "#39E8BD", uploadHot: "#90F4DA",
-        control: "#B897FF", controlHot: "#D9C9FF",
-        node: "#F2F5FC", nodeCore: "#39E8BD", label: "#E6ECF5", labelMuted: "#A3B0C2", labelBg: "rgba(15,23,35,.88)", labelLeader: "#A3B0C2", labelBorder: "rgba(163,176,194,.16)"
-      } : {
-        sphereLight: "#D2E5F8", sphereMid: "#BFDBF4", sphereShade: "#A9CFEF",
-        sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
-        grid: null, land: "#1299DC", landDim: "#0D86C7", landHot: "#22A6ED", landAlpha: 1,
-        landHighlight: "#22A6ED", landRelief: "rgba(18,55,95,.22)", landLow: "#0974AC",
-        border: "#BAE6FD", borderAlpha: .60, borderWidth: .8, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
-        download: "#D99000", downloadHot: "#FFC857", upload: "#10A889", uploadHot: "#79D6C1",
-        control: "#6E5BB4", controlHot: "#A58CEB",
-        node: "#FFFFFF", nodeCore: "#123A67", label: "#1B2938", labelMuted: "#4D6175", labelBg: "rgba(246,247,251,.96)", labelLeader: "#354B60", labelBorder: "rgba(53,75,96,.22)"
+        node: "#F2F5FC", nodeCore: "#39E8BD", label: "#F2F5FC", labelMuted: "#98A6BF", labelBg: "rgba(17,26,41,.94)"
       };
-      const observatory = this.variant === "observatory";
       if (observatory) return {
         sphereLight: "#101832", sphereMid: "#0a1122", sphereShade: "#060a15", sphereEdge: "rgba(129,226,255,.42)", atmosphere: "rgba(99,126,255,.20)", atmosphereSoft: "rgba(99,126,255,.1)", rimLight: "rgba(129,226,255,.4)",
         grid: null, land: "rgba(196,212,248,.28)", landDim: "rgba(150,166,212,.30)", landHot: "#7fe0ff",
@@ -646,7 +736,7 @@
       };
       const dark = document.documentElement.dataset.theme === "dark";
       return dark ? {
-        sphereLight: "#101827", sphereMid: "#0b121d", sphereShade: "#070c13", sphereEdge: "rgba(140,163,255,.38)", atmosphere: "rgba(104,130,255,.16)", atmosphereSoft: "rgba(104,130,255,.07)", rimLight: "rgba(160,180,255,.26)",
+        sphereLight: "#101827", sphereMid: "#0b121d", sphereShade: "#070c13", sphereEdge: "rgba(140,163,255,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
         grid: "rgba(143,166,220,.08)", land: "rgba(178,199,250,.48)", landDim: "rgba(131,155,212,.25)", landHot: "rgba(122,232,255,1)",
         border: "rgba(168,191,242,.26)", borderHot: "rgba(133,234,255,.88)", borderGlow: "rgba(133,234,255,.58)", route: "#397f94", routeHot: "#8de8e4",
         download: "#f04d9e", downloadHot: "#ffc857", upload: "#73e0b5", uploadHot: "#c2f7df",
@@ -672,18 +762,21 @@
       /* Outer atmosphere: a wide luminous halo that breathes slightly while
        * the camera moves, drawn behind the sphere so land and routes stay
        * untouched. */
-      const haloScale = this.cameraMoving ? 1.5 : 1.34;
-      const halo = context.createRadialGradient(x, y, radius * .96, x, y, radius * haloScale);
-      halo.addColorStop(0, colors.atmosphere);
-      halo.addColorStop(.4, colors.atmosphereSoft);
-      halo.addColorStop(1, "rgba(0,0,0,0)");
-      context.save();
-      context.globalCompositeOperation = "lighter";
-      context.fillStyle = halo;
-      context.beginPath();
-      context.arc(x, y, radius * haloScale, 0, TAU);
-      context.fill();
-      context.restore();
+
+      if (colors.atmosphere && colors.atmosphere !== "rgba(0,0,0,0)") {
+        const haloScale = 1.38;
+        const halo = context.createRadialGradient(x, y, radius * .96, x, y, radius * haloScale);
+        halo.addColorStop(0, colors.atmosphere);
+        halo.addColorStop(.4, colors.atmosphereSoft);
+        halo.addColorStop(1, "rgba(0,0,0,0)");
+        context.save();
+        context.globalCompositeOperation = "lighter";
+        context.fillStyle = halo;
+        context.beginPath();
+        context.arc(x, y, radius * haloScale, 0, TAU);
+        context.fill();
+        context.restore();
+      }
 
       const gradient = context.createRadialGradient(x - radius * .36, y - radius * .42, radius * .03, x + radius * .12, y + radius * .16, radius * 1.14);
       gradient.addColorStop(0, colors.sphereLight);
@@ -698,27 +791,29 @@
       context.fill();
       /* Lit limb: two short bright arcs on the light side only — left-top
        * and right-bottom of the light source — instead of a full outline. */
-      context.save();
-      context.lineWidth = Math.max(1.5, radius * 0.012);
-      context.lineCap = "round";
-      context.strokeStyle = colors.rimLight;
-      context.shadowColor = colors.rimLight;
-      context.shadowBlur = radius * 0.035;
-      const rimArc = (startAngle, endAngle, alpha) => {
+      if (colors.rimLight && colors.rimLight !== "rgba(0,0,0,0)") {
         context.save();
-        context.globalAlpha = alpha;
-        context.beginPath();
-        context.arc(x, y, radius - context.lineWidth * 0.6 + 0.5, startAngle, endAngle);
-        context.stroke();
+        context.lineWidth = Math.max(1.5, radius * 0.012);
+        context.lineCap = "round";
+        context.strokeStyle = colors.rimLight;
+        context.shadowColor = colors.rimLight;
+        context.shadowBlur = 0;
+        const rimArc = (startAngle, endAngle, alpha) => {
+          context.save();
+          context.globalAlpha = alpha;
+          context.beginPath();
+          context.arc(x, y, radius - context.lineWidth * 0.6 + 0.5, startAngle, endAngle);
+          context.stroke();
+          context.restore();
+        };
+        rimArc(Math.PI * 0.98, Math.PI * 1.52, 0.5);
+        rimArc(Math.PI * 0.06, Math.PI * 0.4, 0.28);
         context.restore();
-      };
-      rimArc(Math.PI * 0.98, Math.PI * 1.52, 0.5);
-      rimArc(Math.PI * 0.06, Math.PI * 0.4, 0.28);
-      context.restore();
+      }
       context.restore();
 
       context.strokeStyle = colors.sphereEdge;
-      context.lineWidth = 1;
+      context.lineWidth = 1.5;
       context.beginPath();
       context.arc(x, y, radius, 0, TAU);
       context.stroke();
@@ -730,6 +825,84 @@
       context.beginPath();
       context.arc(x, y, radius, 0, TAU);
       context.fill();
+    }
+
+    drawBorders(colors) {
+      const context = this.context;
+      this.drawLand(colors);
+      const basis = this.currentBasis;
+      const east = basis.east;
+      const north = basis.north;
+      const fwd = basis.forward;
+      const scale = this.radius * this.zoom * 1.002;
+      const cx = this.centerX;
+      const cy = this.centerY;
+      const maxJump = this.radius * this.zoom * .24;
+      const maxJumpSq = maxJump * maxJump;
+      const pointStep = this.cameraMoving ? 2 : 1;
+
+      const strokeLines = (lines, style, width, alpha) => {
+        const len = lines.length;
+        if (!len) return;
+        context.save();
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.strokeStyle = style;
+        context.lineWidth = width;
+        context.globalAlpha = alpha;
+        context.beginPath();
+
+        for (let l = 0; l < len; l++) {
+          const line = lines[l];
+          const points = line.points || line;
+          const pLen = points.length;
+          let drawing = false;
+          let prevX = 0, prevY = 0;
+
+          for (let i = 0; i < pLen; i += pointStep) {
+            const ptIndex = (i >= pLen - pointStep && i !== pLen - 1) ? pLen - 1 : i;
+            const v = points[ptIndex].vector;
+            const z = v.x * fwd.x + v.y * fwd.y + v.z * fwd.z;
+            if (z <= 0.012) {
+              drawing = false;
+              continue;
+            }
+            const x = cx + (v.x * east.x + v.y * east.y + v.z * east.z) * scale;
+            const y = cy - (v.x * north.x + v.y * north.y + v.z * north.z) * scale;
+            if (drawing) {
+              const dx = x - prevX, dy = y - prevY;
+              if (dx * dx + dy * dy > maxJumpSq) {
+                context.moveTo(x, y);
+              } else {
+                context.lineTo(x, y);
+              }
+            } else {
+              context.moveTo(x, y);
+              drawing = true;
+            }
+            prevX = x;
+            prevY = y;
+          }
+        }
+        context.stroke();
+        context.restore();
+      };
+      const borderAlpha = colors.borderAlpha ?? (this.variant === "observatory" ? .38 : .28);
+      const borderWidth = colors.borderWidth ?? (this.width < 520 ? .48 : .62);
+      strokeLines(this.boundaryLines, colors.border, borderWidth, borderAlpha);
+      if (this.variant !== "observatory") return;
+      const filterKey = this.annotationFilter ? Array.from(this.annotationFilter).sort().join(",") : "";
+      const currentCacheKey = `${this.route}|${filterKey}`;
+      if (this._cachedActiveLinesKey !== currentCacheKey || !this._cachedActiveLines) {
+        const route = ROUTES[this.route] || ROUTES.auto;
+        const activeKeys = this.annotationFilter ? Array.from(this.annotationFilter) : route.nodes;
+        const activeCountryIds = new Set(activeKeys.map((key) => LOCATIONS[key] && LOCATIONS[key].countryId).filter(Boolean));
+        this._cachedActiveLines = this.targetBoundaryLines.filter((line) => activeCountryIds.has(line.countryId));
+        this._cachedActiveLinesKey = currentCacheKey;
+      }
+      const activeLines = this._cachedActiveLines;
+      strokeLines(activeLines, colors.borderGlow, this.width < 520 ? 2.6 : 3.4, .24);
+      strokeLines(activeLines, colors.borderHot, this.width < 520 ? .82 : 1.05, .72);
     }
 
     drawLand(colors) {
@@ -780,11 +953,14 @@
             if (firstHidden < 0) firstHidden = i;
           } else {
             visibleCount++;
-            scratch[i].x = cx + (pt.x * east.x + pt.y * east.y + pt.z * east.z) * scale;
-            scratch[i].y = cy - (pt.x * north.x + pt.y * north.y + pt.z * north.z) * scale;
           }
         }
         if (visibleCount === 0) return [];
+        for (let i = 0; i < len; i++) {
+          const pt = ring[i];
+          scratch[i].x = cx + (pt.x * east.x + pt.y * east.y + pt.z * east.z) * scale;
+          scratch[i].y = cy - (pt.x * north.x + pt.y * north.y + pt.z * north.z) * scale;
+        }
         if (firstHidden < 0) return [scratch.slice(0, len)];
         const segments = [];
         let segment = [];
@@ -832,7 +1008,11 @@
         const startAngle = Math.atan2(first.y - globeY, first.x - globeX);
         const endAngle = Math.atan2(last.y - globeY, last.x - globeX);
         const arc = Math.atan2(Math.sin(startAngle - endAngle), Math.cos(startAngle - endAngle));
-        landPath.arc(globeX, globeY, globeRadius, endAngle, endAngle + arc, arc < 0);
+        const steps = Math.max(1, Math.ceil(Math.abs(arc) * globeRadius / 8));
+        for (let step = 1; step <= steps; step += 1) {
+          const angle = endAngle + arc * step / steps;
+          landPath.lineTo(globeX + Math.cos(angle) * globeRadius, globeY + Math.sin(angle) * globeRadius);
+        }
         landPath.closePath();
       };
 
@@ -854,17 +1034,10 @@
           pathForRing(ring).forEach((segment) => traceClippedRing(segment, globeX, globeY));
         }));
       };
-      // Zoom and native viewport changes only transform the same projected coastline.
-      const cached = this.landPathCache;
-      if (cached && cached.lon === this.centerLon && cached.lat === this.centerLat && cached.polygons === this.landPolygons) {
-        landPath.addPath(cached.path, new DOMMatrix().translate(cx, cy).scale(scale / cached.scale).translate(-cached.cx, -cached.cy));
-      } else {
-        traceLand();
-        this.landPathCache = { path: landPath, lon: this.centerLon, lat: this.centerLat, polygons: this.landPolygons, scale, cx, cy };
-      }
+      traceLand();
       context.save();
       const isLight = document.documentElement.dataset.theme === "light";
-      const relief = this.options.landDepth === false && !isLight ? 0 : (isLight ? 1.5 : clamp(globeRadius * .014, 2, 5));
+      const relief = this.cameraMoving || (this.options.landDepth === false && !isLight) ? 0 : (isLight ? 1.5 : clamp(globeRadius * .014, 2, 5));
       if (relief) {
         context.save();
         const shadowOffsetX = isLight ? 0.6 : (relief * .24);
@@ -892,65 +1065,13 @@
       context.restore();
     }
 
-    drawBorders(colors) {
-      const context = this.context;
-      this.drawLand(colors);
-      const trace = (points, lift) => {
-        let drawing = false;
-        let previous = null;
-        points.forEach((border) => {
-          const projected = this.projectVector(border.vector, lift);
-          const jump = previous && Math.hypot(projected.x - previous.x, projected.y - previous.y) > this.radius * this.zoom * .24;
-          if (projected.z <= .012 || jump) {
-            drawing = false;
-            previous = projected;
-            return;
-          }
-          if (!drawing) context.moveTo(projected.x, projected.y);
-          else context.lineTo(projected.x, projected.y);
-          drawing = true;
-          previous = projected;
-        });
-      };
-      const strokeLines = (lines, style, width, alpha, shadowColor, shadowBlur) => {
-        if (!lines.length) return;
-        context.save();
-        context.lineCap = "round";
-        context.lineJoin = "round";
-        context.strokeStyle = style;
-        context.lineWidth = width;
-        context.globalAlpha = alpha;
-        context.shadowColor = shadowColor || "transparent";
-        context.shadowBlur = shadowBlur || 0;
-        context.beginPath();
-        lines.forEach((line) => trace(line.points || line, 1.002));
-        context.stroke();
-        context.restore();
-      };
-      const borderAlpha = colors.borderAlpha || (this.variant === "observatory" ? .38 : .28);
-      strokeLines(this.boundaryLines, colors.border, this.width < 520 ? .48 : .62, borderAlpha);
-      if (this.variant !== "observatory") return;
-      const route = ROUTES[this.route] || ROUTES.auto;
-      const activeKeys = this.annotationFilter ? Array.from(this.annotationFilter) : route.nodes;
-      const activeCountryIds = new Set(activeKeys.map((key) => LOCATIONS[key] && LOCATIONS[key].countryId).filter(Boolean));
-      const activeLines = this.targetBoundaryLines.filter((line) => activeCountryIds.has(line.countryId));
-      // A diffused pass gives the active countries a little depth; the crisp
-      // pass keeps borders legible at the close-up measurement zoom.
-      strokeLines(activeLines, colors.borderGlow, this.width < 520 ? 2.6 : 3.4, .24, colors.borderGlow, this.cameraMoving ? 4 : 9);
-      strokeLines(activeLines, colors.borderHot, this.width < 520 ? .82 : 1.05, .72);
-    }
-
-    drawRoutes(colors, time, drawPackets = true) {
-      this.routeHitSegments = [];
-      const links = this.routeLinks();
-      this.drawTrafficLines(links);
-      if (drawPackets && this.trafficActive) this.drawTraffic(links, time || performance.now());
-      return links;
-    }
-
     routeLinks() {
-      const activeRoute = this.activeRouteDefinition();
-      const links = (activeRoute ? activeRoute.links : []).filter((link) =>
+      if (this.trafficActive && !this.autoExitRouteKey) return [];
+      const route = ROUTES[this.route];
+      const activeRoute = (this.trafficActive || this.route === "auto") && this.autoExitRouteKey
+        ? ROUTES[this.autoExitRouteKey]
+        : route;
+      const links = (activeRoute || route).links.filter((link) =>
         link.every((key) => this.availableLocationKeys.has(key))
       );
       const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
@@ -958,217 +1079,374 @@
       return links;
     }
 
-    drawTrafficLines(links) {
-      const context = this.context;
-      const dark = document.documentElement.dataset.theme === "dark";
-      this.trafficStreams().filter(stream => this.selectedTrafficFlow == null || stream.id === this.selectedTrafficFlow).forEach(stream => {
-        const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
-        directed.forEach(([fromKey, toKey]) => {
-          const points = [];
-          for (let i = 0; i <= 80; i++) {
-            points.push(this.projectLanePoint(fromKey, toKey, i / 80, stream.lane));
-          }
-          const emphasized = this.selectedTrafficFlow === stream.id;
-
-          // Elevated Glowing 3D Traffic Beam
-          context.save();
-          context.beginPath();
-          points.forEach((point, i) => {
-            if (point.z <= -.02) return;
-            if (!i || points[i - 1].z <= -.02) context.moveTo(point.x, point.y);
-            else context.lineTo(point.x, point.y);
-          });
-          context.lineCap = context.lineJoin = "round";
-          context.strokeStyle = stream.color;
-          context.globalAlpha = emphasized ? .32 : dark ? .20 : .14;
-          context.lineWidth = emphasized ? 3.8 : 2.4;
-          context.shadowBlur = 0;
-          context.stroke();
-
-          const sheen = context.createLinearGradient(points[0].x, points[0].y, points[80].x, points[80].y);
-          sheen.addColorStop(0, stream.color);
-          sheen.addColorStop(.22, stream.color);
-          sheen.addColorStop(.5, stream.bright);
-          sheen.addColorStop(.78, stream.color);
-          sheen.addColorStop(1, stream.color);
-          context.strokeStyle = sheen;
-          context.globalAlpha = 1;
-          context.lineWidth = emphasized ? 2.0 : 1.3;
-          context.stroke();
-
-          if (emphasized) {
-            context.globalAlpha = .90;
-            context.strokeStyle = "#FFFFFF";
-            context.lineWidth = 0.7;
-            context.shadowBlur = 0;
-            context.stroke();
-          }
-          context.restore();
-
-          for (let i = 1; i < points.length; i++) {
-            const a = points[i - 1], b = points[i];
-            if (a.z <= -.02 || b.z <= -.02) continue;
-            this.routeHitSegments.push({ stream: stream.id, a, b });
-            this.routeSegments.push({ left: Math.min(a.x, b.x), top: Math.min(a.y, b.y),
-              right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) });
-          }
-        });
-      });
+    trafficStreams(colors) {
+      const english = this.language === "en";
+      const windowsHome = document.documentElement.dataset.atlasProfile === "windows";
+      const dark = document.documentElement.dataset.theme !== "light";
+      const contrast = windowsHome
+        ? dark
+          ? { upload: "#FF7798", uploadHot: "#FFE2EA", download: "#FFCE55", downloadHot: "#FFF4CB", control: "#AF8CFF", controlHot: "#EFE5FF" }
+          : { upload: "#FF5278", uploadHot: "#FFCDDD", download: "#F6AD11", downloadHot: "#FFE9A6", control: "#824BFF", controlHot: "#D9C5FF" }
+        : colors;
+      return [
+        { id: "upload", label: english ? "Outbound data" : "исходящие данные", direction: "forward", color: contrast.upload || contrast.routeHot, bright: contrast.uploadHot || contrast.routeHot, lane: .07, duration: 3400, phase: 0 },
+        { id: "download", label: english ? "Return traffic" : "ответный трафик", direction: "reverse", color: contrast.download || contrast.route, bright: contrast.downloadHot || contrast.routeHot, lane: .17, duration: 3000, phase: .34 },
+        { id: "control", label: english ? "Service traffic" : "служебный трафик", direction: "forward", color: contrast.control || (dark ? "#D58CFF" : "#E052C0"), bright: contrast.controlHot || contrast.routeHot, lane: .27, duration: 3800, phase: .68 }
+      ];
     }
 
-    drawTraffic(links, time) {
+    projectLanePoint(fromKey, toKey, amount, laneOffset) {
+      const fromLocation = fromKey === "user" ? this.userLocation : LOCATIONS[fromKey];
+      const toLocation = toKey === "user" ? this.userLocation : LOCATIONS[toKey];
+      if (!fromLocation || !toLocation) return { x: 0, y: 0, z: -1 };
+      const from = vector(fromLocation.lat, fromLocation.lon);
+      const to = vector(toLocation.lat, toLocation.lon);
+      const start = this.projectVector(from, 1.008);
+      const end = this.projectVector(to, 1.008);
+      const point = this.projectVector(slerp(from, to, amount), 1.008);
+      const distance = Math.hypot(end.x - start.x, end.y - start.y);
+      // A shared geographic anchor at either end, with three visibly different
+      // bows above the surface. Reversing a flow never changes its lane.
+      return { x: point.x, y: point.y - Math.sin(amount * Math.PI) * distance * laneOffset, z: point.z };
+    }
+
+    drawArc(fromKey, toKey, stream) {
+      const context = this.context;
+      const points = [];
+      const segments = 80;
+      for (let index = 0; index <= segments; index += 1)
+        points.push(this.projectLanePoint(fromKey, toKey, index / segments, stream.lane));
+      context.save();
+      context.beginPath();
+      let drawing = false;
+      points.forEach((point) => {
+        if (point.z <= -.02) { drawing = false; return; }
+        if (!drawing) context.moveTo(point.x, point.y);
+        else context.lineTo(point.x, point.y);
+        drawing = true;
+      });
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      const emphasized = this.hoveredTrafficStream === stream.id || this.inspectingStream === stream.id;
+      const dark = document.documentElement.dataset.theme !== "light";
+      // A faint colored halo and a continuous satin core keep the three
+      // lanes vivid. No offset outline that makes them look like wires.
+      context.strokeStyle = stream.color;
+      context.globalAlpha = emphasized ? .24 : dark ? .18 : .13;
+      context.lineWidth = emphasized ? 7 : 5.8;
+      context.shadowBlur = 0;
+      context.stroke();
+      const sheen = context.createLinearGradient(points[0].x, points[0].y, points[segments].x, points[segments].y);
+      sheen.addColorStop(0, stream.color);
+      sheen.addColorStop(.22, stream.color);
+      sheen.addColorStop(.5, stream.bright);
+      sheen.addColorStop(.78, stream.color);
+      sheen.addColorStop(1, stream.color);
+      context.strokeStyle = sheen;
+      context.globalAlpha = 1;
+      context.lineWidth = emphasized ? 3.1 : 2.3;
+      context.stroke();
+      if (emphasized) {
+        context.globalAlpha = .9;
+        context.strokeStyle = "#FFFFFF";
+        context.lineWidth = .75;
+        context.shadowBlur = 0;
+        context.stroke();
+      }
+      context.globalAlpha = 1;
+      context.shadowBlur = 0;
+      context.restore();
+      for (let index = 1; index < points.length; index += 1) {
+        if (points[index - 1].z > .015 && points[index].z > .015)
+          this.routeHitSegments.push({ a: points[index - 1], b: points[index], stream, fromKey, toKey });
+      }
+    }
+
+    drawRoutes(colors) {
+      this.routeHitSegments = [];
+      const links = this.routeLinks();
+      if (!links.length) return;
+      const streams = this.trafficStreams(colors).filter((stream) =>
+        this.inspectingStream == null || stream.id === this.inspectingStream);
+      links.forEach((link) => streams.forEach((stream) => this.drawArc(link[0], link[1], stream)));
+    }
+
+    drawTraffic(colors, time) {
+      this.packetHits = [];
+      const links = this.routeLinks();
+      const streams = this.trafficStreams(colors).filter((stream) =>
+        this.inspectingStream == null || stream.id === this.inspectingStream);
 
       if (!links.length) {
-        // Without the location opt-in there is no truthful origin point for a
-        // route line. Pulse the confirmed exit instead of inventing a source.
+        // Without location consent, keep the user's origin private. Show the
+        // three stream types at the confirmed exit without inventing a map path.
         const exit = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
         if (!exit) return;
         const point = this.projectLocation(LOCATIONS[exit], 1.018);
         if (point.z <= .015) return;
         const context = this.context;
-        this.trafficStreams().forEach((stream, index) => {
-          if (this.selectedTrafficFlow != null && stream.id !== this.selectedTrafficFlow) return;
+        streams.forEach((stream, streamIndex) => {
           const phase = this.reducedMotion.matches ? .5 : ((time - this.trafficStartedAt) / (stream.duration * 2) + stream.phase) % 1;
-          const orbit = 9 + index * 5;
-          context.save(); context.globalAlpha = .22; context.beginPath(); context.arc(point.x, point.y, orbit, 0, TAU);
-          context.strokeStyle = stream.color; context.lineWidth = 1; context.stroke(); context.restore();
-          for (let packet = 0; packet < (this.reducedMotion.matches ? 1 : 4); packet++) {
+          const orbit = 9 + streamIndex * 5;
+          context.save();
+          context.globalAlpha = .22;
+          context.beginPath();
+          context.arc(point.x, point.y, orbit, 0, TAU);
+          context.strokeStyle = stream.color;
+          context.lineWidth = 1;
+          context.stroke();
+          context.restore();
+          for (let packet = 0; packet < (this.reducedMotion.matches ? 1 : 4); packet += 1) {
             const angle = (phase + packet / 4) * TAU;
-            this.drawTrafficDot(point.x + Math.cos(angle) * orbit, point.y + Math.sin(angle) * orbit, stream, packet === 0, .82);
+            const x = point.x + Math.cos(angle) * orbit;
+            const y = point.y + Math.sin(angle) * orbit;
+            this.drawPacketDot(x, y, stream, packet === 0, .82);
+            this.packetHits.push({ x, y, stream, fromKey: exit, toKey: exit, sequence: packet + 1, hop: 0, noOrigin: true });
           }
         });
         return;
       }
 
       const elapsed = Math.max(0, time - this.trafficStartedAt);
-      const trafficFade = Math.min(1, elapsed / 280);
-      this.trafficStreams().filter(stream => this.selectedTrafficFlow == null || stream.id === this.selectedTrafficFlow).forEach(stream => {
-        const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
-        const count = this.reducedMotion.matches ? 1 : 5;
-        for (let packet = 0; packet < count; packet++) {
-          const position = this.reducedMotion.matches ? directed.length * .52 : ((elapsed / (stream.duration * directed.length) + packet / count + stream.phase) % 1) * directed.length;
-          const linkIndex = Math.min(directed.length - 1, Math.floor(position)), amount = position - linkIndex;
-          const [fromKey, toKey] = directed[linkIndex], point = this.projectLanePoint(fromKey, toKey, amount, stream.lane);
+      const packetCount = this.reducedMotion.matches ? 1 : 5;
+      streams.forEach((stream) => {
+        const directedLinks = stream.direction === "reverse"
+          ? links.slice().reverse().map((link) => [link[1], link[0]])
+          : links;
+        const lane = stream.lane;
+        for (let packet = 0; packet < packetCount; packet += 1) {
+          const progress = this.reducedMotion.matches
+            ? .52
+            : ((elapsed / (stream.duration * directedLinks.length) + packet / packetCount + stream.phase) % 1);
+          const position = progress * directedLinks.length;
+          const linkIndex = Math.min(directedLinks.length - 1, Math.floor(position));
+          const amount = position - linkIndex;
+          const [fromKey, toKey] = directedLinks[linkIndex];
+          const point = this.projectLanePoint(fromKey, toKey, amount, lane);
           if (point.z <= -.02) continue;
-          if (!this.reducedMotion.matches && packet === 0) this.drawTrafficTrail(directed, position, stream, trafficFade);
-          this.drawTrafficDot(point.x, point.y, stream, packet % 4 === 0, trafficFade, .84 + (packet % 3) * .10);
+          if (!this.reducedMotion.matches && packet === 0)
+            this.drawPacketTrail(directedLinks, position, lane, stream, elapsed);
+          this.drawPacketDot(point.x, point.y, stream, packet % 4 === 0, 1, .86 + (packet % 3) * .14);
+          this.packetHits.push({ x: point.x, y: point.y, stream, fromKey, toKey, sequence: packet + 1, hop: linkIndex + 1, noOrigin: false });
         }
       });
     }
 
-    trafficStreams() {
-      return document.documentElement.dataset.theme === "dark" ? [
-        { id: "upload", color: "#FF7798", bright: "#FFE2EA", lane: -1, duration: 3400, phase: 0 },
-        { id: "download", color: "#FFCE55", bright: "#FFF4CB", lane: 0, duration: 3000, phase: .34, reverse: true },
-        { id: "control", color: "#AF8CFF", bright: "#EFE5FF", lane: 1, duration: 3800, phase: .68 }
-      ] : [
-        { id: "upload", color: "#FF5278", bright: "#FFCDDD", lane: -1, duration: 3400, phase: 0 },
-        { id: "download", color: "#F6AD11", bright: "#FFE9A6", lane: 0, duration: 3000, phase: .34, reverse: true },
-        { id: "control", color: "#824BFF", bright: "#D9C5FF", lane: 1, duration: 3800, phase: .68 }
-      ];
-    }
-
-    projectLanePoint(fromKey, toKey, amount, lane, ground = false) {
-      const fromLocation = fromKey === "user" ? this.userLocation : LOCATIONS[fromKey];
-      const toLocation = toKey === "user" ? this.userLocation : LOCATIONS[toKey];
-      if (!fromLocation || !toLocation) return { x: 0, y: 0, z: -1, lift: 1 };
-      const from = vector(fromLocation.lat, fromLocation.lon), to = vector(toLocation.lat, toLocation.lon);
-      const omega = Math.acos(clamp(dot(from, to), -1, 1));
-      const bell = Math.sin(amount * Math.PI);
-
-      // Subtle 3D radial altitude for depth/occlusion without over-projecting
-      const peakAltitude = 0.025 + Math.min(0.04, omega * 0.06);
-      const lift = ground ? 1.002 : (1.012 + bell * peakAltitude);
-
-      const start = this.projectVector(from, lift);
-      const end = this.projectVector(to, lift);
-      const point = this.projectVector(slerp(from, to, amount), lift);
-      const dx = end.x - start.x, dy = end.y - start.y;
-      const length = Math.hypot(dx, dy) || 1;
-
-      if (ground) {
-        return { x: point.x, y: point.y, z: point.z, lift, bell };
-      }
-
-      // Normal perpendicular to the route chord
-      let nx = -dy / length;
-      let ny = dx / length;
-
-      // Ensure normal points outward/upward over the curvature of the Earth into space
-      const midX = (start.x + end.x) / 2;
-      const midY = (start.y + end.y) / 2;
-      const vx = midX - this.centerX;
-      const vy = midY - this.centerY;
-      const vDist = Math.hypot(vx, vy);
-      if (vDist > 10) {
-        if (nx * vx + ny * vy < 0) { nx = -nx; ny = -ny; }
-      } else {
-        if (ny > 0) { nx = -nx; ny = -ny; }
-      }
-
-      // Responsive 3D Bridge Arch:
-      // - Spacing scales down dynamically when globe is smaller / zoomed out
-      // - Top line (lane = 1) has a balanced, moderate curve instead of extreme bending
-      // - Middle line (lane = 0) remains clearly arched upward
-      // - Bottom line (lane = -1) remains parallelly arched upward, never sagging
-      const globeScale = (this.radius * (this.zoom || 1)) || 160;
-      const zoomFactor = clamp(globeScale / 180, 0.65, 1.25);
-      const laneSpacing = Math.max(7.5, Math.min(13, 10.5 * zoomFactor));
-      const minBottomArch = Math.max(4, Math.min(7.5, length * 0.035 * zoomFactor));
-      const baseArch = minBottomArch + laneSpacing;
-      const laneArch = baseArch + (lane || 0) * laneSpacing;
-      const offset = bell * laneArch;
-
-      return {
-        x: point.x + nx * offset,
-        y: point.y + ny * offset,
-        z: point.z,
-        lift: lift,
-        bell: bell
-      };
-    }
-
-    drawTrafficTrail(links, position, stream, fade = 1) {
+    drawPacketTrail(directedLinks, position, lane, stream, elapsed) {
+      const context = this.context;
       const points = [];
-      for (let step = 10; step >= 0; step--) {
-        const sample = position - .105 * step / 10;
-        if (sample < 0 || sample >= links.length) continue;
-        const index = Math.floor(sample), [from, to] = links[index];
-        points.push(this.projectLanePoint(from, to, sample - index, stream.lane));
+      const linkCount = directedLinks.length;
+      const trailLength = .13;
+      const samples = 10;
+      for (let step = samples; step >= 0; step -= 1) {
+        // Keep the trail on the current pass. Wrapping its samples from the
+        // first hop to the final hop draws a detached chord across the map.
+        const sample = position - trailLength * step / samples;
+        if (sample < 0 || sample >= linkCount) continue;
+        const linkIndex = Math.floor(sample);
+        const amount = sample - linkIndex;
+        const [fromKey, toKey] = directedLinks[linkIndex];
+        points.push(this.projectLanePoint(fromKey, toKey, amount, lane));
       }
-      const context = this.context; context.save(); context.lineCap = context.lineJoin = "round"; context.shadowColor = stream.color; context.shadowBlur = 2;
-      for (let i = 1; i < points.length; i++) { const a = points[i-1], b = points[i]; if (a.z <= -.02 || b.z <= -.02) continue; const intensity = i / (points.length - 1); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.globalAlpha = intensity * .72 * fade; context.strokeStyle = intensity > .7 ? stream.bright : stream.color; context.lineWidth = .42 + intensity * .82; context.stroke(); }
+
+      context.save();
+      context.lineCap = "round";
+      context.lineJoin = "round";
+      context.shadowColor = stream.color;
+      context.shadowBlur = 2;
+      for (let index = 1; index < points.length; index += 1) {
+        const from = points[index - 1], to = points[index];
+        if (from.z <= -.02 || to.z <= -.02) continue;
+        const intensity = index / (points.length - 1);
+        context.beginPath();
+        context.moveTo(from.x, from.y);
+        context.lineTo(to.x, to.y);
+        context.globalAlpha = intensity * .72;
+        context.strokeStyle = intensity > .7 ? stream.bright : stream.color;
+        context.lineWidth = .45 + intensity * .95;
+        context.stroke();
+      }
       context.restore();
     }
 
-    drawTrafficDot(x, y, stream, head, alpha = 1, size = 1) {
-      this.trafficSprites ||= new Map();
+    drawPacketDot(x, y, stream, head, alpha, size = 1) {
+      const context = this.context;
       const key = stream.color + "|" + stream.bright + "|" + head;
-      let sprite = this.trafficSprites.get(key);
+      let sprite = this.packetSprites.get(key);
       if (!sprite) {
-        sprite = document.createElement("canvas"); sprite.width = sprite.height = 48;
-        const paint = sprite.getContext("2d"); paint.scale(2, 2); const radius = head ? 2.05 : 1.55;
-        const halo = paint.createRadialGradient(12, 12, .5, 12, 12, 4.8); halo.addColorStop(0, stream.color + "58"); halo.addColorStop(1, stream.color + "00"); paint.fillStyle = halo; paint.fillRect(4, 4, 16, 16);
-        const sphere = paint.createRadialGradient(11.2, 11.0, .1, 12, 12, radius); sphere.addColorStop(0, "#FFFFFF"); sphere.addColorStop(.32, stream.bright); sphere.addColorStop(1, stream.color);
-        paint.beginPath(); paint.arc(12, 12, radius, 0, TAU); paint.fillStyle = sphere; paint.shadowColor = stream.color; paint.shadowBlur = head ? 2.8 : 1.6; paint.fill();
-        if (head) { paint.beginPath(); paint.arc(11.4, 11.0, .4, 0, TAU); paint.fillStyle = "#FFFFFF"; paint.fill(); }
-        this.trafficSprites.set(key, sprite);
+        sprite = document.createElement("canvas");
+        sprite.width = sprite.height = 48;
+        const paint = sprite.getContext("2d");
+        paint.scale(2, 2);
+        const radius = head ? 2.25 : 1.72;
+        const halo = paint.createRadialGradient(12, 12, .6, 12, 12, 5.7);
+        halo.addColorStop(0, stream.color + "58");
+        halo.addColorStop(1, stream.color + "00");
+        paint.fillStyle = halo;
+        paint.fillRect(4, 4, 16, 16);
+        const sphere = paint.createRadialGradient(11, 10.8, .1, 12, 12, radius);
+        sphere.addColorStop(0, "#FFFFFF");
+        sphere.addColorStop(.32, stream.bright);
+        sphere.addColorStop(1, stream.color);
+        paint.beginPath();
+        paint.arc(12, 12, radius, 0, TAU);
+        paint.fillStyle = sphere;
+        paint.shadowColor = stream.color;
+        paint.shadowBlur = head ? 3 : 1.5;
+        paint.fill();
+        if (head) {
+          paint.beginPath();
+          paint.arc(11.3, 10.9, .5, 0, TAU);
+          paint.fillStyle = "#FFFFFF";
+          paint.fill();
+        }
+        this.packetSprites.set(key, sprite);
       }
-      this.context.globalAlpha = alpha; this.context.drawImage(sprite, x - 12 * size, y - 12 * size, 24 * size, 24 * size); this.context.globalAlpha = 1;
+      context.globalAlpha = alpha;
+      context.drawImage(sprite, x - 12 * size, y - 12 * size, 24 * size, 24 * size);
+      context.globalAlpha = 1;
     }
 
-    findTrafficLineAt(pointer, tolerance) {
-      let closest = tolerance, flow = null;
-      this.routeHitSegments.forEach(segment => { const dx = segment.b.x - segment.a.x, dy = segment.b.y - segment.a.y; const t = clamp(((pointer.x - segment.a.x) * dx + (pointer.y - segment.a.y) * dy) / Math.max(.001, dx * dx + dy * dy), 0, 1); const distance = Math.hypot(pointer.x - segment.a.x - dx * t, pointer.y - segment.a.y - dy * t); if (distance < closest) { closest = distance; flow = segment.stream; } });
-      return flow;
+    findPacketAt(pointer, tolerance) {
+      let nearest = null;
+      let nearestDistance = tolerance;
+      this.packetHits.forEach((packet) => {
+        const distance = Math.hypot(packet.x - pointer.x, packet.y - pointer.y);
+        if (distance < nearestDistance) { nearest = packet; nearestDistance = distance; }
+      });
+      return nearest;
     }
 
-    selectTrafficFlow(flow) {
-      this.selectedTrafficFlow = ["upload", "download", "control"].includes(flow) ? flow : null;
+    findLineAt(pointer, tolerance) {
+      let nearest = null;
+      let closest = tolerance;
+      this.routeHitSegments.forEach((segment) => {
+        const dx = segment.b.x - segment.a.x, dy = segment.b.y - segment.a.y;
+        const t = clamp(((pointer.x - segment.a.x) * dx + (pointer.y - segment.a.y) * dy) / Math.max(.001, dx * dx + dy * dy), 0, 1);
+        const distance = Math.hypot(pointer.x - segment.a.x - dx * t, pointer.y - segment.a.y - dy * t);
+        if (distance < closest) { closest = distance; nearest = { ...segment, isLine: true }; }
+      });
+      return nearest;
+    }
+
+    setHoveredTrafficStream(streamId) {
+      const next = streamId || null;
+      if (this.hoveredTrafficStream === next) return;
+      this.hoveredTrafficStream = next;
+      this.overlayDirty = true;
       this.start();
     }
 
+    showTrafficHint() {
+      const hint = this.root.querySelector("[data-traffic-hint]");
+      if (!hint) return;
+      hint.textContent = this.language === "en"
+        ? "Double-click a line to inspect and highlight its flow"
+        : "для описания потока нажмите на линию дважды";
+      hint.hidden = false;
+      clearTimeout(this.hintTimer);
+      this.hintTimer = setTimeout(() => { hint.hidden = true; }, 4200);
+    }
+
+    resumeTraffic() {
+      this.inspectingStream = null;
+      this.root.classList.remove("is-inspecting");
+      const mainPanel = this.root.querySelector(".home-panel-shell");
+      const compactMode = this.root.classList.contains("is-zoomed") || this.root.classList.contains("is-immersive");
+      mainPanel?.toggleAttribute("inert", compactMode);
+      mainPanel?.setAttribute("aria-hidden", compactMode ? "true" : "false");
+      this.hoveredTrafficStream = null;
+      const inspector = this.root.querySelector("[data-traffic-inspector]");
+      if (inspector) {
+        const restoreFocus = inspector.contains(document.activeElement);
+        inspector.hidden = true;
+        if (restoreFocus) this.canvas.focus({ preventScroll: true });
+      }
+      this.overlayDirty = true;
+      this.start();
+    }
+
+    showTrafficInspector(line) {
+      const inspector = this.root.querySelector("[data-traffic-inspector]");
+      if (!inspector) return;
+      const english = this.language === "en";
+      const placeName = (key) => key === "user" ? this.copy(this.userLocation?.city || (english ? "Your network" : "ваша сеть")) : this.copy(LOCATIONS[key]?.city || key);
+      const from = line.stream.direction === "reverse" ? line.toKey : line.fromKey;
+      const to = line.stream.direction === "reverse" ? line.fromKey : line.toKey;
+      const explanations = english ? {
+        upload: "Requests and data travel from your device to the exit node: opening a page, sending a message or uploading a file.",
+        download: "Responses travel back to your device: page content, incoming messages and downloaded files.",
+        control: "Small service exchanges keep a connection working. DNS resolves names; other control messages coordinate the tunnel."
+      } : {
+        upload: "запросы и данные идут от устройства к выходному узлу: открытие страницы, отправка сообщения или загрузка файла на сервер.",
+        download: "ответы возвращаются к устройству: содержимое страниц, входящие сообщения и скачиваемые файлы.",
+        control: "небольшие служебные обмены поддерживают соединение. dns определяет адрес по имени, остальные сообщения согласуют работу туннеля."
+      };
+      inspector.style.setProperty("--traffic-accent", line.stream.color);
+      inspector.querySelector("[data-inspector-kind]").textContent = english ? "flow highlighted" : "поток выделен";
+      inspector.querySelector("[data-inspector-title]").textContent = line.stream.label.toLowerCase();
+      inspector.querySelector("[data-inspector-path]").textContent = placeName(from) + " → " + placeName(to);
+      inspector.querySelector("[data-inspector-body]").textContent = explanations[line.stream.id];
+      inspector.querySelector("[data-inspector-item]").textContent = english ? "Only this flow is highlighted on the map" : "на карте выделен только этот поток";
+      inspector.querySelector("[data-inspector-note]").textContent = english
+        ? "The moving points illustrate traffic direction; packet contents are not captured."
+        : "движущиеся точки показывают направление потока. содержимое пакетов не считывается.";
+      const resume = inspector.querySelector("[data-inspector-resume]");
+      resume.textContent = english ? "Show all traffic lines" : "показать все линии";
+      resume.onclick = () => this.resumeTraffic();
+      const opening = inspector.hidden;
+      this.root.classList.add("is-inspecting");
+      const mainPanel = this.root.querySelector(".home-panel-shell");
+      mainPanel?.setAttribute("inert", "");
+      mainPanel?.setAttribute("aria-hidden", "true");
+      inspector.hidden = false;
+      this.placeTrafficInspector(inspector);
+      if (opening) {
+        inspector.animate(this.reducedMotion.matches
+          ? [{ opacity: .35 }, { opacity: 1 }]
+          : [{ opacity: 0, transform: "translateY(8px) scale(.98)" }, { opacity: 1, transform: "translateY(0) scale(1)" }],
+          { duration: 200, easing: "cubic-bezier(.23,1,.32,1)" });
+        resume.focus({ preventScroll: true });
+      }
+      const hint = this.root.querySelector("[data-traffic-hint]");
+      if (hint) hint.hidden = true;
+    }
+
+    placeTrafficInspector(inspector) {
+      const width = inspector.offsetWidth, height = inspector.offsetHeight;
+      const candidates = [{ x: 22, y: Math.max(70, this.height - height - 86) }, { x: 22, y: 70 }];
+      if (this.width >= 1180) candidates.unshift({ x: this.width - width - 64, y: Math.max(70, (this.height - height) / 2) });
+      if (this.root.classList.contains("is-zoomed") || this.root.classList.contains("is-immersive"))
+        candidates.push({ x: Math.max(22, this.width - width - 22), y: 70 });
+      for (const candidate of candidates) {
+        candidate.score = Object.values(this.projectedNodes).reduce((score, point) => {
+          if (point.z <= 0) return score;
+          const overlapX = Math.max(0, Math.min(candidate.x + width, point.x + 100) - Math.max(candidate.x, point.x - 100));
+          const overlapY = Math.max(0, Math.min(candidate.y + height, point.y + 44) - Math.max(candidate.y, point.y - 44));
+          return score + overlapX * overlapY;
+        }, 0);
+      }
+      candidates.sort((a, b) => a.score - b.score);
+      inspector.style.left = candidates[0].x + "px";
+      inspector.style.top = candidates[0].y + "px";
+      inspector.style.bottom = "auto";
+    }
+
+    renderOverlay(colors) {
+      const liveContext = this.context;
+      this.context = this.overlayContext;
+      try {
+        this.context.clearRect(0, 0, this.width, this.height);
+        this.drawRoutes(colors);
+        this.drawNodes(colors);
+      } finally {
+        this.context = liveContext;
+      }
+      this.overlayDirty = false;
+    }
+
     activeRouteNodeKeys() {
+      if (this.trafficActive) return ROUTES[this.autoExitRouteKey]?.nodes || [];
       if (this.route === "auto") {
         if (this.autoExitRouteKey && ROUTES[this.autoExitRouteKey]) return ROUTES[this.autoExitRouteKey].nodes;
         const key = COUNTRY_EXIT_KEYS[this.autoExitCountry];
@@ -1177,199 +1455,309 @@
       return ROUTES[this.route].nodes;
     }
 
-    activeRouteDefinition() {
-      if (this.route === "auto") {
-        if (this.autoExitRouteKey && ROUTES[this.autoExitRouteKey]) return ROUTES[this.autoExitRouteKey];
-        if (this.connected) return null;
-      }
-      return ROUTES[this.route] || null;
-    }
-
     drawNode(key, location, colors, kind) {
-      const active = kind === "user" || this.activeRouteNodeKeys().includes(key);
-      if (this.connected && kind !== "user" && !active) return;
       const context = this.context;
       const projected = this.projectLocation(location, 1.008);
       this.projectedNodes[key] = projected;
       if (projected.z <= 0.015) return;
+      const isUser = kind === "user";
+      const isExit = !isUser && this.activeRouteNodeKeys().includes(key);
+      const isCandidate = !isUser && !isExit && ((this.route === "auto" && ROUTES.auto.nodes.includes(key)) || this.availableLocationKeys.has(key));
       const hovered = this.hovered === key;
-      const outer = active || hovered ? (hovered ? 12 : 8) : 0;
+
+      let nodeFill = "#60A5FA";
+      let nodeStroke = "#93C5FD";
+      let haloColor = "rgba(96, 165, 250, 0.18)";
+      let nodeRadius = 3.8;
+
+      if (hovered) {
+        nodeFill = "#FFFFFF";
+        nodeStroke = "#FFFFFF";
+        haloColor = "rgba(255, 255, 255, 0.4)";
+        nodeRadius = 5.6;
+      } else if (isUser) {
+        nodeFill = "#38BDF8";
+        nodeStroke = "#BAE6FD";
+        haloColor = "rgba(56, 189, 248, 0.32)";
+        nodeRadius = 5.0;
+      } else if (isExit) {
+        nodeFill = "#10B981";
+        nodeStroke = "#6EE7B7";
+        haloColor = "rgba(16, 185, 129, 0.35)";
+        nodeRadius = 5.0;
+      } else if (isCandidate) {
+        nodeFill = "#60A5FA";
+        nodeStroke = "#93C5FD";
+        haloColor = "rgba(96, 165, 250, 0.18)";
+        nodeRadius = 3.8;
+      }
+
+      const outer = (hovered || isUser || isExit) ? (hovered ? 13 : 9) : (isCandidate ? 6 : 0);
       if (outer) {
         context.beginPath();
         context.arc(projected.x, projected.y, outer, 0, TAU);
-        context.fillStyle = kind === "user" ? "rgba(117,216,255,.16)" : "rgba(83,101,246,.08)";
+        context.fillStyle = haloColor;
         context.fill();
-        context.globalAlpha = 1;
       }
       context.beginPath();
-      context.arc(projected.x, projected.y, hovered ? 5 : active ? 4.1 : 2.1, 0, TAU);
-      context.fillStyle = kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.landDim;
-      context.shadowColor = kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.border;
-      context.shadowBlur = hovered ? 18 : active ? 12 : 3;
+      context.arc(projected.x, projected.y, nodeRadius, 0, TAU);
+      context.fillStyle = nodeFill;
+      context.shadowColor = nodeFill;
+      context.shadowBlur = hovered ? 18 : isUser || isExit ? 12 : 5;
       context.fill();
       context.shadowBlur = 0;
-      if (active || hovered) {
-        context.beginPath();
-        context.arc(projected.x, projected.y, hovered ? 5 : 4.1, 0, TAU);
-        context.lineWidth = 1;
-        context.strokeStyle = kind === "user" ? colors.node : colors.routeHot;
-        context.stroke();
-      }
+
+      context.beginPath();
+      context.arc(projected.x, projected.y, nodeRadius, 0, TAU);
+      context.lineWidth = isUser || isExit || hovered ? 1.6 : 1.2;
+      context.strokeStyle = nodeStroke;
+      context.stroke();
     }
 
     drawLabel(key, colors, occupied) {
       const point = this.projectedNodes[key];
-      if (!point || point.z <= .03) return;
-      if (window.DeyttAtlasBridge && !this.isAndroidViewportAnchorVisible(point)) return;
-      if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
-      const active = key === "user" || this.activeRouteNodeKeys().includes(key);
-      if (this.connected && key !== "user" && !active) return;
-      const autoCandidate = !this.connected && this.route === "auto" && ROUTES.auto.nodes.includes(key);
-      if (!active && !autoCandidate && this.hovered !== key) return;
-      const context = this.context;
-      const location = key === "user" ? this.userLocation : LOCATIONS[key];
-      const compact = this.width < 520;
-      const labelScale = this.options.labelScale || 1;
-      const baseOffset = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
-      const offset = { x: baseOffset.x * labelScale, y: baseOffset.y * labelScale, align: baseOffset.align };
-      const title = key === "user" ? (this.copy(location.city) || this.copy("ваша сеть")) : this.copy(location.city);
-      const meta = key === "user" ? (location.country || this.copy("вход в сеть")) : location.code + " · " + this.copy(location.country);
-      const titleFontSize = Math.round((compact ? 9 : 10) * labelScale);
-      const metaFontSize = Math.round((compact ? 7 : 8) * labelScale);
-      const inset = Math.round((compact ? 10 : 12) * labelScale);
-      const height = Math.round((compact ? 35 : 39) * labelScale);
-      const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
-      const titleFont = "700 " + titleFontSize + "px " + fontFamily;
-      const metaFont = "600 " + metaFontSize + "px " + fontFamily;
-      context.save();
-      context.font = titleFont;
-      const titleWidth = context.measureText(title).width;
-      context.font = metaFont;
-      const width = Math.max(titleWidth, context.measureText(meta).width) + inset * 2;
-      const preferredSide = this.connected && window.DeyttAtlasBridge ? (key === "user" ? 1 : -1) : 0;
-      // Prefer nearby labels; score all alternatives instead of falling back
-      // to (8,8), which detached crowded user labels from their actual pin.
-      const alternatives = key === "ru" ? [
-        offset,
-        { x: 18 * labelScale, y: -height / 2 - 32 * labelScale, align: "left" },
-        { x: -width / 2, y: -height - 28 * labelScale, align: "left" },
-        { x: -14 * labelScale, y: -height / 2 - 32 * labelScale, align: "right" },
-        { x: 18 * labelScale, y: height / 2 + 18 * labelScale, align: "left" },
-        { x: -width / 2, y: height + 24 * labelScale, align: "left" }
-      ] : [
-        offset,
-        { x: 14 * labelScale, y: -height / 2 - 12 * labelScale, align: "left" },
-        { x: -14 * labelScale, y: -height / 2 - 12 * labelScale, align: "right" },
-        { x: 14 * labelScale, y: height / 2 + 12 * labelScale, align: "left" },
-        { x: -14 * labelScale, y: height / 2 + 12 * labelScale, align: "right" },
-        { x: -width / 2, y: -height - 30 * labelScale, align: "left" },
-        { x: -width / 2, y: height + 30 * labelScale, align: "left" }
-      ];
-      const previousPlacement = this.labelPlacements.get(key);
-      let placementIndex = -1;
-      let bestScore = Infinity;
-      for (let index = 0; index < alternatives.length; index += 1) {
-        const candidate = alternatives[index];
-        const candidateLeft = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
-        const candidateTop = clamp(point.y + candidate.y - height / 2, 8, this.height - height - 8);
-        const overlapsLabel = occupied.some(label =>
-          candidateLeft < label.left + label.width + 5 && candidateLeft + width + 5 > label.left &&
-          candidateTop < label.top + label.height + 5 && candidateTop + height + 5 > label.top);
-        const coversPin = Object.values(this.projectedNodes).some(p => p.z > .03 &&
-          p.x > candidateLeft - 5 && p.x < candidateLeft + width + 5 &&
-          p.y > candidateTop - 5 && p.y < candidateTop + height + 5);
-        const routeCrossings = this.routeSegments.reduce((count, segment) => count + Number(
-          segment.left < candidateLeft + width + 4 && segment.right > candidateLeft - 4 &&
-          segment.top < candidateTop + height + 4 && segment.bottom > candidateTop - 4), 0);
-        const dx = point.x - clamp(point.x, candidateLeft, candidateLeft + width);
-        const dy = point.y - clamp(point.y, candidateTop, candidateTop + height);
-        const oppositeSide = preferredSide > 0 ? candidateLeft < point.x + 5 :
-          preferredSide < 0 && candidateLeft + width > point.x - 5;
-        const score = (coversPin ? 1e9 : 0) + (overlapsLabel ? 1e8 : 0) + routeCrossings * 1e5 +
-          (oppositeSide ? CONNECTED_LABEL_SIDE_PENALTY : 0) +
-          dx * dx + dy * dy + (candidate.y > 0 ? 900 : 0) - (previousPlacement === index ? 30 : 0);
-        if (score < bestScore) { bestScore = score; placementIndex = index; }
-      }
-      if (placementIndex < 0) { context.restore(); return; }
-      this.labelPlacements.set(key, placementIndex);
-      const placement = alternatives[placementIndex];
-      const left = clamp(point.x + placement.x - (placement.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
-      const top = clamp(point.y + placement.y - height / 2, 8, this.height - height - 8);
-      const labelOverlap = occupied.some(label => left < label.left + label.width + 5 && left + width + 5 > label.left &&
-        top < label.top + label.height + 5 && top + height + 5 > label.top);
-      const pinOverlap = Object.values(this.projectedNodes).some(p => p.z > .03 &&
-        p.x > left - 5 && p.x < left + width + 5 && p.y > top - 5 && p.y < top + height + 5);
-      const routeOverlap = this.routeSegments.some(segment =>
-        segment.left < left + width + 4 && segment.right > left - 4 &&
-        segment.top < top + height + 4 && segment.bottom > top - 4);
-      // Keep pins visible when a dense route leaves no collision-free label slot.
-      if (labelOverlap || pinOverlap || routeOverlap) {
-        context.restore();
+      if (!point || point.z <= 0.05) {
+        if (this.domLabels && this.domLabels.has(key)) {
+          this.domLabels.get(key).style.display = "none";
+        }
         return;
       }
-      const endX = clamp(point.x, left + 5, left + width - 5);
-      const endY = clamp(point.y, top + 5, top + height - 5);
+      if (point.x < -120 || point.x > this.width + 120 || point.y < -120 || point.y > this.height + 120) {
+        if (this.domLabels && this.domLabels.has(key)) {
+          this.domLabels.get(key).style.display = "none";
+        }
+        return;
+      }
+      if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
+      if (this.trafficActive && key !== "user" && !this.activeRouteNodeKeys().includes(key)) return;
+
+      const isUser = key === "user";
+      const isExit = !isUser && this.activeRouteNodeKeys().includes(key);
+      const active = isUser || isExit;
+      const isHovered = this.hovered === key;
+      const context = this.context;
+      const location = isUser ? this.userLocation : LOCATIONS[key];
+      if (!location) return;
+
+      const compact = this.width < 820;
+      const countryNames = { RU: "россия", NL: "нидерланды", DE: "германия", FI: "финляндия", IT: "италия" };
+      
+      const title = isUser
+        ? (this.copy(location.city) || this.copy("ваша сеть"))
+        : this.copy(location.city || location.country);
+      const meta = isUser
+        ? this.copy(countryNames[location.country?.toUpperCase()] || location.country || "вход в сеть")
+        : this.copy(location.country);
+
+      const height = 34;
+      const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
+
+      this._labelWidthCache = this._labelWidthCache || new Map();
+      const cacheKey = `${key}_${compact ? 1 : 0}_${title}_${meta}`;
+      let width = this._labelWidthCache.get(cacheKey);
+      if (!width) {
+        context.save();
+        context.font = "600 11.5px " + fontFamily;
+        const titleWidth = context.measureText(title).width;
+        context.font = "500 9.5px " + fontFamily;
+        const metaWidth = meta ? context.measureText(meta).width : 0;
+        context.restore();
+        const textWidth = Math.max(titleWidth, metaWidth);
+        width = Math.round(textWidth + 35);
+        this._labelWidthCache.set(cacheKey, width);
+      }
+
+      // Smooth horizon dissolve as node approaches the curved edge of the globe
+      const horizonFade = clamp((point.z - 0.05) / 0.17, 0, 1);
+      const totalAlpha = (active || isHovered ? 0.95 : 0.75) * horizonFade;
+
+      const preferredOffset = (compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key]) || { x: 22, y: -22, align: "left" };
+      const candidates = [];
+      const seenOffsets = new Set();
+      const addCandidate = (candidate) => {
+        if (!candidate) return;
+        const id = `${candidate.x}:${candidate.y}:${candidate.align}`;
+        if (seenOffsets.has(id)) return;
+        seenOffsets.add(id);
+        const left = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0),
+          8, Math.max(8, this.width - width - 8));
+        const top = clamp(point.y + candidate.y - height / 2, 8, Math.max(8, this.height - height - 8));
+        candidates.push({ ...candidate, left, top });
+      };
+      addCandidate(this.labelPlacements.get(key));
+      addCandidate(preferredOffset);
+      const originLabel = key === "ru" && /^(уфа|ufa)(?:$|[,\s])/i.test(String(this.userLocation?.city || ""))
+        ? occupied.find(box => box.key === "user") : null;
+      if (originLabel) {
+        const y = originLabel.top - height / 2 - 8 - point.y;
+        addCandidate({ x: preferredOffset.x, y, align: preferredOffset.align });
+        addCandidate({ x: -22, y, align: "right" });
+      }
+      for (const align of [preferredOffset.align, preferredOffset.align === "right" ? "left" : "right"]) {
+        const x = align === preferredOffset.align
+          ? preferredOffset.x
+          : align === "right" ? -22 : 22;
+        for (const y of [0, preferredOffset.y, -42, 42, -84, 84, -126, 126, -168, 168])
+          addCandidate({ x, y, align });
+      }
+      const collides = (candidate) => (originLabel && candidate.top + height + 8 > originLabel.top) || occupied.some(box =>
+        candidate.left < box.left + box.width + 8 && candidate.left + width + 8 > box.left &&
+        candidate.top < box.top + box.height + 8 && candidate.top + height + 8 > box.top);
+      const offset = candidates.find(candidate => !collides(candidate));
+      if (!offset) {
+        this.labelPlacements.delete(key);
+        const el = this.domLabels?.get(key);
+        if (el) {
+          el.style.display = "none";
+          el._currentDisplay = "none";
+        }
+        return;
+      }
+      this.labelPlacements.set(key, { x: offset.x, y: offset.y, align: offset.align });
+
+      // Sub-pixel precision: DO NOT round left, top, endX, endY!
+      // This eliminates accordion stretching of the leader line and sub-pixel snapping jitter.
+      const left = offset.left;
+      const top = offset.top;
+      const endX = offset.align === "right" ? left + width : left;
+      const endY = top + height / 2;
+
+      // Draw rigid, perfectly locked leader line on canvas
+      const leaderColor = isHovered ? "#FFFFFF" : isUser ? "#38BDF8" : isExit ? "#34D399" : "#60A5FA";
+      context.save();
       context.beginPath();
       context.moveTo(point.x, point.y);
       context.lineTo(endX, endY);
-      context.strokeStyle = key === "user" ? colors.node : active ? "#38BDF8" : colors.border;
-      context.lineWidth = 1;
-      context.globalAlpha = active ? .75 : .35;
+      context.strokeStyle = leaderColor;
+      context.lineWidth = active || isHovered ? 1.1 : 0.85;
+      context.globalAlpha = totalAlpha;
       context.stroke();
 
-      occupied.push({ left: left, top: top, width: width, height: height });
       context.beginPath();
-      context.roundRect(left, top, width, height, Math.round((compact ? 10 : 12) * labelScale));
-      context.fillStyle = colors.labelBg;
-      context.globalAlpha = active ? .96 : .68;
-      context.shadowColor = "rgba(16,29,65,.22)";
-      context.shadowBlur = 18;
+      context.arc(point.x, point.y, 1.8, 0, TAU);
+      context.fillStyle = leaderColor;
+      context.globalAlpha = totalAlpha;
       context.fill();
-      context.shadowBlur = 0;
-      context.strokeStyle = this.hovered === key ? (colors.borderHot || "#38BDF8") : active ? "#38BDF8" : colors.border;
-      context.globalAlpha = active ? (this.hovered === key ? .9 : .65) : .35;
-      context.lineWidth = 1;
-      context.stroke();
-
-      context.textBaseline = "middle";
-      context.textAlign = "left";
-      context.fillStyle = active ? colors.label : colors.labelMuted;
-      context.globalAlpha = 1;
-      context.font = titleFont;
-      context.fillText(title.toLowerCase(), left + inset, top + Math.round((compact ? 11 : 12) * labelScale));
-      context.fillStyle = colors.labelMuted;
-      context.font = metaFont;
-      context.fillText(meta.toLowerCase(), left + inset, top + Math.round((compact ? 25 : 28) * labelScale));
       context.restore();
+
+      const labelBox = { key, left, top, width, height, leader: [point, { x: endX, y: endY }] };
+      occupied.push(labelBox);
+      this.labelBoxes.push(labelBox);
+
+      // 1:1 Synchronous hardware-accelerated True Liquid Glass DOM Annotation
+      if (this.labelContainer) {
+        let el = this.domLabels.get(key);
+        if (!el) {
+          el = document.createElement("div");
+          el.className = "atlas-glass-label";
+          el.setAttribute("data-label-key", key);
+          el.onclick = (e) => {
+            e.stopPropagation();
+            if (typeof window.deyttSelectRouteFromAtlas === "function") {
+              window.deyttSelectRouteFromAtlas(key);
+            }
+          };
+          el.onpointerenter = () => {
+            this.setHovered(key);
+          };
+          el.onpointerleave = () => {
+            if (this.hovered === key) this.setHovered(null);
+          };
+          this.labelContainer.appendChild(el);
+          this.domLabels.set(key, el);
+        }
+
+        this.activeLabelsThisFrame.add(key);
+
+        const newClass = "atlas-glass-label" +
+          (isUser ? " is-user" : "") +
+          (isExit ? " is-exit" : "") +
+          (isHovered ? " is-hovered" : "") +
+          (offset.align === "right" ? " is-align-right" : "");
+        if (el.className !== newClass) {
+          el.className = newClass;
+        }
+
+        const expectedHtml = `<span class="atlas-glass-label__pip"></span><div class="atlas-glass-label__col"><span class="atlas-glass-label__title">${title}</span>${meta ? `<span class="atlas-glass-label__country">${meta}</span>` : ""}</div>`;
+        if (el._currentHtml !== expectedHtml) {
+          el.innerHTML = expectedHtml;
+          el._currentHtml = expectedHtml;
+        }
+
+        if (horizonFade <= 0.02) {
+          if (el._currentDisplay !== "none") {
+            el.style.display = "none";
+            el._currentDisplay = "none";
+          }
+        } else {
+          if (el._currentDisplay !== "inline-flex") {
+            el.style.display = "inline-flex";
+            el._currentDisplay = "inline-flex";
+          }
+          const widthVal = width + "px";
+          if (el._currentWidth !== widthVal) {
+            el.style.width = widthVal;
+            el._currentWidth = widthVal;
+          }
+          const transformVal = `translate3d(${left.toFixed(2)}px, ${top.toFixed(2)}px, 0)`;
+          if (el._currentTransform !== transformVal) {
+            el.style.transform = transformVal;
+            el._currentTransform = transformVal;
+          }
+          const opacityVal = (isHovered ? 1 : horizonFade).toFixed(2);
+          if (el._currentOpacity !== opacityVal) {
+            el.style.opacity = opacityVal;
+            el._currentOpacity = opacityVal;
+          }
+        }
+      }
     }
 
     drawNodes(colors) {
       this.projectedNodes = {};
+      this.activeLabelsThisFrame = new Set();
       LOCATION_ORDER.forEach((key) => {
         if (this.availableLocationKeys.has(key)) this.drawNode(key, LOCATIONS[key], colors, "server");
       });
       if (this.userLocation) this.drawNode("user", this.userLocation, colors, "user");
-    }
-
-    drawLabels(colors) {
-      const occupied = [];
-      if (this.hovered) this.drawLabel(this.hovered, colors, occupied);
-      if (this.userLocation && this.hovered !== "user") this.drawLabel("user", colors, occupied);
-      LOCATION_ORDER.forEach((key) => {
-        if (this.availableLocationKeys.has(key) && this.hovered !== key) this.drawLabel(key, colors, occupied);
+      this.labelBoxes = [];
+      const occupied = (this.occupiedObstacles || this.updateOccupiedObstacles()).slice();
+      const labelOrder = [];
+      const addLabel = (key) => { if (key && !labelOrder.includes(key)) labelOrder.push(key); };
+      if (this.userLocation) addLabel("user");
+      this.activeRouteNodeKeys().forEach(addLabel);
+      LOCATION_ORDER.slice().sort((a, b) => (this.projectedNodes[a]?.y || 0) - (this.projectedNodes[b]?.y || 0)).forEach((key) => {
+        if (this.availableLocationKeys.has(key)) addLabel(key);
       });
-    }
+      addLabel(this.hovered);
+      labelOrder.forEach((key) => {
+        if (key === "user" ? this.userLocation : this.availableLocationKeys.has(key))
+          this.drawLabel(key, colors, occupied);
+      });
 
-    isAndroidViewportAnchorVisible(point) {
-      return point.x >= 0 && point.x <= this.width && point.y >= 0 && point.y <= this.height;
+      // Hide any DOM label not active on this frame
+      if (this.domLabels) {
+        this.domLabels.forEach((el, key) => {
+          if (!this.activeLabelsThisFrame.has(key)) {
+            if (el._currentDisplay !== "none") {
+              el.style.display = "none";
+              el._currentDisplay = "none";
+            }
+          }
+        });
+      }
     }
 
     renderStatic(colors) {
       const liveContext = this.context;
       const context = this.staticContext;
+      const liveZoom = this.zoom;
+      const liveX = this.centerX, liveY = this.centerY;
+      this.staticCamera = { zoom: this.zoom, x: this.centerX, y: this.centerY };
       this.context = context;
       try {
-        context.clearRect(0, 0, this.width, this.height);
+        const padding = this.staticPadding || 0;
+        context.clearRect(-padding, -padding, this.width + padding * 2, this.height + padding * 2);
         this.drawSphere(colors);
         context.save();
         context.beginPath();
@@ -1382,154 +1770,193 @@
         context.restore();
       } finally {
         this.context = liveContext;
+        this.zoom = liveZoom;
+        this.centerX = liveX;
+        this.centerY = liveY;
       }
       this.staticDirty = false;
       this.staticRenderCount += 1;
     }
 
-    overlaySignature(colors) {
-      const root = document.documentElement;
-      return JSON.stringify([
-        this.staticRenderCount, this.width, this.height, this.pixelRatio,
-        this.centerLon, this.centerLat, this.zoom, this.centerX, this.centerY, this.radius,
-        root.dataset.theme, root.dataset.atlasPalette, root.dataset.atlasBackdrop,
-        this.root.classList.contains("is-backdrop-stage"), colors,
-        this.variant, this.showcaseFocused, this.overviewMode, this.connected, this.hovered,
-        this.route, this.autoExitCountry, this.autoExitRouteKey,
-        Array.from(this.availableLocationKeys).sort(), this.userLocation, this.language,
-        this.annotationFilter && Array.from(this.annotationFilter).sort(), this.selectedTrafficFlow,
-        this.options.labelScale, this.options.labelFontFamily
-      ]);
-    }
-
-    renderOverlayCache(colors, time) {
-      const liveContext = this.context;
-      try {
-        this.context = this.routeOverlayContext;
-        this.context.clearRect(0, 0, this.width, this.height);
-        this.routeSegments = [];
-        this.cachedRouteLinks = this.drawRoutes(colors, time, false);
-
-        this.context = this.foregroundOverlayContext;
-        this.context.clearRect(0, 0, this.width, this.height);
-        this.drawNodes(colors);
-        this.drawLabels(colors);
-      } finally {
-        this.context = liveContext;
+    placeStaticCanvas() {
+      if (!this.staticCamera) return;
+      const scale = this.zoom / this.staticCamera.zoom;
+      const x = this.centerX - this.staticCamera.x * scale;
+      const y = this.centerY - this.staticCamera.y * scale;
+      if (Math.abs(scale - 1) < 0.001 && Math.abs(x) < 0.1 && Math.abs(y) < 0.1) {
+        if (this.staticCanvas.style.transform !== "") {
+          this.staticCanvas.style.transform = "";
+        }
+        return;
       }
-      this.overlayCacheSignature = this.overlaySignature(colors);
-      this.overlayCacheBuildCount += 1;
+      this.staticCanvas.style.transformOrigin = `${this.staticPadding || 0}px ${this.staticPadding || 0}px`;
+      this.staticCanvas.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
     }
 
     render(time) {
       this.frame = 0;
-      if (!this.visible || document.hidden || !this.width) return;
-      if (window.DeyttAtlasBridge && !this.viewportAnchor) return;
-      const idleActive = this.idleMotionStart > 0 && this.variant === "home" && !this.reducedMotion.matches;
-      const idleCycle = idleActive ? ((time - this.idleMotionStart) / 8000) * TAU : 0;
-      const nextIdleOffset = idleActive ? Math.sin(idleCycle) * 5.8 : 0;
-      const nextIdleLatOffset = idleActive ? Math.cos(idleCycle) * 2.2 : 0;
-      if (Math.abs(nextIdleOffset - this.idleMotionOffset) > .001 || Math.abs(nextIdleLatOffset - (this.idleMotionLatOffset || 0)) > .001) this.staticDirty = true;
-      this.idleMotionOffset = nextIdleOffset;
-      this.idleMotionLatOffset = nextIdleLatOffset;
-      const cameraMoving = idleActive || this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
+      if (!this.hostActive || !this.visible || document.hidden || !this.width) return;
+      const wasCameraMoving = this.cameraMoving;
+      const cameraMoving = this.dragging || Math.abs(this.velocityLon) > .001 || Math.abs(this.velocityLat || 0) > .001 || Math.abs(this.targetCenterY - this.centerY) > .5 || Math.abs(this.targetCenterX - this.centerX) > .5 || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
-      // Static geography and route overlays stay cached; only packets change each frame.
+      if (cameraMoving !== this.interactionQuality) this.setInteractionQuality(cameraMoving);
       const elapsed = this.lastFrame ? time - this.lastFrame : 16;
       const delta = Math.min(48, elapsed);
       this.lastFrame = time;
       const previousLon = this.centerLon;
       const previousLat = this.centerLat;
       const previousZoom = this.zoom;
+      const previousCenterX = this.centerX;
+      const previousCenterY = this.centerY;
+      this.centerX = mix(this.centerX, this.targetCenterX, this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS));
+      this.centerY = mix(this.centerY, this.targetCenterY, this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS));
+      if (Math.abs(this.targetCenterX - this.centerX) < .1) this.centerX = this.targetCenterX;
+      if (Math.abs(this.targetCenterY - this.centerY) < .1) this.centerY = this.targetCenterY;
       if (!this.dragging) {
-        this.targetLon += this.velocityLon;
-        this.velocityLon *= .86;
-        if (Math.abs(this.velocityLon) < .004) this.velocityLon = 0;
+        if (Math.abs(this.velocityLon) > 0.001 || Math.abs(this.velocityLat || 0) > 0.001) {
+          // Direct Newtonian glide in zero-gravity: frameScale accounts for variable display refresh (60Hz, 120Hz, 144Hz)
+          const frameScale = Math.min(3, Math.max(0.1, delta / 16.667));
+          this.centerLon += this.velocityLon * frameScale;
+          if (this.velocityLat) {
+            this.centerLat = clamp(this.centerLat + this.velocityLat * frameScale, -62, 72);
+          }
+          this.targetLon = this.centerLon;
+          this.targetLat = this.centerLat;
+
+          // Float like in zero-gravity: continuous exponential decay ensures 60-144+ FPS smoothness
+          const friction = Math.exp(-2.2 * delta / 1000);
+          this.velocityLon *= friction;
+          if (this.velocityLat) {
+            this.velocityLat *= friction;
+            if (Math.abs(this.velocityLat) < 0.002) this.velocityLat = 0;
+          }
+          if (Math.abs(this.velocityLon) < 0.002) this.velocityLon = 0;
+        } else {
+          // Target easing (when clicking a route/node, smooth camera glide to destination)
+          const panBlend = this.reducedMotion.matches ? 1 : (1 - Math.exp(-Math.max(1, delta) / PAN_EASE_MS));
+          this.centerLon = mix(this.centerLon, this.targetLon, panBlend);
+          this.centerLat = mix(this.centerLat, this.targetLat, panBlend);
+          if (Math.abs(this.targetLon - this.centerLon) < 0.005) this.centerLon = this.targetLon;
+          if (Math.abs(this.targetLat - this.centerLat) < 0.005) this.centerLat = this.targetLat;
+        }
       }
-      // Pointer events already arrive as the user's input stream. Interpolating
-      // targetLon a second time made the globe visibly trail and then catch up.
-      const panBlend = this.reducedMotion.matches || this.dragging ? 1 : 1 - Math.exp(-Math.max(1, delta) / PAN_EASE_MS);
-      this.centerLon = mix(this.centerLon, this.targetLon, panBlend);
-      this.centerLat = mix(this.centerLat, this.targetLat, panBlend);
       const zoomBlend = this.reducedMotion.matches ? 1 : 1 - Math.exp(-Math.max(1, delta) / ZOOM_EASE_MS);
       this.zoom = mix(this.zoom, this.targetZoom, zoomBlend);
       // The animation loop intentionally stops at these same visual
       // tolerances. Snap the final sub-pixel remainder now so the next hover
       // cannot wake the camera and force a needless geography redraw.
-      if (Math.abs(this.targetLon - this.centerLon) < .01) this.centerLon = this.targetLon;
-      if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
       if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
+      // Rotation changes the 3D perspective, so it requires static geography redraw.
       if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001) {
-        this.staticDirty = true;
-      } else if (Math.abs(this.zoom - previousZoom) > .0001 && (!this.staticCamera || Math.abs(this.zoom - this.staticCamera.zoom) > 0.25)) {
-        this.staticDirty = true;
+        this.markMapDirty();
+      } else if (Math.abs(this.centerY - previousCenterY) > .001 || Math.abs(this.centerX - previousCenterX) > .001 || Math.abs(this.zoom - previousZoom) > .0001) {
+        // Zoom and pan are smoothly handled by GPU CSS transform in placeStaticCanvas(); only the overlay labels/particles update.
+        this.overlayDirty = true;
       }
-      const cameraSettled = !idleActive && !this.dragging && Math.abs(this.targetLon - this.centerLon) <= .01 &&
-        Math.abs(this.targetLat - this.centerLat) <= .01 && Math.abs(this.targetZoom - this.zoom) <= .002 && Math.abs(this.velocityLon) <= .001;
+      if (this.staticCamera) {
+        const scale = this.zoom / this.staticCamera.zoom;
+        const x = this.centerX - this.staticCamera.x * scale;
+        const y = this.centerY - this.staticCamera.y * scale;
+        const affineSettled = Math.abs(this.targetZoom - this.zoom) < 0.002 && Math.abs(this.targetCenterX - this.centerX) < 0.1 && Math.abs(this.targetCenterY - this.centerY) < 0.1;
+        // Re-rasterize static layer crisply once zoom/pan settles, or if scale deviation is large
+        if ((affineSettled && (scale !== 1 || x !== 0 || y !== 0)) || (wasCameraMoving && !cameraMoving) || scale < 0.65 || scale > 1.45) {
+          this.staticDirty = true;
+        }
+      }
       this.currentBasis = this.basis();
       this.context.clearRect(0, 0, this.width, this.height);
       const colors = this.colors();
       if (this.staticDirty) this.renderStatic(colors);
-      this.context.drawImage(this.staticCanvas, 0, 0, this.width, this.height);
-      if (!cameraSettled) {
-        this.routeSegments = [];
-        this.drawRoutes(colors, time);
-        if (this.connectionAnimationActive(time)) this.drawConnectionAnimation(time);
-        this.drawNodes(colors);
-        this.drawLabels(colors);
-      } else {
-        const signature = this.overlaySignature(colors);
-        if (signature !== this.overlayCacheSignature) this.renderOverlayCache(colors, time);
-        this.context.drawImage(this.routeOverlayCanvas, 0, 0, this.width, this.height);
-        const activeLinks = (this.cachedRouteLinks && this.cachedRouteLinks.length) ? this.cachedRouteLinks : (this.cachedRouteLinks = this.routeLinks());
-        if (this.trafficActive) this.drawTraffic(activeLinks, time || performance.now());
-        if (this.connectionAnimationActive(time)) this.drawConnectionAnimation(time);
-        this.context.drawImage(this.foregroundOverlayCanvas, 0, 0, this.width, this.height);
+      this.placeStaticCanvas();
+      if (this.overlayDirty) this.renderOverlay(colors);
+      // The browser composites the two persistent map layers. Only particle
+      // pixels change on this canvas; no full globe bitmap copy per frame.
+      if ((this.autoSelecting || this.trafficActive) && !this.reducedMotion.matches) {
+        const selecting = this.autoSelecting && this.route === "auto";
+        const keys = (selecting ? ROUTES.auto.nodes : this.activeRouteNodeKeys())
+          .filter(key => this.availableLocationKeys.has(key));
+        keys.forEach((key, index) => {
+          const pulse = ((time || performance.now()) / (selecting ? 1600 : 2600) + index * .23) % 1;
+          const point = this.projectedNodes[key];
+          if (!point || point.z <= .03) return;
+          this.context.save();
+          this.context.globalAlpha = Math.sin(pulse * Math.PI) * (selecting ? .85 : .55);
+          this.context.beginPath(); this.context.arc(point.x, point.y, 6 + pulse * (selecting ? 13 : 10), 0, TAU);
+          this.context.strokeStyle = colors.node; this.context.lineWidth = 3.8; this.context.stroke();
+          this.context.strokeStyle = colors.nodeCore; this.context.lineWidth = 2; this.context.stroke();
+          this.context.restore();
+        });
       }
+      if (this.trafficActive) this.drawTraffic(colors, time || performance.now());
+      else this.packetHits = [];
       this.renderCount += 1;
-      const cameraNeedsFrames = Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001;
-      const connectionAnim = this.connectionAnimationActive(time);
-      if (cameraNeedsFrames || connectionAnim || (this.trafficActive && !this.reducedMotion.matches)) this.start();
-      else if (idleActive && !this.idleFrameTimer) {
-        this.idleFrameTimer = window.setTimeout(() => {
-          this.idleFrameTimer = 0;
-          this.start();
-        }, 40);
-      }
+      // Complete one final frame after easing snaps to its target. This also
+      // clears the moving state when reduced motion completes in a single step.
+      if (this.dragging || cameraMoving || Math.abs(this.targetCenterY - this.centerY) > .1 || Math.abs(this.targetCenterX - this.centerX) > .1 || Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || Math.abs(this.velocityLat || 0) > .001 || ((this.trafficActive && this.trafficPausedAt == null || this.autoSelecting) && !this.reducedMotion.matches)) this.start();
     }
 
-    resetIdleMotion() {
-      if (this.idleMotionTimer) window.clearTimeout(this.idleMotionTimer);
-      if (this.idleFrameTimer) window.clearTimeout(this.idleFrameTimer);
-      this.idleMotionTimer = 0;
-      this.idleFrameTimer = 0;
-      if (this.idleMotionOffset) {
-        this.centerLon += this.idleMotionOffset;
-        this.targetLon += this.idleMotionOffset;
-        this.idleMotionOffset = 0;
-        this.staticDirty = true;
-      }
-      if (this.idleMotionLatOffset) {
-        this.centerLat += this.idleMotionLatOffset;
-        this.targetLat += this.idleMotionLatOffset;
-        this.idleMotionLatOffset = 0;
-        this.staticDirty = true;
-      }
-      this.idleMotionStart = 0;
-      if (this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
-      this.idleMotionTimer = window.setTimeout(() => {
-        this.idleMotionTimer = 0;
-        if (this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
-        this.idleMotionStart = performance.now();
-        this.start();
-      }, 30000);
+    spinImpulse(speed = 4.5, latSpeed = 0) {
+      this.velocityLon = speed;
+      this.velocityLat = latSpeed;
+      this.targetLon = this.centerLon;
+      this.targetLat = this.centerLat;
+      this.start();
     }
 
     start() {
-      if (!this.frame && this.visible && !document.hidden) this.frame = requestAnimationFrame((time) => this.render(time));
+      if (!this.frame && this.hostActive && this.visible && !document.hidden) this.frame = requestAnimationFrame((time) => this.render(time));
+    }
+
+    setHostActive(active) {
+      if (this.hostActive === Boolean(active)) return;
+      this.hostActive = Boolean(active);
+      if (!this.hostActive) {
+        if (this.frame) cancelAnimationFrame(this.frame);
+        this.frame = 0;
+        this.lastFrame = 0;
+        this.dragging = false;
+        this.activePointers.forEach((_, id) => {
+          try { if (this.canvas.hasPointerCapture(id)) this.canvas.releasePointerCapture(id); } catch (_) { /* Native host may already be hidden. */ }
+        });
+        this.activePointers.clear();
+        this.velocityLon = 0;
+        this.hovered = null;
+        this.hoveredTrafficStream = null;
+        this.overlayDirty = true;
+        if (this.tooltip) this.tooltip.hidden = true;
+        clearTimeout(this.hintTimer);
+        const hint = this.root.querySelector("[data-traffic-hint]");
+        if (hint) hint.hidden = true;
+        this.hostPausedAt = performance.now();
+      } else {
+        if (this.hostPausedAt && this.trafficActive) {
+          const hiddenDuration = performance.now() - this.hostPausedAt;
+          this.trafficStartedAt += hiddenDuration;
+          if (this.trafficPausedAt != null) this.trafficPausedAt += hiddenDuration;
+        }
+        this.hostPausedAt = null;
+        this.lastFrame = 0;
+        this.resize();
+        this.start();
+      }
+    }
+
+    resumeHost() {
+      this.setHostActive(true);
+      if (this.frame) cancelAnimationFrame(this.frame);
+      this.frame = 0;
+      this.lastFrame = 0;
+      this.visible = true;
+      this.staticDirty = true;
+      this.overlayDirty = true;
+      this.resize();
+      this.start();
+      this.render(performance.now());
     }
 
     updateHover(pointer) {
+      const line = this.findLineAt(pointer, 12);
+      this.setHoveredTrafficStream(line?.stream.id);
       let nearest = null;
       let nearestDistance = 30;
       Object.keys(this.projectedNodes).forEach((key) => {
@@ -1539,26 +1966,27 @@
         if (distance < nearestDistance) { nearest = key; nearestDistance = distance; }
       });
       this.setHovered(nearest);
+      this.canvas.style.cursor = line || nearest ? "pointer" : this.dragging ? "grabbing" : "grab";
     }
 
     setHovered(key) {
       if (this.hovered === key) return;
       this.hovered = key;
-      this.canvas.style.cursor = key ? "pointer" : this.dragging ? "grabbing" : "grab";
-      // Hover invalidates only the foreground overlay, not the high-DPI geography.
       if (this.tooltip) this.tooltip.hidden = true;
+      this.overlayDirty = true;
       this.start();
     }
 
     setRoute(key, announce) {
       if (!ROUTES[key]) return;
-      this.resetIdleMotion();
+      if (this.routeInitialized && this.route === key) return;
       if (this.variant === "showcase" && announce !== false) this.showcaseFocused = true;
       const routeChanged = !this.routeInitialized || this.route !== key;
+      if (routeChanged && this.inspectingStream != null) this.resumeTraffic();
       this.route = key;
       this.routeInitialized = true;
       if (routeChanged) this.labelPlacements.clear();
-      this.staticDirty = true;
+      this.markMapDirty();
       this.root.querySelectorAll("[data-atlas-route]").forEach(function (button) {
         const active = button.dataset.atlasRoute === key;
         button.classList.toggle("is-active", active);
@@ -1601,21 +2029,23 @@
 
     setLanguage(language) {
       const nextLanguage = language === "en" ? "en" : "ru";
+      if (this.language === nextLanguage) return;
       if (this.language !== nextLanguage) this.labelPlacements.clear();
       this.language = nextLanguage;
       document.documentElement.lang = this.language;
-      document.title = (this.language === "en" ? "DEYTT network map" : "Карта сети DEYTT").toLowerCase();
+      document.title = (this.language === "en" ? "deytt network map" : "карта сети deytt").toLowerCase();
       const hint = this.root.querySelector(".network-atlas__hint");
       const loader = this.root.querySelector(".network-atlas__loader");
       if (hint) hint.textContent = (this.language === "en" ? "drag · pinch to zoom" : "потяните · два пальца — масштаб").toLowerCase();
-      if (loader) loader.textContent = (this.language === "en" ? "Loading map" : "Загружаю карту").toLowerCase();
+      if (loader) loader.textContent = (this.language === "en" ? "loading map" : "загружаю карту").toLowerCase();
       this.renderRouteCopy();
-      this.staticDirty = true;
+      this.markMapDirty();
       this.start();
     }
 
     setAnnotationFilter(keys) {
       this.annotationFilter = keys == null ? null : new Set(keys);
+      this.overlayDirty = true;
       this.start();
     }
 
@@ -1626,7 +2056,7 @@
       this.availableLocationKeys = next;
       this.labelPlacements.clear();
       this.focusRoute();
-      this.staticDirty = true;
+      this.markMapDirty();
       this.start();
     }
 
@@ -1645,34 +2075,34 @@
       // framing. Later IP-location refreshes update the endpoint in place so
       // a small geolocation correction cannot make the whole atlas jump.
       if (previousLocation == null || nextLocation == null) this.focusRoute();
-      this.staticDirty = true;
+      this.markMapDirty();
       this.start();
     }
 
     setAutoExitCountry(countryCode) {
       const nextCountry = String(countryCode || "").toUpperCase();
-      const nextKey = COUNTRY_EXIT_KEYS[nextCountry] && this.availableLocationKeys.has(COUNTRY_EXIT_KEYS[nextCountry])
+      const nextKey = ROUTES.auto.nodes.includes(COUNTRY_EXIT_KEYS[nextCountry]) && this.availableLocationKeys.has(COUNTRY_EXIT_KEYS[nextCountry])
         ? nextCountry
         : null;
       if (this.autoExitCountry === nextKey) return;
       this.autoExitCountry = nextKey;
-      this.staticDirty = true;
+      this.markMapDirty();
       this.start();
     }
 
     setActiveAutoRoute(routeKey) {
-      const allowed = ["nl", "de", "fi", "ru", "it", "ru-de"];
+      const allowed = ["nl", "de", "fi", "it", "ru", "ru-de"];
       const requestedKey = String(routeKey || "").toLowerCase();
       const nextRouteKey = allowed.includes(requestedKey)
         ? requestedKey
         : null;
       if (this.autoExitRouteKey === nextRouteKey) return;
       this.autoExitRouteKey = nextRouteKey;
-      if (this.route === "auto" && nextRouteKey) this.focusRoute();
+      if ((this.trafficActive || this.route === "auto") && nextRouteKey) this.focusRoute();
       // Egress metadata changes the active endpoint, never the user's camera
       // after an active route is selected. The first active route update frames
       // the actual path; later country corrections only refresh its marker.
-      this.staticDirty = true;
+      this.markMapDirty();
       this.start();
     }
 
@@ -1680,205 +2110,18 @@
       const next = Boolean(active);
       if (this.trafficActive === next) return;
       this.trafficActive = next;
-      if (next) {
-        if (!this.trafficStartedAt) this.trafficStartedAt = performance.now();
-        this.overlayCacheSignature = "";
-      } else {
-        this.trafficStartedAt = 0;
-      }
-      this.start();
-    }
-
-    setConnected(active) {
-      const next = Boolean(active);
-      if (this.connected === next) return;
-      this.connected = next;
-      if (!next) {
-        this.autoExitCountry = null;
-        this.autoExitRouteKey = null;
-      }
+      this.trafficStartedAt = next ? performance.now() : 0;
       this.labelPlacements.clear();
+      this.overlayDirty = true;
+      if (!next && this.inspectingStream != null) this.resumeTraffic();
       this.start();
-    }
-
-    setConnectionPhase(phase, isAuto, targetRoute) {
-      const nextPhase = String(phase || "IDLE");
-      const wasConnecting = this.connectionPhase === "STARTING" || this.connectionPhase === "CHECKING";
-      const isNowConnected = nextPhase === "CONNECTED";
-      if (isNowConnected && wasConnecting) {
-        this.connectionBurstAt = performance.now();
-      }
-      this.connectionPhase = nextPhase;
-      this.connectionIsAuto = Boolean(isAuto);
-      this.connectionTargetRoute = targetRoute || null;
-      if (nextPhase === "STARTING" || nextPhase === "CHECKING") {
-        if (!this.connectionPhaseStartedAt || !wasConnecting) {
-          this.connectionPhaseStartedAt = performance.now();
-        }
-      } else {
-        this.connectionPhaseStartedAt = 0;
-      }
-      this.start();
-    }
-
-    connectionAnimationActive(time) {
-      const now = time || performance.now();
-      if (this.connectionPhase === "STARTING" || this.connectionPhase === "CHECKING") return true;
-      if (this.connectionBurstAt && (now - this.connectionBurstAt < 800)) return true;
-      return false;
-    }
-
-    drawConnectionAnimation(time) {
-      const context = this.context;
-      const phase = this.connectionPhase;
-      const isAuto = this.connectionIsAuto;
-      const elapsed = time - (this.connectionPhaseStartedAt || time);
-      const userLoc = this.userLocation;
-      const userPt = userLoc ? this.projectLocation(userLoc, 1.008) : null;
-
-      // 1. Gentle, minimalist connection ripple on successful connect
-      if (this.connectionBurstAt && (time - this.connectionBurstAt < 800)) {
-        const burstT = (time - this.connectionBurstAt) / 800;
-        const burstTargetKey = this.connectionTargetRoute || this.activeRouteNodeKeys()[0] || "de";
-        const burstLoc = LOCATIONS[burstTargetKey];
-        if (burstLoc) {
-          const pt = this.projectLocation(burstLoc, 1.010);
-          if (pt.z > 0.015) {
-            context.save();
-            const ringR = 5 + burstT * 22;
-            const ringAlpha = (1 - burstT) * 0.6;
-            context.beginPath();
-            context.arc(pt.x, pt.y, ringR, 0, TAU);
-            context.strokeStyle = "rgba(0, 245, 180, " + ringAlpha.toFixed(2) + ")";
-            context.lineWidth = Math.max(1, (1 - burstT) * 1.8);
-            context.stroke();
-            context.restore();
-          }
-        }
-      }
-
-      if (phase !== "STARTING" && phase !== "CHECKING") return;
-
-      context.save();
-
-      if (isAuto) {
-        // ============================================
-        // MINIMALIST AUTO MODE (Автоподбор)
-        // ============================================
-        const candidateKeys = Array.from(this.availableLocationKeys).filter(k => k !== "user" && LOCATIONS[k]);
-        if (!candidateKeys.length) candidateKeys.push("nl", "de", "fi", "ru", "it");
-
-        const winnerKey = this.connectionTargetRoute || (phase === "CHECKING" ? candidateKeys[1 % candidateKeys.length] : null);
-
-        if (!winnerKey || phase === "STARTING") {
-          // Subtle, calm cycle across candidates: one node softly breathes at a time
-          const cycleMs = 700;
-          const currentIndex = Math.floor(elapsed / cycleMs) % candidateKeys.length;
-          const currentKey = candidateKeys[currentIndex];
-          const nodeProgress = (elapsed % cycleMs) / cycleMs;
-
-          // Candidate nodes: subtle dots, current one has gentle ripple
-          candidateKeys.forEach((key, idx) => {
-            const loc = LOCATIONS[key];
-            if (!loc) return;
-            const pt = this.projectLocation(loc, 1.008);
-            if (pt.z <= 0.015) return;
-
-            if (idx === currentIndex) {
-              const ringR = 4 + nodeProgress * 12;
-              const ringA = (1 - nodeProgress) * 0.45;
-              context.beginPath();
-              context.arc(pt.x, pt.y, ringR, 0, TAU);
-              context.strokeStyle = "rgba(0, 212, 255, " + ringA.toFixed(2) + ")";
-              context.lineWidth = 1.2;
-              context.stroke();
-            }
-          });
-
-          // Single delicate probe particle traveling from user to currently evaluated candidate
-          if (userLoc && LOCATIONS[currentKey]) {
-            const probePt = this.projectLanePoint("user", currentKey, nodeProgress, 0);
-            if (probePt.z > -0.02) {
-              context.beginPath();
-              context.arc(probePt.x, probePt.y, 2.2, 0, TAU);
-              context.fillStyle = "#00D4FF";
-              context.shadowColor = "#00D4FF";
-              context.shadowBlur = 4;
-              context.fill();
-            }
-          }
-        } else {
-          // Winner selected / CHECKING: chosen node breathes softly, one calm check pulse
-          const targetLoc = LOCATIONS[winnerKey];
-          if (targetLoc) {
-            const pt = this.projectLocation(targetLoc, 1.010);
-            if (pt.z > 0.015) {
-              const breathe = 0.5 + 0.5 * Math.sin(elapsed * 0.005);
-              context.beginPath();
-              context.arc(pt.x, pt.y, 5 + breathe * 5, 0, TAU);
-              context.strokeStyle = "rgba(0, 245, 180, " + (0.3 + breathe * 0.35).toFixed(2) + ")";
-              context.lineWidth = 1.4;
-              context.stroke();
-            }
-
-            if (userLoc) {
-              const pingT = (elapsed % 750) / 750;
-              const pingPt = this.projectLanePoint("user", winnerKey, pingT, 0);
-              if (pingPt.z > -0.02) {
-                context.beginPath();
-                context.arc(pingPt.x, pingPt.y, 2.2, 0, TAU);
-                context.fillStyle = "#00F5A0";
-                context.shadowColor = "#00F5A0";
-                context.shadowBlur = 4;
-                context.fill();
-              }
-            }
-          }
-        }
-      } else {
-        // ============================================
-        // MINIMALIST DIRECT ROUTE CONNECTION
-        // ============================================
-        const targetKey = this.connectionTargetRoute || this.activeRouteNodeKeys()[0] || this.route;
-        const targetLoc = LOCATIONS[targetKey];
-
-        // Soft, calm breathing glow at the target node
-        if (targetLoc) {
-          const pt = this.projectLocation(targetLoc, 1.010);
-          if (pt.z > 0.015) {
-            const breathe = 0.5 + 0.5 * Math.sin(elapsed * 0.004);
-            context.beginPath();
-            context.arc(pt.x, pt.y, 5 + breathe * 5, 0, TAU);
-            context.strokeStyle = phase === "CHECKING"
-              ? "rgba(0, 245, 180, " + (0.3 + breathe * 0.35).toFixed(2) + ")"
-              : "rgba(0, 212, 255, " + (0.3 + breathe * 0.35).toFixed(2) + ")";
-            context.lineWidth = 1.3;
-            context.stroke();
-          }
-        }
-
-        // Single neat light pulse traveling along the route
-        if (userLoc && targetLoc) {
-          const pulseDuration = phase === "CHECKING" ? 750 : 850;
-          const t = (elapsed % pulseDuration) / pulseDuration;
-          const pt = this.projectLanePoint("user", targetKey, t, 0);
-          if (pt.z > -0.02) {
-            context.beginPath();
-            context.arc(pt.x, pt.y, 2.3, 0, TAU);
-            context.fillStyle = phase === "CHECKING" ? "#00F5A0" : "#00D4FF";
-            context.shadowColor = phase === "CHECKING" ? "#00F5A0" : "#00D4FF";
-            context.shadowBlur = 3.5;
-            context.fill();
-          }
-        }
-      }
-
-      context.restore();
     }
 
     focusRoute() {
       const focusNodes = this.variant === "observatory"
         ? LOCATION_ORDER
+        : this.trafficActive
+          ? this.activeRouteNodeKeys()
         : this.route === "auto" && this.activeRouteNodeKeys().length
           ? this.activeRouteNodeKeys()
           : ROUTES[this.route].nodes;
@@ -1899,13 +2142,8 @@
       }, { x: 0, y: 0, z: 0 }));
       const maxAngle = Math.max.apply(Math, vectors.map((point) => Math.acos(clamp(dot(point, center), -1, 1))));
       const target = locationFromVector(center);
-      this.targetLat = clamp(target.lat, -62, 72);
+      this.targetLat = clamp(target.lat - (this.options.routeFocusLatitudeOffset || 0), -62, 72);
       this.targetLon = nearestLongitude(this.centerLon, target.lon);
-      if (this.overviewMode) {
-        this.targetZoom = this.clampZoom(this.targetZoom);
-        this.staticDirty = true;
-        return;
-      }
       // Desktop opens on the selected segment; wheel zoom reveals the whole globe.
       // Other clients retain the established Android/site framing.
       if (Number.isFinite(this.options.routeFocusMinZoom)) {
@@ -1920,7 +2158,7 @@
       } else {
         this.targetZoom = clamp(2.0 / Math.max(Math.sin(maxAngle), .2), 2.15, 2.85);
       }
-      this.staticDirty = true;
+      this.markMapDirty();
     }
 
     focusMeasurement(key) {
@@ -1940,7 +2178,7 @@
       const availableRadius = Math.min(this.width, this.height) * .47;
       const fitZoom = availableRadius / Math.max(this.radius * Math.sin(maxAngle), this.radius * .0125);
       this.targetZoom = clamp(Math.min(MAX_ZOOM, fitZoom), 1.28, MAX_ZOOM);
-      this.staticDirty = true;
+      this.markMapDirty();
       this.start();
     }
   }

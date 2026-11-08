@@ -9,7 +9,7 @@ internal object TunnelCanary {
     // Each hostname-backed HTTPS success proves both DNS and transport. An
     // individual provider outage must not reject an otherwise working tunnel.
     val endpoints = listOf(
-        Endpoint("https://www.cloudflare.com/cdn-cgi/trace", null),
+        Endpoint("https://cp.cloudflare.com/generate_204", 204),
         Endpoint("https://www.gstatic.com/generate_204", 204),
         Endpoint("https://example.com/", 200),
     )
