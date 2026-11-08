@@ -291,6 +291,14 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         super.onDetachedFromWindow()
     }
 
+    fun onPause() {
+        atlas.onPause()
+    }
+
+    fun onResume() {
+        atlas.onResume()
+    }
+
     override fun onWindowVisibilityChanged(visibility: Int) {
         super.onWindowVisibilityChanged(visibility)
         if (visibility == View.VISIBLE) atlas.onResume() else atlas.onPause()

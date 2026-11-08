@@ -41,7 +41,7 @@ internal class RouteRankStyling(
 ) {
     fun sampleLabel(sample: RouteProbeSample, isBest: Boolean = false, isWorst: Boolean = false): String =
         copy("Отклик: ", "Response: ") + (sample.latencyMillis?.let(::formatLatency) ?: "—") +
-            "  ·  " + copy("Скорость: ", "Speed: ") + (sample.downloadBytesPerSecond?.takeIf { it > 0L }?.let(::formatSpeed) ?: "—") +
+            " · " + copy("Скорость: ", "Speed: ") + (sample.downloadBytesPerSecond?.takeIf { it > 0L }?.let(::formatSpeed) ?: "—") +
             when {
                 isBest -> copy(" · лучший выбор", " · best choice")
                 isWorst -> copy(" · худший отклик", " · slowest response")
@@ -198,11 +198,8 @@ internal class RouteRankStyling(
     }
 
     fun formatLatency(milliseconds: Long): String =
-        if (AppLanguage.current(host) == AppLanguage.EN) "$milliseconds ms" else "$milliseconds мс"
+        if (AppLanguage.current(host) == AppLanguage.EN) "$milliseconds\u00A0ms" else "$milliseconds\u00A0мс"
 
-    fun formatSpeed(bytesPerSecond: Long): String {
-        val megabits = bytesPerSecond * 8.0 / 1_000_000.0
-        val unit = if (AppLanguage.current(host) == AppLanguage.EN) "Mbps" else "Мбит/с"
-        return String.format(Locale.US, "%.1f %s", megabits, unit)
-    }
+    fun formatSpeed(bytesPerSecond: Long): String =
+        RouteProbePresentation.formatSpeed(bytesPerSecond, AppLanguage.current(host) == AppLanguage.EN)
 }

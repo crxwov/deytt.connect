@@ -730,15 +730,8 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 observeAutoRoute()
             }
             ensureCurrent(operationId)
-            publishStatus(VpnPhase.CHECKING, "Проверяем туннель…", "Проверяю доступ к интернету через выбранный маршрут")
-            updateNotification("Проверяем туннель…")
-            verifyTunnel(operationId, openFluxOwner)
             synchronized(this) {
                 ensureCurrent(operationId)
-                openFluxProxy?.let {
-                    check(it.isConnected() && it.bytesSent() > 0 && it.bytesReceived() > 0) { "Маршрут обхода не передаёт трафик" }
-                    Log.i(TAG, "OpenFlux carrier verified sent=${it.bytesSent()} received=${it.bytesReceived()}")
-                }
                 updateNotification(formatConnectedNotificationText())
                 publishStatus(VpnPhase.CONNECTED, "Подключено")
                 if (openFluxProfile != null) {
@@ -752,6 +745,27 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                                 if (operation.get() == operationId && runtimeRunning)
                                     fail(errorMessage(error, "Маршрут обхода отключился"))
                             }
+                        }
+                    }
+                }
+            }
+            executor.execute {
+                try {
+                    verifyTunnel(operationId, openFluxOwner)
+                    synchronized(this) {
+                        ensureCurrent(operationId)
+                        openFluxProxy?.let {
+                            check(it.isConnected() && it.bytesSent() > 0 && it.bytesReceived() > 0) { "Маршрут обхода не передаёт трафик" }
+                            Log.i(TAG, "OpenFlux carrier verified sent=${it.bytesSent()} received=${it.bytesReceived()}")
+                        }
+                    }
+                    Log.i(TAG, "VPN service verified successfully")
+                } catch (error: Throwable) {
+                    if (error is InterruptedException) return@execute
+                    Log.w(TAG, "Background tunnel verification failed", error)
+                    synchronized(this) {
+                        if (operation.get() == operationId && runtimeRunning) {
+                            fail(errorMessage(error, "Маршрут не прошёл проверку"))
                         }
                     }
                 }

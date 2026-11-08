@@ -60,12 +60,29 @@ object AwgTunnelController {
                 tunnel = nextTunnel
                 appContext = context.applicationContext
                 nextBackend.setState(nextTunnel, Tunnel.State.UP, parsed)
-                // Diagnostics immediately run the same HTTPS probe and speed
-                // sample through this app-only tunnel. A separate public Google
-                // canary adds up to 30 s and can fail on its DNS independently.
-                if (!diagnosticOnly) verifyTraffic(operationId)
                 ensureCurrent(operationId)
                 publish(context, VpnPhase.CONNECTED, "Подключено")
+                if (!diagnosticOnly) {
+                    executor.execute {
+                        try {
+                            verifyTraffic(operationId)
+                        } catch (error: Throwable) {
+                            if (error is InterruptedException) return@execute
+                            android.util.Log.w("deytt-awg", "Background traffic verification failed", error)
+                            if (operation.get() == operationId && runtimeRunning) {
+                                stopInternal()
+                                runtimeRunning = false
+                                stopping = false
+                                publish(
+                                    context,
+                                    VpnPhase.ERROR,
+                                    "Ошибка запуска соединения",
+                                    describeError(error),
+                                )
+                            }
+                        }
+                    }
+                }
             } catch (error: Throwable) {
                 val handshake = runCatching { backend?.let { current -> tunnel?.let(current::getLastHandshake) } }.getOrNull()
                 val failure = when {

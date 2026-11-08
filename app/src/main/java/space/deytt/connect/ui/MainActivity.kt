@@ -245,9 +245,11 @@ class MainActivity : Activity() {
         if (::primaryPages.isInitialized) primaryPages.startForegroundUpdates()
         homeMetricsCoordinator.startSelectedRouteLatencyTick()
         if (::pager.isInitialized) updatePrimaryPageMotion()
+        if (::globe.isInitialized) globe.onResume()
     }
 
     override fun onStop() {
+        if (::globe.isInitialized) globe.onPause()
         homeMetricsCoordinator.homeSpeedForeground = false; homeMetricExplanationSheet.dismiss(); mapRoutePickerSheet.dismiss()
         homeMetricsCoordinator.stopMapTrafficTick(); homeMetricsCoordinator.mapTrafficWindow.reset(); homeMetricsCoordinator.setMapTrafficActive(false)
         homeMetricsCoordinator.cancelHomeRouteDownload(); tunnelConnectionCoordinator.homeConnectQueued = false

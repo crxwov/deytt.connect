@@ -65,8 +65,8 @@ data class RouteProbeSession(
 /** Runs a bounded GET/HEAD check through a loopback-only sing-box HTTP proxy. */
 object RouteProxyProbe {
     const val TIMEOUT_MILLIS = 8_000
-    const val QUICK_DOWNLOAD_MILLIS = 2_000
-    const val LATENCY_SAMPLE_COUNT = 3
+    const val QUICK_DOWNLOAD_MILLIS = 800
+    const val LATENCY_SAMPLE_COUNT = 1
     private const val DOWNLOAD_PROGRESS_INTERVAL_MILLIS = 250L
     private const val MAX_DOWNLOAD_BYTES = 32L * 1024 * 1024
     private const val DOWNLOAD_CONNECT_TIMEOUT_MILLIS = 3_500
@@ -291,7 +291,7 @@ object RouteProxyProbe {
         onProgress: (bytesPerSecond: Long) -> Unit = {},
     ): Long {
         require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
-        require(sampleMillis in 1_000..5_000)
+        require(sampleMillis in 400..5_000)
         val connectDeadline = SystemClock.elapsedRealtime() + DOWNLOAD_CONNECT_TIMEOUT_MILLIS
         cancellation?.check()
         val socket = openTlsTunnel(session, DOWNLOAD_HOST, connectDeadline, cancellation)

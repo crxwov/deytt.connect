@@ -135,14 +135,14 @@ internal class HomeMetricsCoordinator(
             value.doAfterTextChanged { editable ->
                 val content = editable.toString()
                 val measured = content == "—" || content.firstOrNull()?.isDigit() == true || content.startsWith("↓")
-                value.textSize = if (measured) 23f else 13f
+                value.textSize = if (measured) 20f else 13f
             }
             addView(value, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(7) })
             setOnClickListener { onClick() }
             host.pressFeedback(this)
         }
-        latencyText = host.text("—", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
-            maxLines = 2
+        latencyText = host.text("—", 20f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
             gravity = Gravity.START
             setOnClickListener { showHomeMetricExplanation(false) }
@@ -150,8 +150,8 @@ internal class HomeMetricsCoordinator(
         pingValueProgress = InlineMetricProgress(latencyText)
         addView(metric(uiCopy("Задержка"), latencyText, "home-latency") { showHomeMetricExplanation(false) }, LinearLayout.LayoutParams(0, -2, 1f))
         addView(View(host).apply { setBackgroundColor(DeyttUi.LINE) }, LinearLayout.LayoutParams(dp(1), dp(56)))
-        downloadText = host.text("—", 23f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
-            maxLines = 2
+        downloadText = host.text("—", 20f, DeyttUi.TEXT, android.graphics.Typeface.BOLD).apply {
+            maxLines = 1
             ellipsize = android.text.TextUtils.TruncateAt.END
         }
         speedValueProgress = InlineMetricProgress(downloadText)
@@ -205,8 +205,8 @@ internal class HomeMetricsCoordinator(
             connected -> if (en) "Measuring ping. Tap for an explanation." else "Замер задержки. Нажмите для объяснения."
             else -> uiCopy("Отклик проверяется после подключения")
         }
-        if (::pingValueProgress.isInitialized) pingValueProgress.setLoading(connected && latencyText.text.toString() == "—")
-        if (::speedValueProgress.isInitialized) speedValueProgress.setLoading(connected && downloadText.text.toString() == "—")
+        if (::pingValueProgress.isInitialized) pingValueProgress.setLoading(connected && (selectedRouteLatencyInFlight || pendingRouteProbeId != null))
+        if (::speedValueProgress.isInitialized) speedValueProgress.setLoading(connected && !speedNeedsLogin && (homeSpeedInFlight || (downloadText.text.toString() == "—" && homeSpeedAttemptAt == 0L && homeSpeedError == null)))
     }
 
     fun currentHomeRouteMetricKey(routeId: String): HomeRouteMetricKey? {
@@ -238,6 +238,7 @@ internal class HomeMetricsCoordinator(
         homeSpeedError = null
         homeSpeedErrorKey = null
         homeSpeedBypassedKey = null
+        homeSpeedConnectedRouteId = null
     }
 
     fun cancelHomeRouteDownload() {
@@ -256,6 +257,9 @@ internal class HomeMetricsCoordinator(
     }
 
     fun scheduleHomeMeasurements() {
+        val selected = getSelectedRoute()
+        homeSpeedConnectedRouteId = selected.id
+        homeSpeedAttemptAt = 0L
         selectedRouteLatencyHandler.post {
             if (homeSpeedForeground && homeSpeedOnHome) {
                 measureSelectedRoute()
@@ -476,6 +480,9 @@ internal class HomeMetricsCoordinator(
         if (!isPagerIdle()) return
         if (getCurrentPhase() != VpnPhase.CONNECTED || isHomeConnectQueued() || isTemporaryAwgMeasurement() || RouteProbeClient.isRunning(host)) return
         val selected = getSelectedRoute()
+        if (homeSpeedConnectedRouteId == null) {
+            homeSpeedConnectedRouteId = selected.id
+        }
         if (selected.id != homeSpeedConnectedRouteId) return
         val now = SystemClock.elapsedRealtime()
         val token = TelegramSessionStore.read(host) ?: return

@@ -28,7 +28,7 @@ internal object HomeMetricPresentation {
 
     fun latencyLabel(milliseconds: Long?, bypassed: Boolean, failed: Boolean, english: Boolean): String = when {
         bypassed -> bypassLabel(english)
-        milliseconds != null -> if (english) "$milliseconds ms" else "$milliseconds мс"
+        milliseconds != null -> if (english) "$milliseconds\u00A0ms" else "$milliseconds\u00A0мс"
         failed -> if (english) "no response" else "нет ответа"
         else -> "—"
     }
@@ -36,7 +36,14 @@ internal object HomeMetricPresentation {
     fun speedLabel(bytesPerSecond: Long?, bypassed: Boolean, needsLogin: Boolean, failed: Boolean, english: Boolean): String = when {
         bypassed -> bypassLabel(english)
         needsLogin -> if (english) "sign in" else "войдите"
-        bytesPerSecond != null -> String.format(Locale.US, if (english) "%.1f Mbps" else "%.1f Мбит/с", bytesPerSecond * 8.0 / 1_000_000.0)
+        bytesPerSecond != null -> {
+            val bitsPerSecond = bytesPerSecond.coerceAtLeast(0L) * 8.0
+            if (bitsPerSecond >= 1_000_000.0) {
+                String.format(Locale.US, if (english) "%.1f\u00A0Mbps" else "%.1f\u00A0Мбит/с", bitsPerSecond / 1_000_000.0)
+            } else {
+                String.format(Locale.US, if (english) "%.0f\u00A0Kbps" else "%.0f\u00A0Кбит/с", bitsPerSecond / 1_000.0)
+            }
+        }
         failed -> if (english) "unavailable" else "недоступна"
         else -> "—"
     }
@@ -106,10 +113,10 @@ internal object RouteProbePresentation {
     fun formatSpeed(bytesPerSecond: Long, english: Boolean): String {
         val bitsPerSecond = bytesPerSecond.coerceAtLeast(0L) * 8.0
         return if (bitsPerSecond >= 1_000_000.0) {
-            String.format(Locale.US, "%.1f Mbps", bitsPerSecond / 1_000_000.0)
+            String.format(Locale.US, if (english) "%.1f\u00A0Mbps" else "%.1f\u00A0Мбит/с", bitsPerSecond / 1_000_000.0)
         } else {
-            String.format(Locale.US, "%.0f Kbps", bitsPerSecond / 1_000.0)
-        }.let { if (english) it else it.replace("Mbps", "Мбит/с").replace("Kbps", "Кбит/с") }
+            String.format(Locale.US, if (english) "%.0f\u00A0Kbps" else "%.0f\u00A0Кбит/с", bitsPerSecond / 1_000.0)
+        }
     }
 
     private val HTTP_STATUS = Regex("HTTP\\s+(\\d{3})", RegexOption.IGNORE_CASE)

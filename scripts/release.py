@@ -60,53 +60,66 @@ def check_keystore_certificate(keystore, password_file):
 
 
 def inspect_apk(apk, qa=False, expected_version=None, expected_version_code=None):
-    badging = run(tool("aapt"), "dump", "badging", str(apk))
-    package = POLICY["package"] + (".qa" if qa else "")
-    identities = badging.splitlines()
-    if not identities:
-        raise ValueError("aapt returned no package identity")
-    identity = identities[0]
-    if not identity.startswith(f"package: name='{package}' "):
-        raise ValueError("unexpected package identity")
-    if expected_version and f"versionName='{expected_version}'" not in identity:
-        raise ValueError("apk version name does not match the release tag")
-    if expected_version_code is not None and f"versionCode='{expected_version_code}'" not in identity:
-        raise ValueError("apk version code does not match the release policy")
-    if "application-debuggable" in badging:
-        raise ValueError("distribution apk must not be debuggable")
-    sdk = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
-    target = re.search(r"^targetSdkVersion:'(\d+)'", badging, re.M)
-    if not sdk or int(sdk[1]) != POLICY["min_sdk"] or not target or int(target[1]) < 35:
-        raise ValueError("unexpected android sdk policy")
-    allowed_permissions = {
-        "android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.CHANGE_NETWORK_STATE", "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED",
-        "android.permission.POST_NOTIFICATIONS", "android.permission.REQUEST_INSTALL_PACKAGES",
-        # WorkManager reschedules the hourly subscription refresh after reboots.
-        "android.permission.RECEIVE_BOOT_COMPLETED",
-        "android.permission.WAKE_LOCK",
-        package + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
-    }
-    permissions = set(re.findall(r"^uses-permission: name='([^']+)'", badging, re.M))
-    if permissions - allowed_permissions:
-        raise ValueError("unexpected permissions: " + ", ".join(sorted(permissions - allowed_permissions)))
-    with zipfile.ZipFile(apk) as archive:
-        names = archive.namelist()
-        if len(names) != len(set(names)):
-            raise ValueError("apk contains duplicate ZIP entries")
-        if archive.testzip() is not None:
-            raise ValueError("apk ZIP entry failed its CRC check")
-        if any(Path(name).name in {"libwg.so", "libwg-quick.so"} for name in names):
-            raise ValueError("unused root-management native tools must not ship")
-        if not any(name.endswith("/libwg-go.so") for name in names):
-            raise ValueError("amneziawg userspace backend missing")
-        if not any(name.endswith("/libdeytt-awg.so") for name in names):
-            raise ValueError("amneziawg domain-routing backend missing")
-        if not any(name.endswith("/libopenflux_jni.so") for name in names):
-            raise ValueError("OpenFlux transport backend missing")
-    run(tool("zipalign"), "-c", "-P", "16", "4", str(apk))
-    return identity
+    apk_path = Path(apk)
+    temp_dir = None
+    try:
+        try:
+            str(apk_path).encode("ascii")
+            inspect_path = apk_path
+        except UnicodeEncodeError:
+            temp_dir = tempfile.mkdtemp(prefix="apk-inspect-")
+            inspect_path = Path(temp_dir) / "inspect.apk"
+            shutil.copy2(apk_path, inspect_path)
+        badging = run(tool("aapt"), "dump", "badging", str(inspect_path))
+        package = POLICY["package"] + (".qa" if qa else "")
+        identities = badging.splitlines()
+        if not identities:
+            raise ValueError("aapt returned no package identity")
+        identity = identities[0]
+        if not identity.startswith(f"package: name='{package}' "):
+            raise ValueError("unexpected package identity")
+        if expected_version and f"versionName='{expected_version}'" not in identity:
+            raise ValueError("apk version name does not match the release tag")
+        if expected_version_code is not None and f"versionCode='{expected_version_code}'" not in identity:
+            raise ValueError("apk version code does not match the release policy")
+        if "application-debuggable" in badging:
+            raise ValueError("distribution apk must not be debuggable")
+        sdk = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
+        target = re.search(r"^targetSdkVersion:'(\d+)'", badging, re.M)
+        if not sdk or int(sdk[1]) != POLICY["min_sdk"] or not target or int(target[1]) < 35:
+            raise ValueError("unexpected android sdk policy")
+        allowed_permissions = {
+            "android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.CHANGE_NETWORK_STATE", "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED",
+            "android.permission.POST_NOTIFICATIONS", "android.permission.REQUEST_INSTALL_PACKAGES",
+            # WorkManager reschedules the hourly subscription refresh after reboots.
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            "android.permission.WAKE_LOCK",
+            package + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+        }
+        permissions = set(re.findall(r"^uses-permission: name='([^']+)'", badging, re.M))
+        if permissions - allowed_permissions:
+            raise ValueError("unexpected permissions: " + ", ".join(sorted(permissions - allowed_permissions)))
+        with zipfile.ZipFile(inspect_path) as archive:
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                raise ValueError("apk contains duplicate ZIP entries")
+            if archive.testzip() is not None:
+                raise ValueError("apk ZIP entry failed its CRC check")
+            if any(Path(name).name in {"libwg.so", "libwg-quick.so"} for name in names):
+                raise ValueError("unused root-management native tools must not ship")
+            if not any(name.endswith("/libwg-go.so") for name in names):
+                raise ValueError("amneziawg userspace backend missing")
+            if not any(name.endswith("/libdeytt-awg.so") for name in names):
+                raise ValueError("amneziawg domain-routing backend missing")
+            if not any(name.endswith("/libopenflux_jni.so") for name in names):
+                raise ValueError("OpenFlux transport backend missing")
+        run(tool("zipalign"), "-c", "-P", "16", "4", str(inspect_path))
+        return identity
+    finally:
+        if temp_dir and Path(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def verify(apk, qa=False, expected_version=None, expected_version_code=None):
