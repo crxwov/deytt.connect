@@ -188,15 +188,23 @@ internal sealed class EngineController
             try
             {
                 using var canaryTimeout = CancellationTokenSource.CreateLinkedTokenSource(preflight.Token);
-                canaryTimeout.CancelAfter(TimeSpan.FromMilliseconds(400));
+                canaryTimeout.CancelAfter(TimeSpan.FromSeconds(2));
                 canaryAddresses = await canaryTask.WaitAsync(canaryTimeout.Token).ConfigureAwait(false);
             }
             catch
             {
                 canaryAddresses = new Dictionary<string, IPAddress[]>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["www.cloudflare.com"] = [IPAddress.Parse("1.1.1.1"), IPAddress.Parse("1.0.0.1")],
-                    ["www.gstatic.com"] = [IPAddress.Parse("8.8.8.8"), IPAddress.Parse("8.8.4.4")]
+                    ["www.cloudflare.com"] = [IPAddress.Parse("104.16.123.96"), IPAddress.Parse("104.16.124.96")],
+                    ["www.gstatic.com"] = [IPAddress.Parse("142.251.20.94"), IPAddress.Parse("172.217.16.227")]
+                };
+            }
+            if (canaryAddresses.Count == 0)
+            {
+                canaryAddresses = new Dictionary<string, IPAddress[]>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["www.cloudflare.com"] = [IPAddress.Parse("104.16.123.96"), IPAddress.Parse("104.16.124.96")],
+                    ["www.gstatic.com"] = [IPAddress.Parse("142.251.20.94"), IPAddress.Parse("172.217.16.227")]
                 };
             }
             canaryResultRead = true;
@@ -955,9 +963,12 @@ internal sealed class EngineController
 
     internal static Task<IPAddress[]> ResolveCanaryDestinationAsync(string host,
         IReadOnlyDictionary<string, IPAddress[]>? bootstrapAddresses,
-        Func<string, CancellationToken, Task<IPAddress[]>> resolve, CancellationToken cancellationToken) =>
-        bootstrapAddresses is null ? resolve(host, cancellationToken) :
-            Task.FromResult(bootstrapAddresses.GetValueOrDefault(host) ?? []);
+        Func<string, CancellationToken, Task<IPAddress[]>> resolve, CancellationToken cancellationToken)
+    {
+        if (bootstrapAddresses is not null && bootstrapAddresses.TryGetValue(host, out var ips) && ips.Length > 0)
+            return Task.FromResult(ips);
+        return resolve(host, cancellationToken);
+    }
 
     private static void SetOutgoingInterface(Socket socket, WindowsTunnelCanaryInterface tunnelInterface)
     {

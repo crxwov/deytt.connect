@@ -21,6 +21,10 @@ public partial class MainWindow
     private WindowsRouteProbeResult? _homeLiveProbe;
     private DateTimeOffset _homeProbeUpdatedAt;
     private string? _homeMeasurementSession;
+    // Последние успешно измеренные значения по маршрутам. Перезаписываются только
+    // новым успешным замером и никогда не сбрасываются — прочерк вместо уже
+    // полученных данных запрещён.
+    private readonly Dictionary<string, WindowsRouteProbeResult> _homeLastMeasuredByRoute = new(StringComparer.Ordinal);
     private bool _initialNetherlandsRouteProbeStarted;
 
     internal static long? PositiveLatency(long? latency) => latency is > 0 ? latency : null;
@@ -30,6 +34,8 @@ public partial class MainWindow
         routes.FirstOrDefault(route => route.CountryCode != "AUTO")?.CountryCode;
     private TelegramAwgTraffic? _awgTraffic;
     private string _awgTrafficState = "absent";
+    private TelegramAwgTraffic? _proxyTraffic;
+    private string _proxyTrafficState = "absent";
 
     private void RefreshHomeConnectionMeasurement(bool forceRefresh = false)
     {
@@ -38,7 +44,8 @@ public partial class MainWindow
         if (!IsVpnDisplayConnected() || string.IsNullOrEmpty(routeTag))
         {
             _homeProbeCancellation?.Cancel();
-            _homeLiveProbe = null;
+            // Уже измеренные значения остаются на экране до перезамера: прочерк
+            // вместо них запрещён, поэтому _homeLiveProbe здесь не обнуляется.
             _homeMeasurementSession = null;
             return;
         }
@@ -46,15 +53,20 @@ public partial class MainWindow
         if (_homeMeasurementSession != session)
         {
             _homeProbeCancellation?.Cancel();
-            _homeLiveProbe = null;
+            // Прежние значения маршрута остаются видимыми, пока не завершится
+            // перезамер нового подключения.
             _homeMeasurementSession = session;
             _homeProbeUpdatedAt = default;
         }
         if (_homeLiveProbe?.RouteTag == routeTag && _homeProbeCancellation is null)
         {
+            // Неудачный замер туннеля (null в снапшоте) не должен стирать уже
+            // показанное значение — прочерк вместо измеренного запрещён.
             _homeLiveProbe = _homeLiveProbe with
             {
-                LatencyMilliseconds = PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds),
+                LatencyMilliseconds = PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds)
+                    ?? PositiveLatency(_homeLiveProbe.LatencyMilliseconds)
+                    ?? _homeLastMeasuredByRoute.GetValueOrDefault(routeTag)?.LatencyMilliseconds,
                 Error = _homeLiveProbe.Stage == "latency" ? null : _vpnSnapshot.TunnelLatencyError is null
                     ? _homeLiveProbe.Error
                     : Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."),
@@ -74,8 +86,14 @@ public partial class MainWindow
     {
         using var cancellation = new CancellationTokenSource();
         _homeProbeCancellation = cancellation;
-        var previousSpeed = _homeLiveProbe?.RouteTag == routeTag ? _homeLiveProbe.BytesPerSecond : null;
-        long? latency = null;
+        // Пока идёт перезамер, прежние значения маршрута остаются на экране;
+        // спиннер показывается только когда измерять ещё нечего.
+        var previous = _homeLiveProbe?.RouteTag == routeTag ? _homeLiveProbe : null;
+        var storedLatency = previous?.LatencyMilliseconds
+            ?? _homeLastMeasuredByRoute.GetValueOrDefault(routeTag)?.LatencyMilliseconds;
+        var previousSpeed = previous?.BytesPerSecond
+            ?? _homeLastMeasuredByRoute.GetValueOrDefault(routeTag)?.BytesPerSecond;
+        long? latency = storedLatency;
         string? latencyError = null;
         _homeLiveProbe = new(routeTag, latency, previousSpeed, null, "latency");
         UpdateHomeGlobePresentation();
@@ -104,9 +122,10 @@ public partial class MainWindow
                         TunnelLatencyError = measuredTunnel.TunnelLatencyError,
                         HealthCheckedAt = measuredTunnel.HealthCheckedAt,
                     };
-                    latency = PositiveLatency(measuredTunnel.TunnelLatencyMilliseconds);
-                    latencyError = measuredTunnel.TunnelLatencyError is null ? null :
-                        Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route.");
+                    latency = PositiveLatency(measuredTunnel.TunnelLatencyMilliseconds) ?? latency ?? storedLatency;
+                    latencyError = latency is not null ? null : (measuredTunnel.TunnelLatencyError is null ? null :
+                        Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."));
+                    if (latency is not null) StoreHomeMeasuredValues(routeTag, latency, null);
                     UpdateHomeGlobePresentation();
                 }
             }
@@ -128,6 +147,7 @@ public partial class MainWindow
                     Error = latencyError ?? result.Error,
                     BytesPerSecond = result.BytesPerSecond ?? previousSpeed,
                 };
+                StoreHomeMeasuredValues(routeTag, latency, _homeLiveProbe.BytesPerSecond);
             }
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
@@ -142,6 +162,17 @@ public partial class MainWindow
             if (ReferenceEquals(_homeProbeCancellation, cancellation)) _homeProbeCancellation = null;
             UpdateHomeGlobePresentation();
         }
+    }
+
+    private void StoreHomeMeasuredValues(string routeTag, long? latencyMilliseconds, long? bytesPerSecond)
+    {
+        var existing = _homeLastMeasuredByRoute.GetValueOrDefault(routeTag);
+        var latency = latencyMilliseconds is { } latencyValue && latencyValue > 0
+            ? latencyValue : existing?.LatencyMilliseconds;
+        var speed = bytesPerSecond is { } speedValue && speedValue > 0
+            ? speedValue : existing?.BytesPerSecond;
+        if (latency is null && speed is null) return;
+        _homeLastMeasuredByRoute[routeTag] = new WindowsRouteProbeResult(routeTag, latency, speed, null, "complete");
     }
 
     private Control BuildHomePage()
@@ -371,6 +402,7 @@ public partial class MainWindow
             return Copy("Автоматически", "Automatic");
         return route.Protocol switch
         {
+            "VLESS" when route.Detail is "reality" => "./vless+reality",
             "VLESS" => "./vless+ws",
             "TROJAN" => "./trojan",
             "HYSTERIA2" => "./hysteria",
@@ -618,13 +650,15 @@ public partial class MainWindow
         displayedRoute ??= _routes.FirstOrDefault(route => route.Id == _selectedRoute);
         var destination = GetHomeDestinationParts(displayedRoute);
         var automatic = _selectedRoute == "auto";
-        var country = automatic ? "" : displayedRoute?.CountryCode switch
-        {
-            "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
-            "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
-            "AUTO" or null => Copy("автоподбор", "auto-select"),
-            _ => RouteCountryName(displayedRoute!).ToLowerInvariant(),
-        };
+        var country = automatic
+            ? Copy("автоподбор", "auto-select")
+            : displayedRoute?.CountryCode switch
+            {
+                "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
+                "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
+                "AUTO" or null => Copy("автоподбор", "auto-select"),
+                _ => RouteCountryName(displayedRoute!).ToLowerInvariant(),
+            };
         var protocol = displayedRoute?.CountryCode is null or "AUTO" ? "" : ProtocolDescriptor(displayedRoute).ToLowerInvariant();
         var city = displayedRoute?.CountryCode is null or "AUTO"
             ? connected ? Copy("уточняем выбранный выход…", "confirming the selected exit…")
@@ -673,8 +707,8 @@ public partial class MainWindow
                 ? CopyExact("отключение…", "disconnecting…")
                 : canCancel
                     ? CopyExact("отменить подключение", "cancel connection")
-                    : tunnelActive
-                        ? CopyExact("подключено", "connected")
+                : tunnelActive
+                    ? CopyExact("подключено", "connected")
                         : connecting || _vpnActionInProgress
                             ? CopyExact("подключаемся…", "connecting…")
                             : routeProbeActive
@@ -701,15 +735,25 @@ public partial class MainWindow
         if (failed && action is "home-connect") actionEnabled = true;
 
         var probe = displayedRoute is null ? null : _routeProbeResults.GetValueOrDefault(displayedRoute.Tag);
-        var liveMeasurement = connected && _homeLiveProbe?.RouteTag == _vpnSnapshot.RouteTag;
+        var displayedTag = displayedRoute?.Tag;
+        var liveMeasurement = (_homeLiveProbe is not null && displayedTag is not null && _homeLiveProbe.RouteTag == displayedTag)
+            || (connected && _homeLiveProbe?.RouteTag == _vpnSnapshot.RouteTag);
         if (liveMeasurement)
             probe = _homeLiveProbe! with
             {
                 LatencyMilliseconds = _homeLiveProbe.Stage == "latency"
-                    ? PositiveLatency(_homeLiveProbe.LatencyMilliseconds) : PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds),
+                    ? PositiveLatency(_homeLiveProbe.LatencyMilliseconds) : PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds) ?? PositiveLatency(_homeLiveProbe.LatencyMilliseconds),
                 Error = _vpnSnapshot.TunnelLatencyError is null ? _homeLiveProbe.Error :
                     Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."),
             };
+        // Данные, измеренные ранее на этом маршруте, остаются видимыми до перезамера:
+        // ни дисконнект, ни смена сессии не превращают их в прочерк.
+        if (probe is null || PositiveLatency(probe.LatencyMilliseconds) is null && probe.BytesPerSecond is not > 0)
+        {
+            var lastMeasured = displayedTag is null ? null : _homeLastMeasuredByRoute.GetValueOrDefault(displayedTag);
+            if (lastMeasured is not null)
+                probe = lastMeasured;
+        }
         var probeQuality = displayedRoute is null ? RouteQualityGrade.Unrated : CountryRouteQuality(
             _routes.Where(route => string.Equals(route.CountryCode, displayedRoute.CountryCode,
                 StringComparison.OrdinalIgnoreCase)).ToArray()).Grades.GetValueOrDefault(displayedRoute.Tag);
@@ -759,6 +803,7 @@ public partial class MainWindow
     private void HandleCountryProbeRequested(string countryCode)
     {
         countryCode = countryCode.ToUpperInvariant();
+        Services.UiDiagnostics.Log($"country probe requested: {countryCode} routes={_routes.Count} tab={_activeTab} service={_vpnServiceAvailable} tunnel={_vpnSnapshot.State}");
         _expandedRouteCountries.Add(countryCode);
         _activeTab = MainTab.Routes;
 
@@ -823,6 +868,7 @@ public partial class MainWindow
         {
             state = mainQuotaState,
             usedBytes = mainQuotaState == "ready" ? sub?.TrafficUsedBytes : null,
+            totalBytes = mainQuotaState == "ready" ? sub?.TrafficTotalBytes : null,
             limitBytes = mainQuotaState == "ready" ? sub?.TrafficLimitBytes : null,
             unlimitedTraffic = mainQuotaState == "ready" && sub?.UnlimitedTraffic == true,
             expiresAt = mainQuotaState == "ready" ? ToUtcIso(sub?.ExpiresAt) : null,
@@ -834,8 +880,17 @@ public partial class MainWindow
             usedBytes = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.UsedBytes : null,
             limitBytes = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.QuotaBytes : null,
             unlimitedTraffic = signedIn && _awgTrafficState == "ready" && _awgTraffic?.QuotaBytes == 0,
-            expiresAt = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.ExpiresAt : null,
+            expiresAt = signedIn && _awgTrafficState == "ready" ? ToUtcIso(_awgTraffic?.ExpiresAt) : null,
             unlimitedTime = signedIn && _awgTrafficState == "ready" && _awgTraffic?.ExpiresAt is null,
+        };
+        var proxyQuota = new
+        {
+            state = signedIn ? _proxyTrafficState : "absent",
+            usedBytes = signedIn && _proxyTrafficState == "ready" ? _proxyTraffic?.UsedBytes : null,
+            limitBytes = signedIn && _proxyTrafficState == "ready" ? _proxyTraffic?.QuotaBytes : null,
+            unlimitedTraffic = signedIn && _proxyTrafficState == "ready" && _proxyTraffic?.QuotaBytes == 0,
+            expiresAt = signedIn && _proxyTrafficState == "ready" ? ToUtcIso(_proxyTraffic?.ExpiresAt) : null,
+            unlimitedTime = signedIn && _proxyTrafficState == "ready" && _proxyTraffic?.ExpiresAt is null,
         };
         string? expiresFormatted = null;
         int? daysRemaining = null;
@@ -888,12 +943,14 @@ public partial class MainWindow
             sub?.TariffName ?? (sub?.Active == true ? "Подписка активна" : "Без подписки"),
             expiresFormatted,
             daysRemaining,
+            sub?.DeviceLimit is > 0 ? sub.DeviceLimit : null,
             subKey,
             devices,
             sessions,
             _sessionLoadIssue,
             mainQuota,
-            awgQuota
+            awgQuota,
+            proxyQuota
         );
 
         if (!string.IsNullOrEmpty(_telegramAvatarDataUrl))
@@ -929,6 +986,8 @@ public partial class MainWindow
     {
         _awgTraffic = null;
         _awgTrafficState = state;
+        _proxyTraffic = null;
+        _proxyTrafficState = state;
     }
 
     private async Task CopySubscriptionKeyToClipboardAsync()
@@ -977,6 +1036,9 @@ public partial class MainWindow
         return route is null ? null : RouteGlobeWebView.RouteKeyFor(route.CountryCode);
     }
 
+    private void InstrumentProbeChain(string message) =>
+        Services.UiDiagnostics.Log(message);
+
     private void HandleHomeActionRequested(string action)
     {
         switch (action)
@@ -999,7 +1061,8 @@ public partial class MainWindow
                 break;
             case "home-measure":
                 if (IsVpnDisplayConnected()) RefreshHomeConnectionMeasurement(true);
-                else if (_routes.FirstOrDefault(route => route.Id == _selectedRoute) is { Id: not "auto" } route)
+                else if (_routes.FirstOrDefault(route => route.Id == _selectedRoute) is { Id: not "auto" } route &&
+                         route.Tag != DeyttConnect.Protocol.CdnLteProfile.RouteTag)
                     _ = ProbeRoutesAsync([route.Tag]);
                 else
                 {
