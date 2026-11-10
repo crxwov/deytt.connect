@@ -15,6 +15,7 @@ class SubscriptionRequestIdentityTest {
     @Test fun unauthenticatedImportDoesNotClaimAnAuthenticatedSession() {
         val headers = SubscriptionRequestIdentity.buildHeaders("install-id", null, "Phone\r\nInjected: value", "15")
         assertFalse(headers.containsKey("X-TG-App-Token"))
+        assertFalse(headers.containsKey("X-Deytt-Client"))
         assertFalse(headers.getValue("X-Device-Model").contains('\n'))
         assertEquals("install-id", headers["X-HWID"])
     }
