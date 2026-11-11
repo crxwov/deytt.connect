@@ -216,6 +216,12 @@ public sealed class RouteGlobeWebView : ContentControl
         _ = ExecuteScriptAsync(script);
     }
 
+    public void SetSubscriptionRefreshState(string state, string? message = null)
+    {
+        var script = $"window.deyttSetSubscriptionRefreshState && window.deyttSetSubscriptionRefreshState({JsonSerializer.Serialize(state)}, {JsonSerializer.Serialize(message)});";
+        _ = ExecuteScriptAsync(script);
+    }
+
     private string? _profileDataJson;
     private string? _settingsDataJson;
     private string? _profileAvatarDataUrl;

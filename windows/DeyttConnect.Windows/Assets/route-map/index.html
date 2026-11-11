@@ -5222,13 +5222,21 @@
       }
     }
 
-    // Attach click handler for routes-refresh-card. (It used to sit inside a
-    // setTimeout branch above, so the button never received its listener.)
+    window.deyttSetSubscriptionRefreshState = setSubscriptionRefreshState;
+
+    // Attach click and keyboard handlers for routes-refresh-card.
     const routesRefreshCard = document.getElementById("routes-refresh-card");
     if (routesRefreshCard) {
       routesRefreshCard.addEventListener("click", () => {
+        if (subscriptionRefreshPhase === "refreshing") return;
         setSubscriptionRefreshState("refreshing");
         postHost("routes:refresh:subscription");
+      });
+      routesRefreshCard.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          routesRefreshCard.click();
+        }
       });
     }
 
@@ -5846,6 +5854,9 @@
     window.deyttSetRoutesData = function(routes) {
       if (!Array.isArray(routes)) return;
       currentRouteCatalog = routes;
+      if (subscriptionRefreshPhase === "refreshing") {
+        setSubscriptionRefreshState("success");
+      }
       document.querySelectorAll(".proto-row, .smart-route-row").forEach(card => {
         const route = routeForCard(card, routes);
         setRouteCardVisible(card, !!route);
@@ -6243,7 +6254,7 @@
     document.getElementById("btn-check-updates")?.addEventListener("click", () => {
       const btn = document.getElementById("btn-check-updates");
       if (btn) btn.classList.add("is-measuring");
-      postHost("routes:refresh:subscription");
+      postHost("settings:check_updates");
       setTimeout(() => btn?.classList.remove("is-measuring"), 3000);
     });
 

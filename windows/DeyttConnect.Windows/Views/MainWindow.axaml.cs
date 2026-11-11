@@ -67,6 +67,7 @@ public partial class MainWindow : Window
     private bool _vpnCancelRequested;
     private bool _vpnCancelInProgress;
     private Task<WindowsTunnelSnapshot>? _vpnConnectTask;
+    private Task<bool>? _activeRefreshTask;
     private long _vpnOperationVersion;
     private readonly string? _initialImportUrl;
     private string? _pendingExternalImportUrl;
@@ -4089,6 +4090,7 @@ public partial class MainWindow : Window
         TelegramAccount? verifiedAccount = null,
         IProgress<string>? progress = null)
     {
+        Services.UiDiagnostics.Log("RefreshAccountDataAsync started");
         if (_sessionToken == token)
         {
             ClearAwgTraffic("loading");
@@ -4133,6 +4135,7 @@ public partial class MainWindow : Window
                 _selectedRoute = "auto";
                 SavePreferences();
             }
+            Services.UiDiagnostics.Log($"RefreshAccountDataAsync success (happAvailable={_keysSnapshot.HappAvailable}, routes={_routes.Count})");
             return _keysSnapshot.HappAvailable;
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
@@ -4249,38 +4252,77 @@ public partial class MainWindow : Window
     {
         Services.UiDiagnostics.Log($"subscription refresh requested (inProgress={_profileRefreshInProgress})");
         if (_profileRefreshInProgress)
+        {
+            if (_activeRefreshTask is not null)
+            {
+                try
+                {
+                    var existingSuccess = await _activeRefreshTask;
+                    _routeGlobe?.SetSubscriptionRefreshState(existingSuccess ? "success" : "error", existingSuccess ? null : _profileLoadIssue);
+                }
+                catch
+                {
+                    _routeGlobe?.SetSubscriptionRefreshState("error", Copy("Не удалось обновить профиль", "Could not refresh profile"));
+                }
+            }
             return;
+        }
+
         var token = _sessionToken;
         if (token is null)
         {
             Services.UiDiagnostics.Log("subscription refresh blocked (no session)");
+            _routeGlobe?.SetSubscriptionRefreshState("error", Copy("Войдите в аккаунт", "Sign in first"));
             ShowSignInDialog();
             return;
         }
 
         _profileRefreshInProgress = true;
+        _routeGlobe?.SetSubscriptionRefreshState("refreshing");
         if (IsVisible)
             RenderActiveTabPreservingScroll();
+
+        bool success = false;
+        string? failureReason = null;
         try
         {
-            await RefreshAccountDataAsync(token);
+            var task = RefreshAccountDataAsync(token);
+            _activeRefreshTask = task;
+            success = await task;
+            if (!success)
+            {
+                failureReason = _profileLoadIssue ?? Copy("Активная подписка не найдена", "No active subscription found");
+            }
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
             ClearLocalSession();
+            failureReason = Copy("Сеанс истёк", "Session expired");
             ShowInfoDialog(Copy("Сеанс истёк", "Session expired"),
                 Copy("Войди через Telegram ещё раз.", "Sign in with Telegram again."));
         }
         catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
+            failureReason = Copy("Не удалось обновить профиль", "Could not refresh profile");
             ShowInfoDialog(Copy("Не удалось обновить профиль", "Could not refresh profile"),
                 Copy("Проверь интернет и повтори попытку.", "Check your connection and try again."));
         }
         finally
         {
             _profileRefreshInProgress = false;
+            _activeRefreshTask = null;
+            UpdateHomeGlobePresentation();
             if (IsVisible)
                 RenderActiveTabPreservingScroll();
+
+            if (success)
+            {
+                _routeGlobe?.SetSubscriptionRefreshState("success");
+            }
+            else
+            {
+                _routeGlobe?.SetSubscriptionRefreshState("error", failureReason);
+            }
         }
     }
 
