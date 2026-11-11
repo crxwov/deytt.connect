@@ -166,7 +166,7 @@ public sealed class HomeWindowTests
     [AvaloniaTheory]
     [InlineData("disconnected", "не подключено", "подключиться")]
     [InlineData("connecting", "подключаемся…", "отменить подключение")]
-    [InlineData("error", "не удалось подключиться", "повторить")]
+    [InlineData("error", "не удалось подключиться", "ошибка подключения")]
     [InlineData("connected", "подключено", "подключено")]
     public void Vpn_fixture_renders_truthful_state_in_home_presentation(
         string state, string expectedStatus, string expectedAction)

@@ -721,7 +721,7 @@ public partial class MainWindow
                                         ? CopyExact("открыть профиль", "open profile")
                                         : !_vpnServiceAvailable
                                             ? CopyExact("проверить службу", "check service")
-                                            : failed ? CopyExact("повторить", "retry") : CopyExact("подключиться", "connect");
+                                            : failed ? CopyExact("ошибка подключения", "connection error") : CopyExact("подключиться", "connect");
         if (!tunnelActive && !canCancel)
         {
             if (_sessionToken is null)
@@ -1099,7 +1099,13 @@ public partial class MainWindow
             _ = CancelVpnConnectionAsync();
             return;
         }
-        if (_vpnActionInProgress || _routeProbeInProgress || _vpnCancelInProgress)
+        if (_routeProbeInProgress)
+        {
+            _ = CancelRouteProbeAsync(renderProgress: false);
+            SuspendRouteCountryProbes();
+            _routeProbeInProgress = false;
+        }
+        if (_vpnActionInProgress || _vpnCancelInProgress)
             return;
         if (!tunnelActive && !_sessionRestoreComplete)
             return;

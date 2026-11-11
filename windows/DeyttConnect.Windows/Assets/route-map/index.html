@@ -5854,9 +5854,6 @@
     window.deyttSetRoutesData = function(routes) {
       if (!Array.isArray(routes)) return;
       currentRouteCatalog = routes;
-      if (subscriptionRefreshPhase === "refreshing") {
-        setSubscriptionRefreshState("success");
-      }
       document.querySelectorAll(".proto-row, .smart-route-row").forEach(card => {
         const route = routeForCard(card, routes);
         setRouteCardVisible(card, !!route);

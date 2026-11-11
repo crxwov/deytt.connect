@@ -93,6 +93,22 @@ public partial class MainWindow : Window
     public MainWindow(string? initialImportUrl)
     {
         InitializeComponent();
+        try
+        {
+            var iconUri = new Uri("avares://DeyttConnect.Windows/Assets/deyttconnect.ico");
+            if (Avalonia.Platform.AssetLoader.Exists(iconUri))
+            {
+                using var stream = Avalonia.Platform.AssetLoader.Open(iconUri);
+                Icon = new WindowIcon(stream);
+            }
+            else
+            {
+                var localIco = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "deyttconnect.ico");
+                if (System.IO.File.Exists(localIco))
+                    Icon = new WindowIcon(localIco);
+            }
+        }
+        catch { }
         WorkspaceHeader.PointerPressed += OnWorkspaceHeaderPointerPressed;
         HeaderContentGrid.PointerPressed += OnWorkspaceHeaderPointerPressed;
         HeaderDragRegion.PointerPressed += OnWorkspaceHeaderPointerPressed;
@@ -3047,8 +3063,15 @@ public partial class MainWindow : Window
 
     private async Task ToggleVpnAsync()
     {
-        if (_vpnActionInProgress || _vpnCancelInProgress || _routeProbeInProgress || _quitInProgress || _exitAuthorized)
+        if (_vpnActionInProgress || _vpnCancelInProgress || _quitInProgress || _exitAuthorized)
             return;
+
+        if (_routeProbeInProgress)
+        {
+            _ = CancelRouteProbeAsync(renderProgress: false);
+            SuspendRouteCountryProbes();
+            _routeProbeInProgress = false;
+        }
 
         var wasConnected = IsVpnTunnelActive(_vpnSnapshot.State);
         var operationVersion = ++_vpnOperationVersion;
@@ -4258,7 +4281,10 @@ public partial class MainWindow : Window
                 try
                 {
                     var existingSuccess = await _activeRefreshTask;
-                    _routeGlobe?.SetSubscriptionRefreshState(existingSuccess ? "success" : "error", existingSuccess ? null : _profileLoadIssue);
+                    var successMsg = _routes.Count > 0
+                        ? Copy($"✓ Маршруты обновлены ({_routes.Count})", $"✓ Routes updated ({_routes.Count})")
+                        : Copy("✓ Маршруты обновлены", "✓ Routes updated");
+                    _routeGlobe?.SetSubscriptionRefreshState(existingSuccess ? "success" : "error", existingSuccess ? successMsg : _profileLoadIssue);
                 }
                 catch
                 {
@@ -4278,7 +4304,7 @@ public partial class MainWindow : Window
         }
 
         _profileRefreshInProgress = true;
-        _routeGlobe?.SetSubscriptionRefreshState("refreshing");
+        _routeGlobe?.SetSubscriptionRefreshState("refreshing", Copy("Проверяем сессию и ключи…", "Checking session and keys…"));
         if (IsVisible)
             RenderActiveTabPreservingScroll();
 
@@ -4286,7 +4312,18 @@ public partial class MainWindow : Window
         string? failureReason = null;
         try
         {
-            var task = RefreshAccountDataAsync(token);
+            var progress = new Progress<string>(stage =>
+            {
+                var msg = stage switch
+                {
+                    "metadata" => Copy("Проверяем сессию и ключи…", "Checking session and keys…"),
+                    "profile" => Copy("Загружаем профиль маршрутов…", "Loading routes profile…"),
+                    "optional" => Copy("Обновляем AmneziaWG…", "Updating AmneziaWG…"),
+                    _ => Copy("Обновляем подписку и маршруты…", "Refreshing subscription and routes…")
+                };
+                _routeGlobe?.SetSubscriptionRefreshState("refreshing", msg);
+            });
+            var task = RefreshAccountDataAsync(token, progress: progress);
             _activeRefreshTask = task;
             success = await task;
             if (!success)
@@ -4317,7 +4354,10 @@ public partial class MainWindow : Window
 
             if (success)
             {
-                _routeGlobe?.SetSubscriptionRefreshState("success");
+                var successMsg = _routes.Count > 0
+                    ? Copy($"✓ Маршруты обновлены ({_routes.Count})", $"✓ Routes updated ({_routes.Count})")
+                    : Copy("✓ Маршруты обновлены", "✓ Routes updated");
+                _routeGlobe?.SetSubscriptionRefreshState("success", successMsg);
             }
             else
             {

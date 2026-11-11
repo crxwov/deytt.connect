@@ -3,7 +3,7 @@
         xmlns:controls="using:DeyttConnect.Windows.Controls"
         xmlns:chrome="using:Avalonia.Controls.Chrome"
         x:Class="DeyttConnect.Windows.Views.MainWindow"
-        Icon="/Assets/deyttconnect.ico"
+        Icon="avares://DeyttConnect.Windows/Assets/deyttconnect.ico"
         Title="./connect"
         WindowDecorations="None"
         CanResize="True"
