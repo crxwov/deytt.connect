@@ -156,36 +156,79 @@ public partial class MainWindow
 
     private async Task RefreshSignedInAccountAsync()
     {
+        Services.UiDiagnostics.Log($"subscription refresh requested (inProgress={_profileRefreshInProgress})");
+        if (_profileRefreshInProgress)
+        {
+            if (_activeRefreshTask is not null)
+            {
+                try
+                {
+                    var existingSuccess = await _activeRefreshTask;
+                    _routeGlobe?.SetSubscriptionRefreshState(existingSuccess ? "success" : "error", existingSuccess ? null : _profileLoadIssue);
+                }
+                catch
+                {
+                    _routeGlobe?.SetSubscriptionRefreshState("error", Copy("Не удалось обновить профиль", "Could not refresh profile"));
+                }
+            }
+            return;
+        }
+
         var token = _sessionToken;
         if (token is null)
         {
+            Services.UiDiagnostics.Log("subscription refresh blocked (no session)");
+            _routeGlobe?.SetSubscriptionRefreshState("error", Copy("Войдите в аккаунт", "Sign in first"));
             ShowSignInDialog();
             return;
         }
 
         _profileRefreshInProgress = true;
+        _routeGlobe?.SetSubscriptionRefreshState("refreshing");
         if (IsVisible)
             RenderActiveTabPreservingScroll();
+
+        bool success = false;
+        string? failureReason = null;
         try
         {
-            await RefreshAccountDataAsync(token);
+            var task = RefreshAccountDataAsync(token);
+            _activeRefreshTask = task;
+            success = await task;
+            if (!success)
+            {
+                failureReason = _profileLoadIssue ?? Copy("Активная подписка не найдена", "No active subscription found");
+            }
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
             ClearLocalSession();
+            failureReason = Copy("Сеанс истёк", "Session expired");
             ShowInfoDialog(Copy("Сеанс истёк", "Session expired"),
                 Copy("Войди через Telegram ещё раз.", "Sign in with Telegram again."));
         }
         catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
+            failureReason = Copy("Не удалось обновить профиль", "Could not refresh profile");
             ShowInfoDialog(Copy("Не удалось обновить профиль", "Could not refresh profile"),
                 Copy("Проверь интернет и повтори попытку.", "Check your connection and try again."));
         }
         finally
         {
             _profileRefreshInProgress = false;
+            _activeRefreshTask = null;
+            UpdateHomeGlobePresentation();
             if (IsVisible)
                 RenderActiveTabPreservingScroll();
+
+            if (success)
+            {
+                _routeGlobe?.SetSubscriptionRefreshState("success");
+            }
+            else
+            {
+                _routeGlobe?.SetSubscriptionRefreshState("error", failureReason);
+            }
         }
     }
 

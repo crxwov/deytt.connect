@@ -67,6 +67,7 @@ public partial class MainWindow : Window
     private bool _vpnCancelRequested;
     private bool _vpnCancelInProgress;
     private Task<WindowsTunnelSnapshot>? _vpnConnectTask;
+    private Task<bool>? _activeRefreshTask;
     private long _vpnOperationVersion;
     private readonly string? _initialImportUrl;
     private string? _pendingExternalImportUrl;
