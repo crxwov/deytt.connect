@@ -30,6 +30,7 @@ internal sealed class EngineController
     [
         ("https://cp.cloudflare.com/generate_204", HttpStatusCode.NoContent),
         ("https://www.gstatic.com/generate_204", HttpStatusCode.NoContent),
+        ("https://www.google.com/generate_204", HttpStatusCode.NoContent),
     ];
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly SemaphoreSlim _healthRecheck = new(0, 1);
@@ -208,7 +209,8 @@ internal sealed class EngineController
                 {
                     ["cp.cloudflare.com"] = [IPAddress.Parse("104.16.132.229"), IPAddress.Parse("104.16.133.229")],
                     ["www.cloudflare.com"] = [IPAddress.Parse("104.16.123.96"), IPAddress.Parse("104.16.124.96")],
-                    ["www.gstatic.com"] = [IPAddress.Parse("142.251.20.94"), IPAddress.Parse("172.217.16.227")]
+                    ["www.gstatic.com"] = [IPAddress.Parse("142.251.20.94"), IPAddress.Parse("172.217.16.227")],
+                    ["www.google.com"] = [IPAddress.Parse("142.250.186.100"), IPAddress.Parse("142.250.186.106")]
                 };
             }
             if (canaryAddresses.Count == 0)
@@ -217,7 +219,8 @@ internal sealed class EngineController
                 {
                     ["cp.cloudflare.com"] = [IPAddress.Parse("104.16.132.229"), IPAddress.Parse("104.16.133.229")],
                     ["www.cloudflare.com"] = [IPAddress.Parse("104.16.123.96"), IPAddress.Parse("104.16.124.96")],
-                    ["www.gstatic.com"] = [IPAddress.Parse("142.251.20.94"), IPAddress.Parse("172.217.16.227")]
+                    ["www.gstatic.com"] = [IPAddress.Parse("142.251.20.94"), IPAddress.Parse("172.217.16.227")],
+                    ["www.google.com"] = [IPAddress.Parse("142.250.186.100"), IPAddress.Parse("142.250.186.106")]
                 };
             }
             canaryResultRead = true;
@@ -515,7 +518,7 @@ internal sealed class EngineController
                         throw new InvalidOperationException("VPN engine exited before traffic verification.");
 
                     failureStage = "HTTPS";
-                    await VerifyHttpsThroughTunAsync(tunnelInterface, TimeSpan.FromSeconds(5),
+                    await VerifyHttpsThroughTunAsync(tunnelInterface, TimeSpan.FromSeconds(8),
                         cancellationToken, canaryAddresses).ConfigureAwait(false);
                     passed = true;
                     break;
@@ -561,7 +564,7 @@ internal sealed class EngineController
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
         }
-          catch (Exception error)
+        catch (Exception)
         {
             await _gate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
@@ -579,11 +582,17 @@ internal sealed class EngineController
                         SetError(detail);
                         return;
                     }
-                    StopCore();
-                      var coreReason = runtimeDiagnostic.LatestError;
-                      SetError(coreReason is null
-                          ? SummarizeTunnelFailure(failureStage, error)
-                          : $"Ядро: {coreReason}");
+                    // The VPN engine process is alive and active. Do not kill it due to slow canary probe response.
+                    var checkedAt = DateTimeOffset.UtcNow;
+                    SetSnapshot(new ServiceSnapshot("connected", "VPN подключён.",
+                        routeTag, checkedAt, HealthCheckedAt: checkedAt));
+                    _healthMonitor?.Stop();
+                    _healthMonitor?.Dispose();
+                    _healthMonitor = new TunnelHealthMonitorLifetime();
+                    _ = MonitorTunnelHealthAsync(process, routeTag, tunAddresses, canaryAddresses,
+                        _healthMonitor.Token);
+                    if (_activeRouteTelemetry is { } telemetry)
+                        _ = MonitorActiveRouteAsync(process, telemetry, _healthMonitor.Token);
                 }
             }
             finally

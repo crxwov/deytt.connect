@@ -3,6 +3,7 @@ using Avalonia.Media.Fonts;
 using Avalonia.Threading;
 using System;
 using System.IO.Pipes;
+using System.Runtime.InteropServices;
 using System.Text;
 using DeyttConnect.Protocol;
 using DeyttConnect.Windows.Services;
@@ -39,12 +40,24 @@ sealed class Program
     private const string ActivationPipeName = "DEYTT.Connect.Windows.Activate";
     private static CancellationTokenSource? _activationCancellation;
 
+    [DllImport("shell32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(string appID);
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
     public static void Main(string[] args)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                SetCurrentProcessExplicitAppUserModelID("DEYTT.Connect.Client");
+            }
+            catch { }
+        }
+
         var appArguments = args.ToList();
         string? importUrl = null;
         for (var index = appArguments.Count - 1; index >= 0; index--)

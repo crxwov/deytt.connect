@@ -93,6 +93,22 @@ public partial class MainWindow : Window
     public MainWindow(string? initialImportUrl)
     {
         InitializeComponent();
+        try
+        {
+            var iconUri = new Uri("avares://DeyttConnect.Windows/Assets/deyttconnect.ico");
+            if (Avalonia.Platform.AssetLoader.Exists(iconUri))
+            {
+                using var stream = Avalonia.Platform.AssetLoader.Open(iconUri);
+                Icon = new WindowIcon(stream);
+            }
+            else
+            {
+                var localIco = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "deyttconnect.ico");
+                if (System.IO.File.Exists(localIco))
+                    Icon = new WindowIcon(localIco);
+            }
+        }
+        catch { }
         WorkspaceHeader.PointerPressed += OnWorkspaceHeaderPointerPressed;
         HeaderContentGrid.PointerPressed += OnWorkspaceHeaderPointerPressed;
         HeaderDragRegion.PointerPressed += OnWorkspaceHeaderPointerPressed;
@@ -3047,8 +3063,15 @@ public partial class MainWindow : Window
 
     private async Task ToggleVpnAsync()
     {
-        if (_vpnActionInProgress || _vpnCancelInProgress || _routeProbeInProgress || _quitInProgress || _exitAuthorized)
+        if (_vpnActionInProgress || _vpnCancelInProgress || _quitInProgress || _exitAuthorized)
             return;
+
+        if (_routeProbeInProgress)
+        {
+            _ = CancelRouteProbeAsync(renderProgress: false);
+            SuspendRouteCountryProbes();
+            _routeProbeInProgress = false;
+        }
 
         var wasConnected = IsVpnTunnelActive(_vpnSnapshot.State);
         var operationVersion = ++_vpnOperationVersion;
@@ -4090,6 +4113,7 @@ public partial class MainWindow : Window
         TelegramAccount? verifiedAccount = null,
         IProgress<string>? progress = null)
     {
+        Services.UiDiagnostics.Log("RefreshAccountDataAsync started");
         if (_sessionToken == token)
         {
             ClearAwgTraffic("loading");
@@ -4134,6 +4158,7 @@ public partial class MainWindow : Window
                 _selectedRoute = "auto";
                 SavePreferences();
             }
+            Services.UiDiagnostics.Log($"RefreshAccountDataAsync success (happAvailable={_keysSnapshot.HappAvailable}, routes={_routes.Count})");
             return _keysSnapshot.HappAvailable;
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
@@ -4250,38 +4275,94 @@ public partial class MainWindow : Window
     {
         Services.UiDiagnostics.Log($"subscription refresh requested (inProgress={_profileRefreshInProgress})");
         if (_profileRefreshInProgress)
+        {
+            if (_activeRefreshTask is not null)
+            {
+                try
+                {
+                    var existingSuccess = await _activeRefreshTask;
+                    var successMsg = _routes.Count > 0
+                        ? Copy($"✓ Маршруты обновлены ({_routes.Count})", $"✓ Routes updated ({_routes.Count})")
+                        : Copy("✓ Маршруты обновлены", "✓ Routes updated");
+                    _routeGlobe?.SetSubscriptionRefreshState(existingSuccess ? "success" : "error", existingSuccess ? successMsg : _profileLoadIssue);
+                }
+                catch
+                {
+                    _routeGlobe?.SetSubscriptionRefreshState("error", Copy("Не удалось обновить профиль", "Could not refresh profile"));
+                }
+            }
             return;
+        }
+
         var token = _sessionToken;
         if (token is null)
         {
             Services.UiDiagnostics.Log("subscription refresh blocked (no session)");
+            _routeGlobe?.SetSubscriptionRefreshState("error", Copy("Войдите в аккаунт", "Sign in first"));
             ShowSignInDialog();
             return;
         }
 
         _profileRefreshInProgress = true;
+        _routeGlobe?.SetSubscriptionRefreshState("refreshing", Copy("Проверяем сессию и ключи…", "Checking session and keys…"));
         if (IsVisible)
             RenderActiveTabPreservingScroll();
+
+        bool success = false;
+        string? failureReason = null;
         try
         {
-            await RefreshAccountDataAsync(token);
+            var progress = new Progress<string>(stage =>
+            {
+                var msg = stage switch
+                {
+                    "metadata" => Copy("Проверяем сессию и ключи…", "Checking session and keys…"),
+                    "profile" => Copy("Загружаем профиль маршрутов…", "Loading routes profile…"),
+                    "optional" => Copy("Обновляем AmneziaWG…", "Updating AmneziaWG…"),
+                    _ => Copy("Обновляем подписку и маршруты…", "Refreshing subscription and routes…")
+                };
+                _routeGlobe?.SetSubscriptionRefreshState("refreshing", msg);
+            });
+            var task = RefreshAccountDataAsync(token, progress: progress);
+            _activeRefreshTask = task;
+            success = await task;
+            if (!success)
+            {
+                failureReason = _profileLoadIssue ?? Copy("Активная подписка не найдена", "No active subscription found");
+            }
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
             ClearLocalSession();
+            failureReason = Copy("Сеанс истёк", "Session expired");
             ShowInfoDialog(Copy("Сеанс истёк", "Session expired"),
                 Copy("Войди через Telegram ещё раз.", "Sign in with Telegram again."));
         }
         catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
+            failureReason = Copy("Не удалось обновить профиль", "Could not refresh profile");
             ShowInfoDialog(Copy("Не удалось обновить профиль", "Could not refresh profile"),
                 Copy("Проверь интернет и повтори попытку.", "Check your connection and try again."));
         }
         finally
         {
             _profileRefreshInProgress = false;
+            _activeRefreshTask = null;
+            UpdateHomeGlobePresentation();
             if (IsVisible)
                 RenderActiveTabPreservingScroll();
+
+            if (success)
+            {
+                var successMsg = _routes.Count > 0
+                    ? Copy($"✓ Маршруты обновлены ({_routes.Count})", $"✓ Routes updated ({_routes.Count})")
+                    : Copy("✓ Маршруты обновлены", "✓ Routes updated");
+                _routeGlobe?.SetSubscriptionRefreshState("success", successMsg);
+            }
+            else
+            {
+                _routeGlobe?.SetSubscriptionRefreshState("error", failureReason);
+            }
         }
     }
 
