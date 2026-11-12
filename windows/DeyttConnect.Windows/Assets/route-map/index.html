@@ -4911,7 +4911,7 @@
         <span class="settings-section-title">обновления</span>
         <div class="liquid-glass-card" style="padding: 20px 22px; border-radius: 18px; display: flex; flex-direction: column; gap: 14px;">
           <div>
-            <strong style="color: #FFFFFF; font-size: 15px; display: block; font-family: 'Unbounded', sans-serif;" id="settings-app-version">deytt.connect · v0.11.118</strong>
+            <strong style="color: #FFFFFF; font-size: 15px; display: block; font-family: 'Unbounded', sans-serif;" id="settings-app-version">deytt./connect</strong>
             <span style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px; display: block;" id="settings-app-status">актуальная версия · канал ./beta</span>
           </div>
           <button class="home-measure" id="btn-check-updates" type="button" style="height: 44px !important;">
@@ -5554,6 +5554,7 @@
 
     function updateCountryRankings(countryCard) {
       if (!countryCard) return;
+      const en = document.documentElement.lang === "en";
       const rows = [...countryCard.querySelectorAll(".proto-row")];
       const validRows = rows.map(r => {
         const lat = parseFloat(r.dataset.probeLatency);
@@ -5575,7 +5576,7 @@
         if (bestTitle && !best.querySelector(".badge-best-choice")) {
           const badge = document.createElement("span");
           badge.className = "badge-best-choice";
-          badge.textContent = "лучший выбор";
+          badge.textContent = en ? "best choice" : "лучший выбор";
           bestTitle.appendChild(badge);
         }
 
@@ -5585,7 +5586,7 @@
           if (slowestTitle && !slowest.querySelector(".badge-slowest-choice")) {
             const badge = document.createElement("span");
             badge.className = "badge-slowest-choice";
-            badge.textContent = "медленный ответ";
+            badge.textContent = en ? "slowest response" : "медленный ответ";
             slowestTitle.appendChild(badge);
           }
         }
@@ -5594,6 +5595,9 @@
 
     window.deyttUpdateRouteProbe = function(tag, latency, speedMbps, stage, error) {
       if (!tag) return;
+      const en = document.documentElement.lang === "en";
+      const msUnit = en ? "ms" : "мс";
+      const spdUnit = en ? "mbps" : "мбит/с";
       const row = findProtoRow(tag);
       if (row) {
         const latEl = row.querySelector("[data-metric-latency], .proto-latency");
@@ -5601,17 +5605,17 @@
         const dot = row.querySelector(".ping-dot, .grade-dot");
 
         if (stage === "latency" || stage === "waiting_speed" || stage === "download") {
-          if (latEl) latEl.innerHTML = latency != null ? `${latency} мс` : getSpokeSpinnerSvg(13);
-          if (spdEl) spdEl.innerHTML = speedMbps != null ? `${speedMbps} мбит/с` : getSpokeSpinnerSvg(13);
+          if (latEl) latEl.innerHTML = latency != null ? `${latency} ${msUnit}` : getSpokeSpinnerSvg(13);
+          if (spdEl) spdEl.innerHTML = speedMbps != null ? `${speedMbps} ${spdUnit}` : getSpokeSpinnerSvg(13);
           if (dot) dot.classList.add("is-probing");
         } else if (stage === "complete") {
           row.classList.remove("is-probing");
           if (latEl) {
-            latEl.textContent = latency != null ? `${latency} мс` : "—";
+            latEl.textContent = latency != null ? `${latency} ${msUnit}` : "—";
             latEl.classList.toggle("good", latency != null && latency < 150);
           }
           if (spdEl) {
-            spdEl.textContent = speedMbps != null ? `${speedMbps} мбит/с` : "—";
+            spdEl.textContent = speedMbps != null ? `${speedMbps} ${spdUnit}` : "—";
             spdEl.classList.toggle("good", speedMbps != null && speedMbps > 50);
           }
           if (dot) {
@@ -5628,8 +5632,8 @@
         } else if (stage === "error") {
           row.classList.remove("is-probing");
           if (dot) dot.classList.remove("is-probing");
-          if (latEl) latEl.textContent = latency != null ? `${latency} мс` : "—";
-          if (spdEl) spdEl.textContent = speedMbps != null ? `${speedMbps} мбит/с` : "—";
+          if (latEl) latEl.textContent = latency != null ? `${latency} ${msUnit}` : "—";
+          if (spdEl) spdEl.textContent = speedMbps != null ? `${speedMbps} ${spdUnit}` : "—";
         }
       }
 
@@ -5889,9 +5893,130 @@
       }
       setText("profile-devices-count", copy(`${devices.length} устройств · ${data.sessionsLoadIssue ? "—" : sessions.length} сеансов`, `${devices.length} devices · ${data.sessionsLoadIssue ? "—" : sessions.length} sessions`));
     };
+    window.deyttApplyPageTranslations = function(lang) {
+      const en = lang === "en";
+      const t = (ru, enText) => en ? enText : ru;
+      const setSelText = (selector, text) => {
+        const el = document.querySelector(selector);
+        if (el) el.textContent = text;
+      };
+      const setIdTitle = (id, title) => {
+        const el = document.getElementById(id);
+        if (el) el.title = title;
+      };
+
+      // Top navigation dock & window controls
+      setSelText('#tab-home .nav-label-wrap span', t("главная", "home"));
+      setSelText('#tab-routes .nav-label-wrap span', t("маршруты", "routes"));
+      setSelText('#tab-profile .nav-label-wrap span', t("профиль", "profile"));
+      setSelText('#tab-settings .nav-label-wrap span', t("настройки", "settings"));
+      setIdTitle("win-minimize", t("свернуть", "minimize"));
+      setIdTitle("win-maximize", t("развернуть", "maximize"));
+      setIdTitle("win-close", t("закрыть", "close"));
+
+      // Home stage static controls
+      setSelText('#home-measure span', t("обновить замер", "refresh measurement"));
+      setSelText('[data-inspector-resume]', t("показать все линии", "show all paths"));
+
+      // Routes stage
+      const stageRoutes = document.getElementById("stage-routes");
+      if (stageRoutes) {
+        stageRoutes.setAttribute("aria-label", t("Маршруты подключения", "Connection routes"));
+        setSelText('#stage-routes .routes-title', t("маршруты", "routes"));
+        setSelText('#stage-routes .routes-subtitle', t(
+          "откройте страну — проверим отклик её маршрутов и скорость по очереди. дождитесь результата.",
+          "expand a country to measure route latency and speed sequentially. wait for results."
+        ));
+        setIdTitle("routes-refresh-card", t("обновить подписку и маршруты", "refresh subscription and routes"));
+        setSelText("#routes-refresh-title", t("обновить подписку", "refresh subscription"));
+        setSelText("#routes-refresh-sub", t("загрузить доступные маршруты", "fetch available routes"));
+        const labels = stageRoutes.querySelectorAll(".routes-section-label");
+        if (labels[0]) labels[0].textContent = t("быстрый выбор", "quick select");
+        if (labels[1]) labels[1].textContent = t("страны", "countries");
+        setSelText('#card-route-auto .quick-select-title', t("автоподбор", "auto-select"));
+        setSelText('#card-route-auto .quick-select-sub', t("выберем доступный узел", "picks the best available node"));
+        setSelText('#card-route-ru-de .quick-select-title', t("lte · белые списки", "lte · allowlist"));
+
+        const countryNames = {
+          nl: t("нидерланды", "netherlands"),
+          de: t("германия", "germany"),
+          ru: t("россия", "russia"),
+          fi: t("финляндия", "finland"),
+          it: t("италия", "italy"),
+        };
+        document.querySelectorAll(".country-accordion").forEach(acc => {
+          const cKey = (acc.dataset.countryKey || "").toLowerCase();
+          const nameEl = acc.querySelector(".country-name");
+          if (nameEl && countryNames[cKey]) nameEl.textContent = countryNames[cKey];
+        });
+        stageRoutes.querySelectorAll('.proto-row[data-route-key$="-awg"] .proto-detail').forEach(el => {
+          el.textContent = t("профиль amneziawg", "amneziawg profile");
+        });
+        stageRoutes.querySelectorAll(".proto-telemetry").forEach(tel => {
+          const ks = tel.querySelectorAll(".metric-k");
+          if (ks[0]) ks[0].textContent = t("отклик:", "response:");
+          if (ks[1]) ks[1].textContent = t("скорость:", "speed:");
+        });
+        stageRoutes.querySelectorAll(".proto-selected-mark").forEach(el => {
+          el.textContent = t("выбрано", "selected");
+        });
+        stageRoutes.querySelectorAll(".btn-select-route").forEach(btn => {
+          const isSel = btn.closest(".is-selected") || btn.classList.contains("is-selected");
+          btn.textContent = isSel ? t("активен ✓", "active ✓") : t("выбрать", "select");
+        });
+        stageRoutes.querySelectorAll(".badge-best-choice").forEach(b => b.textContent = t("лучший выбор", "best choice"));
+        stageRoutes.querySelectorAll(".badge-slowest-choice").forEach(b => b.textContent = t("медленный ответ", "slowest response"));
+        stageRoutes.querySelectorAll(".country-accordion").forEach(acc => updateCountryRankings(acc));
+      }
+
+      // Profile stage
+      const stageProfile = document.getElementById("stage-profile");
+      if (stageProfile) {
+        stageProfile.setAttribute("aria-label", t("Профиль пользователя", "User profile"));
+        setSelText('#stage-profile .profile-title', t("профиль", "profile"));
+        setSelText('#stage-profile .routes-section-label', t("твоя подписка", "your subscription"));
+        setSelText('#card-profile-renew .action-card-title', t("продлить подписку", "renew subscription"));
+        setSelText('#card-profile-renew .action-card-sub', t("продлить или сменить тариф", "extend or change your plan"));
+        setSelText('#btn-renew-tariff', t("продлить", "renew"));
+        setSelText('#card-profile-support .action-card-title', t("поддержка", "support"));
+        setSelText('#card-profile-support .action-card-sub', t("чат с командой в приложении · онлайн", "in-app support chat · online"));
+        setSelText('#btn-support-chat', t("чат", "chat"));
+        setSelText('#card-profile-devices .action-card-title', t("устройства и сессии", "devices and sessions"));
+      }
+
+      // Settings stage
+      const stageSettings = document.getElementById("stage-settings");
+      if (stageSettings) {
+        stageSettings.setAttribute("aria-label", t("параметры и настройки", "preferences and settings"));
+        setSelText('#stage-settings .stage-title', t("настройки", "settings"));
+        setSelText('#stage-settings .stage-subtitle', t("параметры подключения, язык, приватность и служба vpn", "connection parameters, language, privacy and vpn service"));
+        const secTitles = stageSettings.querySelectorAll(".settings-section-title");
+        if (secTitles[0]) secTitles[0].textContent = t("язык и аккаунт", "language and account");
+        if (secTitles[1]) secTitles[1].textContent = t("подключение", "connection");
+        if (secTitles[2]) secTitles[2].textContent = t("вид и приватность", "appearance and privacy");
+        if (secTitles[3]) secTitles[3].textContent = t("обновления", "updates");
+        setSelText('#row-setting-lang .setting-label', t("язык приложения", "app language"));
+        setSelText('#row-setting-account .setting-label', t("аккаунт telegram", "telegram account"));
+        setSelText('#row-setting-split .setting-label', t("раздельное туннелирование", "split tunneling"));
+        setSelText('#row-setting-probe .setting-label', t("проверка маршрута", "route check method"));
+        setSelText('#row-setting-service .setting-label', t("служба vpn", "vpn service"));
+        setSelText('#row-setting-bot .setting-label', t("бот deytt", "deytt bot"));
+        setSelText('#row-setting-bot .setting-desc', t("управление подпиской и оплата в telegram", "subscription management and payments in telegram"));
+        setSelText('#row-switch-region .setting-label', t("регион на карте", "region on globe"));
+        setSelText('#row-switch-region .setting-desc', t("по IP через ipinfo.io · без GPS и сохранения координат", "by IP via ipinfo.io · no GPS and no coordinate storage"));
+        setSelText('#row-switch-motion .setting-label', t("меньше движения", "reduced motion"));
+        setSelText('#row-switch-motion .setting-desc', t("остановить анимацию фона", "reduce background motion"));
+        setSelText('#btn-check-updates span', t("проверить обновления", "check for updates"));
+      }
+
+      if (window.__currentSettings) window.deyttSetSettingsData(window.__currentSettings);
+    };
+
     window.deyttSetSettingsData = function(data) {
       if (!data) return;
       window.__currentSettings = data;
+      const en = (data.language || document.documentElement.lang) === "en";
+      const t = (ru, enText) => en ? enText : ru;
       const sLang = document.getElementById("setting-lang-desc");
       const sAcc = document.getElementById("setting-account-desc");
       const btnAcc = document.getElementById("btn-setting-account");
@@ -5901,18 +6026,20 @@
       const swRegion = document.getElementById("switch-setting-region");
       const swMotion = document.getElementById("switch-setting-motion");
       const sVer = document.getElementById("settings-app-version");
+      const sStat = document.getElementById("settings-app-status");
 
       if (sLang && data.language) sLang.textContent = data.language === "ru" ? "русский" : "english";
       if (sAcc) {
-        sAcc.textContent = data.accountUsername ? "@" + data.accountUsername : "войти для управления подпиской";
-        if (btnAcc) btnAcc.textContent = data.accountUsername ? "профиль" : "войти";
+        sAcc.textContent = data.accountUsername ? "@" + data.accountUsername : t("войти для управления подпиской", "sign in to manage subscription");
+        if (btnAcc) btnAcc.textContent = data.accountUsername ? t("профиль", "profile") : t("войти", "sign in");
       }
       if (sSplit && data.splitTunnelSummary) sSplit.textContent = data.splitTunnelSummary;
-      if (sProbe && data.probeMethod) sProbe.textContent = "HTTP " + data.probeMethod + " · быстрая проверка, загрузка 1 с";
-      if (sServ) sServ.textContent = data.vpnServiceAvailable ? "служба установлена · готова к работе" : "требуются права администратора";
+      if (sProbe && data.probeMethod) sProbe.textContent = "HTTP " + data.probeMethod + t(" · быстрая проверка, загрузка 1 с", " · quick check, 1 s load");
+      if (sServ) sServ.textContent = data.vpnServiceAvailable ? t("служба установлена · готова к работе", "service installed · ready") : t("требуются права администратора", "administrator rights required");
       if (swRegion) swRegion.classList.toggle("is-checked", !!data.mapRegionEnabled);
       if (swMotion) swMotion.classList.toggle("is-checked", !!data.reduceMotion);
-      if (sVer && data.appVersion) sVer.textContent = `версия ${data.appVersion} (windows x64) · канал: ./beta`;
+      if (sVer && data.appVersion) sVer.textContent = t(`версия ${data.appVersion} (windows x64) · канал: ./beta`, `version ${data.appVersion} (windows x64) · channel: ./beta`);
+      if (sStat) sStat.textContent = t("актуальная версия · канал ./beta", "up to date · ./beta channel");
     };
 
     let currentRouteCatalog = [];
@@ -5966,7 +6093,8 @@
         const selected = route.isSelected === true;
         card.classList.toggle("is-selected", selected);
         const button = card.querySelector(".btn-select-route");
-        if (button) button.textContent = selected ? "активен ✓" : "выбрать";
+        const en = document.documentElement.lang === "en";
+        if (button) button.textContent = selected ? (en ? "active ✓" : "активен ✓") : (en ? "select" : "выбрать");
         if (route.stage || route.latency != null || route.speed != null)
           window.deyttUpdateRouteProbe(route.tag || route.id, route.latency, route.speed, route.stage || "complete", route.error || null);
       });
@@ -6051,14 +6179,15 @@
         homeCountry.hidden = key === "auto" || !countryName;
       }
       if (homeCity) homeCity.textContent = routeName;
+      const en = document.documentElement.lang === "en";
       const homeRouteSubtitle = document.getElementById("home-route-subtitle");
       if (homeRouteSubtitle) {
         if (key === "auto") {
-          homeRouteSubtitle.innerHTML = '<span class="route-accent-tag">auto</span> <span style="opacity:0.4;">·</span> <span>выбирает самый быстрый европейский выход</span>';
+          homeRouteSubtitle.innerHTML = `<span class="route-accent-tag">auto</span> <span style="opacity:0.4;">·</span> <span>${en ? "picks the fastest european exit" : "выбирает самый быстрый европейский выход"}</span>`;
         } else if (key === "ru-de") {
-          homeRouteSubtitle.textContent = "российский вход и европейский выход";
+          homeRouteSubtitle.textContent = en ? "russian ingress and european exit" : "российский вход и европейский выход";
         } else {
-          homeRouteSubtitle.textContent = `прямой шлюз · ${countryName || routeName}`;
+          homeRouteSubtitle.textContent = `${en ? "direct gateway" : "прямой шлюз"} · ${countryName || routeName}`;
         }
       }
 
@@ -6084,7 +6213,7 @@
         const isCurrent = card.dataset.routeKey === key;
         card.classList.toggle("is-selected", isCurrent);
         const btn = card.querySelector(".btn-select-route");
-        if (btn) btn.textContent = isCurrent ? "активен ✓" : "выбрать";
+        if (btn) btn.textContent = isCurrent ? (en ? "active ✓" : "активен ✓") : (en ? "select" : "выбрать");
       });
 
       // Notify atlas with region code
@@ -6093,7 +6222,7 @@
         window.deyttSetMapRoute(atlasKey);
       }
 
-      showToast(`выбран маршрут: ${routeName}`);
+      showToast(en ? `route selected: ${routeName}` : `выбран маршрут: ${routeName}`);
     }
 
     window.deyttSelectRouteFromAtlas = function(key) {
@@ -6182,8 +6311,9 @@
         const setting = sw.dataset.setting;
         const isChecked = sw.classList.contains("is-checked");
         postHost("settings:set:" + setting + ":" + (isChecked ? "true" : "false"));
-        const state = isChecked ? "включено" : "выключено";
-        showToast(`параметр ${setting}: ${state}`);
+        const en = document.documentElement.lang === "en";
+        const state = en ? (isChecked ? "enabled" : "disabled") : (isChecked ? "включено" : "выключено");
+        showToast(en ? `${setting}: ${state}` : `параметр ${setting}: ${state}`);
       });
     });
 
@@ -6263,10 +6393,12 @@
         }
       }
 
+      const enMode = document.documentElement.lang === "en";
       const homeRouteSubtitle = document.getElementById("home-route-subtitle");
-      if (homeRouteSubtitle) {
+      const isAutoRoute = state.country === "автоподбор" || state.country === "auto-select" || state.country === "auto";
+      if (homeRouteSubtitle && (!isAutoRoute || state.statusTone === "error")) {
         if (state.message) homeRouteSubtitle.textContent = state.message;
-        else if (isGood) homeRouteSubtitle.textContent = "защищенный туннель активен";
+        else if (isGood) homeRouteSubtitle.textContent = enMode ? "secure tunnel active" : "защищенный туннель активен";
       }
 
       if (window.deyttMapAtlas) {
@@ -6359,12 +6491,13 @@
 
     // Settings Stage In-App Actions (Row click & button click parity)
     const handleLanguageClick = () => {
+      const en = document.documentElement.lang === "en";
       const current = window.__currentSettings?.language || (document.getElementById("setting-lang-desc")?.textContent?.includes("english") ? "en" : "ru");
       const html = `
         <div class="modal-choice-item ${current === 'ru' ? 'is-selected' : ''}" data-lang="ru">
           <div>
             <span class="modal-choice-title">русский</span>
-            <span class="modal-choice-desc">основной язык интерфейса</span>
+            <span class="modal-choice-desc">${en ? "russian interface" : "основной язык интерфейса"}</span>
           </div>
           <span class="modal-choice-check">✓</span>
         </div>
@@ -6376,10 +6509,12 @@
           <span class="modal-choice-check">✓</span>
         </div>
       `;
-      openInAppModal("язык приложения", html);
+      openInAppModal(en ? "app language" : "язык приложения", html);
       document.querySelectorAll("#in-app-modal-content .modal-choice-item").forEach(item => {
         item.addEventListener("click", () => {
           const lang = item.dataset.lang;
+          if (typeof window.deyttSetMapLanguage === "function")
+            window.deyttSetMapLanguage(lang);
           postHost("settings:set_language:" + lang);
           const desc = document.getElementById("setting-lang-desc");
           if (desc) desc.textContent = lang === "ru" ? "русский" : "english";
@@ -6393,66 +6528,37 @@
     document.getElementById("row-setting-account")?.addEventListener("click", () => postHost("settings:signin"));
     document.getElementById("btn-setting-account")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:signin"); });
 
-    const handleSplitTunnelClick = () => {
-      const descText = document.getElementById("setting-split-desc")?.textContent || "";
-      const isOnlyVpn = descText.toLowerCase().includes("vpn только") || descText.toLowerCase().includes("только список");
-      const currentMode = isOnlyVpn ? "vpn_only" : "bypass";
-      const html = `
-        <div class="modal-choice-item ${currentMode === 'bypass' ? 'is-selected' : ''}" data-mode="bypass">
-          <div>
-            <span class="modal-choice-title">все сайты через vpn (обход)</span>
-            <span class="modal-choice-desc">все сайты направляются в туннель, исключения — напрямую</span>
-          </div>
-          <span class="modal-choice-check">✓</span>
-        </div>
-        <div class="modal-choice-item ${currentMode === 'vpn_only' ? 'is-selected' : ''}" data-mode="vpn_only">
-          <div>
-            <span class="modal-choice-title">только сайты из списка</span>
-            <span class="modal-choice-desc">в туннель направляются только указанные домены и адреса</span>
-          </div>
-          <span class="modal-choice-check">✓</span>
-        </div>
-      `;
-      openInAppModal("раздельное туннелирование", html);
-      document.querySelectorAll("#in-app-modal-content .modal-choice-item").forEach(item => {
-        item.addEventListener("click", () => {
-          const mode = item.dataset.mode;
-          postHost("settings:set_splittunnel:" + mode);
-          const desc = document.getElementById("setting-split-desc");
-          if (desc) desc.textContent = mode === "bypass" ? "все сайты через vpn" : "только сайты из списка";
-          closeInAppModal();
-        });
-      });
-    };
-    document.getElementById("row-setting-split")?.addEventListener("click", handleSplitTunnelClick);
-    document.getElementById("btn-setting-split")?.addEventListener("click", (e) => { e.stopPropagation(); handleSplitTunnelClick(); });
+    // Open full native Avalonia split-tunneling dialog (presets, modes, custom domains & .exe apps).
+    document.getElementById("row-setting-split")?.addEventListener("click", () => postHost("settings:splittunnel"));
+    document.getElementById("btn-setting-split")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:splittunnel"); });
 
     const handleProbeMethodClick = () => {
+      const en = document.documentElement.lang === "en";
       const isGet = document.getElementById("setting-probe-desc")?.textContent?.includes("GET");
       const current = isGet ? "GET" : "HEAD";
       const html = `
         <div class="modal-choice-item ${current === 'HEAD' ? 'is-selected' : ''}" data-method="HEAD">
           <div>
             <span class="modal-choice-title">HTTP HEAD</span>
-            <span class="modal-choice-desc">быстрая проверка заголовков, загрузка 1 с</span>
+            <span class="modal-choice-desc">${en ? "quick header check, 1 s load" : "быстрая проверка заголовков, загрузка 1 с"}</span>
           </div>
           <span class="modal-choice-check">✓</span>
         </div>
         <div class="modal-choice-item ${current === 'GET' ? 'is-selected' : ''}" data-method="GET">
           <div>
             <span class="modal-choice-title">HTTP GET</span>
-            <span class="modal-choice-desc">полная проверка доступности данных через маршрут</span>
+            <span class="modal-choice-desc">${en ? "full data availability check through route" : "полная проверка доступности данных через маршрут"}</span>
           </div>
           <span class="modal-choice-check">✓</span>
         </div>
       `;
-      openInAppModal("проверка маршрута", html);
+      openInAppModal(en ? "route check" : "проверка маршрута", html);
       document.querySelectorAll("#in-app-modal-content .modal-choice-item").forEach(item => {
         item.addEventListener("click", () => {
           const method = item.dataset.method;
           postHost("settings:set_probemethod:" + method);
           const desc = document.getElementById("setting-probe-desc");
-          if (desc) desc.textContent = "HTTP " + method + " · быстрая проверка, загрузка 1 с";
+          if (desc) desc.textContent = "HTTP " + method + (en ? " · quick check, 1 s load" : " · быстрая проверка, загрузка 1 с");
           closeInAppModal();
         });
       });
@@ -6461,21 +6567,26 @@
     document.getElementById("btn-setting-probe")?.addEventListener("click", (e) => { e.stopPropagation(); handleProbeMethodClick(); });
 
     const handleServiceClick = () => {
+      const en = document.documentElement.lang === "en";
       const descText = document.getElementById("setting-service-desc")?.textContent || "";
-      const isReady = descText.includes("установлена") || descText.includes("готова");
+      const isReady = descText.includes("установлена") || descText.includes("готова") || descText.includes("installed") || descText.includes("ready");
       const html = `
         <div style="padding: 4px 0 10px 0;">
           <p style="font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.7); margin: 0 0 16px 0;">
             ${isReady
-              ? "служба deyttconnect установлена и зарегистрирована в диспетчере служб windows. она управляет туннелями и безопасной фильтрацией маршрутов."
-              : "для управления VPN-соединением требуются системные права. нажмите кнопку ниже для проверки или установки службы."}
+              ? (en
+                ? "the deyttconnect service is installed and registered in the windows service manager. it handles tunnels and safe route filtering."
+                : "служба deyttconnect установлена и зарегистрирована в диспетчере служб windows. она управляет туннелями и безопасной фильтрацией маршрутов.")
+              : (en
+                ? "system administrator privileges are required to manage the vpn connection. click below to check or install the service."
+                : "для управления VPN-соединением требуются системные права. нажмите кнопку ниже для проверки или установки службы.")}
           </p>
           <button id="btn-modal-service-action" type="button" class="home-measure" style="width: 100%; height: 42px !important; justify-content: center; font-size: 13.5px;">
-            <span>${isReady ? "проверить и обновить службу" : "установить службу"}</span>
+            <span>${isReady ? (en ? "check and update service" : "проверить и обновить службу") : (en ? "install service" : "установить службу")}</span>
           </button>
         </div>
       `;
-      openInAppModal("служба vpn", html);
+      openInAppModal(en ? "vpn service" : "служба vpn", html);
       document.getElementById("btn-modal-service-action")?.addEventListener("click", () => {
         postHost("settings:service");
         closeInAppModal();

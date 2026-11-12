@@ -356,7 +356,12 @@ public partial class MainWindow : Window
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
 
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr LoadImage(IntPtr hInst, string lpszName, uint uType, int cxDesired, int cyDesired, uint fuLoad);
+
     private const int WmSetIcon = 0x0080;
+    private const uint ImageIcon = 1;
+    private const uint LrLoadFromFile = 0x0010;
     private static readonly IntPtr IconSmall = (IntPtr)0;
     private static readonly IntPtr IconBig = (IntPtr)1;
 
@@ -366,8 +371,19 @@ public partial class MainWindow : Window
             return;
         try
         {
+            var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "deyttconnect.ico");
+            if (File.Exists(iconPath))
+            {
+                var bigIcon = LoadImage(IntPtr.Zero, iconPath, ImageIcon, 32, 32, LrLoadFromFile);
+                var smallIcon = LoadImage(IntPtr.Zero, iconPath, ImageIcon, 16, 16, LrLoadFromFile);
+                if (bigIcon != IntPtr.Zero) SendMessage(hwnd, WmSetIcon, IconBig, bigIcon);
+                if (smallIcon != IntPtr.Zero) SendMessage(hwnd, WmSetIcon, IconSmall, smallIcon);
+                if (bigIcon != IntPtr.Zero || smallIcon != IntPtr.Zero)
+                    return;
+            }
+
             var exePath = Environment.ProcessPath ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
-            if (!string.IsNullOrEmpty(exePath) && System.IO.File.Exists(exePath))
+            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
             {
                 var hIcon = ExtractIcon(IntPtr.Zero, exePath, 0);
                 if (hIcon != IntPtr.Zero)
@@ -3183,6 +3199,22 @@ public partial class MainWindow : Window
 
         if (operationVersion == _vpnOperationVersion && _vpnSnapshot.State is ("starting" or "checking"))
             _ = MonitorVpnConnectionAsync();
+        else if (operationVersion == _vpnOperationVersion && IsVpnDisplayConnected() &&
+                 _selectedRoute == "auto" && string.IsNullOrWhiteSpace(_vpnSnapshot.ActiveRouteTag))
+            _ = PollAutoSelectActiveRouteAsync(operationVersion);
+    }
+
+    private async Task PollAutoSelectActiveRouteAsync(long operationVersion)
+    {
+        for (var attempt = 0; attempt < 15; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(400));
+            if (operationVersion != _vpnOperationVersion || _vpnCancelRequested ||
+                _quitInProgress || _exitAuthorized || !IsVpnDisplayConnected() ||
+                !string.IsNullOrWhiteSpace(_vpnSnapshot.ActiveRouteTag))
+                return;
+            await RefreshVpnStatusAsync();
+        }
     }
 
     internal async Task ApplySplitTunnelRulesAsync()
@@ -3247,6 +3279,9 @@ public partial class MainWindow : Window
 
         if (operationVersion == _vpnOperationVersion && _vpnSnapshot.State is ("starting" or "checking"))
             _ = MonitorVpnConnectionAsync();
+        else if (operationVersion == _vpnOperationVersion && IsVpnDisplayConnected() &&
+                 _selectedRoute == "auto" && string.IsNullOrWhiteSpace(_vpnSnapshot.ActiveRouteTag))
+            _ = PollAutoSelectActiveRouteAsync(operationVersion);
     }
 
     private async Task CancelVpnConnectionAsync()

@@ -554,4 +554,71 @@ public sealed class TunnelProfileBuilderTests
         Assert.Equal(new[] { "2ip.io" }, deserialized.CustomBypassDomains);
         Assert.Equal(new[] { "curl.exe" }, deserialized.CustomBypassProcesses);
     }
+
+    [Fact]
+    public void FullModeRoutesRuAndSubscriptionDirectDomainsThroughVpnWhileKeepingUserExclusions()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        profile["route"] = new JsonObject
+        {
+            ["final"] = "route:NL:VLESS",
+            ["rules"] = new JsonArray
+            {
+                new JsonObject { ["action"] = "sniff" },
+                new JsonObject { ["domain_suffix"] = new JsonArray("ru", "gosuslugi.ru"), ["outbound"] = "direct" },
+            },
+        };
+        profile["dns"] = new JsonObject
+        {
+            ["servers"] = new JsonArray
+            {
+                new JsonObject { ["tag"] = "remote-dns", ["detour"] = "route:NL:VLESS" },
+                new JsonObject { ["tag"] = "local-dns" },
+            },
+            ["rules"] = new JsonArray
+            {
+                new JsonObject { ["domain_suffix"] = new JsonArray("ru"), ["action"] = "route", ["server"] = "local-dns" },
+            },
+            ["final"] = "remote-dns",
+        };
+
+        var built = TunnelProfileBuilder.Build(
+            profile.ToJsonString(),
+            "route:NL:VLESS",
+            customBypassDomains: new[] { "local-site.example" },
+            customBypassProcesses: new[] { "steam.exe" },
+            splitTunnelMode: "full");
+
+        var runtime = JsonNode.Parse(built)!;
+        Assert.Equal("route:NL:VLESS", runtime["route"]!["final"]!.GetValue<string>());
+
+        var rules = runtime["route"]!["rules"]!.AsArray().OfType<JsonObject>().ToArray();
+        var directDomainRules = rules.Where(r => r["outbound"]?.GetValue<string>() == "direct" &&
+            (r.ContainsKey("domain_suffix") || r.ContainsKey("domain"))).ToArray();
+        var allDirectDomains = directDomainRules
+            .SelectMany(r => (r["domain_suffix"] as JsonArray ?? r["domain"] as JsonArray ?? [])
+                .Select(n => n!.GetValue<string>()))
+            .ToArray();
+
+        Assert.DoesNotContain("ru", allDirectDomains);
+        Assert.DoesNotContain("gosuslugi.ru", allDirectDomains);
+        Assert.DoesNotContain("cp.cloudflare.com", allDirectDomains);
+        Assert.Contains("local-site.example", allDirectDomains);
+
+        var directProcNames = rules
+            .Where(r => r["outbound"]?.GetValue<string>() == "direct" && r.ContainsKey("process_name"))
+            .SelectMany(r => r["process_name"]!.AsArray().Select(n => n!.GetValue<string>()))
+            .ToArray();
+        Assert.Contains("steam.exe", directProcNames);
+
+        var dnsRules = runtime["dns"]!["rules"]!.AsArray().OfType<JsonObject>().ToArray();
+        var localDnsDomains = dnsRules
+            .Where(r => r["server"]?.GetValue<string>() == "local-dns")
+            .SelectMany(r => (r["domain_suffix"] as JsonArray ?? r["domain"] as JsonArray ?? [])
+                .Select(n => n!.GetValue<string>()))
+            .ToArray();
+        Assert.DoesNotContain("ru", localDnsDomains);
+        Assert.Contains("local-site.example", localDnsDomains);
+        Assert.Equal("remote-dns", runtime["dns"]!["final"]!.GetValue<string>());
+    }
 }

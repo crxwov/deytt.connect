@@ -100,6 +100,8 @@ public partial class MainWindow
         void Apply(WindowsRouteProbeResult sample) => Dispatcher.UIThread.Post(() =>
         {
             if (!ReferenceEquals(_homeProbeCancellation, cancellation) || cancellation.IsCancellationRequested || _vpnSnapshot.RouteTag != routeTag || !IsVpnDisplayConnected()) return;
+            latency = PositiveLatency(latency) ?? PositiveLatency(sample.LatencyMilliseconds);
+            if (latency is not null) latencyError = null;
             _homeLiveProbe = sample with
             {
                 LatencyMilliseconds = latency,
@@ -141,7 +143,7 @@ public partial class MainWindow
                 routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
             if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
             {
-                latency = latency ?? storedLatency;
+                latency = PositiveLatency(latency) ?? PositiveLatency(result.LatencyMilliseconds) ?? storedLatency;
                 if (latency is not null) latencyError = null;
                 _homeLiveProbe = result with
                 {
@@ -535,6 +537,8 @@ public partial class MainWindow
         {
             _language = lang;
             SavePreferences();
+            UpdateTopNavigation();
+            UpdateWindowControlState();
             UpdateHomeGlobePresentation();
         };
         map.SplitTunnelRequested += () => ShowSplitTunnelingInfo();
@@ -546,6 +550,8 @@ public partial class MainWindow
                 splitStore = splitStore with { Mode = mode };
                 WindowsSplitTunnelStore.Save(splitStore);
                 UpdateHomeGlobePresentation();
+                if (IsVpnTunnelActive(_vpnSnapshot.State))
+                    _ = ApplySplitTunnelRulesAsync();
             }
             catch { }
         };
@@ -761,7 +767,8 @@ public partial class MainWindow
 
         var probe = displayedRoute is null ? null : _routeProbeResults.GetValueOrDefault(displayedRoute.Tag);
         var displayedTag = displayedRoute?.Tag;
-        var liveMeasurement = connected && _homeLiveProbe is not null && _vpnSnapshot.RouteTag == displayedTag;
+        var liveMeasurement = connected && _homeLiveProbe is not null &&
+            (_homeLiveProbe.RouteTag == displayedTag || _homeLiveProbe.RouteTag == _vpnSnapshot.RouteTag);
         if (liveMeasurement)
         {
             probe = _homeLiveProbe! with
@@ -780,7 +787,8 @@ public partial class MainWindow
         // ни дисконнект, ни смена сессии не превращают их в прочерк.
         if (probe is null || PositiveLatency(probe.LatencyMilliseconds) is null && probe.BytesPerSecond is not > 0)
         {
-            var lastMeasured = displayedTag is null ? null : _homeLastMeasuredByRoute.GetValueOrDefault(displayedTag);
+            var lastMeasured = (displayedTag is null ? null : _homeLastMeasuredByRoute.GetValueOrDefault(displayedTag))
+                ?? (_vpnSnapshot.RouteTag is null ? null : _homeLastMeasuredByRoute.GetValueOrDefault(_vpnSnapshot.RouteTag));
             if (lastMeasured is not null)
                 probe = lastMeasured;
         }
@@ -970,7 +978,7 @@ public partial class MainWindow
             _account?.FirstName ?? _account?.Username,
             null,
             sub?.Active == true,
-            sub?.TariffName ?? (sub?.Active == true ? "Подписка активна" : "Без подписки"),
+            sub?.TariffName ?? (sub?.Active == true ? Copy("подписка активна", "subscription active") : Copy("без подписки", "no subscription")),
             expiresFormatted,
             daysRemaining,
             sub?.DeviceLimit is > 0 ? sub.DeviceLimit : null,
@@ -990,9 +998,14 @@ public partial class MainWindow
 
         var splitStore = WindowsSplitTunnelStore.Load();
         var customCount = (splitStore.CustomDomains?.Count ?? 0) + (splitStore.CustomProcesses?.Count ?? 0);
+        var modeLabel = splitStore.IsVpnOnly
+            ? Copy("vpn только для списка", "vpn only for list")
+            : splitStore.IsFull
+                ? Copy("полный vpn (вкл. .ru)", "full vpn (incl. .ru)")
+                : Copy("сайты из подписки", "subscription bypass");
         var splitSummary = customCount > 0
-            ? $"Подписка + {customCount} своих правил"
-            : "Сайты из подписки · все протоколы";
+            ? Copy($"{modeLabel} + {customCount} своих правил", $"{modeLabel} + {customCount} custom rules")
+            : Copy($"{modeLabel} · все протоколы", $"{modeLabel} · all protocols");
 
         map.UpdateSettingsData(
             _language,

@@ -323,26 +323,30 @@ public partial class MainWindow
         // 1. Mode selector
         var modeSelectorGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,*"),
+            ColumnDefinitions = new ColumnDefinitions("*,*,*"),
             ColumnSpacing = 10,
             RowSpacing = 10,
         };
 
         Button? bypassModeCard = null;
         Button? vpnOnlyModeCard = null;
+        Button? fullModeCard = null;
         Border? bypassModeSurface = null;
         Border? vpnOnlyModeSurface = null;
+        Border? fullModeSurface = null;
         TextBlock? bypassModeTitle = null;
         TextBlock? vpnOnlyModeTitle = null;
+        TextBlock? fullModeTitle = null;
         TextBlock? bypassModeCheck = null;
         TextBlock? vpnOnlyModeCheck = null;
+        TextBlock? fullModeCheck = null;
 
         var bypassHeader = new StackPanel { Spacing = 4 };
         bypassModeTitle = DeyttTheme.TextBlock(Copy("Обход VPN для списка", "Bypass VPN for list"), 13, weight: FontWeight.SemiBold);
         bypassHeader.Children.Add(bypassModeTitle);
         bypassHeader.Children.Add(DeyttTheme.TextBlock(
-            Copy("Весь интернет через VPN. Сайты и программы в списке идут напрямую.",
-                "All traffic through VPN. Listed sites and apps go direct."),
+            Copy("Весь интернет через VPN. .ru, подписка и список ниже идут напрямую.",
+                "All traffic through VPN. .ru, subscription rules and list go direct."),
             12, DeyttTheme.Muted));
 
         var bypassContent = new StackPanel { Spacing = 8, Children = { bypassHeader } };
@@ -368,20 +372,43 @@ public partial class MainWindow
             currentMode = WindowsSplitTunnelConfig.ModeVpnOnly;
             SaveAndRefresh();
         });
-        Avalonia.Automation.AutomationProperties.SetAutomationId(bypassModeCard!, "SplitModeBypass");
-        Avalonia.Automation.AutomationProperties.SetAutomationId(vpnOnlyModeCard!, "SplitModeVpnOnly");
         vpnOnlyModeSurface = (Border)vpnOnlyModeCard.Content!;
         vpnOnlyModeCheck = (TextBlock)((Grid)vpnOnlyModeSurface.Child!).Children[1];
 
+        var fullHeader = new StackPanel { Spacing = 4 };
+        fullModeTitle = DeyttTheme.TextBlock(Copy("Полный VPN (вкл. .ru)", "Full VPN (incl. .ru)"), 13, weight: FontWeight.SemiBold);
+        fullHeader.Children.Add(fullModeTitle);
+        fullHeader.Children.Add(DeyttTheme.TextBlock(
+            Copy("Весь трафик, включая .ru и 2ip.ru, идёт через VPN. Исключения ниже идут напрямую.",
+                "All traffic, including .ru and 2ip.ru, goes through VPN. Exceptions below go direct."),
+            12, DeyttTheme.Muted));
+
+        var fullContent = new StackPanel { Spacing = 8, Children = { fullHeader } };
+        fullModeCard = DeyttTheme.DialogChoice(fullContent, false, () =>
+        {
+            currentMode = WindowsSplitTunnelConfig.ModeFull;
+            SaveAndRefresh();
+        });
+        fullModeSurface = (Border)fullModeCard.Content!;
+        fullModeCheck = (TextBlock)((Grid)fullModeSurface.Child!).Children[1];
+
+        Avalonia.Automation.AutomationProperties.SetAutomationId(bypassModeCard!, "SplitModeBypass");
+        Avalonia.Automation.AutomationProperties.SetAutomationId(vpnOnlyModeCard!, "SplitModeVpnOnly");
+        Avalonia.Automation.AutomationProperties.SetAutomationId(fullModeCard!, "SplitModeFull");
+
         modeSelectorGrid.Children.Add(bypassModeCard);
         modeSelectorGrid.Children.Add(vpnOnlyModeCard);
+        modeSelectorGrid.Children.Add(fullModeCard);
         Grid.SetColumn(bypassModeCard, 0);
         Grid.SetColumn(vpnOnlyModeCard, 1);
+        Grid.SetColumn(fullModeCard, 2);
         rootStack.Children.Add(modeSelectorGrid);
 
         void UpdateModeCardsVisual()
         {
             var isVpnOnly = string.Equals(currentMode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
+            var isFull = string.Equals(currentMode, WindowsSplitTunnelConfig.ModeFull, StringComparison.OrdinalIgnoreCase);
+            var isBypass = !isVpnOnly && !isFull;
             void Update(Button button, Border surface, TextBlock title, TextBlock check, bool selected)
             {
                 surface.Background = selected ? DeyttTheme.Brush(DeyttTheme.DialogSelected) : DeyttTheme.DialogSurface;
@@ -393,8 +420,9 @@ public partial class MainWindow
                     title.Text + (selected ? Copy(", выбрано", ", selected") : ""));
             }
 
-            Update(bypassModeCard!, bypassModeSurface!, bypassModeTitle!, bypassModeCheck!, !isVpnOnly);
+            Update(bypassModeCard!, bypassModeSurface!, bypassModeTitle!, bypassModeCheck!, isBypass);
             Update(vpnOnlyModeCard!, vpnOnlyModeSurface!, vpnOnlyModeTitle!, vpnOnlyModeCheck!, isVpnOnly);
+            Update(fullModeCard!, fullModeSurface!, fullModeTitle!, fullModeCheck!, isFull);
         }
 
         // 2. Base rules are read-only and kept visually quiet.
@@ -413,6 +441,7 @@ public partial class MainWindow
         baseHeaderGrid.Children.Add(baseTitleRow);
         Grid.SetColumn(baseTitleRow, 0);
 
+        var baseBadgeText = DeyttTheme.TextBlock(Copy("Всегда напрямую", "Always direct"), 11, DeyttTheme.Mint, FontWeight.SemiBold, wrap: false);
         var baseBadge = new Border
         {
             Background = DeyttTheme.Brush(DeyttTheme.DialogSelected),
@@ -420,7 +449,7 @@ public partial class MainWindow
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(10),
             Padding = new Thickness(10, 5),
-            Child = DeyttTheme.TextBlock(Copy("Всегда напрямую", "Always direct"), 11, DeyttTheme.Mint, FontWeight.SemiBold, wrap: false)
+            Child = baseBadgeText
         };
         baseHeaderGrid.Children.Add(baseBadge);
         Grid.SetColumn(baseBadge, 1);
@@ -827,15 +856,25 @@ public partial class MainWindow
         {
             UpdateModeCardsVisual();
             var isVpnOnly = string.Equals(currentMode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
+            var isFull = string.Equals(currentMode, WindowsSplitTunnelConfig.ModeFull, StringComparison.OrdinalIgnoreCase);
+
+            baseBadgeText.Text = isFull
+                ? Copy("Отключено (через VPN)", "Bypass disabled (via VPN)")
+                : Copy("Всегда напрямую", "Always direct");
+            baseBadgeText.Foreground = DeyttTheme.Brush(isFull ? DeyttTheme.Muted : DeyttTheme.Mint);
 
             domainsTitle.Text = isVpnOnly
                 ? Copy("Сайты через VPN", "Sites through VPN")
-                : Copy("Сайты в обход VPN", "Sites bypassing VPN");
+                : isFull
+                    ? Copy("Исключения из полного VPN (напрямую)", "Exclusions from full VPN (direct)")
+                    : Copy("Сайты в обход VPN", "Sites bypassing VPN");
             domainsCountBadge.Text = Copy($"{customDomains.Count} сайтов", $"{customDomains.Count} sites");
 
             processTitle.Text = isVpnOnly
                 ? Copy("Приложения через VPN", "Apps through VPN")
-                : Copy("Приложения в обход VPN", "Apps bypassing VPN");
+                : isFull
+                    ? Copy("Приложения в обход полного VPN", "Apps bypassing full VPN")
+                    : Copy("Приложения в обход VPN", "Apps bypassing VPN");
             processCountBadge.Text = Copy($"{customProcesses.Count} приложений", $"{customProcesses.Count} apps");
 
             processDesc.Text = isVpnOnly
@@ -939,14 +978,20 @@ public partial class MainWindow
             {
                 var isActive = string.Equals(pr.Id, activePresetId, StringComparison.OrdinalIgnoreCase);
                 var isVpnOnlyMode = string.Equals(pr.Mode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
+                var isFullMode = string.Equals(pr.Mode, WindowsSplitTunnelConfig.ModeFull, StringComparison.OrdinalIgnoreCase);
+                var modeShort = isVpnOnlyMode
+                    ? Copy("только vpn", "vpn only")
+                    : isFullMode
+                        ? Copy("полный vpn", "full vpn")
+                        : Copy("обход vpn", "bypass vpn");
                 var ruleCount = (pr.CustomDomains?.Count ?? 0) + (pr.CustomProcesses?.Count ?? 0);
                 var choiceDetails = new StackPanel { Spacing = 4 };
                 var presetName = DeyttTheme.TextBlock(pr.Name, 13, DeyttTheme.Text, FontWeight.SemiBold);
                 presetName.MaxWidth = 230;
                 choiceDetails.Children.Add(presetName);
                 choiceDetails.Children.Add(DeyttTheme.TextBlock(Copy(
-                    $"{(isVpnOnlyMode ? "только vpn" : "обход vpn")} · {ruleCount} правил",
-                    $"{(isVpnOnlyMode ? "vpn only" : "bypass vpn")} · {ruleCount} rules"),
+                    $"{modeShort} · {ruleCount} правил",
+                    $"{modeShort} · {ruleCount} rules"),
                     11, DeyttTheme.Muted));
                 var targetId = pr.Id;
                 var selectPresetBtn = DeyttTheme.DialogChoice(choiceDetails, isActive, () =>

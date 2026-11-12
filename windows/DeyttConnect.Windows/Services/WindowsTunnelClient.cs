@@ -20,7 +20,7 @@ public sealed class WindowsTunnelClient
         SendAsync(new WindowsPipeRequest { Command = WindowsPipeCommand.Status }, cancellationToken, 5);
 
     public Task<WindowsTunnelSnapshot> MeasureTunnelLatencyAsync(CancellationToken cancellationToken = default) =>
-        SendAsync(new WindowsPipeRequest { Command = WindowsPipeCommand.MeasureTunnelLatency }, cancellationToken, 10);
+        SendAsync(new WindowsPipeRequest { Command = WindowsPipeCommand.MeasureTunnelLatency }, cancellationToken, 22);
 
     public Task<WindowsTunnelSnapshot> ConnectAsync(string profile, string routeTag, string? awgConfig = null,
         IReadOnlyList<string>? customBypassDomains = null,

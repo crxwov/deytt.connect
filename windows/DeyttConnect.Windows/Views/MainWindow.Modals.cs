@@ -105,15 +105,32 @@ public partial class MainWindow
         Closed += closedHandler;
         var gateAcquired = false;
         Bitmap? pagePreview = null;
-        Task<Bitmap?>? previewCaptureTask = null;
         Rect previewBounds = default;
         Control? previousFocus = null;
         (bool Sidebar, bool BottomNavigation, bool Page, bool HeaderNavigation) previousEnabled = default;
 
+        var previousGlobeVisible = false;
         try
         {
             await _shellModalGate.WaitAsync(closingCancellation.Token);
             gateAcquired = true;
+            var captureGlobe = await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (_routeGlobe is not { Parent: not null, IsVisible: true } globe || !globe.IsAttachedToVisualTree())
+                    return false;
+                var previewOrigin = globe.TranslatePoint(default, ModalOverlayHost) ?? default;
+                previewBounds = new Rect(previewOrigin, globe.Bounds.Size);
+                return previewBounds.Width > 0 && previewBounds.Height > 0;
+            });
+            if (captureGlobe && _routeGlobe is { } activeGlobe)
+            {
+                try
+                {
+                    pagePreview = await activeGlobe.CapturePreviewAsync().WaitAsync(PagePreviewCaptureTimeout, closingCancellation.Token);
+                }
+                catch (OperationCanceledException) when (closingCancellation.IsCancellationRequested) { throw; }
+                catch (Exception) { }
+            }
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 previousFocus = FocusManager?.GetFocusedElement() as Control;
@@ -194,7 +211,7 @@ public partial class MainWindow
 
                 var overlay = new Grid
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(190, 8, 13, 23)),
+                    Background = Brushes.Transparent,
                     Focusable = true,
                 };
                 overlay.Resources["AppFocusBrush"] = DeyttTheme.Brush(DeyttTheme.DialogAccent);
@@ -267,7 +284,12 @@ public partial class MainWindow
                 configure?.Invoke(modal);
                 _activeShellContentDialog = modal;
                 if (_routeGlobe is not null)
+                {
+                    previousGlobeVisible = _routeGlobe.IsVisible;
                     _routeGlobe.IsHitTestVisible = false;
+                    // Native WebView2 HWND renders above Avalonia visuals; hide while an in-shell modal is open.
+                    _routeGlobe.IsVisible = false;
+                }
                 SidebarPanel.IsEnabled = false;
                 BottomNavigationPanel.IsEnabled = false;
                 PageScroll.IsEnabled = false;
@@ -299,7 +321,12 @@ public partial class MainWindow
                         ModalOverlayHost.Children.Clear();
                         ModalOverlayHost.IsVisible = false;
                         if (_routeGlobe is not null)
+                        {
                             _routeGlobe.IsHitTestVisible = true;
+                            _routeGlobe.IsVisible = previousGlobeVisible;
+                            if (previousGlobeVisible)
+                                _routeGlobe.ResumeHost();
+                        }
                         SidebarPanel.IsEnabled = previousEnabled.Sidebar;
                         BottomNavigationPanel.IsEnabled = previousEnabled.BottomNavigation;
                         PageScroll.IsEnabled = previousEnabled.Page;

@@ -501,6 +501,12 @@ internal sealed class EngineController
                 {
                     var connectedAt = DateTimeOffset.UtcNow;
                     SetSnapshot(new ServiceSnapshot("connected", "VPN подключён.", routeTag, connectedAt, HealthCheckedAt: connectedAt));
+                    // Start active-route polling immediately so auto-select exits resolve without waiting for canary retries.
+                    _healthMonitor?.Stop();
+                    _healthMonitor?.Dispose();
+                    _healthMonitor = new TunnelHealthMonitorLifetime();
+                    if (_activeRouteTelemetry is { } initialTelemetry)
+                        _ = MonitorActiveRouteAsync(process, initialTelemetry, _healthMonitor.Token);
                 }
             }
             finally
@@ -548,13 +554,9 @@ internal sealed class EngineController
                 }
                 if (ReferenceEquals(_engine, process) && !process.HasExited)
                 {
-                    _healthMonitor?.Stop();
-                    _healthMonitor?.Dispose();
-                    _healthMonitor = new TunnelHealthMonitorLifetime();
+                    _healthMonitor ??= new TunnelHealthMonitorLifetime();
                     _ = MonitorTunnelHealthAsync(process, routeTag, tunAddresses, canaryAddresses,
                         _healthMonitor.Token);
-                    if (_activeRouteTelemetry is { } telemetry)
-                        _ = MonitorActiveRouteAsync(process, telemetry, _healthMonitor.Token);
                 }
             }
             finally
@@ -587,13 +589,9 @@ internal sealed class EngineController
                     var checkedAt = DateTimeOffset.UtcNow;
                     SetSnapshot(new ServiceSnapshot("connected", "VPN подключён.",
                         routeTag, checkedAt, HealthCheckedAt: checkedAt));
-                    _healthMonitor?.Stop();
-                    _healthMonitor?.Dispose();
-                    _healthMonitor = new TunnelHealthMonitorLifetime();
+                    _healthMonitor ??= new TunnelHealthMonitorLifetime();
                     _ = MonitorTunnelHealthAsync(process, routeTag, tunAddresses, canaryAddresses,
                         _healthMonitor.Token);
-                    if (_activeRouteTelemetry is { } telemetry)
-                        _ = MonitorActiveRouteAsync(process, telemetry, _healthMonitor.Token);
                 }
             }
             finally
@@ -694,35 +692,46 @@ internal sealed class EngineController
     private async Task MonitorActiveRouteAsync(Process process, ActiveRouteTelemetry telemetry,
         CancellationToken cancellationToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+        async Task<bool> PollOnceAsync()
+        {
+            string? route = null;
+            try
+            {
+                route = await telemetry.ReadActiveRouteTagAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return false; }
+            catch (OperationCanceledException) { }
+            catch (Exception error) when (error is HttpRequestException or IOException or
+                System.Text.Json.JsonException or InvalidDataException or ObjectDisposedException)
+            {
+                // Missing/invalid telemetry clears the optional route instead of retaining a stale location.
+            }
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (!ReferenceEquals(_engine, process) || !ReferenceEquals(_activeRouteTelemetry, telemetry) ||
+                    process.HasExited)
+                    return false;
+                var snapshot = Snapshot;
+                if (snapshot.State is "connected" or "health_checking" or "degraded")
+                    SetSnapshot(snapshot with { ActiveRouteTag = route });
+            }
+            finally { _gate.Release(); }
+            return string.IsNullOrWhiteSpace(route);
+        }
+
         try
         {
-            do
+            for (var burst = 0; burst < 15 && !cancellationToken.IsCancellationRequested; burst++)
             {
-                string? route = null;
-                try
-                {
-                    route = await telemetry.ReadActiveRouteTagAsync(cancellationToken).ConfigureAwait(false);
-                }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { return; }
-                catch (OperationCanceledException) { }
-                catch (Exception error) when (error is HttpRequestException or IOException or
-                    System.Text.Json.JsonException or InvalidDataException or ObjectDisposedException)
-                {
-                    // Missing/invalid telemetry clears the optional route instead of retaining a stale location.
-                }
-                await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    if (!ReferenceEquals(_engine, process) || !ReferenceEquals(_activeRouteTelemetry, telemetry) ||
-                        process.HasExited)
-                        return;
-                    var snapshot = Snapshot;
-                    if (snapshot.State is "connected" or "health_checking" or "degraded")
-                        SetSnapshot(snapshot with { ActiveRouteTag = route });
-                }
-                finally { _gate.Release(); }
-            } while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
+                if (!await PollOnceAsync().ConfigureAwait(false))
+                    break;
+                await Task.Delay(TimeSpan.FromMilliseconds(350), cancellationToken).ConfigureAwait(false);
+            }
+
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(3));
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+                await PollOnceAsync().ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
     }
