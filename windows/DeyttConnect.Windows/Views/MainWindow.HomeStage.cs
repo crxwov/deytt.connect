@@ -101,7 +101,7 @@ public partial class MainWindow
         void Apply(WindowsRouteProbeResult sample) => Dispatcher.UIThread.Post(() =>
         {
             if (!ReferenceEquals(_homeProbeCancellation, cancellation) || cancellation.IsCancellationRequested || _vpnSnapshot.RouteTag != routeTag || !IsVpnDisplayConnected()) return;
-            latency = PositiveLatency(latency) ?? PositiveLatency(sample.LatencyMilliseconds);
+            latency = PositiveLatency(latency);
             if (latency is not null) latencyError = null;
             _homeLiveProbe = sample with
             {
@@ -144,7 +144,7 @@ public partial class MainWindow
                 routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
             if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
             {
-                latency = PositiveLatency(latency) ?? PositiveLatency(result.LatencyMilliseconds) ?? storedLatency;
+                latency = PositiveLatency(latency) ?? storedLatency;
                 if (latency is not null) latencyError = null;
                 _homeLiveProbe = result with
                 {
@@ -855,7 +855,8 @@ public partial class MainWindow
                     : Copy("HTTPS-отклик через VPN", "HTTPS response through VPN")
                 : measured ? Copy("последний замер маршрута", "last route measurement") : Copy("запустите замер подключения", "measure the connection")),
             _homeProbeCancellation is null && !_routeProbeInProgress && !_vpnActionInProgress && (!tunnelActive || connected),
-            Copy("обновить замер", "refresh measurement"));
+            Copy("обновить замер", "refresh measurement"),
+            connected ? (_vpnSnapshot.ConnectedAt ?? _vpnSnapshot.HealthCheckedAt)?.ToUnixTimeMilliseconds() : null);
 
         static string startingTone(bool isConnecting, bool isProbing, bool isUnknown) =>
             isConnecting || isProbing || isUnknown ? "warn" : "normal";
@@ -1037,9 +1038,7 @@ public partial class MainWindow
         var presetPrefix = activePreset is not null && (splitStore.Presets?.Count ?? 0) > 1 ? $"{activePreset.Name.ToLowerInvariant()} · " : string.Empty;
         var modeLabel = splitStore.IsVpnOnly
             ? Copy("vpn только для списка", "vpn only for list")
-            : splitStore.IsFull
-                ? Copy("полный vpn (вкл. .ru)", "full vpn (incl. .ru)")
-                : Copy("сайты из подписки", "subscription bypass");
+            : Copy("сайты из подписки", "subscription bypass");
         var splitSummary = customCount > 0
             ? Copy($"{presetPrefix}{modeLabel} + {customCount} своих правил", $"{presetPrefix}{modeLabel} + {customCount} custom rules")
             : Copy($"{presetPrefix}{modeLabel} · все протоколы", $"{presetPrefix}{modeLabel} · all protocols");

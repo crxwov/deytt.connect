@@ -20,7 +20,7 @@ internal static class HomeConnectionProbe
         }
 
         using var handler = new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false };
-        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(6) };
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://deytt.space/api/tg/mobile/probe/download");
         request.Headers.TryAddWithoutValidation("X-TG-App-Token", token);
@@ -45,19 +45,18 @@ internal static class HomeConnectionProbe
 
         await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(6));
+        timeout.CancelAfter(TimeSpan.FromSeconds(3.5));
         const long limit = 32L * 1024 * 1024;
         var expected = response.Content.Headers.ContentLength is > 0 ? Math.Min(response.Content.Headers.ContentLength.Value, limit) : limit;
         var buffer = new byte[32 * 1024];
         long received = 0;
         var started = Stopwatch.GetTimestamp();
         var lastReport = started;
-        var timedOut = false;
         while (received < expected)
         {
             int count;
             try { count = await body.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, expected - received)), timeout.Token).ConfigureAwait(false); }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { timedOut = true; break; }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { break; }
             if (count == 0) break;
             received += count;
             if (Stopwatch.GetElapsedTime(lastReport).TotalMilliseconds < 200) continue;

@@ -33,7 +33,8 @@ public sealed record HomePresentationSnapshot(
     string? SpeedTone,
     string? MeasurementLabel,
     bool MeasurementEnabled = true,
-    string? MeasurementActionLabel = null);
+    string? MeasurementActionLabel = null,
+    long? ConnectedAtUnixMs = null);
 
 /// <summary>
 /// Hosts the same bundled offline network atlas as Android in a native WebView.

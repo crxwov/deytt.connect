@@ -9,23 +9,19 @@ internal static class RouteLatencyProbe
 {
     internal static readonly Uri[] DefaultTargets =
     [
-        new("https://deytt.space/generate_204"),
-        new("https://www.google.com/generate_204"),
         new("https://cp.cloudflare.com/generate_204"),
         new("https://connectivitycheck.gstatic.com/generate_204"),
     ];
 
     internal static readonly Dictionary<Uri, HttpStatusCode> DefaultExpectedStatuses = new()
     {
-        [new("https://deytt.space/generate_204")] = HttpStatusCode.NoContent,
-        [new("https://www.google.com/generate_204")] = HttpStatusCode.NoContent,
         [new("https://cp.cloudflare.com/generate_204")] = HttpStatusCode.NoContent,
         [new("https://connectivitycheck.gstatic.com/generate_204")] = HttpStatusCode.NoContent,
     };
 
     internal static readonly RouteLatencyProbeTimeouts ProductionTimeouts = new(
-        Overall: TimeSpan.FromSeconds(16),
-        Individual: TimeSpan.FromMilliseconds(6500));
+        Overall: TimeSpan.FromSeconds(8),
+        Individual: TimeSpan.FromMilliseconds(2500));
 
     internal static async Task<RouteLatencyProbeResult> MeasureServerAsync(IPAddress serverAddress,
         CancellationToken cancellationToken)
@@ -85,29 +81,43 @@ internal static class RouteLatencyProbe
 
         var coldTargets = targets ?? DefaultTargets;
         if (coldTargets.Count == 0) throw new ArgumentException("At least one latency target is required.", nameof(targets));
-        var coldOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count);
+        var coldOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count * 2);
         RouteLatencyProbeAttempt? selectedCold = null;
 
         for (var round = 1; round <= 2 && selectedCold is null && !overallCancellation.IsCancellationRequested; round++)
         {
+            using var roundCancellation = CancellationTokenSource.CreateLinkedTokenSource(overallCancellation.Token);
             var roundOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count);
-            foreach (var target in coldTargets)
+            var coldTasks = coldTargets.Select(async target =>
             {
-                if (overallCancellation.IsCancellationRequested)
-                    break;
-
                 var outcome = await MeasureRequestAsync(proxyClient, target,
                     ExpectedStatus(target),
-                    overallCancellation.Token, cancellationToken, overallCancellation.Token, limits.Individual)
+                    roundCancellation.Token, cancellationToken, overallCancellation.Token, limits.Individual)
                     .ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
+                return outcome;
+            }).ToList();
+
+            while (coldTasks.Count > 0)
+            {
+                var completed = await Task.WhenAny(coldTasks).ConfigureAwait(false);
+                coldTasks.Remove(completed);
+                var outcome = await completed.ConfigureAwait(false);
                 coldOutcomes.Add(outcome);
                 roundOutcomes.Add(outcome);
                 reportProgress?.Invoke(new RouteLatencyProbeObservation(round,
                     RouteLatencyProbePhase.ColdConnect, null));
-                if (outcome.LatencyMilliseconds is not null)
+                if (outcome.LatencyMilliseconds is not null && selectedCold is null)
                 {
                     selectedCold = outcome;
+                    roundCancellation.Cancel();
+                    while (coldTasks.Count > 0)
+                    {
+                        var remaining = await Task.WhenAny(coldTasks).ConfigureAwait(false);
+                        coldTasks.Remove(remaining);
+                        try { await remaining.ConfigureAwait(false); }
+                        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+                    }
                     break;
                 }
             }
@@ -116,7 +126,7 @@ internal static class RouteLatencyProbe
                 overallCancellation.IsCancellationRequested)
                 break;
 
-            try { await Task.Delay(TimeSpan.FromMilliseconds(200), overallCancellation.Token).ConfigureAwait(false); }
+            try { await Task.Delay(TimeSpan.FromMilliseconds(150), overallCancellation.Token).ConfigureAwait(false); }
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
         }
 
@@ -159,7 +169,18 @@ internal static class RouteLatencyProbe
             catch { }
         }
 
-        var finalLatency = warmLatencies.Count > 0 ? warmLatencies.Min() : selectedCold.LatencyMilliseconds;
+        if (warmLatencies.Count == 0)
+        {
+            return new RouteLatencyProbeResult(
+                LatencyMilliseconds: null,
+                Failure: "Не удалось получить повторный HTTPS-отклик через маршрут.");
+        }
+
+        warmLatencies.Sort();
+        var finalLatency = warmLatencies.Count % 2 == 1
+            ? warmLatencies[warmLatencies.Count / 2]
+            : (long)Math.Round((warmLatencies[warmLatencies.Count / 2 - 1] + warmLatencies[warmLatencies.Count / 2]) / 2d,
+                MidpointRounding.AwayFromZero);
         return new RouteLatencyProbeResult(finalLatency, null);
     }
 
@@ -192,7 +213,7 @@ internal static class RouteLatencyProbe
 
             var elapsedMilliseconds = (long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             var isOriginalTarget = response.RequestMessage?.RequestUri == target;
-            var isExpectedResponse = response.IsSuccessStatusCode || response.StatusCode == expectedStatus || response.StatusCode == HttpStatusCode.NoContent || response.StatusCode == HttpStatusCode.OK || (int)response.StatusCode < 500;
+            var isExpectedResponse = response.StatusCode == expectedStatus;
 
             if (isOriginalTarget && isExpectedResponse)
             {

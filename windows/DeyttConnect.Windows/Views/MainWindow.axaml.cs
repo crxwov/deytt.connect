@@ -3158,12 +3158,6 @@ public partial class MainWindow : Window
                 RenderActiveTabPreservingScroll();
                 return;
             }
-            // Optimistic instant connect (parity with Android)
-            var now = DateTimeOffset.UtcNow;
-            _vpnSnapshot = new WindowsTunnelSnapshot("connected", Copy("Подключено", "Connected"), route.Tag, now, HealthCheckedAt: now);
-            _vpnActionInProgress = false;
-            RenderActiveTabPreservingScroll();
-
             var splitConfig = WindowsSplitTunnelStore.Load();
             _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig,
                 splitConfig.CustomDomains, splitConfig.CustomProcesses, splitConfig.Mode);
@@ -3337,14 +3331,14 @@ public partial class MainWindow : Window
 
     private async Task MonitorVpnConnectionAsync()
     {
-        for (var attempt = 0; attempt < 75; attempt++)
+        for (var attempt = 0; attempt < 160; attempt++)
         {
             if (_vpnSnapshot.State is not ("starting" or "checking"))
                 return;
             await RefreshVpnStatusAsync();
             if (_vpnSnapshot.State is not ("starting" or "checking"))
                 return;
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            await Task.Delay(TimeSpan.FromMilliseconds(250));
         }
     }
 

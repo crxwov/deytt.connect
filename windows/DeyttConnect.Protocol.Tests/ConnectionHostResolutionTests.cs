@@ -126,4 +126,44 @@ public sealed class ConnectionHostResolutionTests
             catch (OperationCanceledException) { }
         }
     }
+
+    [Fact]
+    public void PruneFailedAutoOutboundsKeepsHealthyNodesAndDropsFailedOnes()
+    {
+        const string profile = """
+            {"outbounds":[
+              {"type":"urltest","tag":"auto","outbounds":["route:NL:VLESS","route:DE:VLESS","route:FI:VLESS"],"default":"route:NL:VLESS"},
+              {"type":"vless","tag":"route:NL:VLESS","server":"bad.example"},
+              {"type":"vless","tag":"route:DE:VLESS","server":"192.0.2.10"},
+              {"type":"vless","tag":"route:FI:VLESS","server":"192.0.2.11"}
+            ]}
+            """;
+
+        var failed = new HashSet<string>(["route:NL:VLESS"], StringComparer.Ordinal);
+        var pruned = EngineController.PruneFailedAutoOutbounds(profile, "auto", failed, out var updated);
+
+        Assert.True(pruned);
+        var root = JsonNode.Parse(updated)!;
+        var outbounds = root["outbounds"]!.AsArray();
+        Assert.Equal(3, outbounds.Count);
+        var autoOutbounds = outbounds[0]!["outbounds"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
+        Assert.Equal(["route:DE:VLESS", "route:FI:VLESS"], autoOutbounds);
+        Assert.Equal("route:DE:VLESS", outbounds[0]!["default"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void PruneFailedAutoOutboundsReturnsFalseWhenNoAutoChildrenSurvive()
+    {
+        const string profile = """
+            {"outbounds":[
+              {"type":"urltest","tag":"auto","outbounds":["route:NL:VLESS"]},
+              {"type":"vless","tag":"route:NL:VLESS","server":"bad.example"}
+            ]}
+            """;
+
+        var failed = new HashSet<string>(["route:NL:VLESS"], StringComparer.Ordinal);
+        var pruned = EngineController.PruneFailedAutoOutbounds(profile, "auto", failed, out _);
+
+        Assert.False(pruned);
+    }
 }
