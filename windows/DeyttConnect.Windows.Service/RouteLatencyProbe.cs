@@ -10,17 +10,17 @@ internal static class RouteLatencyProbe
     internal static readonly Uri[] DefaultTargets =
     [
         new("https://deytt.space/generate_204"),
-        new("https://selectel.ru/favicon.ico"),
-        new("https://mirror.yandex.ru/"),
         new("https://www.google.com/generate_204"),
+        new("https://cp.cloudflare.com/generate_204"),
+        new("https://connectivitycheck.gstatic.com/generate_204"),
     ];
 
     internal static readonly Dictionary<Uri, HttpStatusCode> DefaultExpectedStatuses = new()
     {
         [new("https://deytt.space/generate_204")] = HttpStatusCode.NoContent,
-        [new("https://selectel.ru/favicon.ico")] = HttpStatusCode.OK,
-        [new("https://mirror.yandex.ru/")] = HttpStatusCode.OK,
         [new("https://www.google.com/generate_204")] = HttpStatusCode.NoContent,
+        [new("https://cp.cloudflare.com/generate_204")] = HttpStatusCode.NoContent,
+        [new("https://connectivitycheck.gstatic.com/generate_204")] = HttpStatusCode.NoContent,
     };
 
     internal static readonly RouteLatencyProbeTimeouts ProductionTimeouts = new(
@@ -328,11 +328,11 @@ internal readonly record struct RouteLatencyProbeTimeouts(TimeSpan Overall, Time
 {
     internal void Validate()
     {
-        if (Overall <= TimeSpan.Zero || Overall > TimeSpan.FromSeconds(12))
-            throw new ArgumentOutOfRangeException(nameof(Overall), "Overall timeout must be between 0 and 12 seconds.");
+        if (Overall <= TimeSpan.Zero || Overall > TimeSpan.FromSeconds(30))
+            throw new ArgumentOutOfRangeException(nameof(Overall), "Overall timeout must be between 0 and 30 seconds.");
 
-        if (Individual <= TimeSpan.Zero || Individual > TimeSpan.FromSeconds(6))
-            throw new ArgumentOutOfRangeException(nameof(Individual), "Individual timeout must be between 0 and 6 seconds.");
+        if (Individual <= TimeSpan.Zero || Individual > TimeSpan.FromSeconds(15))
+            throw new ArgumentOutOfRangeException(nameof(Individual), "Individual timeout must be between 0 and 15 seconds.");
 
         if (Individual > Overall)
             throw new ArgumentException("Individual timeout cannot exceed overall timeout.", nameof(Individual));

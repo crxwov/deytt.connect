@@ -29,9 +29,9 @@ internal sealed class EngineController
     private static readonly (string Url, HttpStatusCode? ExpectedStatus)[] TunnelCanaries =
     [
         ("https://deytt.space/generate_204", HttpStatusCode.NoContent),
-        ("https://selectel.ru/favicon.ico", HttpStatusCode.OK),
-        ("https://mirror.yandex.ru/", HttpStatusCode.OK),
         ("https://www.google.com/generate_204", HttpStatusCode.NoContent),
+        ("https://cp.cloudflare.com/generate_204", HttpStatusCode.NoContent),
+        ("https://connectivitycheck.gstatic.com/generate_204", HttpStatusCode.NoContent),
     ];
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly SemaphoreSlim _healthRecheck = new(0, 1);
@@ -403,9 +403,9 @@ internal sealed class EngineController
             return new ServiceSnapshot("probe_cancelled", "Проверка маршрутов остановлена.",
                 ProbeResults: SnapshotProbeProgress().ProbeResults);
         }
-        catch
+        catch (Exception ex)
         {
-            return ProbeError("Не удалось проверить маршруты.");
+            return ProbeError($"Не удалось проверить маршруты: {ex.Message}");
         }
         finally
         {
@@ -662,7 +662,7 @@ internal sealed class EngineController
                     var transition = WindowsTunnelHealth.ApplyCanaryResult(passed, _consecutiveHealthFailures,
                         tunnelRouteProven: passed);
                     _consecutiveHealthFailures = transition.ConsecutiveFailures;
-                    if (transition.State == "degraded" && _consecutiveHealthFailures >= 6)
+                    if (transition.State == "degraded" && _consecutiveHealthFailures >= 10)
                     {
                         var fatalDetail = "Маршрут перестал отвечать; соединение прервано. Попробуйте переподключиться.";
                         SetSnapshot(new ServiceSnapshot("error", fatalDetail, routeTag,
