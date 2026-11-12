@@ -9,10 +9,19 @@ internal static class RouteLatencyProbe
 {
     internal static readonly Uri[] DefaultTargets =
     [
+        new("https://deytt.space/generate_204"),
+        new("https://selectel.ru/favicon.ico"),
+        new("https://mirror.yandex.ru/"),
         new("https://www.google.com/generate_204"),
-        new("https://connectivitycheck.gstatic.com/generate_204"),
-        new("https://cp.cloudflare.com/generate_204"),
     ];
+
+    internal static readonly Dictionary<Uri, HttpStatusCode> DefaultExpectedStatuses = new()
+    {
+        [new("https://deytt.space/generate_204")] = HttpStatusCode.NoContent,
+        [new("https://selectel.ru/favicon.ico")] = HttpStatusCode.OK,
+        [new("https://mirror.yandex.ru/")] = HttpStatusCode.OK,
+        [new("https://www.google.com/generate_204")] = HttpStatusCode.NoContent,
+    };
 
     internal static readonly RouteLatencyProbeTimeouts ProductionTimeouts = new(
         Overall: TimeSpan.FromSeconds(16),
@@ -69,7 +78,10 @@ internal static class RouteLatencyProbe
 
         HttpStatusCode ExpectedStatus(Uri target) =>
             expectedStatuses is not null && expectedStatuses.TryGetValue(target, out var status)
-                ? status : HttpStatusCode.NoContent;
+                ? status
+                : (DefaultExpectedStatuses.TryGetValue(target, out var defaultStatus)
+                    ? defaultStatus
+                    : HttpStatusCode.NoContent);
 
         var coldTargets = targets ?? DefaultTargets;
         if (coldTargets.Count == 0) throw new ArgumentException("At least one latency target is required.", nameof(targets));

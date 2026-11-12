@@ -140,8 +140,8 @@ public sealed class RouteLatencyProbeTests
     {
         using var handler = new CallbackHandler((request, _) =>
         {
-            if (request.RequestUri!.Host == "cp.cloudflare.com")
-                return Task.FromResult(Response(request, HttpStatusCode.OK));
+            if (request.RequestUri!.Host == "deytt.space")
+                return Task.FromResult(Response(request, HttpStatusCode.InternalServerError));
 
             var response = new HttpResponseMessage(HttpStatusCode.NoContent)
             {
