@@ -28,8 +28,9 @@ internal sealed class EngineController
     private const int MaximumAwgProfilesTotalBytes = 4 * 1024 * 1024;
     private static readonly (string Url, HttpStatusCode? ExpectedStatus)[] TunnelCanaries =
     [
-        ("https://cp.cloudflare.com/generate_204", HttpStatusCode.NoContent),
-        ("https://www.gstatic.com/generate_204", HttpStatusCode.NoContent),
+        ("https://deytt.space/generate_204", HttpStatusCode.NoContent),
+        ("https://selectel.ru/favicon.ico", HttpStatusCode.OK),
+        ("https://mirror.yandex.ru/", HttpStatusCode.OK),
         ("https://www.google.com/generate_204", HttpStatusCode.NoContent),
     ];
     private readonly SemaphoreSlim _gate = new(1, 1);
