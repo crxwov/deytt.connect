@@ -7,18 +7,19 @@ namespace DeyttConnect.Windows.Tests;
 public sealed class WindowsSplitTunnelStoreTests
 {
     [Fact]
-    public void ConfigFlagsAndNormalizationRecognizeFullMode()
+    public void ConfigFlagsAndNormalizationNormalizeLegacyFullModeToBypass()
     {
-        var full = new WindowsSplitTunnelConfig(["example.org"], ["app.exe"], WindowsSplitTunnelConfig.ModeFull);
-        Assert.True(full.IsFull);
-        Assert.False(full.IsVpnOnly);
+        var bypassed = new WindowsSplitTunnelConfig(["example.org"], ["app.exe"], WindowsSplitTunnelConfig.ModeBypass);
+        Assert.False(bypassed.IsVpnOnly);
 
-        var deserialized = JsonSerializer.Deserialize<WindowsSplitTunnelConfig>(
-            "{\"mode\":\"full\",\"customDomains\":[\"2ip.ru\"]}",
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
-        Assert.NotNull(deserialized);
-        Assert.True(deserialized!.IsFull);
-        Assert.Equal("full", deserialized.Mode);
+        var vpnOnly = new WindowsSplitTunnelConfig(["example.org"], ["app.exe"], WindowsSplitTunnelConfig.ModeVpnOnly);
+        Assert.True(vpnOnly.IsVpnOnly);
+
+        Assert.True(WindowsSplitTunnelStore.TryParseConfigJson(
+            "{\"mode\":\"full\",\"customDomains\":[\"2ip.ru\"]}", out var legacyFull));
+        Assert.NotNull(legacyFull);
+        Assert.False(legacyFull!.IsVpnOnly);
+        Assert.Equal(WindowsSplitTunnelConfig.ModeBypass, legacyFull.Mode);
     }
 
     [Fact]
@@ -40,11 +41,12 @@ public sealed class WindowsSplitTunnelStoreTests
         Assert.True(WindowsSplitTunnelStore.TryParseConfigJson(payload, out var config));
         Assert.NotNull(config);
         Assert.Equal("work", config!.ActivePresetId);
-        Assert.True(config.IsFull);
+        Assert.False(config.IsVpnOnly);
+        Assert.Equal(WindowsSplitTunnelConfig.ModeBypass, config.Mode);
         Assert.Equal(["*.domain.ru", "2ip.ru"], config.CustomDomains);
         Assert.Equal(["discord.exe", "Firefox.exe"], config.CustomProcesses);
         Assert.Equal(2, config.Presets!.Count);
-        Assert.Equal("full", config.Presets[1].Mode);
+        Assert.Equal(WindowsSplitTunnelConfig.ModeBypass, config.Presets[1].Mode);
         Assert.Equal(["*.domain.ru", "2ip.ru"], config.Presets[1].CustomDomains);
 
         Assert.False(WindowsSplitTunnelStore.TryParseConfigJson("{broken", out _));

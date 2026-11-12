@@ -556,7 +556,7 @@ public sealed class TunnelProfileBuilderTests
     }
 
     [Fact]
-    public void FullModeRoutesRuAndSubscriptionDirectDomainsThroughVpnWhileKeepingUserExclusions()
+    public void LegacyFullModeNormalizesToBypassAndNeverBypassesCloudflareCanary()
     {
         var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
         profile["route"] = new JsonObject
@@ -591,6 +591,7 @@ public sealed class TunnelProfileBuilderTests
 
         var runtime = JsonNode.Parse(built)!;
         Assert.Equal("route:NL:VLESS", runtime["route"]!["final"]!.GetValue<string>());
+        Assert.Equal(1400, runtime["inbounds"]![0]!["mtu"]!.GetValue<int>());
 
         var rules = runtime["route"]!["rules"]!.AsArray().OfType<JsonObject>().ToArray();
         var directDomainRules = rules.Where(r => r["outbound"]?.GetValue<string>() == "direct" &&
@@ -600,10 +601,10 @@ public sealed class TunnelProfileBuilderTests
                 .Select(n => n!.GetValue<string>()))
             .ToArray();
 
-        Assert.DoesNotContain("ru", allDirectDomains);
-        Assert.DoesNotContain("gosuslugi.ru", allDirectDomains);
-        Assert.DoesNotContain("cp.cloudflare.com", allDirectDomains);
+        Assert.Contains("ru", allDirectDomains);
+        Assert.Contains("gosuslugi.ru", allDirectDomains);
         Assert.Contains("local-site.example", allDirectDomains);
+        Assert.DoesNotContain("cp.cloudflare.com", allDirectDomains);
 
         var directProcNames = rules
             .Where(r => r["outbound"]?.GetValue<string>() == "direct" && r.ContainsKey("process_name"))
@@ -617,8 +618,9 @@ public sealed class TunnelProfileBuilderTests
             .SelectMany(r => (r["domain_suffix"] as JsonArray ?? r["domain"] as JsonArray ?? [])
                 .Select(n => n!.GetValue<string>()))
             .ToArray();
-        Assert.DoesNotContain("ru", localDnsDomains);
+        Assert.Contains("ru", localDnsDomains);
         Assert.Contains("local-site.example", localDnsDomains);
+        Assert.DoesNotContain("cp.cloudflare.com", localDnsDomains);
         Assert.Equal("remote-dns", runtime["dns"]!["final"]!.GetValue<string>());
     }
 }

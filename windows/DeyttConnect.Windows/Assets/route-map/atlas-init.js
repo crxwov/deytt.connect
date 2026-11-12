@@ -53,7 +53,51 @@
   let entranceAnimations = [];
   let compactAnimation = null;
   let dockGeometryKey = "";
+  let uptimeTimerId = 0;
+  let uptimeStartMs = null;
   const systemReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+  function formatUptime(elapsedMs) {
+    const totalSeconds = Math.max(0, Math.floor(elapsedMs / 1000));
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const pad = n => String(n).padStart(2, "0");
+    return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+  }
+
+  function renderUptime() {
+    const row = root.querySelector("#home-uptime");
+    const label = root.querySelector("#home-uptime-label");
+    const value = root.querySelector("#home-uptime-value");
+    const compactValue = root.querySelector("#compact-uptime");
+    if (!Number.isFinite(uptimeStartMs) || uptimeStartMs <= 0) {
+      if (row) row.hidden = true;
+      if (compactValue) compactValue.hidden = true;
+      return;
+    }
+    const text = formatUptime(Date.now() - uptimeStartMs);
+    if (label) label.textContent = language === "en" ? "connected for" : "в сети";
+    if (value) value.textContent = text;
+    if (row) row.hidden = false;
+    if (compactValue) {
+      compactValue.textContent = text;
+      compactValue.hidden = false;
+    }
+  }
+
+  function syncUptimeTimer(connectedAtUnixMs) {
+    const valid = Number.isFinite(connectedAtUnixMs) && connectedAtUnixMs > 0;
+    uptimeStartMs = valid ? connectedAtUnixMs : null;
+    if (uptimeTimerId) {
+      window.clearInterval(uptimeTimerId);
+      uptimeTimerId = 0;
+    }
+    renderUptime();
+    if (valid) {
+      uptimeTimerId = window.setInterval(renderUptime, 1000);
+    }
+  }
 
   function motionIsReduced() {
     return reducedMotion || systemReducedMotion.matches;
@@ -335,6 +379,7 @@
       el.hidden = state.statusTone !== "good";
       el.textContent = language === "en" ? "connected" : "подключено";
     });
+    syncUptimeTimer(state.statusTone === "good" ? state.connectedAtUnixMs : null);
     const isMeasuring = state.measuring === true || state.latency === "…" || state.speed === "…";
     // Значение важнее статуса подключения: измеренные данные остаются на экране
     // до перезамера, спиннер — только когда измерять ещё нечего.
@@ -426,6 +471,7 @@
     const canvas = root.querySelector("canvas[data-atlas-interactive]");
     if (canvas) canvas.setAttribute("aria-label", strings[language].globe);
     if (window.deyttHomePresentation) applyHomePresentation(window.deyttHomePresentation);
+    renderUptime();
     const atlas = window.deyttMapAtlas;
     if (atlas) atlas.setLanguage(language);
     if (typeof window.deyttApplyPageTranslations === "function")

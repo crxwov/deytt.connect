@@ -905,6 +905,52 @@
       .network-atlas .action-dots i { animation: none !important; opacity: .16 !important; }
     }
 
+    /* Connection Uptime Row (visible only while VPN is genuinely connected) */
+    .home-uptime {
+      display: inline-flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      margin: -6px 0 -4px 4px !important;
+      font-size: 12.5px !important;
+      font-weight: 500 !important;
+      color: #8E9EAF !important;
+      font-variant-numeric: tabular-nums !important;
+      letter-spacing: 0.01em !important;
+    }
+    .home-uptime[hidden],
+    .compact-uptime[hidden] {
+      display: none !important;
+    }
+    .home-uptime__dot {
+      width: 7px !important;
+      height: 7px !important;
+      border-radius: 50% !important;
+      background: #39E8BD !important;
+      box-shadow: 0 0 8px rgba(57, 232, 189, 0.55) !important;
+      flex-shrink: 0 !important;
+    }
+    .home-uptime__value {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace !important;
+      font-size: 12.5px !important;
+      font-weight: 600 !important;
+      color: #F2F5FC !important;
+      letter-spacing: 0.03em !important;
+    }
+    .compact-uptime {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      color: #39E8BD !important;
+      font-variant-numeric: tabular-nums !important;
+    }
+    html[data-theme="light"]:not([data-atlas-profile="windows"]) .home-uptime { color: #5C6B82 !important; }
+    html[data-theme="light"]:not([data-atlas-profile="windows"]) .home-uptime__dot {
+      background: #10A889 !important;
+      box-shadow: 0 0 6px rgba(16, 168, 137, 0.35) !important;
+    }
+    html[data-theme="light"]:not([data-atlas-profile="windows"]) .home-uptime__value { color: #111823 !important; }
+    html[data-theme="light"]:not([data-atlas-profile="windows"]) .compact-uptime { color: #117A68 !important; }
+
     /* Minimal Typographic Telemetry Strip (Zero Card Boxes!) */
     .home-metrics {
       display: grid !important;
@@ -4406,6 +4452,11 @@
               <span data-action-label>подключиться</span>
               <span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span>
             </button>
+            <div id="home-uptime" class="home-uptime panel-copy" hidden>
+              <span class="home-uptime__dot" aria-hidden="true"></span>
+              <span id="home-uptime-label">в сети</span>
+              <strong id="home-uptime-value" class="home-uptime__value">00:00:00</strong>
+            </div>
             <div class="home-metrics panel-copy" aria-label="последний замер маршрута">
               <div class="metric">
                 <span class="metric-label" id="latency-label"><span class="ping-dot"></span>отклик</span>
@@ -4445,7 +4496,7 @@
             <button id="compact-action" class="compact-action" type="button" data-action="home-connect"><span data-action-label>подключиться</span><span class="action-dots" aria-hidden="true"><i></i><i></i><i></i></span></button>
             <button id="immersive-exit" class="compact-exit" type="button" aria-label="вернуться к окну" title="вернуться к окну · esc" hidden>↙</button>
             <p id="compact-error" class="compact-error" role="status" hidden></p>
-            <div class="compact-metrics"><span id="compact-latency">— мс</span><span id="compact-speed">— мбит/с</span></div>
+            <div class="compact-metrics"><span id="compact-uptime" class="compact-uptime" hidden>00:00:00</span><span id="compact-latency">— мс</span><span id="compact-speed">— мбит/с</span></div>
           </div>
         </section>
       </div>
@@ -6774,18 +6825,19 @@
 
     function buildDefaultSplitState() {
       const en = document.documentElement.lang === "en";
+      const normalizeSplitMode = m => m === "vpn_only" ? "vpn_only" : "bypass";
       const seed = window.__currentSettings?.splitTunnel;
       if (seed && Array.isArray(seed.presets) && seed.presets.length > 0) {
         return {
           activePresetId: seed.activePresetId || seed.presets[0].id,
-          mode: seed.mode || "bypass",
+          mode: normalizeSplitMode(seed.mode),
           customDomains: Array.isArray(seed.customDomains) ? [...seed.customDomains] : [],
           customProcesses: Array.isArray(seed.customProcesses) ? [...seed.customProcesses] : [],
           baseRules: Array.isArray(seed.baseRules) ? [...seed.baseRules] : [],
           presets: seed.presets.map(p => ({
             id: p.id,
             name: p.name,
-            mode: p.mode || "bypass",
+            mode: normalizeSplitMode(p.mode),
             customDomains: Array.isArray(p.customDomains) ? [...p.customDomains] : [],
             customProcesses: Array.isArray(p.customProcesses) ? [...p.customProcesses] : []
           }))
@@ -6839,9 +6891,7 @@
         const prefix = activePreset && splitModalState.presets.length > 1 ? `${String(activePreset.name).toLowerCase()} · ` : "";
         const modeLabel = splitModalState.mode === "vpn_only"
           ? (en ? "vpn only for list" : "vpn только для списка")
-          : splitModalState.mode === "full"
-            ? (en ? "full vpn (incl. .ru)" : "полный vpn (вкл. .ru)")
-            : (en ? "subscription bypass" : "сайты из подписки");
+          : (en ? "subscription bypass" : "сайты из подписки");
         desc.textContent = count > 0
           ? (en ? `${prefix}${modeLabel} + ${count} custom rules` : `${prefix}${modeLabel} + ${count} своих правил`)
           : (en ? `${prefix}${modeLabel} · all protocols` : `${prefix}${modeLabel} · все протоколы`);
@@ -6854,14 +6904,11 @@
       const en = document.documentElement.lang === "en";
       const t = (ru, enText) => en ? enText : ru;
       const isVpnOnly = splitModalState.mode === "vpn_only";
-      const isFull = splitModalState.mode === "full";
-      const isBypass = !isVpnOnly && !isFull;
+      const isBypass = !isVpnOnly;
 
       const modeShortLabel = mode => mode === "vpn_only"
         ? t("только vpn", "vpn only")
-        : mode === "full"
-          ? t("полный vpn", "full vpn")
-          : t("обход vpn", "bypass vpn");
+        : t("обход vpn", "bypass vpn");
 
       const presetsHtml = splitModalState.presets.map(pr => {
         const isActive = String(pr.id).toLowerCase() === String(splitModalState.activePresetId).toLowerCase();
@@ -6931,14 +6978,10 @@
 
       const domainsTitle = isVpnOnly
         ? t("сайты через vpn", "sites through vpn")
-        : isFull
-          ? t("исключения из полного vpn (напрямую)", "full vpn exclusions (direct)")
-          : t("сайты в обход vpn", "sites bypassing vpn");
+        : t("сайты в обход vpn", "sites bypassing vpn");
       const procTitle = isVpnOnly
         ? t("приложения через vpn", "apps through vpn")
-        : isFull
-          ? t("приложения в обход полного vpn", "apps bypassing full vpn")
-          : t("приложения в обход vpn", "apps bypassing vpn");
+        : t("приложения в обход vpn", "apps bypassing vpn");
       const procDesc = isVpnOnly
         ? t("весь исходящий трафик выбранных процессов направляется через vpn.", "all outgoing traffic from selected processes goes through vpn.")
         : t("весь исходящий трафик выбранных процессов направляется напрямую в обход vpn.", "all outgoing traffic from selected processes goes directly without vpn.");
@@ -6977,19 +7020,12 @@
             </div>
             <span class="modal-choice-check">✓</span>
           </div>
-          <div class="modal-choice-item ${isFull ? "is-selected" : ""}" data-st-mode="full" role="radio" aria-checked="${isFull}">
-            <div>
-              <span class="modal-choice-title">${t("полный vpn (вкл. .ru)", "full vpn (incl. .ru)")}</span>
-              <span class="modal-choice-desc">${t("весь трафик, включая .ru и 2ip.ru, через vpn. исключения ниже идут напрямую.", "all traffic, incl. .ru and 2ip.ru, goes via vpn. exceptions below go direct.")}</span>
-            </div>
-            <span class="modal-choice-check">✓</span>
-          </div>
         </div>
 
         <div class="st-card">
           <div class="st-card-head">
             <span class="st-card-title">${t("базовые правила подписки", "base subscription rules")}</span>
-            <span class="st-badge ${isFull ? "" : "is-mint"}">${isFull ? t("отключено (через vpn)", "disabled (via vpn)") : t("всегда напрямую", "always direct")}</span>
+            <span class="st-badge is-mint">${t("всегда напрямую", "always direct")}</span>
           </div>
           <div class="st-chips">${baseRulesHtml}</div>
           <div style="font-size:11.5px;color:var(--text-muted);line-height:1.4;">${t("встроены в конфигурацию подписки для стабильной работы локальных сервисов.", "built into subscription for reliable access to essential services.")}</div>
