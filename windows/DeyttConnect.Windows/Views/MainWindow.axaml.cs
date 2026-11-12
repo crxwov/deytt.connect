@@ -157,6 +157,7 @@ public partial class MainWindow : Window
         };
         Opened += async (_, _) =>
         {
+            ApplyNativeWindowIcon();
             InitializeTray();
             AttachSystemThemeWatcher();
             FitInitialWindowToWorkArea();
@@ -351,6 +352,33 @@ public partial class MainWindow : Window
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
+
+    private const int WmSetIcon = 0x0080;
+    private static readonly IntPtr IconSmall = (IntPtr)0;
+    private static readonly IntPtr IconBig = (IntPtr)1;
+
+    private void ApplyNativeWindowIcon()
+    {
+        if (!OperatingSystem.IsWindows() || TryGetPlatformHandle()?.Handle is not { } hwnd || hwnd == IntPtr.Zero)
+            return;
+        try
+        {
+            var exePath = Environment.ProcessPath ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrEmpty(exePath) && System.IO.File.Exists(exePath))
+            {
+                var hIcon = ExtractIcon(IntPtr.Zero, exePath, 0);
+                if (hIcon != IntPtr.Zero)
+                {
+                    SendMessage(hwnd, WmSetIcon, IconBig, hIcon);
+                    SendMessage(hwnd, WmSetIcon, IconSmall, hIcon);
+                }
+            }
+        }
+        catch { }
+    }
 
     private const int WmNcLButtonDown = 0x00A1;
     private const int HtCaption = 0x0002;

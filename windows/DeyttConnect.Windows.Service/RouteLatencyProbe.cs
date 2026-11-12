@@ -9,14 +9,14 @@ internal static class RouteLatencyProbe
 {
     internal static readonly Uri[] DefaultTargets =
     [
-        new("https://cp.cloudflare.com/generate_204"),
-        new("https://connectivitycheck.gstatic.com/generate_204"),
         new("https://www.google.com/generate_204"),
+        new("https://connectivitycheck.gstatic.com/generate_204"),
+        new("https://cp.cloudflare.com/generate_204"),
     ];
 
     internal static readonly RouteLatencyProbeTimeouts ProductionTimeouts = new(
-        Overall: TimeSpan.FromSeconds(12),
-        Individual: TimeSpan.FromMilliseconds(5000));
+        Overall: TimeSpan.FromSeconds(16),
+        Individual: TimeSpan.FromMilliseconds(6500));
 
     internal static async Task<RouteLatencyProbeResult> MeasureServerAsync(IPAddress serverAddress,
         CancellationToken cancellationToken)

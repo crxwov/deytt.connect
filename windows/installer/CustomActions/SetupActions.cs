@@ -300,6 +300,17 @@ namespace DeyttConnect.Setup
                 link.SetDescription("deytt./connect — подключение к VPN");
                 link.SetIconLocation(executable, 0);
                 link.SetShowCmd(1);
+                if (link is IPropertyStore propertyStore)
+                {
+                    try
+                    {
+                        var key = new PropertyKey(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
+                        using var propVar = PropVariant.FromString("DEYTT.Connect.Client");
+                        propertyStore.SetValue(ref key, propVar);
+                        propertyStore.Commit();
+                    }
+                    catch { }
+                }
                 persist.Save(shortcutPath, true);
             }
             finally { Marshal.FinalReleaseComObject(link); }
@@ -433,6 +444,49 @@ namespace DeyttConnect.Setup
         void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, uint reserved);
         void Resolve(IntPtr window, uint flags);
         void SetPath([MarshalAs(UnmanagedType.LPWStr)] string path);
+    }
+
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99")]
+    internal interface IPropertyStore
+    {
+        uint GetCount([Out] out uint cProps);
+        uint GetAt([In] uint iProp, out PropertyKey pkey);
+        uint GetValue([In] ref PropertyKey key, [Out] PropVariant pv);
+        uint SetValue([In] ref PropertyKey key, [In] PropVariant pv);
+        uint Commit();
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    internal struct PropertyKey
+    {
+        public Guid fmtid;
+        public uint pid;
+        public PropertyKey(Guid guid, uint id) { fmtid = guid; pid = id; }
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct PropVariant : IDisposable
+    {
+        [FieldOffset(0)] public ushort vt;
+        [FieldOffset(8)] public IntPtr pwszVal;
+
+        public static PropVariant FromString(string val)
+        {
+            return new PropVariant
+            {
+                vt = 31, // VT_LPWSTR
+                pwszVal = Marshal.StringToCoTaskMemUni(val)
+            };
+        }
+
+        public void Dispose()
+        {
+            if (pwszVal != IntPtr.Zero)
+            {
+                Marshal.FreeCoTaskMem(pwszVal);
+                pwszVal = IntPtr.Zero;
+            }
+        }
     }
 }
 

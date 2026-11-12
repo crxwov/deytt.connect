@@ -20,7 +20,7 @@ internal static class HomeConnectionProbe
         }
 
         using var handler = new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false };
-        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(6) };
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
 
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://deytt.space/api/tg/mobile/probe/download");
         request.Headers.TryAddWithoutValidation("X-TG-App-Token", token);
@@ -33,12 +33,19 @@ internal static class HomeConnectionProbe
         var measuredLatency = (long)Math.Max(1, Stopwatch.GetElapsedTime(latencyStarted).TotalMilliseconds);
         result = result with { LatencyMilliseconds = measuredLatency };
         if (response.StatusCode != HttpStatusCode.OK)
-            return result with { Error = response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden
-                ? "Обновите вход для замера скорости." : "Сервер скорости временно недоступен." };
+        {
+            var err = response.StatusCode switch
+            {
+                HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => "Обновите вход для замера скорости.",
+                HttpStatusCode.TooManyRequests => "Лимит частых замеров. Попробуйте через минуту.",
+                _ => "Сервер скорости временно недоступен."
+            };
+            return result with { Error = err };
+        }
 
         await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        timeout.CancelAfter(TimeSpan.FromSeconds(6));
         const long limit = 32L * 1024 * 1024;
         var expected = response.Content.Headers.ContentLength is > 0 ? Math.Min(response.Content.Headers.ContentLength.Value, limit) : limit;
         var buffer = new byte[32 * 1024];
@@ -60,7 +67,7 @@ internal static class HomeConnectionProbe
         }
         cancellationToken.ThrowIfCancellationRequested();
         var seconds = Stopwatch.GetElapsedTime(started).TotalSeconds;
-        if (seconds < .1 || received < 256 * 1024 || !timedOut && received < expected)
+        if (seconds < .1 || received < 256 * 1024)
             return result with { Error = "Недостаточно данных для замера скорости." };
         return result with { BytesPerSecond = (long)(received / seconds), BytesReceived = received, TotalBytes = expected };
     }
