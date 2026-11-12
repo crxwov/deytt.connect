@@ -794,14 +794,16 @@ public partial class MainWindow
         void ApplyResponsiveLayout(double contentWidth)
         {
             var compact = contentWidth < 600;
-            modeSelectorGrid.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "*,*");
-            modeSelectorGrid.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto");
-            modeSelectorGrid.ColumnSpacing = compact ? 0 : 10;
-            modeSelectorGrid.RowSpacing = compact ? 8 : 10;
+            modeSelectorGrid.ColumnDefinitions = new ColumnDefinitions("*");
+            modeSelectorGrid.RowDefinitions = new RowDefinitions("Auto,Auto,Auto");
+            modeSelectorGrid.ColumnSpacing = 0;
+            modeSelectorGrid.RowSpacing = 8;
             Grid.SetColumn(bypassModeCard!, 0);
             Grid.SetRow(bypassModeCard!, 0);
-            Grid.SetColumn(vpnOnlyModeCard!, compact ? 0 : 1);
-            Grid.SetRow(vpnOnlyModeCard!, compact ? 1 : 0);
+            Grid.SetColumn(vpnOnlyModeCard!, 0);
+            Grid.SetRow(vpnOnlyModeCard!, 1);
+            Grid.SetColumn(fullModeCard!, 0);
+            Grid.SetRow(fullModeCard!, 2);
 
             presetsHeader.ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "*,Auto");
             presetsHeader.RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto");

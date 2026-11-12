@@ -55,51 +55,7 @@ public static class WindowsSplitTunnelStore
             }
 
             var value = JsonSerializer.Deserialize<WindowsSplitTunnelConfig>(File.ReadAllBytes(path), JsonOptions);
-            if (value is null)
-            {
-                var defaultPreset = new SplitTunnelPreset("default", "Основной", WindowsSplitTunnelConfig.ModeBypass, [], []);
-                return new WindowsSplitTunnelConfig([], [], WindowsSplitTunnelConfig.ModeBypass, "default", [defaultPreset]);
-            }
-
-            var rootDomains = NormalizeDomainList(value.CustomDomains);
-            var rootProcesses = NormalizeProcessList(value.CustomProcesses);
-            var rootMode = NormalizeMode(value.Mode);
-
-            var presetsList = new List<SplitTunnelPreset>();
-            if (value.Presets is { Count: > 0 })
-            {
-                foreach (var p in value.Presets)
-                {
-                    if (string.IsNullOrWhiteSpace(p.Id) || string.IsNullOrWhiteSpace(p.Name)) continue;
-                    presetsList.Add(new SplitTunnelPreset(
-                        p.Id.Trim(),
-                        p.Name.Trim(),
-                        NormalizeMode(p.Mode),
-                        NormalizeDomainList(p.CustomDomains),
-                        NormalizeProcessList(p.CustomProcesses)));
-                }
-            }
-
-            if (presetsList.Count == 0)
-            {
-                presetsList.Add(new SplitTunnelPreset(
-                    "default",
-                    "Основной",
-                    rootMode,
-                    rootDomains,
-                    rootProcesses));
-            }
-
-            var activeId = value.ActivePresetId;
-            var activePreset = presetsList.FirstOrDefault(p => string.Equals(p.Id, activeId, StringComparison.OrdinalIgnoreCase))
-                               ?? presetsList[0];
-
-            return new WindowsSplitTunnelConfig(
-                activePreset.CustomDomains,
-                activePreset.CustomProcesses,
-                activePreset.Mode,
-                activePreset.Id,
-                presetsList);
+            return NormalizeLoaded(value);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -108,29 +64,69 @@ public static class WindowsSplitTunnelStore
         }
     }
 
-    public static void Save(WindowsSplitTunnelConfig config)
+    public static bool TryParseConfigJson(string? json, out WindowsSplitTunnelConfig? config)
     {
-        EnsureWindows();
+        config = null;
+        if (string.IsNullOrWhiteSpace(json))
+            return false;
 
+        try
+        {
+            var raw = JsonSerializer.Deserialize<WindowsSplitTunnelConfig>(json, JsonOptions);
+            if (raw is null)
+                return false;
+
+            var normalized = NormalizeForSave(raw);
+            config = normalized;
+            return true;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static WindowsSplitTunnelConfig NormalizeLoaded(WindowsSplitTunnelConfig? value)
+    {
+        if (value is null)
+        {
+            var defaultPreset = new SplitTunnelPreset("default", "Основной", WindowsSplitTunnelConfig.ModeBypass, [], []);
+            return new WindowsSplitTunnelConfig([], [], WindowsSplitTunnelConfig.ModeBypass, "default", [defaultPreset]);
+        }
+
+        var rootDomains = NormalizeDomainList(value.CustomDomains);
+        var rootProcesses = NormalizeProcessList(value.CustomProcesses);
+        var rootMode = NormalizeMode(value.Mode);
+
+        var presetsList = NormalizePresets(value.Presets);
+        if (presetsList.Count == 0)
+        {
+            presetsList.Add(new SplitTunnelPreset(
+                "default",
+                "Основной",
+                rootMode,
+                rootDomains,
+                rootProcesses));
+        }
+
+        var activePreset = presetsList.FirstOrDefault(p => string.Equals(p.Id, value.ActivePresetId, StringComparison.OrdinalIgnoreCase))
+                           ?? presetsList[0];
+
+        return new WindowsSplitTunnelConfig(
+            activePreset.CustomDomains,
+            activePreset.CustomProcesses,
+            activePreset.Mode,
+            activePreset.Id,
+            presetsList);
+    }
+
+    private static WindowsSplitTunnelConfig NormalizeForSave(WindowsSplitTunnelConfig config)
+    {
         var currentDomains = NormalizeDomainList(config.CustomDomains);
         var currentProcesses = NormalizeProcessList(config.CustomProcesses);
         var currentMode = NormalizeMode(config.Mode);
 
-        var presetsList = new List<SplitTunnelPreset>();
-        if (config.Presets is { Count: > 0 })
-        {
-            foreach (var p in config.Presets)
-            {
-                if (string.IsNullOrWhiteSpace(p.Id) || string.IsNullOrWhiteSpace(p.Name)) continue;
-                presetsList.Add(new SplitTunnelPreset(
-                    p.Id.Trim(),
-                    p.Name.Trim(),
-                    NormalizeMode(p.Mode),
-                    NormalizeDomainList(p.CustomDomains),
-                    NormalizeProcessList(p.CustomProcesses)));
-            }
-        }
-
+        var presetsList = NormalizePresets(config.Presets);
         var activeId = config.ActivePresetId;
         if (string.IsNullOrWhiteSpace(activeId) && presetsList.Count > 0)
             activeId = presetsList[0].Id;
@@ -161,10 +157,44 @@ public static class WindowsSplitTunnelStore
             else
             {
                 activeId = presetsList[0].Id;
+                currentMode = presetsList[0].Mode;
+                currentDomains = presetsList[0].CustomDomains ?? [];
+                currentProcesses = presetsList[0].CustomProcesses ?? [];
             }
         }
 
-        var safe = new WindowsSplitTunnelConfig(currentDomains, currentProcesses, currentMode, activeId, presetsList);
+        return new WindowsSplitTunnelConfig(currentDomains, currentProcesses, currentMode, activeId, presetsList);
+    }
+
+    private static List<SplitTunnelPreset> NormalizePresets(IEnumerable<SplitTunnelPreset>? raw)
+    {
+        var list = new List<SplitTunnelPreset>();
+        if (raw is null)
+            return list;
+
+        var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in raw)
+        {
+            if (string.IsNullOrWhiteSpace(p.Id) || string.IsNullOrWhiteSpace(p.Name))
+                continue;
+            var id = p.Id.Trim();
+            if (!seenIds.Add(id))
+                continue;
+            list.Add(new SplitTunnelPreset(
+                id,
+                p.Name.Trim(),
+                NormalizeMode(p.Mode),
+                NormalizeDomainList(p.CustomDomains),
+                NormalizeProcessList(p.CustomProcesses)));
+        }
+
+        return list;
+    }
+
+    public static void Save(WindowsSplitTunnelConfig config)
+    {
+        EnsureWindows();
+        var safe = NormalizeForSave(config);
         var path = SplitTunnelPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";

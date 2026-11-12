@@ -2067,6 +2067,240 @@
       opacity: 1;
     }
 
+    /* Extended Liquid Glass Modal for Split Tunneling */
+    .glass-modal-card.is-wide {
+      max-width: 660px;
+      width: min(92vw, 660px);
+      max-height: min(86vh, 760px);
+      display: flex;
+      flex-direction: column;
+      padding: 22px 24px;
+    }
+    .glass-modal-card.is-wide #in-app-modal-content {
+      overflow-y: auto;
+      flex: 1 1 auto;
+      min-height: 0;
+      padding-right: 6px;
+      margin-right: -6px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+    }
+    .glass-modal-card.is-wide #in-app-modal-content::-webkit-scrollbar { width: 6px; }
+    .glass-modal-card.is-wide #in-app-modal-content::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+    }
+    .st-subtitle { font-size: 12.5px; color: var(--text-muted); margin: 0 0 14px 0; line-height: 1.45; }
+    .st-card {
+      background: rgba(255, 255, 255, 0.035);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+    .st-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .st-card-title { font-size: 13.5px; font-weight: 600; color: #FFFFFF; }
+    .st-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+    }
+    .st-badge.is-mint {
+      background: rgba(57, 232, 189, 0.12);
+      color: var(--accent-mint);
+      border-color: rgba(57, 232, 189, 0.3);
+    }
+    .st-presets-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+    .st-preset-pill {
+      display: inline-flex;
+      align-items: stretch;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+      transition: border-color 140ms ease, background 140ms ease;
+    }
+    .st-preset-pill:hover { border-color: rgba(255, 255, 255, 0.22); }
+    .st-preset-pill.is-active {
+      background: rgba(57, 232, 189, 0.11);
+      border-color: rgba(57, 232, 189, 0.42);
+    }
+    .st-preset-btn {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 8px 12px;
+      background: none;
+      border: none;
+      color: inherit;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+      text-transform: lowercase;
+    }
+    .st-preset-name { display: block; font-size: 13px; font-weight: 600; color: #FFFFFF; }
+    .st-preset-meta { display: block; font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .st-preset-del {
+      background: rgba(255, 255, 255, 0.03);
+      border: none;
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+      color: rgba(255, 255, 255, 0.55);
+      width: 30px;
+      cursor: pointer;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 140ms ease, background 140ms ease;
+    }
+    .st-preset-del:hover { color: #FB7185; background: rgba(251, 113, 133, 0.12); }
+    .st-modes { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .st-modes .modal-choice-item { margin-bottom: 0; padding: 11px 14px; border-radius: 14px; gap: 12px; }
+    .st-modes .modal-choice-item.is-selected {
+      background: rgba(57, 232, 189, 0.11);
+      border-color: rgba(57, 232, 189, 0.42);
+    }
+    .st-modes .modal-choice-item.is-selected .modal-choice-title,
+    .st-modes .modal-choice-item.is-selected .modal-choice-check { color: var(--accent-mint); }
+    .st-input-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .st-input {
+      flex: 1 1 200px;
+      min-width: 0;
+      height: 38px;
+      border-radius: 11px;
+      padding: 0 12px;
+      background: rgba(5, 9, 17, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #FFFFFF;
+      font-size: 13px;
+      font-family: inherit;
+      text-transform: none;
+      outline: none;
+      transition: border-color 140ms ease;
+    }
+    .st-input::placeholder { color: rgba(255, 255, 255, 0.36); text-transform: lowercase; }
+    .st-input:focus { border-color: rgba(56, 189, 248, 0.65); }
+    .st-btn {
+      height: 38px;
+      padding: 0 14px;
+      border-radius: 11px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: #E2E8F0;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      font-family: inherit;
+      text-transform: lowercase;
+      transition: all 140ms ease;
+    }
+    .st-btn:hover { background: rgba(255, 255, 255, 0.14); color: #FFFFFF; }
+    .st-btn.is-primary {
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.85), rgba(37, 99, 235, 0.9));
+      border-color: rgba(125, 211, 252, 0.45);
+      color: #FFFFFF;
+    }
+    .st-btn.is-accent {
+      background: rgba(57, 232, 189, 0.11);
+      border-color: rgba(57, 232, 189, 0.35);
+      color: var(--accent-mint);
+    }
+    .st-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .st-chip {
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 4px 8px;
+      text-transform: none;
+    }
+    .st-rule-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 152px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    .st-rule-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .st-rule-name {
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 12.5px;
+      color: #F1F5F9;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-transform: none;
+    }
+    .st-rule-sub { display: block; font-size: 11px; color: var(--text-muted); margin-top: 1px; text-transform: none; }
+    .st-rule-remove {
+      background: none;
+      border: none;
+      color: #FB7185;
+      font-size: 16px;
+      width: 26px;
+      height: 26px;
+      border-radius: 7px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .st-rule-remove:hover { background: rgba(251, 113, 133, 0.14); }
+    .st-running-drawer {
+      margin-top: 6px;
+      margin-bottom: 10px;
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(5, 9, 17, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .st-empty {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 9px 11px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      line-height: 1.4;
+    }
+    .st-hint-error { font-size: 11.5px; color: #FB7185; margin: -2px 0 8px 2px; }
+    .st-footer {
+      display: flex;
+      justify-content: center;
+      padding-top: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      margin-top: 6px;
+    }
+    @media (max-width: 560px) {
+      .glass-modal-card.is-wide { width: 96vw; padding: 18px 16px; }
+      .st-input { flex-basis: 100%; }
+    }
+
     .qr-preview-box {
       width: 200px;
       height: 200px;
@@ -6462,11 +6696,24 @@
     });
 
     // In-App Liquid Glass Modal system
-    function openInAppModal(title, contentHtml) {
+    let splitModalOpen = false;
+    let splitModalDirty = false;
+    let splitModalState = null;
+    let splitRunningApps = [];
+    let splitRunningPickerOpen = false;
+    let splitRunningLoading = false;
+    let splitAddPresetOpen = false;
+    let splitDomainError = "";
+    let splitRunningFilter = "";
+
+    function openInAppModal(title, contentHtml, options = {}) {
       const backdrop = document.getElementById("in-app-modal-backdrop");
+      const card = document.getElementById("in-app-modal-card");
       const titleEl = document.getElementById("in-app-modal-title");
       const contentEl = document.getElementById("in-app-modal-content");
       if (!backdrop || !titleEl || !contentEl) return;
+      if (!options.keepSplitState) splitModalOpen = false;
+      if (card) card.classList.toggle("is-wide", options.wide === true);
       titleEl.textContent = title;
       contentEl.innerHTML = contentHtml;
       backdrop.classList.add("is-open");
@@ -6475,10 +6722,17 @@
 
     function closeInAppModal() {
       const backdrop = document.getElementById("in-app-modal-backdrop");
+      const card = document.getElementById("in-app-modal-card");
       if (backdrop) {
         backdrop.classList.remove("is-open");
         backdrop.setAttribute("aria-hidden", "true");
       }
+      if (card) card.classList.remove("is-wide");
+      if (splitModalOpen && splitModalDirty) {
+        splitModalDirty = false;
+        postHost("settings:apply_splittunnel");
+      }
+      splitModalOpen = false;
     }
 
     document.getElementById("in-app-modal-close")?.addEventListener("click", closeInAppModal);
@@ -6486,8 +6740,527 @@
       if (e.target === e.currentTarget) closeInAppModal();
     });
     window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") closeInAppModal();
+      if (e.key === "Escape") {
+        const backdrop = document.getElementById("in-app-modal-backdrop");
+        if (backdrop?.classList.contains("is-open")) closeInAppModal();
+      }
     });
+
+    function escapeSplitHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+    function normalizeSplitDomain(raw) {
+      let domain = String(raw ?? "").trim().toLowerCase();
+      if (!domain) return null;
+      if (domain.startsWith("http://")) domain = domain.slice(7);
+      else if (domain.startsWith("https://")) domain = domain.slice(8);
+      const cut = domain.search(/[/?#:]/);
+      if (cut >= 0) domain = domain.slice(0, cut).trim();
+      if (!domain) return null;
+      if (domain.startsWith(".")) domain = "*" + domain;
+      return /^(\*\.)?([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z0-9-]{2,}$/.test(domain) ? domain : null;
+    }
+
+    function normalizeSplitProcess(raw) {
+      let trimmed = String(raw ?? "").trim().replace(/^["']+|["']+$/g, "");
+      if (!trimmed) return null;
+      const parts = trimmed.split(/[\\/]/);
+      const fileName = (parts[parts.length - 1] || trimmed).replace(/[<>:"|?*]/g, "").trim();
+      return fileName || null;
+    }
+
+    function buildDefaultSplitState() {
+      const en = document.documentElement.lang === "en";
+      const seed = window.__currentSettings?.splitTunnel;
+      if (seed && Array.isArray(seed.presets) && seed.presets.length > 0) {
+        return {
+          activePresetId: seed.activePresetId || seed.presets[0].id,
+          mode: seed.mode || "bypass",
+          customDomains: Array.isArray(seed.customDomains) ? [...seed.customDomains] : [],
+          customProcesses: Array.isArray(seed.customProcesses) ? [...seed.customProcesses] : [],
+          baseRules: Array.isArray(seed.baseRules) ? [...seed.baseRules] : [],
+          presets: seed.presets.map(p => ({
+            id: p.id,
+            name: p.name,
+            mode: p.mode || "bypass",
+            customDomains: Array.isArray(p.customDomains) ? [...p.customDomains] : [],
+            customProcesses: Array.isArray(p.customProcesses) ? [...p.customProcesses] : []
+          }))
+        };
+      }
+      return {
+        activePresetId: "default",
+        mode: "bypass",
+        customDomains: [],
+        customProcesses: [],
+        baseRules: [],
+        presets: [{ id: "default", name: en ? "default" : "основной", mode: "bypass", customDomains: [], customProcesses: [] }]
+      };
+    }
+
+    function syncActivePresetInState() {
+      if (!splitModalState) return;
+      const idx = splitModalState.presets.findIndex(p => String(p.id).toLowerCase() === String(splitModalState.activePresetId).toLowerCase());
+      if (idx >= 0) {
+        splitModalState.presets[idx] = {
+          ...splitModalState.presets[idx],
+          mode: splitModalState.mode,
+          customDomains: [...splitModalState.customDomains],
+          customProcesses: [...splitModalState.customProcesses]
+        };
+      }
+    }
+
+    function persistSplitModalState() {
+      if (!splitModalState) return;
+      syncActivePresetInState();
+      splitModalDirty = true;
+      const payload = {
+        activePresetId: splitModalState.activePresetId,
+        mode: splitModalState.mode,
+        customDomains: splitModalState.customDomains,
+        customProcesses: splitModalState.customProcesses,
+        presets: splitModalState.presets
+      };
+      if (window.__currentSettings) {
+        window.__currentSettings.splitTunnel = {
+          ...payload,
+          baseRules: splitModalState.baseRules
+        };
+      }
+      const desc = document.getElementById("setting-split-desc");
+      if (desc) {
+        const en = document.documentElement.lang === "en";
+        const count = splitModalState.customDomains.length + splitModalState.customProcesses.length;
+        const activePreset = splitModalState.presets.find(p => String(p.id).toLowerCase() === String(splitModalState.activePresetId).toLowerCase());
+        const prefix = activePreset && splitModalState.presets.length > 1 ? `${String(activePreset.name).toLowerCase()} · ` : "";
+        const modeLabel = splitModalState.mode === "vpn_only"
+          ? (en ? "vpn only for list" : "vpn только для списка")
+          : splitModalState.mode === "full"
+            ? (en ? "full vpn (incl. .ru)" : "полный vpn (вкл. .ru)")
+            : (en ? "subscription bypass" : "сайты из подписки");
+        desc.textContent = count > 0
+          ? (en ? `${prefix}${modeLabel} + ${count} custom rules` : `${prefix}${modeLabel} + ${count} своих правил`)
+          : (en ? `${prefix}${modeLabel} · all protocols` : `${prefix}${modeLabel} · все протоколы`);
+      }
+      postHost("settings:save_splittunnel:" + JSON.stringify(payload));
+    }
+
+    function renderSplitTunnelModalBody() {
+      if (!splitModalState) return;
+      const en = document.documentElement.lang === "en";
+      const t = (ru, enText) => en ? enText : ru;
+      const isVpnOnly = splitModalState.mode === "vpn_only";
+      const isFull = splitModalState.mode === "full";
+      const isBypass = !isVpnOnly && !isFull;
+
+      const modeShortLabel = mode => mode === "vpn_only"
+        ? t("только vpn", "vpn only")
+        : mode === "full"
+          ? t("полный vpn", "full vpn")
+          : t("обход vpn", "bypass vpn");
+
+      const presetsHtml = splitModalState.presets.map(pr => {
+        const isActive = String(pr.id).toLowerCase() === String(splitModalState.activePresetId).toLowerCase();
+        const count = (pr.customDomains?.length || 0) + (pr.customProcesses?.length || 0);
+        const ruleWord = en ? (count === 1 ? "rule" : "rules") : "правил";
+        return `
+          <div class="st-preset-pill ${isActive ? "is-active" : ""}">
+            <button type="button" class="st-preset-btn" data-st-preset-select="${escapeSplitHtml(pr.id)}">
+              <div>
+                <span class="st-preset-name">${escapeSplitHtml(pr.name)}</span>
+                <span class="st-preset-meta">${escapeSplitHtml(modeShortLabel(pr.mode))} · ${count} ${ruleWord}</span>
+              </div>
+              ${isActive ? '<span style="color:var(--accent-mint);font-size:14px;">✓</span>' : ""}
+            </button>
+            ${splitModalState.presets.length > 1
+              ? `<button type="button" class="st-preset-del" data-st-preset-del="${escapeSplitHtml(pr.id)}" title="${t("удалить профиль", "delete preset")}">×</button>`
+              : ""}
+          </div>`;
+      }).join("");
+
+      const baseRulesHtml = splitModalState.baseRules.length > 0
+        ? splitModalState.baseRules.map(site => `<span class="st-chip">${escapeSplitHtml(site)}</span>`).join("")
+        : `<span style="font-size:12px;color:#FBBF24;">${t("правила подписки не загружены", "subscription rules not loaded")}</span>`;
+
+      const sortedDomains = [...splitModalState.customDomains].sort((a, b) => a.localeCompare(b));
+      const domainsListHtml = sortedDomains.length === 0
+        ? `<div class="st-empty">${t("список пуст. введите домен выше и нажмите «+ добавить».", "list is empty. enter a domain above and select «+ add».")}</div>`
+        : sortedDomains.map(d => `
+          <div class="st-rule-row">
+            <span class="st-rule-name">${escapeSplitHtml(d)}</span>
+            <button type="button" class="st-rule-remove" data-st-domain-del="${escapeSplitHtml(d)}" title="${t("удалить", "remove")}">×</button>
+          </div>`).join("");
+
+      const sortedProcesses = [...splitModalState.customProcesses].sort((a, b) => a.localeCompare(b));
+      const processesListHtml = sortedProcesses.length === 0
+        ? `<div class="st-empty">${t("список пуст. выберите запущенное приложение, укажите .exe или введите имя процесса.", "list is empty. pick a running app, browse an .exe, or type a process name.")}</div>`
+        : sortedProcesses.map(p => `
+          <div class="st-rule-row">
+            <span class="st-rule-name">${escapeSplitHtml(p)}</span>
+            <button type="button" class="st-rule-remove" data-st-proc-del="${escapeSplitHtml(p)}" title="${t("удалить", "remove")}">×</button>
+          </div>`).join("");
+
+      const filterLower = splitRunningFilter.trim().toLowerCase();
+      const filteredRunning = filterLower
+        ? splitRunningApps.filter(a =>
+            String(a.displayName || "").toLowerCase().includes(filterLower) ||
+            String(a.processName || "").toLowerCase().includes(filterLower))
+        : splitRunningApps;
+
+      const runningListHtml = splitRunningLoading
+        ? `<div class="st-empty">${t("загружаем список запущенных программ…", "loading running apps…")}</div>`
+        : filteredRunning.length === 0
+          ? `<div class="st-empty">${t("ничего не найдено", "no running applications found")}</div>`
+          : filteredRunning.slice(0, 60).map(app => {
+              const added = splitModalState.customProcesses.some(x => x.toLowerCase() === String(app.processName).toLowerCase());
+              return `
+                <div class="st-rule-row">
+                  <div style="min-width:0;flex:1;">
+                    <span class="st-rule-name" style="display:block;">${escapeSplitHtml(app.displayName || app.processName)}</span>
+                    <span class="st-rule-sub">${escapeSplitHtml(app.processName)}</span>
+                  </div>
+                  ${added
+                    ? `<span style="font-size:11.5px;font-weight:600;color:var(--accent-mint);white-space:nowrap;">✓ ${t("добавлен", "added")}</span>`
+                    : `<button type="button" class="st-btn" style="height:30px;padding:0 10px;font-size:11.5px;" data-st-running-add="${escapeSplitHtml(app.processName)}">+ ${t("добавить", "add")}</button>`}
+                </div>`;
+            }).join("");
+
+      const domainsTitle = isVpnOnly
+        ? t("сайты через vpn", "sites through vpn")
+        : isFull
+          ? t("исключения из полного vpn (напрямую)", "full vpn exclusions (direct)")
+          : t("сайты в обход vpn", "sites bypassing vpn");
+      const procTitle = isVpnOnly
+        ? t("приложения через vpn", "apps through vpn")
+        : isFull
+          ? t("приложения в обход полного vpn", "apps bypassing full vpn")
+          : t("приложения в обход vpn", "apps bypassing vpn");
+      const procDesc = isVpnOnly
+        ? t("весь исходящий трафик выбранных процессов направляется через vpn.", "all outgoing traffic from selected processes goes through vpn.")
+        : t("весь исходящий трафик выбранных процессов направляется напрямую в обход vpn.", "all outgoing traffic from selected processes goes directly without vpn.");
+
+      const html = `
+        <p class="st-subtitle">${t("настройте, какой трафик направлять через vpn, а какой — напрямую через вашего провайдера.", "configure which traffic goes through vpn and which goes directly through your isp.")}</p>
+
+        <div class="st-card">
+          <div class="st-card-head">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="st-card-title">${t("сохранённые профили", "saved presets")}</span>
+              <span class="st-badge">${splitModalState.presets.length}</span>
+            </div>
+            <button type="button" class="st-btn is-accent" id="st-preset-toggle">${splitAddPresetOpen ? t("скрыть", "cancel") : t("+ профиль", "+ add preset")}</button>
+          </div>
+          ${splitAddPresetOpen ? `
+            <div class="st-input-row" style="margin-bottom:10px;">
+              <input type="text" class="st-input" id="st-preset-name-input" placeholder="${t("название (например: игры, работа...)", "preset name (e.g. gaming, work...)")}" maxlength="40">
+              <button type="button" class="st-btn is-primary" id="st-preset-create-btn">${t("создать", "create")}</button>
+            </div>` : ""}
+          <div class="st-presets-wrap">${presetsHtml}</div>
+        </div>
+
+        <div class="st-modes" role="radiogroup" aria-label="${t("режим маршрутизации", "routing mode")}">
+          <div class="modal-choice-item ${isBypass ? "is-selected" : ""}" data-st-mode="bypass" role="radio" aria-checked="${isBypass}">
+            <div>
+              <span class="modal-choice-title">${t("обход vpn для списка", "bypass vpn for list")}</span>
+              <span class="modal-choice-desc">${t("весь интернет через vpn. .ru, подписка и список ниже идут напрямую.", "all traffic through vpn. .ru, subscription rules and list go direct.")}</span>
+            </div>
+            <span class="modal-choice-check">✓</span>
+          </div>
+          <div class="modal-choice-item ${isVpnOnly ? "is-selected" : ""}" data-st-mode="vpn_only" role="radio" aria-checked="${isVpnOnly}">
+            <div>
+              <span class="modal-choice-title">${t("vpn только для списка", "vpn only for list")}</span>
+              <span class="modal-choice-desc">${t("весь интернет напрямую. только сайты и программы из списка идут через vpn.", "all traffic direct. only listed sites and apps go through vpn.")}</span>
+            </div>
+            <span class="modal-choice-check">✓</span>
+          </div>
+          <div class="modal-choice-item ${isFull ? "is-selected" : ""}" data-st-mode="full" role="radio" aria-checked="${isFull}">
+            <div>
+              <span class="modal-choice-title">${t("полный vpn (вкл. .ru)", "full vpn (incl. .ru)")}</span>
+              <span class="modal-choice-desc">${t("весь трафик, включая .ru и 2ip.ru, через vpn. исключения ниже идут напрямую.", "all traffic, incl. .ru and 2ip.ru, goes via vpn. exceptions below go direct.")}</span>
+            </div>
+            <span class="modal-choice-check">✓</span>
+          </div>
+        </div>
+
+        <div class="st-card">
+          <div class="st-card-head">
+            <span class="st-card-title">${t("базовые правила подписки", "base subscription rules")}</span>
+            <span class="st-badge ${isFull ? "" : "is-mint"}">${isFull ? t("отключено (через vpn)", "disabled (via vpn)") : t("всегда напрямую", "always direct")}</span>
+          </div>
+          <div class="st-chips">${baseRulesHtml}</div>
+          <div style="font-size:11.5px;color:var(--text-muted);line-height:1.4;">${t("встроены в конфигурацию подписки для стабильной работы локальных сервисов.", "built into subscription for reliable access to essential services.")}</div>
+        </div>
+
+        <div class="st-card">
+          <div class="st-card-head">
+            <span class="st-card-title">${domainsTitle}</span>
+            <span class="st-badge">${sortedDomains.length}</span>
+          </div>
+          <div class="st-input-row">
+            <input type="text" class="st-input" id="st-domain-input" placeholder="${t("например: mydomain.com или *.domain.ru", "e.g. mydomain.com or *.domain.ru")}">
+            <button type="button" class="st-btn is-primary" id="st-domain-add-btn">+ ${t("добавить", "add")}</button>
+          </div>
+          ${splitDomainError ? `<div class="st-hint-error">${escapeSplitHtml(splitDomainError)}</div>` : ""}
+          <div class="st-rule-list" id="st-domains-list">${domainsListHtml}</div>
+        </div>
+
+        <div class="st-card">
+          <div class="st-card-head">
+            <span class="st-card-title">${procTitle}</span>
+            <span class="st-badge">${sortedProcesses.length}</span>
+          </div>
+          <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px 0;line-height:1.4;">${procDesc}</p>
+          <div class="st-input-row">
+            <button type="button" class="st-btn is-accent" style="flex:1 1 180px;" id="st-running-toggle-btn">${t("выбрать запущенное приложение", "pick a running app")}</button>
+            <button type="button" class="st-btn" style="flex:1 1 150px;" id="st-browse-exe-btn">${t("обзор файла .exe…", "browse for .exe…")}</button>
+          </div>
+          ${splitRunningPickerOpen ? `
+            <div class="st-running-drawer" id="st-running-drawer">
+              <div class="st-input-row" style="margin-bottom:8px;">
+                <input type="text" class="st-input" id="st-running-search" value="${escapeSplitHtml(splitRunningFilter)}" placeholder="${t("поиск по названию окна или процессу…", "search by window title or process…")}">
+              </div>
+              <div class="st-rule-list" id="st-running-list" style="max-height:168px;">${runningListHtml}</div>
+            </div>` : ""}
+          <div class="st-input-row">
+            <input type="text" class="st-input" id="st-proc-input" placeholder="${t("или имя процесса вручную (например: discord.exe)", "or type process manually (e.g. discord.exe)")}">
+            <button type="button" class="st-btn is-primary" id="st-proc-add-btn">+ ${t("добавить", "add")}</button>
+          </div>
+          <div class="st-rule-list" id="st-processes-list">${processesListHtml}</div>
+        </div>
+
+        <div class="st-footer">
+          <button type="button" class="st-btn is-primary" id="st-done-btn" style="min-width:168px;height:40px;font-size:13.5px;">${t("готово", "done")}</button>
+        </div>`;
+
+      openInAppModal(t("раздельное туннелирование", "split tunneling"), html, { wide: true, keepSplitState: true });
+      bindSplitModalEvents();
+    }
+
+    function bindSplitModalEvents() {
+      const en = document.documentElement.lang === "en";
+      const t = (ru, enText) => en ? enText : ru;
+
+      document.getElementById("st-preset-toggle")?.addEventListener("click", () => {
+        splitAddPresetOpen = !splitAddPresetOpen;
+        renderSplitTunnelModalBody();
+        if (splitAddPresetOpen) document.getElementById("st-preset-name-input")?.focus();
+      });
+
+      const createPreset = () => {
+        const input = document.getElementById("st-preset-name-input");
+        const name = input?.value?.trim();
+        if (!name || !splitModalState) return;
+        syncActivePresetInState();
+        const newId = "p_" + Math.random().toString(36).slice(2, 10);
+        splitModalState.presets.push({ id: newId, name, mode: "bypass", customDomains: [], customProcesses: [] });
+        splitModalState.activePresetId = newId;
+        splitModalState.mode = "bypass";
+        splitModalState.customDomains = [];
+        splitModalState.customProcesses = [];
+        splitAddPresetOpen = false;
+        splitDomainError = "";
+        persistSplitModalState();
+        renderSplitTunnelModalBody();
+      };
+      document.getElementById("st-preset-create-btn")?.addEventListener("click", createPreset);
+      document.getElementById("st-preset-name-input")?.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); createPreset(); }
+      });
+
+      document.querySelectorAll("[data-st-preset-select]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const targetId = btn.dataset.stPresetSelect;
+          if (!splitModalState || String(targetId).toLowerCase() === String(splitModalState.activePresetId).toLowerCase()) return;
+          syncActivePresetInState();
+          const target = splitModalState.presets.find(p => String(p.id).toLowerCase() === String(targetId).toLowerCase());
+          if (!target) return;
+          splitModalState.activePresetId = target.id;
+          splitModalState.mode = target.mode || "bypass";
+          splitModalState.customDomains = [...(target.customDomains || [])];
+          splitModalState.customProcesses = [...(target.customProcesses || [])];
+          splitDomainError = "";
+          persistSplitModalState();
+          renderSplitTunnelModalBody();
+        });
+      });
+
+      document.querySelectorAll("[data-st-preset-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const targetId = btn.dataset.stPresetDel;
+          if (!splitModalState || splitModalState.presets.length <= 1) return;
+          splitModalState.presets = splitModalState.presets.filter(p => String(p.id).toLowerCase() !== String(targetId).toLowerCase());
+          if (String(splitModalState.activePresetId).toLowerCase() === String(targetId).toLowerCase()) {
+            const next = splitModalState.presets[0];
+            splitModalState.activePresetId = next.id;
+            splitModalState.mode = next.mode || "bypass";
+            splitModalState.customDomains = [...(next.customDomains || [])];
+            splitModalState.customProcesses = [...(next.customProcesses || [])];
+          }
+          splitDomainError = "";
+          persistSplitModalState();
+          renderSplitTunnelModalBody();
+        });
+      });
+
+      document.querySelectorAll("[data-st-mode]").forEach(card => {
+        card.addEventListener("click", () => {
+          if (!splitModalState) return;
+          splitModalState.mode = card.dataset.stMode || "bypass";
+          splitDomainError = "";
+          persistSplitModalState();
+          renderSplitTunnelModalBody();
+        });
+      });
+
+      const addDomain = () => {
+        const input = document.getElementById("st-domain-input");
+        const raw = input?.value || "";
+        const normalized = normalizeSplitDomain(raw);
+        if (!normalized) {
+          splitDomainError = raw.trim()
+            ? t("укажите корректный домен, например example.com или *.domain.ru", "enter a valid domain, e.g. example.com or *.domain.ru")
+            : "";
+          renderSplitTunnelModalBody();
+          document.getElementById("st-domain-input")?.focus();
+          return;
+        }
+        splitDomainError = "";
+        if (!splitModalState.customDomains.some(d => d.toLowerCase() === normalized.toLowerCase())) {
+          splitModalState.customDomains.push(normalized);
+          persistSplitModalState();
+        }
+        renderSplitTunnelModalBody();
+      };
+      document.getElementById("st-domain-add-btn")?.addEventListener("click", addDomain);
+      document.getElementById("st-domain-input")?.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); addDomain(); }
+      });
+
+      document.querySelectorAll("[data-st-domain-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const val = btn.dataset.stDomainDel;
+          splitModalState.customDomains = splitModalState.customDomains.filter(d => d !== val);
+          persistSplitModalState();
+          renderSplitTunnelModalBody();
+        });
+      });
+
+      const addProcess = rawName => {
+        const normalized = normalizeSplitProcess(rawName);
+        if (!normalized || !splitModalState) return;
+        if (!splitModalState.customProcesses.some(p => p.toLowerCase() === normalized.toLowerCase())) {
+          splitModalState.customProcesses.push(normalized);
+          persistSplitModalState();
+        }
+        renderSplitTunnelModalBody();
+      };
+      document.getElementById("st-proc-add-btn")?.addEventListener("click", () => {
+        addProcess(document.getElementById("st-proc-input")?.value || "");
+      });
+      document.getElementById("st-proc-input")?.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); addProcess(e.target.value || ""); }
+      });
+
+      document.querySelectorAll("[data-st-proc-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const val = btn.dataset.stProcDel;
+          splitModalState.customProcesses = splitModalState.customProcesses.filter(p => p !== val);
+          persistSplitModalState();
+          renderSplitTunnelModalBody();
+        });
+      });
+
+      document.getElementById("st-running-toggle-btn")?.addEventListener("click", () => {
+        splitRunningPickerOpen = !splitRunningPickerOpen;
+        if (splitRunningPickerOpen) {
+          splitRunningLoading = splitRunningApps.length === 0;
+          postHost("settings:splittunnel_running");
+        }
+        renderSplitTunnelModalBody();
+        if (splitRunningPickerOpen) document.getElementById("st-running-search")?.focus();
+      });
+
+      document.getElementById("st-running-search")?.addEventListener("input", e => {
+        splitRunningFilter = e.target.value || "";
+        const listEl = document.getElementById("st-running-list");
+        if (!listEl || !splitModalState) return;
+        const filterLower = splitRunningFilter.trim().toLowerCase();
+        const filteredRunning = filterLower
+          ? splitRunningApps.filter(a =>
+              String(a.displayName || "").toLowerCase().includes(filterLower) ||
+              String(a.processName || "").toLowerCase().includes(filterLower))
+          : splitRunningApps;
+        listEl.innerHTML = filteredRunning.length === 0
+          ? `<div class="st-empty">${t("ничего не найдено", "no running applications found")}</div>`
+          : filteredRunning.slice(0, 60).map(app => {
+              const added = splitModalState.customProcesses.some(x => x.toLowerCase() === String(app.processName).toLowerCase());
+              return `
+                <div class="st-rule-row">
+                  <div style="min-width:0;flex:1;">
+                    <span class="st-rule-name" style="display:block;">${escapeSplitHtml(app.displayName || app.processName)}</span>
+                    <span class="st-rule-sub">${escapeSplitHtml(app.processName)}</span>
+                  </div>
+                  ${added
+                    ? `<span style="font-size:11.5px;font-weight:600;color:var(--accent-mint);white-space:nowrap;">✓ ${t("добавлен", "added")}</span>`
+                    : `<button type="button" class="st-btn" style="height:30px;padding:0 10px;font-size:11.5px;" data-st-running-add="${escapeSplitHtml(app.processName)}">+ ${t("добавить", "add")}</button>`}
+                </div>`;
+            }).join("");
+        listEl.querySelectorAll("[data-st-running-add]").forEach(btn => {
+          btn.addEventListener("click", () => addProcess(btn.dataset.stRunningAdd));
+        });
+      });
+
+      document.querySelectorAll("[data-st-running-add]").forEach(btn => {
+        btn.addEventListener("click", () => addProcess(btn.dataset.stRunningAdd));
+      });
+
+      document.getElementById("st-browse-exe-btn")?.addEventListener("click", () => {
+        postHost("settings:splittunnel_browse_exe");
+      });
+
+      document.getElementById("st-done-btn")?.addEventListener("click", closeInAppModal);
+    }
+
+    window.deyttSetRunningApps = function(apps) {
+      splitRunningApps = Array.isArray(apps) ? apps : [];
+      splitRunningLoading = false;
+      if (splitModalOpen && splitRunningPickerOpen) {
+        const searchFocused = document.activeElement?.id === "st-running-search";
+        renderSplitTunnelModalBody();
+        if (searchFocused) {
+          const el = document.getElementById("st-running-search");
+          if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+        }
+      }
+    };
+
+    window.deyttOnSplitTunnelExePicked = function(exeName) {
+      if (!exeName) return;
+      if (splitModalState && !splitModalState.customProcesses.some(p => p.toLowerCase() === exeName.toLowerCase())) {
+        splitModalState.customProcesses.push(exeName);
+        syncActivePresetInState();
+        splitModalDirty = true;
+      }
+      if (splitModalOpen) renderSplitTunnelModalBody();
+      const en = document.documentElement.lang === "en";
+      showToast(en ? `added ${exeName}` : `добавлено: ${exeName}`);
+    };
+
+    const handleSplitTunnelClick = () => {
+      splitModalState = buildDefaultSplitState();
+      splitModalOpen = true;
+      splitModalDirty = false;
+      splitRunningPickerOpen = false;
+      splitRunningLoading = false;
+      splitAddPresetOpen = false;
+      splitDomainError = "";
+      splitRunningFilter = "";
+      renderSplitTunnelModalBody();
+    };
 
     // Settings Stage In-App Actions (Row click & button click parity)
     const handleLanguageClick = () => {
@@ -6528,9 +7301,9 @@
     document.getElementById("row-setting-account")?.addEventListener("click", () => postHost("settings:signin"));
     document.getElementById("btn-setting-account")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:signin"); });
 
-    // Open full native Avalonia split-tunneling dialog (presets, modes, custom domains & .exe apps).
-    document.getElementById("row-setting-split")?.addEventListener("click", () => postHost("settings:splittunnel"));
-    document.getElementById("btn-setting-split")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:splittunnel"); });
+    // Open smooth in-app LiquidGlass split-tunneling configurator (zero WebView2 overlay lag).
+    document.getElementById("row-setting-split")?.addEventListener("click", handleSplitTunnelClick);
+    document.getElementById("btn-setting-split")?.addEventListener("click", (e) => { e.stopPropagation(); handleSplitTunnelClick(); });
 
     const handleProbeMethodClick = () => {
       const en = document.documentElement.lang === "en";
