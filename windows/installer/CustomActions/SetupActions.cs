@@ -325,6 +325,9 @@ namespace DeyttConnect.Setup
             finally { Marshal.FinalReleaseComObject(link); }
         }
 
+        [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        internal static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
         internal static bool ShouldLaunchConnect(string launch, string canLaunch, string rebootNeeded) =>
             launch == "1" && canLaunch == "1" && rebootNeeded != "1";
 
@@ -496,8 +499,6 @@ namespace DeyttConnect.Setup
                 pwszVal = IntPtr.Zero;
             }
         }
-        [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-        private static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
     }
 }
 
