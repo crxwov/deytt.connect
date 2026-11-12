@@ -298,7 +298,11 @@ namespace DeyttConnect.Setup
                 link.SetPath(executable);
                 link.SetWorkingDirectory(Path.GetDirectoryName(executable));
                 link.SetDescription("deytt./connect — подключение к VPN");
-                link.SetIconLocation(executable, 0);
+                var iconPath = Path.Combine(Path.GetDirectoryName(executable) ?? string.Empty, "Assets", "deyttconnect.ico");
+                if (File.Exists(iconPath))
+                    link.SetIconLocation(iconPath, 0);
+                else
+                    link.SetIconLocation(executable, 0);
                 link.SetShowCmd(1);
                 if (link is IPropertyStore propertyStore)
                 {
@@ -312,6 +316,11 @@ namespace DeyttConnect.Setup
                     catch { }
                 }
                 persist.Save(shortcutPath, true);
+                try
+                {
+                    SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero);
+                }
+                catch { }
             }
             finally { Marshal.FinalReleaseComObject(link); }
         }
@@ -487,6 +496,8 @@ namespace DeyttConnect.Setup
                 pwszVal = IntPtr.Zero;
             }
         }
+        [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
     }
 }
 

@@ -114,29 +114,6 @@ public partial class MainWindow
         {
             await _shellModalGate.WaitAsync(closingCancellation.Token);
             gateAcquired = true;
-            if (_routeGlobe is { Parent: not null, IsEffectivelyVisible: true } globe && globe.IsAttachedToVisualTree())
-            {
-                var previewOrigin = globe.TranslatePoint(default, ModalOverlayHost) ?? default;
-                previewBounds = new Rect(previewOrigin, globe.Bounds.Size);
-                try
-                {
-                    previewCaptureTask = globe.CapturePreviewAsync();
-                    pagePreview = await previewCaptureTask.WaitAsync(PagePreviewCaptureTimeout,
-                        closingCancellation.Token);
-                }
-                catch (TimeoutException)
-                {
-                    // A late capture must not retain the native bitmap after the dialog closes.
-                    if (previewCaptureTask is not null)
-                        _ = previewCaptureTask.ContinueWith(task => task.Result?.Dispose(),
-                            CancellationToken.None, TaskContinuationOptions.OnlyOnRanToCompletion,
-                            TaskScheduler.Default);
-                }
-                catch (OperationCanceledException) when (closingCancellation.IsCancellationRequested)
-                {
-                    return null;
-                }
-            }
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 previousFocus = FocusManager?.GetFocusedElement() as Control;
@@ -217,7 +194,7 @@ public partial class MainWindow
 
                 var overlay = new Grid
                 {
-                    Background = Brushes.Transparent,
+                    Background = new SolidColorBrush(Color.FromArgb(190, 8, 13, 23)),
                     Focusable = true,
                 };
                 overlay.Resources["AppFocusBrush"] = DeyttTheme.Brush(DeyttTheme.DialogAccent);
@@ -289,9 +266,8 @@ public partial class MainWindow
 
                 configure?.Invoke(modal);
                 _activeShellContentDialog = modal;
-                // WebView2 owns a native child window and otherwise paints over Avalonia dialogs.
-                if (_routeGlobe?.Parent is Panel mapHost)
-                    mapHost.Children.Remove(_routeGlobe);
+                if (_routeGlobe is not null)
+                    _routeGlobe.IsHitTestVisible = false;
                 SidebarPanel.IsEnabled = false;
                 BottomNavigationPanel.IsEnabled = false;
                 PageScroll.IsEnabled = false;
@@ -322,11 +298,8 @@ public partial class MainWindow
                         _activeShellContentDialog = null;
                         ModalOverlayHost.Children.Clear();
                         ModalOverlayHost.IsVisible = false;
-                        if (_activeTab is MainTab.Home or MainTab.Routes or MainTab.Profile or MainTab.Settings)
-                        {
-                            RefreshHomePageInPlace();
-                            RenderActiveTabPreservingScroll(reuseCachedPage: true);
-                        }
+                        if (_routeGlobe is not null)
+                            _routeGlobe.IsHitTestVisible = true;
                         SidebarPanel.IsEnabled = previousEnabled.Sidebar;
                         BottomNavigationPanel.IsEnabled = previousEnabled.BottomNavigation;
                         PageScroll.IsEnabled = previousEnabled.Page;

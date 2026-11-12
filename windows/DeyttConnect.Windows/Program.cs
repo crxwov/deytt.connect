@@ -43,6 +43,9 @@ sealed class Program
     [DllImport("shell32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     private static extern int SetCurrentProcessExplicitAppUserModelID(string appID);
 
+    [DllImport("shell32.dll", SetLastError = true)]
+    private static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
@@ -54,6 +57,7 @@ sealed class Program
             try
             {
                 SetCurrentProcessExplicitAppUserModelID("DEYTT.Connect.Client");
+                SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero);
             }
             catch { }
         }

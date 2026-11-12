@@ -141,7 +141,7 @@ public partial class MainWindow
                 routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
             if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
             {
-                latency = latency ?? PositiveLatency(result.LatencyMilliseconds) ?? storedLatency;
+                latency = latency ?? storedLatency;
                 if (latency is not null) latencyError = null;
                 _homeLiveProbe = result with
                 {
@@ -531,8 +531,31 @@ public partial class MainWindow
         map.SupportRequested += () => _ = ShowSupportWindowAsync();
         map.ImportRequested += () => _ = ShowSetupWindowAsync();
         map.LanguagePickerRequested += () => _ = ShowLanguagePickerAsync();
+        map.LanguageChanged += lang =>
+        {
+            _language = lang;
+            SavePreferences();
+            UpdateHomeGlobePresentation();
+        };
         map.SplitTunnelRequested += () => ShowSplitTunnelingInfo();
+        map.SplitTunnelModeChanged += mode =>
+        {
+            try
+            {
+                var splitStore = WindowsSplitTunnelStore.Load();
+                splitStore = splitStore with { Mode = mode };
+                WindowsSplitTunnelStore.Save(splitStore);
+                UpdateHomeGlobePresentation();
+            }
+            catch { }
+        };
         map.ProbeMethodRequested += () => _ = ShowProbeMethodPickerAsync();
+        map.ProbeMethodChanged += method =>
+        {
+            _probeMethod = method;
+            SavePreferences();
+            UpdateHomeGlobePresentation();
+        };
         map.ServiceCheckRequested += () => _ = InstallVpnServiceAsync();
         map.BotRequested += () => OpenExternal("https://t.me/deyttbot");
         map.UpdateProfileAvatar(_telegramAvatarDataUrl);

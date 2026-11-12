@@ -177,6 +177,9 @@ public sealed class RouteGlobeWebView : ContentControl
     public event Action? ProbeMethodRequested;
     public event Action? ServiceCheckRequested;
     public event Action? BotRequested;
+    public event Action<string>? LanguageChanged;
+    public event Action<string>? ProbeMethodChanged;
+    public event Action<string>? SplitTunnelModeChanged;
 
     internal bool IsNativeInitializationDisabled => _disableNativeInitialization;
 
@@ -1143,6 +1146,36 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         if (node == "profile:import" || node == "settings:import")
         {
             Dispatcher.UIThread.Post(() => ImportRequested?.Invoke());
+            return;
+        }
+        if (node.StartsWith("settings:set_language:", StringComparison.Ordinal))
+        {
+            var lang = node["settings:set_language:".Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    LanguageChanged?.Invoke(lang);
+            });
+            return;
+        }
+        if (node.StartsWith("settings:set_probemethod:", StringComparison.Ordinal))
+        {
+            var method = node["settings:set_probemethod:".Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    ProbeMethodChanged?.Invoke(method);
+            });
+            return;
+        }
+        if (node.StartsWith("settings:set_splittunnel:", StringComparison.Ordinal))
+        {
+            var mode = node["settings:set_splittunnel:".Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SplitTunnelModeChanged?.Invoke(mode);
+            });
             return;
         }
         if (node == "settings:language")

@@ -1988,16 +1988,16 @@
     .glass-modal-backdrop {
       position: fixed;
       inset: 0;
-      background: transparent;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      background: rgba(5, 9, 17, 0.72);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       z-index: 200;
       display: flex;
       align-items: center;
       justify-content: center;
       opacity: 0;
       pointer-events: none;
-      transition: opacity 240ms ease;
+      transition: opacity 220ms ease;
     }
 
     .glass-modal-backdrop.is-open {
@@ -2007,22 +2007,64 @@
 
     .glass-modal-card {
       width: 90%;
-      max-width: 420px;
-      background: rgba(14, 22, 38, 0.85);
-      backdrop-filter: blur(32px) saturate(180%);
-      -webkit-backdrop-filter: blur(32px) saturate(180%);
+      max-width: 440px;
+      background: rgba(14, 22, 38, 0.90);
+      backdrop-filter: blur(36px) saturate(180%);
+      -webkit-backdrop-filter: blur(36px) saturate(180%);
       border: 1px solid rgba(255, 255, 255, 0.12);
-      border-top-color: rgba(255, 255, 255, 0.38);
+      border-top-color: rgba(255, 255, 255, 0.35);
       border-radius: 24px;
-      padding: 32px;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.25);
-      text-align: center;
-      transform: scale(0.95);
-      transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+      padding: 24px 26px;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+      text-align: left;
+      transform: scale(0.96);
+      transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .glass-modal-backdrop.is-open .glass-modal-card {
       transform: scale(1);
+    }
+
+    .modal-choice-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 13px 16px;
+      margin-bottom: 9px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      cursor: pointer;
+      transition: all 160ms ease;
+    }
+    .modal-choice-item:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    .modal-choice-item.is-selected {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+    .modal-choice-title {
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #FFFFFF;
+      display: block;
+    }
+    .modal-choice-desc {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.55);
+      margin-top: 3px;
+      display: block;
+    }
+    .modal-choice-check {
+      font-size: 16px;
+      color: #38BDF8;
+      opacity: 0;
+      transition: opacity 160ms ease;
+    }
+    .modal-choice-item.is-selected .modal-choice-check {
+      opacity: 1;
     }
 
     .qr-preview-box {
@@ -4882,6 +4924,17 @@
     </section>
   </main>
 
+  <!-- Authentic LiquidGlass in-app modal container -->
+  <div class="glass-modal-backdrop" id="in-app-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="glass-modal-card" id="in-app-modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+        <h3 id="in-app-modal-title" style="font-family: 'Unbounded', sans-serif; font-size: 16.5px; font-weight: 700; color: #FFFFFF; margin: 0; text-transform: lowercase;">заголовок</h3>
+        <button id="in-app-modal-close" type="button" style="background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.15); color: #FFFFFF; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 18px; line-height: 1; transition: all 0.15s ease;">×</button>
+      </div>
+      <div id="in-app-modal-content" style="text-align: left;"></div>
+    </div>
+  </div>
+
   <div class="motion-toast" id="toast"></div>
 
   <script>
@@ -5575,8 +5628,8 @@
         } else if (stage === "error") {
           row.classList.remove("is-probing");
           if (dot) dot.classList.remove("is-probing");
-          if (latEl && latEl.textContent === "…") latEl.textContent = "—";
-          if (spdEl && spdEl.textContent === "…") spdEl.textContent = "—";
+          if (latEl) latEl.textContent = latency != null ? `${latency} мс` : "—";
+          if (spdEl) spdEl.textContent = speedMbps != null ? `${speedMbps} мбит/с` : "—";
         }
       }
 
@@ -5838,6 +5891,7 @@
     };
     window.deyttSetSettingsData = function(data) {
       if (!data) return;
+      window.__currentSettings = data;
       const sLang = document.getElementById("setting-lang-desc");
       const sAcc = document.getElementById("setting-account-desc");
       const btnAcc = document.getElementById("btn-setting-account");
@@ -6275,21 +6329,160 @@
       });
     });
 
-    // Settings Stage IPC actions (Row click & button click parity)
-    document.getElementById("row-setting-lang")?.addEventListener("click", () => postHost("settings:language"));
-    document.getElementById("btn-setting-lang")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:language"); });
+    // In-App Liquid Glass Modal system
+    function openInAppModal(title, contentHtml) {
+      const backdrop = document.getElementById("in-app-modal-backdrop");
+      const titleEl = document.getElementById("in-app-modal-title");
+      const contentEl = document.getElementById("in-app-modal-content");
+      if (!backdrop || !titleEl || !contentEl) return;
+      titleEl.textContent = title;
+      contentEl.innerHTML = contentHtml;
+      backdrop.classList.add("is-open");
+      backdrop.setAttribute("aria-hidden", "false");
+    }
+
+    function closeInAppModal() {
+      const backdrop = document.getElementById("in-app-modal-backdrop");
+      if (backdrop) {
+        backdrop.classList.remove("is-open");
+        backdrop.setAttribute("aria-hidden", "true");
+      }
+    }
+
+    document.getElementById("in-app-modal-close")?.addEventListener("click", closeInAppModal);
+    document.getElementById("in-app-modal-backdrop")?.addEventListener("click", (e) => {
+      if (e.target === e.currentTarget) closeInAppModal();
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeInAppModal();
+    });
+
+    // Settings Stage In-App Actions (Row click & button click parity)
+    const handleLanguageClick = () => {
+      const current = window.__currentSettings?.language || (document.getElementById("setting-lang-desc")?.textContent?.includes("english") ? "en" : "ru");
+      const html = `
+        <div class="modal-choice-item ${current === 'ru' ? 'is-selected' : ''}" data-lang="ru">
+          <div>
+            <span class="modal-choice-title">русский</span>
+            <span class="modal-choice-desc">основной язык интерфейса</span>
+          </div>
+          <span class="modal-choice-check">✓</span>
+        </div>
+        <div class="modal-choice-item ${current === 'en' ? 'is-selected' : ''}" data-lang="en">
+          <div>
+            <span class="modal-choice-title">english</span>
+            <span class="modal-choice-desc">interface in english</span>
+          </div>
+          <span class="modal-choice-check">✓</span>
+        </div>
+      `;
+      openInAppModal("язык приложения", html);
+      document.querySelectorAll("#in-app-modal-content .modal-choice-item").forEach(item => {
+        item.addEventListener("click", () => {
+          const lang = item.dataset.lang;
+          postHost("settings:set_language:" + lang);
+          const desc = document.getElementById("setting-lang-desc");
+          if (desc) desc.textContent = lang === "ru" ? "русский" : "english";
+          closeInAppModal();
+        });
+      });
+    };
+    document.getElementById("row-setting-lang")?.addEventListener("click", handleLanguageClick);
+    document.getElementById("btn-setting-lang")?.addEventListener("click", (e) => { e.stopPropagation(); handleLanguageClick(); });
 
     document.getElementById("row-setting-account")?.addEventListener("click", () => postHost("settings:signin"));
     document.getElementById("btn-setting-account")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:signin"); });
 
-    document.getElementById("row-setting-split")?.addEventListener("click", () => postHost("settings:splittunnel"));
-    document.getElementById("btn-setting-split")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:splittunnel"); });
+    const handleSplitTunnelClick = () => {
+      const descText = document.getElementById("setting-split-desc")?.textContent || "";
+      const isOnlyVpn = descText.toLowerCase().includes("vpn только") || descText.toLowerCase().includes("только список");
+      const currentMode = isOnlyVpn ? "vpn_only" : "bypass";
+      const html = `
+        <div class="modal-choice-item ${currentMode === 'bypass' ? 'is-selected' : ''}" data-mode="bypass">
+          <div>
+            <span class="modal-choice-title">все сайты через vpn (обход)</span>
+            <span class="modal-choice-desc">все сайты направляются в туннель, исключения — напрямую</span>
+          </div>
+          <span class="modal-choice-check">✓</span>
+        </div>
+        <div class="modal-choice-item ${currentMode === 'vpn_only' ? 'is-selected' : ''}" data-mode="vpn_only">
+          <div>
+            <span class="modal-choice-title">только сайты из списка</span>
+            <span class="modal-choice-desc">в туннель направляются только указанные домены и адреса</span>
+          </div>
+          <span class="modal-choice-check">✓</span>
+        </div>
+      `;
+      openInAppModal("раздельное туннелирование", html);
+      document.querySelectorAll("#in-app-modal-content .modal-choice-item").forEach(item => {
+        item.addEventListener("click", () => {
+          const mode = item.dataset.mode;
+          postHost("settings:set_splittunnel:" + mode);
+          const desc = document.getElementById("setting-split-desc");
+          if (desc) desc.textContent = mode === "bypass" ? "все сайты через vpn" : "только сайты из списка";
+          closeInAppModal();
+        });
+      });
+    };
+    document.getElementById("row-setting-split")?.addEventListener("click", handleSplitTunnelClick);
+    document.getElementById("btn-setting-split")?.addEventListener("click", (e) => { e.stopPropagation(); handleSplitTunnelClick(); });
 
-    document.getElementById("row-setting-probe")?.addEventListener("click", () => postHost("settings:probemethod"));
-    document.getElementById("btn-setting-probe")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:probemethod"); });
+    const handleProbeMethodClick = () => {
+      const isGet = document.getElementById("setting-probe-desc")?.textContent?.includes("GET");
+      const current = isGet ? "GET" : "HEAD";
+      const html = `
+        <div class="modal-choice-item ${current === 'HEAD' ? 'is-selected' : ''}" data-method="HEAD">
+          <div>
+            <span class="modal-choice-title">HTTP HEAD</span>
+            <span class="modal-choice-desc">быстрая проверка заголовков, загрузка 1 с</span>
+          </div>
+          <span class="modal-choice-check">✓</span>
+        </div>
+        <div class="modal-choice-item ${current === 'GET' ? 'is-selected' : ''}" data-method="GET">
+          <div>
+            <span class="modal-choice-title">HTTP GET</span>
+            <span class="modal-choice-desc">полная проверка доступности данных через маршрут</span>
+          </div>
+          <span class="modal-choice-check">✓</span>
+        </div>
+      `;
+      openInAppModal("проверка маршрута", html);
+      document.querySelectorAll("#in-app-modal-content .modal-choice-item").forEach(item => {
+        item.addEventListener("click", () => {
+          const method = item.dataset.method;
+          postHost("settings:set_probemethod:" + method);
+          const desc = document.getElementById("setting-probe-desc");
+          if (desc) desc.textContent = "HTTP " + method + " · быстрая проверка, загрузка 1 с";
+          closeInAppModal();
+        });
+      });
+    };
+    document.getElementById("row-setting-probe")?.addEventListener("click", handleProbeMethodClick);
+    document.getElementById("btn-setting-probe")?.addEventListener("click", (e) => { e.stopPropagation(); handleProbeMethodClick(); });
 
-    document.getElementById("row-setting-service")?.addEventListener("click", () => postHost("settings:service"));
-    document.getElementById("btn-setting-service")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:service"); });
+    const handleServiceClick = () => {
+      const descText = document.getElementById("setting-service-desc")?.textContent || "";
+      const isReady = descText.includes("установлена") || descText.includes("готова");
+      const html = `
+        <div style="padding: 4px 0 10px 0;">
+          <p style="font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.7); margin: 0 0 16px 0;">
+            ${isReady
+              ? "служба deyttconnect установлена и зарегистрирована в диспетчере служб windows. она управляет туннелями и безопасной фильтрацией маршрутов."
+              : "для управления VPN-соединением требуются системные права. нажмите кнопку ниже для проверки или установки службы."}
+          </p>
+          <button id="btn-modal-service-action" type="button" class="home-measure" style="width: 100%; height: 42px !important; justify-content: center; font-size: 13.5px;">
+            <span>${isReady ? "проверить и обновить службу" : "установить службу"}</span>
+          </button>
+        </div>
+      `;
+      openInAppModal("служба vpn", html);
+      document.getElementById("btn-modal-service-action")?.addEventListener("click", () => {
+        postHost("settings:service");
+        closeInAppModal();
+      });
+    };
+    document.getElementById("row-setting-service")?.addEventListener("click", handleServiceClick);
+    document.getElementById("btn-setting-service")?.addEventListener("click", (e) => { e.stopPropagation(); handleServiceClick(); });
 
     document.getElementById("row-setting-bot")?.addEventListener("click", () => postHost("settings:bot"));
     document.getElementById("btn-setting-bot")?.addEventListener("click", (e) => { e.stopPropagation(); postHost("settings:bot"); });
