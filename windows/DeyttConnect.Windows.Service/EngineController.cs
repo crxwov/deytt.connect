@@ -661,6 +661,16 @@ internal sealed class EngineController
                     var transition = WindowsTunnelHealth.ApplyCanaryResult(passed, _consecutiveHealthFailures,
                         tunnelRouteProven: passed);
                     _consecutiveHealthFailures = transition.ConsecutiveFailures;
+                    if (transition.State == "degraded" && _consecutiveHealthFailures >= 6)
+                    {
+                        var fatalDetail = "Маршрут перестал отвечать; соединение прервано. Попробуйте переподключиться.";
+                        SetSnapshot(new ServiceSnapshot("error", fatalDetail, routeTag,
+                            Snapshot.ConnectedAt, HealthCheckedAt: checkedAt,
+                            ActiveRouteTag: null,
+                            TunnelLatencyMilliseconds: null, TunnelLatencyError: null));
+                        TryKill(process);
+                        return;
+                    }
                     var detail = transition.State switch
                     {
                         "connected" => "HTTPS проверен через TUN.",
@@ -1729,7 +1739,7 @@ internal sealed class EngineController
         // Bound the request-header wait separately from the five-second streaming
         // sample below; an unreachable server must not leave the route row pending
         // for the old twelve-second default before any live speed can be reported.
-        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(6) };
+        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(10) };
         using var request = new HttpRequestMessage(HttpMethod.Get,
             "https://deytt.space/api/tg/mobile/probe/download");
         request.Headers.TryAddWithoutValidation("X-TG-App-Token", token);
@@ -1739,6 +1749,8 @@ internal sealed class EngineController
             HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             return new DownloadMeasurement(null, "Сессия для замера скорости недействительна. Обновите вход.", false);
+        if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            return new DownloadMeasurement(null, "Лимит частых замеров. Попробуйте через минуту.", true);
         if (response.StatusCode != HttpStatusCode.OK)
             return new DownloadMeasurement(null, "Сервер скорости временно недоступен.", true);
 

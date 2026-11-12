@@ -132,7 +132,9 @@
                       Target="[INSTALLFOLDER]DeyttConnect.Windows.exe"
                       Icon="DeyttConnectProductIcon.exe"
                       IconIndex="0"
-                      WorkingDirectory="INSTALLFOLDER" />
+                      WorkingDirectory="INSTALLFOLDER">
+              <ShortcutProperty Key="System.AppUserModel.ID" Value="DEYTT.Connect.Client" />
+            </Shortcut>
             <Shortcut Id="UiUninstallStartMenuShortcut" Advertise="no" Directory="ApplicationProgramsFolder"
                       Name="Удалить connect" Target="[System64Folder]msiexec.exe" Arguments="/x [ProductCode]"
                       Icon="DeyttConnectProductIcon.exe" WorkingDirectory="INSTALLFOLDER" />
