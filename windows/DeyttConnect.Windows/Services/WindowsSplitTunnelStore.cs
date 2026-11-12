@@ -19,8 +19,10 @@ public sealed record WindowsSplitTunnelConfig(
 {
     public const string ModeBypass = "bypass";
     public const string ModeVpnOnly = "vpn_only";
+    public const string ModeFull = "full";
 
     public bool IsVpnOnly => string.Equals(Mode, ModeVpnOnly, StringComparison.OrdinalIgnoreCase);
+    public bool IsFull => string.Equals(Mode, ModeFull, StringComparison.OrdinalIgnoreCase);
 }
 
 public static class WindowsSplitTunnelStore
@@ -204,7 +206,9 @@ public static class WindowsSplitTunnelStore
     private static string NormalizeMode(string? mode) =>
         string.Equals(mode, WindowsSplitTunnelConfig.ModeVpnOnly, StringComparison.OrdinalIgnoreCase)
             ? WindowsSplitTunnelConfig.ModeVpnOnly
-            : WindowsSplitTunnelConfig.ModeBypass;
+            : string.Equals(mode, WindowsSplitTunnelConfig.ModeFull, StringComparison.OrdinalIgnoreCase)
+                ? WindowsSplitTunnelConfig.ModeFull
+                : WindowsSplitTunnelConfig.ModeBypass;
 
     public static string? NormalizeDomain(string? raw)
     {

@@ -225,6 +225,9 @@
       ? `${countryCode}./${rawProto}` : "";
 
     if (isAuto) {
+      const subText = (state.city && state.city.toLowerCase() !== "auto-select")
+        ? state.city
+        : (language === "en" ? "picks the fastest european exit" : "выбирает самый быстрый европейский выход");
       if (city) city.textContent = "auto-select";
       if (country) {
         country.textContent = "";
@@ -236,9 +239,10 @@
       }
       if (subtitle) {
         subtitle.hidden = false;
-        subtitle.innerHTML = '<span class="route-accent-tag">auto</span> <span style="opacity:0.4;">·</span> <span>выбирает самый быстрый европейский выход</span>';
+        subtitle.innerHTML = `<span class="route-accent-tag">auto</span> <span style="opacity:0.4;">·</span> <span>${subText}</span>`;
       }
     } else if (countryCode && rawProto) {
+      const isAutoActive = state.country === "автоподбор" || state.country === "auto-select";
       if (country) {
         country.textContent = "";
         country.hidden = true;
@@ -249,7 +253,12 @@
       }
       if (city) city.textContent = compactRouteTag || state.city || "";
       if (subtitle) {
-        subtitle.hidden = true;
+        if (isAutoActive) {
+          subtitle.hidden = false;
+          subtitle.innerHTML = `<span class="route-accent-tag">auto</span> <span style="opacity:0.4;">·</span> <span>${language === "en" ? "auto-select active exit" : "активный выход автоподбора"}</span>`;
+        } else {
+          subtitle.hidden = true;
+        }
       }
     } else {
       if (country) {
@@ -364,7 +373,8 @@
       }
     }
     const homeRouteSubtitle = root.querySelector("#home-route-subtitle");
-    if (homeRouteSubtitle) {
+    const isAutoRoute = state.country === "автоподбор" || state.country === "auto-select" || state.country === "auto";
+    if (homeRouteSubtitle && (!isAutoRoute || state.statusTone === "error")) {
       if (state.message) homeRouteSubtitle.textContent = state.message;
       else if (state.statusTone === "good") homeRouteSubtitle.textContent = language === "en" ? "secure tunnel active" : "защищенный туннель активен";
     }
@@ -418,6 +428,8 @@
     if (window.deyttHomePresentation) applyHomePresentation(window.deyttHomePresentation);
     const atlas = window.deyttMapAtlas;
     if (atlas) atlas.setLanguage(language);
+    if (typeof window.deyttApplyPageTranslations === "function")
+      window.deyttApplyPageTranslations(language);
   }
 
   window.deyttMapNodeTapped = function () { /* Disabled: globe clicks do not change borders/routes */ };
