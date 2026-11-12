@@ -6,6 +6,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using DeyttConnect.Windows.Controls;
 using DeyttConnect.Protocol;
@@ -548,12 +549,46 @@ public partial class MainWindow
             {
                 var splitStore = WindowsSplitTunnelStore.Load();
                 splitStore = splitStore with { Mode = mode };
-                WindowsSplitTunnelStore.Save(splitStore);
+                if (!_qaFixture)
+                    WindowsSplitTunnelStore.Save(splitStore);
                 UpdateHomeGlobePresentation();
-                if (IsVpnTunnelActive(_vpnSnapshot.State))
+                if (!_qaFixture && IsVpnTunnelActive(_vpnSnapshot.State))
                     _ = ApplySplitTunnelRulesAsync();
             }
             catch { }
+        };
+        map.SplitTunnelConfigSaved += json =>
+        {
+            try
+            {
+                if (!WindowsSplitTunnelStore.TryParseConfigJson(json, out var parsed) || parsed is null)
+                    return;
+                if (!_qaFixture)
+                    WindowsSplitTunnelStore.Save(parsed);
+                UpdateHomeGlobePresentation();
+            }
+            catch { }
+        };
+        map.SplitTunnelRunningAppsRequested += () =>
+        {
+            _ = Task.Run(() =>
+            {
+                var apps = GetRunningApplications()
+                    .Select(a => (object)new
+                    {
+                        processName = a.ProcessName,
+                        displayName = a.DisplayName,
+                        hasWindow = a.HasWindow
+                    })
+                    .ToList();
+                Dispatcher.UIThread.Post(() => _routeGlobe?.PushSplitTunnelRunningApps(apps));
+            });
+        };
+        map.SplitTunnelBrowseExeRequested += () => _ = BrowseSplitTunnelExeFromWebAsync();
+        map.SplitTunnelApplyRequested += () =>
+        {
+            if (!_qaFixture && IsVpnTunnelActive(_vpnSnapshot.State))
+                _ = ApplySplitTunnelRulesAsync();
         };
         map.ProbeMethodRequested += () => _ = ShowProbeMethodPickerAsync();
         map.ProbeMethodChanged += method =>
@@ -998,14 +1033,33 @@ public partial class MainWindow
 
         var splitStore = WindowsSplitTunnelStore.Load();
         var customCount = (splitStore.CustomDomains?.Count ?? 0) + (splitStore.CustomProcesses?.Count ?? 0);
+        var activePreset = splitStore.Presets?.FirstOrDefault(p => string.Equals(p.Id, splitStore.ActivePresetId, StringComparison.OrdinalIgnoreCase));
+        var presetPrefix = activePreset is not null && (splitStore.Presets?.Count ?? 0) > 1 ? $"{activePreset.Name.ToLowerInvariant()} · " : string.Empty;
         var modeLabel = splitStore.IsVpnOnly
             ? Copy("vpn только для списка", "vpn only for list")
             : splitStore.IsFull
                 ? Copy("полный vpn (вкл. .ru)", "full vpn (incl. .ru)")
                 : Copy("сайты из подписки", "subscription bypass");
         var splitSummary = customCount > 0
-            ? Copy($"{modeLabel} + {customCount} своих правил", $"{modeLabel} + {customCount} custom rules")
-            : Copy($"{modeLabel} · все протоколы", $"{modeLabel} · all protocols");
+            ? Copy($"{presetPrefix}{modeLabel} + {customCount} своих правил", $"{presetPrefix}{modeLabel} + {customCount} custom rules")
+            : Copy($"{presetPrefix}{modeLabel} · все протоколы", $"{presetPrefix}{modeLabel} · all protocols");
+
+        var splitPayload = new
+        {
+            activePresetId = splitStore.ActivePresetId ?? "default",
+            mode = splitStore.Mode ?? WindowsSplitTunnelConfig.ModeBypass,
+            customDomains = splitStore.CustomDomains ?? [],
+            customProcesses = splitStore.CustomProcesses ?? [],
+            baseRules = ReadBypassSites() ?? [],
+            presets = (splitStore.Presets ?? []).Select(p => new
+            {
+                id = p.Id,
+                name = p.Name,
+                mode = p.Mode,
+                customDomains = p.CustomDomains ?? [],
+                customProcesses = p.CustomProcesses ?? []
+            }).ToList()
+        };
 
         map.UpdateSettingsData(
             _language,
@@ -1015,9 +1069,49 @@ public partial class MainWindow
             _vpnServiceAvailable,
             _mapRegionEnabled,
             _reduceMotion,
-            WindowsUpdateClient.GetInstalledVersion()?.ToString(3) ?? "—"
+            WindowsUpdateClient.GetInstalledVersion()?.ToString(3) ?? "—",
+            splitPayload
         );
         EnsureInitialNetherlandsRouteProbe();
+    }
+
+    private async Task BrowseSplitTunnelExeFromWebAsync()
+    {
+        try
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel is null)
+                return;
+
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = Copy("Выберите приложение для правила", "Select application for rule"),
+                AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("Executable (*.exe)") { Patterns = ["*.exe"] }]
+            });
+            if (files.Count == 0)
+                return;
+
+            var normalized = WindowsSplitTunnelStore.NormalizeProcess(files[0].Name);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return;
+
+            var store = WindowsSplitTunnelStore.Load();
+            var list = (store.CustomProcesses ?? []).ToList();
+            if (!list.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+            {
+                list.Add(normalized);
+                if (!_qaFixture)
+                    WindowsSplitTunnelStore.Save(store with { CustomProcesses = list });
+                UpdateHomeGlobePresentation();
+            }
+
+            _routeGlobe?.NotifySplitTunnelExePicked(normalized);
+        }
+        catch
+        {
+            // Ignored if file dialog canceled or unavailable.
+        }
     }
 
     private static string? ToUtcIso(string? value) =>

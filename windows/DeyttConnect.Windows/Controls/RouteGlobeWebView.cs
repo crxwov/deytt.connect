@@ -180,6 +180,10 @@ public sealed class RouteGlobeWebView : ContentControl
     public event Action<string>? LanguageChanged;
     public event Action<string>? ProbeMethodChanged;
     public event Action<string>? SplitTunnelModeChanged;
+    public event Action<string>? SplitTunnelConfigSaved;
+    public event Action? SplitTunnelRunningAppsRequested;
+    public event Action? SplitTunnelBrowseExeRequested;
+    public event Action? SplitTunnelApplyRequested;
 
     internal bool IsNativeInitializationDisabled => _disableNativeInitialization;
 
@@ -293,7 +297,8 @@ public sealed class RouteGlobeWebView : ContentControl
         bool vpnServiceAvailable,
         bool mapRegionEnabled,
         bool reduceMotion,
-        string appVersion)
+        string appVersion,
+        object? splitTunnel = null)
     {
         var payload = new
         {
@@ -304,10 +309,27 @@ public sealed class RouteGlobeWebView : ContentControl
             vpnServiceAvailable,
             mapRegionEnabled,
             reduceMotion,
-            appVersion
+            appVersion,
+            splitTunnel
         };
         _settingsDataJson = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
         _ = ExecuteScriptAsync($"window.deyttSetSettingsData && window.deyttSetSettingsData({_settingsDataJson});");
+    }
+
+    public void PushSplitTunnelRunningApps(IReadOnlyList<object> apps)
+    {
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null)
+            return;
+        var json = JsonSerializer.Serialize(apps, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        _ = ExecuteScriptAsync($"window.deyttSetRunningApps && window.deyttSetRunningApps({json});");
+    }
+
+    public void NotifySplitTunnelExePicked(string? exeName)
+    {
+        if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null || string.IsNullOrWhiteSpace(exeName))
+            return;
+        var json = JsonSerializer.Serialize(exeName);
+        _ = ExecuteScriptAsync($"window.deyttOnSplitTunnelExePicked && window.deyttOnSplitTunnelExePicked({json});");
     }
 
     public void PushRouteProbeProgress(WindowsRouteProbeResult probe)
@@ -944,7 +966,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
     private void OnWebMessageReceived(object? sender, WebMessageReceivedEventArgs args)
     {
         var body = args.Body;
-        if (_atlasFailed || !ReferenceEquals(sender, _webView) || body is null || body.Length > 4096)
+        if (_atlasFailed || !ReferenceEquals(sender, _webView) || body is null || body.Length > 65536)
             return;
 
         var node = body.Trim();
@@ -1175,6 +1197,44 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
             {
                 if (!_atlasFailed && ReferenceEquals(sender, _webView))
                     SplitTunnelModeChanged?.Invoke(mode);
+            });
+            return;
+        }
+        const string saveSplitPrefix = "settings:save_splittunnel:";
+        if (node.StartsWith(saveSplitPrefix, StringComparison.Ordinal))
+        {
+            var json = originalNode[saveSplitPrefix.Length..];
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SplitTunnelConfigSaved?.Invoke(json);
+            });
+            return;
+        }
+        if (node == "settings:splittunnel_running")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SplitTunnelRunningAppsRequested?.Invoke();
+            });
+            return;
+        }
+        if (node == "settings:splittunnel_browse_exe")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SplitTunnelBrowseExeRequested?.Invoke();
+            });
+            return;
+        }
+        if (node == "settings:apply_splittunnel")
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    SplitTunnelApplyRequested?.Invoke();
             });
             return;
         }
