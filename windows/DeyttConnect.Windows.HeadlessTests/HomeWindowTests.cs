@@ -389,7 +389,7 @@ public sealed class HomeWindowTests
     public void Initial_route_probe_uses_an_available_country_when_Netherlands_is_absent()
     {
         var routes = Fixture().Routes;
-        Assert.Equal("NL", MainWindow.InitialProbeCountry(routes));
+        Assert.Equal("DE", MainWindow.InitialProbeCountry(routes));
         Assert.Equal("DE", MainWindow.InitialProbeCountry(routes.Where(route => route.CountryCode is "AUTO" or "DE").ToArray()));
         Assert.Null(MainWindow.InitialProbeCountry(routes.Where(route => route.CountryCode == "AUTO").ToArray()));
     }

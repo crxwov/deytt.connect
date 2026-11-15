@@ -22,7 +22,7 @@ public sealed class TunnelProfileBuilderTests
         var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), AutoTag))!;
         var selector = runtime["outbounds"]!.AsArray().OfType<JsonObject>()
             .Single(outbound => outbound["tag"]!.GetValue<string>() == AutoTag);
-        Assert.Equal(new[] { "route:NL:VLESS", "route:DE:TROJAN", "route:DE:TUIC", "route:FI:HYSTERIA2", "route:IT:VLESS" },
+        Assert.Equal(new[] { "route:DE:TROJAN", "route:DE:TUIC", "route:FI:HYSTERIA2", "route:IT:VLESS", "route:NL:VLESS" },
             selector["outbounds"]!.AsArray().Select(tag => tag!.GetValue<string>()));
         Assert.False(selector.ContainsKey("default"));
         Assert.DoesNotContain("route:RU", selector["outbounds"]!.ToJsonString());

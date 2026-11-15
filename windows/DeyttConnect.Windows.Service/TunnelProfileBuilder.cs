@@ -32,7 +32,7 @@ internal static class TunnelProfileBuilder
         if (ReadString(automatic, "type") is not ("urltest" or "selector"))
             throw new InvalidDataException("Automatic route must select European servers.");
 
-        string[] countries = ["NL", "DE", "FI", "IT"];
+        string[] countries = ["DE", "FI", "IT", "NL"];
         var candidates = countries.SelectMany(country => Protocols.Select(protocol => $"route:{country}:{protocol}"))
             .Where(tag => byTag.TryGetValue(tag, out var outbound) &&
                           ReadString(outbound, "type") is "vless" or "trojan" or "hysteria2" or "tuic" &&

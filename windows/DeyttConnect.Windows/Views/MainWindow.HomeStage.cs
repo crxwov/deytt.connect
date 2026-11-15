@@ -31,6 +31,7 @@ public partial class MainWindow
     internal static long? PositiveLatency(long? latency) => latency is > 0 ? latency : null;
 
     internal static string? InitialProbeCountry(IReadOnlyList<WindowsRoute> routes) =>
+        routes.Any(route => route.CountryCode == "DE") ? "DE" :
         routes.Any(route => route.CountryCode == "NL") ? "NL" :
         routes.FirstOrDefault(route => route.CountryCode != "AUTO")?.CountryCode;
     private TelegramAwgTraffic? _awgTraffic;
@@ -326,7 +327,7 @@ public partial class MainWindow
     {
         var selected = _routes.FirstOrDefault(route => route.Id == _selectedRoute);
         var displayedRoute = IsVpnDisplayConnected()
-            ? _routes.FirstOrDefault(route => route.Tag == _vpnSnapshot.RouteTag) ?? selected
+            ? _routes.FirstOrDefault(route => route.Tag == (_vpnSnapshot.ActiveRouteTag ?? _vpnSnapshot.RouteTag)) ?? selected
             : selected;
         var details = new StackPanel { Spacing = _compactLayout ? 18 : 24 };
         var routeName = displayedRoute?.CountryCode switch
