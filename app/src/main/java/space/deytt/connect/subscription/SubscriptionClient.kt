@@ -82,15 +82,12 @@ object SubscriptionClient {
         val url = withFormat(baseUrl, "singbox")
         onStage("download")
 
-        val pool = java.util.concurrent.Executors.newFixedThreadPool(3)
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
         val singboxFuture = pool.submit(java.util.concurrent.Callable {
             request(url, "application/json", required = true, transport = transport)!!
         })
         val awgFuture = pool.submit(java.util.concurrent.Callable {
             fetchAwgGenerations(baseUrl, transport)
-        })
-        val openFluxFuture = pool.submit(java.util.concurrent.Callable {
-            fetchOpenFluxProfiles(baseUrl, transport)
         })
 
         val response = try {
@@ -113,12 +110,6 @@ object SubscriptionClient {
         onStage("awg")
         val awgResults = try {
             awgFuture.get()
-        } catch (e: java.util.concurrent.ExecutionException) {
-            pool.shutdownNow()
-            throw (e.cause ?: e)
-        }
-        val openFluxResult = try {
-            openFluxFuture.get()
         } catch (e: java.util.concurrent.ExecutionException) {
             pool.shutdownNow()
             throw (e.cause ?: e)
@@ -148,7 +139,6 @@ object SubscriptionClient {
         checkCancellation()
         onStage("save")
         val warnings = awgResults.mapNotNull { it.warning }.toMutableList()
-        openFluxResult.warning?.let(warnings::add)
         val awgProfiles = synchronized(AtomicSubscriptionFile.lock) {
             checkCancellation()
             onBeforeCommit()
@@ -160,23 +150,18 @@ object SubscriptionClient {
                 normalizeBaseUrl(previousUrl) == baseUrl
             }.getOrDefault(false)
             val profiles = mergedProfiles(if (sameSubscription) awgStore.profiles() else emptyList())
-            val openFluxStore = OpenFluxProfileStore(context)
-            val owner = OpenFluxProfileStore.owner(context, baseUrl)!!
-            val openFluxProfiles = if (openFluxResult.keepPrevious && sameSubscription) {
-                openFluxStore.profiles(owner)
-            } else openFluxResult.profiles
             // Invalidate ownership before the multi-file commit. After a process/disk
             // failure no old account's AWG config may be reused for a new source.
             if (!settings.edit().remove("subscription_url").commit()) throw SubscriptionStorageException()
             try {
                 SubscriptionStore(context).commitValidated(content, awgStore, profiles) {
-                    openFluxStore.save(owner, openFluxProfiles)
+                    OpenFluxProfileStore(context).clear()
                 }
             } catch (error: IOException) {
                 throw SubscriptionStorageException()
             }
-            val routes = RouteCatalog.from(content, profiles, openFluxProfiles)
-            val availableRouteIds = routes.mapTo(mutableSetOf()) { it.id } + openFluxProfiles.map { it.id }
+            val routes = RouteCatalog.from(content, profiles)
+            val availableRouteIds = routes.mapTo(mutableSetOf()) { it.id }
             if (SelectedRouteStore(context).read().id !in availableRouteIds) {
                 routes.firstOrNull { it.protocol == RouteProtocol.AUTO }
                     ?.let { SelectedRouteStore(context).save(it) }
@@ -199,6 +184,12 @@ object SubscriptionClient {
             warnings = warnings,
         )
     }
+
+    internal fun activeSubscriptionWarning(warning: String?): String? =
+        warning?.lineSequence()
+            ?.filterNot { it.contains("Cups", ignoreCase = true) }
+            ?.joinToString("\n")
+            ?.takeIf(String::isNotBlank)
 
     fun getSavedSubscriptionUrl(context: android.content.Context): String? =
         SubscriptionStore.getSavedSubscriptionUrl(context)

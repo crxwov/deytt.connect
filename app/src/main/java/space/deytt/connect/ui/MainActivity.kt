@@ -437,7 +437,8 @@ class MainActivity : Activity() {
         root.addView(refreshBtn, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
         tunnelConnectionCoordinator.updateRouteFlow(SelectedRouteStore(this).read()); networkLocationCoordinator.updateNetworkLocationViews()
         root.addView(spacer(12, this))
-        getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_warning", null)?.takeIf(String::isNotBlank)?.let { warning ->
+        val subscriptionWarning = getSharedPreferences("profile_settings", MODE_PRIVATE).getString("subscription_warning", null)
+        SubscriptionClient.activeSubscriptionWarning(subscriptionWarning)?.let { warning ->
             val compactWarning = if (warning.startsWith("профили amneziawg ") && warning.contains(" не загружены.")) "профиль amneziawg 3.1 не загружен. обновите подписку." else warning
             root.addView(note(compactWarning, DeyttUi.AMBER).apply { maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; contentDescription = uiCopy(warning); setPadding(dp(12), dp(7), dp(12), dp(7)) })
         }

@@ -65,12 +65,12 @@ data class RouteProbeSession(
 /** Runs a bounded GET/HEAD check through a loopback-only sing-box HTTP proxy. */
 object RouteProxyProbe {
     const val TIMEOUT_MILLIS = 8_000
-    const val QUICK_DOWNLOAD_MILLIS = 800
+    const val QUICK_DOWNLOAD_MILLIS = 4_000
     const val LATENCY_SAMPLE_COUNT = 1
     private const val DOWNLOAD_PROGRESS_INTERVAL_MILLIS = 250L
     private const val MAX_DOWNLOAD_BYTES = 32L * 1024 * 1024
-    private const val DOWNLOAD_CONNECT_TIMEOUT_MILLIS = 3_500
-    private const val SYSTEM_DOWNLOAD_DEADLINE_MILLIS = 8_000L
+    private const val DOWNLOAD_CONNECT_TIMEOUT_MILLIS = 4_000
+    private const val SYSTEM_DOWNLOAD_CLEANUP_MILLIS = 1_000L
     private val systemVpnProbeExecutor = ThreadPoolExecutor(
         0,
         4,
@@ -631,10 +631,11 @@ object RouteProxyProbe {
         require(sampleMillis in 400..5_000)
         require(token.length in 32..256 && token.none { it == '\r' || it == '\n' })
         val activeConnection = AtomicReference<HttpsURLConnection?>()
+        val taskDeadline = systemDownloadTaskTimeoutMillis(sampleMillis)
+        val deadline = SystemClock.elapsedRealtime() + taskDeadline
         val task = FutureTask {
-            measureSystemDownloadBlocking(token, stillCurrent, transferActive, sampleMillis, onProgress, activeConnection)
+            measureSystemDownloadBlocking(token, stillCurrent, transferActive, sampleMillis, deadline, onProgress, activeConnection)
         }
-        val taskDeadline = (sampleMillis + 2_500L).coerceAtMost(SYSTEM_DOWNLOAD_DEADLINE_MILLIS)
         try {
             systemVpnProbeExecutor.execute(task)
             return task.get(taskDeadline, TimeUnit.MILLISECONDS)
@@ -658,21 +659,24 @@ object RouteProxyProbe {
         }
     }
 
+    internal fun systemDownloadTaskTimeoutMillis(sampleMillis: Int): Long =
+        DOWNLOAD_CONNECT_TIMEOUT_MILLIS + sampleMillis + SYSTEM_DOWNLOAD_CLEANUP_MILLIS
+
     private fun measureSystemDownloadBlocking(
         token: String,
         stillCurrent: () -> Boolean,
         transferActive: () -> Boolean,
         sampleMillis: Int,
+        totalDeadline: Long,
         onProgress: (Long) -> Unit,
         activeConnection: AtomicReference<HttpsURLConnection?>,
     ): Long {
-        val requestStarted = SystemClock.elapsedRealtime()
         val connection = URL("https://$DOWNLOAD_HOST$DOWNLOAD_PATH")
             .openConnection(Proxy.NO_PROXY) as HttpsURLConnection
         activeConnection.set(connection)
         try {
-            connection.connectTimeout = 2_000
-            connection.readTimeout = 2_000
+            connection.connectTimeout = DOWNLOAD_CONNECT_TIMEOUT_MILLIS
+            connection.readTimeout = DOWNLOAD_CONNECT_TIMEOUT_MILLIS
             connection.instanceFollowRedirects = false
             connection.setRequestProperty("X-TG-App-Token", token)
             connection.setRequestProperty("Accept-Encoding", "identity")
@@ -681,7 +685,6 @@ object RouteProxyProbe {
             val responseCode = connection.responseCode
             if (responseCode != HTTP_OK) throw IOException("Download endpoint returned HTTP $responseCode")
             validateDownloadContentType(connection.contentType)
-            val totalDeadline = requestStarted + SYSTEM_DOWNLOAD_DEADLINE_MILLIS
             val contentLength = connection.contentLengthLong.takeIf { it >= 0L }
             val maximumBytes = MAX_DOWNLOAD_BYTES
             var received = 0L
@@ -690,19 +693,21 @@ object RouteProxyProbe {
             val result = connection.inputStream.use { input ->
                 val sampleStarted = SystemClock.elapsedRealtime()
                 val sampleDeadline = sampleStarted + sampleMillis
-                val bodyDeadline = minOf(sampleDeadline, totalDeadline)
+                check(sampleDeadline < totalDeadline) { "Download setup exhausted the measurement budget" }
                 var lastProgressAt = sampleStarted
                 while (received < maximumBytes) {
                     check(isSystemDownloadTransferActive(transferActive) { Thread.currentThread().isInterrupted }) {
                         "Measurement interrupted"
                     }
                     val now = SystemClock.elapsedRealtime()
-                    if (now >= bodyDeadline) break
                     connection.readTimeout = remainingSystemDownloadReadTimeoutMillis(
                         now, sampleDeadline, totalDeadline,
                     ) ?: break
-                    val count = try { input.read(buffer) } catch (error: SocketTimeoutException) {
-                        if (received > 0) break else throw error
+                    val count = try {
+                        input.read(buffer, 0, minOf(buffer.size.toLong(), maximumBytes - received).toInt())
+                    } catch (error: SocketTimeoutException) {
+                        if (received > 0 && SystemClock.elapsedRealtime() >= sampleDeadline) break
+                        throw error
                     }
                     if (count < 0) {
                         if (isPrematureDownloadEof(received, contentLength, maximumBytes)) {

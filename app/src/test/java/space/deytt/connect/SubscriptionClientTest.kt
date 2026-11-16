@@ -9,6 +9,14 @@ import org.junit.Assert.fail
 import org.junit.Test
 
 class SubscriptionClientTest {
+
+    @Test fun stripsRetiredCupsWarningFromExistingInstallations() {
+        val awg = "amneziawg 3.1 не удалось обновить"
+        val cups = "сервер обхода cups временно недоступен или занят."
+        assertEquals(awg, SubscriptionClient.activeSubscriptionWarning("$awg\n$cups"))
+        assertEquals(null, SubscriptionClient.activeSubscriptionWarning(cups))
+    }
+
     private fun cupsProfile(expiry: Long): OpenFluxProfile {
         val room = LocalBase64.encode("[\"12345678-1234-1234-1234-123456789abc\"]".toByteArray())
             .replace('+', '-').replace('/', '_').trimEnd('=')

@@ -62,6 +62,12 @@ class RouteProxyProbeTest {
     }
 
     @Test
+    fun allowsFourSecondsOfDownloadAfterConnectionSetup() {
+        assertEquals(4_000, RouteProxyProbe.QUICK_DOWNLOAD_MILLIS)
+        assertEquals(9_000L, RouteProxyProbe.systemDownloadTaskTimeoutMillis(4_000))
+    }
+
+    @Test
     fun distinguishesPrematureEofFromIntentionalPartialSamples() {
         assertTrue(RouteProxyProbe.isPrematureDownloadEof(12, 32, 32))
         assertTrue(RouteProxyProbe.isPrematureDownloadEof(12, 64, 32))
