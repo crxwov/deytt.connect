@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const html = fs.readFileSync(path.join(__dirname, '../DeyttConnect.Windows/Assets/route-map/index.html'), 'utf8');
-const cards = ['NL', 'DE'].map(country => {
+const cards = ['NL', 'DE', 'FI', 'IT', 'RU'].map(country => {
   const key = country.toLowerCase() + '-tuic';
   assert.match(html, new RegExp(`data-route-key="${key}" data-route-tag="route:${country}:TUIC" hidden`));
   assert.match(html, new RegExp(`data-action-route="${key}"`));
@@ -18,13 +18,16 @@ const cards = ['NL', 'DE'].map(country => {
 const messages = [];
 const context = {
   window: {}, postHost: message => messages.push(message),
-  document: { querySelectorAll: selector => selector === '.proto-row, .smart-route-row' ? cards : [] }
+  document: {
+    documentElement: { lang: 'ru' },
+    querySelectorAll: selector => selector === '.proto-row, .smart-route-row' ? cards : []
+  }
 };
 const start = html.indexOf('    let currentRouteCatalog = [];');
 const end = html.indexOf('    // Routes Selection & Syncing', start);
 assert.ok(start >= 0 && end > start);
 vm.runInNewContext('let activeRouteKey = "auto";\n' + html.slice(start, end) + '\nthis.resolve = routeForUiKey; this.active = () => activeRouteKey;', context);
-const routes = ['NL', 'DE'].map(country => ({
+const routes = ['NL', 'DE', 'FI', 'IT', 'RU'].map(country => ({
   id: `route:${country}:TUIC`, tag: `route:${country}:TUIC`, countryCode: country,
   protocol: 'TUIC', protocolName: 'tuic', isSelected: country === 'DE'
 }));
@@ -40,4 +43,4 @@ assert.equal(cards[1].button.textContent, 'активен ✓');
 assert.deepEqual(messages, []); // Rendering a subscription must never select/connect a route.
 context.window.deyttSetRoutesData([{ id: 'route:NL:VLESS', tag: 'route:NL:VLESS', countryCode: 'NL', protocol: 'VLESS' }]);
 assert.ok(cards.every(card => card.hidden && card.style.display === 'none'));
-console.log('PASS: TUIC NL/DE visible only when supplied; route keys resolve; rendering sends no host commands.');
+console.log('PASS: TUIC NL/DE/FI/IT/RU visible only when supplied; route keys resolve; rendering sends no host commands.');
