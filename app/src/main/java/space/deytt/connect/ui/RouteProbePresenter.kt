@@ -440,7 +440,7 @@ internal class RouteProbePresenter(
                     }
                 val english = AppLanguage.current(host) == AppLanguage.EN
                 val speed = if (token.isNullOrBlank()) null else runCatching {
-                    RouteProxyProbe.measureSystemDownload(token, current, sampleMillis = 500, onProgress = { bytesPerSecond ->
+                    RouteProxyProbe.measureSystemDownload(token, current, onProgress = { bytesPerSecond ->
                         val latency = measuredLatency
                         host.runOnUiThread {
                             if (current()) {
@@ -450,10 +450,6 @@ internal class RouteProbePresenter(
                                     bytesPerSecond,
                                 )
                                 row.progress.setLoading(true)
-                                if (country != null) {
-                                    country.samples[row.route.id] = RouteProbeSample(row.route.id, latency, bytesPerSecond)
-                                    styling.updateCountryLatencySummary(country)
-                                }
                             }
                         }
                     })

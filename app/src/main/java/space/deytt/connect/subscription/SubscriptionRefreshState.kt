@@ -54,7 +54,7 @@ object SubscriptionRefreshState {
         return when (stage) {
             "download" -> if (isEnglish) "Connecting to subscription server…" else "Связываемся с сервером подписки…"
             "validate" -> if (isEnglish) "Validating protocols and profiles…" else "Проверка протоколов и профилей…"
-            "awg" -> if (isEnglish) "Synchronizing sing-box, AmneziaWG, and OpenFlux…" else "Синхронизация sing-box, AmneziaWG и OpenFlux…"
+            "awg" -> if (isEnglish) "Synchronizing sing-box and AmneziaWG…" else "Синхронизация sing-box и AmneziaWG…"
             "save" -> if (isEnglish) "Saving and assembling routes…" else "Сохранение и сборка маршрутов…"
             else -> if (isEnglish) "Updating subscription…" else "Обновляем подписку…"
         }
@@ -80,7 +80,7 @@ object SubscriptionRefreshState {
             }
             "awg" -> {
                 currentPhase = Phase.SYNCING
-                phaseDescription = customDescription ?: "Синхронизация sing-box, AmneziaWG и OpenFlux…"
+                phaseDescription = customDescription ?: "Синхронизация sing-box и AmneziaWG…"
             }
             "save" -> {
                 currentPhase = Phase.ASSEMBLING

@@ -641,6 +641,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 return
             }
             val selected = SelectedRouteStore(this).read()
+            if (selected.engine == TunnelEngine.OPENFLUX || selected.id == "openflux:DE") {
+                throw OpenFluxRouteException("обход cups отключён. выберите другой маршрут.")
+            }
             Log.i(TAG, "VPN start engine=${selected.engine}")
             val parsedAwg = if (selected.engine == TunnelEngine.AMNEZIAWG) {
                 val raw = AwgProfileStore(this).read(selected.id)
