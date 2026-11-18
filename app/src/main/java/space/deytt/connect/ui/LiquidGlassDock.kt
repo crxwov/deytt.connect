@@ -12,6 +12,7 @@ import android.graphics.RenderEffect
 import android.graphics.RenderNode
 import android.graphics.RuntimeShader
 import android.os.Build
+import android.os.SystemClock
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -82,6 +83,8 @@ internal class LiquidGlassDock(
     private var velocity: VelocityTracker? = null
     private var pagerPosition = initialPage.toFloat()
     private var position = pagerPosition
+    private var lastMovementTime = 0L
+    private var fastSwipeBlend = 0f
     private var selected = -1
 
     init {
@@ -95,6 +98,15 @@ internal class LiquidGlassDock(
     }
 
     private fun moveTo(value: Float) {
+        if (value != position) {
+            val now = SystemClock.uptimeMillis()
+            val elapsed = (now - lastMovementTime).coerceAtLeast(8L)
+            val speed = abs(value - position) * 1000f / elapsed
+            val blend = ((speed - 2f) / 3f).coerceIn(0f, 1f)
+            // Smooth the speed estimate without delaying the lens position.
+            fastSwipeBlend += (blend - fastSwipeBlend) * (elapsed / (elapsed + 10f))
+            lastMovementTime = now
+        }
         position = value
         val active = value.roundToInt()
         if (active != selected) {
@@ -210,10 +222,11 @@ internal class LiquidGlassDock(
         val lensWidth = cellWidth() * .91f + scale * ripple * 2f
         val lensHeight = scale * 48f
         val refraction = travel + ripple * .16f
+        val rimStabilization = fastSwipeBlend * (travel * 4f).coerceAtMost(1f)
         val inset = scale * 6f
         if (Build.VERSION.SDK_INT >= 33 && canvas.isHardwareAccelerated && glass != null) {
             glass.draw(canvas, this, scene(), pages.takeIf { pagerPosition > 0f }, row,
-                x, lensWidth, lensHeight, refraction, inset)
+                x, lensWidth, lensHeight, refraction, rimStabilization, inset)
         } else {
             body.set(0f, inset, width.toFloat(), height - inset)
             val radius = body.height() / 2f
@@ -244,6 +257,7 @@ private class DockRefraction {
     private val currentLens = RectF()
     private val previousLens = RectF()
     private var previousRefraction = Float.NaN
+    private var previousStabilization = Float.NaN
 
     fun draw(
         canvas: Canvas,
@@ -255,6 +269,7 @@ private class DockRefraction {
         lensWidth: Float,
         lensHeight: Float,
         refraction: Float,
+        stabilization: Float,
         inset: Float,
     ) {
         val width = dock.width
@@ -289,15 +304,19 @@ private class DockRefraction {
             node.endRecording()
         }
         currentLens.set(x, height / 2f, lensWidth / 2f, lensHeight / 2f)
-        if (node.width != width || node.height != height || previousLens != currentLens || refraction != previousRefraction) {
+        if (node.width != width || node.height != height || previousLens != currentLens ||
+            refraction != previousRefraction || stabilization != previousStabilization
+        ) {
             node.setPosition(0, 0, width, height)
             shader.setFloatUniform("dockSize", width.toFloat(), height.toFloat())
             shader.setFloatUniform("inset", inset)
             shader.setFloatUniform("refraction", refraction)
+            shader.setFloatUniform("stabilization", stabilization)
             shader.setFloatUniform("lens", currentLens.left, currentLens.top, currentLens.right, currentLens.bottom)
             node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(shader, "backdrop"))
             previousLens.set(currentLens)
             previousRefraction = refraction
+            previousStabilization = stabilization
         }
         canvas.drawRenderNode(node)
     }
@@ -313,6 +332,7 @@ private class DockRefraction {
             uniform float4 lens;
             uniform float inset;
             uniform float refraction;
+            uniform float stabilization;
 
             float2 capsuleOffset(float2 p, float2 halfSize) {
                 float radius = min(halfSize.x, halfSize.y);
@@ -347,11 +367,12 @@ private class DockRefraction {
                 float2 lensNormal = shoulder / max(shoulderLength, 0.01);
                 float rim = smoothstep(-inset * 1.25, 0.0, distance);
                 float fold = rim * rim;
-                float2 bent = p - local * (0.012 + refraction * 0.018)
-                    - lensNormal * inset * (0.65 + refraction * 1.8) * fold;
-                float2 dispersion = lensNormal * inset * refraction * 0.10 * fold;
+                float bend = mix(0.65 + refraction * 1.8, 0.20, stabilization);
+                float2 bent = p - local * (0.012 + refraction * 0.018) - lensNormal * inset * bend * fold;
+                float chroma = refraction * (1.0 - stabilization);
+                float2 dispersion = lensNormal * inset * chroma * 0.10 * fold;
                 half3 glass = backdrop.eval(clamp(bent, minPixel, maxPixel)).rgb;
-                if (fold > 0.04 && refraction > 0.08) {
+                if (fold > 0.04 && chroma > 0.08) {
                     glass.r = backdrop.eval(clamp(bent + dispersion, minPixel, maxPixel)).r;
                     glass.b = backdrop.eval(clamp(bent - dispersion, minPixel, maxPixel)).b;
                 }
