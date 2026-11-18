@@ -239,7 +239,7 @@ internal class PrimaryPages(
             }
         }
         appendToGroup(connectionGroup, splitRow)
-        val probeSummary = { copy("HTTP ${RouteProbePreferences.method(host).title} · быстрая проверка, загрузка 1 с", "HTTP ${RouteProbePreferences.method(host).title} · fast check, 1 s download") }
+        val probeSummary = { copy("HTTP ${RouteProbePreferences.method(host).title} · быстрая проверка, загрузка 2 с", "HTTP ${RouteProbePreferences.method(host).title} · fast check, 2 s download") }
         appendToGroup(connectionGroup, host.row(copy("Проверка маршрута", "Route check"), probeSummary(), "ROUTE_CHECK_ICON", "›").apply {
             val summary = (getChildAt(1) as? LinearLayout)?.getChildAt(1) as? TextView
             setOnClickListener {
@@ -299,6 +299,9 @@ internal class PrimaryPages(
         root.addView(spacer(18, host))
         return ScrollView(host).apply {
             isFillViewport = true
+            isVerticalScrollBarEnabled = false
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             addView(root)
         }
     }

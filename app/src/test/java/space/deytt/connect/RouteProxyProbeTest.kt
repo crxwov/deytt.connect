@@ -62,9 +62,80 @@ class RouteProxyProbeTest {
     }
 
     @Test
-    fun allowsFourSecondsOfDownloadAfterConnectionSetup() {
-        assertEquals(4_000, RouteProxyProbe.QUICK_DOWNLOAD_MILLIS)
-        assertEquals(9_000L, RouteProxyProbe.systemDownloadTaskTimeoutMillis(4_000))
+    fun boundsDownloadAfterConnectionSetup() {
+        assertEquals(2_000, RouteProxyProbe.QUICK_DOWNLOAD_MILLIS)
+        assertEquals(2_500, RouteProxyProbe.HOME_DOWNLOAD_MILLIS)
+        assertEquals(7_000L, RouteProxyProbe.systemDownloadTaskTimeoutMillis(2_000))
+    }
+
+    @Test
+    fun downloadThroughputTrackerExcludesWarmupSlowStartFromSteadyState() {
+        val tracker = DownloadThroughputTracker(startedAtMillis = 1000L, warmupMillis = 400L, minSteadyMillis = 250L)
+        // During warmup (e.g. at 1200ms)
+        tracker.record(totalBytes = 10_000L, nowMillis = 1200L)
+        assertEquals(50_000L, tracker.bytesPerSecond(totalBytes = 10_000L, nowMillis = 1200L))
+
+        // After warmup (at 1500ms, total 100_000B recorded at end of warmup)
+        tracker.record(totalBytes = 100_000L, nowMillis = 1500L)
+        // Steady state measurement at 2000ms: transferred additional 500_000B in 500ms -> 1_000_000 B/s
+        val steadySpeed = tracker.bytesPerSecond(totalBytes = 600_000L, nowMillis = 2000L)
+        assertEquals(1_000_000L, steadySpeed)
+    }
+
+    @Test
+    fun socks5HandshakeNegotiatesUsernamePasswordAuthAndConnect() {
+        val clientIn = java.io.PipedInputStream()
+        val serverOut = java.io.PipedOutputStream(clientIn)
+        val serverIn = java.io.PipedInputStream()
+        val clientOut = java.io.PipedOutputStream(serverIn)
+
+        val serverThread = Thread {
+            // Read greeting (0x05, 0x01, 0x02)
+            val greeting = ByteArray(3)
+            serverIn.read(greeting)
+            assertEquals(0x05.toByte(), greeting[0])
+            assertEquals(0x02.toByte(), greeting[2])
+            // Reply auth method accepted: 0x05, 0x02
+            serverOut.write(byteArrayOf(0x05, 0x02))
+            serverOut.flush()
+
+            // Read auth subnegotiation: 0x01, ulen, user, plen, pass
+            val ver = serverIn.read()
+            assertEquals(0x01, ver)
+            val ulen = serverIn.read()
+            val user = ByteArray(ulen)
+            serverIn.read(user)
+            assertEquals("test-user", String(user))
+            val plen = serverIn.read()
+            val pass = ByteArray(plen)
+            serverIn.read(pass)
+            assertEquals("test-pass", String(pass))
+            // Reply auth success: 0x01, 0x00
+            serverOut.write(byteArrayOf(0x01, 0x00))
+            serverOut.flush()
+
+            // Read CONNECT request: 0x05, 0x01, 0x00, 0x03, hlen, host, port
+            val req = ByteArray(4)
+            serverIn.read(req)
+            assertEquals(0x05.toByte(), req[0])
+            assertEquals(0x01.toByte(), req[1]) // CONNECT
+            assertEquals(0x03.toByte(), req[3]) // DOMAIN
+            val hlen = serverIn.read()
+            val host = ByteArray(hlen)
+            serverIn.read(host)
+            assertEquals("speed.cloudflare.com", String(host))
+            val p1 = serverIn.read()
+            val p2 = serverIn.read()
+            assertEquals(443, (p1 shl 8) or p2)
+            // Reply success: 0x05, 0x00, 0x00, 0x01, 0,0,0,0, 0,0
+            serverOut.write(byteArrayOf(0x05, 0x00, 0x00, 0x01, 127, 0, 0, 1, 0x01, 0xBB.toByte()))
+            serverOut.flush()
+        }
+        serverThread.start()
+
+        RouteProxyProbe.negotiateSocks5Connect(clientIn, clientOut, "test-user", "test-pass", "speed.cloudflare.com", 443)
+        serverThread.join(2000)
+        assertFalse(serverThread.isAlive)
     }
 
     @Test

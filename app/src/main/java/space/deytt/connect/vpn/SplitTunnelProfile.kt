@@ -152,7 +152,11 @@ object SplitTunnelProfile {
             }
         }
 
-        val dns = root.getJSONObject("dns")
+        val dns = root.optJSONObject("dns") ?: JSONObject().also { root.put("dns", it) }
+        val servers = dns.optJSONArray("servers") ?: JSONArray().also { dns.put("servers", it) }
+        if ((0 until servers.length()).none { servers.optJSONObject(it)?.optString("tag") == "local-dns" }) {
+            servers.put(JSONObject().put("type", "local").put("tag", "local-dns"))
+        }
         dns.put("strategy", "ipv4_only")
         val dnsRules = JSONArray()
             .put(JSONObject().put("domain_suffix", JSONArray(suffixes)).put("action", "route").put("server", "local-dns"))
@@ -215,7 +219,11 @@ object SplitTunnelProfile {
         }
         // TCP DoH uses the encrypted carrier; local DNS remains only for the
         // existing explicit bypass domains. No UDP or direct remote resolver.
-        val dns = root.getJSONObject("dns")
+        val dns = root.optJSONObject("dns") ?: JSONObject().also { root.put("dns", it) }
+        val servers = dns.optJSONArray("servers") ?: JSONArray().also { dns.put("servers", it) }
+        if ((0 until servers.length()).none { servers.optJSONObject(it)?.optString("tag") == "local-dns" }) {
+            servers.put(JSONObject().put("type", "local").put("tag", "local-dns"))
+        }
         dns.put("strategy", "ipv4_only")
         val bypassRules = JSONArray()
         val dnsRules = dns.getJSONArray("rules")

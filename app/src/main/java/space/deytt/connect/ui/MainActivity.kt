@@ -341,18 +341,26 @@ class MainActivity : Activity() {
         primaryPages = PrimaryPages(this) { if (::pageAdapter.isInitialized) pageAdapter.flushDeferredRouteRefresh() }
         tunnelConnectionCoordinator.primaryPages = primaryPages
 
+        val dockHeight = dp(LiquidGlassDock.HEIGHT_DP + 8)
+        var currentBottomInset = 0
+        val pageBaseBottomPadding = java.util.WeakHashMap<View, Int>()
+        fun applyPageBottomClearance(page: View) {
+            val content = (page as? android.widget.ScrollView)?.getChildAt(0) ?: page
+            val base = pageBaseBottomPadding.getOrPut(content) { content.paddingBottom }
+            val target = base + dockHeight + currentBottomInset
+            if (content.paddingBottom != target) {
+                content.setPadding(content.paddingLeft, content.paddingTop, content.paddingRight, target)
+            }
+        }
         pageAdapter = TopLevelViewPagerAdapter(shouldDeferRouteRefresh = { ::primaryPages.isInitialized && primaryPages.hasActiveRouteDiagnostics() }) { pos ->
             val page = if (pos == 0) buildHomePage() else primaryPages.create(pos)
-            val content = (page as? android.widget.ScrollView)?.getChildAt(0) ?: page
-            content.setPadding(content.paddingLeft, content.paddingTop, content.paddingRight,
-                content.paddingBottom + dp(LiquidGlassDock.OVERLAP_DP))
+            applyPageBottomClearance(page)
             page
         }
         pager = ViewPager2(this).apply {
             orientation = ViewPager2.ORIENTATION_HORIZONTAL; offscreenPageLimit = 3; isUserInputEnabled = true; adapter = pageAdapter
         }
         navigationBar = LiquidGlassDock(this, initialPage, { globeStage }, pager, ::selectTab)
-        val dockHeight = dp(LiquidGlassDock.HEIGHT_DP + 8)
         val dock = FrameLayout(this).apply {
             setPadding(dp(12), 0, dp(12), dp(8))
             addView(navigationBar, FrameLayout.LayoutParams(-1, dp(LiquidGlassDock.HEIGHT_DP)))
@@ -366,14 +374,17 @@ class MainActivity : Activity() {
         pager.addOnLayoutChangeListener { _, _, top, _, bottom, _, oldTop, _, oldBottom ->
             if (bottom - top > 0 && bottom - top != oldBottom - oldTop) { updateHomeMapAnchor(); updatePrimaryPageMotion() }
         }
+        val contentStage = FrameLayout(this@MainActivity).apply {
+            clipChildren = false
+            clipToPadding = false
+            addView(pager, FrameLayout.LayoutParams(-1, -1))
+            addView(dock, FrameLayout.LayoutParams(-1, dockHeight, Gravity.BOTTOM))
+        }
         shellRoot = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; tag = "shell-starfield"; clipChildren = false; clipToPadding = false
             addView(statusInset, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0))
             addView(accountHeader, LinearLayout.LayoutParams(-1, dp(64))); addView(primaryPages.createUpdateBanner())
-            addView(FrameLayout(this@MainActivity).apply { clipChildren = false; addView(pager, FrameLayout.LayoutParams(-1, -1)) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-            addView(dock, LinearLayout.LayoutParams(-1, dockHeight).apply {
-                topMargin = -dp(LiquidGlassDock.OVERLAP_DP)
-            })
+            addView(contentStage, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
         ViewCompat.setOnApplyWindowInsetsListener(shellRoot) { _, insets ->
             val status = insets.getInsets(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout()).top
@@ -381,8 +392,12 @@ class MainActivity : Activity() {
             val statusParams = statusInset.layoutParams as LinearLayout.LayoutParams
             if (statusParams.height != status) { statusParams.height = status; statusInset.layoutParams = statusParams }
             val targetDockHeight = dockHeight + bottom
-            val dockParams = dock.layoutParams as LinearLayout.LayoutParams
+            val dockParams = dock.layoutParams as FrameLayout.LayoutParams
             if (dockParams.height != targetDockHeight) { dock.setPadding(dp(12), 0, dp(12), dp(8) + bottom); dockParams.height = targetDockHeight; dock.layoutParams = dockParams }
+            if (currentBottomInset != bottom) {
+                currentBottomInset = bottom
+                pageAdapter.cachedPages().forEach { (_, page) -> applyPageBottomClearance(page) }
+            }
             insets
         }
         var lastHapticPage = initialPage
@@ -470,9 +485,9 @@ class MainActivity : Activity() {
                 }
             }
             setOnClickListener {
+                homeMetricsCoordinator.cancelHomeRouteDownload()
                 homeMetricsCoordinator.homeSpeedAttemptAt = 0L
-                homeMetricsCoordinator.measureHomeRouteDownload()
-                homeMetricsCoordinator.measureSelectedRoute()
+                homeMetricsCoordinator.measureSelectedRoute(thenMeasureDownload = true)
             }
         }
         root.addView(refreshBtn, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })

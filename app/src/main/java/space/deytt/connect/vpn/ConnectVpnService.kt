@@ -125,6 +125,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
     private var commandClient: CommandClient? = null
     private var tunnel: ParcelFileDescriptor? = null
     private var awgProxy: AwgProxyBackend? = null
+    private val probeAwgProxies = java.util.Collections.synchronizedList(mutableListOf<AwgProxyBackend>())
     private var openFluxProxy: OpenFluxProxyBackend? = null
     private var openFluxExpiry: Long? = null
     @Volatile private var activeCanary: HttpsURLConnection? = null
@@ -294,6 +295,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         val config = intent.getStringExtra("config")
         val token = intent.getStringExtra(RouteProbeClient.EXTRA_TOKEN).orEmpty()
         val routeTags = intent.getStringArrayListExtra("route_tags").orEmpty()
+        val awgRouteIds = intent.getStringArrayListExtra(RouteProbeClient.EXTRA_AWG_ROUTE_IDS).orEmpty()
         val method = runCatching {
             RouteProbeMethod.valueOf(intent.getStringExtra("method") ?: RouteProbeMethod.HEAD.name)
         }.getOrDefault(RouteProbeMethod.HEAD)
@@ -307,7 +309,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
             stopSelf(startId)
             return
         }
-        if (requestId.isBlank() || config.isNullOrBlank() || routeTags.isEmpty()) {
+        if (requestId.isBlank() || (routeTags.isEmpty() && awgRouteIds.isEmpty()) || (routeTags.isNotEmpty() && config.isNullOrBlank())) {
             sendRouteProbeResult(requestId, "", null, "Не удалось подготовить проверку", complete = true)
             stopSelf(startId)
             return
@@ -323,7 +325,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         try {
             startForegroundCompat("Проверяем маршрут через прокси…")
             reportRouteProbeStage(requestId, "accepted", requestStartedAt)
-            executor.execute { runRouteProbe(requestId, config, routeTags, method, token, operationId, startId, requestStartedAt, cancellation) }
+            executor.execute { runRouteProbe(requestId, config.orEmpty(), routeTags, awgRouteIds, method, token, operationId, startId, requestStartedAt, cancellation) }
         } catch (error: Throwable) {
             if (activeRouteProbeRequestId == requestId) {
                 sendRouteProbeResult(requestId, "", null, "Не удалось запустить проверку", complete = true)
@@ -342,6 +344,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         requestId: String,
         config: String,
         routeTags: List<String>,
+        awgRouteIds: List<String>,
         method: RouteProbeMethod,
         token: String,
         operationId: Long,
@@ -350,35 +353,82 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         cancellation: RouteProbeCancellation,
     ) {
         var stage = "profile validation"
+        val allTags = (routeTags + awgRouteIds).distinct()
         try {
-            reportRouteProbeStage(requestId, "startup_profile_validation", requestStartedAt)
-            ProfileValidator.validate(config)
-            stage = "loopback proxy setup"
             val sessions = linkedMapOf<String, RouteProbeSession>()
-            routeTags.distinct().forEach { tag ->
-                var session = RouteProxyProbe.newSession()
-                while (sessions.values.any { it.port == session.port }) session = RouteProxyProbe.newSession()
-                sessions[tag] = session
+            val distinctLibboxTags = routeTags.distinct()
+            if (distinctLibboxTags.isNotEmpty()) {
+                reportRouteProbeStage(requestId, "startup_profile_validation", requestStartedAt)
+                ProfileValidator.validate(config)
+                stage = "loopback proxy setup"
+                val libboxSessions = linkedMapOf<String, RouteProbeSession>()
+                distinctLibboxTags.forEach { tag ->
+                    var session = RouteProxyProbe.newSession()
+                    while (libboxSessions.values.any { it.port == session.port }) session = RouteProxyProbe.newSession()
+                    libboxSessions[tag] = session
+                }
+                if (operation.get() != operationId || !routeProbeOnly) return
+                stage = "libbox setup"
+                reportRouteProbeStage(requestId, "startup_libbox_setup", requestStartedAt)
+                setupLibbox()
+                reportRouteProbeStage(requestId, "startup_libbox_ready", requestStartedAt)
+                stage = "command server start"
+                reportRouteProbeStage(requestId, "startup_command_server_start", requestStartedAt)
+                val server = CommandServer(this, this)
+                commandServer = server
+                server.start()
+                reportRouteProbeStage(requestId, "startup_command_server_ready", requestStartedAt)
+                if (operation.get() != operationId || !routeProbeOnly) return
+                stage = "batch routes setup"
+                reportRouteProbeStage(requestId, "startup_batch_routes_setup", requestStartedAt)
+                server.startOrReloadService(
+                    runtimeConfig(RouteProxyProbe.batchConfiguration(config, libboxSessions)),
+                    OverrideOptions().apply { autoRedirect = false },
+                )
+                reportRouteProbeStage(requestId, "startup_batch_routes_ready", requestStartedAt)
+                sessions.putAll(libboxSessions)
             }
-            if (operation.get() != operationId || !routeProbeOnly) return
-            stage = "libbox setup"
-            reportRouteProbeStage(requestId, "startup_libbox_setup", requestStartedAt)
-            setupLibbox()
-            reportRouteProbeStage(requestId, "startup_libbox_ready", requestStartedAt)
-            stage = "command server start"
-            reportRouteProbeStage(requestId, "startup_command_server_start", requestStartedAt)
-            val server = CommandServer(this, this)
-            commandServer = server
-            server.start()
-            reportRouteProbeStage(requestId, "startup_command_server_ready", requestStartedAt)
-            if (operation.get() != operationId || !routeProbeOnly) return
-            stage = "batch routes setup"
-            reportRouteProbeStage(requestId, "startup_batch_routes_setup", requestStartedAt)
-            server.startOrReloadService(
-                runtimeConfig(RouteProxyProbe.batchConfiguration(config, sessions)),
-                OverrideOptions().apply { autoRedirect = false },
-            )
-            reportRouteProbeStage(requestId, "startup_batch_routes_ready", requestStartedAt)
+            val distinctAwgIds = awgRouteIds.distinct()
+            if (distinctAwgIds.isNotEmpty()) {
+                stage = "awg proxy setup"
+                val awgStore = AwgProfileStore(this)
+                distinctAwgIds.forEach { awgId ->
+                    if (operation.get() != operationId || !routeProbeOnly) return
+                    runCatching {
+                        val raw = awgStore.read(awgId)
+                            ?: throw IllegalStateException("Профиль AmneziaWG не найден")
+                        val parsed = Config.parse(BufferedReader(StringReader(raw)))
+                        val awgUserspace = parsed.toAwgUserspaceString()
+                        val local = parsed.`interface`
+                        val addresses = local.addresses.mapNotNull { it.address.hostAddress }.toTypedArray()
+                        val dns = local.dnsServers.mapNotNull { it.hostAddress }
+                            .ifEmpty { FALLBACK_CARRIER_DNS.toList() }
+                            .toTypedArray()
+                        val username = UUID.randomUUID().toString()
+                        val password = UUID.randomUUID().toString()
+                        val proxy = AwgProxyBackend.start(
+                            awgUserspace,
+                            addresses,
+                            dns,
+                            local.mtu.orElse(1280),
+                            username,
+                            password,
+                        ) { fd ->
+                            val protected = this@ConnectVpnService.protect(fd)
+                            runCatching { networkBridge.bindSocketToUnderlying(fd) }
+                            protected
+                        }
+                        probeAwgProxies.add(proxy)
+                        sessions[awgId] = RouteProbeSession(proxy.port, username, password, socks5 = true)
+                    }.onFailure { error ->
+                        Log.w(TAG, "AWG proxy setup failed for ${safeRouteLogLabel(awgId)} (${probeFailureKind(error)}): ${error.message}")
+                        if (operation.get() == operationId && routeProbeOnly) {
+                            sendRouteProbeResult(requestId, awgId, null, routeProbeError(error), stage = "failed")
+                        }
+                    }
+                }
+            }
+            if (sessions.isEmpty() || operation.get() != operationId || !routeProbeOnly) return
             val latencies = linkedMapOf<String, Long>()
             val workers = Executors.newFixedThreadPool(minOf(MAX_PARALLEL_LATENCY_PROBES, sessions.size))
             probeWorkers = workers
@@ -477,7 +527,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                 val detail = error.message?.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
                 val message = if (stage == "batch routes setup" || stage == "command server start" || stage == "libbox setup")
                     "Сбой запуска ядра$detail" else routeProbeError(error)
-                routeTags.forEach { tag -> sendRouteProbeResult(requestId, tag, null, message) }
+                allTags.forEach { tag -> sendRouteProbeResult(requestId, tag, null, message) }
             }
         } finally {
             probeWorkers?.shutdownNow()
@@ -512,6 +562,10 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         runCatching { commandServer?.closeService() }
         runCatching { commandServer?.close() }
         commandServer = null
+        val awgList = synchronized(probeAwgProxies) {
+            probeAwgProxies.toList().also { probeAwgProxies.clear() }
+        }
+        awgList.forEach { runCatching { it.close() } }
         runCatching { tunnel?.close() }
         tunnel = null
     }
@@ -562,7 +616,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         speedProbe && Regex("http 5\\d{2}", RegexOption.IGNORE_CASE).containsMatchIn(errorChainMessage(error)) ->
             "Сервер скорости временно недоступен"
         error.message.orEmpty().contains("timeout", ignoreCase = true) ||
-            error.message.orEmpty().contains("времен", ignoreCase = true) -> "тайм-аут · 8 с"
+            error.message.orEmpty().contains("времен", ignoreCase = true) -> "тайм-аут · ${RouteProxyProbe.TIMEOUT_MILLIS / 1000} с"
         error.message.orEmpty().startsWith("Локальный прокси ответил HTTP") ->
             error.message.orEmpty().substringAfter("ответил ")
         speedProbe && error.message.orEmpty().startsWith("Сервер скорости ответил HTTP") ||
@@ -708,7 +762,7 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                     val proxy = AwgProxyBackend.start(
                         awgUserspace!!,
                         local.addresses.map { it.address.hostAddress!! }.toTypedArray(),
-                        local.dnsServers.map { it.hostAddress!! }.toTypedArray(),
+                        local.dnsServers.map { it.hostAddress!! }.ifEmpty { FALLBACK_CARRIER_DNS.toList() }.toTypedArray(),
                         local.mtu.orElse(1280), username, password, this::protect,
                     )
                     awgProxy = proxy

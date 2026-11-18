@@ -27,6 +27,8 @@ internal class RouteProbePresenter(
     private var diagnosticForeground = true
     private var awgCompletion: ((Boolean) -> Unit)? = null
     private val routeProbeStates = mutableMapOf<String, CountryProbeState>()
+    private val singleAwgProbeRows = mutableMapOf<String, ProbeRouteRow>()
+    private val singleAwgProbeSamples = mutableMapOf<String, RouteProbeSample>()
     private var closed = false
 
     private val updateHandler = Handler(Looper.getMainLooper())
@@ -131,13 +133,6 @@ internal class RouteProbePresenter(
                 row.status.text = copy("Проверка после подключения", "Measure after connecting")
                 return@forEach
             }
-            if (row.route.engine == TunnelEngine.AMNEZIAWG) {
-                row.progress.setLoading(false)
-                row.status.text = copy("В очереди…", "Queued…")
-                row.status.setTextColor(DeyttUi.MUTED)
-                row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
-                return@forEach
-            }
             row.status.text = styling.sampleLabel(RouteProbeSample(row.route.id, null, null))
             row.status.setTextColor(SKY)
             row.status.setTypeface(null, android.graphics.Typeface.NORMAL)
@@ -145,7 +140,8 @@ internal class RouteProbePresenter(
             country.pingTraces[row.route.id] = mutableListOf()
         }
         val networkRoutes = country.routes.filter { it.engine == TunnelEngine.LIBBOX }
-        if (networkRoutes.isEmpty()) { startCountryAwgProbes(country); return }
+        val awgRoutes = country.routes.filter { it.engine == TunnelEngine.AMNEZIAWG }
+        if (networkRoutes.isEmpty() && awgRoutes.isEmpty()) { finishCountryProbe(country); return }
         runCatching {
             RouteProbeClient.start(
                 host,
@@ -153,6 +149,7 @@ internal class RouteProbePresenter(
                 networkRoutes.map(DeyttRoute::configTag),
                 RouteProbePreferences.method(host),
                 token,
+                awgRouteIds = awgRoutes.map(DeyttRoute::id),
             )
         }.onSuccess { requestId -> routeProbeStates[requestId] = country }
             .onFailure {
@@ -161,7 +158,7 @@ internal class RouteProbePresenter(
                     row.status.text = host.uiCopy("ошибка")
                     row.status.setTextColor(CORAL)
                 }
-                startCountryAwgProbes(country)
+                finishCountryProbe(country)
             }
     }
 
@@ -172,6 +169,11 @@ internal class RouteProbePresenter(
         val tag = event.getStringExtra(RouteProbeClient.EXTRA_ROUTE_TAG).orEmpty()
         val error = event.getStringExtra(RouteProbeClient.EXTRA_ERROR).orEmpty()
         android.util.Log.i("DeyttRouteProbe", "onRouteProbeEvent req=$requestId stage=$stage tag=$tag complete=$complete error=$error")
+        val singleRow = singleAwgProbeRows[requestId]
+        if (singleRow != null) {
+            handleSingleAwgProbeEvent(requestId, singleRow, event, stage, complete, error)
+            return
+        }
         val country = routeProbeStates[requestId] ?: run {
             if (complete) launchNextCountry()
             return
@@ -180,7 +182,7 @@ internal class RouteProbePresenter(
             if (event.getBooleanExtra(RouteProbeClient.EXTRA_COMPLETE, false)) {
                 routeProbeStates.remove(requestId)
                 country.cancelled = true
-                country.rows.values.filter { it.route.engine == TunnelEngine.LIBBOX }.forEach { row ->
+                country.rows.values.filter { it.route.engine != TunnelEngine.OPENFLUX }.forEach { row ->
                     row.progress.setLoading(false)
                     val sample = country.samples[row.route.id]
                     if (sample?.latencyMillis == null && sample?.downloadBytesPerSecond == null) {
@@ -206,7 +208,7 @@ internal class RouteProbePresenter(
             country.summaryProgress.setLoading(true)
         }
         if (tag.isNotBlank()) {
-            val row = country.rows.values.firstOrNull { it.route.configTag == tag }
+            val row = country.rows.values.firstOrNull { it.route.configTag == tag || it.route.id == tag }
             if (row != null) {
                 val previous = country.samples[row.route.id] ?: RouteProbeSample(row.route.id, null, null)
                 val probeStage = event.getStringExtra(RouteProbeClient.EXTRA_STAGE)
@@ -286,7 +288,63 @@ internal class RouteProbePresenter(
                 }
             }
             styling.updateCountryLatencySummary(country)
-            startCountryAwgProbes(country)
+            finishCountryProbe(country)
+        }
+    }
+
+    private fun handleSingleAwgProbeEvent(
+        requestId: String,
+        row: ProbeRouteRow,
+        event: Intent,
+        stage: String,
+        complete: Boolean,
+        error: String,
+    ) {
+        val english = AppLanguage.current(host) == AppLanguage.EN
+        val previous = singleAwgProbeSamples[requestId] ?: RouteProbeSample(row.route.id, null, null)
+        val reportedLatency = event.getLongExtra(RouteProbeClient.EXTRA_MILLISECONDS, -1L)
+            .takeIf(RouteProbeStatistics::isValidLatencyMillis)
+        val reportedSpeed = event.getLongExtra(RouteProbeClient.EXTRA_BYTES_PER_SECOND, -1L)
+            .takeIf { it > 0L }
+        val latency = reportedLatency ?: previous.latencyMillis
+        val speed = if (stage == "download_progress") previous.downloadBytesPerSecond else reportedSpeed ?: previous.downloadBytesPerSecond
+        val sample = RouteProbeSample(row.route.id, latency, speed)
+        singleAwgProbeSamples[requestId] = sample
+        when (stage) {
+            "latency", "latency_sample", "latency_retry", "waiting_download" -> {
+                row.status.text = styling.sampleLabel(sample)
+                row.status.setTextColor(TEXT)
+                row.progress.setLoading(true)
+            }
+            "download", "download_progress" -> {
+                row.status.text = RouteProbePresentation.speedProgress(latency?.let(styling::formatLatency), english, reportedSpeed)
+                row.status.setTextColor(SKY)
+                row.progress.setLoading(true)
+            }
+            "complete", "failed" -> {
+                row.progress.setLoading(false)
+                val baseText = styling.sampleLabel(sample)
+                if (speed == null) {
+                    val reason = error.takeIf(String::isNotBlank)?.let { RouteProbePresentation.failureMessage(it, english) }
+                        ?: if (TelegramSessionStore.read(host).isNullOrBlank()) copy("Войдите через Telegram, чтобы проверить скорость", "Link Telegram to measure speed")
+                        else copy("Скорость не измерена · повторите", "Speed unavailable · retry")
+                    row.status.text = "$baseText · $reason"
+                } else {
+                    row.status.text = baseText
+                }
+                row.status.setTextColor(when {
+                    speed != null -> MINT
+                    latency != null -> AMBER
+                    else -> CORAL
+                })
+                if (latency != null || speed != null) RouteQualityStore.write(host, sample)
+            }
+        }
+        if (complete) {
+            row.progress.setLoading(false)
+            singleAwgProbeRows.remove(requestId)
+            singleAwgProbeSamples.remove(requestId)
+            launchNextCountry()
         }
     }
 
@@ -298,58 +356,6 @@ internal class RouteProbePresenter(
         styling.applyCountryRanking(country, selectedRouteId)
         styling.updateCountryLatencySummary(country)
         launchNextCountry()
-    }
-
-    private fun startCountryAwgProbes(country: CountryProbeState) {
-        val rows = country.rows.values.filter { it.route.engine == TunnelEngine.AMNEZIAWG }
-        android.util.Log.i("DeyttRouteProbe", "startCountryAwgProbes country=${country.code} rows=${rows.size} cancelled=${country.cancelled} closed=$closed diagForeground=$diagnosticForeground prepare=${VpnService.prepare(host) != null}")
-        if (rows.isEmpty() || country.cancelled || closed || !diagnosticForeground) { finishCountryProbe(country); return }
-        if (VpnService.prepare(host) != null && host.requestRouteProbePermission {
-                if (!country.cancelled && !closed) startCountryAwgProbes(country)
-            }
-        ) return
-        awgMeasurementRunning = true
-        activeAwgCountry = country
-        rows.forEach {
-            it.status.text = styling.sampleLabel(RouteProbeSample(it.route.id, null, null))
-            it.status.contentDescription = copy("В очереди · временный VPN только для приложения", "Queued · temporary app-only VPN")
-            it.progress.setLoading(true)
-        }
-        host.requestAwgMeasurements(rows.map { it.route }, onComplete = {
-            android.util.Log.i("DeyttRouteProbe", "awg onComplete")
-            awgMeasurementRunning = false
-            activeAwgCountry = null
-            rows.forEach { row ->
-                row.progress.setLoading(false)
-                val pendingStatus = row.status.text.toString() == styling.sampleLabel(RouteProbeSample(row.route.id, null, null))
-                if (!country.cancelled && row.route.id !in country.samples && pendingStatus) {
-                    row.status.text = copy("Проверка недоступна · нажмите для повтора", "Measurement unavailable · tap to retry")
-                }
-            }
-            finishCountryProbe(country)
-        }, onRouteFailure = { route ->
-            android.util.Log.w("DeyttRouteProbe", "awg onRouteFailure: ${route.id}")
-            country.rows[route.id]?.let { row ->
-                row.progress.setLoading(false)
-                country.errors[route.id] = "tunnel startup failed"
-                row.status.text = copy("Туннель не запустился · повторите", "Tunnel did not start · retry")
-                row.status.setTextColor(CORAL)
-                val selectedRouteId = SelectedRouteStore(host).read().id
-                styling.applyCountryRanking(country, selectedRouteId)
-            }
-        }, onRouteStarting = { route ->
-            android.util.Log.i("DeyttRouteProbe", "awg onRouteStarting: ${route.id}")
-            country.rows[route.id]?.let { row ->
-                row.status.text = styling.sampleLabel(RouteProbeSample(route.id, null, null))
-                row.status.contentDescription = copy("Подключаем AmneziaWG…", "Connecting AmneziaWG…")
-                row.status.setTextColor(SKY)
-                row.progress.setLoading(true)
-            }
-        }, measure = { route, finished ->
-            android.util.Log.i("DeyttRouteProbe", "awg measure: ${route.id}")
-            val row = country.rows.getValue(route.id)
-            measureAwgRow(row, country, finished)
-        })
     }
 
     fun cancelCountryProbe(country: CountryProbeState) {
@@ -377,131 +383,37 @@ internal class RouteProbePresenter(
     fun startAwgProbe(row: ProbeRouteRow) {
         if (awgMeasurementRunning || RouteProbeClient.isRunning(host) || closed) return
         if (VpnService.prepare(host) != null && host.requestRouteProbePermission { startAwgProbe(row) }) return
-        awgMeasurementRunning = true
-        row.progress.setLoading(true)
-        row.status.text = styling.sampleLabel(RouteProbeSample(row.route.id, null, null))
-        row.status.contentDescription = copy("Подключаем для проверки…", "Connecting to measure…")
-        host.requestAwgMeasurement(row.route, onComplete = { successful ->
-            awgMeasurementRunning = false
-            row.progress.setLoading(false)
-            if (!successful && RouteQualityStore.read(host, row.route.id) == null &&
-                row.status.text.toString() == styling.sampleLabel(RouteProbeSample(row.route.id, null, null))
-            ) row.status.text = copy("Проверка недоступна · повторите", "Measurement unavailable · retry")
-            launchNextCountry()
-        }) { finished -> measureAwgRow(row, null, finished) }
-    }
-
-    private fun measureAwgRow(row: ProbeRouteRow, country: CountryProbeState?, finished: (Boolean) -> Unit) {
+        val config = SubscriptionStore(host).readCurrent().orEmpty()
         val token = TelegramSessionStore.read(host)
-        android.util.Log.i("DeyttRouteProbe", "measureAwgRow ${row.route.id} token=${token != null} closed=$closed diagForeground=$diagnosticForeground cancelled=${country?.cancelled}")
-        if (closed || !diagnosticForeground || country?.cancelled == true) { finished(false); return }
-        awgCompletion = finished
         row.progress.setLoading(true)
         row.status.text = styling.sampleLabel(RouteProbeSample(row.route.id, null, null))
-        diagnosticExecutor.execute {
-            var measuredLatency: Long? = null
-            val result = runCatching {
-                val current = {
-                    !closed && diagnosticForeground && country?.cancelled != true &&
-                        AwgTunnelController.isRunning() && !AwgTunnelController.isStopping() &&
-                        SelectedRouteStore(host).read().id == row.route.id
-                }
-                check(current())
-                val pingSamples = mutableListOf<Long>()
-                runCatching {
-                    RouteProxyProbe.measureThroughSystemVpn(
-                        RouteProbePreferences.method(host),
-                        sampleCount = 1,
-                        onSample = { _, latency ->
-                            if (latency != null && RouteProbeStatistics.isValidLatencyMillis(latency)) {
-                                pingSamples += latency
-                                val currentLatency = RouteProbeStatistics.medianLatencyMillis(pingSamples)
-                                measuredLatency = currentLatency
-                                val snapshot = pingSamples.toList()
-                                host.runOnUiThread {
-                                    if (current()) {
-                                        val sample = RouteProbeSample(row.route.id, currentLatency, null)
-                                        row.status.text = styling.sampleLabel(sample)
-                                        row.progress.setLoading(true)
-                                        if (country != null) {
-                                            country.samples[row.route.id] = sample
-                                            country.pingTraces[row.route.id] = snapshot.toMutableList()
-                                            styling.updateCountryLatencySummary(country)
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                    )
-                }.onSuccess { measuredLatency = it }
-                    .onFailure {
-                        android.util.Log.w("DeyttAwgProbe", "Latency probe failed (${it.javaClass.simpleName})")
-                    }
-                val english = AppLanguage.current(host) == AppLanguage.EN
-                val speed = if (token.isNullOrBlank()) null else runCatching {
-                    RouteProxyProbe.measureSystemDownload(token, current, onProgress = { bytesPerSecond ->
-                        val latency = measuredLatency
-                        host.runOnUiThread {
-                            if (current()) {
-                                row.status.text = RouteProbePresentation.speedProgress(
-                                    latency?.let(styling::formatLatency),
-                                    english,
-                                    bytesPerSecond,
-                                )
-                                row.progress.setLoading(true)
-                            }
-                        }
-                    })
-                }.getOrNull()
-                check(current()) { "AmneziaWG measurement is no longer active" }
-                val measuredSpeed = speed?.takeIf { it > 0L }
-                if (measuredLatency == null && measuredSpeed == null) {
-                    throw java.net.SocketTimeoutException("No HTTPS measurement result")
-                }
-                RouteProbeSample(row.route.id, measuredLatency, measuredSpeed)
-            }.onFailure { error ->
-                android.util.Log.w(
-                    "DeyttAwgProbe",
-                    "Measurement failed (${error.javaClass.simpleName}: ${error.message?.take(72).orEmpty()})",
-                )
-            }
-            host.runOnUiThread {
-                row.progress.setLoading(false)
-                if (!closed && diagnosticForeground && country?.cancelled != true &&
-                    AwgTunnelController.isRunning() && !AwgTunnelController.isStopping() &&
-                    SelectedRouteStore(host).read().id == row.route.id) {
-                    val sample = result.getOrNull()
-                    sample?.let {
-                        country?.samples?.put(row.route.id, it)
-                        RouteQualityStore.write(host, it)
-                    }
-                    row.status.text = sample?.let(styling::sampleLabel) ?: copy("Не удалось измерить HTTPS · повторите", "HTTPS measurement failed · retry")
-                    if (sample != null && sample.downloadBytesPerSecond == null && !token.isNullOrBlank()) {
-                        val failure = result.exceptionOrNull()?.let {
-                            RouteProbePresentation.failure(it, AppLanguage.current(host) == AppLanguage.EN)
-                        } ?: copy("скорость недоступна", "speed unavailable")
-                        row.status.append(" · $failure")
-                    }
-                    row.status.setTextColor(when {
-                        sample?.downloadBytesPerSecond?.let { it > 0L } == true -> MINT
-                        sample != null -> AMBER
-                        else -> CORAL
-                    })
-                    if (country != null) {
-                        styling.updateCountryLatencySummary(country)
-                        val selectedRouteId = SelectedRouteStore(host).read().id
-                        styling.applyCountryRanking(country, selectedRouteId)
-                    }
-                }
-                if (awgCompletion === finished) awgCompletion = null
-                finished(result.isSuccess)
-            }
+        row.status.setTextColor(SKY)
+        runCatching {
+            RouteProbeClient.start(
+                host,
+                config,
+                emptyList(),
+                RouteProbePreferences.method(host),
+                token,
+                awgRouteIds = listOf(row.route.id),
+            )
+        }.onSuccess { requestId ->
+            singleAwgProbeRows[requestId] = row
+        }.onFailure {
+            row.progress.setLoading(false)
+            row.status.text = copy("Проверка недоступна · повторите", "Measurement unavailable · retry")
+            row.status.setTextColor(CORAL)
+            launchNextCountry()
         }
     }
 
     fun startForegroundDiagnostics() {
         diagnosticForeground = true
-        if (!RouteProbeClient.isRunning(host) && !awgMeasurementRunning) routeProbeStates.clear()
+        if (!RouteProbeClient.isRunning(host) && !awgMeasurementRunning) {
+            routeProbeStates.clear()
+            singleAwgProbeRows.clear()
+            singleAwgProbeSamples.clear()
+        }
         launchNextCountry()
     }
 
@@ -509,6 +421,9 @@ internal class RouteProbePresenter(
         diagnosticForeground = false
         pendingCountries.clear()
         routeProbeStates.values.forEach { it.cancelled = true }
+        singleAwgProbeRows.values.forEach { it.progress.setLoading(false) }
+        singleAwgProbeRows.clear()
+        singleAwgProbeSamples.clear()
         activeAwgCountry?.let { cancelCountryProbe(it) }
         if (awgMeasurementRunning) host.cancelAwgMeasurement()
         updateHandler.removeCallbacks(nextCountryCheck)
@@ -517,12 +432,15 @@ internal class RouteProbePresenter(
     fun cancelRouteDiagnosticsForSelection() {
         pendingCountries.clear()
         routeProbeStates.values.forEach { it.cancelled = true }
+        singleAwgProbeRows.values.forEach { it.progress.setLoading(false) }
+        singleAwgProbeRows.clear()
+        singleAwgProbeSamples.clear()
         activeAwgCountry?.cancelled = true
         if (RouteProbeClient.isRunning(host)) RouteProbeClient.cancel(host)
     }
 
     fun hasActiveRouteDiagnostics(): Boolean = RouteProbeClient.isRunning(host) ||
-        routeProbeStates.isNotEmpty() || pendingCountries.isNotEmpty() || awgMeasurementRunning || activeAwgCountry != null
+        routeProbeStates.isNotEmpty() || singleAwgProbeRows.isNotEmpty() || pendingCountries.isNotEmpty() || awgMeasurementRunning || activeAwgCountry != null
 
     fun close() {
         closed = true
@@ -530,7 +448,9 @@ internal class RouteProbePresenter(
         updateHandler.removeCallbacks(nextCountryCheck)
         diagnosticExecutor.shutdownNow()
         routeProbeStates.values.forEach { it.cancelled = true }
+        singleAwgProbeRows.clear()
+        singleAwgProbeSamples.clear()
         pendingCountries.clear()
-        if (routeProbeStates.isNotEmpty()) RouteProbeClient.cancel(host)
+        if (routeProbeStates.isNotEmpty() || RouteProbeClient.isRunning(host)) RouteProbeClient.cancel(host)
     }
 }

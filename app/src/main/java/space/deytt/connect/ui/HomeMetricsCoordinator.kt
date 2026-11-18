@@ -103,8 +103,10 @@ internal class HomeMetricsCoordinator(
         override fun run() {
             if (host.isFinishing || host.isDestroyed) return
             if (isHomeSelected() && getCurrentPhase() == VpnPhase.CONNECTED &&
-                VpnService.prepare(host) == null && !RouteProbeClient.isRunning(host)) measureSelectedRoute()
-            measureHomeRouteDownload()
+                VpnService.prepare(host) == null && !RouteProbeClient.isRunning(host) && !homeSpeedInFlight) {
+                measureSelectedRoute()
+            }
+            if (!selectedRouteLatencyInFlight) measureHomeRouteDownload()
             selectedRouteLatencyHandler.postDelayed(this, SELECTED_ROUTE_LATENCY_INTERVAL_MS)
         }
     }
@@ -189,7 +191,7 @@ internal class HomeMetricsCoordinator(
             latency != null -> DeyttUi.MINT
             else -> DeyttUi.MUTED
         })
-        val sampleSeconds = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS / 1_000
+        val sampleSeconds = (RouteProxyProbe.HOME_DOWNLOAD_MILLIS + 500) / 1_000
         downloadText.contentDescription = when {
             speedBypassed -> uiCopy("Скорость не измеряется: приложение исключено из VPN текущими настройками обхода")
             speedNeedsLogin -> if (en) "Sign in to Telegram to measure speed. Tap for an explanation." else "Для замера скорости войдите через Telegram. Нажмите для объяснения."
@@ -262,8 +264,8 @@ internal class HomeMetricsCoordinator(
         homeSpeedAttemptAt = 0L
         selectedRouteLatencyHandler.post {
             if (homeSpeedForeground && homeSpeedOnHome) {
-                measureSelectedRoute()
-                measureHomeRouteDownload()
+                // Measure ping before download so throughput saturation does not inflate latency.
+                measureSelectedRoute(thenMeasureDownload = true)
             }
         }
     }
@@ -336,9 +338,10 @@ internal class HomeMetricsCoordinator(
         return panel
     }
 
-    fun measureSelectedRoute() {
+    fun measureSelectedRoute(thenMeasureDownload: Boolean = false) {
         if (!::latencyText.isInitialized) return
         if (RouteProbeClient.isRunning(host) || selectedRouteLatencyInFlight) return
+        if (!thenMeasureDownload && homeSpeedInFlight) return
         if (isHomeConnectQueued() || isTemporaryAwgMeasurement() || getCurrentPhase() in setOf(VpnPhase.STARTING, VpnPhase.CHECKING, VpnPhase.STOPPING)) return
         if (getCurrentPhase() != VpnPhase.CONNECTED) {
             latencyText.contentDescription = uiCopy("HTTPS-отклик проверяется после подключения")
@@ -368,7 +371,9 @@ internal class HomeMetricsCoordinator(
         latencyText.text = previousLatency?.let(::formatLatency) ?: "—"
         updateQualityStrip()
         if (tunnelActive) {
-            val appBypassed = route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)
+            val usesLibboxTun = route.engine == TunnelEngine.LIBBOX ||
+                (route.engine == TunnelEngine.AMNEZIAWG && ConnectVpnService.isRunning())
+            val appBypassed = usesLibboxTun && !isHomeApplicationRoutedByTunnel(config)
             if (route.id != selected.id || appBypassed) {
                 if (appBypassed) {
                     homePingSamples.clear(); lastRouteLatency = null; homePingBypassedKey = metricKey; homePingErrorKey = null; updateQualityStrip()
@@ -381,7 +386,7 @@ internal class HomeMetricsCoordinator(
                 }
                 return
             }
-            if (route.engine == TunnelEngine.AMNEZIAWG && !AwgTunnelController.isRunning()) {
+            if (route.engine == TunnelEngine.AMNEZIAWG && !ConnectVpnService.isRunning() && !AwgTunnelController.isRunning()) {
                 latencyText.apply {
                     text = uiCopy("Отклик: подключите AmneziaWG").substringAfter(": ")
                     isEnabled = true; alpha = 1f; setTextColor(DeyttUi.AMBER)
@@ -398,7 +403,7 @@ internal class HomeMetricsCoordinator(
                             if (!HomeMetricPresentation.ownsRequest(generation, latencyGeneration) ||
                                 host.isFinishing || host.isDestroyed || getCurrentPhase() != VpnPhase.CONNECTED ||
                                 currentHomeRouteMetricKey(selected.id) != metricKey ||
-                                (route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config))
+                                (usesLibboxTun && !isHomeApplicationRoutedByTunnel(config))
                             ) return@runOnUiThread
                             homePingSamples += sample
                             if (lastRouteLatency?.first != metricKey) {
@@ -414,7 +419,7 @@ internal class HomeMetricsCoordinator(
                     if (currentHomeRouteMetricKey(selected.id) != metricKey) {
                         latencyText.apply { isEnabled = true; alpha = 1f }; updateQualityStrip(); return@runOnUiThread
                     }
-                    if (route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)) {
+                    if (usesLibboxTun && !isHomeApplicationRoutedByTunnel(config)) {
                         homePingSamples.clear(); lastRouteLatency = null; homePingBypassedKey = metricKey; homePingErrorKey = null
                         latencyText.apply { isEnabled = true; alpha = 1f }; updateQualityStrip(); return@runOnUiThread
                     }
@@ -425,10 +430,11 @@ internal class HomeMetricsCoordinator(
                     latencyText.apply {
                         isEnabled = true; alpha = 1f
                         setTextColor(if (validElapsed != null) DeyttUi.MINT else DeyttUi.CORAL)
-                        contentDescription = validElapsed?.let { uiCopy("Медиана HTTPS-ответов через активное соединение: ${it} миллисекунд") }
-                            ?: uiCopy("HTTPS-проверка через активное соединение не ответила за 8 секунд")
+                        contentDescription = validElapsed?.let { uiCopy("HTTPS-отклик через активное соединение: ${it} миллисекунд") }
+                            ?: uiCopy("HTTPS-проверка через активное соединение не ответила вовремя")
                     }
                     updateQualityStrip()
+                    if (thenMeasureDownload) measureHomeRouteDownload()
                 }
             }
             return
@@ -494,12 +500,14 @@ internal class HomeMetricsCoordinator(
             failed = homeSpeedErrorKey == metricKey && homeSpeedError != null,
         )
         if (homeSpeedAttemptAt > 0L && now - homeSpeedAttemptAt < retryDelay) return
-        if (route.engine == TunnelEngine.LIBBOX && !isHomeApplicationRoutedByTunnel(config)) {
+        val usesLibboxTun = route.engine == TunnelEngine.LIBBOX ||
+            (route.engine == TunnelEngine.AMNEZIAWG && ConnectVpnService.isRunning())
+        if (usesLibboxTun && !isHomeApplicationRoutedByTunnel(config)) {
             homeSpeedSample = null; homeSpeedError = null; homeSpeedErrorKey = null; homeSpeedBypassedKey = metricKey
             updateQualityStrip(); return
         }
         if (route.engine == TunnelEngine.LIBBOX && !ConnectVpnService.isRunning()) return
-        if (route.engine == TunnelEngine.AMNEZIAWG && !AwgTunnelController.isRunning()) return
+        if (route.engine == TunnelEngine.AMNEZIAWG && !ConnectVpnService.isRunning() && !AwgTunnelController.isRunning()) return
         homeSpeedAttemptAt = now
         homeSpeedInFlight = true
         homeSpeedError = null
@@ -509,17 +517,17 @@ internal class HomeMetricsCoordinator(
         val transferActive = {
             generation == homeSpeedGeneration && homeSpeedForeground && homeSpeedOnHome &&
                 !isTemporaryAwgMeasurement() && !RouteProbeClient.isRunning(host) && getCurrentPhase() == VpnPhase.CONNECTED &&
-                (if (route.engine == TunnelEngine.AMNEZIAWG) AwgTunnelController.isRunning() else ConnectVpnService.isRunning())
+                (if (route.engine == TunnelEngine.AMNEZIAWG) (ConnectVpnService.isRunning() || AwgTunnelController.isRunning()) else ConnectVpnService.isRunning())
         }
         val stillCurrent = {
             transferActive() && SelectedRouteStore(host).read().id == selected.id &&
                 TelegramSessionStore.read(host) == token && currentHomeRouteMetricKey(selected.id) == metricKey &&
-                (route.engine != TunnelEngine.LIBBOX || isHomeApplicationRoutedByTunnel(config))
+                (!usesLibboxTun || isHomeApplicationRoutedByTunnel(config))
         }
         updateQualityStrip()
         homeSpeedFuture = LatencyExecutor.pool.submit {
             val result = runCatching {
-                RouteProxyProbe.measureSystemDownload(token, stillCurrent, sampleMillis = RouteProxyProbe.QUICK_DOWNLOAD_MILLIS, transferActive = transferActive)
+                RouteProxyProbe.measureSystemDownload(token, stillCurrent, sampleMillis = RouteProxyProbe.HOME_DOWNLOAD_MILLIS, transferActive = transferActive)
             }
             host.runOnUiThread {
                 if (generation != homeSpeedGeneration) return@runOnUiThread
@@ -527,7 +535,7 @@ internal class HomeMetricsCoordinator(
                 if (!stillCurrent() || host.isFinishing || host.isDestroyed) {
                     if (!host.isFinishing && !host.isDestroyed && getCurrentPhase() == VpnPhase.CONNECTED &&
                         SelectedRouteStore(host).read().id == selected.id &&
-                        currentHomeRouteMetricKey(selected.id) == metricKey && route.engine == TunnelEngine.LIBBOX &&
+                        currentHomeRouteMetricKey(selected.id) == metricKey && usesLibboxTun &&
                         !isHomeApplicationRoutedByTunnel(config)
                     ) {
                         homeSpeedSample = null; homeSpeedError = null; homeSpeedErrorKey = null; homeSpeedBypassedKey = metricKey

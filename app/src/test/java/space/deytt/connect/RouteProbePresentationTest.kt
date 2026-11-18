@@ -16,10 +16,10 @@ class RouteProbePresentationTest {
 
     @Test
     fun refreshAndFailureKeepTheSuccessfulCurrentConnectionValues() {
-        assertEquals("42 мс", HomeMetricPresentation.latencyLabel(42L, false, false, false))
-        assertEquals("42 мс", HomeMetricPresentation.latencyLabel(42L, false, true, false))
-        assertEquals("20.0 Mbps", HomeMetricPresentation.speedLabel(2_500_000L, false, false, false, true))
-        assertEquals("20.0 Mbps", HomeMetricPresentation.speedLabel(2_500_000L, false, false, true, true))
+        assertEquals("42\u00A0мс", HomeMetricPresentation.latencyLabel(42L, false, false, false))
+        assertEquals("42\u00A0мс", HomeMetricPresentation.latencyLabel(42L, false, true, false))
+        assertEquals("20.0\u00A0Mbps", HomeMetricPresentation.speedLabel(2_500_000L, false, false, false, true))
+        assertEquals("20.0\u00A0Mbps", HomeMetricPresentation.speedLabel(2_500_000L, false, false, true, true))
         assertEquals("—", HomeMetricPresentation.latencyLabel(null, false, false, true))
         assertEquals("нет ответа", HomeMetricPresentation.latencyLabel(null, false, true, false))
         assertEquals("недоступна", HomeMetricPresentation.speedLabel(null, false, false, true, false))
@@ -60,7 +60,7 @@ class RouteProbePresentationTest {
     @Test
     fun speedProgressShowsLiveThroughputWithoutDroppingLatency() {
         assertEquals(
-            "Response: 500 ms · Speed: ↓ 8.0 Mbps",
+            "Response: 500 ms · Speed: ↓ 8.0\u00A0Mbps",
             RouteProbePresentation.speedProgress("500 ms", english = true, bytesPerSecond = 1_000_000L),
         )
     }

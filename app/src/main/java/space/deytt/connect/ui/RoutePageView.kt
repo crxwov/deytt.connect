@@ -309,9 +309,9 @@ internal class RoutePageView(
             val countrySelected = countryRoutes.any { it.id == selectedId }
             countryGroup.background = host.glassRowBackground(countrySelected, 22f)
             countryGroup.clipToOutline = true
-            countryGroup.addView(countryHeader)
-            countryGroup.addView(headerDivider)
-            countryGroup.addView(detail)
+            countryGroup.addView(countryHeader, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            countryGroup.addView(headerDivider, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, host.dp(1)))
+            countryGroup.addView(detail, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             root.addView(countryGroup)
             root.addView(spacer(8, host))
         }
@@ -321,6 +321,9 @@ internal class RoutePageView(
         root.addView(spacer(18, host))
         return ScrollView(host).apply {
             isFillViewport = true
+            isVerticalScrollBarEnabled = false
+            clipToPadding = false
+            overScrollMode = View.OVER_SCROLL_NEVER
             addView(root)
             setOnScrollChangeListener { _, _, scrollY, _, _ -> onScrollChanged(scrollY) }
             post { scrollTo(0, initialScrollY) }

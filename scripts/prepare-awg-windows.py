@@ -24,7 +24,7 @@ def prepare(go_executable: str, destination: Path, patch: Path) -> None:
         executable = destination / "bin/go.exe"
         if (executable.is_file()
                 and hashlib.sha256(executable.read_bytes()).digest() == hashlib.sha256(Path(go_executable).read_bytes()).digest()
-                and subprocess.run(["git", "-C", str(destination), "apply", "--unidiff-zero", "--reverse", "--check", str(patch.resolve())],
+                and subprocess.run(["git", "-C", str(destination), "apply", "--unidiff-zero", "--ignore-space-change", "--ignore-whitespace", "--reverse", "--check", str(patch.resolve())],
                                    capture_output=True).returncode == 0):
             marker.write_text(identity + "\n")
             return
@@ -34,8 +34,8 @@ def prepare(go_executable: str, destination: Path, patch: Path) -> None:
     shutil.copytree(sdk, destination, dirs_exist_ok=True)
     # Keep git apply inside this generated SDK when the checkout uses a worktree pointer.
     subprocess.run(["git", "-C", str(destination), "init", "--quiet"], check=True)
-    subprocess.run(["git", "-C", str(destination), "apply", "--unidiff-zero", "--check", str(patch.resolve())], check=True)
-    subprocess.run(["git", "-C", str(destination), "apply", "--unidiff-zero", str(patch.resolve())], check=True)
+    subprocess.run(["git", "-C", str(destination), "apply", "--unidiff-zero", "--ignore-space-change", "--ignore-whitespace", "--check", str(patch.resolve())], check=True)
+    subprocess.run(["git", "-C", str(destination), "apply", "--unidiff-zero", "--ignore-space-change", "--ignore-whitespace", str(patch.resolve())], check=True)
     marker.write_text(identity + "\n")
 
 
