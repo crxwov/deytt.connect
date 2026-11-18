@@ -85,6 +85,28 @@ internal class LiquidGlassDock(
     private var position = pagerPosition
     private var lastMovementTime = 0L
     private var fastSwipeBlend = 0f
+    private var pagerGesture = false
+    private var fastPagerGesture = false
+    private var glideStartedAt = 0L
+    private var glideFrom = 0f
+    private var glideTarget = Float.NaN
+    private var glideRipple = 0f
+    private val glideFrame = object : Runnable {
+        override fun run() {
+            val progress = ((SystemClock.uptimeMillis() - glideStartedAt) / FAST_GLIDE_MS).coerceIn(0f, 1f)
+            val remaining = 1f - progress
+            val distance = remaining * remaining * remaining
+            glideRipple = sin(progress * Math.PI.toFloat()) * remaining
+            if (progress >= 1f) {
+                moveTo(glideTarget)
+                glideStartedAt = 0L
+                if (pagerPosition == glideTarget) stopPagerGlide()
+                return
+            }
+            moveTo(glideTarget + (glideFrom - glideTarget) * distance)
+            postOnAnimation(this)
+        }
+    }
     private var selected = -1
 
     init {
@@ -94,7 +116,42 @@ internal class LiquidGlassDock(
 
     fun setPageOffset(index: Int, offset: Float) {
         pagerPosition = (index + offset).coerceIn(0f, labels.lastIndex.toFloat())
-        if (!dragging && settle == null) moveTo(pagerPosition)
+        if (glideStartedAt == 0L && pagerPosition == glideTarget) stopPagerGlide()
+        if (!dragging && settle == null && glideTarget.isNaN()) moveTo(pagerPosition)
+    }
+
+    fun beginPagerGesture() {
+        stopPagerGlide()
+        pagerGesture = true
+        fastPagerGesture = false
+    }
+
+    fun endPagerGesture() {
+        pagerGesture = false
+        fastPagerGesture = false
+    }
+
+    fun onPagerSelected(page: Int) {
+        if (glideTarget == page.toFloat()) return
+        stopPagerGlide()
+        if (pagerGesture && fastPagerGesture && !dragging && settle == null && !host.prefersReducedMotion()) {
+            startGlide(page)
+        }
+    }
+
+    private fun startGlide(page: Int) {
+        // This is the continuation of a touch gesture, like the pager's own fling.
+        glideFrom = position
+        glideTarget = page.toFloat()
+        glideStartedAt = SystemClock.uptimeMillis()
+        postOnAnimation(glideFrame)
+    }
+
+    private fun stopPagerGlide() {
+        removeCallbacks(glideFrame)
+        glideStartedAt = 0L
+        glideTarget = Float.NaN
+        glideRipple = 0f
     }
 
     private fun moveTo(value: Float) {
@@ -103,6 +160,7 @@ internal class LiquidGlassDock(
             val elapsed = (now - lastMovementTime).coerceAtLeast(8L)
             val speed = abs(value - position) * 1000f / elapsed
             val blend = ((speed - 2f) / 3f).coerceIn(0f, 1f)
+            if (pagerGesture && speed >= FAST_SWIPE_CELLS_PER_SECOND) fastPagerGesture = true
             // Smooth the speed estimate without delaying the lens position.
             fastSwipeBlend += (blend - fastSwipeBlend) * (elapsed / (elapsed + 10f))
             lastMovementTime = now
@@ -136,7 +194,9 @@ internal class LiquidGlassDock(
             }
             MotionEvent.ACTION_MOVE -> if (abs(event.x - dragStart) > touchSlop) {
                 velocity?.addMovement(event)
+                stopPagerGlide()
                 settle?.cancel()
+                settle = null
                 dragOrigin = position
                 dragging = true
                 parent.requestDisallowInterceptTouchEvent(true)
@@ -160,9 +220,13 @@ internal class LiquidGlassDock(
                 val momentum = releaseVelocity()
                 val target = if (released) position.roundToInt() else pagerPosition.roundToInt()
                 dragging = false
-                if (motionEnabled()) settleAt(target, if (released) momentum else 0f)
+                if (released && abs(momentum) >= FAST_SWIPE_CELLS_PER_SECOND && !host.prefersReducedMotion()) {
+                    startGlide(target)
+                } else if (motionEnabled()) {
+                    settleAt(target, if (released) momentum else 0f)
+                }
                 if (released) onSelect(target)
-                if (settle == null) moveTo(pagerPosition)
+                if (settle == null && glideTarget.isNaN()) moveTo(pagerPosition)
             }
         }
         return true
@@ -204,6 +268,8 @@ internal class LiquidGlassDock(
 
     override fun onDetachedFromWindow() {
         viewTreeObserver.removeOnScrollChangedListener(scrollListener)
+        stopPagerGlide()
+        endPagerGesture()
         settle?.cancel()
         settle = null
         dragging = false
@@ -219,10 +285,14 @@ internal class LiquidGlassDock(
         val travel = abs(sin(phase))
         // A small horizontal ripple follows the gesture, including when it reverses.
         val ripple = travel * sin(phase * 4f)
-        val lensWidth = cellWidth() * .91f + scale * ripple * 2f
+        val lensWidth = cellWidth() * .91f + scale * (ripple * 2f + glideRipple * 12f)
         val lensHeight = scale * 48f
-        val refraction = travel + ripple * .16f
-        val rimStabilization = fastSwipeBlend * (travel * 4f).coerceAtMost(1f)
+        val refraction = maxOf(travel + ripple * .16f, glideRipple)
+        val rimStabilization = if (glideStartedAt != 0L) {
+            (refraction * 4f).coerceAtMost(1f)
+        } else {
+            fastSwipeBlend * (travel * 4f).coerceAtMost(1f)
+        }
         val inset = scale * 6f
         if (Build.VERSION.SDK_INT >= 33 && canvas.isHardwareAccelerated && glass != null) {
             glass.draw(canvas, this, scene(), pages.takeIf { pagerPosition > 0f }, row,
@@ -244,6 +314,8 @@ internal class LiquidGlassDock(
     companion object {
         const val HEIGHT_DP = 68
         const val OVERLAP_DP = 56
+        private const val FAST_SWIPE_CELLS_PER_SECOND = 3.5f
+        private const val FAST_GLIDE_MS = 230f
     }
 }
 
@@ -368,7 +440,8 @@ private class DockRefraction {
                 float rim = smoothstep(-inset * 1.25, 0.0, distance);
                 float fold = rim * rim;
                 float bend = mix(0.65 + refraction * 1.8, 0.20, stabilization);
-                float2 bent = p - local * (0.012 + refraction * 0.018) - lensNormal * inset * bend * fold;
+                float magnification = mix(0.012 + refraction * 0.018, 0.10 * refraction * (1.0 - rim), stabilization);
+                float2 bent = p - local * magnification - lensNormal * inset * bend * fold;
                 float chroma = refraction * (1.0 - stabilization);
                 float2 dispersion = lensNormal * inset * chroma * 0.10 * fold;
                 half3 glass = backdrop.eval(clamp(bent, minPixel, maxPixel)).rgb;
@@ -379,7 +452,7 @@ private class DockRefraction {
                 float top = max(dot(lensNormal, float2(-0.42, -0.91)), 0.0);
                 float bounce = max(dot(lensNormal, float2(0.34, 0.94)), 0.0);
                 float glint = (0.14 * top * top + 0.095 * bounce * bounce) * rim * rim * rim;
-                glass += half3(0.78, 0.87, 0.98) * (glint + 0.032 * fold);
+                glass += half3(0.78, 0.87, 0.98) * (glint * (1.0 + 0.55 * stabilization * refraction) + 0.032 * fold);
                 return half4(mix(body * bodyAlpha, glass, lensAlpha), mix(bodyAlpha, 1.0, lensAlpha));
             }
         """

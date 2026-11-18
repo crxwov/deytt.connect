@@ -392,11 +392,14 @@ class MainActivity : Activity() {
                 globe.setBackdropProgress(if (pageMotionEnabled) progress else if (progress >= .5f) 1f else 0f)
             }
             override fun onPageSelected(pos: Int) {
+                navigationBar.onPagerSelected(pos)
                 homeMetricsCoordinator.homeSpeedOnHome = pos == 0
                 if (pos != 0) { homeMetricsCoordinator.cancelHomeRouteDownload(); homeMetricsCoordinator.setMapTrafficActive(false) } else homeMetricsCoordinator.sampleMapTraffic()
                 if (pager.scrollState == ViewPager2.SCROLL_STATE_IDLE) confirmSelection()
             }
             override fun onPageScrollStateChanged(state: Int) {
+                if (state == ViewPager2.SCROLL_STATE_DRAGGING) navigationBar.beginPagerGesture()
+                if (state == ViewPager2.SCROLL_STATE_IDLE) navigationBar.endPagerGesture()
                 if (state == ViewPager2.SCROLL_STATE_DRAGGING || state == ViewPager2.SCROLL_STATE_SETTLING) { if (::globeStage.isInitialized) DeyttUi.setStarfieldMotion(globeStage, active = false) }
                 else if (state == ViewPager2.SCROLL_STATE_IDLE) {
                     confirmSelection(); syncGlobeHost(pager.currentItem); updateHomeMapAnchor(); if (::globeStage.isInitialized) updatePrimaryPageMotion()
