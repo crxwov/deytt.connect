@@ -337,29 +337,27 @@ private class DockRefraction {
 
                 float2 normal = edge / max(edgeLength, 0.01);
                 float bevel = smoothstep(-inset, 0.0, dockDistance);
-                float2 minPixel = float2(0.5);
-                float2 maxPixel = dockSize - 0.5;
-                half3 body = backdrop.eval(clamp(p - normal * inset * 0.9 * bevel, minPixel, maxPixel)).rgb;
+                float2 samplePoint = p - normal * inset * 0.9 * bevel;
                 float bodyRim = smoothstep(-1.6, 0.0, dockDistance);
-                body += half3(0.72, 0.83, 0.96) * (0.10 * max(-normal.y, 0.0) + 0.024) * bodyRim;
-                if (lensAlpha <= 0.0) return half4(body * bodyAlpha, bodyAlpha);
-
-                float2 lensNormal = shoulder / max(shoulderLength, 0.01);
-                float rim = smoothstep(-inset * 1.25, 0.0, distance);
-                float fold = rim * rim;
-                float2 bent = p - local * (0.012 + refraction * 0.018)
-                    - lensNormal * inset * (0.65 + refraction * 1.8) * fold;
-                float2 dispersion = lensNormal * inset * refraction * 0.10 * fold;
-                half3 glass = backdrop.eval(clamp(bent, minPixel, maxPixel)).rgb;
-                if (fold > 0.04 && refraction > 0.08) {
-                    glass.r = backdrop.eval(clamp(bent + dispersion, minPixel, maxPixel)).r;
-                    glass.b = backdrop.eval(clamp(bent - dispersion, minPixel, maxPixel)).b;
+                float light = (0.10 * max(-normal.y, 0.0) + 0.024) * bodyRim;
+                if (lensAlpha > 0.0) {
+                    float rim = smoothstep(-inset * 1.25, 0.0, distance);
+                    float2 unit = local / lens.zw;
+                    float curvature = 1.0 - 0.34 * min(dot(unit, unit), 1.0);
+                    // Fade displacement to zero at the edge so details are not sampled in reverse.
+                    float2 scale = float2(0.15, 0.20) + refraction * 0.025;
+                    float2 lensSample = p - local * scale * curvature * (1.0 - rim);
+                    float2 lensNormal = shoulder / max(shoulderLength, 0.01);
+                    float top = max(dot(lensNormal, float2(-0.42, -0.91)), 0.0);
+                    float bounce = max(dot(lensNormal, float2(0.34, 0.94)), 0.0);
+                    float lensLight = ((0.14 * top * top + 0.095 * bounce * bounce) * rim + 0.032) * rim * rim;
+                    samplePoint = mix(samplePoint, lensSample, lensAlpha);
+                    light = mix(light, lensLight, lensAlpha);
                 }
-                float top = max(dot(lensNormal, float2(-0.42, -0.91)), 0.0);
-                float bounce = max(dot(lensNormal, float2(0.34, 0.94)), 0.0);
-                float glint = (0.14 * top * top + 0.095 * bounce * bounce) * rim * rim * rim;
-                glass += half3(0.78, 0.87, 0.98) * (glint + 0.032 * fold);
-                return half4(mix(body * bodyAlpha, glass, lensAlpha), mix(bodyAlpha, 1.0, lensAlpha));
+                half3 scene = backdrop.eval(clamp(samplePoint, float2(0.5), dockSize - 0.5)).rgb;
+                scene += half3(0.76, 0.85, 0.97) * light;
+                half coverage = half(mix(bodyAlpha, 1.0, lensAlpha));
+                return half4(scene * coverage, coverage);
             }
         """
     }
