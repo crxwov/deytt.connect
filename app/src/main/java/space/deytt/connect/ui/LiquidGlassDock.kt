@@ -1,0 +1,440 @@
+package space.deytt.connect
+
+import android.animation.ValueAnimator
+import android.app.Activity
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.RenderEffect
+import android.graphics.RenderNode
+import android.graphics.RuntimeShader
+import android.os.Build
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewConfiguration
+import android.view.ViewTreeObserver
+import android.view.VelocityTracker
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import androidx.annotation.RequiresApi
+import space.deytt.connect.AppLanguage.uiCopy
+import space.deytt.connect.DeyttUi.dp
+import space.deytt.connect.DeyttUi.prefersReducedMotion
+import space.deytt.connect.DeyttUi.ripple
+import space.deytt.connect.DeyttUi.text
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.math.sign
+import kotlin.math.sin
+import kotlin.math.exp
+
+internal class LiquidGlassDock(
+    private val host: Activity,
+    initialPage: Int,
+    private val scene: () -> View,
+    private val pages: View,
+    private val onSelect: (Int) -> Unit,
+) : FrameLayout(host) {
+    private val scale = resources.displayMetrics.density
+    private val labels = listOf("Главная", "Маршруты", "Профиль", "Настройки").map { host.uiCopy(it) }
+    private val labelsAndIcons = labels.mapIndexed { index, label ->
+        val icon = DockIcon(host, index)
+        val title = host.text(label, 10f, 0xFFD6DCE5.toInt()).apply {
+            gravity = Gravity.CENTER
+            importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        }
+        val item = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            isFocusable = true
+            foreground = host.ripple(20f)
+            contentDescription = label
+            setOnClickListener { onSelect(index) }
+            addView(icon, LinearLayout.LayoutParams(host.dp(22), host.dp(22)))
+            addView(title, LinearLayout.LayoutParams(-1, -2))
+        }
+        Triple(item, icon, title)
+    }
+    private val row = LinearLayout(host).apply {
+        gravity = Gravity.CENTER
+        setPadding(host.dp(5), 0, host.dp(5), 0)
+        labelsAndIcons.forEach { (item, _, _) -> addView(item, LinearLayout.LayoutParams(0, -1, 1f)) }
+    }
+    private val fallbackBody = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xE5212936.toInt() }
+    private val fallbackLens = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF344357.toInt() }
+    private val rim = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x36FFFFFF
+        strokeWidth = scale
+        style = Paint.Style.STROKE
+    }
+    private val glass = if (Build.VERSION.SDK_INT >= 33) runCatching { DockRefraction() }.getOrNull() else null
+    private val scrollListener = ViewTreeObserver.OnScrollChangedListener { invalidate() }
+    private val body = RectF()
+    private val padding = host.dp(5)
+    private val touchSlop = ViewConfiguration.get(host).scaledTouchSlop
+    private var dragStart = 0f
+    private var dragOrigin = 0f
+    private var dragging = false
+    private var settle: ValueAnimator? = null
+    private var velocity: VelocityTracker? = null
+    private var pagerPosition = initialPage.toFloat()
+    private var position = pagerPosition
+    private var selected = -1
+    private var direction = 1f
+
+    init {
+        addView(row, LayoutParams(-1, -1))
+        setPageOffset(initialPage, 0f)
+    }
+
+    fun setPageOffset(index: Int, offset: Float) {
+        pagerPosition = (index + offset).coerceIn(0f, labels.lastIndex.toFloat())
+        if (!dragging && settle == null) moveTo(pagerPosition)
+    }
+
+    private fun moveTo(value: Float) {
+        if (value != position) direction = sign(value - position)
+        position = value
+        val active = value.roundToInt()
+        if (active != selected) {
+            selected = active
+            labelsAndIcons.forEachIndexed { index, (item, icon, title) ->
+                val isActive = index == active
+                item.isSelected = isActive
+                icon.setActive(isActive)
+                title.setTextColor(if (isActive) 0xFFA8DBFF.toInt() else 0xFFD6DCE5.toInt())
+            }
+        }
+        invalidate()
+    }
+
+    private fun motionEnabled(): Boolean = !host.prefersReducedMotion() &&
+        (Build.VERSION.SDK_INT < 26 || ValueAnimator.areAnimatorsEnabled())
+
+    private fun cellWidth(): Float = ((width - padding * 2) / labels.size.toFloat()).coerceAtLeast(1f)
+
+    override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                velocity?.recycle()
+                velocity = VelocityTracker.obtain().also { it.addMovement(event) }
+                dragStart = event.x
+                dragOrigin = position
+            }
+            MotionEvent.ACTION_MOVE -> if (abs(event.x - dragStart) > touchSlop) {
+                velocity?.addMovement(event)
+                settle?.cancel()
+                dragOrigin = position
+                dragging = true
+                parent.requestDisallowInterceptTouchEvent(true)
+                return true
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> releaseVelocity()
+        }
+        return super.onInterceptTouchEvent(event)
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (!dragging) return super.onTouchEvent(event)
+        velocity?.addMovement(event)
+        when (event.actionMasked) {
+            MotionEvent.ACTION_MOVE -> {
+                val target = (dragOrigin + (event.x - dragStart) / cellWidth()).coerceIn(0f, labels.lastIndex.toFloat())
+                moveTo(if (motionEnabled()) target else target.roundToInt().toFloat())
+            }
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val released = event.actionMasked == MotionEvent.ACTION_UP
+                val momentum = releaseVelocity()
+                val target = if (released) position.roundToInt() else pagerPosition.roundToInt()
+                dragging = false
+                if (motionEnabled()) settleAt(target, if (released) momentum else 0f)
+                if (released) onSelect(target)
+                if (settle == null) moveTo(pagerPosition)
+            }
+        }
+        return true
+    }
+
+    private fun releaseVelocity(): Float {
+        val tracker = velocity ?: return 0f
+        tracker.computeCurrentVelocity(1000)
+        val cellsPerSecond = (tracker.xVelocity / cellWidth()).coerceIn(-6f, 6f)
+        tracker.recycle()
+        velocity = null
+        return cellsPerSecond
+    }
+
+    private fun settleAt(target: Int, velocity: Float) {
+        val offset = position - target
+        val damping = 17f
+        val snap = ValueAnimator.ofFloat(0f, .36f)
+        settle = snap
+        snap.duration = 360L
+        snap.interpolator = android.view.animation.LinearInterpolator()
+        snap.addUpdateListener { frame ->
+            val t = frame.animatedValue as Float
+            val displacement = (offset + (velocity + damping * offset) * t) * exp(-damping * t)
+            if (frame.animatedFraction == 1f) {
+                settle = null
+                moveTo(pagerPosition)
+            } else {
+                moveTo((target + displacement).coerceIn(-.05f, labels.lastIndex + .05f))
+            }
+        }
+        snap.start()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        viewTreeObserver.addOnScrollChangedListener(scrollListener)
+    }
+
+    override fun onDetachedFromWindow() {
+        viewTreeObserver.removeOnScrollChangedListener(scrollListener)
+        settle?.cancel()
+        settle = null
+        dragging = false
+        velocity?.recycle()
+        velocity = null
+        if (Build.VERSION.SDK_INT >= 33) glass?.discard()
+        super.onDetachedFromWindow()
+    }
+
+    override fun dispatchDraw(canvas: Canvas) {
+        val x = padding + cellWidth() * (position + .5f)
+        val motion = motionEnabled()
+        val travel = if (motion) abs(sin(position * Math.PI.toFloat())) else 0f
+        val lift = if (motion && dragging) .55f + travel * .45f else travel
+        val lensWidth = cellWidth() * (.91f + lift * .28f)
+        val lensHeight = scale * (48f + lift * 14f)
+        val inset = scale * 6f
+        if (Build.VERSION.SDK_INT >= 33 && canvas.isHardwareAccelerated && glass != null) {
+            glass.draw(canvas, this, scene(), pages.takeIf { pagerPosition > 0f }, row,
+                x, lensWidth, lensHeight, lift * direction, inset)
+        } else {
+            body.set(0f, inset, width.toFloat(), height - inset)
+            val radius = body.height() / 2f
+            canvas.drawRoundRect(body, radius, radius, fallbackBody)
+            body.inset(rim.strokeWidth / 2, rim.strokeWidth / 2)
+            canvas.drawRoundRect(body, radius, radius, rim)
+            val y = height / 2f
+            body.set(x - lensWidth / 2, y - lensHeight / 2, x + lensWidth / 2, y + lensHeight / 2)
+            val corner = lensHeight * .43f
+            canvas.drawRoundRect(body, corner, corner, fallbackLens)
+            super.dispatchDraw(canvas)
+        }
+    }
+
+    companion object {
+        const val HEIGHT_DP = 68
+        const val OVERLAP_DP = 56
+    }
+}
+
+@RequiresApi(33)
+private class DockRefraction {
+    private val node = RenderNode("dockBackdrop")
+    private val shader = RuntimeShader(SOURCE)
+    private val location = IntArray(2)
+    private val sourceLocation = IntArray(2)
+    private val sourceBounds = Rect()
+    private val currentLens = RectF()
+    private val previousLens = RectF()
+    private var previousTravel = Float.NaN
+
+    fun draw(
+        canvas: Canvas,
+        dock: View,
+        scene: View,
+        pageSource: View?,
+        controls: View,
+        x: Float,
+        lensWidth: Float,
+        lensHeight: Float,
+        travel: Float,
+        inset: Float,
+    ) {
+        val width = dock.width
+        val height = dock.height
+        if (width == 0 || height == 0) return
+        dock.getLocationInWindow(location)
+        val recording = node.beginRecording(width, height)
+        try {
+            recording.drawColor(DeyttUi.BG)
+            scene.getLocationInWindow(sourceLocation)
+            val saved = recording.save()
+            recording.translate((sourceLocation[0] - location[0]).toFloat(), (sourceLocation[1] - location[1]).toFloat())
+            scene.background?.draw(recording)
+            recording.restoreToCount(saved)
+            if (pageSource != null && pageSource.isShown) {
+                pageSource.getLocationInWindow(sourceLocation)
+                val left = sourceLocation[0] - location[0]
+                val top = sourceLocation[1] - location[1]
+                sourceBounds.set(left, top, left + pageSource.width, top + pageSource.height)
+                if (sourceBounds.intersects(0, 0, width, height)) {
+                    val save = recording.save()
+                    recording.clipRect(sourceBounds)
+                    recording.translate(left.toFloat(), top.toFloat())
+                    pageSource.draw(recording)
+                    recording.restoreToCount(save)
+                }
+            }
+            recording.drawColor(0xA9121822.toInt())
+            // The floating lens passes over the dock's own glyphs and captions, too.
+            controls.draw(recording)
+        } finally {
+            node.endRecording()
+        }
+        currentLens.set(x, height / 2f, lensWidth / 2f, lensHeight / 2f)
+        if (node.width != width || node.height != height || previousLens != currentLens || travel != previousTravel) {
+            node.setPosition(0, 0, width, height)
+            shader.setFloatUniform("dockSize", width.toFloat(), height.toFloat())
+            shader.setFloatUniform("inset", inset)
+            shader.setFloatUniform("travel", travel)
+            shader.setFloatUniform("lens", currentLens.left, currentLens.top, currentLens.right, currentLens.bottom)
+            node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(shader, "backdrop"))
+            previousLens.set(currentLens)
+            previousTravel = travel
+        }
+        canvas.drawRenderNode(node)
+    }
+
+    fun discard() {
+        node.discardDisplayList()
+    }
+
+    companion object {
+        private const val SOURCE = """
+            uniform shader backdrop;
+            uniform float2 dockSize;
+            uniform float4 lens;
+            uniform float inset;
+            uniform float travel;
+
+            float2 capsuleOffset(float2 p, float2 halfSize) {
+                float radius = min(halfSize.x, halfSize.y);
+                return p - clamp(p, -(halfSize - radius), halfSize - radius);
+            }
+
+            half4 main(float2 p) {
+                float2 dockHalf = dockSize * 0.5;
+                float2 bodyHalf = dockHalf - float2(0, inset);
+                float2 edge = capsuleOffset(p - dockHalf, bodyHalf);
+                float edgeLength = length(edge);
+                float dockDistance = edgeLength - bodyHalf.y;
+                float bodyAlpha = 1.0 - smoothstep(-0.65, 0.65, dockDistance);
+
+                float2 local = p - lens.xy;
+                float2 warped = local;
+                warped.y *= 1.0 - clamp(local.x / lens.z, -1.0, 1.0) * travel * 0.15;
+                float radius = min(lens.z, lens.w) * 0.79;
+                float2 shoulder = warped - clamp(warped, -lens.zw + radius, lens.zw - radius);
+                float shoulderLength = length(shoulder);
+                float distance = shoulderLength - radius;
+                float lensAlpha = 1.0 - smoothstep(-0.65, 0.65, distance);
+                if (bodyAlpha + lensAlpha <= 0.0) return half4(0);
+
+                float2 normal = edge / max(edgeLength, 0.01);
+                float bevel = smoothstep(-inset, 0.0, dockDistance);
+                float2 minPixel = float2(0.5);
+                float2 maxPixel = dockSize - 0.5;
+                half3 body = backdrop.eval(clamp(p - normal * inset * 0.9 * bevel, minPixel, maxPixel)).rgb;
+                float bodyRim = smoothstep(-1.6, 0.0, dockDistance);
+                body += half3(0.72, 0.83, 0.96) * (0.10 * max(-normal.y, 0.0) + 0.024) * bodyRim;
+                if (lensAlpha <= 0.0) return half4(body * bodyAlpha, bodyAlpha);
+
+                float2 lensNormal = shoulder / max(shoulderLength, 0.01);
+                float rim = smoothstep(-inset * 1.65, 0.0, distance);
+                float fold = rim * rim;
+                float lift = abs(travel);
+                float2 bent = p - local * (0.018 + lift * 0.032)
+                    - lensNormal * inset * (0.65 + lift * 1.8) * fold;
+                float2 dispersion = lensNormal * inset * lift * 0.16 * fold;
+                half3 glass = backdrop.eval(clamp(bent, minPixel, maxPixel)).rgb;
+                if (fold > 0.04 && lift > 0.08) {
+                    glass.r = backdrop.eval(clamp(bent + dispersion, minPixel, maxPixel)).r;
+                    glass.b = backdrop.eval(clamp(bent - dispersion, minPixel, maxPixel)).b;
+                }
+                float top = max(dot(lensNormal, normalize(float2(-0.42 + travel * 0.25, -0.91))), 0.0);
+                float bounce = max(dot(lensNormal, float2(0.34, 0.94)), 0.0);
+                float glint = (0.14 * top * top + 0.095 * bounce * bounce) * rim * rim * rim;
+                glass = glass * 0.98 + half3(0.72, 0.83, 0.96) * (glint + 0.023 * rim);
+                glass += half3(0.016, 0.020, 0.025);
+                return half4(mix(body * bodyAlpha, glass, lensAlpha), mix(bodyAlpha, 1.0, lensAlpha));
+            }
+        """
+    }
+}
+
+private class DockIcon(context: Context, private val index: Int) : View(context) {
+    private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeWidth = 1.75f
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+    }
+    private val path = Path().apply {
+        when (index) {
+            0 -> {
+                moveTo(-8f, -1f)
+                lineTo(-1.35f, -7.1f)
+                quadTo(0f, -8.3f, 1.35f, -7.1f)
+                lineTo(8f, -1f)
+                lineTo(6.1f, -1f)
+                lineTo(6.1f, 5.65f)
+                quadTo(6.1f, 7f, 4.65f, 7f)
+                lineTo(2.15f, 7f)
+                lineTo(2.15f, 2.75f)
+                quadTo(2.15f, 1.75f, 1.1f, 1.75f)
+                lineTo(-1.1f, 1.75f)
+                quadTo(-2.15f, 1.75f, -2.15f, 2.75f)
+                lineTo(-2.15f, 7f)
+                lineTo(-4.65f, 7f)
+                quadTo(-6.1f, 7f, -6.1f, 5.65f)
+                lineTo(-6.1f, -1f)
+                close()
+            }
+            1 -> {
+                addCircle(0f, 0f, 7.5f, Path.Direction.CW)
+                addOval(-3.1f, -7.5f, 3.1f, 7.5f, Path.Direction.CW)
+                moveTo(-7.4f, 0f)
+                lineTo(7.4f, 0f)
+            }
+            2 -> {
+                addCircle(0f, -3.7f, 3.2f, Path.Direction.CW)
+                moveTo(-7f, 7f)
+                cubicTo(-7f, .75f, 7f, .75f, 7f, 7f)
+                close()
+            }
+            else -> {
+                addCircle(0f, 0f, 2.65f, Path.Direction.CW)
+                for (tooth in 0 until 6) {
+                    val start = tooth * 60f
+                    arcTo(-5.8f, -5.8f, 5.8f, 5.8f, start - 15f, 30f, tooth == 0)
+                    arcTo(-7.7f, -7.7f, 7.7f, 7.7f, start + 22f, 16f, false)
+                }
+                close()
+            }
+        }
+    }
+
+    init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
+
+    fun setActive(active: Boolean) {
+        ink.color = if (active) 0xFFA8DBFF.toInt() else 0xFFD6DCE5.toInt()
+        invalidate()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val scale = resources.displayMetrics.density
+        val saved = canvas.save()
+        canvas.translate(width / 2f, height / 2f)
+        canvas.scale(scale, scale)
+        canvas.drawPath(path, ink)
+        canvas.restoreToCount(saved)
+    }
+}

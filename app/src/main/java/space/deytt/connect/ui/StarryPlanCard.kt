@@ -1,29 +1,17 @@
 package space.deytt.connect
 
-import android.animation.ValueAnimator
-import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.*
 import android.os.Build
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.animation.LinearInterpolator
-import android.webkit.WebSettings
-import android.webkit.WebView
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import java.util.Locale
 
-/**
- * Premium pitch-black starry night plan card for the Profile page.
- * Powered by React Bits WebGL2 Galaxy shader rendered in hardware-accelerated local WebView,
- * combined with a rotating iridescent border, custom vector infinity glyph,
- * and bold Unbounded brand typography.
- */
-@SuppressLint("SetJavaScriptEnabled")
+/** Plan details on the app's native starfield. */
 class StarryPlanCard(context: Context) : FrameLayout(context) {
 
     private fun dp(v: Int): Int = (v * context.resources.displayMetrics.density).toInt()
@@ -76,13 +64,6 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
 
     private val cornerRadiusPx = dp(24).toFloat()
     private val borderRect = RectF()
-    private val borderMatrix = Matrix()
-
-    private var shimmerPhase = 0f
-    private var shimmerAnimator: ValueAnimator? = null
-
-    // Subviews
-    private val galaxyView: WebView
     private val labelTariffView: TextView
     private val tariffNameView: TextView
     private val infinityGlyphView: InfinityGlyphView
@@ -99,33 +80,8 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
                 outline.setRoundRect(0, 0, view.width, view.height, cornerRadiusPx)
             }
         }
-        setBackgroundColor(Color.BLACK)
+        background = DeyttUi.starfieldBackground(context, allowMotion = false)
 
-        // 1. WebGL 2.0 Galaxy Background from React Bits
-        galaxyView = object : WebView(context) {
-            // Purely decorative background: never claim touch gestures, otherwise
-            // the card eats horizontal swipes and the pager cannot change pages.
-            override fun onTouchEvent(event: MotionEvent): Boolean = false
-        }.apply {
-            layoutParams = LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            setBackgroundColor(Color.BLACK)
-            isVerticalScrollBarEnabled = false
-            isHorizontalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            isClickable = false
-            isFocusable = false
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            settings.apply {
-                javaScriptEnabled = true
-                allowFileAccess = true
-                domStorageEnabled = false
-                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
-            }
-            loadUrl("file:///android_asset/galaxy/galaxy.html")
-        }
-        addView(galaxyView)
-
-        // 2. Foreground Native UI
         val paddingH = dp(20)
         val paddingV = dp(20)
         val contentLayout = LinearLayout(context).apply {
@@ -257,61 +213,22 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
         contentLayout.addView(bottomGrid)
 
         addView(contentLayout)
-        startBorderShimmer()
-    }
-
-    private fun startBorderShimmer() {
-        if (shimmerAnimator?.isRunning == true) return
-        shimmerAnimator?.cancel()
-        shimmerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 7500L
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = LinearInterpolator()
-            addUpdateListener { anim ->
-                shimmerPhase = anim.animatedValue as Float
-                invalidate()
-            }
-            start()
-        }
-    }
-
-    override fun onAttachedToWindow() {
-        super.onAttachedToWindow()
-        galaxyView.onResume()
-        startBorderShimmer()
-    }
-
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        galaxyView.onPause()
-        shimmerAnimator?.cancel()
-        shimmerAnimator = null
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val halfStroke = borderPaint.strokeWidth / 2f
         borderRect.set(halfStroke, halfStroke, w.toFloat() - halfStroke, h.toFloat() - halfStroke)
+        if (w > 0 && h > 0) {
+            borderPaint.shader = LinearGradient(
+                0f, 0f, w.toFloat(), h.toFloat(),
+                intArrayOf(0x458CCEFA, 0x14446A88, 0x3083B6E0), null, Shader.TileMode.CLAMP,
+            )
+        }
     }
 
     override fun dispatchDraw(canvas: Canvas) {
         super.dispatchDraw(canvas)
-        val w = width.toFloat()
-        val h = height.toFloat()
-        if (w <= 0 || h <= 0) return
-
-        // Subtle chromatic iridescent border shimmer drawn on top of the webview
-        val borderSweepColors = intArrayOf(
-            0x221E3A5F.toInt(),
-            0x6638BDF8.toInt(),
-            0x33818CF8.toInt(),
-            0x6638BDF8.toInt(),
-            0x221E3A5F.toInt()
-        )
-        val sweep = SweepGradient(w / 2f, h / 2f, borderSweepColors, floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f))
-        borderMatrix.setRotate(shimmerPhase * 360f, w / 2f, h / 2f)
-        sweep.setLocalMatrix(borderMatrix)
-        borderPaint.shader = sweep
         canvas.drawRoundRect(borderRect, cornerRadiusPx, cornerRadiusPx, borderPaint)
     }
 

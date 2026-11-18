@@ -1310,7 +1310,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         add("refresh", findView(content) { it.tag == "home-refresh" })
         add("latency", findView(content) { it.tag == "home-latency" })
         add("speed", findView(content) { it.tag == "home-speed" })
-        val navigation = checkNotNull(findView(content) { it is DeyttUi.PrimaryNavigationBar }) {
+        val navigation = checkNotNull(findView(content) { it is LiquidGlassDock }) {
             "Primary navigation dock is missing"
         }
         add("dock", navigation)

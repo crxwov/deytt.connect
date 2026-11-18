@@ -10,7 +10,6 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.LinearGradient
-import android.graphics.Matrix
 import android.graphics.Outline
 import android.graphics.Paint
 import android.graphics.Path
@@ -18,7 +17,6 @@ import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
-import android.graphics.SweepGradient
 import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -34,7 +32,6 @@ import android.view.ViewGroup
 import android.view.VelocityTracker
 import android.view.Window
 import android.view.WindowManager
-import android.view.animation.LinearInterpolator
 import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -213,8 +210,11 @@ object DeyttUi {
         pressFeedback(this, .995f)
     }
 
-    fun starfieldBackground(context: Context, referenceHeightPx: Int? = null): Drawable =
-        NetworkAtmosphereDrawable(context, referenceHeightPx?.takeIf { it > 0 })
+    fun starfieldBackground(
+        context: Context,
+        referenceHeightPx: Int? = null,
+        allowMotion: Boolean = true,
+    ): Drawable = NetworkAtmosphereDrawable(context, referenceHeightPx?.takeIf { it > 0 }, allowMotion)
 
     fun Activity.text(value: String, size: Float, color: Int = TEXT, style: Int = Typeface.NORMAL): TextView =
         TextView(this).apply {
@@ -286,71 +286,6 @@ object DeyttUi {
             )
         }
 
-        // Continually flowing glint & edge shimmer along the border of the connect button
-        val (shimmerStroke, shimmerFill) = when (phase) {
-            VpnPhase.CONNECTED -> intArrayOf(
-                0xEEFFFFFF.toInt(),
-                0xD834D399.toInt(),
-                0x75059669.toInt(),
-                0x28047857.toInt(),
-                0x75059669.toInt(),
-                0xD834D399.toInt(),
-                0xEEFFFFFF.toInt(),
-            ) to intArrayOf(
-                0x441A3E2E.toInt(),
-                0x240F241A.toInt(),
-                0x36163424.toInt(),
-                0x240F241A.toInt(),
-                0x441A3E2E.toInt(),
-            )
-            VpnPhase.STARTING, VpnPhase.CHECKING -> intArrayOf(
-                0xF0FFFFFF.toInt(),
-                0xD838BDF8.toInt(),
-                0x600284C7.toInt(),
-                0x280369A1.toInt(),
-                0x600284C7.toInt(),
-                0xD838BDF8.toInt(),
-                0xF0FFFFFF.toInt(),
-            ) to intArrayOf(
-                0x481E3854.toInt(),
-                0x28122438.toInt(),
-                0x3818324C.toInt(),
-                0x28122438.toInt(),
-                0x481E3854.toInt(),
-            )
-            VpnPhase.ERROR -> intArrayOf(
-                0xF0FFFFFF.toInt(),
-                0xD8F43F5E.toInt(),
-                0x70BE123C.toInt(),
-                0x30881337.toInt(),
-                0x70BE123C.toInt(),
-                0xD8F43F5E.toInt(),
-                0xF0FFFFFF.toInt(),
-            ) to intArrayOf(
-                0x443E1A22.toInt(),
-                0x28241016.toInt(),
-                0x3630141C.toInt(),
-                0x28241016.toInt(),
-                0x443E1A22.toInt(),
-            )
-            VpnPhase.STOPPING -> null to null
-            VpnPhase.IDLE -> intArrayOf(
-                0xEEFFFFFF.toInt(),
-                0xD538BDF8.toInt(),
-                0x700284C7.toInt(),
-                0x300369A1.toInt(),
-                0x700284C7.toInt(),
-                0xD538BDF8.toInt(),
-                0xEEFFFFFF.toInt(),
-            ) to intArrayOf(
-                0x481E3854.toInt(),
-                0x28122438.toInt(),
-                0x3818324C.toInt(),
-                0x28122438.toInt(),
-                0x481E3854.toInt(),
-            )
-        }
-
         return LiquidGlassDrawable(
             density = resources.displayMetrics.density,
             cornerRadiusPx = dp(28).toFloat(),
@@ -361,9 +296,6 @@ object DeyttUi {
             hasGloss = true,
             glossAlpha = 0x18,
             innerLip = true,
-            animatedShimmer = shimmerStroke != null,
-            shimmerStrokeColors = shimmerStroke,
-            shimmerFillColors = shimmerFill,
         )
     }
 
@@ -898,156 +830,6 @@ object DeyttUi {
             .roundToInt()
             .coerceIn(18, 24))
 
-    class PrimaryNavigationBar(
-        private val activity: Activity,
-        initialPage: Int,
-        private val onSelect: (Int) -> Unit,
-    ) : FrameLayout(activity) {
-        private data class Entry(
-            val label: String,
-            val glyph: NavGlyph,
-            val shell: FrameLayout,
-            val title: TextView,
-            val item: LinearLayout,
-            val glyphView: NavGlyphView,
-        )
-
-        private val entries = mutableListOf<Entry>()
-        private var selectedPage = -1
-        private var pagePosition = initialPage.coerceIn(0, 3).toFloat()
-        private val selection = View(activity).apply {
-            background = activity.glassRowBackground(true, 20f)
-            isClickable = false
-            isFocusable = false
-            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }
-
-        init {
-            background = activity.glassRowBackground(false, 28f)
-            clipToOutline = true
-            elevation = activity.dp(8).toFloat()
-            contentDescription = activity.uiCopy("Основная навигация")
-            addView(selection, LayoutParams(0, activity.dp(50), Gravity.TOP or Gravity.START).apply {
-                leftMargin = activity.dp(8)
-                topMargin = activity.dp(8)
-            })
-            val labels = listOf("Главная", "Маршруты", "Профиль", "Настройки")
-                .map { activity.uiCopy(it) }
-            val glyphs = listOf(NavGlyph.HOME, NavGlyph.MAP, NavGlyph.PROFILE, NavGlyph.SETTINGS)
-            val row = LinearLayout(activity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER
-                setPadding(activity.dp(8), activity.dp(8), activity.dp(8), activity.dp(8))
-            }
-            labels.forEachIndexed { index, label ->
-                val title = activity.text(label, 10f, MUTED).apply {
-                    gravity = Gravity.CENTER
-                    setPadding(0, activity.dp(4), 0, 0)
-                }
-                val glyphView = NavGlyphView(activity, glyphs[index], if (index == initialPage) SKY else MUTED)
-                val shell = FrameLayout(activity).apply {
-                    addView(glyphView, LayoutParams(activity.dp(20), activity.dp(20), Gravity.CENTER))
-                }
-                val item = LinearLayout(activity).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER
-                    minimumHeight = activity.dp(48)
-                    isClickable = true
-                    isFocusable = true
-                    setOnClickListener { onSelect(index) }
-                    foreground = activity.ripple(17f)
-                    activity.pressFeedback(this, .985f)
-                    addView(shell, LinearLayout.LayoutParams(activity.dp(34), activity.dp(28)))
-                    addView(title)
-                }
-                entries += Entry(label, glyphs[index], shell, title, item, glyphView)
-                row.addView(item, LinearLayout.LayoutParams(0, activity.dp(50), 1f))
-            }
-            addView(row, LayoutParams(LayoutParams.MATCH_PARENT, activity.dp(66), Gravity.TOP))
-            setSelectedPage(initialPage)
-        }
-
-        fun setSystemBottomInset(inset: Int) {
-            setPadding(0, 0, 0, inset.coerceAtLeast(0))
-        }
-
-        fun setPageOffset(position: Int, offset: Float) {
-            pagePosition = (position + offset).coerceIn(0f, 3f)
-            updateSelectedPage((pagePosition + .5f).toInt().coerceIn(0, 3))
-            updateSelectionPosition()
-        }
-
-        fun setSelectedPage(index: Int) {
-            pagePosition = index.coerceIn(0, 3).toFloat()
-            updateSelectedPage(pagePosition.toInt())
-            updateSelectionPosition()
-        }
-
-        private fun updateSelectedPage(next: Int) {
-            if (selectedPage == next) return
-            selectedPage = next
-            entries.forEachIndexed { position, entry ->
-                val selected = position == selectedPage
-                entry.item.isSelected = selected
-                entry.item.contentDescription = if (selected) "${entry.label}, ${activity.uiCopy("выбран")}" else entry.label
-                entry.glyphView.setColor(if (selected) SKY else MUTED)
-                entry.title.setTextColor(if (selected) TEXT else MUTED)
-                entry.title.setTypeface(null, if (selected) Typeface.BOLD else Typeface.NORMAL)
-            }
-        }
-
-        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-            super.onMeasure(widthMeasureSpec, heightMeasureSpec)
-            val totalWidth = measuredWidth
-            if (totalWidth > 0) {
-                val cellWidth = ((totalWidth - activity.dp(16)).coerceAtLeast(0) / 4f).toInt()
-                selection.measure(
-                    MeasureSpec.makeMeasureSpec(cellWidth, MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(activity.dp(50), MeasureSpec.EXACTLY)
-                )
-            }
-        }
-
-        override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
-            super.onLayout(changed, left, top, right, bottom)
-            val totalWidth = right - left
-            if (totalWidth > 0) {
-                val cellWidth = (totalWidth - activity.dp(16)).coerceAtLeast(0) / 4f
-                val targetWidth = cellWidth.toInt()
-                val selLeft = activity.dp(8)
-                val selTop = activity.dp(8)
-                selection.layout(selLeft, selTop, selLeft + targetWidth, selTop + activity.dp(50))
-                selection.translationX = cellWidth * pagePosition
-                selection.visibility = View.VISIBLE
-                selection.alpha = 1f
-            }
-        }
-
-        private fun updateSelectionPosition() {
-            val totalWidth = width
-            if (totalWidth <= 0) {
-                post { updateSelectionPosition() }
-                return
-            }
-            val cellWidth = (totalWidth - activity.dp(16)).coerceAtLeast(0) / 4f
-            val targetWidth = cellWidth.toInt()
-            if (selection.width != targetWidth && targetWidth > 0) {
-                val selLeft = activity.dp(8)
-                val selTop = activity.dp(8)
-                selection.layout(selLeft, selTop, selLeft + targetWidth, selTop + activity.dp(50))
-            }
-            selection.translationX = cellWidth * pagePosition
-            selection.visibility = View.VISIBLE
-            selection.alpha = 1f
-        }
-
-        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
-            super.onSizeChanged(w, h, oldw, oldh)
-            updateSelectionPosition()
-        }
-
-    }
-
     fun setStarfieldMotion(root: View, active: Boolean, reducedMotion: Boolean = false) {
         (root.background as? NetworkAtmosphereDrawable)?.setMotionEnabled(active && !reducedMotion)
         if (root is ViewGroup) {
@@ -1437,7 +1219,11 @@ private class PageSwipeFrame(
     }
 }
 
-private class NetworkAtmosphereDrawable(context: Context, private val referenceHeightPx: Int? = null) : Drawable() {
+private class NetworkAtmosphereDrawable(
+    context: Context,
+    private val referenceHeightPx: Int? = null,
+    private val allowMotion: Boolean = true,
+) : Drawable() {
     private data class Star(
         val x: Float,
         val y: Float,
@@ -1487,7 +1273,7 @@ private class NetworkAtmosphereDrawable(context: Context, private val referenceH
 
     fun setMotionEnabled(enabled: Boolean) {
         val systemAllowsMotion = Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled()
-        val shouldRun = enabled && systemAllowsMotion
+        val shouldRun = allowMotion && enabled && systemAllowsMotion
         if (motionEnabled == shouldRun) return
         motionEnabled = shouldRun
         if (shouldRun) scheduleSelf(tick, SystemClock.uptimeMillis() + 32L) else unscheduleSelf(tick)
@@ -1644,8 +1430,8 @@ private enum class NavGlyph { HOME, MAP, PROFILE, SETTINGS }
 
 class LiquidGlassDrawable(
     private val density: Float,
-    private var cornerRadiusPx: Float,
-    private var fillColors: IntArray,
+    private val cornerRadiusPx: Float,
+    private val fillColors: IntArray,
     private var strokeColors: IntArray = intArrayOf(
         0x32FFFFFF.toInt(),
         0x14FFFFFF.toInt(),
@@ -1657,9 +1443,6 @@ class LiquidGlassDrawable(
     private var hasGloss: Boolean = true,
     private var glossAlpha: Int = 0x14,
     private var innerLip: Boolean = false,
-    private var animatedShimmer: Boolean = false,
-    private var shimmerStrokeColors: IntArray? = null,
-    private var shimmerFillColors: IntArray? = null,
 ) : Drawable() {
     private val boundsRect = RectF()
     private val strokeRect = RectF()
@@ -1673,63 +1456,10 @@ class LiquidGlassDrawable(
 
     private var currentAlpha = 255
     private var currentColorFilter: ColorFilter? = null
-    private var isVisibleState = true
-
-    // Continuous chromatic shimmer animation
-    private var shimmerPhase = 0f
-    private var shimmerAnimator: ValueAnimator? = null
-    private val shimmerStrokeMatrix = Matrix()
-    private val shimmerFillMatrix = Matrix()
-    private var shimmerStrokeShader: SweepGradient? = null
-    private var shimmerFillShader: SweepGradient? = null
-
-    fun setFillColors(colors: IntArray) {
-        fillColors = colors
-        rebuildShaders()
-        invalidateSelf()
-    }
-
-    fun setCornerRadius(radiusPx: Float) {
-        cornerRadiusPx = radiusPx
-        invalidateSelf()
-    }
-
-    fun startShimmer() {
-        if (!animatedShimmer) return
-        if (shimmerAnimator?.isRunning == true) return
-        shimmerAnimator?.cancel()
-        shimmerAnimator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 5500L
-            repeatCount = ValueAnimator.INFINITE
-            interpolator = LinearInterpolator()
-            addUpdateListener { animator ->
-                shimmerPhase = animator.animatedValue as Float
-                invalidateSelf()
-            }
-            start()
-        }
-    }
-
-    fun stopShimmer() {
-        shimmerAnimator?.cancel()
-        shimmerAnimator = null
-    }
-
-    override fun setVisible(visible: Boolean, restart: Boolean): Boolean {
-        isVisibleState = visible
-        val changed = super.setVisible(visible, restart)
-        if (visible) {
-            if (animatedShimmer) startShimmer()
-        } else {
-            stopShimmer()
-        }
-        return changed
-    }
 
     override fun onBoundsChange(bounds: Rect) {
         super.onBoundsChange(bounds)
         if (bounds.isEmpty) {
-            stopShimmer()
             return
         }
         val w = bounds.width().toFloat()
@@ -1751,12 +1481,9 @@ class LiquidGlassDrawable(
             innerLipRect.set(left + lipOffset, top + lipOffset, left + w - lipOffset, top + h - lipOffset)
         }
 
-        glossRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + (h * 0.40f))
+        glossRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + minOf(h * .38f, 18f * density))
 
         rebuildShaders()
-        if (animatedShimmer && isVisibleState) {
-            startShimmer()
-        }
     }
 
     private fun rebuildShaders() {
@@ -1765,40 +1492,26 @@ class LiquidGlassDrawable(
         val bottom = boundsRect.bottom
         val left = boundsRect.left
         val right = boundsRect.right
-        val cx = boundsRect.centerX()
-        val cy = boundsRect.centerY()
-
-        if (animatedShimmer && shimmerFillColors != null && shimmerFillColors!!.size >= 2) {
-            shimmerFillShader = SweepGradient(cx, cy, shimmerFillColors!!, null)
-            fillPaint.shader = shimmerFillShader
-        } else if (fillColors.size >= 2) {
-            shimmerFillShader = null
+        if (fillColors.size >= 2) {
             fillPaint.shader = LinearGradient(
                 0f, top, 0f, bottom,
                 fillColors, null, Shader.TileMode.CLAMP
             )
         } else if (fillColors.isNotEmpty()) {
-            shimmerFillShader = null
             fillPaint.shader = null
             fillPaint.color = fillColors[0]
         }
 
-        if (animatedShimmer && shimmerStrokeColors != null && shimmerStrokeColors!!.isNotEmpty()) {
-            shimmerStrokeShader = SweepGradient(cx, cy, shimmerStrokeColors!!, null)
-            strokePaint.shader = shimmerStrokeShader
-        } else {
-            shimmerStrokeShader = null
-            strokePaint.shader = LinearGradient(
-                left + (right - left) * 0.2f, top,
-                right - (right - left) * 0.2f, bottom,
-                strokeColors, strokePositions, Shader.TileMode.CLAMP
-            )
-        }
+        strokePaint.shader = LinearGradient(
+            left + (right - left) * .15f, top,
+            right - (right - left) * .08f, bottom,
+            strokeColors, strokePositions, Shader.TileMode.CLAMP
+        )
 
         if (innerLip) {
             innerLipPaint.shader = LinearGradient(
                 0f, top, 0f, bottom,
-                intArrayOf(0x18FFFFFF, 0x05FFFFFF, 0x12000000),
+                intArrayOf(0x28FFFFFF, 0x04FFFFFF, 0x2606080C),
                 floatArrayOf(0f, 0.4f, 1f),
                 Shader.TileMode.CLAMP
             )
@@ -1808,9 +1521,10 @@ class LiquidGlassDrawable(
             0f, top, 0f, glossRect.bottom,
             intArrayOf(
                 (glossAlpha shl 24) or 0x00FFFFFF,
+                ((glossAlpha / 4) shl 24) or 0x00FFFFFF,
                 0x00FFFFFF
             ),
-            floatArrayOf(0f, 1f),
+            floatArrayOf(0f, .28f, 1f),
             Shader.TileMode.CLAMP
         )
     }
@@ -1820,22 +1534,6 @@ class LiquidGlassDrawable(
 
         val maxRadius = minOf(boundsRect.width(), boundsRect.height()) / 2f
         val r = cornerRadiusPx.coerceIn(0f, maxRadius)
-
-        // Rotate animated shimmer gradients if active
-        if (animatedShimmer) {
-            val cx = boundsRect.centerX()
-            val cy = boundsRect.centerY()
-            shimmerStrokeShader?.let { shader ->
-                shimmerStrokeMatrix.reset()
-                shimmerStrokeMatrix.postRotate(shimmerPhase * 360f, cx, cy)
-                shader.setLocalMatrix(shimmerStrokeMatrix)
-            }
-            shimmerFillShader?.let { shader ->
-                shimmerFillMatrix.reset()
-                shimmerFillMatrix.postRotate(-shimmerPhase * 360f * 0.6f, cx, cy)
-                shader.setLocalMatrix(shimmerFillMatrix)
-            }
-        }
 
         // 1. Draw liquid glass body
         fillPaint.alpha = currentAlpha

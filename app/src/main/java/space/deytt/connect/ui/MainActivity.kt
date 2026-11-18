@@ -44,7 +44,7 @@ class MainActivity : Activity() {
     private lateinit var globeStage: FrameLayout
     private lateinit var shellRoot: LinearLayout
     private lateinit var pager: ViewPager2
-    private lateinit var navigationBar: DeyttUi.PrimaryNavigationBar
+    private lateinit var navigationBar: LiquidGlassDock
     private lateinit var pageAdapter: TopLevelViewPagerAdapter
     private lateinit var primaryPages: PrimaryPages
     private lateinit var statusInset: View
@@ -339,14 +339,21 @@ class MainActivity : Activity() {
         tunnelConnectionCoordinator.primaryPages = primaryPages
 
         pageAdapter = TopLevelViewPagerAdapter(shouldDeferRouteRefresh = { ::primaryPages.isInitialized && primaryPages.hasActiveRouteDiagnostics() }) { pos ->
-            if (pos == 0) buildHomePage() else primaryPages.create(pos)
+            val page = if (pos == 0) buildHomePage() else primaryPages.create(pos)
+            val content = (page as? android.widget.ScrollView)?.getChildAt(0) ?: page
+            content.setPadding(content.paddingLeft, content.paddingTop, content.paddingRight,
+                content.paddingBottom + dp(LiquidGlassDock.OVERLAP_DP))
+            page
         }
         pager = ViewPager2(this).apply {
             orientation = ViewPager2.ORIENTATION_HORIZONTAL; offscreenPageLimit = 3; isUserInputEnabled = true; adapter = pageAdapter
-            setPageTransformer { page, pos -> val dist = kotlin.math.abs(pos).coerceAtMost(1f); page.alpha = if (pageMotionEnabled) 1f - .16f * dist else 1f; val s = if (pageMotionEnabled) 1f - .025f * dist else 1f; page.scaleX = s; page.scaleY = s }
         }
-        navigationBar = DeyttUi.PrimaryNavigationBar(this, initialPage) { selectTab(it) }
-        val dock = FrameLayout(this).apply { clipChildren = false; clipToPadding = false; setPadding(dp(12), 0, dp(12), dp(8)); addView(navigationBar, FrameLayout.LayoutParams(-1, dp(66))) }
+        navigationBar = LiquidGlassDock(this, initialPage, { globeStage }, pager, ::selectTab)
+        val dockHeight = dp(LiquidGlassDock.HEIGHT_DP + 8)
+        val dock = FrameLayout(this).apply {
+            setPadding(dp(12), 0, dp(12), dp(8))
+            addView(navigationBar, FrameLayout.LayoutParams(-1, dp(LiquidGlassDock.HEIGHT_DP)))
+        }
         val accountHeader = brandHeader().apply { tag = "shell-header"; setPadding(dp(20), dp(6), dp(20), dp(6)) }
         telegramIdentityBridge.bindViews(accountHeader.findViewWithTag("telegram-account-name"), accountHeader.findViewWithTag("telegram-avatar-fallback"), accountHeader.findViewWithTag("telegram-avatar-image"))
         accountHeader.setOnClickListener { selectTab(2) }
@@ -361,22 +368,24 @@ class MainActivity : Activity() {
             addView(statusInset, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0))
             addView(accountHeader, LinearLayout.LayoutParams(-1, dp(64))); addView(primaryPages.createUpdateBanner())
             addView(FrameLayout(this@MainActivity).apply { clipChildren = false; addView(pager, FrameLayout.LayoutParams(-1, -1)) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-            addView(dock, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(82)))
+            addView(dock, LinearLayout.LayoutParams(-1, dockHeight).apply {
+                topMargin = -dp(LiquidGlassDock.OVERLAP_DP)
+            })
         }
         ViewCompat.setOnApplyWindowInsetsListener(shellRoot) { _, insets ->
             val status = insets.getInsets(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.displayCutout()).top
             val bottom = insets.getInsets(WindowInsetsCompat.Type.navigationBars() or WindowInsetsCompat.Type.displayCutout()).bottom
             val statusParams = statusInset.layoutParams as LinearLayout.LayoutParams
             if (statusParams.height != status) { statusParams.height = status; statusInset.layoutParams = statusParams }
-            val targetDockHeight = dp(82) + bottom
+            val targetDockHeight = dockHeight + bottom
             val dockParams = dock.layoutParams as LinearLayout.LayoutParams
             if (dockParams.height != targetDockHeight) { dock.setPadding(dp(12), 0, dp(12), dp(8) + bottom); dockParams.height = targetDockHeight; dock.layoutParams = dockParams }
             insets
         }
         var lastHapticPage = initialPage
         pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            private fun confirmSelection() { navigationBar.setSelectedPage(pager.currentItem); if (pager.currentItem != lastHapticPage) { pager.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); lastHapticPage = pager.currentItem } }
-            override fun onPageScrolled(pos: Int, off: Float, px: Int) { navigationBar.setPageOffset(pos, off); val prog = (pos + off).coerceIn(0f, 1f); globe.setBackdropProgress(if (pageMotionEnabled) prog else if (prog >= .5f) 1f else 0f) }
+            private fun confirmSelection() { navigationBar.setPageOffset(pager.currentItem, 0f); if (pager.currentItem != lastHapticPage) { pager.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); lastHapticPage = pager.currentItem } }
+            override fun onPageScrolled(pos: Int, off: Float, px: Int) { navigationBar.setPageOffset(if (pageMotionEnabled) pos else pager.currentItem, if (pageMotionEnabled) off else 0f); val prog = (pos + off).coerceIn(0f, 1f); globe.setBackdropProgress(if (pageMotionEnabled) prog else if (prog >= .5f) 1f else 0f) }
             override fun onPageSelected(pos: Int) {
                 homeMetricsCoordinator.homeSpeedOnHome = pos == 0
                 if (pos != 0) { homeMetricsCoordinator.cancelHomeRouteDownload(); homeMetricsCoordinator.setMapTrafficActive(false) } else homeMetricsCoordinator.sampleMapTraffic()
@@ -472,7 +481,6 @@ class MainActivity : Activity() {
         pageMotionEnabled = !reduced
         if (::globe.isInitialized) globe.setReducedMotion(reduced)
         if (::globeStage.isInitialized) DeyttUi.setStarfieldMotion(globeStage, active = !isFinishing && !homeMetricExplanationSheet.isTrafficExplanationShowing(), reducedMotion = reduced)
-        pager.requestTransform()
     }
 
     private fun setSelectedDestination(label: String) {
