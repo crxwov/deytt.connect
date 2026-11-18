@@ -28,7 +28,6 @@ import space.deytt.connect.DeyttUi.ripple
 import space.deytt.connect.DeyttUi.text
 import kotlin.math.abs
 import kotlin.math.roundToInt
-import kotlin.math.sign
 import kotlin.math.sin
 import kotlin.math.exp
 
@@ -84,7 +83,6 @@ internal class LiquidGlassDock(
     private var pagerPosition = initialPage.toFloat()
     private var position = pagerPosition
     private var selected = -1
-    private var direction = 1f
 
     init {
         addView(row, LayoutParams(-1, -1))
@@ -97,7 +95,6 @@ internal class LiquidGlassDock(
     }
 
     private fun moveTo(value: Float) {
-        if (value != position) direction = sign(value - position)
         position = value
         val active = value.roundToInt()
         if (active != selected) {
@@ -206,14 +203,17 @@ internal class LiquidGlassDock(
 
     override fun dispatchDraw(canvas: Canvas) {
         val x = padding + cellWidth() * (position + .5f)
-        val travel = abs(sin(position * Math.PI.toFloat()))
-        val lift = if (dragging) .55f + travel * .45f else travel
-        val lensWidth = cellWidth() * (.91f + lift * .28f)
-        val lensHeight = scale * (48f + lift * 14f)
+        val phase = (position - position.roundToInt()) * Math.PI.toFloat()
+        val travel = abs(sin(phase))
+        // A small horizontal ripple follows the gesture, including when it reverses.
+        val ripple = travel * sin(phase * 4f)
+        val lensWidth = cellWidth() * .91f + scale * ripple * 2f
+        val lensHeight = scale * 48f
+        val refraction = travel + ripple * .16f
         val inset = scale * 6f
         if (Build.VERSION.SDK_INT >= 33 && canvas.isHardwareAccelerated && glass != null) {
             glass.draw(canvas, this, scene(), pages.takeIf { pagerPosition > 0f }, row,
-                x, lensWidth, lensHeight, lift * direction, inset)
+                x, lensWidth, lensHeight, refraction, inset)
         } else {
             body.set(0f, inset, width.toFloat(), height - inset)
             val radius = body.height() / 2f
@@ -243,7 +243,7 @@ private class DockRefraction {
     private val sourceBounds = Rect()
     private val currentLens = RectF()
     private val previousLens = RectF()
-    private var previousTravel = Float.NaN
+    private var previousRefraction = Float.NaN
 
     fun draw(
         canvas: Canvas,
@@ -254,7 +254,7 @@ private class DockRefraction {
         x: Float,
         lensWidth: Float,
         lensHeight: Float,
-        travel: Float,
+        refraction: Float,
         inset: Float,
     ) {
         val width = dock.width
@@ -282,22 +282,22 @@ private class DockRefraction {
                     recording.restoreToCount(save)
                 }
             }
-            recording.drawColor(0xA9121822.toInt())
+            recording.drawColor(0xA2121822.toInt())
             // The floating lens passes over the dock's own glyphs and captions, too.
             controls.draw(recording)
         } finally {
             node.endRecording()
         }
         currentLens.set(x, height / 2f, lensWidth / 2f, lensHeight / 2f)
-        if (node.width != width || node.height != height || previousLens != currentLens || travel != previousTravel) {
+        if (node.width != width || node.height != height || previousLens != currentLens || refraction != previousRefraction) {
             node.setPosition(0, 0, width, height)
             shader.setFloatUniform("dockSize", width.toFloat(), height.toFloat())
             shader.setFloatUniform("inset", inset)
-            shader.setFloatUniform("travel", travel)
+            shader.setFloatUniform("refraction", refraction)
             shader.setFloatUniform("lens", currentLens.left, currentLens.top, currentLens.right, currentLens.bottom)
             node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(shader, "backdrop"))
             previousLens.set(currentLens)
-            previousTravel = travel
+            previousRefraction = refraction
         }
         canvas.drawRenderNode(node)
     }
@@ -312,7 +312,7 @@ private class DockRefraction {
             uniform float2 dockSize;
             uniform float4 lens;
             uniform float inset;
-            uniform float travel;
+            uniform float refraction;
 
             float2 capsuleOffset(float2 p, float2 halfSize) {
                 float radius = min(halfSize.x, halfSize.y);
@@ -328,10 +328,8 @@ private class DockRefraction {
                 float bodyAlpha = 1.0 - smoothstep(-0.65, 0.65, dockDistance);
 
                 float2 local = p - lens.xy;
-                float2 warped = local;
-                warped.y *= 1.0 - clamp(local.x / lens.z, -1.0, 1.0) * travel * 0.15;
                 float radius = min(lens.z, lens.w) * 0.79;
-                float2 shoulder = warped - clamp(warped, -lens.zw + radius, lens.zw - radius);
+                float2 shoulder = local - clamp(local, -lens.zw + radius, lens.zw - radius);
                 float shoulderLength = length(shoulder);
                 float distance = shoulderLength - radius;
                 float lensAlpha = 1.0 - smoothstep(-0.65, 0.65, distance);
@@ -347,22 +345,20 @@ private class DockRefraction {
                 if (lensAlpha <= 0.0) return half4(body * bodyAlpha, bodyAlpha);
 
                 float2 lensNormal = shoulder / max(shoulderLength, 0.01);
-                float rim = smoothstep(-inset * 1.65, 0.0, distance);
+                float rim = smoothstep(-inset * 1.25, 0.0, distance);
                 float fold = rim * rim;
-                float lift = abs(travel);
-                float2 bent = p - local * (0.018 + lift * 0.032)
-                    - lensNormal * inset * (0.65 + lift * 1.8) * fold;
-                float2 dispersion = lensNormal * inset * lift * 0.16 * fold;
+                float2 bent = p - local * (0.012 + refraction * 0.018)
+                    - lensNormal * inset * (0.65 + refraction * 1.8) * fold;
+                float2 dispersion = lensNormal * inset * refraction * 0.10 * fold;
                 half3 glass = backdrop.eval(clamp(bent, minPixel, maxPixel)).rgb;
-                if (fold > 0.04 && lift > 0.08) {
+                if (fold > 0.04 && refraction > 0.08) {
                     glass.r = backdrop.eval(clamp(bent + dispersion, minPixel, maxPixel)).r;
                     glass.b = backdrop.eval(clamp(bent - dispersion, minPixel, maxPixel)).b;
                 }
-                float top = max(dot(lensNormal, normalize(float2(-0.42 + travel * 0.25, -0.91))), 0.0);
+                float top = max(dot(lensNormal, float2(-0.42, -0.91)), 0.0);
                 float bounce = max(dot(lensNormal, float2(0.34, 0.94)), 0.0);
                 float glint = (0.14 * top * top + 0.095 * bounce * bounce) * rim * rim * rim;
-                glass = glass * 0.98 + half3(0.72, 0.83, 0.96) * (glint + 0.023 * rim);
-                glass += half3(0.016, 0.020, 0.025);
+                glass += half3(0.78, 0.87, 0.98) * (glint + 0.032 * fold);
                 return half4(mix(body * bodyAlpha, glass, lensAlpha), mix(bodyAlpha, 1.0, lensAlpha));
             }
         """
