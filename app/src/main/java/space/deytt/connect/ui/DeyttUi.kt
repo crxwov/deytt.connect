@@ -41,6 +41,7 @@ import android.widget.Space
 import android.widget.TextView
 import android.webkit.WebView
 import space.deytt.connect.AppLanguage.uiCopy
+import androidx.core.graphics.ColorUtils
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -72,7 +73,7 @@ object DeyttUi {
     fun blurBehind(window: Window, radiusPx: Int) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
-            window.attributes = window.attributes.apply { setBlurBehindRadius(radiusPx) }
+            window.attributes = window.attributes.apply { setBlurBehindRadius(radiusPx.coerceIn(0, 36)) }
         }
     }
 
@@ -363,7 +364,7 @@ object DeyttUi {
                 ImageView(this@row).apply {
                     setImageBitmap(avatar)
                     scaleType = ImageView.ScaleType.CENTER_CROP
-                    background = glassRowBackground(emphasis, 16f)
+                    background = rowIconBacking(emphasis)
                     clipToOutline = true
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
@@ -386,7 +387,7 @@ object DeyttUi {
                 "↻" -> android.widget.ImageView(this@row).apply {
                     setImageResource(R.drawable.ic_sync)
                     imageTintList = ColorStateList.valueOf(SKY)
-                    background = glassRowBackground(emphasis, 16f)
+                    background = rowIconBacking(emphasis)
                     setPadding(dp(8), dp(8), dp(8), dp(8))
                     scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -398,7 +399,7 @@ object DeyttUi {
                     gravity = Gravity.CENTER
                     letterSpacing = .025f
                     background = if (isCountryFlag) ColorDrawable(Color.TRANSPARENT)
-                        else glassRowBackground(emphasis, 16f)
+                        else rowIconBacking(emphasis)
                     minWidth = dp(38)
                     minHeight = dp(38)
                     maxLines = 1
@@ -439,7 +440,7 @@ object DeyttUi {
                     maxWidth = dp(84)
                     minHeight = dp(36)
                     setPadding(dp(8), dp(6), dp(8), dp(6))
-                    background = glassRowBackground(emphasis, 18f)
+                    background = rowIconBacking(emphasis, 18f)
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     leftMargin = dp(8)
                 })
@@ -454,11 +455,17 @@ object DeyttUi {
     private fun Activity.actionIcon(resource: Int, emphasis: Boolean) = ImageView(this).apply {
         setImageResource(resource)
         imageTintList = ColorStateList.valueOf(SKY)
-        background = glassRowBackground(emphasis, 16f)
+        background = rowIconBacking(emphasis)
         setPadding(dp(8), dp(8), dp(8), dp(8))
         scaleType = ImageView.ScaleType.FIT_CENTER
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
+
+    private fun Activity.rowIconBacking(emphasis: Boolean, radius: Float = 16f): Drawable =
+        GradientDrawable().apply {
+            cornerRadius = dp(radius.roundToInt()).toFloat()
+            setColor(if (emphasis) 0x80203249.toInt() else 0x64141E2B.toInt())
+        }
 
     internal fun Activity.glassRowBackground(emphasis: Boolean, radius: Float): Drawable {
         val density = resources.displayMetrics.density
@@ -680,9 +687,9 @@ object DeyttUi {
                 density = density,
                 cornerRadiusPx = rPx,
                 fillColors = intArrayOf(
-                    0xFF121B27.toInt(),
-                    0xFF0D141F.toInt(),
-                    0xFF090E16.toInt(),
+                    0xE5182433.toInt(),
+                    0xE4131C28.toInt(),
+                    0xE2111924.toInt(),
                 ),
                 strokeColors = intArrayOf(
                     0x45FFFFFF.toInt(),
@@ -775,41 +782,10 @@ object DeyttUi {
                 glossAlpha = 0x10,
                 innerLip = true,
             )
-            else -> {
-                val alpha = Color.alpha(fill)
-                if (alpha in 1..254 || (fill and 0x00FFFFFF) != 0) {
-                    val strokeColors = if (stroke != fill) {
-                        intArrayOf(
-                            0x55FFFFFF.toInt(),
-                            0x2C82B4E8.toInt(),
-                            0x4B60A5FA.toInt(),
-                            0x22FFFFFF.toInt(),
-                        )
-                    } else {
-                        intArrayOf(
-                            0x28FFFFFF.toInt(),
-                            0x12FFFFFF.toInt(),
-                            0x0C78A8D0.toInt(),
-                            0x14FFFFFF.toInt(),
-                        )
-                    }
-                    LiquidGlassDrawable(
-                        density = density,
-                        cornerRadiusPx = rPx,
-                        fillColors = intArrayOf(fill),
-                        strokeColors = strokeColors,
-                        strokeWidthPx = 0.85f,
-                        hasGloss = false,
-                        glossAlpha = 0x08,
-                        innerLip = false,
-                    )
-                } else {
-                    GradientDrawable().apply {
-                        setColor(fill)
-                        cornerRadius = rPx
-                        if (stroke != fill) setStroke(dp(1), stroke)
-                    }
-                }
+            else -> GradientDrawable().apply {
+                setColor(fill)
+                cornerRadius = rPx
+                if (stroke != fill) setStroke(dp(1), stroke)
             }
         }
     }
@@ -1446,13 +1422,9 @@ class LiquidGlassDrawable(
 ) : Drawable() {
     private val boundsRect = RectF()
     private val strokeRect = RectF()
-    private val innerLipRect = RectF()
-    private val glossRect = RectF()
 
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-    private val innerLipPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
-    private val glossPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
     private var currentAlpha = 255
     private var currentColorFilter: ColorFilter? = null
@@ -1460,6 +1432,7 @@ class LiquidGlassDrawable(
     override fun onBoundsChange(bounds: Rect) {
         super.onBoundsChange(bounds)
         if (bounds.isEmpty) {
+            boundsRect.setEmpty()
             return
         }
         val w = bounds.width().toFloat()
@@ -1473,15 +1446,6 @@ class LiquidGlassDrawable(
         strokePaint.strokeWidth = sw
         val halfSw = sw / 2f
         strokeRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + h - halfSw)
-
-        if (innerLip) {
-            val lipW = (0.5f * density).coerceAtLeast(0.75f)
-            innerLipPaint.strokeWidth = lipW
-            val lipOffset = sw + lipW / 2f
-            innerLipRect.set(left + lipOffset, top + lipOffset, left + w - lipOffset, top + h - lipOffset)
-        }
-
-        glossRect.set(left + halfSw, top + halfSw, left + w - halfSw, top + minOf(h * .38f, 18f * density))
 
         rebuildShaders()
     }
@@ -1502,65 +1466,32 @@ class LiquidGlassDrawable(
             fillPaint.color = fillColors[0]
         }
 
+        // Keep the highlight on the bevel instead of laying gloss across the content.
+        val rim = strokeColors.copyOf()
+        if (hasGloss) rim[0] = ColorUtils.compositeColors((glossAlpha shl 24) or 0xFFFFFF, rim[0])
+        if (innerLip) rim[rim.lastIndex] = ColorUtils.compositeColors(0x0C9BCBFF, rim.last())
         strokePaint.shader = LinearGradient(
             left + (right - left) * .15f, top,
             right - (right - left) * .08f, bottom,
-            strokeColors, strokePositions, Shader.TileMode.CLAMP
-        )
-
-        if (innerLip) {
-            innerLipPaint.shader = LinearGradient(
-                0f, top, 0f, bottom,
-                intArrayOf(0x28FFFFFF, 0x04FFFFFF, 0x2606080C),
-                floatArrayOf(0f, 0.4f, 1f),
-                Shader.TileMode.CLAMP
-            )
-        }
-
-        glossPaint.shader = LinearGradient(
-            0f, top, 0f, glossRect.bottom,
-            intArrayOf(
-                (glossAlpha shl 24) or 0x00FFFFFF,
-                ((glossAlpha / 4) shl 24) or 0x00FFFFFF,
-                0x00FFFFFF
-            ),
-            floatArrayOf(0f, .28f, 1f),
-            Shader.TileMode.CLAMP
+            rim, strokePositions, Shader.TileMode.CLAMP
         )
     }
 
     override fun draw(canvas: Canvas) {
-        if (boundsRect.isEmpty) return
+        if (boundsRect.isEmpty || currentAlpha == 0) return
 
         val maxRadius = minOf(boundsRect.width(), boundsRect.height()) / 2f
-        val r = cornerRadiusPx.coerceIn(0f, maxRadius)
-
-        // 1. Draw liquid glass body
-        fillPaint.alpha = currentAlpha
+        val radius = cornerRadiusPx.coerceIn(0f, maxRadius)
+        val fillAlpha = if (fillColors.size == 1) Color.alpha(fillColors[0]) else 255
+        fillPaint.alpha = (fillAlpha * currentAlpha + 127) / 255
         fillPaint.colorFilter = currentColorFilter
-        canvas.drawRoundRect(boundsRect, r, r, fillPaint)
+        canvas.drawRoundRect(boundsRect, radius, radius, fillPaint)
 
-        // 2. Draw curved lens specular gloss (top highlight sheen)
-        if (hasGloss && glossRect.height() > 4f) {
-            val saveCount = canvas.save()
-            canvas.clipRect(glossRect)
-            glossPaint.alpha = currentAlpha
-            canvas.drawRoundRect(boundsRect, r, r, glossPaint)
-            canvas.restoreToCount(saveCount)
-        }
-
-        // 3. Draw inner refraction lip (3D glass edge bevel)
-        if (innerLip && innerLipRect.width() > 0 && innerLipRect.height() > 0) {
-            val innerR = (r - strokePaint.strokeWidth).coerceAtLeast(0f)
-            innerLipPaint.alpha = currentAlpha
-            canvas.drawRoundRect(innerLipRect, innerR, innerR, innerLipPaint)
-        }
-
-        // 4. Draw outer specular rim (crisp refractive border)
-        val strokeR = (r - strokePaint.strokeWidth / 2f).coerceAtLeast(0f)
+        if (strokeRect.isEmpty) return
+        val strokeRadius = (radius - strokePaint.strokeWidth / 2f).coerceAtLeast(0f)
         strokePaint.alpha = currentAlpha
         strokePaint.colorFilter = currentColorFilter
-        canvas.drawRoundRect(strokeRect, strokeR, strokeR, strokePaint)
+        canvas.drawRoundRect(strokeRect, strokeRadius, strokeRadius, strokePaint)
     }
 
     override fun getOutline(outline: Outline) {

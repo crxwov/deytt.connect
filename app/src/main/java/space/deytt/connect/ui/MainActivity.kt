@@ -388,14 +388,21 @@ class MainActivity : Activity() {
             override fun onPageScrolled(pos: Int, off: Float, px: Int) {
                 // Gesture feedback tracks the pager even when autonomous animations are disabled.
                 navigationBar.setPageOffset(pos, off)
-                val progress = (pos + off).coerceIn(0f, 1f)
+                val progress = if (pager.scrollState == ViewPager2.SCROLL_STATE_IDLE) {
+                    if (pager.currentItem == 0) 0f else 1f
+                } else {
+                    (pos + off).coerceIn(0f, 1f)
+                }
                 globe.setBackdropProgress(if (pageMotionEnabled) progress else if (progress >= .5f) 1f else 0f)
             }
             override fun onPageSelected(pos: Int) {
                 navigationBar.onPagerSelected(pos)
                 homeMetricsCoordinator.homeSpeedOnHome = pos == 0
                 if (pos != 0) { homeMetricsCoordinator.cancelHomeRouteDownload(); homeMetricsCoordinator.setMapTrafficActive(false) } else homeMetricsCoordinator.sampleMapTraffic()
-                if (pager.scrollState == ViewPager2.SCROLL_STATE_IDLE) confirmSelection()
+                if (pager.scrollState == ViewPager2.SCROLL_STATE_IDLE) {
+                    confirmSelection()
+                    syncGlobeHost(pos)
+                }
             }
             override fun onPageScrollStateChanged(state: Int) {
                 if (state == ViewPager2.SCROLL_STATE_DRAGGING) navigationBar.beginPagerGesture()
@@ -485,8 +492,10 @@ class MainActivity : Activity() {
 
     private fun updatePrimaryPageMotion() {
         if (!::pageAdapter.isInitialized) return
-        val reduced = isReducedMotionEnabled() || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled())
-        pageMotionEnabled = !reduced
+        val reducedInApp = isReducedMotionEnabled()
+        // The changing map blur is direct feedback for a manual drag.
+        pageMotionEnabled = !reducedInApp
+        val reduced = reducedInApp || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled())
         if (::globe.isInitialized) globe.setReducedMotion(reduced)
         if (::globeStage.isInitialized) DeyttUi.setStarfieldMotion(globeStage, active = !isFinishing && !homeMetricExplanationSheet.isTrafficExplanationShowing(), reducedMotion = reduced)
     }

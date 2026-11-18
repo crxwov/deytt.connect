@@ -1147,58 +1147,54 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             checkNotNull(findViews(activity.findViewById(android.R.id.content)) { it is RouteGlobeView }.singleOrNull()) as RouteGlobeView
         }
         val progressField = RouteGlobeView::class.java.getDeclaredField("backdropProgress").apply { isAccessible = true }
-        fun state() = onMainValue {
-            progressField.getFloat(globe) to globe.alpha
-        }
         fun checkVisual(expected: Float, label: String) {
-            val actual = state()
-            check(kotlin.math.abs(actual.first - expected) < .015f) {
+            val actual = onMainValue { progressField.getFloat(globe) }
+            check(kotlin.math.abs(actual - expected) < .015f) {
                 "$label: progress=$actual expected=$expected"
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                check(kotlin.math.abs(actual.second - (1f - .6f * expected)) < .025f) {
-                    "$label: native blur/opacity did not follow swipe progress: $actual"
+                val opacity = onMainValue { webView.alpha }
+                check(kotlin.math.abs(opacity - (1f - .15f * expected)) < .025f) {
+                    "$label: atlas opacity did not follow swipe progress: $opacity"
                 }
-            } else {
-                val css = runAtlasScript(webView,
-                    "(function(){var s=getComputedStyle(document.querySelector('.network-atlas'));return parseFloat(s.getPropertyValue('--backdrop-blur'))+'|'+parseFloat(s.getPropertyValue('--backdrop-opacity'));})()")
-                    .split('|').mapNotNull(String::toDoubleOrNull)
-                check(css.size == 2 && kotlin.math.abs(css[0] - 28.0 * expected) < 1.0 &&
-                    kotlin.math.abs(css[1] - (1.0 - .6 * expected)) < .03) {
-                    "$label: CSS blur/opacity did not follow swipe progress: $css expected=$expected"
-                }
+                return
+            }
+            val css = runAtlasScript(webView,
+                "(function(){var s=getComputedStyle(document.querySelector('.network-atlas'));return parseFloat(s.getPropertyValue('--backdrop-blur'))+'|'+parseFloat(s.getPropertyValue('--backdrop-opacity'));})()")
+                .split('|').mapNotNull(String::toDoubleOrNull)
+            check(css.size == 2 && kotlin.math.abs(css[0] - 7.0 * expected) < 1.0 &&
+                kotlin.math.abs(css[1] - (1.0 - .15 * expected)) < .03) {
+                "$label: atlas blur and opacity did not follow swipe progress: $css expected=$expected"
             }
         }
 
         val camera = readAtlasCameraSnapshot(webView, resetResizeCount = true)
         checkVisual(0f, "Home should start clear")
-        val normalSamples = arrayListOf<Pair<Float, Float>>()
+        val normalSamples = arrayListOf<Float>()
         val normalRecorder = object : androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
             override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
-                normalSamples += (progressField.getFloat(globe) to globe.alpha)
+                normalSamples += progressField.getFloat(globe)
             }
         }
         onMainValue { pager.registerOnPageChangeCallback(normalRecorder) }
         swipePageLeft(activity, pagerSwipeY)
         awaitPagerSettled(activity, 1, "lte + белые списки")
-        check(normalSamples.any { (progress, alpha) -> progress in .05f.. .95f &&
-            (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || kotlin.math.abs(alpha - (1f - .6f * progress)) < .025f) }) {
+        check(normalSamples.any { it in .05f.. .95f }) {
             "Routes swipe did not report intermediate blur progress: " + normalSamples.take(12)
         }
         onMainValue { pager.unregisterOnPageChangeCallback(normalRecorder) }
         checkVisual(1f, "Routes should finish with the globe blurred")
 
-        val reverseSamples = arrayListOf<Pair<Float, Float>>()
+        val reverseSamples = arrayListOf<Float>()
         val reverseRecorder = object : androidx.viewpager2.widget.ViewPager2.OnPageChangeCallback() {
             override fun onPageScrolled(position: Int, positionOffset: Float, positionOffsetPixels: Int) {
-                reverseSamples += (progressField.getFloat(globe) to globe.alpha)
+                reverseSamples += progressField.getFloat(globe)
             }
         }
         onMainValue { pager.registerOnPageChangeCallback(reverseRecorder) }
         swipePageRight(activity, pagerSwipeY)
         awaitPagerSettled(activity, 0, "Подключить")
-        check(reverseSamples.any { (progress, alpha) -> progress in .05f.. .95f &&
-            (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || kotlin.math.abs(alpha - (1f - .6f * progress)) < .025f) }) {
+        check(reverseSamples.any { it in .05f.. .95f }) {
             "Returning swipe did not report intermediate blur progress: " + reverseSamples.take(12)
         }
         onMainValue { pager.unregisterOnPageChangeCallback(reverseRecorder) }
@@ -1229,6 +1225,13 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             runOnMainSync { activity.setReducedMotionEnabled(originalReducedMotion) }
             if (onMainValue { pager.currentItem != 0 }) onMainValue { pager.setCurrentItem(0, false) }
         }
+        runOnMainSync { pager.setCurrentItem(1, false) }
+        awaitPagerSettled(activity, 1, "lte + белые списки")
+        checkVisual(1f, "Instant Routes selection should blur the globe")
+        runOnMainSync { pager.setCurrentItem(0, false) }
+        awaitPagerSettled(activity, 0, "Подключить")
+        checkVisual(0f, "Instant Home selection should clear the globe")
+
         val cameraAfter = readAtlasCameraSnapshot(webView)
         check(camera.navigationEquivalent(cameraAfter)) {
             "Blur changed globe geometry: before=$camera after=$cameraAfter"

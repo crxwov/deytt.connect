@@ -380,7 +380,7 @@ object AppDialog {
                 dialog.window?.apply {
                     setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
                     setLayout(minOf(host.resources.displayMetrics.widthPixels - host.dp(32), host.dp(390)), ViewGroup.LayoutParams.WRAP_CONTENT)
-                    setDimAmount(.65f)
+                    setDimAmount(.48f)
                     DeyttUi.blurBehind(this, host.dp(24))
                 }
             }

@@ -32,6 +32,7 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.exp
+import kotlin.random.Random
 
 internal class LiquidGlassDock(
     private val host: Activity,
@@ -86,6 +87,10 @@ internal class LiquidGlassDock(
     private var position = pagerPosition
     private var lastMovementTime = 0L
     private var fastSwipeBlend = 0f
+    private var lastLensVelocity = 0f
+    private var shape = 0f
+    private var shapeVelocity = 0f
+    private var gestureElasticity = 1f
     private var pagerGesture = false
     private var fastPagerGesture = false
     private var glideStartedAt = 0L
@@ -129,7 +134,18 @@ internal class LiquidGlassDock(
         pagerGesture = true
         fastPagerGesture = false
         fastSwipeBlend = 0f
-        lastMovementTime = SystemClock.uptimeMillis()
+        beginShapeGesture()
+    }
+
+    private fun beginShapeGesture() {
+        val now = SystemClock.uptimeMillis()
+        if (now - lastMovementTime > 150L) {
+            shape = 0f
+            shapeVelocity = 0f
+        }
+        gestureElasticity = .85f + Random.nextFloat() * .30f
+        lastLensVelocity = 0f
+        lastMovementTime = now
     }
 
     fun endPagerGesture() {
@@ -165,11 +181,20 @@ internal class LiquidGlassDock(
         if (value != position) {
             val now = SystemClock.uptimeMillis()
             val elapsed = (now - lastMovementTime).coerceAtLeast(8L)
-            val speed = abs(value - position) * 1000f / elapsed
+            val velocity = (value - position) * 1000f / elapsed
+            val speed = abs(velocity)
             val blend = ((speed - 2f) / 3f).coerceIn(0f, 1f)
             if (pagerGesture && speed >= FAST_SWIPE_CELLS_PER_SECOND) fastPagerGesture = true
             // Smooth the speed estimate without delaying the lens position.
             fastSwipeBlend += (blend - fastSwipeBlend) * (elapsed / (elapsed + 10f))
+            val pull = (speed * .42f + abs(velocity - lastLensVelocity) * .12f).coerceAtMost(1f) * gestureElasticity
+            val dt = elapsed.coerceAtMost(60L) * .001f
+            val offset = shape - pull
+            val velocityTerm = shapeVelocity + SHAPE_DAMPING * offset
+            val decay = exp(-SHAPE_DAMPING * dt)
+            shape = pull + (offset + velocityTerm * dt) * decay
+            shapeVelocity = (shapeVelocity - SHAPE_DAMPING * velocityTerm * dt) * decay
+            lastLensVelocity = velocity
             lastMovementTime = now
         }
         position = value
@@ -197,6 +222,7 @@ internal class LiquidGlassDock(
             MotionEvent.ACTION_DOWN -> {
                 velocity?.recycle()
                 velocity = VelocityTracker.obtain().also { it.addMovement(event) }
+                beginShapeGesture()
                 dragStart = event.x
                 dragOrigin = position
             }
@@ -291,11 +317,11 @@ internal class LiquidGlassDock(
         val x = padding + cellWidth() * (position + .5f)
         val phase = (position - position.roundToInt()) * Math.PI.toFloat()
         val travel = abs(sin(phase))
-        // A small horizontal ripple follows the gesture, including when it reverses.
         val ripple = travel * sin(phase * 4f)
-        val lensWidth = cellWidth() * .91f + scale * (ripple * 2f + glideRipple * 12f)
-        val lensHeight = scale * 48f
         val refraction = maxOf(travel + ripple * .16f, glideRipple)
+        val tension = (shape * maxOf(travel, glideRipple)).coerceIn(0f, 1f)
+        val lensWidth = cellWidth() * .91f + scale * tension * 8f
+        val lensHeight = scale * 48f
         val rimStabilization = if (glideStartedAt != 0L) {
             (refraction * 4f).coerceAtMost(1f)
         } else {
@@ -304,7 +330,7 @@ internal class LiquidGlassDock(
         val inset = scale * 6f
         if (Build.VERSION.SDK_INT >= 33 && canvas.isHardwareAccelerated && glass != null) {
             glass.draw(canvas, this, scene(), pages.takeIf { pagerPosition > 0f }, row,
-                x, lensWidth, lensHeight, refraction, rimStabilization, glideLight, inset)
+                x, lensWidth, lensHeight, refraction, rimStabilization, glideLight, tension, inset)
         } else {
             body.set(0f, inset, width.toFloat(), height - inset)
             val radius = body.height() / 2f
@@ -324,6 +350,7 @@ internal class LiquidGlassDock(
         const val OVERLAP_DP = 56
         private const val FAST_SWIPE_CELLS_PER_SECOND = 3.5f
         private const val FAST_GLIDE_MS = 285f
+        private const val SHAPE_DAMPING = 23f
         private val TAB_NEUTRAL_COLOR = 0xFFD6DCE5.toInt()
         private val TAB_LENS_COLOR = 0xFF64E9FF.toInt()
     }
@@ -341,6 +368,7 @@ private class DockRefraction {
     private var previousRefraction = Float.NaN
     private var previousStabilization = Float.NaN
     private var previousLight = Float.NaN
+    private var previousTension = Float.NaN
 
     fun draw(
         canvas: Canvas,
@@ -354,6 +382,7 @@ private class DockRefraction {
         refraction: Float,
         stabilization: Float,
         travelLight: Float,
+        tension: Float,
         inset: Float,
     ) {
         val width = dock.width
@@ -389,19 +418,21 @@ private class DockRefraction {
         }
         currentLens.set(x, height / 2f, lensWidth / 2f, lensHeight / 2f)
         if (node.width != width || node.height != height || previousLens != currentLens ||
-            refraction != previousRefraction || stabilization != previousStabilization || travelLight != previousLight
+            refraction != previousRefraction || stabilization != previousStabilization ||
+            travelLight != previousLight || tension != previousTension
         ) {
             node.setPosition(0, 0, width, height)
             shader.setFloatUniform("dockSize", width.toFloat(), height.toFloat())
             shader.setFloatUniform("inset", inset)
             shader.setFloatUniform("refraction", refraction)
-            shader.setFloatUniform("motion", stabilization, travelLight)
+            shader.setFloatUniform("motion", stabilization, travelLight, tension)
             shader.setFloatUniform("lens", currentLens.left, currentLens.top, currentLens.right, currentLens.bottom)
             node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(shader, "backdrop"))
             previousLens.set(currentLens)
             previousRefraction = refraction
             previousStabilization = stabilization
             previousLight = travelLight
+            previousTension = tension
         }
         canvas.drawRenderNode(node)
     }
@@ -417,7 +448,7 @@ private class DockRefraction {
             uniform float4 lens;
             uniform float inset;
             uniform float refraction;
-            uniform float2 motion;
+            uniform float3 motion;
 
             float2 capsuleOffset(float2 p, float2 halfSize) {
                 float radius = min(halfSize.x, halfSize.y);
@@ -430,14 +461,19 @@ private class DockRefraction {
                 float2 edge = capsuleOffset(p - dockHalf, bodyHalf);
                 float edgeLength = length(edge);
                 float dockDistance = edgeLength - bodyHalf.y;
-                float bodyAlpha = 1.0 - smoothstep(-0.65, 0.65, dockDistance);
+                // Distance is in device pixels, so keep coverage gradual at subpixel positions.
+                float bodyAlpha = 1.0 - smoothstep(-1.05, 1.05, dockDistance);
 
                 float2 local = p - lens.xy;
-                float radius = min(lens.z, lens.w) * 0.79;
-                float2 shoulder = local - clamp(local, -lens.zw + radius, lens.zw - radius);
+                float tension = motion.z;
+                float side = min(abs(local.x) / lens.z, 1.0);
+                float radius = min(lens.z, lens.w) * (0.79 + 0.13 * tension);
+                // Shape the shoulders symmetrically without lifting or tilting the droplet.
+                float2 contour = float2(local.x, local.y * (1.0 + 0.11 * tension * side * side));
+                float2 shoulder = contour - clamp(contour, -lens.zw + radius, lens.zw - radius);
                 float shoulderLength = length(shoulder);
                 float distance = shoulderLength - radius;
-                float lensAlpha = 1.0 - smoothstep(-0.65, 0.65, distance);
+                float lensAlpha = 1.0 - smoothstep(-1.15, 1.15, distance);
                 if (bodyAlpha + lensAlpha <= 0.0) return half4(0);
 
                 float2 normal = edge / max(edgeLength, 0.01);
@@ -445,7 +481,7 @@ private class DockRefraction {
                 float2 minPixel = float2(0.5);
                 float2 maxPixel = dockSize - 0.5;
                 float2 samplePoint = p - normal * inset * 0.9 * bevel;
-                float bodyRim = smoothstep(-1.6, 0.0, dockDistance);
+                float bodyRim = smoothstep(-2.0, 0.0, dockDistance);
                 half3 light = half3(0.72, 0.83, 0.96) * ((0.10 * max(-normal.y, 0.0) + 0.024) * bodyRim);
                 float2 dispersion = float2(0);
                 if (lensAlpha > 0.0) {
@@ -460,8 +496,9 @@ private class DockRefraction {
                     float2 bent = p - local * focus - lensNormal * inset * bend;
                     samplePoint = mix(samplePoint, bent, lensAlpha);
                     float chroma = refraction * (1.0 - stabilization);
-                    if (fold > 0.04 && chroma > 0.08) {
-                        dispersion = lensNormal * inset * chroma * 0.10 * fold * lensAlpha;
+                    if (fold > 0.025 && chroma > 0.06) {
+                        float fade = smoothstep(0.025, 0.08, fold) * smoothstep(0.06, 0.18, chroma);
+                        dispersion = lensNormal * inset * chroma * 0.10 * fold * fade * lensAlpha;
                     }
                     float top = max(dot(lensNormal, float2(-0.42 + motion.y * 0.85, -0.91)), 0.0);
                     float bounce = max(dot(lensNormal, float2(0.34, 0.94)), 0.0);
