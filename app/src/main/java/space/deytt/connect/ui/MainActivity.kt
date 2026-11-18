@@ -385,7 +385,12 @@ class MainActivity : Activity() {
         var lastHapticPage = initialPage
         pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             private fun confirmSelection() { navigationBar.setPageOffset(pager.currentItem, 0f); if (pager.currentItem != lastHapticPage) { pager.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK); lastHapticPage = pager.currentItem } }
-            override fun onPageScrolled(pos: Int, off: Float, px: Int) { navigationBar.setPageOffset(if (pageMotionEnabled) pos else pager.currentItem, if (pageMotionEnabled) off else 0f); val prog = (pos + off).coerceIn(0f, 1f); globe.setBackdropProgress(if (pageMotionEnabled) prog else if (prog >= .5f) 1f else 0f) }
+            override fun onPageScrolled(pos: Int, off: Float, px: Int) {
+                // Gesture feedback tracks the pager even when autonomous animations are disabled.
+                navigationBar.setPageOffset(pos, off)
+                val progress = (pos + off).coerceIn(0f, 1f)
+                globe.setBackdropProgress(if (pageMotionEnabled) progress else if (progress >= .5f) 1f else 0f)
+            }
             override fun onPageSelected(pos: Int) {
                 homeMetricsCoordinator.homeSpeedOnHome = pos == 0
                 if (pos != 0) { homeMetricsCoordinator.cancelHomeRouteDownload(); homeMetricsCoordinator.setMapTrafficActive(false) } else homeMetricsCoordinator.sampleMapTraffic()

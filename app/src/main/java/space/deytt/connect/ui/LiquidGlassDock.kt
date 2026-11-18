@@ -144,7 +144,7 @@ internal class LiquidGlassDock(
         when (event.actionMasked) {
             MotionEvent.ACTION_MOVE -> {
                 val target = (dragOrigin + (event.x - dragStart) / cellWidth()).coerceIn(0f, labels.lastIndex.toFloat())
-                moveTo(if (motionEnabled()) target else target.roundToInt().toFloat())
+                moveTo(target)
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 val released = event.actionMasked == MotionEvent.ACTION_UP
@@ -206,9 +206,8 @@ internal class LiquidGlassDock(
 
     override fun dispatchDraw(canvas: Canvas) {
         val x = padding + cellWidth() * (position + .5f)
-        val motion = motionEnabled()
-        val travel = if (motion) abs(sin(position * Math.PI.toFloat())) else 0f
-        val lift = if (motion && dragging) .55f + travel * .45f else travel
+        val travel = abs(sin(position * Math.PI.toFloat()))
+        val lift = if (dragging) .55f + travel * .45f else travel
         val lensWidth = cellWidth() * (.91f + lift * .28f)
         val lensHeight = scale * (48f + lift * 14f)
         val inset = scale * 6f
