@@ -4,8 +4,12 @@ import android.content.Context
 import android.graphics.*
 import android.os.Build
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -64,6 +68,8 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
 
     private val cornerRadiusPx = dp(24).toFloat()
     private val borderRect = RectF()
+    private val galaxy: WebView
+    private var galaxyMotion = false
     private val labelTariffView: TextView
     private val tariffNameView: TextView
     private val infinityGlyphView: InfinityGlyphView
@@ -81,6 +87,29 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
             }
         }
         background = DeyttUi.starfieldBackground(context)
+        galaxy = object : WebView(context) {
+            override fun onTouchEvent(event: MotionEvent): Boolean = false
+        }.apply {
+            setBackgroundColor(Color.TRANSPARENT)
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            isFocusable = false
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            settings.apply {
+                javaScriptEnabled = true
+                allowFileAccess = false
+                allowContentAccess = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            }
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView, url: String) {
+                    applyGalaxyMotion()
+                }
+            }
+        }
+        addView(galaxy, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+        galaxy.loadUrl("file:///android_asset/galaxy/galaxy.html")
 
         val paddingH = dp(20)
         val paddingV = dp(20)
@@ -213,6 +242,28 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
         contentLayout.addView(bottomGrid)
 
         addView(contentLayout)
+    }
+
+    internal fun setGalaxyMotion(enabled: Boolean) {
+        if (galaxyMotion == enabled) return
+        galaxyMotion = enabled
+        applyGalaxyMotion()
+    }
+
+    private fun applyGalaxyMotion() {
+        galaxy.evaluateJavascript("window.deyttSetGalaxyMotion && window.deyttSetGalaxyMotion($galaxyMotion)", null)
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        galaxy.onResume()
+        post { if (isAttachedToWindow) (context as? MainActivity)?.updatePrimaryPageMotion() }
+    }
+
+    override fun onDetachedFromWindow() {
+        setGalaxyMotion(false)
+        galaxy.onPause()
+        super.onDetachedFromWindow()
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {

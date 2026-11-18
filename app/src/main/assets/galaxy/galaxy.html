@@ -9,7 +9,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #000000;
+      background: transparent;
       touch-action: none;
     }
     #galaxyCanvas {
@@ -19,7 +19,7 @@
       width: 100%;
       height: 100%;
       display: block;
-      background: #000000;
+      background: transparent;
     }
   </style>
 </head>
@@ -33,7 +33,7 @@
     antialias: false,
     depth: false,
     stencil: false,
-    powerPreference: 'high-performance'
+    powerPreference: 'low-power'
   });
   if (!gl) return;
 
@@ -232,7 +232,7 @@
     speed: 1.0,
     glowIntensity: 0.32,
     saturation: 0.0,
-    twinkleIntensity: 0.45,
+    twinkleIntensity: 0.66,
     rotationSpeed: 0.06,
     starSize: 0.75, // Small crisp pinprick stars!
     flareIntensity: 1.0,
@@ -250,24 +250,21 @@
   };
 
   let last = 0;
+  let frame = 0;
+  let motionEnabled = false;
   function resize() {
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.1);
     const w = Math.max(1, Math.round(window.innerWidth * dpr));
     const h = Math.max(1, Math.round(window.innerHeight * dpr));
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
-      gl.viewport(0, 0, w, h);
     }
+    gl.viewport(0, 0, w, h);
+    draw(0);
   }
 
-  window.addEventListener('resize', resize);
-  resize();
-
-  function render(now) {
-    if (!last) last = now;
-    const dt = Math.min((now - last) / 1000, 0.05);
-    last = now;
+  function draw(dt) {
 
     const flight = settings.starSpeed / 10.0;
     state.time += dt * settings.speed;
@@ -305,10 +302,35 @@
     gl.uniform1f(uniforms.uOpacity, settings.opacity);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    requestAnimationFrame(render);
   }
 
-  requestAnimationFrame(render);
+  function render(now) {
+    if (!last || now - last >= 32) {
+      draw(last ? Math.min((now - last) / 1000, .08) : 0);
+      last = now;
+    }
+    frame = requestAnimationFrame(render);
+  }
+
+  function updateMotion() {
+    const shouldRun = motionEnabled && !document.hidden;
+    if (shouldRun && !frame) {
+      last = 0;
+      frame = requestAnimationFrame(render);
+    } else if (!shouldRun && frame) {
+      cancelAnimationFrame(frame);
+      frame = 0;
+    }
+  }
+
+  // The host supplies current app and system motion settings. WebView may retain its launch preference.
+  window.deyttSetGalaxyMotion = function (enabled) {
+    motionEnabled = Boolean(enabled);
+    updateMotion();
+  };
+  document.addEventListener('visibilitychange', updateMotion);
+  window.addEventListener('resize', resize);
+  resize();
 })();
 </script>
 </body>

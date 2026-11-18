@@ -27,11 +27,11 @@ import space.deytt.connect.DeyttUi.BLUE_DEEP
 import space.deytt.connect.DeyttUi.LINE
 import space.deytt.connect.DeyttUi.MUTED
 import space.deytt.connect.DeyttUi.SKY
-import space.deytt.connect.DeyttUi.SURFACE
 import space.deytt.connect.DeyttUi.SURFACE_2
 import space.deytt.connect.DeyttUi.TEXT
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
+import space.deytt.connect.DeyttUi.glassCardBackground
 import space.deytt.connect.DeyttUi.header
 import space.deytt.connect.DeyttUi.row
 import space.deytt.connect.DeyttUi.rounded
@@ -266,7 +266,7 @@ internal class PrimaryPages(
         root.addView(LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(15), host.dp(3), host.dp(15), host.dp(3))
-            background = host.rounded(SURFACE, 18f, LINE)
+            background = host.glassCardBackground(radius = 18f)
             clipToOutline = true
             addView(preferenceSwitch(
                 copy("Регион на карте", "Region on the map"),
@@ -285,7 +285,7 @@ internal class PrimaryPages(
         root.addView(LinearLayout(host).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(host.dp(16), host.dp(13), host.dp(16), host.dp(13))
-            background = host.rounded(SURFACE, 18f, LINE)
+            background = host.glassCardBackground(radius = 18f)
             clipToOutline = true
             addView(host.text("deytt.connect · ${BuildConfig.VERSION_NAME}", 13f, TEXT, android.graphics.Typeface.BOLD))
             val updateStatus = host.text(inAppUpdateFlow.updateStatusText, 11f, MUTED).apply { setPadding(0, host.dp(5), 0, host.dp(10)) }

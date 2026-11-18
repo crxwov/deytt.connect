@@ -522,51 +522,56 @@ private class DockRefraction {
 private class DockIcon(context: Context, private val index: Int) : View(context) {
     private val ink = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = 1.75f
+        strokeWidth = 1.55f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
     private val path = Path().apply {
         when (index) {
             0 -> {
-                moveTo(-8f, -1f)
-                lineTo(-1.35f, -7.1f)
-                quadTo(0f, -8.3f, 1.35f, -7.1f)
-                lineTo(8f, -1f)
-                lineTo(6.1f, -1f)
-                lineTo(6.1f, 5.65f)
-                quadTo(6.1f, 7f, 4.65f, 7f)
-                lineTo(2.15f, 7f)
-                lineTo(2.15f, 2.75f)
-                quadTo(2.15f, 1.75f, 1.1f, 1.75f)
-                lineTo(-1.1f, 1.75f)
-                quadTo(-2.15f, 1.75f, -2.15f, 2.75f)
-                lineTo(-2.15f, 7f)
-                lineTo(-4.65f, 7f)
-                quadTo(-6.1f, 7f, -6.1f, 5.65f)
-                lineTo(-6.1f, -1f)
-                close()
+                moveTo(-7.5f, -.3f)
+                lineTo(-1.15f, -6.25f)
+                quadTo(0f, -7.3f, 1.15f, -6.25f)
+                lineTo(7.5f, -.3f)
+                moveTo(-5.65f, -1.8f)
+                lineTo(-5.65f, 5.2f)
+                quadTo(-5.65f, 6.15f, -4.65f, 6.15f)
+                lineTo(-2.05f, 6.15f)
+                lineTo(-2.05f, 2.2f)
+                quadTo(-2.05f, 1.4f, -1.2f, 1.4f)
+                lineTo(1.2f, 1.4f)
+                quadTo(2.05f, 1.4f, 2.05f, 2.2f)
+                lineTo(2.05f, 6.15f)
+                lineTo(4.65f, 6.15f)
+                quadTo(5.65f, 6.15f, 5.65f, 5.2f)
+                lineTo(5.65f, -1.8f)
             }
             1 -> {
-                addCircle(0f, 0f, 7.5f, Path.Direction.CW)
-                addOval(-3.1f, -7.5f, 3.1f, 7.5f, Path.Direction.CW)
-                moveTo(-7.4f, 0f)
-                lineTo(7.4f, 0f)
+                addCircle(-4.8f, -4.5f, 1.75f, Path.Direction.CW)
+                addCircle(4.8f, 4.5f, 1.75f, Path.Direction.CW)
+                moveTo(-3.05f, -4.5f)
+                lineTo(1.55f, -4.5f)
+                cubicTo(4.8f, -4.5f, 4.8f, 0f, 1.55f, 0f)
+                lineTo(-1.55f, 0f)
+                cubicTo(-4.8f, 0f, -4.8f, 4.5f, -1.55f, 4.5f)
+                lineTo(3.05f, 4.5f)
             }
             2 -> {
-                addCircle(0f, -3.7f, 3.2f, Path.Direction.CW)
-                moveTo(-7f, 7f)
-                cubicTo(-7f, .75f, 7f, .75f, 7f, 7f)
-                close()
+                addCircle(0f, -3.65f, 2.9f, Path.Direction.CW)
+                moveTo(-6.3f, 6.1f)
+                cubicTo(-5.7f, .6f, 5.7f, .6f, 6.3f, 6.1f)
             }
             else -> {
-                addCircle(0f, 0f, 2.65f, Path.Direction.CW)
-                for (tooth in 0 until 6) {
-                    val start = tooth * 60f
-                    arcTo(-5.8f, -5.8f, 5.8f, 5.8f, start - 15f, 30f, tooth == 0)
-                    arcTo(-7.7f, -7.7f, 7.7f, 7.7f, start + 22f, 16f, false)
-                }
-                close()
+                moveTo(-6.75f, -4f)
+                lineTo(-3.55f, -4f)
+                addCircle(-1.7f, -4f, 1.85f, Path.Direction.CW)
+                moveTo(.15f, -4f)
+                lineTo(6.75f, -4f)
+                moveTo(-6.75f, 4f)
+                lineTo(-.15f, 4f)
+                addCircle(1.7f, 4f, 1.85f, Path.Direction.CW)
+                moveTo(3.55f, 4f)
+                lineTo(6.75f, 4f)
             }
         }
     }

@@ -1192,7 +1192,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val opacity = onMainValue { webView.alpha }
-                check(kotlin.math.abs(opacity - (1f - .192f * expected)) < .025f) {
+                check(kotlin.math.abs(opacity - (1f - .384f * expected)) < .025f) {
                     "$label: atlas opacity did not follow swipe progress: $opacity"
                 }
                 return
@@ -1200,8 +1200,8 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             val css = runAtlasScript(webView,
                 "(function(){var s=getComputedStyle(document.querySelector('.network-atlas'));return parseFloat(s.getPropertyValue('--backdrop-blur'))+'|'+parseFloat(s.getPropertyValue('--backdrop-opacity'));})()")
                 .split('|').mapNotNull(String::toDoubleOrNull)
-            check(css.size == 2 && kotlin.math.abs(css[0] - 8.96 * expected) < 1.0 &&
-                kotlin.math.abs(css[1] - (1.0 - .192 * expected)) < .03) {
+            check(css.size == 2 && kotlin.math.abs(css[0] - 17.92 * expected) < 1.0 &&
+                kotlin.math.abs(css[1] - (1.0 - .384 * expected)) < .03) {
                 "$label: atlas blur and opacity did not follow swipe progress: $css expected=$expected"
             }
         }

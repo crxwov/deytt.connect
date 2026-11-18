@@ -263,7 +263,7 @@ object DeyttUi {
         primaryTop: Int = 0x402D425A.toInt(),
         primaryBottom: Int = 0x22131F2E.toInt(),
     ): Drawable = if (secondary) {
-        glassButtonBackground(0x40364C68.toInt(), 0x22121E2E.toInt(), radius)
+        glassButtonBackground(0x63445770, 0x28101D2C, radius)
     } else {
         connectionGlassBackground(VpnPhase.IDLE)
     }
@@ -312,10 +312,10 @@ object DeyttUi {
             )
         } else {
             intArrayOf(
-                0x2CFFFFFF.toInt(),
-                0x12FFFFFF.toInt(),
-                0x0C82B4E8.toInt(),
-                0x12FFFFFF.toInt(),
+                0x54FFFFFF,
+                0x15E0EEFA,
+                0x1489B9E7,
+                0x2BCDE6FF,
             )
         }
         return LiquidGlassDrawable(
@@ -323,9 +323,10 @@ object DeyttUi {
             cornerRadiusPx = dp(radius.roundToInt()).toFloat(),
             fillColors = if (topColor == bottomColor) intArrayOf(topColor) else intArrayOf(topColor, bottomColor),
             strokeColors = strokeColors,
-            strokeWidthPx = if (isPrimary) 0.95f else 0.85f,
+            strokePositions = floatArrayOf(0f, .27f, .71f, 1f),
+            strokeWidthPx = if (isPrimary) 0.95f else 0.9f,
             hasGloss = true,
-            glossAlpha = if (isPrimary) 0x1E else 0x12,
+            glossAlpha = if (isPrimary) 0x1E else 0x26,
             innerLip = false,
         )
     }
@@ -423,7 +424,7 @@ object DeyttUi {
                     tag = if (trailing == "›") null else "country-chevron"
                     importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                 }
-                addView(chevron, LinearLayout.LayoutParams(dp(22), dp(22)).apply { leftMargin = dp(8) })
+                addView(chevron, LinearLayout.LayoutParams(dp(18), dp(18)).apply { leftMargin = dp(8) })
             } else {
                 addView(text(trailing, 12f, if (emphasis) SKY else TEXT, Typeface.BOLD).apply {
                     gravity = Gravity.CENTER
@@ -433,7 +434,8 @@ object DeyttUi {
                     maxWidth = dp(84)
                     minHeight = dp(36)
                     setPadding(dp(8), dp(6), dp(8), dp(6))
-                    background = rowIconBacking(emphasis, 18f)
+                    background = if (emphasis) glassButtonBackground(0x55456887, 0x24182232, 18f)
+                    else liquidGlassButton(secondary = true, radius = 18f)
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     leftMargin = dp(8)
                 })
@@ -800,7 +802,11 @@ object DeyttUi {
             .coerceIn(18, 24))
 
     fun setStarfieldMotion(root: View, active: Boolean, reducedMotion: Boolean = false, profileVisible: Boolean = false) {
-        val canAnimate = active && !reducedMotion && (root !is StarryPlanCard || profileVisible)
+        val canAnimate = active && !reducedMotion
+        if (root is StarryPlanCard) {
+            root.setGalaxyMotion(canAnimate && profileVisible)
+            return
+        }
         (root.background as? NetworkAtmosphereDrawable)?.setMotionEnabled(canAnimate)
         if (root is ViewGroup) {
             for (index in 0 until root.childCount) {

@@ -1194,7 +1194,28 @@
       this.projectedNodes[key] = projected;
       if (projected.z <= 0.015) return;
       const hovered = this.hovered === key;
-      const countryAccent = window.DeyttAtlasBridge ? COUNTRY_ACCENTS[key] : null;
+      if (window.DeyttAtlasBridge) {
+        const tint = COUNTRY_ACCENTS[key] || colors.routeHot;
+        const radius = active || hovered ? 2.8 : 2.1;
+        context.save();
+        context.beginPath();
+        context.arc(projected.x, projected.y, radius, 0, TAU);
+        context.fillStyle = tint;
+        context.shadowColor = tint;
+        context.shadowBlur = active || hovered ? 4 : 2;
+        context.fill();
+        if (active || hovered) {
+          context.beginPath();
+          context.arc(projected.x, projected.y, 5, 0, TAU);
+          context.shadowBlur = 0;
+          context.globalAlpha = .32;
+          context.strokeStyle = tint;
+          context.lineWidth = .7;
+          context.stroke();
+        }
+        context.restore();
+        return;
+      }
       const outer = active || hovered ? (hovered ? 12 : 8) : 0;
       if (outer) {
         context.beginPath();
@@ -1204,18 +1225,18 @@
         context.globalAlpha = 1;
       }
       context.beginPath();
-      const radius = hovered ? 5 : active ? 4.1 : countryAccent ? 3.3 : 2.1;
+      const radius = hovered ? 5 : active ? 4.1 : 2.1;
       context.arc(projected.x, projected.y, radius, 0, TAU);
-      context.fillStyle = countryAccent || (kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.landDim);
-      context.shadowColor = countryAccent || (kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.border);
+      context.fillStyle = kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.landDim;
+      context.shadowColor = kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.border;
       context.shadowBlur = hovered ? 9 : active ? 6 : 0;
       context.fill();
       context.shadowBlur = 0;
-      if (active || hovered || countryAccent) {
+      if (active || hovered) {
         context.beginPath();
-        context.arc(projected.x, projected.y, radius + (countryAccent ? 1.15 : 0), 0, TAU);
-        context.lineWidth = active || hovered ? 1.15 : .9;
-        context.strokeStyle = countryAccent ? "rgba(9,21,35,.86)" : kind === "user" ? colors.node : colors.routeHot;
+        context.arc(projected.x, projected.y, radius, 0, TAU);
+        context.lineWidth = 1.15;
+        context.strokeStyle = kind === "user" ? colors.node : colors.routeHot;
         context.stroke();
       }
     }
@@ -1232,6 +1253,7 @@
       const context = this.context;
       const location = key === "user" ? this.userLocation : LOCATIONS[key];
       const compact = this.width < 520;
+      const glass = Boolean(window.DeyttAtlasBridge);
       const labelScale = this.options.labelScale || 1;
       const baseOffset = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
       const offset = { x: baseOffset.x * labelScale, y: baseOffset.y * labelScale, align: baseOffset.align };
@@ -1239,11 +1261,11 @@
       const meta = key === "user" ? (location.country || this.copy("вход в сеть")) : location.code + " · " + this.copy(location.country);
       const titleFontSize = Math.round((compact ? 9 : 10) * labelScale);
       const metaFontSize = Math.round((compact ? 7 : 8) * labelScale);
-      const inset = Math.round((compact ? 10 : 12) * labelScale);
-      const height = Math.round((compact ? 35 : 39) * labelScale);
+      const inset = Math.round((glass ? 8 : compact ? 10 : 12) * labelScale);
+      const height = Math.round((glass ? (compact ? 30 : 33) : (compact ? 35 : 39)) * labelScale);
       const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
-      const titleFont = "700 " + titleFontSize + "px " + fontFamily;
-      const metaFont = "600 " + metaFontSize + "px " + fontFamily;
+      const titleFont = (glass ? "550 " : "700 ") + titleFontSize + "px " + fontFamily;
+      const metaFont = (glass ? "500 " : "600 ") + metaFontSize + "px " + fontFamily;
       context.save();
       context.font = titleFont;
       const titleWidth = context.measureText(title).width;
@@ -1316,15 +1338,15 @@
       context.moveTo(point.x, point.y);
       context.lineTo(endX, endY);
       context.strokeStyle = key === "user" ? colors.node : active ? "#38BDF8" : colors.border;
-      context.lineWidth = 1;
-      context.globalAlpha = active ? .75 : .35;
+      context.lineWidth = glass ? .65 : 1;
+      context.globalAlpha = glass ? .3 : active ? .75 : .35;
       context.stroke();
 
       occupied.push({ left: left, top: top, width: width, height: height });
       context.beginPath();
-      context.roundRect(left, top, width, height, Math.round((compact ? 10 : 12) * labelScale));
+      context.roundRect(left, top, width, height, Math.round((glass ? 8 : compact ? 10 : 12) * labelScale));
       const accent = COUNTRY_ACCENTS[key] || colors.routeHot || "#7AC6FF";
-      if (window.DeyttAtlasBridge && this.staticCanvas && this.staticCanvas.width) {
+      if (glass && this.staticCanvas && this.staticCanvas.width) {
         const sourceX = this.staticCanvas.width / this.width;
         const sourceY = this.staticCanvas.height / this.height;
         context.save();
@@ -1334,16 +1356,16 @@
         context.drawImage(this.staticCanvas, (left + width * .045) * sourceX, (top + height * .045) * sourceY,
           width * .91 * sourceX, height * .91 * sourceY, left, top, width, height);
         const tint = context.createLinearGradient(left, top, left, top + height);
-        tint.addColorStop(0, "rgba(18,34,52,.80)");
-        tint.addColorStop(.35, "rgba(10,23,39,.87)");
-        tint.addColorStop(1, "rgba(7,15,28,.92)");
+        tint.addColorStop(0, "rgba(14,26,41,.68)");
+        tint.addColorStop(.28, "rgba(10,22,37,.76)");
+        tint.addColorStop(1, "rgba(7,17,30,.84)");
         context.fillStyle = tint;
         context.fillRect(left, top, width, height);
         context.restore();
         const rim = context.createLinearGradient(left, top, left + width, top + height);
-        rim.addColorStop(0, this.hovered === key ? accent : "rgba(221,242,255,.54)");
-        rim.addColorStop(.44, "rgba(130,181,222,.24)");
-        rim.addColorStop(1, active ? accent : "rgba(136,191,230,.36)");
+        rim.addColorStop(0, "rgba(230,246,255,.46)");
+        rim.addColorStop(.48, "rgba(169,202,231,.09)");
+        rim.addColorStop(1, accent + (active || this.hovered === key ? "60" : "34"));
         context.strokeStyle = rim;
         context.globalAlpha = 1;
       } else {
@@ -1353,18 +1375,18 @@
         context.strokeStyle = this.hovered === key ? (colors.borderHot || "#38BDF8") : active ? "#38BDF8" : colors.border;
         context.globalAlpha = active ? .65 : .35;
       }
-      context.lineWidth = 1;
+      context.lineWidth = glass ? .7 : 1;
       context.stroke();
 
       context.textBaseline = "middle";
       context.textAlign = "left";
-      context.fillStyle = window.DeyttAtlasBridge || active ? colors.label : colors.labelMuted;
+      context.fillStyle = glass ? "#F0F6FF" : active ? colors.label : colors.labelMuted;
       context.globalAlpha = 1;
       context.font = titleFont;
-      context.fillText(title.toLowerCase(), left + inset, top + Math.round((compact ? 11 : 12) * labelScale));
-      context.fillStyle = colors.labelMuted;
+      context.fillText(title.toLowerCase(), left + inset, top + Math.round((glass ? (compact ? 9 : 10) : (compact ? 11 : 12)) * labelScale));
+      context.fillStyle = glass ? "#B9C9DC" : colors.labelMuted;
       context.font = metaFont;
-      context.fillText(meta.toLowerCase(), left + inset, top + Math.round((compact ? 25 : 28) * labelScale));
+      context.fillText(meta.toLowerCase(), left + inset, top + Math.round((glass ? (compact ? 21 : 23) : (compact ? 25 : 28)) * labelScale));
       context.restore();
     }
 
@@ -1800,13 +1822,13 @@
           if (point.z <= .015) return;
           const phaseOffset = index * .19;
           const progress = reduce ? .35 : ((elapsed / 1050 + phaseOffset) % 1);
-          const opacity = reduce ? .7 : Math.sin(Math.PI * progress) * .72;
+          const opacity = reduce ? .48 : Math.sin(Math.PI * progress) * .48;
           const accent = confirmedKey ? "#7CEAC0" : COUNTRY_ACCENTS[key];
           context.beginPath();
           context.arc(point.x, point.y, 6 + progress * 10, 0, TAU);
           context.globalAlpha = opacity;
           context.strokeStyle = accent;
-          context.lineWidth = confirmedKey ? 1.7 : 1.3;
+          context.lineWidth = confirmedKey ? 1.25 : .85;
           context.stroke();
 
           if (userLoc && !reduce) {

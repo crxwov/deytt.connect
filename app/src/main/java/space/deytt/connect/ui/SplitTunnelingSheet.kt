@@ -94,7 +94,7 @@ internal class SplitTunnelingSheet(
         }
         val deletePreset = host.text("✕", 14f, DeyttUi.CORAL, android.graphics.Typeface.BOLD).apply {
             setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(8))
-            background = host.rounded(0x50381E24, 14f, 0x45F43F5E.toInt())
+            background = host.glassButtonBackground(0x654F2934, 0x282B1820, 14f)
             foreground = host.ripple(14f)
             host.pressFeedback(this, .985f)
             isClickable = true
@@ -201,7 +201,7 @@ internal class SplitTunnelingSheet(
                 addView(host.sectionLabel(if (vpnOnly) copy("сайты через vpn", "sites through vpn") else copy("сайты без vpn", "bypass sites")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 val addBtn = host.text("+ " + copy("Добавить", "Add"), 12f, SKY, android.graphics.Typeface.BOLD).apply {
                     setPadding(host.dp(12), host.dp(6), host.dp(12), host.dp(6))
-                    background = host.glassButtonBackground(0x303B82F6.toInt(), 0x181D4ED8.toInt(), 12f)
+                    background = host.glassButtonBackground(0x59345578, 0x2419263B, 12f)
                     foreground = host.ripple(12f)
                     host.pressFeedback(this, .985f)
                     isClickable = true
@@ -297,7 +297,7 @@ internal class SplitTunnelingSheet(
                 addView(host.sectionLabel(if (vpnOnly) copy("приложения через vpn", "apps through vpn") else copy("приложения без vpn", "bypass apps")), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 val addBtn = host.text("+ " + copy("Добавить", "Add"), 12f, SKY, android.graphics.Typeface.BOLD).apply {
                     setPadding(host.dp(12), host.dp(6), host.dp(12), host.dp(6))
-                    background = host.glassButtonBackground(0x303B82F6.toInt(), 0x181D4ED8.toInt(), 12f)
+                    background = host.glassButtonBackground(0x59345578, 0x2419263B, 12f)
                     foreground = host.ripple(12f)
                     host.pressFeedback(this, .985f)
                     isClickable = true
@@ -537,7 +537,7 @@ internal class SplitTunnelingSheet(
                     addView(host.text(copy("+ добавить", "+ add"), 10f, SKY, android.graphics.Typeface.BOLD).apply {
                         gravity = Gravity.CENTER
                         setPadding(host.dp(8), host.dp(7), host.dp(8), host.dp(7))
-                        background = host.rounded(DeyttUi.SKY_SURFACE, 10f, LINE)
+                        background = host.glassButtonBackground(0x4C316183, 0x22152639, 10f)
                     }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                         marginStart = host.dp(8)
                     })

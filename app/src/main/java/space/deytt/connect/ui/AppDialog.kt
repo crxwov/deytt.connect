@@ -347,7 +347,7 @@ object AppDialog {
                         gravity = Gravity.CENTER
                         minHeight = host.dp(48)
                         setPadding(host.dp(16), host.dp(8), host.dp(16), host.dp(8))
-                        background = host.glassButtonBackground(DeyttUi.BLUE, DeyttUi.BLUE_DEEP, 22f)
+                        background = host.glassButtonBackground(0xCE21548F.toInt(), 0xA61B3A67.toInt(), 22f)
                         foreground = host.ripple(22f)
                         elevation = host.dp(2).toFloat()
                         host.pressFeedback(this, .985f)

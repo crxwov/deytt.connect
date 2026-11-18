@@ -507,7 +507,7 @@ class MainActivity : Activity() {
         val startup = StartupAnimationView(this, isReducedMotionEnabled()); globeStage.addView(startup, FrameLayout.LayoutParams(-1, -1)); startup.start()
     }
 
-    private fun updatePrimaryPageMotion() {
+    internal fun updatePrimaryPageMotion() {
         if (!::pageAdapter.isInitialized) return
         val reducedInApp = isReducedMotionEnabled()
         // The changing map blur is direct feedback for a manual drag.
