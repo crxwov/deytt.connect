@@ -22,6 +22,7 @@ import android.view.VelocityTracker
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.annotation.RequiresApi
+import androidx.core.graphics.ColorUtils
 import space.deytt.connect.AppLanguage.uiCopy
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.prefersReducedMotion
@@ -43,7 +44,7 @@ internal class LiquidGlassDock(
     private val labels = listOf("Главная", "Маршруты", "Профиль", "Настройки").map { host.uiCopy(it) }
     private val labelsAndIcons = labels.mapIndexed { index, label ->
         val icon = DockIcon(host, index)
-        val title = host.text(label, 10f, 0xFFD6DCE5.toInt()).apply {
+        val title = host.text(label, 10f, TAB_NEUTRAL_COLOR).apply {
             gravity = Gravity.CENTER
             importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         }
@@ -167,14 +168,15 @@ internal class LiquidGlassDock(
         }
         position = value
         val active = value.roundToInt()
-        if (active != selected) {
-            selected = active
-            labelsAndIcons.forEachIndexed { index, (item, icon, title) ->
-                val isActive = index == active
-                item.isSelected = isActive
-                icon.setActive(isActive)
-                title.setTextColor(if (isActive) 0xFFA8DBFF.toInt() else 0xFFD6DCE5.toInt())
-            }
+        val selectionChanged = active != selected
+        selected = active
+        labelsAndIcons.forEachIndexed { index, (item, icon, title) ->
+            if (selectionChanged) item.isSelected = index == active
+            val proximity = (1f - abs(index - value)).coerceIn(0f, 1f)
+            val tint = proximity * proximity * (3f - 2f * proximity)
+            val color = ColorUtils.blendARGB(TAB_NEUTRAL_COLOR, TAB_LENS_COLOR, tint)
+            icon.setTint(color)
+            if (title.currentTextColor != color) title.setTextColor(color)
         }
         invalidate()
     }
@@ -316,6 +318,8 @@ internal class LiquidGlassDock(
         const val OVERLAP_DP = 56
         private const val FAST_SWIPE_CELLS_PER_SECOND = 3.5f
         private const val FAST_GLIDE_MS = 230f
+        private val TAB_NEUTRAL_COLOR = 0xFFD6DCE5.toInt()
+        private val TAB_LENS_COLOR = 0xFFA8DBFF.toInt()
     }
 }
 
@@ -513,8 +517,9 @@ private class DockIcon(context: Context, private val index: Int) : View(context)
 
     init { importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
 
-    fun setActive(active: Boolean) {
-        ink.color = if (active) 0xFFA8DBFF.toInt() else 0xFFD6DCE5.toInt()
+    fun setTint(color: Int) {
+        if (ink.color == color) return
+        ink.color = color
         invalidate()
     }
 
