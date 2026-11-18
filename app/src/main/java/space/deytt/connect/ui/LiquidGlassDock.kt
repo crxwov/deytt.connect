@@ -319,7 +319,7 @@ internal class LiquidGlassDock(
         private const val FAST_SWIPE_CELLS_PER_SECOND = 3.5f
         private const val FAST_GLIDE_MS = 230f
         private val TAB_NEUTRAL_COLOR = 0xFFD6DCE5.toInt()
-        private val TAB_LENS_COLOR = 0xFFA8DBFF.toInt()
+        private val TAB_LENS_COLOR = 0xFF64E9FF.toInt()
     }
 }
 
