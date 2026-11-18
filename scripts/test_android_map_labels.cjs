@@ -48,3 +48,24 @@ const compact = labels("nl", 360, 100, 265);
 assert.ok(compact.user.left > 265 && compact.serverLabel.left + compact.serverLabel.width < 100);
 labels("nl", 600, 40, 590);
 console.log("Android connected label directions, compact layout and edge fallbacks: 7 cases passed");
+const strategy = Object.create(window.DeyttAtlas.NetworkAtlas.prototype);
+const strokes = [];
+Object.assign(strategy, {
+  context: {
+    save() {}, restore() {}, beginPath() {},
+    arc(x, y) { this.center = [x, y]; },
+    stroke() { strokes.push({ center: this.center, color: this.strokeStyle }); },
+  },
+  connectionPhase: "CHECKING", connectionIsAuto: true,
+  availableLocationKeys: new Set(["nl", "de"]),
+  reducedMotion: { matches: true },
+  projectLocation(location) { return { x: location.lon, y: location.lat, z: 1 }; },
+});
+strategy.drawConnectionAnimation(600);
+assert.equal(strokes.length, 2, "checking highlights both available locations");
+assert.equal(new Set(strokes.map(stroke => stroke.color)).size, 2);
+assert.ok(strokes.every(stroke => stroke.color !== "#7CEAC0"), "checking never invents a winner");
+strategy.autoExitRouteKey = "de";
+strategy.drawConnectionAnimation(600);
+assert.deepEqual(strokes.slice(2), [{ center: strokes[1].center, color: "#7CEAC0" }]);
+console.log("Auto strategy displays only available candidates and confirms the observed exit");

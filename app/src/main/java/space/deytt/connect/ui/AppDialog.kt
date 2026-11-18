@@ -222,7 +222,7 @@ object AppDialog {
 
                         if (isSingleChoice) {
                             val dot = View(host).apply {
-                                background = host.rounded(if (isSelected) DeyttUi.SKY else 0x22FFFFFF, 8f, if (isSelected) DeyttUi.SKY else DeyttUi.LINE)
+                                background = host.rounded(if (isSelected) DeyttUi.SKY else android.graphics.Color.TRANSPARENT, 8f, if (isSelected) DeyttUi.SKY else DeyttUi.MUTED)
                             }
                             addView(dot, LinearLayout.LayoutParams(host.dp(14), host.dp(14)).apply {
                                 leftMargin = host.dp(10)
@@ -249,7 +249,7 @@ object AppDialog {
                                     rowLabel?.setTextColor(if (sel) DeyttUi.SKY else DeyttUi.TEXT)
                                     rowLabel?.typeface = host.typeface(DeyttUi.FontFamily.INTER_TIGHT, if (sel) 600 else 450)
                                     val rowDot = itemView.getChildAt(1)
-                                    rowDot?.background = host.rounded(if (sel) DeyttUi.SKY else 0x22FFFFFF, 8f, if (sel) DeyttUi.SKY else DeyttUi.LINE)
+                                    rowDot?.background = host.rounded(if (sel) DeyttUi.SKY else android.graphics.Color.TRANSPARENT, 8f, if (sel) DeyttUi.SKY else DeyttUi.MUTED)
                                 }
                                 dialogSingleChoiceListener?.onClick(createdDialog, index)
                             } else {

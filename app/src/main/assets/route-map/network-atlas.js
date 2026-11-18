@@ -12,6 +12,7 @@
   const PAN_EASE_MS = 120;
   const NODE_TAP_CORE_RADIUS = 12;
   const LOCATION_ORDER = ["ru", "fi", "nl", "de", "it"];
+  const COUNTRY_ACCENTS = { nl: "#7AC6FF", de: "#F4C681", fi: "#86E4D4", ru: "#CFB4F7", it: "#F39D9C" };
   const CONNECTED_LABEL_SIDE_PENALTY = 10000;
   const LABEL_OFFSETS = {
     nl: { x: -24, y: -42, align: "right" },
@@ -1193,6 +1194,7 @@
       this.projectedNodes[key] = projected;
       if (projected.z <= 0.015) return;
       const hovered = this.hovered === key;
+      const countryAccent = window.DeyttAtlasBridge ? COUNTRY_ACCENTS[key] : null;
       const outer = active || hovered ? (hovered ? 12 : 8) : 0;
       if (outer) {
         context.beginPath();
@@ -1202,17 +1204,18 @@
         context.globalAlpha = 1;
       }
       context.beginPath();
-      context.arc(projected.x, projected.y, hovered ? 5 : active ? 4.1 : 2.1, 0, TAU);
-      context.fillStyle = kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.landDim;
-      context.shadowColor = kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.border;
-      context.shadowBlur = hovered ? 18 : active ? 12 : 3;
+      const radius = hovered ? 5 : active ? 4.1 : countryAccent ? 3.3 : 2.1;
+      context.arc(projected.x, projected.y, radius, 0, TAU);
+      context.fillStyle = countryAccent || (kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.landDim);
+      context.shadowColor = countryAccent || (kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.border);
+      context.shadowBlur = hovered ? 9 : active ? 6 : 0;
       context.fill();
       context.shadowBlur = 0;
-      if (active || hovered) {
+      if (active || hovered || countryAccent) {
         context.beginPath();
-        context.arc(projected.x, projected.y, hovered ? 5 : 4.1, 0, TAU);
-        context.lineWidth = 1;
-        context.strokeStyle = kind === "user" ? colors.node : colors.routeHot;
+        context.arc(projected.x, projected.y, radius + (countryAccent ? 1.15 : 0), 0, TAU);
+        context.lineWidth = active || hovered ? 1.15 : .9;
+        context.strokeStyle = countryAccent ? "rgba(9,21,35,.86)" : kind === "user" ? colors.node : colors.routeHot;
         context.stroke();
       }
     }
@@ -1320,20 +1323,42 @@
       occupied.push({ left: left, top: top, width: width, height: height });
       context.beginPath();
       context.roundRect(left, top, width, height, Math.round((compact ? 10 : 12) * labelScale));
-      context.fillStyle = colors.labelBg;
-      context.globalAlpha = active ? .96 : .68;
-      context.shadowColor = "rgba(16,29,65,.22)";
-      context.shadowBlur = 18;
-      context.fill();
-      context.shadowBlur = 0;
-      context.strokeStyle = this.hovered === key ? (colors.borderHot || "#38BDF8") : active ? "#38BDF8" : colors.border;
-      context.globalAlpha = active ? (this.hovered === key ? .9 : .65) : .35;
+      const accent = COUNTRY_ACCENTS[key] || colors.routeHot || "#7AC6FF";
+      if (window.DeyttAtlasBridge && this.staticCanvas && this.staticCanvas.width) {
+        const sourceX = this.staticCanvas.width / this.width;
+        const sourceY = this.staticCanvas.height / this.height;
+        context.save();
+        context.clip();
+        // The geography is cached separately, so this lens never samples labels or itself.
+        context.globalAlpha = 1;
+        context.drawImage(this.staticCanvas, (left + width * .045) * sourceX, (top + height * .045) * sourceY,
+          width * .91 * sourceX, height * .91 * sourceY, left, top, width, height);
+        const tint = context.createLinearGradient(left, top, left, top + height);
+        tint.addColorStop(0, "rgba(18,34,52,.80)");
+        tint.addColorStop(.35, "rgba(10,23,39,.87)");
+        tint.addColorStop(1, "rgba(7,15,28,.92)");
+        context.fillStyle = tint;
+        context.fillRect(left, top, width, height);
+        context.restore();
+        const rim = context.createLinearGradient(left, top, left + width, top + height);
+        rim.addColorStop(0, this.hovered === key ? accent : "rgba(221,242,255,.54)");
+        rim.addColorStop(.44, "rgba(130,181,222,.24)");
+        rim.addColorStop(1, active ? accent : "rgba(136,191,230,.36)");
+        context.strokeStyle = rim;
+        context.globalAlpha = 1;
+      } else {
+        context.fillStyle = colors.labelBg;
+        context.globalAlpha = active ? .96 : .68;
+        context.fill();
+        context.strokeStyle = this.hovered === key ? (colors.borderHot || "#38BDF8") : active ? "#38BDF8" : colors.border;
+        context.globalAlpha = active ? .65 : .35;
+      }
       context.lineWidth = 1;
       context.stroke();
 
       context.textBaseline = "middle";
       context.textAlign = "left";
-      context.fillStyle = active ? colors.label : colors.labelMuted;
+      context.fillStyle = window.DeyttAtlasBridge || active ? colors.label : colors.labelMuted;
       context.globalAlpha = 1;
       context.font = titleFont;
       context.fillText(title.toLowerCase(), left + inset, top + Math.round((compact ? 11 : 12) * labelScale));
@@ -1489,7 +1514,8 @@
       this.renderCount += 1;
       const cameraNeedsFrames = Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001;
       const connectionAnim = this.connectionAnimationActive(time);
-      if (cameraNeedsFrames || connectionAnim || (this.trafficActive && !this.reducedMotion.matches)) this.start();
+      if (cameraNeedsFrames || ((connectionAnim || this.trafficActive) &&
+          !this.reducedMotion.matches && !window.deyttMapReducedMotion)) this.start();
       else if (idleActive && !this.idleFrameTimer) {
         this.idleFrameTimer = window.setTimeout(() => {
           this.idleFrameTimer = 0;
@@ -1668,7 +1694,10 @@
         : null;
       if (this.autoExitRouteKey === nextRouteKey) return;
       this.autoExitRouteKey = nextRouteKey;
-      if (this.route === "auto" && nextRouteKey) this.focusRoute();
+      if (this.route === "auto" && nextRouteKey) {
+        if (this.connectionIsAuto && this.connectionPhase === "CONNECTED") this.connectionBurstAt = performance.now();
+        this.focusRoute();
+      }
       // Egress metadata changes the active endpoint, never the user's camera
       // after an active route is selected. The first active route update frames
       // the actual path; later country corrections only refresh its marker.
@@ -1723,6 +1752,7 @@
 
     connectionAnimationActive(time) {
       const now = time || performance.now();
+      if (this.root.classList.contains("is-backdrop-stage")) return false;
       if (this.connectionPhase === "STARTING" || this.connectionPhase === "CHECKING") return true;
       if (this.connectionBurstAt && (now - this.connectionBurstAt < 800)) return true;
       return false;
@@ -1734,13 +1764,15 @@
       const isAuto = this.connectionIsAuto;
       const elapsed = time - (this.connectionPhaseStartedAt || time);
       const userLoc = this.userLocation;
-      const userPt = userLoc ? this.projectLocation(userLoc, 1.008) : null;
+      const reduce = this.reducedMotion.matches || window.deyttMapReducedMotion;
+      const confirmedRoute = this.connectionTargetRoute || (isAuto ? this.autoExitRouteKey : this.route);
+      const confirmedKey = confirmedRoute && (ROUTES[confirmedRoute]?.nodes || [confirmedRoute])
+        .find(key => LOCATIONS[key] && this.availableLocationKeys.has(key));
 
       // 1. Gentle, minimalist connection ripple on successful connect
-      if (this.connectionBurstAt && (time - this.connectionBurstAt < 800)) {
+      if (!reduce && phase === "CONNECTED" && this.connectionBurstAt && (time - this.connectionBurstAt < 800)) {
         const burstT = (time - this.connectionBurstAt) / 800;
-        const burstTargetKey = this.connectionTargetRoute || this.activeRouteNodeKeys()[0] || "de";
-        const burstLoc = LOCATIONS[burstTargetKey];
+        const burstLoc = confirmedKey ? LOCATIONS[confirmedKey] : null;
         if (burstLoc) {
           const pt = this.projectLocation(burstLoc, 1.010);
           if (pt.z > 0.015) {
@@ -1762,79 +1794,31 @@
       context.save();
 
       if (isAuto) {
-        // ============================================
-        // MINIMALIST AUTO MODE (Автоподбор)
-        // ============================================
-        const candidateKeys = Array.from(this.availableLocationKeys).filter(k => k !== "user" && LOCATIONS[k]);
-        if (!candidateKeys.length) candidateKeys.push("nl", "de", "fi", "ru", "it");
+        const candidateKeys = confirmedKey ? [confirmedKey] : LOCATION_ORDER.filter(key => this.availableLocationKeys.has(key));
+        candidateKeys.forEach((key, index) => {
+          const point = this.projectLocation(LOCATIONS[key], 1.010);
+          if (point.z <= .015) return;
+          const phaseOffset = index * .19;
+          const progress = reduce ? .35 : ((elapsed / 1050 + phaseOffset) % 1);
+          const opacity = reduce ? .7 : Math.sin(Math.PI * progress) * .72;
+          const accent = confirmedKey ? "#7CEAC0" : COUNTRY_ACCENTS[key];
+          context.beginPath();
+          context.arc(point.x, point.y, 6 + progress * 10, 0, TAU);
+          context.globalAlpha = opacity;
+          context.strokeStyle = accent;
+          context.lineWidth = confirmedKey ? 1.7 : 1.3;
+          context.stroke();
 
-        const winnerKey = this.connectionTargetRoute || (phase === "CHECKING" ? candidateKeys[1 % candidateKeys.length] : null);
-
-        if (!winnerKey || phase === "STARTING") {
-          // Subtle, calm cycle across candidates: one node softly breathes at a time
-          const cycleMs = 700;
-          const currentIndex = Math.floor(elapsed / cycleMs) % candidateKeys.length;
-          const currentKey = candidateKeys[currentIndex];
-          const nodeProgress = (elapsed % cycleMs) / cycleMs;
-
-          // Candidate nodes: subtle dots, current one has gentle ripple
-          candidateKeys.forEach((key, idx) => {
-            const loc = LOCATIONS[key];
-            if (!loc) return;
-            const pt = this.projectLocation(loc, 1.008);
-            if (pt.z <= 0.015) return;
-
-            if (idx === currentIndex) {
-              const ringR = 4 + nodeProgress * 12;
-              const ringA = (1 - nodeProgress) * 0.45;
+          if (userLoc && !reduce) {
+            const samplePosition = this.projectLanePoint("user", key, progress, 0);
+            if (samplePosition.z > -.02) {
               context.beginPath();
-              context.arc(pt.x, pt.y, ringR, 0, TAU);
-              context.strokeStyle = "rgba(0, 212, 255, " + ringA.toFixed(2) + ")";
-              context.lineWidth = 1.2;
-              context.stroke();
-            }
-          });
-
-          // Single delicate probe particle traveling from user to currently evaluated candidate
-          if (userLoc && LOCATIONS[currentKey]) {
-            const probePt = this.projectLanePoint("user", currentKey, nodeProgress, 0);
-            if (probePt.z > -0.02) {
-              context.beginPath();
-              context.arc(probePt.x, probePt.y, 2.2, 0, TAU);
-              context.fillStyle = "#00D4FF";
-              context.shadowColor = "#00D4FF";
-              context.shadowBlur = 4;
+              context.arc(samplePosition.x, samplePosition.y, confirmedKey ? 2.5 : 1.8, 0, TAU);
+              context.fillStyle = accent;
               context.fill();
             }
           }
-        } else {
-          // Winner selected / CHECKING: chosen node breathes softly, one calm check pulse
-          const targetLoc = LOCATIONS[winnerKey];
-          if (targetLoc) {
-            const pt = this.projectLocation(targetLoc, 1.010);
-            if (pt.z > 0.015) {
-              const breathe = 0.5 + 0.5 * Math.sin(elapsed * 0.005);
-              context.beginPath();
-              context.arc(pt.x, pt.y, 5 + breathe * 5, 0, TAU);
-              context.strokeStyle = "rgba(0, 245, 180, " + (0.3 + breathe * 0.35).toFixed(2) + ")";
-              context.lineWidth = 1.4;
-              context.stroke();
-            }
-
-            if (userLoc) {
-              const pingT = (elapsed % 750) / 750;
-              const pingPt = this.projectLanePoint("user", winnerKey, pingT, 0);
-              if (pingPt.z > -0.02) {
-                context.beginPath();
-                context.arc(pingPt.x, pingPt.y, 2.2, 0, TAU);
-                context.fillStyle = "#00F5A0";
-                context.shadowColor = "#00F5A0";
-                context.shadowBlur = 4;
-                context.fill();
-              }
-            }
-          }
-        }
+        });
       } else {
         // ============================================
         // MINIMALIST DIRECT ROUTE CONNECTION
@@ -1846,7 +1830,7 @@
         if (targetLoc) {
           const pt = this.projectLocation(targetLoc, 1.010);
           if (pt.z > 0.015) {
-            const breathe = 0.5 + 0.5 * Math.sin(elapsed * 0.004);
+            const breathe = reduce ? .4 : .5 + .5 * Math.sin(elapsed * .004);
             context.beginPath();
             context.arc(pt.x, pt.y, 5 + breathe * 5, 0, TAU);
             context.strokeStyle = phase === "CHECKING"
@@ -1858,7 +1842,7 @@
         }
 
         // Single neat light pulse traveling along the route
-        if (userLoc && targetLoc) {
+        if (userLoc && targetLoc && !reduce) {
           const pulseDuration = phase === "CHECKING" ? 750 : 850;
           const t = (elapsed % pulseDuration) / pulseDuration;
           const pt = this.projectLanePoint("user", targetKey, t, 0);

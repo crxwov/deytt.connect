@@ -1,6 +1,15 @@
 package space.deytt.connect
 
+import android.animation.ValueAnimator
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.Matrix
+import android.graphics.Rect
+import android.graphics.Shader
+import android.graphics.drawable.LayerDrawable
+import android.graphics.drawable.ShapeDrawable
+import android.graphics.drawable.shapes.RoundRectShape
 import android.graphics.Color
 import android.os.Build
 import android.os.Handler
@@ -8,12 +17,15 @@ import android.os.Looper
 import android.os.SystemClock
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
+import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.PathInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.core.view.doOnLayout
 import space.deytt.connect.AppLanguage.uiCopy
 import space.deytt.connect.DeyttUi.dp
 import space.deytt.connect.DeyttUi.rounded
@@ -33,7 +45,6 @@ internal class FloatingBannerPresenter(
     private fun uiCopy(value: String): String = host.uiCopy(value)
 
     fun showFloatingBanner(title: String, subtitle: String? = null, isSuccess: Boolean = true) {
-        android.util.Log.i("DeyttBanner", "showFloatingBanner: title=$title isSuccess=$isSuccess")
         if (host.isFinishing || host.isDestroyed) return
         val globeStage = globeStageProvider() ?: return
         val now = SystemClock.elapsedRealtime()
@@ -42,6 +53,7 @@ internal class FloatingBannerPresenter(
 
         floatingBannerDismissRunnable?.let { floatingBannerHandler.removeCallbacks(it) }
         activeFloatingBanner?.let { existing ->
+            existing.animate().cancel()
             (existing.parent as? ViewGroup)?.removeView(existing)
             activeFloatingBanner = null
         }
@@ -50,13 +62,29 @@ internal class FloatingBannerPresenter(
         val statusHeight = (statusInset?.let { (it.layoutParams as? ViewGroup.LayoutParams)?.height })
             ?.takeIf { it > 0 } ?: statusInset?.height ?: 0
         val topInset = if (statusHeight > 0) statusHeight else dp(28)
+        val motion = !host.isReducedMotionEnabled() &&
+            (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || ValueAnimator.areAnimatorsEnabled())
+        val corner = dp(22).toFloat()
+        val material = LiquidGlassDrawable(
+            density = host.resources.displayMetrics.density,
+            cornerRadiusPx = corner,
+            fillColors = intArrayOf(0xDD273A4D.toInt(), 0xCD131D2B.toInt(), 0xE60D1722.toInt()),
+            strokeColors = intArrayOf(
+                0x7AFFFFFF,
+                0x267FC3F8,
+                if (isSuccess) 0x3634D399 else 0x36F96B88,
+                0x50FFFFFF,
+            ),
+            glossAlpha = 0x24,
+            innerLip = true,
+        )
         val banner = LinearLayout(host).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            elevation = dp(32).toFloat()
-            translationZ = dp(32).toFloat()
-            val borderColor = if (isSuccess) 0x6534D399.toInt() else 0x65F43F5E.toInt()
-            background = with(host) { rounded(0xFD111A26.toInt(), 22f, borderColor) }
+            elevation = dp(24).toFloat()
+            background = material
+            tag = "subscription-update-banner"
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
             setPadding(dp(16), dp(10), dp(18), dp(10))
             isClickable = true
             isFocusable = true
@@ -64,8 +92,7 @@ internal class FloatingBannerPresenter(
 
         val iconContainer = FrameLayout(host).apply {
             val iconBg = if (isSuccess) 0x2810B981.toInt() else 0x28F43F5E.toInt()
-            val iconBorder = if (isSuccess) 0x4534D399.toInt() else 0x45F43F5E.toInt()
-            background = with(host) { rounded(iconBg, 14f, iconBorder) }
+            background = with(host) { rounded(iconBg, 14f) }
             val iv = ImageView(host).apply {
                 setImageResource(if (isSuccess) R.drawable.ic_shield_check else R.drawable.ic_sync)
                 imageTintList = ColorStateList.valueOf(if (isSuccess) DeyttUi.MINT else DeyttUi.CORAL)
@@ -103,24 +130,62 @@ internal class FloatingBannerPresenter(
             rightMargin = dp(16)
         }
 
-        banner.translationY = -dp(20).toFloat()
         banner.alpha = 0f
-        banner.scaleX = 0.94f
-        banner.scaleY = 0.94f
-
+        activeFloatingBanner = banner
         globeStage.addView(banner, params)
         banner.bringToFront()
-        activeFloatingBanner = banner
-        android.util.Log.i("DeyttBanner", "banner added to globeStage at topMargin=${params.topMargin}")
 
-        banner.animate()
-            .translationY(0f)
-            .alpha(1f)
-            .scaleX(1f)
-            .scaleY(1f)
-            .setDuration(320L)
-            .setInterpolator(android.view.animation.OvershootInterpolator(1.1f))
-            .start()
+        var revealed = false
+        fun reveal() {
+            if (revealed || activeFloatingBanner !== banner) return
+            revealed = true
+            if (!motion) {
+                banner.alpha = 1f
+                return
+            }
+            banner.translationY = -dp(12).toFloat()
+            banner.scaleX = .97f
+            banner.scaleY = .92f
+            banner.animate().translationY(0f).alpha(1f).scaleX(1f).scaleY(1f)
+                .setDuration(280L)
+                .setInterpolator(PathInterpolator(.2f, .85f, .28f, 1f))
+                .start()
+        }
+
+        banner.doOnLayout {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || banner.width == 0 || banner.height == 0) {
+                reveal()
+            } else {
+                val loc = IntArray(2)
+                banner.getLocationInWindow(loc)
+                val area = Rect(loc[0], loc[1], loc[0] + banner.width, loc[1] + banner.height)
+                val sample = Bitmap.createBitmap(area.width(), area.height(), Bitmap.Config.ARGB_8888)
+                val revealTimeout = Runnable { reveal() }
+                floatingBannerHandler.postDelayed(revealTimeout, 80L)
+                try {
+                    PixelCopy.request(host.window, area, sample, { result ->
+                        if (!revealed) {
+                            floatingBannerHandler.removeCallbacks(revealTimeout)
+                            if (activeFloatingBanner === banner && result == PixelCopy.SUCCESS) {
+                                val lens = ShapeDrawable(RoundRectShape(FloatArray(8) { corner }, null, null))
+                                lens.paint.isFilterBitmap = true
+                                lens.paint.shader = BitmapShader(sample, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP).apply {
+                                    // shortcut: a single backdrop sample, resample if the banner needs to follow moving content.
+                                    setLocalMatrix(Matrix().apply {
+                                        setScale(1.09f, 1.09f, sample.width / 2f, sample.height / 2f)
+                                    })
+                                }
+                                banner.background = LayerDrawable(arrayOf(lens, material))
+                            }
+                            reveal()
+                        }
+                    }, floatingBannerHandler)
+                } catch (_: IllegalArgumentException) {
+                    floatingBannerHandler.removeCallbacks(revealTimeout)
+                    reveal()
+                }
+            }
+        }
 
         runCatching {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -130,18 +195,25 @@ internal class FloatingBannerPresenter(
             }
         }
 
+        fun removeBanner() {
+            (banner.parent as? ViewGroup)?.removeView(banner)
+            if (activeFloatingBanner === banner) activeFloatingBanner = null
+        }
+
         fun dismissBanner() {
+            revealed = true
+            if (!motion) {
+                removeBanner()
+                return
+            }
             banner.animate()
-                .translationY(-dp(40).toFloat())
+                .translationY(-dp(10).toFloat())
                 .alpha(0f)
                 .scaleX(0.94f)
                 .scaleY(0.94f)
-                .setDuration(220L)
+                .setDuration(170L)
                 .setInterpolator(android.view.animation.AccelerateInterpolator())
-                .withEndAction {
-                    (banner.parent as? ViewGroup)?.removeView(banner)
-                    if (activeFloatingBanner === banner) activeFloatingBanner = null
-                }
+                .withEndAction { removeBanner() }
                 .start()
         }
 
@@ -164,6 +236,7 @@ internal class FloatingBannerPresenter(
         floatingBannerDismissRunnable = null
         floatingBannerHandler.removeCallbacksAndMessages(null)
         activeFloatingBanner?.let { banner ->
+            banner.animate().cancel()
             (banner.parent as? ViewGroup)?.removeView(banner)
             activeFloatingBanner = null
         }

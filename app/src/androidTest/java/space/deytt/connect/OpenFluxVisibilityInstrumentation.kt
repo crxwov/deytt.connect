@@ -33,7 +33,13 @@ import java.util.concurrent.TimeUnit
 
 /** Empty-cache UI regression. This runner must never target the installed production application. */
 class OpenFluxVisibilityInstrumentation : Instrumentation() {
-    override fun onCreate(arguments: Bundle?) { super.onCreate(arguments); start() }
+    private var glassOnly = false
+
+    override fun onCreate(arguments: Bundle?) {
+        super.onCreate(arguments)
+        glassOnly = arguments?.getString("glassOnly") == "true"
+        start()
+    }
 
     override fun onStart() {
         val results = Bundle()
@@ -93,14 +99,46 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)) as MainActivity
             activity = launched
             waitForIdleSync()
-            stage = "startup_splash_types_brand_mark"
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                stage = "startup_splash_types_brand_mark"
+                awaitCondition {
+                    onMainCondition {
+                        val mark = findView(launched.findViewById(android.R.id.content)) { it.tag == "startup-mark" } as? TextView
+                        mark?.text?.toString()?.isNotBlank() == true && mark.isShown
+                    }
+                }
+                passed += stage
+            }
+            stage = "strategy_update_banner_reveals_and_dismisses"
+            runOnMainSync { SubscriptionRefreshState.finishSuccess(5, "Маршруты обновлены (5)") }
+            val content = launched.findViewById<View>(android.R.id.content)
             awaitCondition {
                 onMainCondition {
-                    val mark = findView(launched.findViewById(android.R.id.content)) { it.tag == "startup-mark" } as? TextView
-                    mark?.text?.toString()?.isNotBlank() == true && mark.isShown
+                    findView(content) { it.tag == "subscription-update-banner" }?.alpha == 1f
                 }
             }
+            runOnMainSync {
+                val banner = checkNotNull(findView(content) { it.tag == "subscription-update-banner" })
+                check(banner.background is LiquidGlassDrawable ||
+                    banner.background is android.graphics.drawable.LayerDrawable)
+                check(banner.performClick())
+            }
+            awaitCondition { onMainCondition { findView(content) { it.tag == "subscription-update-banner" } == null } }
             passed += stage
+
+            if (glassOnly) {
+                stage = "globe_blur_animates_reverses_and_respects_reduced_motion"
+                clickNavigation(launched, "главная")
+                awaitPagerSettled(launched, 0, "Подключить")
+                val globe = onMainValue { checkNotNull(findViews(content) { it is RouteGlobeView }.singleOrNull()) as RouteGlobeView }
+                awaitAtlasReady(globe)
+                val webView = onMainValue { checkNotNull(findViews(globe) { it is WebView }.singleOrNull()) as WebView }
+                awaitAtlasCameraStable(webView)
+                assertGlobeBlurTransition(launched, webView, homePagerSwipeYOutsideGlobeSlot(launched))
+                passed += stage
+                return
+            }
+
             stage = "open_routes_through_visible_navigation"
             awaitCondition {
                 onMainCondition {
@@ -523,10 +561,10 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             activity?.let { current -> runOnMainSync { current.finish() } }
             waitForIdleSync()
             runCatching { SubscriptionStore(targetContext).saveValidated(CORE) }
+            results.putStringArrayList("passed", passed)
+            if (!results.containsKey("result")) results.putString("result", "PASS")
+            finish(if (results.getString("result") == "PASS") -1 else 0, results)
         }
-        results.putStringArrayList("passed", passed)
-        if (!results.containsKey("result")) results.putString("result", "PASS")
-        finish(if (results.getString("result") == "PASS") -1 else 0, results)
     }
 
     private fun clickNavigation(activity: MainActivity, label: String) {
@@ -1154,7 +1192,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 val opacity = onMainValue { webView.alpha }
-                check(kotlin.math.abs(opacity - (1f - .15f * expected)) < .025f) {
+                check(kotlin.math.abs(opacity - (1f - .192f * expected)) < .025f) {
                     "$label: atlas opacity did not follow swipe progress: $opacity"
                 }
                 return
@@ -1162,8 +1200,8 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             val css = runAtlasScript(webView,
                 "(function(){var s=getComputedStyle(document.querySelector('.network-atlas'));return parseFloat(s.getPropertyValue('--backdrop-blur'))+'|'+parseFloat(s.getPropertyValue('--backdrop-opacity'));})()")
                 .split('|').mapNotNull(String::toDoubleOrNull)
-            check(css.size == 2 && kotlin.math.abs(css[0] - 7.0 * expected) < 1.0 &&
-                kotlin.math.abs(css[1] - (1.0 - .15 * expected)) < .03) {
+            check(css.size == 2 && kotlin.math.abs(css[0] - 8.96 * expected) < 1.0 &&
+                kotlin.math.abs(css[1] - (1.0 - .192 * expected)) < .03) {
                 "$label: atlas blur and opacity did not follow swipe progress: $css expected=$expected"
             }
         }
@@ -1178,7 +1216,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         }
         onMainValue { pager.registerOnPageChangeCallback(normalRecorder) }
         swipePageLeft(activity, pagerSwipeY)
-        awaitPagerSettled(activity, 1, "lte + белые списки")
+        awaitPagerSettled(activity, 1, "Маршруты")
         check(normalSamples.any { it in .05f.. .95f }) {
             "Routes swipe did not report intermediate blur progress: " + normalSamples.take(12)
         }
@@ -1212,7 +1250,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
         onMainValue { pager.registerOnPageChangeCallback(reducedRecorder) }
         try {
             swipePageLeft(activity, pagerSwipeY)
-            awaitPagerSettled(activity, 1, "lte + белые списки")
+            awaitPagerSettled(activity, 1, "Маршруты")
             check(reducedSamples.isNotEmpty() && reducedSamples.all { it < .01f || it > .99f }) {
                 "Reduced-motion swipe should use endpoint blur states only: " + reducedSamples.take(12)
             }
@@ -1226,7 +1264,7 @@ class OpenFluxVisibilityInstrumentation : Instrumentation() {
             if (onMainValue { pager.currentItem != 0 }) onMainValue { pager.setCurrentItem(0, false) }
         }
         runOnMainSync { pager.setCurrentItem(1, false) }
-        awaitPagerSettled(activity, 1, "lte + белые списки")
+        awaitPagerSettled(activity, 1, "Маршруты")
         checkVisual(1f, "Instant Routes selection should blur the globe")
         runOnMainSync { pager.setCurrentItem(0, false) }
         awaitPagerSettled(activity, 0, "Подключить")

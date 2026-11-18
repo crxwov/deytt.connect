@@ -80,7 +80,7 @@ class StarryPlanCard(context: Context) : FrameLayout(context) {
                 outline.setRoundRect(0, 0, view.width, view.height, cornerRadiusPx)
             }
         }
-        background = DeyttUi.starfieldBackground(context, allowMotion = false)
+        background = DeyttUi.starfieldBackground(context)
 
         val paddingH = dp(20)
         val paddingV = dp(20)

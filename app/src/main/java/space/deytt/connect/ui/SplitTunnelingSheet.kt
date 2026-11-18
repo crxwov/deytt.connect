@@ -2,6 +2,7 @@ package space.deytt.connect
 
 import android.app.Dialog
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
@@ -26,7 +27,6 @@ import space.deytt.connect.DeyttUi.LINE
 import space.deytt.connect.DeyttUi.MUTED
 import space.deytt.connect.DeyttUi.SKY
 import space.deytt.connect.DeyttUi.SURFACE
-import space.deytt.connect.DeyttUi.SURFACE_2
 import space.deytt.connect.DeyttUi.TEXT
 import space.deytt.connect.DeyttUi.button
 import space.deytt.connect.DeyttUi.dp
@@ -71,7 +71,7 @@ internal class SplitTunnelingSheet(
         val presetName = host.text("", 12f, TEXT, android.graphics.Typeface.BOLD).apply {
             minimumHeight = host.dp(44)
             setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
-            background = host.rounded(0x551E324E, 14f, 0x5060A5FA.toInt())
+            background = host.glassRowBackground(true, 14f)
             foreground = host.ripple(14f)
             host.pressFeedback(this, .985f)
             isClickable = true
@@ -79,14 +79,14 @@ internal class SplitTunnelingSheet(
         val modeButton = host.text("", 12f, TEXT, android.graphics.Typeface.BOLD).apply {
             minimumHeight = host.dp(44)
             setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
-            background = host.rounded(0x551E324E, 14f, 0x5060A5FA.toInt())
+            background = host.glassRowBackground(true, 14f)
             foreground = host.ripple(14f)
             host.pressFeedback(this, .985f)
             isClickable = true
         }
         val addPreset = host.text("+", 16f, SKY, android.graphics.Typeface.BOLD).apply {
             setPadding(host.dp(14), host.dp(8), host.dp(14), host.dp(8))
-            background = host.rounded(0x551E324E, 14f, 0x5060A5FA.toInt())
+            background = host.glassRowBackground(true, 14f)
             foreground = host.ripple(14f)
             host.pressFeedback(this, .985f)
             isClickable = true
@@ -212,7 +212,7 @@ internal class SplitTunnelingSheet(
                             setHintTextColor(MUTED)
                             textSize = 14f
                             inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-                            background = host.rounded(SURFACE_2, 12f, LINE)
+                            background = host.glassRowBackground(false, 12f)
                             setPadding(host.dp(14), host.dp(12), host.dp(14), host.dp(12))
                         }
                         val container = FrameLayout(host).apply {
@@ -250,13 +250,13 @@ internal class SplitTunnelingSheet(
             if (customDomains.isEmpty()) {
                 val empty = host.text(copy("Нет добавленных сайтов. Нажмите «+ Добавить», чтобы открывать сайт без VPN.", "No custom sites added. Tap \"+ Add\" to bypass a site."), 12f, MUTED).apply {
                     setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
-                    background = host.rounded(SURFACE_2, 14f, LINE)
+                    background = host.glassRowBackground(false, 14f)
                 }
                 content.addView(empty)
             } else {
                 val listCard = LinearLayout(host).apply {
                     orientation = LinearLayout.VERTICAL
-                    background = host.rounded(SURFACE_2, 14f, LINE)
+                    background = host.glassRowBackground(false, 14f)
                     setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
                 }
                 customDomains.forEachIndexed { index, domain ->
@@ -317,13 +317,13 @@ internal class SplitTunnelingSheet(
             if (customPackages.isEmpty()) {
                 val empty = host.text(copy("Нет исключённых приложений. Нажмите «+ Добавить», чтобы выбрать приложение из списка.", "No excluded apps. Tap \"+ Add\" to select an application."), 12f, MUTED).apply {
                     setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
-                    background = host.rounded(SURFACE_2, 14f, LINE)
+                    background = host.glassRowBackground(false, 14f)
                 }
                 content.addView(empty)
             } else {
                 val listCard = LinearLayout(host).apply {
                     orientation = LinearLayout.VERTICAL
-                    background = host.rounded(SURFACE_2, 14f, LINE)
+                    background = host.glassRowBackground(false, 14f)
                     setPadding(host.dp(10), host.dp(4), host.dp(10), host.dp(4))
                 }
                 val pm = host.packageManager
@@ -378,12 +378,16 @@ internal class SplitTunnelingSheet(
 
             val subCard = LinearLayout(host).apply {
                 orientation = LinearLayout.VERTICAL
-                background = host.rounded(SURFACE_2, 14f, LINE)
+                background = host.glassRowBackground(false, 14f)
                 setPadding(host.dp(12), host.dp(10), host.dp(12), host.dp(10))
                 val ruleHeader = LinearLayout(host).apply {
                     orientation = LinearLayout.HORIZONTAL
                     gravity = Gravity.CENTER_VERTICAL
-                    addView(host.text("🔒", 12f, MUTED))
+                    addView(ImageView(host).apply {
+                        setImageResource(R.drawable.ic_shield_check)
+                        imageTintList = ColorStateList.valueOf(MUTED)
+                        importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, LinearLayout.LayoutParams(host.dp(16), host.dp(16)))
                     addView(host.text(copy("базовые правила подписки", "base subscription rules"), 12f, TEXT, android.graphics.Typeface.BOLD),
                         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { marginStart = host.dp(6) })
                     addView(host.text(copy("всегда без vpn", "always bypass VPN"), 10f, SKY, android.graphics.Typeface.BOLD).apply {
@@ -459,7 +463,7 @@ internal class SplitTunnelingSheet(
             setTextColor(TEXT)
             setHintTextColor(MUTED)
             textSize = 14f
-            background = host.rounded(SURFACE_2, 12f, LINE)
+            background = host.glassRowBackground(false, 12f)
             setPadding(host.dp(14), host.dp(10), host.dp(14), host.dp(10))
         }
         sheet.addView(searchInput, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {

@@ -12,6 +12,9 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.style.ImageSpan
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -456,7 +459,21 @@ class MainActivity : Activity() {
         tunnelConnectionCoordinator.actionButton = action; root.addView(action, LinearLayout.LayoutParams(-1, dp(56)))
         root.addView(spacer(12, this)); root.addView(homeMetricsCoordinator.buildQualityStrip())
         val refreshBtn = button("Обновить замер", secondary = true).apply {
-            tag = "home-refresh"; setOnClickListener { homeMetricsCoordinator.homeSpeedAttemptAt = 0L; homeMetricsCoordinator.measureHomeRouteDownload(); homeMetricsCoordinator.measureSelectedRoute() }
+            tag = "home-refresh"
+            getDrawable(R.drawable.ic_sync)?.mutate()?.let { icon ->
+                icon.setBounds(0, 0, dp(16), dp(16))
+                icon.setTint(DeyttUi.SKY)
+                val label = text.toString()
+                contentDescription = label
+                text = SpannableString("￼  $label").apply {
+                    setSpan(ImageSpan(icon, ImageSpan.ALIGN_CENTER), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                }
+            }
+            setOnClickListener {
+                homeMetricsCoordinator.homeSpeedAttemptAt = 0L
+                homeMetricsCoordinator.measureHomeRouteDownload()
+                homeMetricsCoordinator.measureSelectedRoute()
+            }
         }
         root.addView(refreshBtn, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(12) })
         tunnelConnectionCoordinator.updateRouteFlow(SelectedRouteStore(this).read()); networkLocationCoordinator.updateNetworkLocationViews()
@@ -497,7 +514,12 @@ class MainActivity : Activity() {
         pageMotionEnabled = !reducedInApp
         val reduced = reducedInApp || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !ValueAnimator.areAnimatorsEnabled())
         if (::globe.isInitialized) globe.setReducedMotion(reduced)
-        if (::globeStage.isInitialized) DeyttUi.setStarfieldMotion(globeStage, active = !isFinishing && !homeMetricExplanationSheet.isTrafficExplanationShowing(), reducedMotion = reduced)
+        if (::globeStage.isInitialized) DeyttUi.setStarfieldMotion(
+            globeStage,
+            active = homeMetricsCoordinator.homeSpeedForeground && !isFinishing && !homeMetricExplanationSheet.isTrafficExplanationShowing(),
+            reducedMotion = reduced,
+            profileVisible = pager.currentItem == 2 && pager.scrollState == ViewPager2.SCROLL_STATE_IDLE,
+        )
     }
 
     private fun setSelectedDestination(label: String) {

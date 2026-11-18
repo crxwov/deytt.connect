@@ -35,7 +35,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private val backdropEffects = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         Array<RenderEffect?>(BACKDROP_BLUR_STEPS + 1) { step ->
             if (step == 0) null else {
-                val radius = resources.displayMetrics.density * 7f * step / BACKDROP_BLUR_STEPS
+                val radius = resources.displayMetrics.density * 10f * step / BACKDROP_BLUR_STEPS
                 RenderEffect.createBlurEffect(radius, radius, Shader.TileMode.CLAMP)
             }
         }
@@ -498,7 +498,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     companion object {
         private const val ASSET_HOST = "appassets.androidplatform.net"
         private const val BACKDROP_BLUR_STEPS = 8
-        private const val BACKDROP_BLUR_STRENGTH = .25f
+        private const val BACKDROP_BLUR_STRENGTH = .32f
 
         internal fun parentInterceptPolicy(actionMasked: Int, gestureStartedInsideGlobe: Boolean): Boolean? = when {
             actionMasked == MotionEvent.ACTION_DOWN ||

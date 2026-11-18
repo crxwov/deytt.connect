@@ -384,14 +384,7 @@ object DeyttUi {
                 "ACCOUNT_ICON" -> actionIcon(R.drawable.ic_user_round, emphasis)
                 "DEVICE_DESKTOP" -> actionIcon(R.drawable.ic_monitor, emphasis)
                 "DEVICE_PHONE" -> actionIcon(R.drawable.ic_smartphone, emphasis)
-                "↻" -> android.widget.ImageView(this@row).apply {
-                    setImageResource(R.drawable.ic_sync)
-                    imageTintList = ColorStateList.valueOf(SKY)
-                    background = rowIconBacking(emphasis)
-                    setPadding(dp(8), dp(8), dp(8), dp(8))
-                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
-                    importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                }
+                "↻" -> actionIcon(R.drawable.ic_sync, emphasis)
                 else -> {
                 val isCountryFlag = leading.any { it.code in 0xD800..0xDBFF }
                 text(leading, if (isCountryFlag) 20f else 11f, if (isCountryFlag) TEXT else SKY,
@@ -456,7 +449,7 @@ object DeyttUi {
         setImageResource(resource)
         imageTintList = ColorStateList.valueOf(SKY)
         background = rowIconBacking(emphasis)
-        setPadding(dp(8), dp(8), dp(8), dp(8))
+        setPadding(dp(11), dp(11), dp(11), dp(11))
         scaleType = ImageView.ScaleType.FIT_CENTER
         importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
     }
@@ -806,10 +799,13 @@ object DeyttUi {
             .roundToInt()
             .coerceIn(18, 24))
 
-    fun setStarfieldMotion(root: View, active: Boolean, reducedMotion: Boolean = false) {
-        (root.background as? NetworkAtmosphereDrawable)?.setMotionEnabled(active && !reducedMotion)
+    fun setStarfieldMotion(root: View, active: Boolean, reducedMotion: Boolean = false, profileVisible: Boolean = false) {
+        val canAnimate = active && !reducedMotion && (root !is StarryPlanCard || profileVisible)
+        (root.background as? NetworkAtmosphereDrawable)?.setMotionEnabled(canAnimate)
         if (root is ViewGroup) {
-            for (index in 0 until root.childCount) setStarfieldMotion(root.getChildAt(index), active, reducedMotion)
+            for (index in 0 until root.childCount) {
+                setStarfieldMotion(root.getChildAt(index), active, reducedMotion, profileVisible)
+            }
         }
     }
 
