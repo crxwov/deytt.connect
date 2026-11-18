@@ -686,14 +686,16 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
         return true
     }
 
+    private fun defaultAwgBaseConfig(): String = org.json.JSONObject()
+        .put("inbounds", org.json.JSONArray().put(org.json.JSONObject().put("type", "tun").put("address", org.json.JSONArray().put("172.19.0.1/30"))))
+        .put("outbounds", org.json.JSONArray().put(org.json.JSONObject().put("type", "direct").put("tag", "direct")))
+        .put("route", org.json.JSONObject().put("rules", org.json.JSONArray()).put("final", "direct"))
+        .put("dns", org.json.JSONObject().put("servers", org.json.JSONArray().put(org.json.JSONObject().put("type", "local").put("tag", "local-dns"))))
+        .toString()
+
     private fun startTunnel(operationId: Long) {
         var pendingOpenFlux: OpenFluxProxyBackend? = null
         try {
-            val config = SubscriptionStore(this).readCurrent()
-            if (config == null) {
-                fail("Нет сохранённой подписки")
-                return
-            }
             val selected = SelectedRouteStore(this).read()
             if (selected.engine == TunnelEngine.OPENFLUX || selected.id == "openflux:DE") {
                 throw OpenFluxRouteException("обход cups отключён. выберите другой маршрут.")
@@ -704,6 +706,12 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                     ?: error("Обновите подписку: профиль AmneziaWG отсутствует")
                 Config.parse(BufferedReader(StringReader(raw)))
             } else null
+            val config = SubscriptionStore(this).readCurrent()
+                ?: if (parsedAwg != null) defaultAwgBaseConfig() else null
+            if (config == null) {
+                fail("Нет сохранённой подписки")
+                return
+            }
             // Endpoint hostname resolution must not hold the lifecycle lock:
             // Android calls stop/revoke on its main thread.
             val awgUserspace = parsedAwg?.toAwgUserspaceString()
@@ -762,7 +770,9 @@ open class ConnectVpnService : VpnService(), CommandServerHandler, PlatformInter
                     val proxy = AwgProxyBackend.start(
                         awgUserspace!!,
                         local.addresses.map { it.address.hostAddress!! }.toTypedArray(),
-                        local.dnsServers.map { it.hostAddress!! }.ifEmpty { FALLBACK_CARRIER_DNS.toList() }.toTypedArray(),
+                        local.dnsServers.mapNotNull { it.hostAddress }
+                            .ifEmpty { listOf("1.1.1.1", "8.8.8.8") }
+                            .toTypedArray(),
                         local.mtu.orElse(1280), username, password, this::protect,
                     )
                     awgProxy = proxy

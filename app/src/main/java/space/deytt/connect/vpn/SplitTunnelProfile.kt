@@ -54,7 +54,7 @@ object SplitTunnelProfile {
         val rules = route.getJSONArray("rules")
         val vpnOnly = mode == UserSplitTunnelStore.MODE_VPN_ONLY
         val selectedOutbound = proxyOutbound ?: route.optString("final")
-        val googleViaGermany = !isRussianRoute(selectedOutbound)
+        val googleViaGermany = !isRussianRoute(selectedOutbound) && (hasGermanyRoute(root) || proxyOutbound == null)
         if (googleViaGermany) germanyRouteOutbounds(root)
         // These are the additional explicit rules in the provider's Happ profile.
         val suffixes = linkedSetOf("ru", "su", "рф", "xn--p1ai")
@@ -258,7 +258,7 @@ object SplitTunnelProfile {
         val routeRules = root.getJSONObject("route").getJSONArray("rules")
         val googleOutbounds = if ((0 until routeRules.length()).any {
                 routeRules.optJSONObject(it)?.optString("outbound") == GOOGLE_OUTBOUND
-            }) germanyRouteOutbounds(root) else emptyList()
+            } && hasGermanyRoute(root)) germanyRouteOutbounds(root) else emptyList()
         val outbounds = JSONArray()
             .put(JSONObject().put("type", "direct").put("tag", "direct"))
             .put(JSONObject().put("type", "socks").put("tag", outbound)
@@ -286,6 +286,21 @@ object SplitTunnelProfile {
 
     private fun isRussianRoute(tag: String): Boolean =
         tag.equals("route:RU", ignoreCase = true) || tag.startsWith("route:RU:", ignoreCase = true)
+
+    private fun hasGermanyRoute(root: JSONObject): Boolean {
+        val source = root.optJSONArray("outbounds") ?: return false
+        val group = (0 until source.length()).mapNotNull(source::optJSONObject)
+            .singleOrNull { it.optString("tag") == GOOGLE_OUTBOUND } ?: return false
+        if (group.optString("type") != "selector") return false
+        val members = group.optJSONArray("outbounds") ?: return false
+        if (members.length() == 0) return false
+        val tags = (0 until members.length()).map { members.getString(it) }
+        if (tags.distinct().size != tags.size) return false
+        val required = tags.toSet() + GOOGLE_OUTBOUND
+        val retained = (0 until source.length()).mapNotNull(source::optJSONObject)
+            .filter { it.optString("tag") in required }
+        return retained.size == required.size
+    }
 
     private fun germanyRouteOutbounds(root: JSONObject): List<JSONObject> {
         val source = root.optJSONArray("outbounds")

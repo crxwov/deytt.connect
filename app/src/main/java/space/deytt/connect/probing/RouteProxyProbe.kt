@@ -104,7 +104,7 @@ internal class DownloadThroughputTracker(
 /** Runs a bounded GET/HEAD check through a loopback-only proxy (sing-box HTTP or AWG SOCKS5). */
 object RouteProxyProbe {
     const val TIMEOUT_MILLIS = 5_000
-    const val QUICK_DOWNLOAD_MILLIS = 2_000
+    const val QUICK_DOWNLOAD_MILLIS = 1_000
     const val HOME_DOWNLOAD_MILLIS = 2_500
     const val LATENCY_SAMPLE_COUNT = 2
     internal const val DOWNLOAD_WARMUP_MILLIS = 400L
@@ -129,8 +129,8 @@ object RouteProxyProbe {
     // Neither host is bypassed by SplitTunnelProfile direct rules (cp.cloudflare.com)
     // or pinned to route:DE (googleDomains), so probes always traverse the selected tunnel.
     internal val LATENCY_ENDPOINTS = listOf(
-        LatencyProbeEndpoint("speed.cloudflare.com", "/__down?bytes=0"),
         LatencyProbeEndpoint("deytt.space", "/generate_204"),
+        LatencyProbeEndpoint("speed.cloudflare.com", "/__down?bytes=0"),
     )
     private const val PROBE_PORT = 443
     private const val HTTP_OK = 200

@@ -63,9 +63,9 @@ class RouteProxyProbeTest {
 
     @Test
     fun boundsDownloadAfterConnectionSetup() {
-        assertEquals(2_000, RouteProxyProbe.QUICK_DOWNLOAD_MILLIS)
+        assertEquals(1_000, RouteProxyProbe.QUICK_DOWNLOAD_MILLIS)
         assertEquals(2_500, RouteProxyProbe.HOME_DOWNLOAD_MILLIS)
-        assertEquals(7_000L, RouteProxyProbe.systemDownloadTaskTimeoutMillis(2_000))
+        assertEquals(6_000L, RouteProxyProbe.systemDownloadTaskTimeoutMillis(RouteProxyProbe.QUICK_DOWNLOAD_MILLIS))
     }
 
     @Test

@@ -345,7 +345,9 @@ class MainActivity : Activity() {
         var currentBottomInset = 0
         val pageBaseBottomPadding = java.util.WeakHashMap<View, Int>()
         fun applyPageBottomClearance(page: View) {
-            val content = (page as? android.widget.ScrollView)?.getChildAt(0) ?: page
+            if (page !is android.widget.ScrollView) return
+            page.clipToPadding = false
+            val content = page.getChildAt(0) ?: page
             val base = pageBaseBottomPadding.getOrPut(content) { content.paddingBottom }
             val target = base + dockHeight + currentBottomInset
             if (content.paddingBottom != target) {
