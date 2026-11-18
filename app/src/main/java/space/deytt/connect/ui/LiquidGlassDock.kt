@@ -92,12 +92,15 @@ internal class LiquidGlassDock(
     private var glideFrom = 0f
     private var glideTarget = Float.NaN
     private var glideRipple = 0f
+    private var glideLight = 0f
     private val glideFrame = object : Runnable {
         override fun run() {
             val progress = ((SystemClock.uptimeMillis() - glideStartedAt) / FAST_GLIDE_MS).coerceIn(0f, 1f)
             val remaining = 1f - progress
-            val distance = remaining * remaining * remaining
-            glideRipple = sin(progress * Math.PI.toFloat()) * remaining
+            val distance = remaining * remaining
+            val pulse = sin(progress * Math.PI.toFloat()) * (1f - progress * .40f)
+            glideRipple = pulse
+            glideLight = pulse * (glideTarget - glideFrom).coerceIn(-1f, 1f)
             if (progress >= 1f) {
                 moveTo(glideTarget)
                 glideStartedAt = 0L
@@ -125,6 +128,8 @@ internal class LiquidGlassDock(
         stopPagerGlide()
         pagerGesture = true
         fastPagerGesture = false
+        fastSwipeBlend = 0f
+        lastMovementTime = SystemClock.uptimeMillis()
     }
 
     fun endPagerGesture() {
@@ -153,6 +158,7 @@ internal class LiquidGlassDock(
         glideStartedAt = 0L
         glideTarget = Float.NaN
         glideRipple = 0f
+        glideLight = 0f
     }
 
     private fun moveTo(value: Float) {
@@ -298,7 +304,7 @@ internal class LiquidGlassDock(
         val inset = scale * 6f
         if (Build.VERSION.SDK_INT >= 33 && canvas.isHardwareAccelerated && glass != null) {
             glass.draw(canvas, this, scene(), pages.takeIf { pagerPosition > 0f }, row,
-                x, lensWidth, lensHeight, refraction, rimStabilization, inset)
+                x, lensWidth, lensHeight, refraction, rimStabilization, glideLight, inset)
         } else {
             body.set(0f, inset, width.toFloat(), height - inset)
             val radius = body.height() / 2f
@@ -317,7 +323,7 @@ internal class LiquidGlassDock(
         const val HEIGHT_DP = 68
         const val OVERLAP_DP = 56
         private const val FAST_SWIPE_CELLS_PER_SECOND = 3.5f
-        private const val FAST_GLIDE_MS = 230f
+        private const val FAST_GLIDE_MS = 285f
         private val TAB_NEUTRAL_COLOR = 0xFFD6DCE5.toInt()
         private val TAB_LENS_COLOR = 0xFF64E9FF.toInt()
     }
@@ -334,6 +340,7 @@ private class DockRefraction {
     private val previousLens = RectF()
     private var previousRefraction = Float.NaN
     private var previousStabilization = Float.NaN
+    private var previousLight = Float.NaN
 
     fun draw(
         canvas: Canvas,
@@ -346,6 +353,7 @@ private class DockRefraction {
         lensHeight: Float,
         refraction: Float,
         stabilization: Float,
+        travelLight: Float,
         inset: Float,
     ) {
         val width = dock.width
@@ -381,18 +389,19 @@ private class DockRefraction {
         }
         currentLens.set(x, height / 2f, lensWidth / 2f, lensHeight / 2f)
         if (node.width != width || node.height != height || previousLens != currentLens ||
-            refraction != previousRefraction || stabilization != previousStabilization
+            refraction != previousRefraction || stabilization != previousStabilization || travelLight != previousLight
         ) {
             node.setPosition(0, 0, width, height)
             shader.setFloatUniform("dockSize", width.toFloat(), height.toFloat())
             shader.setFloatUniform("inset", inset)
             shader.setFloatUniform("refraction", refraction)
-            shader.setFloatUniform("stabilization", stabilization)
+            shader.setFloatUniform("motion", stabilization, travelLight)
             shader.setFloatUniform("lens", currentLens.left, currentLens.top, currentLens.right, currentLens.bottom)
             node.setRenderEffect(RenderEffect.createRuntimeShaderEffect(shader, "backdrop"))
             previousLens.set(currentLens)
             previousRefraction = refraction
             previousStabilization = stabilization
+            previousLight = travelLight
         }
         canvas.drawRenderNode(node)
     }
@@ -408,7 +417,7 @@ private class DockRefraction {
             uniform float4 lens;
             uniform float inset;
             uniform float refraction;
-            uniform float stabilization;
+            uniform float2 motion;
 
             float2 capsuleOffset(float2 p, float2 halfSize) {
                 float radius = min(halfSize.x, halfSize.y);
@@ -435,29 +444,39 @@ private class DockRefraction {
                 float bevel = smoothstep(-inset, 0.0, dockDistance);
                 float2 minPixel = float2(0.5);
                 float2 maxPixel = dockSize - 0.5;
-                half3 body = backdrop.eval(clamp(p - normal * inset * 0.9 * bevel, minPixel, maxPixel)).rgb;
+                float2 samplePoint = p - normal * inset * 0.9 * bevel;
                 float bodyRim = smoothstep(-1.6, 0.0, dockDistance);
-                body += half3(0.72, 0.83, 0.96) * (0.10 * max(-normal.y, 0.0) + 0.024) * bodyRim;
-                if (lensAlpha <= 0.0) return half4(body * bodyAlpha, bodyAlpha);
-
-                float2 lensNormal = shoulder / max(shoulderLength, 0.01);
-                float rim = smoothstep(-inset * 1.25, 0.0, distance);
-                float fold = rim * rim;
-                float bend = mix(0.65 + refraction * 1.8, 0.20, stabilization);
-                float magnification = mix(0.012 + refraction * 0.018, 0.10 * refraction * (1.0 - rim), stabilization);
-                float2 bent = p - local * magnification - lensNormal * inset * bend * fold;
-                float chroma = refraction * (1.0 - stabilization);
-                float2 dispersion = lensNormal * inset * chroma * 0.10 * fold;
-                half3 glass = backdrop.eval(clamp(bent, minPixel, maxPixel)).rgb;
-                if (fold > 0.04 && chroma > 0.08) {
-                    glass.r = backdrop.eval(clamp(bent + dispersion, minPixel, maxPixel)).r;
-                    glass.b = backdrop.eval(clamp(bent - dispersion, minPixel, maxPixel)).b;
+                half3 light = half3(0.72, 0.83, 0.96) * ((0.10 * max(-normal.y, 0.0) + 0.024) * bodyRim);
+                float2 dispersion = float2(0);
+                if (lensAlpha > 0.0) {
+                    float2 lensNormal = shoulder / max(shoulderLength, 0.01);
+                    float rim = smoothstep(-inset * 1.25, 0.0, distance);
+                    float fold = rim * rim;
+                    float stabilization = motion.x;
+                    float slowBend = (0.65 + refraction * 1.8) * fold;
+                    float fastBend = 0.55 * rim * (1.0 - rim);
+                    float bend = mix(slowBend, fastBend, stabilization);
+                    float focus = mix(0.012 + refraction * 0.018, 0.18 * refraction * (1.0 - rim), stabilization);
+                    float2 bent = p - local * focus - lensNormal * inset * bend;
+                    samplePoint = mix(samplePoint, bent, lensAlpha);
+                    float chroma = refraction * (1.0 - stabilization);
+                    if (fold > 0.04 && chroma > 0.08) {
+                        dispersion = lensNormal * inset * chroma * 0.10 * fold * lensAlpha;
+                    }
+                    float top = max(dot(lensNormal, float2(-0.42 + motion.y * 0.85, -0.91)), 0.0);
+                    float bounce = max(dot(lensNormal, float2(0.34, 0.94)), 0.0);
+                    float glint = (0.14 * top * top + 0.095 * bounce * bounce) * rim * rim * rim;
+                    float gleam = glint * (1.0 + stabilization * refraction * 0.8) + 0.032 * fold;
+                    light = mix(light, half3(0.78, 0.87, 0.98) * gleam, lensAlpha);
                 }
-                float top = max(dot(lensNormal, float2(-0.42, -0.91)), 0.0);
-                float bounce = max(dot(lensNormal, float2(0.34, 0.94)), 0.0);
-                float glint = (0.14 * top * top + 0.095 * bounce * bounce) * rim * rim * rim;
-                glass += half3(0.78, 0.87, 0.98) * (glint * (1.0 + 0.55 * stabilization * refraction) + 0.032 * fold);
-                return half4(mix(body * bodyAlpha, glass, lensAlpha), mix(bodyAlpha, 1.0, lensAlpha));
+
+                half3 color = backdrop.eval(clamp(samplePoint, minPixel, maxPixel)).rgb;
+                if (dispersion.x != 0.0 || dispersion.y != 0.0) {
+                    color.r = backdrop.eval(clamp(samplePoint + dispersion, minPixel, maxPixel)).r;
+                    color.b = backdrop.eval(clamp(samplePoint - dispersion, minPixel, maxPixel)).b;
+                }
+                half coverage = half(mix(bodyAlpha, 1.0, lensAlpha));
+                return half4((color + light) * coverage, coverage);
             }
         """
     }
