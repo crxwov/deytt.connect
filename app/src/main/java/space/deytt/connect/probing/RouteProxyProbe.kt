@@ -82,6 +82,7 @@ object RouteProxyProbe {
     )
     private const val PROBE_INBOUND = "deytt-route-probe"
     private const val PROBE_HOST = "cp.cloudflare.com"
+    private const val SYSTEM_VPN_FALLBACK_HOST = "www.gstatic.com"
     private const val PROBE_PORT = 443
     private const val PROBE_PATH = "/generate_204"
     private const val HTTP_OK = 200
@@ -260,10 +261,11 @@ object RouteProxyProbe {
         method: RouteProbeMethod,
         deadline: Long,
         keepAlive: Boolean = false,
+        host: String = PROBE_HOST,
     ): Long {
         val request = buildString {
             append(method.wireValue).append(' ').append(PROBE_PATH).append(" HTTP/1.1\r\n")
-            append("Host: ").append(PROBE_HOST).append("\r\n")
+            append("Host: ").append(host).append("\r\n")
             append("User-Agent: deytt-connect/1\r\n")
             append("Cache-Control: no-cache\r\n")
             if (keepAlive) {
@@ -533,7 +535,18 @@ object RouteProxyProbe {
         onSample: (index: Int, milliseconds: Long?) -> Unit = { _, _ -> },
     ): Long {
         val activeConnection = AtomicReference<Socket?>()
-        val task = FutureTask { measureThroughSystemVpnBlocking(method, timeoutMillis, sampleCount, activeConnection, onSample) }
+        val task = FutureTask {
+            val deadline = SystemClock.elapsedRealtime() + timeoutMillis
+            val primaryDeadline = SystemClock.elapsedRealtime() + (timeoutMillis * .55).toLong()
+            try {
+                measureThroughSystemVpnBlocking(PROBE_HOST, method, primaryDeadline, sampleCount, activeConnection) { index, sample ->
+                    if (sample != null) onSample(index, sample)
+                }
+            } catch (failure: IOException) {
+                if (Thread.currentThread().isInterrupted) throw failure
+                measureThroughSystemVpnBlocking(SYSTEM_VPN_FALLBACK_HOST, method, deadline, sampleCount, activeConnection, onSample)
+            }
+        }
         try {
             systemVpnProbeExecutor.execute(task)
             return task.get(timeoutMillis.toLong(), TimeUnit.MILLISECONDS)
@@ -558,13 +571,13 @@ object RouteProxyProbe {
     }
 
     private fun measureThroughSystemVpnBlocking(
+        host: String,
         method: RouteProbeMethod,
-        timeoutMillis: Int,
+        deadline: Long,
         sampleCount: Int,
         activeConnection: AtomicReference<Socket?>,
         onSample: (index: Int, milliseconds: Long?) -> Unit,
     ): Long {
-        val deadline = SystemClock.elapsedRealtime() + timeoutMillis
         val samples = ArrayList<Long>(sampleCount)
         var lastFailure: Exception? = null
         var currentSocket: Socket? = null
@@ -589,21 +602,21 @@ object RouteProxyProbe {
                         val socket = Socket()
                         currentSocket = socket
                         activeConnection.set(socket)
-                        socket.connect(InetSocketAddress(PROBE_HOST, PROBE_PORT), remainingTimeout(deadline))
+                        socket.connect(InetSocketAddress(host, PROBE_PORT), remainingTimeout(deadline))
                         socket.soTimeout = remainingTimeout(deadline)
                         val newTls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
-                            .createSocket(socket, PROBE_HOST, PROBE_PORT, true) as SSLSocket
+                            .createSocket(socket, host, PROBE_PORT, true) as SSLSocket
                         currentTlsSocket = newTls
                         tls = newTls
                         activeConnection.set(newTls)
                         newTls.soTimeout = remainingTimeout(deadline)
                         newTls.startHandshake()
                         val hostnameVerified = HttpsURLConnection.getDefaultHostnameVerifier()
-                            .verify(PROBE_HOST, newTls.session)
+                            .verify(host, newTls.session)
                         if (!hostnameVerified) throw SSLPeerUnverifiedException("TLS hostname verification failed")
                     }
                     val isLast = index == sampleCount
-                    val sample = measureProbeHttpRoundTrip(tls, method, deadline, keepAlive = !isLast)
+                    val sample = measureProbeHttpRoundTrip(tls, method, deadline, keepAlive = !isLast, host = host)
                     samples += sample
                     onSample(index, sample)
                 } catch (failure: Exception) {
@@ -617,7 +630,7 @@ object RouteProxyProbe {
             closeCurrentConnection()
         }
         return RouteProbeStatistics.medianLatencyMillis(samples)
-            ?: throw (lastFailure ?: SocketTimeoutException("Проверка маршрута превысила $timeoutMillis мс"))
+            ?: throw (lastFailure ?: SocketTimeoutException("Проверочный сервер не ответил вовремя"))
     }
 
     /** A bounded sample through the current Android VPN. Caller verifies its route. */

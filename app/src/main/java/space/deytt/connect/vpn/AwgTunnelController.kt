@@ -51,14 +51,13 @@ object AwgTunnelController {
                     override fun getName(): String = name.take(15)
                     override fun onStateChange(newState: Tunnel.State) = Unit
                 }
-                nextBackend.setStatusCallback { connected ->
-                    if (connected && operation.get() == operationId) {
-                        publish(context, VpnPhase.CHECKING, "Проверяем туннель…")
-                    }
-                }
                 backend = nextBackend
                 tunnel = nextTunnel
                 appContext = context.applicationContext
+                // The backend reports handshakes asynchronously, including after setState returns.
+                // Only this operation publishes phases so a late handshake cannot undo CONNECTED.
+                ensureCurrent(operationId)
+                publish(context, VpnPhase.CHECKING, "Запускаем туннель…")
                 nextBackend.setState(nextTunnel, Tunnel.State.UP, parsed)
                 ensureCurrent(operationId)
                 publish(context, VpnPhase.CONNECTED, "Подключено")

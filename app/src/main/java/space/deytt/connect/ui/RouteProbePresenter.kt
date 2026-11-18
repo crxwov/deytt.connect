@@ -331,8 +331,8 @@ internal class RouteProbePresenter(
             android.util.Log.w("DeyttRouteProbe", "awg onRouteFailure: ${route.id}")
             country.rows[route.id]?.let { row ->
                 row.progress.setLoading(false)
-                country.errors[route.id] = "no response"
-                row.status.text = copy("Нет ответа · нажмите для повтора", "No response · tap to retry")
+                country.errors[route.id] = "tunnel startup failed"
+                row.status.text = copy("Туннель не запустился · повторите", "Tunnel did not start · retry")
                 row.status.setTextColor(CORAL)
                 val selectedRouteId = SelectedRouteStore(host).read().id
                 styling.applyCountryRanking(country, selectedRouteId)
@@ -411,7 +411,6 @@ internal class RouteProbePresenter(
                 runCatching {
                     RouteProxyProbe.measureThroughSystemVpn(
                         RouteProbePreferences.method(host),
-                        timeoutMillis = 2_500,
                         sampleCount = 1,
                         onSample = { _, latency ->
                             if (latency != null && RouteProbeStatistics.isValidLatencyMillis(latency)) {
@@ -454,7 +453,12 @@ internal class RouteProbePresenter(
                         }
                     })
                 }.getOrNull()
-                RouteProbeSample(row.route.id, measuredLatency, speed).also { RouteQualityStore.write(host, it) }
+                check(current()) { "AmneziaWG measurement is no longer active" }
+                val measuredSpeed = speed?.takeIf { it > 0L }
+                if (measuredLatency == null && measuredSpeed == null) {
+                    throw java.net.SocketTimeoutException("No HTTPS measurement result")
+                }
+                RouteProbeSample(row.route.id, measuredLatency, measuredSpeed)
             }.onFailure { error ->
                 android.util.Log.w(
                     "DeyttAwgProbe",
@@ -463,14 +467,16 @@ internal class RouteProbePresenter(
             }
             host.runOnUiThread {
                 row.progress.setLoading(false)
-                if (!closed && diagnosticForeground && country?.cancelled != true) {
-                    val sample = result.getOrNull() ?: measuredLatency?.let { RouteProbeSample(row.route.id, it, null) }
+                if (!closed && diagnosticForeground && country?.cancelled != true &&
+                    AwgTunnelController.isRunning() && !AwgTunnelController.isStopping() &&
+                    SelectedRouteStore(host).read().id == row.route.id) {
+                    val sample = result.getOrNull()
                     sample?.let {
                         country?.samples?.put(row.route.id, it)
                         RouteQualityStore.write(host, it)
                     }
-                    row.status.text = sample?.let(styling::sampleLabel) ?: copy("Не удалось измерить · повторите проверку", "Measurement failed · try again")
-                    if (sample != null && sample.downloadBytesPerSecond == null) {
+                    row.status.text = sample?.let(styling::sampleLabel) ?: copy("Не удалось измерить HTTPS · повторите", "HTTPS measurement failed · retry")
+                    if (sample != null && sample.downloadBytesPerSecond == null && !token.isNullOrBlank()) {
                         val failure = result.exceptionOrNull()?.let {
                             RouteProbePresentation.failure(it, AppLanguage.current(host) == AppLanguage.EN)
                         } ?: copy("скорость недоступна", "speed unavailable")
@@ -488,7 +494,7 @@ internal class RouteProbePresenter(
                     }
                 }
                 if (awgCompletion === finished) awgCompletion = null
-                finished(result.isSuccess && measuredLatency != null)
+                finished(result.isSuccess)
             }
         }
     }

@@ -22,6 +22,8 @@ import space.deytt.connect.DeyttUi.mono
 import space.deytt.connect.DeyttUi.rounded
 import space.deytt.connect.DeyttUi.text
 
+private const val AWG_START_TIMEOUT_MILLIS = 13_000L
+
 internal class AwgMeasurementCoordinator(
     private val host: MainActivity,
     private val cancelHomeRouteDownload: (() -> Unit)? = null,
@@ -72,7 +74,7 @@ internal class AwgMeasurementCoordinator(
         val wasConnected = ConnectVpnService.isRunning() || AwgTunnelController.isRunning()
         android.util.Log.i("DeyttRouteProbe", "requestAwgMeasurements temporary=$temporaryAwgMeasurement routes=${routes.size} previous=${previous.id} previousRoute=${previousRoute?.id} wasConnected=$wasConnected")
         if (config == null || (wasConnected && previousRoute == null)) {
-            android.util.Log.w("DeyttRouteProbe", "requestAwgMeasurements aborted: config=$config previousRoute=$previousRoute wasConnected=$wasConnected")
+            android.util.Log.w("DeyttRouteProbe", "AWG diagnostic unavailable: hasConfig=${config != null} hasPreviousRoute=${previousRoute != null} wasConnected=$wasConnected")
             routes.forEach(onRouteFailure)
             onComplete(false)
             return
@@ -257,7 +259,7 @@ internal class AwgMeasurementCoordinator(
                                 val state = VpnStateStore(app).read()
                                 when {
                                     host.isFinishing || host.isDestroyed -> restore()
-                                    state.phase == VpnPhase.ERROR || SystemClock.elapsedRealtime() - began > 5_000L -> failed()
+                                    state.phase == VpnPhase.ERROR || SystemClock.elapsedRealtime() - began > AWG_START_TIMEOUT_MILLIS -> failed()
                                     state.phase == VpnPhase.CONNECTED && AwgTunnelController.isRunning() -> measureReady()
                                     else -> handler.postDelayed(this, 30L)
                                 }
