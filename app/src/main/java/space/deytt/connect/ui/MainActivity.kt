@@ -22,6 +22,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
@@ -345,9 +346,9 @@ class MainActivity : Activity() {
         var currentBottomInset = 0
         val pageBaseBottomPadding = java.util.WeakHashMap<View, Int>()
         fun applyPageBottomClearance(page: View) {
-            if (page !is android.widget.ScrollView) return
-            page.clipToPadding = false
-            val content = page.getChildAt(0) ?: page
+            val scroll = page as? android.widget.ScrollView
+            val content = scroll?.getChildAt(0) ?: page
+            scroll?.clipToPadding = false
             val base = pageBaseBottomPadding.getOrPut(content) { content.paddingBottom }
             val target = base + dockHeight + currentBottomInset
             if (content.paddingBottom != target) {
@@ -502,7 +503,18 @@ class MainActivity : Activity() {
         }
         rebuildRouteRow(); tunnelConnectionCoordinator.renderStoredState()
         root.post { if (::pager.isInitialized) syncGlobeHost(pager.currentItem) }
-        return root
+        val scroll = ScrollView(this).apply {
+            tag = "home-scroll"
+            isFillViewport = true
+            clipToPadding = false
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+            addView(root, FrameLayout.LayoutParams(-1, -1))
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                setOnScrollChangeListener { _, _, _, _, _ -> updateHomeMapAnchor() }
+            }
+        }
+        return scroll
     }
 
     private fun updateHomeMapAnchor() {
