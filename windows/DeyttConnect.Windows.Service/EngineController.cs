@@ -180,7 +180,7 @@ internal sealed class EngineController
                 return SetError("Не удалось разрешить адрес узла AmneziaWG. Проверьте соединение и повторите.");
             }
             var tunAddresses = TunnelProfileBuilder.GetTunAddresses(runtimeProfile);
-            var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
+            var enginePath = GetEnginePath();
             if (!File.Exists(enginePath))
                 return SetError("Не найдено ядро VPN. Переустановите приложение.");
             (runtimeProfile, _activeRouteTelemetry) = ActiveRouteTelemetry.Create(runtimeProfile, routeTag);
@@ -315,7 +315,7 @@ internal sealed class EngineController
             probeProfile = resolvedOutbounds.Profile;
             _profilePath = WritePrivateProfile(probeProfile);
             probeProfileWritten = true;
-            var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
+            var enginePath = GetEnginePath();
             if (!File.Exists(enginePath))
                 return ProbeError("Не найдено ядро VPN. Переустановите приложение.");
 
@@ -1094,7 +1094,7 @@ internal sealed class EngineController
                 // retaining its SYSTEM/Administrators ACL and cleanup ownership.
                 File.WriteAllText(profilePath, recoveredProfile, new System.Text.UTF8Encoding(false));
             }
-            var enginePath = Path.Combine(AppContext.BaseDirectory, "DeyttVpnEngine.exe");
+            var enginePath = GetEnginePath();
             var retryDiagnostic = new EngineRuntimeDiagnostic();
             var retryProcess = StartOwnedEngine(enginePath, profilePath, retryDiagnostic);
             SetSnapshot(new ServiceSnapshot("checking", "Повторная подготовка VPN-интерфейса…", routeTag));
@@ -2091,45 +2091,87 @@ internal sealed class EngineController
                 @"(?i)\b(?:context|operation|request)\s+(?:was\s+)?cancel(?:ed|led)\b");
     }
 
+    private static string GetEnginePath()
+    {
+        var exeName = OperatingSystem.IsWindows() ? "DeyttVpnEngine.exe" : "DeyttVpnEngine";
+        var localPath = Path.Combine(AppContext.BaseDirectory, exeName);
+        if (File.Exists(localPath)) return localPath;
+
+        if (OperatingSystem.IsLinux())
+        {
+            var systemPath = Path.Combine("/usr/lib/deytt-connect", exeName);
+            if (File.Exists(systemPath)) return systemPath;
+            var binPath = Path.Combine("/usr/bin", exeName);
+            if (File.Exists(binPath)) return binPath;
+        }
+
+        return localPath;
+    }
+
     private static string WritePrivateProfile(string content)
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException();
+        string directoryPath;
+        if (OperatingSystem.IsWindows())
+        {
+            directoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+                "DEYTT", "Connect", "runtime");
+            var directory = new DirectoryInfo(directoryPath);
+            var security = new DirectorySecurity();
+            security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+            security.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
+                FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                PropagationFlags.None, AccessControlType.Allow));
+            security.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
+                FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                PropagationFlags.None, AccessControlType.Allow));
 
-        var directoryPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "DEYTT", "Connect", "runtime");
-        var directory = new DirectoryInfo(directoryPath);
-        var security = new DirectorySecurity();
-        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        security.AddAccessRule(new FileSystemAccessRule(
-            new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
-            FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
-            PropagationFlags.None, AccessControlType.Allow));
-        security.AddAccessRule(new FileSystemAccessRule(
-            new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
-            FileSystemRights.FullControl, InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
-            PropagationFlags.None, AccessControlType.Allow));
+            directory.Create(security);
+            if ((File.GetAttributes(directoryPath) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Runtime folder cannot be a reparse point.");
+            directory.SetAccessControl(security);
 
-        directory.Create(security);
-        if ((File.GetAttributes(directoryPath) & FileAttributes.ReparsePoint) != 0)
-            throw new IOException("Runtime folder cannot be a reparse point.");
-        directory.SetAccessControl(security);
+            var path = Path.Combine(directoryPath, $"{Guid.NewGuid():N}.json");
+            using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+            using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false)))
+                writer.Write(content);
 
-        var path = Path.Combine(directoryPath, $"{Guid.NewGuid():N}.json");
-        using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-        using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false)))
-            writer.Write(content);
-
-        var fileSecurity = new FileSecurity();
-        fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
-        fileSecurity.AddAccessRule(new FileSystemAccessRule(
-            new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
-            FileSystemRights.FullControl, AccessControlType.Allow));
-        fileSecurity.AddAccessRule(new FileSystemAccessRule(
-            new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
-            FileSystemRights.FullControl, AccessControlType.Allow));
-        new FileInfo(path).SetAccessControl(fileSecurity);
-        return path;
+            var fileSecurity = new FileSecurity();
+            fileSecurity.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+            fileSecurity.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(WellKnownSidType.LocalSystemSid, null),
+                FileSystemRights.FullControl, AccessControlType.Allow));
+            fileSecurity.AddAccessRule(new FileSystemAccessRule(
+                new SecurityIdentifier(WellKnownSidType.BuiltinAdministratorsSid, null),
+                FileSystemRights.FullControl, AccessControlType.Allow));
+            new FileInfo(path).SetAccessControl(fileSecurity);
+            return path;
+        }
+        else
+        {
+            directoryPath = "/run/deytt-connect/runtime";
+            if (!Directory.Exists(directoryPath))
+            {
+                try
+                {
+                    Directory.CreateDirectory(directoryPath);
+                }
+                catch
+                {
+                    directoryPath = Path.Combine(Path.GetTempPath(), "deytt-connect", "runtime");
+                    Directory.CreateDirectory(directoryPath);
+                }
+            }
+            var path = Path.Combine(directoryPath, $"{Guid.NewGuid():N}.json");
+            File.WriteAllText(path, content, new System.Text.UTF8Encoding(false));
+            try
+            {
+                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+            catch { }
+            return path;
+        }
     }
 
     private Process StartOwnedEngine(string enginePath, string profilePath, EngineRuntimeDiagnostic diagnostic)

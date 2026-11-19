@@ -22,7 +22,8 @@ internal static class PipeServer
     public static async Task RunAsync(string allowedUserSid, EngineController engine,
         CancellationToken cancellationToken)
     {
-        _ = new SecurityIdentifier(allowedUserSid);
+        if (OperatingSystem.IsWindows())
+            _ = new SecurityIdentifier(allowedUserSid);
         var activeClients = new HashSet<Task>();
         var firstPipeInstance = true;
         while (!cancellationToken.IsCancellationRequested)
@@ -149,34 +150,62 @@ internal static class PipeServer
 
     private static NamedPipeServerStream CreateServerPipe(string allowedUserSid, bool firstInstance)
     {
-        var sddl = $"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;{allowedUserSid})";
-        if (!ConvertStringSecurityDescriptorToSecurityDescriptor(sddl,
-                SecurityDescriptorRevision, out var descriptor, out _))
-            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-
-        try
+        if (OperatingSystem.IsWindows())
         {
-            var attributes = new SecurityAttributes
-            {
-                Length = Marshal.SizeOf<SecurityAttributes>(),
-                SecurityDescriptor = descriptor,
-                InheritHandle = false,
-            };
-            var flags = PipeAccessDuplex | FileFlagOverlapped |
-                        (firstInstance ? FileFlagFirstPipeInstance : 0u);
-            var handle = CreateNamedPipe(PipeName,
-                flags,
-                PipeTypeByte | PipeReadModeByte | PipeWait | PipeRejectRemoteClients,
-                16, 64 * 1024, 64 * 1024, 0, ref attributes);
-            if (handle.IsInvalid)
+            var sddl = $"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;{allowedUserSid})";
+            if (!ConvertStringSecurityDescriptorToSecurityDescriptor(sddl,
+                    SecurityDescriptorRevision, out var descriptor, out _))
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-            return new NamedPipeServerStream(PipeDirection.InOut, isAsync: true,
-                isConnected: false, handle);
+
+            try
+            {
+                var attributes = new SecurityAttributes
+                {
+                    Length = Marshal.SizeOf<SecurityAttributes>(),
+                    SecurityDescriptor = descriptor,
+                    InheritHandle = false,
+                };
+                var flags = PipeAccessDuplex | FileFlagOverlapped |
+                            (firstInstance ? FileFlagFirstPipeInstance : 0u);
+                var handle = CreateNamedPipe(PipeName,
+                    flags,
+                    PipeTypeByte | PipeReadModeByte | PipeWait | PipeRejectRemoteClients,
+                    16, 64 * 1024, 64 * 1024, 0, ref attributes);
+                if (handle.IsInvalid)
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                return new NamedPipeServerStream(PipeDirection.InOut, isAsync: true,
+                    isConnected: false, handle);
+            }
+            finally
+            {
+                _ = LocalFree(descriptor);
+            }
         }
-        finally
+
+        var server = new NamedPipeServerStream(
+            "DEYTT.Connect.v1",
+            PipeDirection.InOut,
+            16,
+            PipeTransmissionMode.Byte,
+            PipeOptions.Asynchronous);
+
+        if (OperatingSystem.IsLinux())
         {
-            _ = LocalFree(descriptor);
+            try
+            {
+                var socketPath = "/tmp/CoreFxPipe_DEYTT.Connect.v1";
+                if (File.Exists(socketPath))
+                {
+                    File.SetUnixFileMode(socketPath,
+                        UnixFileMode.UserRead | UnixFileMode.UserWrite |
+                        UnixFileMode.GroupRead | UnixFileMode.GroupWrite |
+                        UnixFileMode.OtherRead | UnixFileMode.OtherWrite);
+                }
+            }
+            catch { }
         }
+
+        return server;
     }
 
     [StructLayout(LayoutKind.Sequential)]
