@@ -132,7 +132,7 @@ public static class CdnLteProfile
 
         if (root["route"] is JsonObject routeObj && routeObj["rules"] is JsonArray rules)
         {
-            var directIps = new JsonArray("188.72.103.0/24", "77.88.8.8/32", "8.8.8.8/32", "1.1.1.1/32");
+            var directIps = new JsonArray("188.72.103.0/24", "77.88.8.8/32");
             try
             {
                 foreach (var addr in System.Net.Dns.GetHostAddresses(Host))
@@ -142,14 +142,19 @@ public static class CdnLteProfile
             }
             catch { }
 
-            var directRule = new JsonObject
+            var directDomainRule = new JsonObject
             {
                 ["domain"] = new JsonArray("front.deytt.space"),
                 ["domain_suffix"] = new JsonArray(".yccdn.ru", ".deytt.space"),
+                ["outbound"] = "direct",
+            };
+            var directIpRule = new JsonObject
+            {
                 ["ip_cidr"] = directIps,
                 ["outbound"] = "direct",
             };
-            rules.Insert(0, directRule);
+            rules.Insert(0, directDomainRule);
+            rules.Insert(1, directIpRule);
         }
 
         if (root["dns"] is JsonObject dnsObj && dnsObj["rules"] is JsonArray dnsRules)

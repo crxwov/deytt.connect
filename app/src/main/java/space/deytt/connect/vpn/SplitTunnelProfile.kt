@@ -54,11 +54,13 @@ object SplitTunnelProfile {
         val rules = route.getJSONArray("rules")
         val vpnOnly = mode == UserSplitTunnelStore.MODE_VPN_ONLY
         val selectedOutbound = proxyOutbound ?: route.optString("final")
-        val googleViaGermany = !isRussianRoute(selectedOutbound) && (hasGermanyRoute(root) || proxyOutbound == null)
+        val googleViaGermany = !isRussianRoute(selectedOutbound) &&
+            !isBypassRoute(selectedOutbound) &&
+            (hasGermanyRoute(root) || proxyOutbound == null)
         if (googleViaGermany) germanyRouteOutbounds(root)
         // These are the additional explicit rules in the provider's Happ profile.
-        val suffixes = linkedSetOf("ru", "su", "рф", "xn--p1ai")
-        val exact = linkedSetOf("cp.cloudflare.com")
+        val suffixes = linkedSetOf("ru", "su", "рф", "xn--p1ai", "yccdn.ru", "deytt.space")
+        val exact = linkedSetOf("cp.cloudflare.com", "front.deytt.space")
         for (index in 0 until rules.length()) {
             val rule = rules.getJSONObject(index)
             if (rule.optString("outbound") != "direct") continue
@@ -286,6 +288,9 @@ object SplitTunnelProfile {
 
     private fun isRussianRoute(tag: String): Boolean =
         tag.equals("route:RU", ignoreCase = true) || tag.startsWith("route:RU:", ignoreCase = true)
+
+    private fun isBypassRoute(tag: String): Boolean =
+        tag == CdnLteProfile.ROUTE_TAG || tag == OPENFLUX_OUTBOUND
 
     private fun hasGermanyRoute(root: JSONObject): Boolean {
         val source = root.optJSONArray("outbounds") ?: return false

@@ -73,7 +73,9 @@ object RuntimeProfile {
         }
         val route = root.optJSONObject("route")
             ?: throw IllegalArgumentException("В профиле отсутствуют правила маршрутизации")
-        route.put("default_domain_resolver", if (route.optString("final") == SplitTunnelProfile.OPENFLUX_OUTBOUND) {
+        val isBypassRoute = route.optString("final") == SplitTunnelProfile.OPENFLUX_OUTBOUND ||
+            route.optString("final") == CdnLteProfile.ROUTE_TAG
+        route.put("default_domain_resolver", if (isBypassRoute) {
             "remote-dns"
         } else "local-dns")
 

@@ -101,19 +101,19 @@ internal object CdnLteProfile {
             val directIps = JSONArray()
                 .put("188.72.103.0/24")
                 .put("77.88.8.8/32")
-                .put("8.8.8.8/32")
-                .put("1.1.1.1/32")
             runCatching {
                 java.net.InetAddress.getAllByName(HOST).forEach { addr ->
                     addr.hostAddress?.let { directIps.put("$it/32") }
                 }
             }
-            val directRule = JSONObject()
+            val directDomainRule = JSONObject()
                 .put("domain", JSONArray().put("front.deytt.space"))
                 .put("domain_suffix", JSONArray().put(".yccdn.ru").put(".deytt.space"))
+                .put("outbound", "direct")
+            val directIpRule = JSONObject()
                 .put("ip_cidr", directIps)
                 .put("outbound", "direct")
-            val updatedRules = JSONArray().put(directRule)
+            val updatedRules = JSONArray().put(directDomainRule).put(directIpRule)
             for (i in 0 until rules.length()) {
                 updatedRules.put(rules.get(i))
             }

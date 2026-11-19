@@ -93,6 +93,12 @@ class SplitTunnelProfileTest {
         assertFalse((0 until rules.length()).any { rules.getJSONObject(it).optString("outbound") == "route:DE" })
     }
 
+    @Test fun lteWhitelistRouteKeepsGoogleOnTheSelectedRoute() {
+        val lte = config.replace("\"final\":\"selected\"", "\"final\":\"${CdnLteProfile.ROUTE_TAG}\"")
+        val rules = JSONObject(SplitTunnelProfile.apply(lte)).getJSONObject("route").getJSONArray("rules")
+        assertFalse((0 until rules.length()).any { rules.getJSONObject(it).optString("outbound") == "route:DE" })
+    }
+
     @Test fun russianToGermanyRouteUsesGermanGoogleEgress() {
         val chain = config.replace("\"final\":\"selected\"", "\"final\":\"route:RU-DE:CHAIN\"")
         val rules = JSONObject(SplitTunnelProfile.apply(chain)).getJSONObject("route").getJSONArray("rules")
