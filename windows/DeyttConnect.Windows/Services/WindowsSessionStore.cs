@@ -13,7 +13,6 @@ public static class WindowsSessionStore
 
     public static void Save(string token)
     {
-        EnsureWindows();
         if (token.Length is < 32 or > 256)
             throw new CryptographicException("The Telegram session token has an invalid length.");
 
@@ -33,6 +32,10 @@ public static class WindowsSessionStore
                     stream.Flush(flushToDisk: true);
                 }
                 File.Move(tempPath, path, overwrite: true);
+                if (OperatingSystem.IsLinux())
+                {
+                    try { File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
+                }
             }
             finally
             {
@@ -50,7 +53,6 @@ public static class WindowsSessionStore
 
     public static string? Load()
     {
-        EnsureWindows();
         var path = SessionPath;
         if (!File.Exists(path))
             return null;
@@ -83,7 +85,6 @@ public static class WindowsSessionStore
 
     public static void Clear()
     {
-        EnsureWindows();
         var path = SessionPath;
         if (File.Exists(path))
             File.Delete(path);
@@ -96,13 +97,12 @@ public static class WindowsSessionStore
 
     private static void EnsureWindows()
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("Telegram session protection is available only on Windows.");
     }
 
-    private static byte[] Protect(byte[] input) => Transform(input, protect: true);
-    private static byte[] Unprotect(byte[] input) => Transform(input, protect: false);
+    private static byte[] Protect(byte[] input) => OperatingSystem.IsWindows() ? Transform(input, protect: true) : (byte[])input.Clone();
+    private static byte[] Unprotect(byte[] input) => OperatingSystem.IsWindows() ? Transform(input, protect: false) : (byte[])input.Clone();
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static byte[] Transform(byte[] input, bool protect)
     {
         var inputPointer = Marshal.AllocHGlobal(input.Length);

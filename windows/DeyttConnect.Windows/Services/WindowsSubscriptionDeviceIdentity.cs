@@ -33,7 +33,7 @@ internal static class WindowsSubscriptionDeviceIdentity
 
         request.Headers.TryAddWithoutValidation("X-HWID", parsedId.ToString("D"));
         request.Headers.TryAddWithoutValidation("X-Deytt-Client", "deytt-connect");
-        request.Headers.TryAddWithoutValidation("X-Device-Os", "Windows");
+        request.Headers.TryAddWithoutValidation("X-Device-Os", OperatingSystem.IsWindows() ? "Windows" : "Linux");
         request.Headers.TryAddWithoutValidation("X-Ver-Os", SafeHeaderValue(osVersion));
         request.Headers.TryAddWithoutValidation("X-TG-App-Token", sessionToken);
         // Do not send a generic Windows model: the server uses this field for
@@ -86,11 +86,9 @@ internal static class WindowsSubscriptionDeviceIdentity
 
     private static string GetOrCreateInstallationId()
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("Subscription device identity is available only on Windows.");
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(localAppData))
-            throw new IOException("The Windows application data directory is unavailable.");
+            throw new IOException("The application data directory is unavailable.");
         var path = Path.Combine(localAppData, ProductFolder, InstallationIdFileName);
         return GetOrCreateInstallationId(path);
     }

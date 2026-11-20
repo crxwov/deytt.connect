@@ -24,7 +24,8 @@ public static class WindowsImportLinkProtocol
     [SupportedOSPlatform("windows")]
     public static void Register()
     {
-        EnsureWindows();
+        if (!OperatingSystem.IsWindows())
+            return;
         var executable = GetCurrentExecutablePath();
         using var schemeKey = Registry.CurrentUser.CreateSubKey(SchemeKeyPath, writable: true)
                               ?? throw new IOException("Could not create the DEYTT link protocol key.");
@@ -39,7 +40,8 @@ public static class WindowsImportLinkProtocol
     [SupportedOSPlatform("windows")]
     public static void Unregister()
     {
-        EnsureWindows();
+        if (!OperatingSystem.IsWindows())
+            return;
         Registry.CurrentUser.DeleteSubKeyTree(SchemeKeyPath, throwOnMissingSubKey: false);
     }
 
@@ -71,7 +73,5 @@ public static class WindowsImportLinkProtocol
 
     private static void EnsureWindows()
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("DEYTT link association is available only on Windows.");
     }
 }

@@ -21,7 +21,6 @@ public static class WindowsPreferencesStore
 
     public static WindowsPreferences Load()
     {
-        EnsureWindows();
         var path = PreferencesPath;
         if (!File.Exists(path))
             return new WindowsPreferences();
@@ -53,7 +52,6 @@ public static class WindowsPreferencesStore
 
     public static void Save(WindowsPreferences preferences)
     {
-        EnsureWindows();
         var safe = new WindowsPreferences(
             preferences.Language is "ru" or "en" ? preferences.Language : "ru",
             IsKnownRoute(preferences.SelectedRoute) ? preferences.SelectedRoute : "auto",
@@ -100,7 +98,5 @@ public static class WindowsPreferencesStore
 
     private static void EnsureWindows()
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("Windows preferences are available only on Windows.");
     }
 }

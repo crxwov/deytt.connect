@@ -13,7 +13,6 @@ public static class WindowsImportedSubscriptionStore
 
     public static void Save(string profileJson)
     {
-        EnsureWindows();
         var plain = Encoding.UTF8.GetBytes(profileJson);
         if (plain.Length is < 1 or > MaxProfileBytes)
             throw new InvalidDataException("The imported subscription is outside the supported size limit.");
@@ -21,7 +20,7 @@ public static class WindowsImportedSubscriptionStore
         byte[]? protectedProfile = null;
         try
         {
-            protectedProfile = Transform(plain, protect: true);
+            protectedProfile = OperatingSystem.IsWindows() ? Transform(plain, protect: true) : (byte[])plain.Clone();
             var path = ProfilePath;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -34,6 +33,10 @@ public static class WindowsImportedSubscriptionStore
                     stream.Flush(flushToDisk: true);
                 }
                 File.Move(tempPath, path, overwrite: true);
+                if (OperatingSystem.IsLinux())
+                {
+                    try { File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
+                }
             }
             finally
             {
@@ -51,7 +54,6 @@ public static class WindowsImportedSubscriptionStore
 
     public static string? Load()
     {
-        EnsureWindows();
         var path = ProfilePath;
         if (!File.Exists(path))
             return null;
@@ -64,7 +66,7 @@ public static class WindowsImportedSubscriptionStore
             if (info.Length is < 1 or > MaxProfileBytes + 64 * 1024)
                 throw new CryptographicException("The imported subscription file is invalid.");
             protectedProfile = File.ReadAllBytes(path);
-            plain = Transform(protectedProfile, protect: false);
+            plain = OperatingSystem.IsWindows() ? Transform(protectedProfile, protect: false) : (byte[])protectedProfile.Clone();
             if (plain.Length is < 1 or > MaxProfileBytes)
                 throw new CryptographicException("The imported subscription is outside the supported size limit.");
             return Encoding.UTF8.GetString(plain);
@@ -85,7 +87,6 @@ public static class WindowsImportedSubscriptionStore
 
     public static void Clear()
     {
-        EnsureWindows();
         var path = ProfilePath;
         if (File.Exists(path))
             File.Delete(path);
@@ -97,10 +98,9 @@ public static class WindowsImportedSubscriptionStore
 
     private static void EnsureWindows()
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("Imported subscription protection is available only on Windows.");
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static byte[] Transform(byte[] input, bool protect)
     {
         var inputPointer = Marshal.AllocHGlobal(input.Length);

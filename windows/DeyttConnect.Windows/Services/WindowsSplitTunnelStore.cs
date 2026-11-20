@@ -35,7 +35,6 @@ public static class WindowsSplitTunnelStore
 
     public static WindowsSplitTunnelConfig Load()
     {
-        EnsureWindows();
         var path = SplitTunnelPath;
         if (!File.Exists(path))
         {
@@ -191,7 +190,6 @@ public static class WindowsSplitTunnelStore
 
     public static void Save(WindowsSplitTunnelConfig config)
     {
-        EnsureWindows();
         var safe = NormalizeForSave(config);
         var path = SplitTunnelPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -278,7 +276,5 @@ public static class WindowsSplitTunnelStore
 
     private static void EnsureWindows()
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("Windows split tunneling is available only on Windows.");
     }
 }
