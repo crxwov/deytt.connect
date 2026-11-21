@@ -34,11 +34,14 @@ public partial class MainWindow
             {
                 try
                 {
-                    var name = p.ProcessName;
+                    var name = OperatingSystem.IsLinux()
+                        ? Path.GetFileName(p.MainModule?.FileName)
+                        : p.ProcessName;
                     if (string.IsNullOrWhiteSpace(name) || systemProcesses.Contains(name))
                         continue;
 
-                    var exeName = name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? name : name + ".exe";
+                    var exeName = OperatingSystem.IsWindows() && !name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                        ? name + ".exe" : name;
                     if (!seen.Add(exeName))
                         continue;
 
@@ -697,7 +700,9 @@ public partial class MainWindow
             {
                 Title = Copy("Выберите приложение для правила", "Select application for rule"),
                 AllowMultiple = false,
-                FileTypeFilter = [new FilePickerFileType("Executable (*.exe)") { Patterns = ["*.exe"] }]
+                FileTypeFilter = OperatingSystem.IsWindows()
+                    ? [new FilePickerFileType("Executable (*.exe)") { Patterns = ["*.exe"] }]
+                    : null
             });
             if (files.Count > 0)
             {
@@ -723,7 +728,9 @@ public partial class MainWindow
         };
         var processTextBox = new TextBox
         {
-            PlaceholderText = Copy("или введите имя процесса вручную (например: discord.exe)", "or enter process name manually: discord.exe"),
+            PlaceholderText = OperatingSystem.IsLinux()
+                ? Copy("или введите имя процесса, например firefox", "or enter a process name, e.g. firefox")
+                : Copy("или введите имя процесса вручную (например: discord.exe)", "or enter process name manually: discord.exe"),
             MinHeight = 44,
             VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };

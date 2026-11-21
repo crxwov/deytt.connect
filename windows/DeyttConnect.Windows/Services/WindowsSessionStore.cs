@@ -26,16 +26,20 @@ public static class WindowsSessionStore
             var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                var options = new FileStreamOptions
+                {
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Options = FileOptions.WriteThrough,
+                };
+                if (OperatingSystem.IsLinux())
+                    options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                using (var stream = new FileStream(tempPath, options))
                 {
                     stream.Write(protectedToken);
                     stream.Flush(flushToDisk: true);
                 }
                 File.Move(tempPath, path, overwrite: true);
-                if (OperatingSystem.IsLinux())
-                {
-                    try { File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
-                }
             }
             finally
             {
@@ -94,10 +98,6 @@ public static class WindowsSessionStore
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         ProductFolder,
         SessionFileName);
-
-    private static void EnsureWindows()
-    {
-    }
 
     private static byte[] Protect(byte[] input) => OperatingSystem.IsWindows() ? Transform(input, protect: true) : (byte[])input.Clone();
     private static byte[] Unprotect(byte[] input) => OperatingSystem.IsWindows() ? Transform(input, protect: false) : (byte[])input.Clone();

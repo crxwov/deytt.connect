@@ -5206,7 +5206,7 @@
         <div class="liquid-glass-card" style="padding: 20px 22px; border-radius: 18px; display: flex; flex-direction: column; gap: 14px;">
           <div>
             <strong style="color: #FFFFFF; font-size: 15px; display: block; font-family: 'Unbounded', sans-serif;" id="settings-app-version">deytt./connect</strong>
-            <span style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px; display: block;" id="settings-app-status">актуальная версия · канал ./beta</span>
+            <span style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px; display: block;" id="settings-app-status">канал ./beta</span>
           </div>
           <button class="home-measure" id="btn-check-updates" type="button" style="height: 44px !important;">
             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
@@ -6332,8 +6332,8 @@
       if (sServ) sServ.textContent = data.vpnServiceAvailable ? t("служба установлена · готова к работе", "service installed · ready") : t("требуются права администратора", "administrator rights required");
       if (swRegion) swRegion.classList.toggle("is-checked", !!data.mapRegionEnabled);
       if (swMotion) swMotion.classList.toggle("is-checked", !!data.reduceMotion);
-      if (sVer && data.appVersion) sVer.textContent = t(`версия ${data.appVersion} (windows x64) · канал: ./beta`, `version ${data.appVersion} (windows x64) · channel: ./beta`);
-      if (sStat) sStat.textContent = t("актуальная версия · канал ./beta", "up to date · ./beta channel");
+      if (sVer && data.appVersion) sVer.textContent = t(`версия ${data.appVersion}`, `version ${data.appVersion}`);
+      if (sStat) sStat.textContent = t("канал ./beta", "./beta channel");
     };
 
     let currentRouteCatalog = [];
@@ -6956,7 +6956,7 @@
 
       const sortedProcesses = [...splitModalState.customProcesses].sort((a, b) => a.localeCompare(b));
       const processesListHtml = sortedProcesses.length === 0
-        ? `<div class="st-empty">${t("список пуст. выберите запущенное приложение, укажите .exe или введите имя процесса.", "list is empty. pick a running app, browse an .exe, or type a process name.")}</div>`
+        ? `<div class="st-empty">${t("список пуст. добавьте приложение или введите имя процесса.", "list is empty. add an app or enter a process name.")}</div>`
         : sortedProcesses.map(p => `
           <div class="st-rule-row">
             <span class="st-rule-name">${escapeSplitHtml(p)}</span>
@@ -7064,7 +7064,7 @@
           <p style="font-size:12px;color:var(--text-muted);margin:0 0 10px 0;line-height:1.4;">${procDesc}</p>
           <div class="st-input-row">
             <button type="button" class="st-btn is-accent" style="flex:1 1 180px;" id="st-running-toggle-btn">${t("выбрать запущенное приложение", "pick a running app")}</button>
-            <button type="button" class="st-btn" style="flex:1 1 150px;" id="st-browse-exe-btn">${t("обзор файла .exe…", "browse for .exe…")}</button>
+            <button type="button" class="st-btn" style="flex:1 1 150px;" id="st-browse-exe-btn">${t("выбрать исполняемый файл…", "choose executable file…")}</button>
           </div>
           ${splitRunningPickerOpen ? `
             <div class="st-running-drawer" id="st-running-drawer">
@@ -7073,8 +7073,9 @@
               </div>
               <div class="st-rule-list" id="st-running-list" style="max-height:168px;">${runningListHtml}</div>
             </div>` : ""}
+          <label for="st-proc-input">${t("имя процесса", "process name")}</label>
           <div class="st-input-row">
-            <input type="text" class="st-input" id="st-proc-input" placeholder="${t("или имя процесса вручную (например: discord.exe)", "or type process manually (e.g. discord.exe)")}">
+            <input type="text" class="st-input" id="st-proc-input" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
             <button type="button" class="st-btn is-primary" id="st-proc-add-btn">+ ${t("добавить", "add")}</button>
           </div>
           <div class="st-rule-list" id="st-processes-list">${processesListHtml}</div>
@@ -7396,14 +7397,14 @@
           <p style="font-size: 13px; line-height: 1.5; color: rgba(255,255,255,0.7); margin: 0 0 16px 0;">
             ${isReady
               ? (en
-                ? "the deyttconnect service is installed and registered in the windows service manager. it handles tunnels and safe route filtering."
-                : "служба deyttconnect установлена и зарегистрирована в диспетчере служб windows. она управляет туннелями и безопасной фильтрацией маршрутов.")
+                ? "the vpn service is running and ready to connect."
+                : "служба vpn запущена и готова к подключению.")
               : (en
-                ? "system administrator privileges are required to manage the vpn connection. click below to check or install the service."
-                : "для управления VPN-соединением требуются системные права. нажмите кнопку ниже для проверки или установки службы.")}
+                ? "check the vpn service. you may need approval from your system administrator."
+                : "проверьте службу vpn. может потребоваться разрешение системного администратора.")}
           </p>
           <button id="btn-modal-service-action" type="button" class="home-measure" style="width: 100%; height: 42px !important; justify-content: center; font-size: 13.5px;">
-            <span>${isReady ? (en ? "check and update service" : "проверить и обновить службу") : (en ? "install service" : "установить службу")}</span>
+            <span>${en ? "check service" : "проверить службу"}</span>
           </button>
         </div>
       `;

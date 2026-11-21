@@ -14,7 +14,7 @@ public partial class MainWindow
     private bool _quitInProgress;
     private void InitializeTray()
     {
-        if (_qaFixture || !OperatingSystem.IsWindows() || _trayIcon is not null || Application.Current is null)
+        if (_qaFixture || _trayIcon is not null || Application.Current is null)
             return;
         _trayIcon = new TrayIcon { Icon = Icon, ToolTipText = "deytt. connect", IsVisible = true };
         _trayIcon.Clicked += (_, _) => ShowFromTray();
@@ -144,7 +144,7 @@ public partial class MainWindow
 
     private void OnTrayWindowClosing(object? sender, WindowClosingEventArgs args)
     {
-        if (_qaFixture || _exitAuthorized || _trayIcon is null ||
+        if (_qaFixture || _exitAuthorized || (OperatingSystem.IsWindows() && _trayIcon is null) ||
             args.CloseReason is WindowCloseReason.OSShutdown or WindowCloseReason.ApplicationShutdown)
             return;
         args.Cancel = true;
@@ -197,6 +197,7 @@ public partial class MainWindow
         _vpnCancelRequested = true;
         _vpnActionInProgress = true;
         _vpnStatusTimer.Stop();
+        var previousVpnState = _vpnSnapshot.State;
         _vpnSnapshot = new WindowsTunnelSnapshot("stopping",
             Copy("Отключаем VPN и закрываем приложение…", "Disconnecting VPN and closing the app…"));
         ShowFromTray();
@@ -205,7 +206,8 @@ public partial class MainWindow
         try
         {
             _vpnSnapshot = await StopVpnBeforeExitAsync(_vpnConnectTask,
-                !_qaFixture && OperatingSystem.IsWindows()
+                !_qaFixture && (OperatingSystem.IsWindows() || _vpnServiceAvailable ||
+                                _vpnConnectTask is not null || WindowsTunnelHealth.IsTunnelActive(previousVpnState))
                     ? () => _tunnelClient.DisconnectAsync()
                     : () => Task.FromResult(new WindowsTunnelSnapshot("disconnected", "")),
                 serviceInactive: !_qaFixture && OperatingSystem.IsWindows() ? IsVpnServiceConfirmedInactive : null);

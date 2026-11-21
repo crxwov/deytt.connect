@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text.Json;
@@ -19,11 +20,11 @@ internal static class PipeServer
     private const uint PipeRejectRemoteClients = 0x00000008;
     private const uint SecurityDescriptorRevision = 1;
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public static async Task RunAsync(string allowedUserSid, EngineController engine,
         CancellationToken cancellationToken)
     {
-        if (OperatingSystem.IsWindows())
-            _ = new SecurityIdentifier(allowedUserSid);
+        _ = new SecurityIdentifier(allowedUserSid);
         var activeClients = new HashSet<Task>();
         var firstPipeInstance = true;
         while (!cancellationToken.IsCancellationRequested)
@@ -62,7 +63,42 @@ internal static class PipeServer
         }
     }
 
-    private static async Task ProcessClientAsync(NamedPipeServerStream pipe, EngineController engine,
+    public static async Task RunLinuxAsync(EngineController engine, CancellationToken cancellationToken)
+    {
+        // The listening socket and its access policy belong to systemd. Never bind a privileged
+        // service to a predictable path in a user-writable directory.
+        if (Environment.GetEnvironmentVariable("LISTEN_PID") != FormattableString.Invariant($"{Environment.ProcessId}") ||
+            Environment.GetEnvironmentVariable("LISTEN_FDS") != "1")
+            throw new InvalidOperationException("Start the VPN daemon using its systemd socket.");
+
+        using var listener = new Socket(new SafeSocketHandle((IntPtr)3, ownsHandle: true));
+        if (listener.LocalEndPoint is not UnixDomainSocketEndPoint endpoint ||
+            endpoint.ToString() != WindowsPipeProtocol.LinuxSocketPath)
+            throw new InvalidOperationException("The systemd VPN socket is invalid.");
+
+        var activeClients = new HashSet<Task>();
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                activeClients.RemoveWhere(task => task.IsCompleted);
+                if (activeClients.Count >= 15)
+                {
+                    await Task.WhenAny(activeClients).WaitAsync(cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                var client = await listener.AcceptAsync(cancellationToken).ConfigureAwait(false);
+                activeClients.Add(ProcessClientAsync(new NetworkStream(client, ownsSocket: true), engine, cancellationToken));
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        await Task.WhenAll(activeClients).ConfigureAwait(false);
+    }
+
+    private static async Task ProcessClientAsync(Stream pipe, EngineController engine,
         CancellationToken cancellationToken)
     {
         using (pipe)
@@ -89,7 +125,7 @@ internal static class PipeServer
         }
     }
 
-    private static async Task HandleClientAsync(NamedPipeServerStream pipe, EngineController engine,
+    private static async Task HandleClientAsync(Stream pipe, EngineController engine,
         CancellationToken cancellationToken)
     {
         var payload = await WindowsPipeProtocol.ReadFrameAsync(pipe, WindowsPipeProtocol.MaximumRequestBytes,
@@ -150,62 +186,34 @@ internal static class PipeServer
 
     private static NamedPipeServerStream CreateServerPipe(string allowedUserSid, bool firstInstance)
     {
-        if (OperatingSystem.IsWindows())
+        var sddl = $"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;{allowedUserSid})";
+        if (!ConvertStringSecurityDescriptorToSecurityDescriptor(sddl,
+                SecurityDescriptorRevision, out var descriptor, out _))
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+
+        try
         {
-            var sddl = $"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;{allowedUserSid})";
-            if (!ConvertStringSecurityDescriptorToSecurityDescriptor(sddl,
-                    SecurityDescriptorRevision, out var descriptor, out _))
+            var attributes = new SecurityAttributes
+            {
+                Length = Marshal.SizeOf<SecurityAttributes>(),
+                SecurityDescriptor = descriptor,
+                InheritHandle = false,
+            };
+            var flags = PipeAccessDuplex | FileFlagOverlapped |
+                        (firstInstance ? FileFlagFirstPipeInstance : 0u);
+            var handle = CreateNamedPipe(PipeName,
+                flags,
+                PipeTypeByte | PipeReadModeByte | PipeWait | PipeRejectRemoteClients,
+                16, 64 * 1024, 64 * 1024, 0, ref attributes);
+            if (handle.IsInvalid)
                 throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-
-            try
-            {
-                var attributes = new SecurityAttributes
-                {
-                    Length = Marshal.SizeOf<SecurityAttributes>(),
-                    SecurityDescriptor = descriptor,
-                    InheritHandle = false,
-                };
-                var flags = PipeAccessDuplex | FileFlagOverlapped |
-                            (firstInstance ? FileFlagFirstPipeInstance : 0u);
-                var handle = CreateNamedPipe(PipeName,
-                    flags,
-                    PipeTypeByte | PipeReadModeByte | PipeWait | PipeRejectRemoteClients,
-                    16, 64 * 1024, 64 * 1024, 0, ref attributes);
-                if (handle.IsInvalid)
-                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-                return new NamedPipeServerStream(PipeDirection.InOut, isAsync: true,
-                    isConnected: false, handle);
-            }
-            finally
-            {
-                _ = LocalFree(descriptor);
-            }
+            return new NamedPipeServerStream(PipeDirection.InOut, isAsync: true,
+                isConnected: false, handle);
         }
-
-        var server = new NamedPipeServerStream(
-            "DEYTT.Connect.v1",
-            PipeDirection.InOut,
-            16,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous);
-
-        if (OperatingSystem.IsLinux())
+        finally
         {
-            try
-            {
-                var socketPath = "/tmp/CoreFxPipe_DEYTT.Connect.v1";
-                if (File.Exists(socketPath))
-                {
-                    File.SetUnixFileMode(socketPath,
-                        UnixFileMode.UserRead | UnixFileMode.UserWrite |
-                        UnixFileMode.GroupRead | UnixFileMode.GroupWrite |
-                        UnixFileMode.OtherRead | UnixFileMode.OtherWrite);
-                }
-            }
-            catch { }
+            _ = LocalFree(descriptor);
         }
-
-        return server;
     }
 
     [StructLayout(LayoutKind.Sequential)]

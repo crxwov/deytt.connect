@@ -10,7 +10,7 @@ public partial class MainWindow
     /// <summary>Offers each newer stable package matching this installation on every app launch.</summary>
     internal async Task CheckForStartupUpdateAsync()
     {
-        if (!OperatingSystem.IsWindows() || _qaFixture || !IsVisible || _startupUpdateCheckStarted)
+        if (_qaFixture || !IsVisible || _startupUpdateCheckStarted)
             return;
 
         _startupUpdateCheckStarted = true;
@@ -25,6 +25,18 @@ public partial class MainWindow
             if (release is null || !release.CanDownloadVerifiedPackage ||
                 !WindowsUpdateClient.IsReleaseForInstallation(release, kind))
                 return;
+
+            if (OperatingSystem.IsLinux())
+            {
+                var openUpdates = await ConfirmInShellAsync(
+                    Copy("доступно обновление", "update available"),
+                    Copy($"доступен пакет {release.AssetName}. скачать его через настройки?",
+                        $"package {release.AssetName} is available. download it from settings?"),
+                    Copy("обновления", "updates"));
+                if (openUpdates && IsVisible && !cancellation.IsCancellationRequested)
+                    await ShowUpdateDialogAsync();
+                return;
+            }
 
             var accepted = await ConfirmInShellAsync(
                 Copy("Доступно обновление DEYTT Connect", "DEYTT Connect update available"),
@@ -99,7 +111,7 @@ public partial class MainWindow
             if (!exited)
                 throw new InvalidOperationException("VPN could not stop for update.");
         }
-        else
+        else if (kind == WindowsUpdatePackageKind.PortableZip)
             await WindowsUpdateClient.OpenVerifiedPackageInExplorerAsync(package, cancellationToken);
         return package;
     }

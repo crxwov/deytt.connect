@@ -85,6 +85,8 @@ public partial class MainWindow : Window
     private Grid? _homeConnectionLayout;
     private Border? _homeConnectionPrimaryAction;
     private RouteGlobeWebView? _routeGlobe;
+    private bool UseNativeDesktopShell => _disableNativeMapInitialization ||
+        (OperatingSystem.IsLinux() && _routeGlobe?.IsAtlasReady != true);
 
     public MainWindow() : this((string?)null)
     {
@@ -122,20 +124,17 @@ public partial class MainWindow : Window
         };
         CloseWindowButton.Click += (_, _) => Close();
         _initialImportUrl = initialImportUrl;
-        if (OperatingSystem.IsWindows())
-        {
-            _systemDarkTheme = IsSystemDarkTheme();
-            var preferences = WindowsPreferencesStore.Load();
-            _language = preferences.Language;
-            _selectedRoute = preferences.SelectedRoute;
-            _probeMethod = preferences.ProbeMethod;
-            _mapRegionConsentGranted = preferences.MapRegionConsentGranted;
-            _mapRegionConsentAsked = preferences.MapRegionConsentAsked;
-            _mapRegionEnabled = preferences.MapRegionEnabled && _mapRegionConsentGranted;
-            _reduceMotion = preferences.ReduceMotion;
-            _themePreference = preferences.ThemePreference;
-            _windowChromePreference = preferences.WindowChromePreference;
-        }
+        _systemDarkTheme = IsSystemDarkTheme();
+        var preferences = WindowsPreferencesStore.Load();
+        _language = preferences.Language;
+        _selectedRoute = preferences.SelectedRoute;
+        _probeMethod = preferences.ProbeMethod;
+        _mapRegionConsentGranted = preferences.MapRegionConsentGranted;
+        _mapRegionConsentAsked = preferences.MapRegionConsentAsked;
+        _mapRegionEnabled = preferences.MapRegionEnabled && _mapRegionConsentGranted;
+        _reduceMotion = preferences.ReduceMotion;
+        _themePreference = preferences.ThemePreference;
+        _windowChromePreference = preferences.WindowChromePreference;
         _useSystemWindowChrome = _windowChromePreference == "system";
         WindowDecorations = _useSystemWindowChrome
             ? Avalonia.Controls.WindowDecorations.Full
@@ -300,7 +299,7 @@ public partial class MainWindow : Window
             return;
 
         await RefreshVpnStatusAsync();
-        if (OperatingSystem.IsWindows() && IsVisible)
+        if (IsVisible)
             _vpnStatusTimer.Start();
 
         // Resolve the initial account/setup flow before creating the Windows WebView2
@@ -340,7 +339,7 @@ public partial class MainWindow : Window
         {
             if (_routeGlobe != null) _routeGlobe.HostActive = false;
         }
-        else if (IsVisible)
+        else if (IsVisible && (_activeTab == MainTab.Home || !UseNativeDesktopShell))
         {
             if (_routeGlobe != null) _routeGlobe.ResumeHost();
         }
@@ -553,7 +552,7 @@ public partial class MainWindow : Window
 
     private void ShowPageInHost(MainTab tab, Control page)
     {
-        if (!_disableNativeMapInitialization && _routeGlobe is not null)
+        if (!UseNativeDesktopShell && _routeGlobe is not null)
         {
             if (tab is MainTab.Home or MainTab.Routes or MainTab.Profile or MainTab.Settings)
             {
@@ -587,7 +586,6 @@ public partial class MainWindow : Window
             }
         }
 
-        // Keep host active so starry sky and stage transitions render without freeze
         var homePage = _pageViews.TryGetValue(MainTab.Home, out var cachedHome)
             ? cachedHome.View
             : null;
@@ -609,6 +607,8 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_routeGlobe is not null)
+            _routeGlobe.HostActive = false;
         if (homePage is not null)
         {
             if (homePage.Parent is Panel oldParent && !ReferenceEquals(oldParent, PageHost))
@@ -880,7 +880,7 @@ public partial class MainWindow : Window
             MainTab.Setup => Copy("Настройка подключения", "Connection setup"),
             _ => Copy("Ваше подключение", "Your connection"),
         };
-        WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !_mapImmersive;
+        WorkspaceHeader.IsVisible = UseNativeDesktopShell && !_mapImmersive;
         NavSectionTitle.Text = Copy("РАЗДЕЛЫ", "WORKSPACE");
         UpdateHomeGlobePresentation();
     }
@@ -896,14 +896,15 @@ public partial class MainWindow : Window
         var compact = Bounds.Width < 900;
         var medium = Bounds.Width < 1180;
         var shortCompact = compact && Bounds.Height < 700;
-        PageScroll.VerticalScrollBarVisibility = _disableNativeMapInitialization || _activeTab is MainTab.Setup or MainTab.Support
+        PageScroll.VerticalScrollBarVisibility = UseNativeDesktopShell || _activeTab is MainTab.Setup or MainTab.Support
             ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
             : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
         if (_responsiveLayoutInitialized && _compactLayout == compact && _mediumLayout == medium &&
             _shortCompactLayout == shortCompact)
         {
-            WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !_mapImmersive;
-            if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = _disableNativeMapInitialization ? (_mapImmersive ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
+            WorkspaceHeader.IsVisible = UseNativeDesktopShell && !_mapImmersive;
+            WorkspaceHeader.Height = UseNativeDesktopShell ? 68 : 0;
+            if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = UseNativeDesktopShell ? (_mapImmersive ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
             UpdatePageHostWidth();
             UpdateHomeColumns();
             return;
@@ -927,9 +928,9 @@ public partial class MainWindow : Window
         SidebarStatusCard.IsVisible = !compact;
         WorkspaceHeader.Padding = compact ? new Thickness(16, 0) : medium
             ? new Thickness(24, 0) : new Thickness(36, 0);
-        WorkspaceHeader.Height = _disableNativeMapInitialization ? 68 : 0;
+        WorkspaceHeader.Height = UseNativeDesktopShell ? 68 : 0;
         if (WorkspaceColumn.RowDefinitions.Count > 0)
-            WorkspaceColumn.RowDefinitions[0].Height = _disableNativeMapInitialization ? (_mapImmersive ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
+            WorkspaceColumn.RowDefinitions[0].Height = UseNativeDesktopShell ? (_mapImmersive ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
         HeaderContentGrid.ColumnSpacing = compact ? 8 : medium ? 16 : 24;
         WindowChromeActions.Spacing = 8;
         HeaderNavigation.Spacing = 4;
@@ -938,10 +939,10 @@ public partial class MainWindow : Window
         MinimizeWindowButton.IsVisible = !_useSystemWindowChrome;
         MaximizeWindowButton.IsVisible = !_useSystemWindowChrome;
         CloseWindowButton.IsVisible = !_useSystemWindowChrome;
-        PageHost.Margin = !_disableNativeMapInitialization || _mapImmersive || _activeTab == MainTab.Home ? new Thickness(0) : compact
+        PageHost.Margin = !UseNativeDesktopShell || _mapImmersive || _activeTab == MainTab.Home ? new Thickness(0) : compact
             ? new Thickness(20, 24)
             : medium ? new Thickness(32, 28) : new Thickness(64, 32);
-        WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !_mapImmersive;
+        WorkspaceHeader.IsVisible = UseNativeDesktopShell && !_mapImmersive;
 
         PageScroll.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
 
@@ -978,8 +979,8 @@ public partial class MainWindow : Window
         else if (WindowState == Avalonia.Controls.WindowState.FullScreen)
             WindowState = _windowStateBeforeMapImmersive;
 
-        WorkspaceHeader.IsVisible = _disableNativeMapInitialization && !enabled;
-        if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = _disableNativeMapInitialization ? (enabled ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
+        WorkspaceHeader.IsVisible = UseNativeDesktopShell && !enabled;
+        if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = UseNativeDesktopShell ? (enabled ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
         UpdateResponsiveLayout();
         UpdatePageHostWidth();
         UpdateHomeColumns();
@@ -1063,7 +1064,7 @@ public partial class MainWindow : Window
         WorkspaceHeader.Background = new SolidColorBrush(Color.Parse("#080D17"));
         WorkspaceHeader.BorderBrush = Brushes.Transparent;
         WorkspaceHeader.BorderThickness = new Thickness(0);
-        WorkspaceBrand.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
+        WorkspaceBrand.Foreground = Brushes.White;
 
         ThemeToggleButton.Content = new NavigationIcon(
             dark ? NavigationIconKind.ThemeLight : NavigationIconKind.ThemeDark, selected: false);
@@ -1088,7 +1089,7 @@ public partial class MainWindow : Window
     private static bool IsSystemDarkTheme()
     {
         if (!OperatingSystem.IsWindows())
-            return true;
+            return Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant != Avalonia.Platform.PlatformThemeVariant.Light;
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(
@@ -1103,7 +1104,7 @@ public partial class MainWindow : Window
 
     private void AttachSystemThemeWatcher()
     {
-        if (!OperatingSystem.IsWindows() || _systemThemeWatcherAttached)
+        if (_systemThemeWatcherAttached)
             return;
 
         _systemDarkTheme = IsSystemDarkTheme();
@@ -1221,7 +1222,7 @@ public partial class MainWindow : Window
 
     private Control BuildConnectionCard()
     {
-        var signedIn = _sessionToken is not null;
+        var signedIn = _sessionToken is not null || _keysSnapshot?.HappAvailable == true;
         var restoringSession = !_sessionRestoreComplete && !_qaFixture;
         var subscriptionReady = _keysSnapshot?.HappAvailable == true;
         var profileReady = !string.IsNullOrWhiteSpace(_keysSnapshot?.ProfileJson);
@@ -1330,7 +1331,9 @@ public partial class MainWindow : Window
             }
             if (starting && !healthUnknown)
                 return;
-            if (!signedIn)
+            if (tunnelActive)
+                _ = ToggleVpnAsync();
+            else if (!signedIn)
                 ShowSignInDialog();
             else if (!subscriptionReady || !profileReady)
                 ShowTab(MainTab.Profile);
@@ -2854,7 +2857,7 @@ public partial class MainWindow : Window
 
     private async Task ShowInitialMapConsentIfNeededAsync()
     {
-        if (!OperatingSystem.IsWindows() || _mapRegionConsentAsked)
+        if (_mapRegionConsentAsked)
             return;
 
         var accepted = await ConfirmMapRegionConsentAsync();
@@ -3841,7 +3844,7 @@ public partial class MainWindow : Window
 
     internal async Task RefreshVpnStatusAsync(Func<Task<WindowsTunnelSnapshot>>? statusReader = null)
     {
-        if (!OperatingSystem.IsWindows() || _vpnActionInProgress || _vpnCancelInProgress || _vpnStatusRefreshRunning || _quitInProgress || _exitAuthorized)
+        if (_vpnActionInProgress || _vpnCancelInProgress || _vpnStatusRefreshRunning || _quitInProgress || _exitAuthorized)
             return;
 
         _vpnStatusRefreshRunning = true;
@@ -3882,8 +3885,8 @@ public partial class MainWindow : Window
     }
 
     private WindowsTunnelSnapshot VpnServiceUnavailableSnapshot() => new("error",
-        Copy("Не удалось узнать состояние VPN: служба не отвечает. Проверьте её в настройках и состояние VPN в Windows.",
-            "VPN status is unknown: the service is not responding. Check it in settings and verify VPN status in Windows."));
+        Copy("служба vpn не отвечает. проверьте её в настройках приложения.",
+            "the vpn service is not responding. check it in the app settings."));
 
     private void UpdateMapLocationForVpnState(string previousState, string currentState)
     {
@@ -4004,14 +4007,20 @@ public partial class MainWindow : Window
 
     private async Task InstallVpnServiceAsync()
     {
-        if (!OperatingSystem.IsWindows())
+        if (_vpnActionInProgress)
+            return;
+        if (OperatingSystem.IsLinux())
         {
-            ShowInfoDialog(Copy("Только для Windows", "Windows only"),
-                Copy("Установка VPN-службы доступна после запуска полного Windows-пакета.",
-                    "VPN service setup is available in the full Windows package."));
+            await RefreshVpnStatusAsync();
+            var message = _vpnServiceAvailable
+                ? Copy("служба отвечает. можно подключиться с главного экрана.",
+                    "the service is running. you can connect from the home screen.")
+                : Copy("проверьте службу командой sudo systemctl enable --now deytt-connect.socket. если доступ ещё не выдан, администратор может добавить ваш аккаунт в группу deytt-connect. затем войдите в систему заново.",
+                    "check the service with sudo systemctl enable --now deytt-connect.socket. if you do not have access yet, an administrator can add your account to the deytt-connect group. then sign out and back in.");
+            ShowInfoDialog(Copy("служба vpn", "vpn service"), message);
             return;
         }
-        if (_vpnActionInProgress)
+        if (!OperatingSystem.IsWindows())
             return;
 
         var installerPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Install-VpnService.ps1");
@@ -4102,7 +4111,7 @@ public partial class MainWindow : Window
             UpdateHomeGlobePresentation();
             return;
         }
-        if (_activeTab == MainTab.Home && _routeGlobe?.Parent is not null)
+        if (!UseNativeDesktopShell && _activeTab == MainTab.Home && _routeGlobe?.Parent is not null)
         {
             UpdateShellStatus();
             return;
@@ -4116,9 +4125,6 @@ public partial class MainWindow : Window
 
     private async Task RestoreSessionAsync(CancellationToken cancellationToken = default)
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         string? token;
         try
         {
@@ -5132,7 +5138,7 @@ public partial class MainWindow : Window
 
     private void SavePreferences()
     {
-        if (_qaFixture || !OperatingSystem.IsWindows())
+        if (_qaFixture)
             return;
         try
         {
@@ -5156,14 +5162,6 @@ public partial class MainWindow : Window
 
     private async Task ShowTelegramPairingDialogAsync()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            ShowInfoDialog(Copy("Вход через Telegram", "Sign in with Telegram"),
-                Copy("Сохранение сеанса защищено средствами Windows. Завершите вход в версии для Windows.",
-                    "Session storage uses Windows protection. Complete sign-in in the Windows build."));
-            return;
-        }
-
         var title = DeyttTheme.TextBlock(Copy("Добавить приложение", "Add this app"), 22,
             DeyttTheme.Text, FontWeight.Bold);
         var detail = DeyttTheme.TextBlock(

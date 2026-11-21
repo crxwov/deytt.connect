@@ -18,6 +18,7 @@ namespace DeyttConnect.Windows.Views;
 public partial class MainWindow
 {
     private Control? _homeMapPanel;
+    private ContentControl? _linuxHomeActions;
     private CancellationTokenSource? _homeProbeCancellation;
     private WindowsRouteProbeResult? _homeLiveProbe;
     private DateTimeOffset _homeProbeUpdatedAt;
@@ -192,7 +193,33 @@ public partial class MainWindow
             oldHost.Children.Remove(map);
         _homeMapPanel = map;
         UpdateHomeColumns();
-        return map;
+        if (!OperatingSystem.IsLinux())
+            return map;
+
+        _linuxHomeActions = new ContentControl
+        {
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            MaxWidth = 680,
+            Margin = new Thickness(24),
+        };
+        RefreshLinuxHomeActions(map);
+        Grid.SetRow(map, 1);
+        return new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            Children = { _linuxHomeActions, map },
+        };
+    }
+
+    private void RefreshLinuxHomeActions(RouteGlobeWebView map)
+    {
+        if (_linuxHomeActions is null)
+            return;
+        _linuxHomeActions.IsVisible = UseNativeDesktopShell;
+        if (UseNativeDesktopShell)
+            _linuxHomeActions.Content = BuildConnectionCard();
+        map.MinHeight = UseNativeDesktopShell ? 380 : 0;
     }
 
     private void RefreshHomePageInPlace()
@@ -202,6 +229,11 @@ public partial class MainWindow
 
         ConfigureHomeMap(map);
         _homeMapPanel = map;
+        if (OperatingSystem.IsLinux() && _linuxHomeActions is not null)
+        {
+            RefreshLinuxHomeActions(map);
+            return;
+        }
 
         if (_pageViews.TryGetValue(MainTab.Home, out var homePage) &&
             !homePage.View.Children.Contains(map))
@@ -507,6 +539,14 @@ public partial class MainWindow
             Language = _language,
             ReducedMotion = _reduceMotion,
         };
+        if (OperatingSystem.IsLinux())
+        {
+            map.AtlasAvailabilityChanged += () => Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(_routeGlobe, map) && IsVisible)
+                    ShowTab(_activeTab, reuseCachedPage: true);
+            });
+        }
         map.NodeTapped += node => _ = ShowMapRoutePickerAsync(node);
         map.HomeActionRequested += HandleHomeActionRequested;
         map.ImmersiveModeRequested += SetMapImmersive;
@@ -1087,7 +1127,9 @@ public partial class MainWindow
             {
                 Title = Copy("Выберите приложение для правила", "Select application for rule"),
                 AllowMultiple = false,
-                FileTypeFilter = [new FilePickerFileType("Executable (*.exe)") { Patterns = ["*.exe"] }]
+                FileTypeFilter = OperatingSystem.IsWindows()
+                    ? [new FilePickerFileType("Executable (*.exe)") { Patterns = ["*.exe"] }]
+                    : null
             });
             if (files.Count == 0)
                 return;

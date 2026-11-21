@@ -26,17 +26,20 @@ public static class WindowsImportedSubscriptionStore
             var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write,
-                           FileShare.None, 4096, FileOptions.WriteThrough))
+                var options = new FileStreamOptions
+                {
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Options = FileOptions.WriteThrough,
+                };
+                if (OperatingSystem.IsLinux())
+                    options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                using (var stream = new FileStream(tempPath, options))
                 {
                     stream.Write(protectedProfile);
                     stream.Flush(flushToDisk: true);
                 }
                 File.Move(tempPath, path, overwrite: true);
-                if (OperatingSystem.IsLinux())
-                {
-                    try { File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch { }
-                }
             }
             finally
             {
@@ -95,10 +98,6 @@ public static class WindowsImportedSubscriptionStore
     private static string ProfilePath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "DEYTT", "Connect", "subscription-profile.dat");
-
-    private static void EnsureWindows()
-    {
-    }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static byte[] Transform(byte[] input, bool protect)

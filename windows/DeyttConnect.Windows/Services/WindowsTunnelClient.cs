@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using DeyttConnect.Protocol;
 using Microsoft.Win32.SafeHandles;
@@ -74,19 +75,32 @@ public sealed class WindowsTunnelClient
     private static async Task<WindowsTunnelSnapshot> SendAsync(WindowsPipeRequest request,
         CancellationToken cancellationToken, int timeoutSeconds)
     {
-        await using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut,
-            PipeOptions.Asynchronous);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        if (OperatingSystem.IsLinux())
+        {
+            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(WindowsPipeProtocol.LinuxSocketPath), timeout.Token)
+                .ConfigureAwait(false);
+            using var stream = new NetworkStream(socket);
+            return await ExchangeAsync(stream, request, timeout.Token).ConfigureAwait(false);
+        }
+
+        await using var pipe = new NamedPipeClientStream(".", PipeName, PipeDirection.InOut,
+            PipeOptions.Asynchronous);
         await pipe.ConnectAsync(timeout.Token).ConfigureAwait(false);
-
         ValidateServerIdentity(pipe);
+        return await ExchangeAsync(pipe, request, timeout.Token).ConfigureAwait(false);
+    }
 
+    private static async Task<WindowsTunnelSnapshot> ExchangeAsync(Stream pipe, WindowsPipeRequest request,
+        CancellationToken cancellationToken)
+    {
         var payload = WindowsPipeProtocol.SerializeRequest(request);
-        await WindowsPipeProtocol.WriteFrameAsync(pipe, payload, WindowsPipeProtocol.MaximumRequestBytes, timeout.Token)
+        await WindowsPipeProtocol.WriteFrameAsync(pipe, payload, WindowsPipeProtocol.MaximumRequestBytes, cancellationToken)
             .ConfigureAwait(false);
         var response = await WindowsPipeProtocol.ReadFrameAsync(pipe, WindowsPipeProtocol.MaximumResponseBytes,
-            timeout.Token).ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false);
         return WindowsPipeProtocol.DeserializeResponse(response);
     }
 

@@ -18,10 +18,10 @@
   <ItemGroup>
     <ProjectReference Include="..\DeyttConnect.Protocol\DeyttConnect.Protocol.csproj" />
     <Compile Include="..\DeyttConnect.Shared\WindowsAwgProfileParser.cs" Link="Shared\WindowsAwgProfileParser.cs" />
-    <Content Include="..\..\.toolchain\libxray-v26.10.21\windows\xray.exe" Condition="'$(RuntimeIdentifier)' == '' or $([MSBuild]::IsOSPlatform('Windows')) or $(RuntimeIdentifier.StartsWith('win'))"
+    <Content Include="..\..\.toolchain\libxray-v26.10.21\windows\xray.exe" Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or $(RuntimeIdentifier.StartsWith('win'))"
            Link="xray.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
-  <Target Name="RequirePinnedXray" BeforeTargets="PrepareForBuild" Condition="'$(RuntimeIdentifier)' == '' or $([MSBuild]::IsOSPlatform('Windows')) or $(RuntimeIdentifier.StartsWith('win'))">
+  <Target Name="RequirePinnedXray" BeforeTargets="PrepareForBuild" Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or $(RuntimeIdentifier.StartsWith('win'))">
     <Error Condition="!Exists('..\..\.toolchain\libxray-v26.10.21\windows\xray.exe')"
            Text="Pinned xray.exe is missing." />
   </Target>

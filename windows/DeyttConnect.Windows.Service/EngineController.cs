@@ -190,6 +190,14 @@ internal sealed class EngineController
             {
                 var dialer = FindXrayDialer(null);
                 var xrayConfig = CdnLteProfile.BuildXrayConfig(profile, socksPort);
+                if (OperatingSystem.IsLinux())
+                {
+                    var linuxConfig = JsonNode.Parse(xrayConfig)!.AsObject();
+                    // The CDN endpoint is resolved before TUN starts. Keep its socket on the uplink.
+                    linuxConfig["outbounds"]![0]!["streamSettings"]!["sockopt"] =
+                        new JsonObject { ["interface"] = dialer.InterfaceName };
+                    xrayConfig = linuxConfig.ToJsonString();
+                }
                 _xrayProfilePath = WritePrivateProfile(xrayConfig);
                 var xray = StartOwnedXray(_xrayProfilePath, dialer.InterfaceName, dialer.DnsEndpoint);
                 await WaitForXraySocksAsync(xray, socksPort, cancellationToken).ConfigureAwait(false);
@@ -851,7 +859,7 @@ internal sealed class EngineController
                         _ => 0,
                     };
                     if (interfaceIndex > 0)
-                        interfaceAddresses.Add(new WindowsTunnelCanaryInterface(unicast.Address, interfaceIndex));
+                        interfaceAddresses.Add(new WindowsTunnelCanaryInterface(unicast.Address, interfaceIndex) { Name = networkInterface.Name });
                 }
             }
             catch (Exception error) when (error is NetworkInformationException or PlatformNotSupportedException)
@@ -1012,6 +1020,17 @@ internal sealed class EngineController
 
     private static void SetOutgoingInterface(Socket socket, WindowsTunnelCanaryInterface tunnelInterface)
     {
+        if (OperatingSystem.IsLinux())
+        {
+            const int socketLevel = 1; // SOL_SOCKET
+            const int bindToDevice = 25; // SO_BINDTODEVICE
+            var name = tunnelInterface.Name ?? throw new InvalidOperationException("The TUN interface name is missing.");
+            var device = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+            if (SetLinuxSocketOption(socket.SafeHandle, socketLevel, bindToDevice, device, device.Length) != 0)
+                throw new SocketException(Marshal.GetLastPInvokeError());
+            return;
+        }
+
         const int ipProtocol = 0;
         const int ipv6Protocol = 41;
         const int unicastInterfaceOption = 31;
@@ -1028,6 +1047,10 @@ internal sealed class EngineController
                 optionValue, optionValue.Length) != 0)
             throw new SocketException(GetSocketErrorNative());
     }
+
+    [DllImport("libc", EntryPoint = "setsockopt", SetLastError = true)]
+    private static extern int SetLinuxSocketOption(SafeSocketHandle socket, int level, int optionName,
+        byte[] optionValue, int optionLength);
 
     [DllImport("Ws2_32.dll", EntryPoint = "setsockopt")]
     private static extern int SetSocketOptionNative(SafeSocketHandle socket, int level, int optionName,
@@ -2150,26 +2173,17 @@ internal sealed class EngineController
         }
         else
         {
-            directoryPath = "/run/deytt-connect/runtime";
-            if (!Directory.Exists(directoryPath))
-            {
-                try
-                {
-                    Directory.CreateDirectory(directoryPath);
-                }
-                catch
-                {
-                    directoryPath = Path.Combine(Path.GetTempPath(), "deytt-connect", "runtime");
-                    Directory.CreateDirectory(directoryPath);
-                }
-            }
+            directoryPath = Path.Combine("/run/deytt-connect", "runtime");
+            Directory.CreateDirectory(directoryPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             var path = Path.Combine(directoryPath, $"{Guid.NewGuid():N}.json");
-            File.WriteAllText(path, content, new System.Text.UTF8Encoding(false));
-            try
+            using var stream = new FileStream(path, new FileStreamOptions
             {
-                File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-            }
-            catch { }
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite,
+            });
+            using var writer = new StreamWriter(stream);
+            writer.Write(content);
             return path;
         }
     }
@@ -2265,6 +2279,9 @@ internal sealed class EngineController
         if (selected is null)
             throw new InvalidOperationException("Не найдена сеть для LTE Xray.");
 
+        if (OperatingSystem.IsLinux())
+            return (selected.Name, string.Empty);
+
         var dns = selected.GetIPProperties().DnsAddresses.FirstOrDefault(address =>
             !IsAnyAddress(address) && !IPAddress.IsLoopback(address));
         if (dns is null)
@@ -2278,7 +2295,7 @@ internal sealed class EngineController
 
     private Process StartOwnedXray(string profilePath, string interfaceName, string dnsEndpoint)
     {
-        var xrayPath = Path.Combine(AppContext.BaseDirectory, "xray.exe");
+        var xrayPath = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "xray.exe" : "xray");
         if (!File.Exists(xrayPath))
             throw new FileNotFoundException("Не найден компонент CDN Xray. Переустановите Connect.", xrayPath);
         var process = StartXrayProcess(xrayPath, profilePath, interfaceName, dnsEndpoint);
@@ -2309,10 +2326,13 @@ internal sealed class EngineController
             RedirectStandardError = true,
         };
         start.ArgumentList.Add("run");
-        start.ArgumentList.Add("-dns");
-        start.ArgumentList.Add(dnsEndpoint);
-        start.ArgumentList.Add("-interface");
-        start.ArgumentList.Add(interfaceName);
+        if (OperatingSystem.IsWindows())
+        {
+            start.ArgumentList.Add("-dns");
+            start.ArgumentList.Add(dnsEndpoint);
+            start.ArgumentList.Add("-interface");
+            start.ArgumentList.Add(interfaceName);
+        }
         start.ArgumentList.Add("-config");
         start.ArgumentList.Add(profilePath);
         var process = Process.Start(start) ?? throw new InvalidOperationException("Xray did not start.");

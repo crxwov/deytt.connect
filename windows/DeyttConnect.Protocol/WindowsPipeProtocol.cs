@@ -77,6 +77,7 @@ public sealed record WindowsRouteProbeResult(
 
 public static class WindowsPipeProtocol
 {
+    public const string LinuxSocketPath = "/run/deytt-connect.sock";
     // The 2 MiB profile plus 4 MiB of AWG configs can expand several-fold when
     // JSON escapes Unicode and control characters. Keep enough bounded headroom.
     public const int MaximumRequestBytes = 40 * 1024 * 1024;
@@ -240,7 +241,10 @@ public static class WindowsTunnelCanaryRoute
     }
 }
 
-public sealed record WindowsTunnelCanaryInterface(IPAddress Address, int InterfaceIndex);
+public sealed record WindowsTunnelCanaryInterface(IPAddress Address, int InterfaceIndex)
+{
+    public string? Name { get; init; }
+}
 
 public sealed record WindowsTunnelHealthTransition(string State, int ConsecutiveFailures);
 

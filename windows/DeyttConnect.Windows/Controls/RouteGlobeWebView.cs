@@ -911,7 +911,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
             _appliedMapRegionWidth = 0;
             _appliedMapRegionHeight = 0;
             _appliedMapRegionDpi = 0;
-            _pageReady = false;
+            SetPageReady(false);
             StopAtlasReadyTimeout();
             if (_attachedToVisualTree && !_atlasFailed)
                 HandleAtlasFailure("load");
@@ -937,7 +937,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         {
             CancelPendingStatePush();
             _appliedHomeResumeRevision = -1;
-            _pageReady = false;
+            SetPageReady(false);
             StopAtlasReadyTimeout();
         }
     }
@@ -994,7 +994,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
                     return;
                 _automaticRetries = 0;
                 StopAtlasReadyTimeout();
-                _pageReady = true;
+                SetPageReady(true);
                 QueueStateUpdate();
                 PushProfileAvatar();
             });
@@ -1464,7 +1464,19 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
             Content = null;
         _webView = null;
         _coreWebView2 = null;
-        _pageReady = false;
+        SetPageReady(false);
+    }
+
+    internal bool IsAtlasReady => _pageReady;
+
+    internal event Action? AtlasAvailabilityChanged;
+
+    private void SetPageReady(bool ready)
+    {
+        if (_pageReady == ready)
+            return;
+        _pageReady = ready;
+        AtlasAvailabilityChanged?.Invoke();
     }
 
     private string BuildStateScript()

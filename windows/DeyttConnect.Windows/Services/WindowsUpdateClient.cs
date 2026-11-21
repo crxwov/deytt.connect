@@ -28,6 +28,9 @@ public enum WindowsUpdatePackageKind
 {
     PortableZip,
     Msi,
+    Deb,
+    Rpm,
+    Arch,
 }
 
 public sealed record VerifiedWindowsUpdatePackage(string FilePath, string Sha256, long Size);
@@ -66,7 +69,7 @@ public static class WindowsUpdateClient
         using var request = new HttpRequestMessage(HttpMethod.Get,
             "https://api.github.com/repos/crxwov/deytt.connect/releases?per_page=30");
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
-        request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
+        request.Headers.UserAgent.ParseAdd(OperatingSystem.IsLinux() ? "deytt-connect/linux" : "deytt-connect/windows");
         using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         response.EnsureSuccessStatusCode();
 
@@ -84,6 +87,7 @@ public static class WindowsUpdateClient
 
         WindowsUpdateRelease? latestCandidate = null;
         Version? latestVersion = null;
+        var linux = preferredKind is WindowsUpdatePackageKind.Deb or WindowsUpdatePackageKind.Rpm or WindowsUpdatePackageKind.Arch;
         foreach (var release in releases.RootElement.EnumerateArray())
         {
             // Stable-channel selection fails closed when GitHub omits or malforms channel metadata.
@@ -91,8 +95,12 @@ public static class WindowsUpdateClient
                 continue;
 
             var tag = GetJsonString(release, "tag_name");
-            if (tag is null || !TryParseReleaseVersion(tag, out var releaseVersion) ||
-                !IsOfficialReleaseUrl(GetJsonString(release, "html_url"), "tag", tag))
+            if (tag is null || !IsOfficialReleaseUrl(GetJsonString(release, "html_url"), "tag", tag))
+                continue;
+            const string releasePrefix = "connect./";
+            var versionTag = linux && tag.StartsWith(releasePrefix, StringComparison.Ordinal)
+                ? tag[releasePrefix.Length..] : tag;
+            if (!TryParseReleaseVersion(versionTag, out var releaseVersion))
                 continue;
             if (!release.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
                 continue;
@@ -100,7 +108,13 @@ public static class WindowsUpdateClient
             foreach (var asset in assets.EnumerateArray())
             {
                 var name = GetJsonString(asset, "name");
-                if (name is null || !TryGetSupportedWindowsAsset(tag, name, out var packageKind))
+                if (name is null)
+                    continue;
+                var packageKind = preferredKind.GetValueOrDefault();
+                var candidateVersion = releaseVersion;
+                if (linux
+                    ? !TryGetLinuxPackageVersion(name, packageKind, out candidateVersion)
+                    : !TryGetSupportedWindowsAsset(tag, name, out packageKind))
                     continue;
 
                 var rawUrl = GetJsonString(asset, "browser_download_url");
@@ -117,9 +131,11 @@ public static class WindowsUpdateClient
                 if (preferredKind is not null && packageKind != preferredKind)
                     continue;
 
-                if (latestVersion is null || CompareReleaseVersions(releaseVersion, latestVersion) > 0)
+                if (linux && !candidate.CanDownloadVerifiedPackage)
+                    continue;
+                if (latestVersion is null || CompareReleaseVersions(candidateVersion, latestVersion) > 0)
                 {
-                    latestVersion = releaseVersion;
+                    latestVersion = candidateVersion;
                     latestCandidate = candidate;
                 }
             }
@@ -199,15 +215,53 @@ public static class WindowsUpdateClient
         return false;
     }
 
-    internal static WindowsUpdatePackageKind GetCurrentInstallationKind(string appBaseDirectory) =>
-        WindowsPortableLayout.FindPortableRoot(appBaseDirectory) is null
+    internal static WindowsUpdatePackageKind GetCurrentInstallationKind(string appBaseDirectory)
+    {
+        if (OperatingSystem.IsLinux())
+        {
+            var distribution = File.ReadAllLines("/etc/os-release")
+                .Where(line => line.StartsWith("ID=", StringComparison.Ordinal) ||
+                               line.StartsWith("ID_LIKE=", StringComparison.Ordinal))
+                .SelectMany(line => line[(line.IndexOf('=') + 1)..].Trim('"', '\'').Split(' '));
+            if (distribution.Contains("arch"))
+                return WindowsUpdatePackageKind.Arch;
+            if (distribution.Any(id => id is "fedora" or "rhel" or "centos" or "rocky" or "almalinux"))
+                return WindowsUpdatePackageKind.Rpm;
+            return WindowsUpdatePackageKind.Deb;
+        }
+
+        return WindowsPortableLayout.FindPortableRoot(appBaseDirectory) is null
             ? WindowsUpdatePackageKind.Msi
             : WindowsUpdatePackageKind.PortableZip;
+    }
+
+    private static bool TryGetLinuxPackageVersion(string name, WindowsUpdatePackageKind kind, out Version version)
+    {
+        var (prefix, suffix) = kind switch
+        {
+            WindowsUpdatePackageKind.Deb => ("deytt-connect_", "_amd64.deb"),
+            WindowsUpdatePackageKind.Rpm => ("deytt-connect-", "-1.x86_64.rpm"),
+            WindowsUpdatePackageKind.Arch => ("deytt-connect-", "-1-x86_64.pkg.tar.zst"),
+            _ => ("", ""),
+        };
+        version = new Version();
+        return prefix.Length > 0 && name.Length > prefix.Length + suffix.Length &&
+               name.StartsWith(prefix, StringComparison.Ordinal) && name.EndsWith(suffix, StringComparison.Ordinal) &&
+               TryParseReleaseVersion(name[prefix.Length..^suffix.Length], out version) && version.Revision < 0;
+    }
 
     internal static Version? GetInstalledVersion() => typeof(WindowsUpdateClient).Assembly.GetName().Version;
 
-    internal static bool IsReleaseForInstallation(WindowsUpdateRelease release, WindowsUpdatePackageKind kind) =>
-        release.PackageKind == kind && IsNewerThan(release.Tag, GetInstalledVersion());
+    internal static bool IsReleaseForInstallation(WindowsUpdateRelease release, WindowsUpdatePackageKind kind)
+    {
+        if (release.PackageKind != kind)
+            return false;
+        if (kind is WindowsUpdatePackageKind.Msi or WindowsUpdatePackageKind.PortableZip)
+            return IsNewerThan(release.Tag, GetInstalledVersion());
+        return GetInstalledVersion() is { } installed &&
+               TryGetLinuxPackageVersion(release.AssetName, kind, out var available) &&
+               CompareReleaseVersions(available, installed) > 0;
+    }
 
     public static async Task<VerifiedWindowsUpdatePackage> DownloadAndVerifyAsync(
         WindowsUpdateRelease release,
@@ -227,8 +281,11 @@ public static class WindowsUpdateClient
         Directory.CreateDirectory(updatesDirectory);
         var safeTag = SanitizeTag(release.Tag);
         var extension = release.PackageKind == WindowsUpdatePackageKind.Msi ? ".msi" : ".zip";
-        var outputPath = Path.Combine(updatesDirectory, $"deytt-connect-windows-x64-{safeTag}{extension}");
-        var partialPath = outputPath + ".part";
+        var packageName = release.PackageKind is WindowsUpdatePackageKind.Msi or WindowsUpdatePackageKind.PortableZip
+            ? $"deytt-connect-windows-x64-{safeTag}{extension}"
+            : Path.GetFileName(release.AssetName);
+        var outputPath = Path.Combine(updatesDirectory, packageName);
+        var partialPath = outputPath + "." + Guid.NewGuid().ToString("N") + ".part";
 
         try
         {
@@ -381,15 +438,12 @@ public static class WindowsUpdateClient
             uri.UserInfo.Length != 0 || uri.Port != 443 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
             return false;
 
-        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var expectedLength = pathType == "download" ? 6 : 5;
-        if (segments.Length != expectedLength || segments[0] != "crxwov" || segments[1] != "deytt.connect" ||
-            segments[2] != "releases" || segments[3] != pathType || expectedTag is null ||
-            !Uri.UnescapeDataString(segments[4]).Equals(expectedTag, StringComparison.Ordinal))
+        if (expectedTag is null || pathType == "download" && expectedAssetName is null)
             return false;
-
-        return pathType != "download" || expectedAssetName is not null &&
-            Uri.UnescapeDataString(segments[5]).Equals(expectedAssetName, StringComparison.Ordinal);
+        var expectedPath = $"/crxwov/deytt.connect/releases/{pathType}/{expectedTag}";
+        if (pathType == "download")
+            expectedPath += "/" + expectedAssetName;
+        return Uri.UnescapeDataString(uri.AbsolutePath).Equals(expectedPath, StringComparison.Ordinal);
     }
 
     private static async Task<HttpResponseMessage> SendAssetRequestAsync(
@@ -408,7 +462,7 @@ public static class WindowsUpdateClient
                 throw new InvalidDataException("GitHub redirected the Windows package to an untrusted host.");
 
             using var request = new HttpRequestMessage(HttpMethod.Get, currentUri);
-            request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
+            request.Headers.UserAgent.ParseAdd(OperatingSystem.IsLinux() ? "deytt-connect/linux" : "deytt-connect/windows");
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/octet-stream"));
             var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
             if (response.IsSuccessStatusCode)

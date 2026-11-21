@@ -37,9 +37,23 @@ internal static class Program
 
         try
         {
-            var userSid = OperatingSystem.IsWindows() ? ReadAllowedUserSid() : "linux";
-            Console.WriteLine("deytt./connect VPN service ready and listening on IPC pipe.");
-            PipeServer.RunAsync(userSid, Engine, StopToken.Token).GetAwaiter().GetResult();
+            if (OperatingSystem.IsLinux())
+            {
+                using var shutdown = PosixSignalRegistration.Create(PosixSignal.SIGTERM, signal =>
+                {
+                    signal.Cancel = true;
+                    StopToken.Cancel();
+                });
+                PipeServer.RunLinuxAsync(Engine, StopToken.Token).GetAwaiter().GetResult();
+            }
+            else if (OperatingSystem.IsWindows())
+            {
+                PipeServer.RunAsync(ReadAllowedUserSid(), Engine, StopToken.Token).GetAwaiter().GetResult();
+            }
+            else
+            {
+                return 1;
+            }
             Engine.Stop();
             return 0;
         }
@@ -57,6 +71,7 @@ internal static class Program
     private static ServiceControlHandler? _controlHandler;
     private static ServiceStatus _status;
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static void ServiceMain(uint argumentCount, IntPtr arguments)
     {
         _controlHandler = HandleControl;

@@ -1,0 +1,11 @@
+[Unit]
+Description=deytt./connect vpn socket
+
+[Socket]
+ListenStream=/run/deytt-connect.sock
+SocketMode=0660
+SocketGroup=deytt-connect
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target

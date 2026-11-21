@@ -37,7 +37,12 @@ internal sealed record QaHomeFixture(
 sealed class Program
 {
     private const string SingleInstanceMutexName = @"Local\DEYTT.Connect.Windows";
-    private const string ActivationPipeName = "DEYTT.Connect.Windows.Activate";
+    private const string WindowsActivationPipe = "DEYTT.Connect.Windows.Activate";
+    private static string? ActivationPipeName => OperatingSystem.IsWindows() ? WindowsActivationPipe
+        : Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } runtimeDirectory &&
+          Path.IsPathFullyQualified(runtimeDirectory)
+            ? Path.Combine(runtimeDirectory, "deytt-connect-activate.sock")
+            : null;
     private static CancellationTokenSource? _activationCancellation;
 
     [DllImport("shell32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
@@ -73,13 +78,18 @@ sealed class Program
         }
 
         Mutex? instanceMutex = null;
-        if (OperatingSystem.IsWindows())
+        if (ActivationPipeName is { } activationPipe)
         {
-            instanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out var isPrimaryInstance);
+            bool isPrimaryInstance;
+            instanceMutex = OperatingSystem.IsWindows()
+                ? new Mutex(initiallyOwned: true, SingleInstanceMutexName, out isPrimaryInstance)
+                : new Mutex(initiallyOwned: true, "DEYTT.Connect.Linux",
+                    new NamedWaitHandleOptions { CurrentUserOnly = true, CurrentSessionOnly = false },
+                    out isPrimaryInstance);
             if (!isPrimaryInstance)
             {
                 instanceMutex.Dispose();
-                SignalPrimaryInstance(importUrl);
+                SignalPrimaryInstance(activationPipe, importUrl);
                 return;
             }
         }
@@ -99,8 +109,10 @@ sealed class Program
 
     internal static void StartActivationListener(MainWindow mainWindow)
     {
+        if (ActivationPipeName is not { } activationPipe)
+            return;
         _activationCancellation = new CancellationTokenSource();
-        _ = ListenForActivationAsync(mainWindow, _activationCancellation.Token);
+        _ = ListenForActivationAsync(mainWindow, activationPipe, _activationCancellation.Token);
     }
 
     internal static void StopActivationListener()
@@ -110,13 +122,13 @@ sealed class Program
         _activationCancellation = null;
     }
 
-    private static void SignalPrimaryInstance(string? importUrl)
+    private static void SignalPrimaryInstance(string activationPipe, string? importUrl)
     {
         for (var attempt = 0; attempt < 10; attempt++)
         {
             try
             {
-                using var client = new NamedPipeClientStream(".", ActivationPipeName,
+                using var client = new NamedPipeClientStream(".", activationPipe,
                     PipeDirection.Out, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 client.Connect(timeout: 150);
                 using var writer = new StreamWriter(client, new UTF8Encoding(false), leaveOpen: true);
@@ -145,13 +157,13 @@ sealed class Program
         }
     }
 
-    private static async Task ListenForActivationAsync(MainWindow mainWindow, CancellationToken cancellationToken)
+    private static async Task ListenForActivationAsync(MainWindow mainWindow, string activationPipe, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
             try
             {
-                await using var server = new NamedPipeServerStream(ActivationPipeName, PipeDirection.In,
+                await using var server = new NamedPipeServerStream(activationPipe, PipeDirection.In,
                     maxNumberOfServerInstances: 1, PipeTransmissionMode.Byte,
                     PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
                 await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);

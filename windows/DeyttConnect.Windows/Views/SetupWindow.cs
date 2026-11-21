@@ -293,7 +293,7 @@ public sealed class SetupWindow : UserControl
             return;
         }
 
-        if (_options.RestoreExistingSession && OperatingSystem.IsWindows())
+        if (_options.RestoreExistingSession)
             await RestoreSessionAsync();
         else
             FocusLater(_usernameInput);

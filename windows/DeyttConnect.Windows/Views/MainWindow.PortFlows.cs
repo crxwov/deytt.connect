@@ -147,50 +147,47 @@ public partial class MainWindow
             result.SelectedRoute is null)
             throw new InvalidDataException("The imported subscription is incomplete.");
 
-        if (OperatingSystem.IsWindows())
-        {
-            if (_vpnActionInProgress || _routeProbeInProgress)
-                throw new InvalidOperationException("Wait for the current VPN action to finish before importing.");
+        if (_vpnActionInProgress || _routeProbeInProgress)
+            throw new InvalidOperationException("Wait for the current VPN action to finish before importing.");
 
-            _vpnActionInProgress = true;
-            try
-            {
-                var coordinator = new WindowsSubscriptionImportCoordinator(
-                    _tunnelClient.GetStatusAsync,
-                    _tunnelClient.DisconnectAsync,
-                    IsTunnelTransportError);
-                await coordinator.CommitAsync(
-                    _vpnSnapshot,
-                    () => ConfirmImportTunnelDisconnectAsync(owner),
-                    _ =>
+        _vpnActionInProgress = true;
+        try
+        {
+            var coordinator = new WindowsSubscriptionImportCoordinator(
+                _tunnelClient.GetStatusAsync,
+                _tunnelClient.DisconnectAsync,
+                IsTunnelTransportError);
+            await coordinator.CommitAsync(
+                _vpnSnapshot,
+                () => ConfirmImportTunnelDisconnectAsync(owner),
+                _ =>
+                {
+                    if (payload.SessionToken is { Length: > 0 } token)
                     {
-                        if (payload.SessionToken is { Length: > 0 } token)
-                        {
-                            // Clear the previous anonymous import before replacing the account token.
-                            // A cleanup failure must leave the currently saved account untouched.
-                            WindowsImportedSubscriptionStore.Clear();
-                            WindowsSessionStore.Save(token);
-                        }
-                        else
-                        {
-                            WindowsImportedSubscriptionStore.Save(profile);
-                        }
-                        return Task.CompletedTask;
-                    },
-                    state =>
+                        // Clear the previous anonymous import before replacing the account token.
+                        // A cleanup failure must leave the currently saved account untouched.
+                        WindowsImportedSubscriptionStore.Clear();
+                        WindowsSessionStore.Save(token);
+                    }
+                    else
                     {
-                        var previousState = _vpnSnapshot.State;
-                        _vpnServiceAvailable = state.ServiceAvailable;
-                        _vpnSnapshot = state.ServiceAvailable ? state.Snapshot : VpnServiceUnavailableSnapshot();
-                        UpdateMapLocationForVpnState(previousState, _vpnSnapshot.State);
-                    },
-                    cancellationToken);
-            }
-            finally
-            {
-                _vpnActionInProgress = false;
-                RenderActiveTabPreservingScroll();
-            }
+                        WindowsImportedSubscriptionStore.Save(profile);
+                    }
+                    return Task.CompletedTask;
+                },
+                state =>
+                {
+                    var previousState = _vpnSnapshot.State;
+                    _vpnServiceAvailable = state.ServiceAvailable;
+                    _vpnSnapshot = state.ServiceAvailable ? state.Snapshot : VpnServiceUnavailableSnapshot();
+                    UpdateMapLocationForVpnState(previousState, _vpnSnapshot.State);
+                },
+                cancellationToken);
+        }
+        finally
+        {
+            _vpnActionInProgress = false;
+            RenderActiveTabPreservingScroll();
         }
 
         if (payload.SessionToken is { Length: > 0 } token)
@@ -218,9 +215,6 @@ public partial class MainWindow
 
     private bool RestoreImportedSubscription()
     {
-        if (!OperatingSystem.IsWindows())
-            return false;
-
         try
         {
             var profileJson = WindowsImportedSubscriptionStore.Load();
@@ -435,22 +429,14 @@ public partial class MainWindow
 
     private void ToggleImportLinkProtocol()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            ShowInfoDialog(Copy("Только для Windows", "Windows only"),
-                Copy("Связь ссылок с приложением можно настроить в Windows.",
-                    "Subscription link association is configured in Windows."));
-            return;
-        }
-
         try
         {
             if (WindowsImportLinkProtocol.IsRegistered())
             {
                 WindowsImportLinkProtocol.Unregister();
                 ShowInfoDialog(Copy("Ссылки DEYTT отвязаны", "DEYTT links disconnected"),
-                    Copy("Windows больше не будет открывать ссылки подписки в этом приложении.",
-                        "Windows will no longer open subscription links in this app."));
+                    Copy("ссылки подписки больше не будут открываться в этом приложении.",
+                        "subscription links will no longer open in this app."));
             }
             else
             {
@@ -464,8 +450,8 @@ public partial class MainWindow
                                       System.Security.SecurityException or PlatformNotSupportedException)
         {
             ShowInfoDialog(Copy("Не удалось настроить ссылки", "Could not set up links"),
-                Copy("Проверьте разрешения текущего пользователя Windows.",
-                    "Check permissions for the current Windows user."));
+                Copy("проверьте разрешения текущего пользователя.",
+                    "check permissions for the current user."));
         }
         finally
         {
@@ -475,14 +461,16 @@ public partial class MainWindow
 
     private async Task ShowUpdateDialogAsync()
     {
-        var status = DeyttTheme.TextBlock(Copy("Проверяем релизы Windows…", "Checking Windows releases…"),
+        var linux = OperatingSystem.IsLinux();
+        var status = DeyttTheme.TextBlock(Copy("проверяем обновления…", "checking for updates…"),
             13, DeyttTheme.Muted);
         var openRelease = DeyttTheme.Action(
             DeyttTheme.TextBlock(Copy("Открыть все релизы", "Open all releases"), 13,
                 DeyttTheme.Sky, FontWeight.SemiBold),
             () => OpenExternal("https://github.com/crxwov/deytt.connect/releases"));
-        var packageButton = DeyttTheme.PrimaryButton(Copy("Скачать и запустить обновление", "Download and start update"),
-            () => { });
+        var packageButton = DeyttTheme.PrimaryButton(linux
+            ? Copy("скачать пакет", "download package")
+            : Copy("Скачать и запустить обновление", "Download and start update"), () => { });
         packageButton.IsVisible = false;
         var download = (Button)packageButton.Child!;
         AutomationProperties.SetAutomationId(download, "ManualUpdateDownloadButton");
@@ -495,7 +483,7 @@ public partial class MainWindow
             Spacing = 13,
             Children =
             {
-                DeyttTheme.TextBlock(Copy("КАНАЛ WINDOWS", "WINDOWS CHANNEL"), 9,
+                DeyttTheme.TextBlock(linux ? Copy("релизы для linux", "linux releases") : Copy("КАНАЛ WINDOWS", "WINDOWS CHANNEL"), 9,
                     DeyttTheme.Sky, FontWeight.SemiBold, DeyttTheme.JetBrainsMono),
                 DeyttTheme.TextBlock(Copy("Обновления приложения", "Application updates"),
                     22, DeyttTheme.Text, FontWeight.Bold),
@@ -542,7 +530,10 @@ public partial class MainWindow
                     return;
 
                 var megabytes = package.Size / (1024d * 1024d);
-                status.Text = release.PackageKind == WindowsUpdatePackageKind.Msi
+                status.Text = linux
+                    ? Copy($"пакет проверен · sha-256 {package.Sha256}\nустановите его менеджером пакетов: {package.FilePath}",
+                        $"package verified · sha-256 {package.Sha256}\ninstall it with your package manager: {package.FilePath}")
+                    : release.PackageKind == WindowsUpdatePackageKind.Msi
                     ? Copy($"MSI проверен · {megabytes:0.0} МБ · SHA-256 {package.Sha256}\nЗапущен установщик Windows.",
                         $"MSI verified · {megabytes:0.0} MB · SHA-256 {package.Sha256}\nWindows Installer has started.")
                     : Copy($"ZIP проверен · {megabytes:0.0} МБ · SHA-256 {package.Sha256}\nПроводник выделил архив. Распаковка остаётся под вашим контролем.",
@@ -594,8 +585,8 @@ public partial class MainWindow
                 if (release is null)
                 {
                     status.Text = Copy(
-                        "Установлена последняя доступная версия для этого типа Windows-пакета.",
-                        "The latest available version for this Windows package type is installed.");
+                        "установлена последняя доступная версия для этого формата пакета.",
+                        "the latest available version for this package format is installed.");
                 }
                 else
                 {

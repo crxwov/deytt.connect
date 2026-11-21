@@ -61,7 +61,7 @@ public partial class MainWindow
     {
         await ShowSetupWindowAsync();
 
-        if (_sessionToken is null && OperatingSystem.IsWindows())
+        if (_sessionToken is null)
         {
             try
             {
