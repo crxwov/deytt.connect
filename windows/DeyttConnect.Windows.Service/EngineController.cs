@@ -362,11 +362,13 @@ internal sealed class EngineController
             }
             catch (OperationCanceledException) when (!probeToken.IsCancellationRequested && process.HasExited)
             {
-                return ProbeError(FormatProbeStartupFailure(process.ExitCode, runtimeDiagnostic.LatestError ?? ""));
+                await runtimeDiagnostic.WaitForDrainAsync().ConfigureAwait(false);
+                return ProbeError(FormatProbeStartupFailure(process.ExitCode, runtimeDiagnostic.ExitReason ?? ""));
             }
             catch (InvalidOperationException) when (process.HasExited)
             {
-                return ProbeError(FormatProbeStartupFailure(process.ExitCode, runtimeDiagnostic.LatestError ?? ""));
+                await runtimeDiagnostic.WaitForDrainAsync().ConfigureAwait(false);
+                return ProbeError(FormatProbeStartupFailure(process.ExitCode, runtimeDiagnostic.ExitReason ?? ""));
             }
             finally
             {
@@ -2095,6 +2097,7 @@ internal sealed class EngineController
         {
             if (string.IsNullOrWhiteSpace(line))
                 return;
+            Console.WriteLine($"[engine] {line}");
             var summary = SummarizeEngineDiagnostic(line);
             Volatile.Write(ref _latestLine, summary);
             if (System.Text.RegularExpressions.Regex.IsMatch(line,
@@ -2184,6 +2187,7 @@ internal sealed class EngineController
             });
             using var writer = new StreamWriter(stream);
             writer.Write(content);
+            try { File.WriteAllText("/tmp/last-singbox-profile.json", content); } catch { }
             return path;
         }
     }

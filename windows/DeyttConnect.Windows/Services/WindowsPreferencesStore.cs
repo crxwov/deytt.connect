@@ -82,10 +82,28 @@ public static class WindowsPreferencesStore
         }
     }
 
-    private static string PreferencesPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        ProductFolder,
-        PreferencesFileName);
+    private static string PreferencesPath
+    {
+        get
+        {
+            var basePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var properPath = Path.Combine(basePath, "DEYTT", "Connect", PreferencesFileName);
+            if (!File.Exists(properPath) && OperatingSystem.IsLinux())
+            {
+                var legacyPath = Path.Combine(basePath, "DEYTT\\Connect", PreferencesFileName);
+                if (File.Exists(legacyPath))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(properPath)!);
+                        File.Copy(legacyPath, properPath, overwrite: true);
+                    }
+                    catch { }
+                }
+            }
+            return properPath;
+        }
+    }
 
     internal static bool IsKnownRoute(string route) => route is "auto" or "ru-de" or "route:DE:LTE" ||
         System.Text.RegularExpressions.Regex.IsMatch(route,

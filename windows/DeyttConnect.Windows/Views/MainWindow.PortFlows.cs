@@ -119,7 +119,6 @@ public partial class MainWindow
         using var request = new HttpRequestMessage(HttpMethod.Get, uri.Uri);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.UserAgent.ParseAdd("deytt-connect/windows");
-        request.Headers.TryAddWithoutValidation("X-Deytt-Client", "deytt-connect");
         using var response = await SubscriptionImportHttp.SendAsync(
             request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         if (response.StatusCode != HttpStatusCode.OK)

@@ -89,7 +89,20 @@ internal static class WindowsSubscriptionDeviceIdentity
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         if (string.IsNullOrWhiteSpace(localAppData))
             throw new IOException("The application data directory is unavailable.");
-        var path = Path.Combine(localAppData, ProductFolder, InstallationIdFileName);
+        var path = Path.Combine(localAppData, "DEYTT", "Connect", InstallationIdFileName);
+        if (!File.Exists(path) && OperatingSystem.IsLinux())
+        {
+            var legacyPath = Path.Combine(localAppData, "DEYTT\\Connect", InstallationIdFileName);
+            if (File.Exists(legacyPath))
+            {
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                    File.Copy(legacyPath, path, overwrite: true);
+                }
+                catch { }
+            }
+        }
         return GetOrCreateInstallationId(path);
     }
 

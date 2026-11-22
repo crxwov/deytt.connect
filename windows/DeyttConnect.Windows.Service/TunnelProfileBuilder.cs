@@ -100,7 +100,7 @@ internal static class TunnelProfileBuilder
         root["log"] = new JsonObject
         {
             ["disabled"] = false,
-            ["level"] = "error",
+            ["level"] = "trace",
         };
 
         // Privileged service security boundaries: user profiles must never control
@@ -128,7 +128,11 @@ internal static class TunnelProfileBuilder
             addresses.Add("fdfe:dcba:9876::1/126");
         }
         tun["auto_route"] = true;
-        tun["strict_route"] = true;
+        tun["strict_route"] = OperatingSystem.IsWindows();
+        if (OperatingSystem.IsLinux())
+        {
+            tun["route_exclude_address"] = new JsonArray("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16");
+        }
         tun["mtu"] = 1400;
         tun["stack"] = "mixed";
         root["inbounds"] = new JsonArray(tun);

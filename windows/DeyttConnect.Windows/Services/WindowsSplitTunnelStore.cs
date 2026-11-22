@@ -269,10 +269,28 @@ public static class WindowsSplitTunnelStore
         return fileName;
     }
 
-    private static string SplitTunnelPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        ProductFolder,
-        SplitTunnelFileName);
+    private static string SplitTunnelPath
+    {
+        get
+        {
+            var basePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var properPath = Path.Combine(basePath, "DEYTT", "Connect", SplitTunnelFileName);
+            if (!File.Exists(properPath) && OperatingSystem.IsLinux())
+            {
+                var legacyPath = Path.Combine(basePath, "DEYTT\\Connect", SplitTunnelFileName);
+                if (File.Exists(legacyPath))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(properPath)!);
+                        File.Copy(legacyPath, properPath, overwrite: true);
+                    }
+                    catch { }
+                }
+            }
+            return properPath;
+        }
+    }
 
     private static void EnsureWindows()
     {

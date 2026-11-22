@@ -94,10 +94,28 @@ public static class WindowsSessionStore
             File.Delete(path);
     }
 
-    private static string SessionPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        ProductFolder,
-        SessionFileName);
+    private static string SessionPath
+    {
+        get
+        {
+            var basePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var properPath = Path.Combine(basePath, "DEYTT", "Connect", SessionFileName);
+            if (!File.Exists(properPath) && OperatingSystem.IsLinux())
+            {
+                var legacyPath = Path.Combine(basePath, "DEYTT\\Connect", SessionFileName);
+                if (File.Exists(legacyPath))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(properPath)!);
+                        File.Copy(legacyPath, properPath, overwrite: true);
+                    }
+                    catch { }
+                }
+            }
+            return properPath;
+        }
+    }
 
     private static byte[] Protect(byte[] input) => OperatingSystem.IsWindows() ? Transform(input, protect: true) : (byte[])input.Clone();
     private static byte[] Unprotect(byte[] input) => OperatingSystem.IsWindows() ? Transform(input, protect: false) : (byte[])input.Clone();
