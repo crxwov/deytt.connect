@@ -659,8 +659,8 @@ public sealed class SetupWindow : UserControl
         if (!TryGetSubscriptionUrl(candidate, out var url))
         {
             Render(ViewState.ImportUrl, Copy(
-                "Поддерживается ссылка вида https://deytt.space/sub/token/… или ссылка DEYTT из Android.",
-                "Use a link like https://deytt.space/sub/token/… or a DEYTT link from Android."),
+                "Поддерживается ссылка вида https://getmy.deytt.space/sub/token/… или ссылка DEYTT из Android.",
+                "Use a link like https://getmy.deytt.space/sub/token/… or a DEYTT link from Android."),
                 DeyttTheme.Coral);
             return;
         }
@@ -1090,10 +1090,10 @@ public sealed class SetupWindow : UserControl
         _body.Children.Add(DeyttTheme.TextBlock(Copy("Ссылка подписки", "Subscription link"), 13,
             DeyttTheme.Text, FontWeight.SemiBold));
         _body.Children.Add(DeyttTheme.TextBlock(Copy(
-            "Вставь ссылку DEYTT. Она должна начинаться с https://deytt.space/sub/token/.",
-            "Paste a DEYTT link. It must start with https://deytt.space/sub/token/."),
+            "Вставь ссылку DEYTT. Она должна начинаться с https://getmy.deytt.space/sub/token/ или https://deytt.space/sub/token/.",
+            "Paste a DEYTT link. It must start with https://getmy.deytt.space/sub/token/ or https://deytt.space/sub/token/."),
             14, DeyttTheme.Text));
-        _urlInput = CreateInput("https://deytt.space/sub/token/…", 50);
+        _urlInput = CreateInput("https://getmy.deytt.space/sub/token/…", 50);
         _urlInput.MaxLength = 4096;
         _urlInput.Text = _resolvedImportUrl;
         _urlInput.KeyDown += (_, args) =>

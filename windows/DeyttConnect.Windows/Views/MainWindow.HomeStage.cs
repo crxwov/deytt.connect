@@ -1047,7 +1047,7 @@ public partial class MainWindow
         }).Cast<object>().ToList();
 
         var subKey = _keysSnapshot?.AwgProfiles.FirstOrDefault()?.Config
-                     ?? (!string.IsNullOrEmpty(_sessionToken) ? $"https://deytt.space/api/tg/mobile/sub/token/{_sessionToken}" : null);
+                     ?? (!string.IsNullOrEmpty(_sessionToken) ? $"https://getmy.deytt.space/sub/token/{_sessionToken}" : null);
 
         map.UpdateProfileData(
             signedIn,
@@ -1173,7 +1173,7 @@ public partial class MainWindow
     {
         var key = _keysSnapshot?.AwgProfiles.FirstOrDefault()?.Config
                   ?? (!string.IsNullOrEmpty(_sessionToken)
-                      ? $"https://deytt.space/api/tg/mobile/sub/token/{_sessionToken}"
+                      ? $"https://getmy.deytt.space/sub/token/{_sessionToken}"
                       : null);
         if (string.IsNullOrWhiteSpace(key))
         {
