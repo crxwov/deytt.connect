@@ -54,19 +54,21 @@ internal static class IconBuilder
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.TextRenderingHint = TextRenderingHint.AntiAlias;
 
-            using (var shadow = new SolidBrush(Color.FromArgb(100, 15, 20, 28)))
+            var inset = size * 0.055f;
+            var bounds = new RectangleF(inset, inset, size - inset * 2, size - inset * 2);
+            using (var tile = RoundedRectangle(bounds, size * 0.228f))
             using (var white = new SolidBrush(Color.FromArgb(255, 255, 255, 255)))
+            using (var border = new Pen(Color.FromArgb(255, 226, 232, 240), Math.Max(1f, size / 128f)))
+            using (var black = new SolidBrush(Color.FromArgb(255, 0, 0, 0)))
             using (var format = new StringFormat(StringFormat.GenericTypographic))
-            using (var mark = new Font(family, size * 0.60f, FontStyle.Bold, GraphicsUnit.Pixel))
+            using (var mark = new Font(family, size * 0.44f, FontStyle.Bold, GraphicsUnit.Pixel))
             {
+                graphics.FillPath(white, tile);
+                graphics.DrawPath(border, tile);
                 format.Alignment = StringAlignment.Center;
                 format.LineAlignment = StringAlignment.Center;
                 format.FormatFlags |= StringFormatFlags.NoWrap;
-                // Subtle contrast shadow
-                var shadowOffset = Math.Max(1f, size * 0.02f);
-                graphics.DrawString("./c", mark, shadow,
-                    new RectangleF(shadowOffset, shadowOffset, size, size), format);
-                graphics.DrawString("./c", mark, white,
+                graphics.DrawString("./c", mark, black,
                     new RectangleF(0, 0, size, size), format);
             }
             frame.Save(stream, ImageFormat.Png);
