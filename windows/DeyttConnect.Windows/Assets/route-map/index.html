@@ -12,33 +12,33 @@
     :root {
       --header-bg: transparent;
       --header-border: transparent;
-      /* Навбар: Android LiquidGlassDock + Apple HIG преломляющее стекло */
-      --nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.015) 44%, transparent 100%), rgba(18, 24, 34, 0.635);
-      --nav-border: rgba(255, 255, 255, 0.15);
-      --nav-border-top: rgba(255, 255, 255, 0.42);
-      --nav-border-bottom: rgba(137, 185, 231, 0.10);
-      --nav-shadow: 0 14px 36px -6px rgba(4, 9, 18, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.20), inset 0 -1px 0 rgba(0, 0, 0, 0.24);
+      /* Навбар: тёмное кристаллическое стекло Apple Liquid Glass (низкая дымка, острая кромка) */
+      --nav-bg: rgba(8, 13, 24, 0.42);
+      --nav-border: rgba(255, 255, 255, 0.085);
+      --nav-border-top: rgba(255, 255, 255, 0.20);
+      --nav-border-bottom: rgba(255, 255, 255, 0.06);
+      --nav-shadow: 0 10px 28px rgba(3, 8, 18, 0.48), inset 0 0.75px 0 rgba(255, 255, 255, 0.16), inset 0 0 12px rgba(0, 0, 0, 0.28);
       /* Капелька / sliding lens capsule (CSS fallback) */
-      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.06) 46%, rgba(100, 233, 255, 0.04) 100%), rgba(52, 67, 87, 0.54);
-      --nav-pill-border: rgba(255, 255, 255, 0.22);
-      --nav-pill-border-top: rgba(255, 255, 255, 0.76);
-      --nav-pill-border-bottom: rgba(137, 185, 231, 0.18);
-      --nav-pill-shadow: 0 6px 18px -4px rgba(4, 9, 18, 0.46), inset 0 1px 1px rgba(255, 255, 255, 0.52), inset 0 -1px 1.5px rgba(0, 0, 0, 0.25);
+      --nav-pill-bg: rgba(16, 26, 44, 0.36);
+      --nav-pill-border: rgba(255, 255, 255, 0.12);
+      --nav-pill-border-top: rgba(255, 255, 255, 0.28);
+      --nav-pill-border-bottom: rgba(255, 255, 255, 0.09);
+      --nav-pill-shadow: 0 4px 14px rgba(3, 8, 18, 0.38), inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.24), inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.08), inset 0 0 10px rgba(0, 0, 0, 0.24);
       --text: #F2F5FC;
       --text-muted: #98A6BF;
 
-      /* Полупрозрачный Liquid Glass (1:1 с Android DeyttUi) */
-      --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.065) 0%, rgba(255, 255, 255, 0) 40%), linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 52%, rgba(12, 19, 29, 0.12) 100%);
-      --glass-bg-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.095) 0%, rgba(255, 255, 255, 0) 42%), linear-gradient(180deg, rgba(34, 54, 78, 0.36) 0%, rgba(22, 36, 52, 0.24) 52%, rgba(14, 23, 35, 0.16) 100%);
-      --glass-bg-active: linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 42%), linear-gradient(180deg, rgba(38, 64, 94, 0.42) 0%, rgba(24, 41, 60, 0.28) 52%, rgba(16, 27, 41, 0.20) 100%);
-      --glass-border: rgba(112, 168, 224, 0.16);
-      --glass-border-top: rgba(255, 255, 255, 0.32);
-      --glass-border-bottom: rgba(80, 128, 184, 0.10);
-      --glass-border-hover: rgba(120, 186, 240, 0.28);
-      --glass-border-top-hover: rgba(255, 255, 255, 0.48);
-      --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.16), 0 8px 24px rgba(4, 9, 18, 0.34);
-      --glass-shadow-hover: inset 0 1px 1px rgba(255, 255, 255, 0.20), 0 14px 34px rgba(4, 9, 18, 0.42);
-      --glass-blur: blur(22px) saturate(175%);
+      /* Apple Dark Liquid Glass (чистое прозрачное тёмное стекло без молочной завесы) */
+      --glass-bg: rgba(11, 18, 30, 0.22);
+      --glass-bg-hover: rgba(15, 25, 42, 0.28);
+      --glass-bg-active: rgba(18, 34, 56, 0.34);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-border-top: rgba(255, 255, 255, 0.18);
+      --glass-border-bottom: rgba(255, 255, 255, 0.06);
+      --glass-border-hover: rgba(255, 255, 255, 0.14);
+      --glass-border-top-hover: rgba(255, 255, 255, 0.26);
+      --glass-shadow: inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.20), inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.07), inset 0 0 14px rgba(0, 0, 0, 0.26), 0 10px 28px rgba(3, 8, 18, 0.42);
+      --glass-shadow-hover: inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.28), inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.10), inset 0 0 14px rgba(0, 0, 0, 0.24), 0 12px 32px rgba(3, 8, 18, 0.48);
+      --glass-blur: blur(18px) saturate(165%) brightness(1.03);
 
       /* Accent & System Colors */
       --accent-mint: #39E8BD;
@@ -148,9 +148,9 @@
     .nav-container.has-webgl-dock {
       background: transparent;
       border-color: transparent;
-      box-shadow: 0 14px 36px -6px rgba(4, 9, 18, 0.56);
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
+      box-shadow: 0 10px 28px rgba(3, 8, 18, 0.44);
+      backdrop-filter: blur(16px) saturate(165%);
+      -webkit-backdrop-filter: blur(16px) saturate(165%);
     }
     .nav-glass-canvas {
       position: absolute;
@@ -2593,21 +2593,17 @@
 
     /* Authentic Android LiquidGlass Tokens & Surfaces */
     :root {
-      --liquid-glass-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 40%),
-                              linear-gradient(180deg, rgba(38, 60, 84, 0.28) 0%, rgba(22, 37, 54, 0.18) 50%, rgba(14, 23, 36, 0.12) 100%);
-      --liquid-glass-card-border: rgba(112, 168, 224, 0.16);
-      --liquid-glass-card-border-top: rgba(255, 255, 255, 0.30);
-      --liquid-glass-card-border-bottom: rgba(80, 128, 184, 0.10);
-      --liquid-glass-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 8px 26px rgba(4, 10, 20, 0.36);
-      --liquid-glass-card-blur: blur(22px) saturate(175%);
+      /* Apple Dark Liquid Glass Tokens & Surfaces */
+      --liquid-glass-card-bg: rgba(11, 18, 30, 0.22);
+      --liquid-glass-card-border: rgba(255, 255, 255, 0.08);
+      --liquid-glass-card-border-top: rgba(255, 255, 255, 0.18);
+      --liquid-glass-card-border-bottom: rgba(255, 255, 255, 0.06);
+      --liquid-glass-card-shadow: inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.20), inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.07), inset 0 0 14px rgba(0, 0, 0, 0.26), 0 10px 28px rgba(3, 8, 18, 0.42);
+      --liquid-glass-card-blur: blur(18px) saturate(165%) brightness(1.03);
 
-      /* Route rows / country cards: exact translucent Android DeyttUi.glassRowBackground */
-      --liquid-glass-row-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.063) 0%, rgba(255, 255, 255, 0) 40%),
-                             linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 52%, rgba(12, 19, 29, 0.12) 100%);
-      --liquid-glass-row-bg-selected: linear-gradient(180deg, rgba(255, 255, 255, 0.086) 0%, rgba(255, 255, 255, 0) 40%),
-                                      linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 52%, rgba(15, 25, 38, 0.17) 100%);
-      --liquid-glass-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 42%),
-                              linear-gradient(180deg, rgba(68, 87, 112, 0.38) 0%, rgba(16, 29, 44, 0.16) 100%);
+      --liquid-glass-row-bg: rgba(11, 18, 30, 0.22);
+      --liquid-glass-row-bg-selected: rgba(18, 34, 56, 0.34);
+      --liquid-glass-pill-bg: rgba(12, 20, 34, 0.24);
     }
 
     /* LiquidGlass Card Component */
@@ -2616,22 +2612,18 @@
       backdrop-filter: var(--liquid-glass-card-blur) !important;
       -webkit-backdrop-filter: var(--liquid-glass-card-blur) !important;
       border: 1px solid var(--liquid-glass-card-border) !important;
-      border-top-color: var(--liquid-glass-card-border-top) !important;
-      border-bottom-color: var(--liquid-glass-card-border-bottom) !important;
       box-shadow: var(--liquid-glass-card-shadow) !important;
       border-radius: 22px !important;
       position: relative !important;
     }
 
-    /* Unified Android DeyttUi.glassButtonBackground Pill */
+    /* Secondary Apple Dark Liquid Glass Pill */
     .btn-select-route, .home-measure, .btn-action-glass, #home-measure {
       background: var(--liquid-glass-pill-bg) !important;
-      backdrop-filter: blur(22px) saturate(175%) !important;
-      -webkit-backdrop-filter: blur(22px) saturate(175%) !important;
-      border: 1px solid rgba(137, 185, 231, 0.20) !important;
-      border-top-color: rgba(255, 255, 255, 0.36) !important;
-      border-bottom-color: rgba(205, 230, 255, 0.18) !important;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 4px 14px rgba(4, 10, 20, 0.30) !important;
+      backdrop-filter: blur(18px) saturate(165%) brightness(1.04) !important;
+      -webkit-backdrop-filter: blur(18px) saturate(165%) brightness(1.04) !important;
+      border: 1px solid rgba(255, 255, 255, 0.09) !important;
+      box-shadow: inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.24), inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.09), inset 0 0 10px rgba(0, 0, 0, 0.26), 0 6px 20px rgba(3, 8, 18, 0.36) !important;
       border-radius: 9999px !important;
       color: #F8FAFC !important;
       font-weight: 600 !important;
@@ -3983,13 +3975,18 @@
       }
 
       /* ================================================================
-         APPLE LIQUID GLASS + ANDROID DeyttUi / LiquidGlassDock SYSTEM
-         Dark-navy canvas harmony + Android translucent blue-slate glass +
-         strict edge-only rim glow (zero interior gradient bleed).
+         CONNECT BUTTON — VERBATIM f839c64 / 2487645 (reverted per user)
+         APPLE DARK LIQUID GLASS SYSTEM — clear low-haze dark crystal,
+         sharp diagonal 0.75px specular bevel, zero milky wash.
          ================================================================ */
       @property --glass-rim { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+      @property --glass-fill { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
       @keyframes glass-rim-spin { to { --glass-rim: 360deg; } }
+      @keyframes glass-fill-spin { to { --glass-fill: -216deg; } }
 
+      /* --- мёртвые псевдоэлементы прошлых версий (источник артефакта) --- */
+      #home-action::before, .home-action::before,
+      #compact-action::before, .compact-action::before,
       #home-action::after, .home-action::after,
       #compact-action::after, .compact-action::after,
       #home-measure::before, .home-measure::before,
@@ -3998,210 +3995,193 @@
         display: none !important;
       }
 
-      /* Primary Connect Pill: Pure Translucent Android Glass Interior + Edge-Only Rim */
+      /* --- «подключиться»: connectionGlassBackground(IDLE) --- */
       #home-action, .home-action, #compact-action, .compact-action {
         height: 56px !important;
         min-height: 56px !important;
-        padding: 0 22px !important;
-        border-radius: 9999px !important;
-        border: none !important;
+        padding: 0 14px !important;
+        border-radius: 28px !important;
+        border: 1.35px solid transparent !important;
         font-family: "Inter Tight", sans-serif !important;
-        font-size: 14.5px !important;
-        font-weight: 640 !important;
-        letter-spacing: -0.01em !important;
+        font-size: 13.5px !important;
+        font-weight: 620 !important;
+        letter-spacing: 0 !important;
         color: #F2F5FC !important;
-        position: relative !important;
-        isolation: isolate !important;
-        overflow: hidden !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.094) 0%, rgba(255, 255, 255, 0) 40%),
-          linear-gradient(180deg, rgba(45, 66, 90, 0.25) 0%, rgba(19, 31, 46, 0.14) 100%) !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(30, 56, 84, 0.28) 0%, rgba(18, 36, 56, 0.16) 25%,
+            rgba(24, 50, 76, 0.22) 50%, rgba(18, 36, 56, 0.16) 75%,
+            rgba(30, 56, 84, 0.28) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08)) border-box !important;
         box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.16),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.14),
-          0 6px 20px rgba(4, 10, 22, 0.34) !important;
-        backdrop-filter: blur(22px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
         text-shadow: none !important;
-        animation: none !important;
-        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease, box-shadow 180ms ease !important;
+        overflow: hidden !important;
+        animation: glass-rim-spin 5.5s linear infinite,
+          glass-fill-spin 5.5s linear infinite !important;
+        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease !important;
       }
-      #compact-action, .compact-action {
-        height: 46px !important;
-        min-height: 46px !important;
-        padding: 0 22px !important;
-        font-size: 14px !important;
-      }
-
-      /* Strict Perimeter-Only Specular Rim Ring via Mask Exclusion */
-      #home-action::before, .home-action::before,
-      #compact-action::before, .compact-action::before {
-        content: "" !important;
-        display: block !important;
-        position: absolute !important;
-        inset: 0 !important;
-        border-radius: inherit !important;
-        padding: 1.35px !important;
-        background: conic-gradient(from var(--glass-rim) at 50% 50%,
-          rgba(240, 249, 255, 0.62) 0deg,
-          rgba(96, 165, 250, 0.34) 72deg,
-          rgba(56, 189, 248, 0.62) 150deg,
-          rgba(255, 255, 255, 0.22) 235deg,
-          rgba(96, 165, 250, 0.36) 305deg,
-          rgba(240, 249, 255, 0.62) 360deg) !important;
-        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
-        -webkit-mask-composite: xor !important;
-        mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
-        mask-composite: exclude !important;
-        pointer-events: none !important;
-        z-index: 2 !important;
-        opacity: 0.92 !important;
-        animation: glass-rim-spin 6.5s linear infinite !important;
-      }
-
       #home-action:hover, .home-action:hover,
       #compact-action:hover, .compact-action:hover {
-        filter: brightness(1.10) !important;
+        filter: brightness(1.07) !important;
       }
       #home-action:active, .home-action:active,
       #compact-action:active, .compact-action:active {
         transform: scale(0.985) !important;
+        transition-duration: 120ms, 160ms !important;
       }
 
-      /* Connected: Translucent Emerald Interior + Edge-Only Mint Glow */
+      /* CONNECTED: изумруд 0x351F3A30→0x2010201A, shimmer 0xD834D399 */
       #home-action[data-tone="connected"], .home-action[data-tone="connected"],
       #home-action[data-tone="good"], .home-action[data-tone="good"],
       #compact-action[data-tone="connected"], .compact-action[data-tone="connected"],
       #compact-action[data-tone="good"], .compact-action[data-tone="good"] {
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.094) 0%, rgba(255, 255, 255, 0) 40%),
-          linear-gradient(180deg, rgba(31, 58, 48, 0.22) 0%, rgba(16, 32, 26, 0.13) 100%) !important;
+        border-color: transparent !important;
+        border-top-color: transparent !important;
         box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.18),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.14),
-          0 6px 22px rgba(16, 185, 129, 0.18) !important;
-      }
-      #home-action[data-tone="connected"]::before, .home-action[data-tone="connected"]::before,
-      #home-action[data-tone="good"]::before, .home-action[data-tone="good"]::before,
-      #compact-action[data-tone="connected"]::before, .compact-action[data-tone="connected"]::before,
-      #compact-action[data-tone="good"]::before, .compact-action[data-tone="good"]::before {
-        background: conic-gradient(from var(--glass-rim) at 50% 50%,
-          rgba(246, 255, 252, 0.72) 0deg,
-          rgba(52, 211, 153, 0.44) 72deg,
-          rgba(16, 185, 129, 0.72) 150deg,
-          rgba(255, 255, 255, 0.22) 235deg,
-          rgba(52, 211, 153, 0.42) 305deg,
-          rgba(246, 255, 252, 0.72) 360deg) !important;
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(26, 62, 46, 0.27) 0%, rgba(15, 36, 26, 0.14) 25%,
+            rgba(22, 52, 36, 0.21) 50%, rgba(15, 36, 26, 0.14) 75%,
+            rgba(26, 62, 46, 0.27) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(255, 255, 255, 0.93) 0%, rgba(52, 211, 153, 0.85) 16.7%,
+            rgba(5, 150, 105, 0.46) 33.3%, rgba(4, 120, 87, 0.16) 50%,
+            rgba(5, 150, 105, 0.46) 66.7%, rgba(52, 211, 153, 0.85) 83.3%,
+            rgba(255, 255, 255, 0.93) 100%) border-box !important;
       }
 
-      /* Connecting / Checking: Translucent Glass + Animated Cyan Rim Sweep */
+      /* CONNECTING: fill как в покое, блик 0xF0FFFFFF→0x280369A1 */
       #home-action[data-tone="connecting"], .home-action[data-tone="connecting"],
       #compact-action[data-tone="connecting"], .compact-action[data-tone="connecting"] {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.094) 0%, rgba(255, 255, 255, 0) 40%),
-          linear-gradient(180deg, rgba(45, 66, 90, 0.26) 0%, rgba(19, 31, 46, 0.15) 100%) !important;
-      }
-      #home-action[data-tone="connecting"]::before, .home-action[data-tone="connecting"]::before,
-      #compact-action[data-tone="connecting"]::before, .compact-action[data-tone="connecting"]::before {
-        background: conic-gradient(from var(--glass-rim) at 50% 50%,
-          rgba(244, 251, 255, 0.90) 0deg,
-          rgba(120, 201, 240, 0.65) 48deg,
-          rgba(96, 165, 250, 0.26) 110deg,
-          rgba(56, 189, 248, 0.52) 180deg,
-          rgba(96, 165, 250, 0.22) 255deg,
-          rgba(120, 201, 240, 0.60) 318deg,
-          rgba(244, 251, 255, 0.90) 360deg) !important;
-        animation: glass-rim-spin 3.2s linear infinite !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(30, 56, 84, 0.28) 0%, rgba(18, 36, 56, 0.16) 25%,
+            rgba(24, 50, 76, 0.22) 50%, rgba(18, 36, 56, 0.16) 75%,
+            rgba(30, 56, 84, 0.28) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(240, 255, 255, 0.94) 0%, rgba(56, 189, 248, 0.85) 16.7%,
+            rgba(2, 132, 199, 0.38) 33.3%, rgba(3, 105, 161, 0.16) 50%,
+            rgba(2, 132, 199, 0.38) 66.7%, rgba(56, 189, 248, 0.85) 83.3%,
+            rgba(240, 255, 255, 0.94) 100%) border-box !important;
       }
 
-      /* Error: Translucent Coral Glass + Edge-Only Rose Rim */
+      /* ERROR: 0x38352630→0x221E141C, блик 0xD8F43F5E */
       #home-action[data-tone="error"], .home-action[data-tone="error"],
       #compact-action[data-tone="error"], .compact-action[data-tone="error"] {
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0) 40%),
-          linear-gradient(180deg, rgba(53, 38, 48, 0.22) 0%, rgba(30, 20, 28, 0.14) 100%) !important;
-      }
-      #home-action[data-tone="error"]::before, .home-action[data-tone="error"]::before,
-      #compact-action[data-tone="error"]::before, .compact-action[data-tone="error"]::before {
-        background: conic-gradient(from var(--glass-rim) at 50% 50%,
-          rgba(255, 241, 242, 0.72) 0deg,
-          rgba(244, 63, 94, 0.45) 72deg,
-          rgba(251, 113, 133, 0.68) 150deg,
-          rgba(255, 255, 255, 0.20) 235deg,
-          rgba(244, 63, 94, 0.42) 305deg,
-          rgba(255, 241, 242, 0.72) 360deg) !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          conic-gradient(from var(--glass-fill) at 50% 50%,
+            rgba(62, 26, 34, 0.27) 0%, rgba(36, 16, 22, 0.16) 25%,
+            rgba(48, 20, 28, 0.21) 50%, rgba(36, 16, 22, 0.16) 75%,
+            rgba(62, 26, 34, 0.27) 100%) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          conic-gradient(from var(--glass-rim) at 50% 50%,
+            rgba(240, 255, 255, 0.94) 0%, rgba(244, 63, 94, 0.85) 16.7%,
+            rgba(190, 18, 60, 0.44) 33.3%, rgba(136, 19, 55, 0.19) 50%,
+            rgba(190, 18, 60, 0.44) 66.7%, rgba(244, 63, 94, 0.85) 83.3%,
+            rgba(240, 255, 255, 0.94) 100%) border-box !important;
       }
 
-      /* Stopping / Disabled: Muted Static Glass */
+      /* STOPPING/disabled: глухое стекло без блика (на телефоне shimmerStroke=null) */
       #home-action[data-tone="stopping"], .home-action[data-tone="stopping"],
       #compact-action[data-tone="stopping"], .compact-action[data-tone="stopping"],
       #home-action:disabled, .home-action:disabled,
       #compact-action:disabled, .compact-action:disabled {
-        background: linear-gradient(180deg, rgba(43, 57, 75, 0.21) 0%, rgba(19, 28, 41, 0.125) 100%) !important;
-        opacity: 0.72 !important;
-      }
-      #home-action[data-tone="stopping"]::before, .home-action[data-tone="stopping"]::before,
-      #compact-action[data-tone="stopping"]::before, .compact-action[data-tone="stopping"]::before,
-      #home-action:disabled::before, .home-action:disabled::before,
-      #compact-action:disabled::before, .compact-action:disabled::before {
-        background: linear-gradient(135deg,
-          rgba(255, 255, 255, 0.31) 0%, rgba(60, 82, 104, 0.19) 34%,
-          rgba(82, 98, 122, 0.15) 72%, rgba(255, 255, 255, 0.18) 100%) !important;
+        border-color: transparent !important;
+        border-top-color: transparent !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.09),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
+          0 2px 8px rgba(8, 14, 26, 0.35) !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(43, 57, 75, 0.21), rgba(19, 28, 41, 0.13)) padding-box,
+          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(135deg, rgba(255, 255, 255, 0.31) 0%, rgba(60, 82, 104, 0.19) 34%,
+            rgba(82, 98, 122, 0.15) 72%, rgba(255, 255, 255, 0.16) 100%) border-box !important;
         animation: none !important;
       }
 
-      /* Zoomed-in Floating Compact Dock Bar (.home-compact): True Apple/Android Liquid Glass */
+      /* Zoomed-in Floating Compact Dock Bar (.home-compact): Apple Dark Liquid Glass */
       .network-atlas .home-compact {
         border-radius: 26px !important;
         padding: 14px 18px !important;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0) 42%),
-          linear-gradient(180deg, rgba(28, 44, 63, 0.34) 0%, rgba(18, 29, 42, 0.22) 55%, rgba(10, 17, 28, 0.16) 100%) !important;
-        border: 1px solid rgba(137, 185, 231, 0.18) !important;
-        border-top-color: rgba(255, 255, 255, 0.38) !important;
-        border-bottom-color: rgba(137, 185, 231, 0.12) !important;
+        background: rgba(10, 17, 29, 0.24) !important;
+        border: 1px solid rgba(255, 255, 255, 0.085) !important;
         box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.18),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.16),
-          0 14px 38px rgba(4, 9, 18, 0.46) !important;
-        backdrop-filter: blur(26px) saturate(185%) !important;
-        -webkit-backdrop-filter: blur(26px) saturate(185%) !important;
+          inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.22),
+          inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.08),
+          inset 0 0 14px rgba(0, 0, 0, 0.26),
+          0 14px 36px rgba(3, 8, 18, 0.46) !important;
+        backdrop-filter: blur(20px) saturate(168%) brightness(1.04) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(168%) brightness(1.04) !important;
       }
       .home-compact .compact-route { gap: 11px !important; }
       .home-compact #compact-flag { width: auto !important; height: auto !important; }
       .home-compact #compact-flag svg { width: 38px !important; height: 28px !important; display: block !important; }
       .home-compact .compact-metrics {
-        border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.07) !important;
         padding-top: 9px !important;
         margin-top: 2px !important;
         gap: 14px !important;
       }
 
-      /* Secondary Pill: "обновить замер" & Update Button (Android glassButtonBackground parity) */
+      /* Secondary Pill: "обновить замер" — Clear Apple Dark Liquid Glass (low light haze) */
       #home-measure, .home-measure {
         height: 46px !important;
         min-height: 46px !important;
         margin-top: -2px !important;
         border-radius: 24px !important;
-        border: 1px solid rgba(137, 185, 231, 0.20) !important;
-        border-top-color: rgba(255, 255, 255, 0.36) !important;
-        border-bottom-color: rgba(205, 230, 255, 0.18) !important;
+        border: 1px solid rgba(255, 255, 255, 0.09) !important;
         font-size: 13.5px !important;
         font-weight: 580 !important;
         letter-spacing: -0.01em !important;
         color: #F2F5FC !important;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 42%),
-          linear-gradient(180deg, rgba(68, 87, 112, 0.38) 0%, rgba(16, 29, 44, 0.16) 100%) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 4px 14px rgba(4, 10, 20, 0.28) !important;
-        backdrop-filter: blur(22px) saturate(175%) !important;
-        -webkit-backdrop-filter: blur(22px) saturate(175%) !important;
+        background: rgba(12, 20, 34, 0.24) !important;
+        box-shadow:
+          inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.24),
+          inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.09),
+          inset 0 0 10px rgba(0, 0, 0, 0.26),
+          0 6px 20px rgba(3, 8, 18, 0.36) !important;
+        backdrop-filter: blur(18px) saturate(165%) brightness(1.04) !important;
+        -webkit-backdrop-filter: blur(18px) saturate(165%) brightness(1.04) !important;
         animation: none !important;
-        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease, border-color 160ms ease !important;
+        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), background-color 160ms ease, box-shadow 160ms ease !important;
       }
       #home-measure:hover, .home-measure:hover {
-        filter: brightness(1.12) !important;
-        border-top-color: rgba(255, 255, 255, 0.56) !important;
+        background: rgba(16, 28, 46, 0.30) !important;
+        box-shadow:
+          inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.32),
+          inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.12),
+          inset 0 0 10px rgba(0, 0, 0, 0.22),
+          0 8px 24px rgba(3, 8, 18, 0.40) !important;
       }
       #home-measure:active, .home-measure:active {
         transform: scale(0.985) !important;
@@ -4213,47 +4193,57 @@
         min-height: 36px !important;
         padding: 6px 14px !important;
         border-radius: 24px !important;
-        border: 1px solid rgba(137, 185, 231, 0.20) !important;
-        border-top-color: rgba(255, 255, 255, 0.36) !important;
+        border: 1px solid rgba(255, 255, 255, 0.09) !important;
         font-size: 12.5px !important;
         font-weight: 620 !important;
         color: #F2F5FC !important;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 44%),
-          linear-gradient(180deg, rgba(68, 87, 112, 0.36) 0%, rgba(16, 29, 44, 0.16) 100%) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 3px 10px rgba(4, 10, 20, 0.24) !important;
-        backdrop-filter: blur(20px) saturate(175%) !important;
-        -webkit-backdrop-filter: blur(20px) saturate(175%) !important;
+        background: rgba(12, 20, 34, 0.24) !important;
+        box-shadow:
+          inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.22),
+          inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.08),
+          inset 0 0 8px rgba(0, 0, 0, 0.24),
+          0 4px 12px rgba(3, 8, 18, 0.28) !important;
+        backdrop-filter: blur(18px) saturate(165%) brightness(1.04) !important;
+        -webkit-backdrop-filter: blur(18px) saturate(165%) brightness(1.04) !important;
         animation: none !important;
       }
-      .btn-select-route:hover { filter: brightness(1.12) !important; }
+      .btn-select-route:hover {
+        background: rgba(16, 28, 46, 0.32) !important;
+      }
       .btn-select-route:active { transform: scale(0.97) !important; }
       .btn-select-route.is-selected {
         color: #64E9FF !important;
-        border-color: rgba(120, 186, 240, 0.34) !important;
-        border-top-color: rgba(255, 255, 255, 0.52) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 4px 12px rgba(4, 10, 20, 0.28) !important;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0) 44%),
-          linear-gradient(180deg, rgba(34, 58, 86, 0.44) 0%, rgba(18, 32, 48, 0.22) 100%) !important;
+        border-color: rgba(100, 233, 255, 0.26) !important;
+        box-shadow:
+          inset 0.75px 0.75px 0 rgba(186, 240, 255, 0.30),
+          inset -0.75px -0.75px 0 rgba(100, 233, 255, 0.12),
+          inset 0 0 10px rgba(0, 0, 0, 0.24),
+          0 4px 14px rgba(3, 8, 18, 0.32) !important;
+        background: rgba(18, 38, 62, 0.34) !important;
       }
 
-      /* Translucent Route Cards & Glass Containers (Нидерланды, Германия, Россия, Финдия — 1:1 Android DeyttUi) */
+      /* Translucent Route Cards & Glass Containers (Нидерланды, Германия, Россия, Финдия) */
       .liquid-glass-card {
-        background: var(--liquid-glass-row-bg) !important;
-        border: 1px solid rgba(112, 168, 224, 0.16) !important;
-        border-top-color: rgba(255, 255, 255, 0.30) !important;
-        border-bottom-color: rgba(80, 128, 184, 0.10) !important;
+        background: rgba(11, 18, 30, 0.22) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
         border-radius: 22px !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 8px 26px rgba(4, 10, 20, 0.34) !important;
-        backdrop-filter: blur(22px) saturate(175%) !important;
-        -webkit-backdrop-filter: blur(22px) saturate(175%) !important;
+        box-shadow:
+          inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.20),
+          inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.07),
+          inset 0 0 14px rgba(0, 0, 0, 0.26),
+          0 10px 28px rgba(3, 8, 18, 0.42) !important;
+        backdrop-filter: blur(18px) saturate(165%) brightness(1.03) !important;
+        -webkit-backdrop-filter: blur(18px) saturate(165%) brightness(1.03) !important;
       }
       .liquid-glass-card:active { transform: scale(0.992) !important; }
       .liquid-glass-card.is-selected {
-        border-color: rgba(120, 186, 240, 0.28) !important;
-        border-top-color: rgba(255, 255, 255, 0.42) !important;
-        background: var(--liquid-glass-row-bg-selected) !important;
+        border-color: rgba(120, 186, 240, 0.22) !important;
+        box-shadow:
+          inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.26),
+          inset -0.75px -0.75px 0 rgba(120, 186, 240, 0.12),
+          inset 0 0 14px rgba(0, 0, 0, 0.22),
+          0 10px 30px rgba(3, 8, 18, 0.46) !important;
+        background: rgba(18, 34, 56, 0.34) !important;
       }
       .country-accordion-header:hover { background: transparent !important; }
 
@@ -4281,19 +4271,25 @@
       .btn-profile-primary, .profile-btn-primary,
       .btn-profile-secondary, .profile-btn-secondary {
         border-radius: 24px !important;
-        background: var(--liquid-glass-pill-bg) !important;
-        border: 1px solid rgba(137, 185, 231, 0.22) !important;
-        border-top-color: rgba(255, 255, 255, 0.38) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 4px 14px rgba(4, 10, 20, 0.28) !important;
-        backdrop-filter: blur(22px) saturate(175%) !important;
-        -webkit-backdrop-filter: blur(22px) saturate(175%) !important;
+        background: rgba(12, 20, 34, 0.24) !important;
+        border: 1px solid rgba(255, 255, 255, 0.09) !important;
+        box-shadow:
+          inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.24),
+          inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.09),
+          inset 0 0 10px rgba(0, 0, 0, 0.24),
+          0 6px 18px rgba(3, 8, 18, 0.34) !important;
+        backdrop-filter: blur(18px) saturate(165%) brightness(1.04) !important;
+        -webkit-backdrop-filter: blur(18px) saturate(165%) brightness(1.04) !important;
       }
       .glass-modal-card {
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%), linear-gradient(180deg, rgba(52, 66, 86, 0.78) 0%, rgba(16, 27, 44, 0.84) 100%) !important;
-        border: 1px solid rgba(137, 185, 231, 0.24) !important;
-        border-top-color: rgba(255, 255, 255, 0.42) !important;
-        backdrop-filter: blur(28px) saturate(185%) !important;
-        -webkit-backdrop-filter: blur(28px) saturate(185%) !important;
+        background: rgba(12, 20, 34, 0.64) !important;
+        border: 1px solid rgba(255, 255, 255, 0.11) !important;
+        box-shadow:
+          inset 0.75px 0.75px 0 rgba(255, 255, 255, 0.24),
+          inset -0.75px -0.75px 0 rgba(255, 255, 255, 0.08),
+          0 18px 46px rgba(2, 6, 16, 0.56) !important;
+        backdrop-filter: blur(22px) saturate(170%) !important;
+        -webkit-backdrop-filter: blur(22px) saturate(170%) !important;
       }
 
       :is(.nav-item, button, .country-accordion-header, .proto-row, .setting-item, .profile-user-card):focus-visible {
@@ -4301,13 +4297,13 @@
         outline-offset: 2px !important;
       }
 
-      .network-atlas.reduce-motion #home-action::before, .network-atlas.reduce-motion .home-action::before,
-      .network-atlas.reduce-motion #compact-action::before, .network-atlas.reduce-motion .compact-action::before,
+      .network-atlas.reduce-motion #home-action, .network-atlas.reduce-motion .home-action,
+      .network-atlas.reduce-motion #compact-action, .network-atlas.reduce-motion .compact-action,
       .network-atlas.reduce-motion #home-measure, .network-atlas.reduce-motion .home-measure {
         animation: none !important;
       }
       @media (prefers-reduced-motion: reduce) {
-        #home-action::before, .home-action::before, #compact-action::before, .compact-action::before,
+        #home-action, .home-action, #compact-action, .compact-action,
         #home-measure, .home-measure { animation: none !important; }
       }
       @media (prefers-reduced-transparency: reduce) {
@@ -5790,7 +5786,7 @@
       const gl = navGlassCanvas.getContext("webgl2", {
         alpha: true,
         antialias: false,
-        premultipliedAlpha: false,
+        premultipliedAlpha: true,
         preserveDrawingBuffer: false
       });
       if (!gl) return null;
@@ -5821,9 +5817,9 @@
             sdRoundRect(p + e.yx, b, r) - sdRoundRect(p - e.yx, b, r)
           ) + 1e-5);
         }
-        vec3 sampleBackdrop(vec2 px) {
+        vec4 sampleBackdrop(vec2 px) {
           vec2 clamped = clamp(px, vec2(0.5), u_resolution - vec2(0.5));
-          return texture(u_backdrop, clamped / u_resolution).rgb;
+          return texture(u_backdrop, clamped / u_resolution);
         }
         void main() {
           vec2 p = vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y);
@@ -5839,7 +5835,6 @@
 
           vec2 bodyNormal = roundRectNormal(dockPos, bodyHalf, bodyR);
           float bevel = smoothstep(-inset, 0.0, dockDist);
-          float bodyRim = smoothstep(-2.2 * u_scale, 0.0, dockDist);
 
           float tension = clamp(u_motion.z, 0.0, 1.0);
           float refraction = clamp(u_motion.x, 0.0, 1.5);
@@ -5853,48 +5848,59 @@
           float lensAlpha = 1.0 - smoothstep(-1.15 * u_scale, 1.15 * u_scale, lensDist);
 
           vec2 lensNormal = roundRectNormal(contour, u_lens.zw, lensRadius);
-          float rim = smoothstep(-inset * 1.45, 0.0, lensDist);
+          float rim = smoothstep(-inset * 0.85, 0.0, lensDist);
           float fold = rim * rim;
 
-          float slowBend = (0.70 + refraction * 1.75) * fold;
-          float fastBend = 0.55 * rim * (1.0 - rim);
+          float slowBend = (0.68 + refraction * 1.55) * fold;
+          float fastBend = 0.48 * rim * (1.0 - rim);
           float bend = mix(slowBend, fastBend, stabilization);
-          float restMag = 0.025 + 0.026 * u_hoverMix;
-          float focus = mix(restMag + refraction * 0.024, 0.16 * refraction * (1.0 - rim), stabilization);
+          float restMag = 0.036 + 0.022 * u_hoverMix;
+          float focus = mix(restMag + refraction * 0.032, 0.14 * refraction * (1.0 - rim), stabilization);
           if (u_reducedMotion > 0.5) {
             bend = 0.22 * fold;
-            focus = 0.012;
+            focus = 0.015;
           }
 
-          vec2 samplePoint = p - bodyNormal * inset * 0.90 * bevel;
+          vec2 samplePoint = p - bodyNormal * inset * 0.72 * bevel;
           vec2 bentPoint = p - local * focus - lensNormal * inset * bend;
           samplePoint = mix(samplePoint, bentPoint, lensAlpha);
 
-          vec3 color = sampleBackdrop(samplePoint);
+          vec4 tex = sampleBackdrop(samplePoint);
+          vec3 color = tex.rgb;
+          float baseAlpha = tex.a;
 
-          // Chromatic RGB dispersion along beveled droplet perimeter
-          float activeChroma = max(refraction * (1.0 - stabilization * 0.50), 0.34 * u_hoverMix + 0.18);
-          if (u_reducedMotion > 0.5) activeChroma = 0.06;
-          float fade = smoothstep(0.02, 0.10, fold) * smoothstep(0.04, 0.22, activeChroma);
+          // Crisp TIR inner depth shadow just inside the glass bevel (authentic Apple dark crystal)
+          float darkEdge = smoothstep(-inset * 1.45, -inset * 0.60, lensDist) * (1.0 - smoothstep(-inset * 0.60, -0.45 * u_scale, lensDist));
+          color *= 1.0 - 0.28 * darkEdge * lensAlpha;
+
+          // Focused RGB chromatic dispersion strictly inside outer 3px meniscus rim
+          float activeChroma = max(refraction * (1.0 - stabilization * 0.45), 0.30 * u_hoverMix + 0.12);
+          if (u_reducedMotion > 0.5) activeChroma = 0.05;
+          float fade = smoothstep(0.04, 0.16, fold) * smoothstep(0.05, 0.20, activeChroma);
           if (fade > 0.001 && lensAlpha > 0.001) {
-            vec2 disp = lensNormal * inset * activeChroma * 0.36 * fold * fade * lensAlpha;
-            color.r = sampleBackdrop(samplePoint + disp).r;
-            color.b = sampleBackdrop(samplePoint - disp).b;
+            vec2 disp = lensNormal * inset * activeChroma * 0.38 * fold * fade * lensAlpha;
+            vec4 texR = sampleBackdrop(samplePoint + disp);
+            vec4 texB = sampleBackdrop(samplePoint - disp);
+            color.r = texR.r;
+            color.b = texB.b;
+            baseAlpha = max(baseAlpha, max(texR.a, texB.a) * 0.85);
           }
 
-          // Subtle internal liquid lens luminescence
-          float innerGlow = smoothstep(0.0, -u_lens.w * 0.7, lensDist) * (0.045 + 0.030 * u_hoverMix);
-          color += vec3(0.54, 0.78, 0.98) * innerGlow * lensAlpha;
-
-          // Capsule rim + Android directional droplet specular glints
-          vec3 light = vec3(0.72, 0.83, 0.96) * ((0.12 * max(-bodyNormal.y, 0.0) + 0.028) * bodyRim);
+          // Razor-thin Apple opposing corner specular catchlights (no milky interior glow!)
+          float capsuleTop = max(dot(bodyNormal, normalize(vec2(-0.35, -0.94))), 0.0);
+          float capsuleBot = max(dot(bodyNormal, normalize(vec2(0.35, 0.94))), 0.0);
+          vec3 light = vec3(0.86, 0.92, 1.0) * ((0.085 * pow(capsuleTop, 3.0) + 0.035 * pow(capsuleBot, 3.0) + 0.012) * smoothstep(-1.6 * u_scale, 0.0, dockDist));
           float top = max(dot(lensNormal, normalize(vec2(-0.42 + u_motion.y * 0.85, -0.91))), 0.0);
           float bounce = max(dot(lensNormal, normalize(vec2(0.34, 0.94))), 0.0);
-          float glint = (0.19 * top * top + 0.12 * bounce * bounce) * rim * rim * rim;
-          float gleam = glint * (1.0 + stabilization * refraction * 0.8 + 0.25 * u_hoverMix) + 0.038 * fold;
-          light = mix(light, vec3(0.78, 0.88, 1.0) * gleam, lensAlpha);
+          float crispRim = smoothstep(-2.4 * u_scale, 0.0, lensDist);
+          float glint = (0.24 * pow(top, 6.0) + 0.11 * pow(bounce, 5.0)) * crispRim * crispRim;
+          float gleam = glint * (1.0 + stabilization * refraction * 0.55 + 0.20 * u_hoverMix) + 0.014 * fold;
+          light = mix(light, vec3(0.92, 0.96, 1.0) * gleam, lensAlpha);
 
-          fragColor = vec4(color + light, bodyAlpha);
+          float lightAlpha = clamp(max(max(light.r, light.g), light.b) * 1.15, 0.0, 1.0);
+          float outAlpha = clamp(baseAlpha + lightAlpha * (1.0 - baseAlpha), 0.0, 1.0) * bodyAlpha;
+          vec3 finalRgb = min((color + light) * bodyAlpha, vec3(outAlpha));
+          fragColor = vec4(finalRgb, outAlpha);
         }`;
 
       const compile = (type, src) => {
@@ -5926,6 +5932,7 @@
       const tex = gl.createTexture();
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -5988,13 +5995,13 @@
 
       const ctx = dockGl.bCtx;
       ctx.clearRect(0, 0, wPx, hPx);
-      ctx.fillStyle = "#080D17";
-      ctx.fillRect(0, 0, wPx, hPx);
 
-      // Reflect stars behind top capsule & faint globe/stage aura into refraction texture
+      // Subtle star hints + translucent dark obsidian glass wash (backdrop-filter handles globe/scroll blur underneath)
       const starsCanvas = document.getElementById("stars-canvas");
       if (starsCanvas && starsCanvas.width > 0 && window.innerWidth > 0 && window.innerHeight > 0) {
         try {
+          ctx.save();
+          ctx.globalAlpha = 0.42;
           const sx = starsCanvas.width / window.innerWidth;
           const sy = starsCanvas.height / window.innerHeight;
           ctx.drawImage(
@@ -6003,17 +6010,11 @@
             Math.max(1, rect.width * sx), Math.max(1, rect.height * sy),
             0, 0, wPx, hPx
           );
+          ctx.restore();
         } catch (_) {}
       }
 
-      // Soft horizon shimmer + Android DockRefraction glass tint wash (0xA2121822)
-      const glow = ctx.createRadialGradient(wPx * 0.5, hPx * 1.15, hPx * 0.1, wPx * 0.5, hPx * 1.15, wPx * 0.48);
-      glow.addColorStop(0, "rgba(62, 138, 212, 0.22)");
-      glow.addColorStop(1, "rgba(18, 24, 34, 0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(0, 0, wPx, hPx);
-
-      ctx.fillStyle = "rgba(18, 24, 34, 0.635)";
+      ctx.fillStyle = "rgba(8, 13, 24, 0.34)";
       ctx.fillRect(0, 0, wPx, hPx);
 
       // Paint 4 accessible tab icons + text directly into refraction backdrop for live warping + smoothstep tint
