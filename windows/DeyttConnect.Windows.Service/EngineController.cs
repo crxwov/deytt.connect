@@ -1,3 +1,5 @@
+using System.Buffers;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
@@ -337,24 +339,67 @@ internal sealed class EngineController
             {
                 await ProbeListenerReadiness.WaitAsync(endpoints.Select(endpoint => endpoint.Port).ToArray(),
                     () => process.HasExited, measurementCancellation.Token).ConfigureAwait(false);
-                var failures = new System.Collections.Concurrent.ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+                var canMeasureSpeed = CanMeasureSpeedToken(token);
+                var failures = new ConcurrentDictionary<string, string>(StringComparer.Ordinal);
+                var sharedClients = new ConcurrentDictionary<string, HttpClient>(StringComparer.Ordinal);
+                HttpClient GetOrCreateClient(ProbeRouteEndpoint endpoint) =>
+                    sharedClients.GetOrAdd(endpoint.RouteTag, _ =>
+                        new HttpClient(RouteProxyTransport.CreateHandler(endpoint), disposeHandler: true)
+                        {
+                            Timeout = Timeout.InfiniteTimeSpan,
+                        });
+
                 async Task<long?> Measure(ProbeRouteEndpoint endpoint, string _, CancellationToken ct,
                     Action<int, long?> report)
                 {
-                    using var http = new HttpClient(RouteProxyTransport.CreateHandler(endpoint), disposeHandler: true)
-                    {
-                        Timeout = RouteLatencyProbe.ProductionTimeouts.Overall,
-                    };
+                    var http = GetOrCreateClient(endpoint);
                     var result = await RouteLatencyProbe.MeasureAsync(http, ct,
                         observation => report(observation.Attempt, observation.LatencyMilliseconds),
                         RouteLatencyProbe.ProductionTimeouts).ConfigureAwait(false);
                     if (result.Failure is { } failure)
+                    {
                         failures[endpoint.RouteTag] = failure;
+                    }
+                    else if (result.LatencyMilliseconds is not null && canMeasureSpeed)
+                    {
+                        // Pre-warm DNS/TLS/keep-alive session to deytt.space in parallel with other
+                        // latency probes without downloading a body so sequential speed starts immediately.
+                        await WarmSpeedConnectionAsync(http, ct).ConfigureAwait(false);
+                    }
                     return result.LatencyMilliseconds;
                 }
-                results = await MeasureRoutesAsync(endpoints, method, token, measurementCancellation.Token,
-                    PublishProbeProgress, Measure, MeasureDownloadAsync,
-                    endpoint => failures.GetValueOrDefault(endpoint.RouteTag)).ConfigureAwait(false);
+
+                async Task<DownloadMeasurement> MeasureDownloadWithReuseAsync(ProbeRouteEndpoint endpoint,
+                    string probeTokenValue, CancellationToken ct, Action<long, long, long?> reportProgress)
+                {
+                    var http = GetOrCreateClient(endpoint);
+                    try
+                    {
+                        var measurement = await MeasureDownloadWithClientAsync(http, probeTokenValue, ct, reportProgress,
+                            TimeSpan.FromSeconds(5.5), TimeSpan.FromSeconds(3.5)).ConfigureAwait(false);
+                        if (measurement.Retryable && sharedClients.TryRemove(endpoint.RouteTag, out var stale))
+                            stale.Dispose();
+                        return measurement;
+                    }
+                    catch
+                    {
+                        if (sharedClients.TryRemove(endpoint.RouteTag, out var stale))
+                            stale.Dispose();
+                        throw;
+                    }
+                }
+
+                try
+                {
+                    results = await MeasureRoutesAsync(endpoints, method, token, measurementCancellation.Token,
+                        PublishProbeProgress, Measure, MeasureDownloadWithReuseAsync,
+                        endpoint => failures.GetValueOrDefault(endpoint.RouteTag)).ConfigureAwait(false);
+                }
+                finally
+                {
+                    foreach (var client in sharedClients.Values)
+                        client.Dispose();
+                }
             }
             catch (TimeoutException)
             {
@@ -1667,6 +1712,10 @@ internal sealed class EngineController
         return endpoints;
     }
 
+    internal static bool CanMeasureSpeedToken(string? token) =>
+        token is { Length: >= 32 and <= 256 } &&
+        token.All(character => character is >= '\x21' and <= '\x7e');
+
     internal static async Task<IReadOnlyList<ServiceProbeResult>> MeasureRoutesAsync(
         IReadOnlyList<ProbeRouteEndpoint> endpoints, string method, string token,
         CancellationToken cancellationToken, Action<ServiceProbeResult> publish,
@@ -1675,8 +1724,7 @@ internal sealed class EngineController
             Task<DownloadMeasurement>> measureDownload,
         Func<ProbeRouteEndpoint, string?>? latencyFailure = null)
     {
-        var canMeasureSpeed = token.Length is >= 32 and <= 256 &&
-                              token.All(character => character is >= '\x21' and <= '\x7e');
+        var canMeasureSpeed = CanMeasureSpeedToken(token);
         var latencyResults = new System.Collections.Concurrent.ConcurrentDictionary<string, ServiceProbeResult>(
             StringComparer.Ordinal);
         using var latencyConcurrency = new SemaphoreSlim(4, 4);
@@ -1803,21 +1851,44 @@ internal sealed class EngineController
 
     internal readonly record struct DownloadMeasurement(long? BytesPerSecond, string? Error, bool Retryable);
 
-    private static async Task<DownloadMeasurement> MeasureDownloadAsync(ProbeRouteEndpoint endpoint, string token,
-        CancellationToken cancellationToken, Action<long, long, long?> reportProgress)
+    private static async Task WarmSpeedConnectionAsync(HttpClient client, CancellationToken cancellationToken)
     {
-        using var handler = RouteProxyTransport.CreateHandler(endpoint);
-        // Bound the request-header wait separately from the five-second streaming
-        // sample below; an unreachable server must not leave the route row pending
-        // for the old twelve-second default before any live speed can be reported.
-        using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(6) };
+        using var warmTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        warmTimeout.CancelAfter(TimeSpan.FromMilliseconds(2200));
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://deytt.space/cdn-cgi/trace");
+            request.Headers.CacheControl = new CacheControlHeaderValue { NoStore = true };
+            using var response = await client.SendAsync(request,
+                HttpCompletionOption.ResponseHeadersRead, warmTimeout.Token).ConfigureAwait(false);
+            if (response.Content is not null)
+                await response.Content.CopyToAsync(Stream.Null, warmTimeout.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            // Best-effort connection warm-up; MeasureDownloadWithClientAsync establishes its own socket if needed.
+        }
+    }
+
+    internal static async Task<DownloadMeasurement> MeasureDownloadWithClientAsync(HttpClient client, string token,
+        CancellationToken cancellationToken, Action<long, long, long?> reportProgress,
+        TimeSpan headerTimeout, TimeSpan sampleDuration)
+    {
+        // Keep the header-wait budget separate from sampleDuration so slow TTFB/TLS handshakes
+        // cannot cut off or abort an actively streaming speed measurement window.
+        using var headerCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        headerCancellation.CancelAfter(headerTimeout);
         using var request = new HttpRequestMessage(HttpMethod.Get,
             "https://deytt.space/api/tg/mobile/probe/download");
         request.Headers.TryAddWithoutValidation("X-TG-App-Token", token);
         request.Headers.AcceptEncoding.ParseAdd("identity");
         request.Headers.CacheControl = new CacheControlHeaderValue { NoStore = true };
         using var response = await client.SendAsync(request,
-            HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            HttpCompletionOption.ResponseHeadersRead, headerCancellation.Token).ConfigureAwait(false);
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
             return new DownloadMeasurement(null, "Сессия для замера скорости недействительна. Обновите вход.", false);
         if (response.StatusCode == HttpStatusCode.TooManyRequests)
@@ -1825,9 +1896,9 @@ internal sealed class EngineController
         if (response.StatusCode != HttpStatusCode.OK)
             return new DownloadMeasurement(null, "Сервер скорости временно недоступен.", true);
 
-        await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var body = await response.Content.ReadAsStreamAsync(headerCancellation.Token).ConfigureAwait(false);
         return await ReadDownloadSampleAsync(body, response.Content.Headers.ContentLength,
-            cancellationToken, reportProgress, TimeSpan.FromSeconds(3.5)).ConfigureAwait(false);
+            cancellationToken, reportProgress, sampleDuration).ConfigureAwait(false);
     }
 
     internal static async Task<DownloadMeasurement> ReadDownloadSampleAsync(Stream body, long? contentLength,
@@ -1838,36 +1909,43 @@ internal sealed class EngineController
         var expectedBytes = contentLength is > 0 ? Math.Min(contentLength.Value, maximumSampleBytes) : maximumSampleBytes;
         using var sampleTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         sampleTimeout.CancelAfter(sampleDuration);
-        var buffer = new byte[32 * 1024];
+        var buffer = ArrayPool<byte>.Shared.Rent(128 * 1024);
         long received = 0;
         long lastProgress = 0;
         var sampleStarted = Stopwatch.GetTimestamp();
         var timedOut = false;
-        while (received < 32L * 1024 * 1024)
+        try
         {
-            int count;
-            try
+            while (received < maximumSampleBytes)
             {
-                count = await body.ReadAsync(buffer.AsMemory(), sampleTimeout.Token).ConfigureAwait(false);
+                int count;
+                try
+                {
+                    count = await body.ReadAsync(buffer.AsMemory(), sampleTimeout.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && received > 0)
+                {
+                    timedOut = true;
+                    break;
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                    return new DownloadMeasurement(null, "Сервер скорости не передал данные за пять секунд.", true);
+                }
+                if (count <= 0)
+                    break;
+                received += count;
+                var elapsedMs = Stopwatch.GetElapsedTime(sampleStarted).TotalMilliseconds;
+                if (lastProgress == 0 || Stopwatch.GetElapsedTime(lastProgress).TotalMilliseconds >= 200)
+                {
+                    reportProgress(received, expectedBytes, elapsedMs >= 200 ? (long)(received * 1000d / elapsedMs) : null);
+                    lastProgress = Stopwatch.GetTimestamp();
+                }
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && received > 0)
-            {
-                timedOut = true;
-                break;
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                return new DownloadMeasurement(null, "Сервер скорости не передал данные за пять секунд.", true);
-            }
-            if (count <= 0)
-                break;
-            received += count;
-            var elapsedMs = Stopwatch.GetElapsedTime(sampleStarted).TotalMilliseconds;
-            if (lastProgress == 0 || Stopwatch.GetElapsedTime(lastProgress).TotalMilliseconds >= 200)
-            {
-                reportProgress(received, expectedBytes, elapsedMs >= 200 ? (long)(received * 1000d / elapsedMs) : null);
-                lastProgress = Stopwatch.GetTimestamp();
-            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
 
         if (received == 0)

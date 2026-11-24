@@ -830,16 +830,31 @@
     drawBorders(colors) {
       const context = this.context;
       this.drawLand(colors);
+      const horizon = 0.012;
       const basis = this.currentBasis;
       const east = basis.east;
       const north = basis.north;
       const fwd = basis.forward;
-      const scale = this.radius * this.zoom * 1.002;
+      const scale = this.radius * this.zoom * 1.001;
       const cx = this.centerX;
       const cy = this.centerY;
       const maxJump = this.radius * this.zoom * .24;
       const maxJumpSq = maxJump * maxJump;
       const pointStep = 1; // Always full-resolution borders during rotation and idle (no jumping/simplification)
+
+      const horizonPoint = (from, to, zFrom, zTo) => {
+        const denom = zTo - zFrom;
+        const t = Math.abs(denom) > 1e-6 ? clamp((horizon - zFrom) / denom, 0, 1) : 0.5;
+        const px = from.x + t * (to.x - from.x);
+        const py = from.y + t * (to.y - from.y);
+        const pz = from.z + t * (to.z - from.z);
+        const len = Math.hypot(px, py, pz) || 1;
+        const nx = px / len, ny = py / len, nz = pz / len;
+        return {
+          x: cx + (nx * east.x + ny * east.y + nz * east.z) * scale,
+          y: cy - (nx * north.x + ny * north.y + nz * north.z) * scale
+        };
+      };
 
       const strokeLines = (lines, style, width, alpha) => {
         const len = lines.length;
@@ -858,13 +873,21 @@
           const pLen = points.length;
           let drawing = false;
           let prevX = 0, prevY = 0;
+          let prevV = null, prevZ = 0;
 
           for (let i = 0; i < pLen; i += pointStep) {
             const ptIndex = (i >= pLen - pointStep && i !== pLen - 1) ? pLen - 1 : i;
             const v = points[ptIndex].vector;
             const z = v.x * fwd.x + v.y * fwd.y + v.z * fwd.z;
-            if (z <= 0.012) {
+            if (z <= horizon) {
+              if (drawing && prevV) {
+                const edge = horizonPoint(prevV, v, prevZ, z);
+                const dx = edge.x - prevX, dy = edge.y - prevY;
+                if (dx * dx + dy * dy <= maxJumpSq) context.lineTo(edge.x, edge.y);
+              }
               drawing = false;
+              prevV = v;
+              prevZ = z;
               continue;
             }
             const x = cx + (v.x * east.x + v.y * east.y + v.z * east.z) * scale;
@@ -877,11 +900,20 @@
                 context.lineTo(x, y);
               }
             } else {
-              context.moveTo(x, y);
+              if (prevV && prevZ <= horizon) {
+                const edge = horizonPoint(prevV, v, prevZ, z);
+                context.moveTo(edge.x, edge.y);
+                const dx = x - edge.x, dy = y - edge.y;
+                if (dx * dx + dy * dy <= maxJumpSq) context.lineTo(x, y);
+              } else {
+                context.moveTo(x, y);
+              }
               drawing = true;
             }
             prevX = x;
             prevY = y;
+            prevV = v;
+            prevZ = z;
           }
         }
         context.stroke();
@@ -1651,11 +1683,20 @@
           el = document.createElement("div");
           el.className = "atlas-glass-label";
           el.setAttribute("data-label-key", key);
+          let labelPress = null;
+          el.onpointerdown = (e) => {
+            labelPress = { x: e.clientX, y: e.clientY };
+          };
           el.onclick = (e) => {
             e.stopPropagation();
-            if (this.dragDistance > 6 || this.dragging || Math.abs(this.velocityLon) > 0.05) return;
-            if (typeof window.deyttSelectRouteFromAtlas === "function") {
-              window.deyttSelectRouteFromAtlas(key);
+            const moved = labelPress
+              ? Math.hypot(e.clientX - labelPress.x, e.clientY - labelPress.y)
+              : 0;
+            labelPress = null;
+            if (moved > 5 || this.dragDistance > 6 || this.dragging || Math.abs(this.velocityLon) > 0.05) return;
+            // Never switch VPN routes or disconnect tunnel from globe clicks; only focus view cleanly.
+            if (key !== "user" && typeof this.focusMeasurement === "function") {
+              this.focusMeasurement(key);
             }
           };
           el.onpointerenter = () => {

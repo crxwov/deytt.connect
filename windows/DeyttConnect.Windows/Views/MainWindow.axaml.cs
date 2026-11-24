@@ -1061,7 +1061,7 @@ public partial class MainWindow : Window
         }
         Background = DeyttTheme.Brush(DeyttTheme.Background);
         ShellGrid.Background = DeyttTheme.Brush(DeyttTheme.Background);
-        WorkspaceHeader.Background = new SolidColorBrush(Color.Parse("#080D17"));
+        WorkspaceHeader.Background = new SolidColorBrush(Color.Parse("#080A0D"));
         WorkspaceHeader.BorderBrush = Brushes.Transparent;
         WorkspaceHeader.BorderThickness = new Thickness(0);
         WorkspaceBrand.Foreground = Brushes.White;

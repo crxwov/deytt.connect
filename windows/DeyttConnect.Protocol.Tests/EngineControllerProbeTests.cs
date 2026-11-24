@@ -472,6 +472,96 @@ public sealed class EngineControllerProbeTests
         Assert.False(result.Retryable);
     }
 
+    [Fact]
+    public async Task DownloadHeaderBudgetDoesNotCutOffFullSampleWindow()
+    {
+        using var handler = new DelayedHeaderHandler(
+            headerDelay: TimeSpan.FromMilliseconds(140),
+            chunkSize: 128 * 1024,
+            chunkCount: 2,
+            chunkInterval: TimeSpan.FromMilliseconds(40));
+        using var client = new System.Net.Http.HttpClient(handler)
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+
+        var progressCalls = 0;
+        var measurement = await EngineController.MeasureDownloadWithClientAsync(
+            client,
+            "test-token",
+            CancellationToken.None,
+            (_, _, _) => Interlocked.Increment(ref progressCalls),
+            headerTimeout: TimeSpan.FromMilliseconds(220),
+            sampleDuration: TimeSpan.FromMilliseconds(160));
+
+        Assert.Null(measurement.Error);
+        Assert.False(measurement.Retryable);
+        Assert.NotNull(measurement.BytesPerSecond);
+        Assert.True(measurement.BytesPerSecond > 0);
+        Assert.True(progressCalls > 0);
+    }
+
+    private sealed class DelayedHeaderHandler(
+        TimeSpan headerDelay,
+        int chunkSize,
+        int chunkCount,
+        TimeSpan chunkInterval) : System.Net.Http.HttpMessageHandler
+    {
+        protected override async Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(headerDelay, cancellationToken);
+            var response = new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new System.Net.Http.StreamContent(
+                    new PacedSampleStream(chunkSize, chunkCount, chunkInterval)),
+            };
+            response.Content.Headers.ContentLength = 32L * 1024L * 1024L;
+            return response;
+        }
+    }
+
+    private sealed class PacedSampleStream(
+        int chunkSize,
+        int chunkCount,
+        TimeSpan chunkInterval) : Stream
+    {
+        private int _chunksEmitted;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (_chunksEmitted >= chunkCount)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return 0;
+            }
+
+            if (_chunksEmitted > 0)
+            {
+                await Task.Delay(chunkInterval, cancellationToken);
+            }
+
+            _chunksEmitted++;
+            var toWrite = Math.Min(chunkSize, buffer.Length);
+            buffer.Span[..toWrite].Fill(0x5A);
+            return toWrite;
+        }
+    }
+
     private static ProbeRouteEndpoint ProbeEndpoint(string routeTag) =>
         new(routeTag, "probe", 12345, "user", "secret", null);
 

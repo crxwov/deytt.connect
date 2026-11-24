@@ -15,9 +15,9 @@
         MinWidth="520"
         MinHeight="420"
         WindowStartupLocation="CenterScreen"
-        Background="#080D17">
+        Background="#080A0D">
 
-    <Grid x:Name="ShellGrid" ColumnDefinitions="*,0" RowDefinitions="Auto,*,0" Background="#080D17">
+    <Grid x:Name="ShellGrid" ColumnDefinitions="*,0" RowDefinitions="Auto,*,0" Background="#080A0D">
         <Grid x:Name="WorkspaceColumn" Grid.Column="0" Grid.RowSpan="2" RowDefinitions="Auto,*">
             <Border x:Name="WorkspaceHeader" Grid.Row="0" Height="68" Padding="36,0,36,0"
                     Background="Transparent" BorderThickness="0"
@@ -37,9 +37,9 @@
                                 chrome:WindowDecorationProperties.ElementRole="TitleBar" />
 
                         <Border x:Name="NavDockBorder" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                CornerRadius="20" Background="#B2182230" BorderBrush="#33FFFFFF"
-                                BorderThickness="1" Padding="4"
-                                BoxShadow="0 4 20 0 #40000000"
+                                CornerRadius="9999" Background="#7A16181C" BorderBrush="#38FFFFFF"
+                                BorderThickness="1" Padding="5"
+                                BoxShadow="0 10 28 0 #55000000"
                                 chrome:WindowDecorationProperties.ElementRole="User">
                             <StackPanel x:Name="HeaderNavigation" Orientation="Horizontal"
                                         Spacing="4" VerticalAlignment="Center">

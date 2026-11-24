@@ -237,7 +237,7 @@
         flag.dataset.country = code;
         flag.classList.toggle("is-generic", !code);
         if (code && typeof window.getFlagSvg === "function") {
-          flag.innerHTML = window.getFlagSvg(code, 34, 24);
+          flag.innerHTML = window.getFlagSvg(code, 44, 30);
         } else if (code) {
           flag.textContent = code;
         } else {

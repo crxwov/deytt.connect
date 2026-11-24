@@ -12,33 +12,33 @@
     :root {
       --header-bg: transparent;
       --header-border: transparent;
-      /* Навбар: аутентичное нейтральное стекло Liquid Glass (Android LiquidGlassDock / Apple Design) */
-      --nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(16, 22, 32, 0.72);
-      --nav-border: rgba(255, 255, 255, 0.14);
-      --nav-border-top: rgba(255, 255, 255, 0.38);
-      --nav-border-bottom: rgba(0, 0, 0, 0.40);
-      --nav-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.30);
-      /* Выбранный пункт: капелька / sliding lens capsule */
-      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 45%, rgba(255, 255, 255, 0.01) 100%), rgba(38, 48, 64, 0.65);
+      /* Навбар: нейтральный Liquid Glass (Apple HIG + Android LiquidGlassDock) */
+      --nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.03) 44%, rgba(255, 255, 255, 0.01) 100%), rgba(22, 24, 28, 0.46);
+      --nav-border: rgba(255, 255, 255, 0.15);
+      --nav-border-top: rgba(255, 255, 255, 0.46);
+      --nav-border-bottom: rgba(255, 255, 255, 0.07);
+      --nav-shadow: 0 14px 36px -6px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(0, 0, 0, 0.28);
+      /* Капелька / sliding lens capsule */
+      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.08) 46%, rgba(255, 255, 255, 0.02) 100%), rgba(255, 255, 255, 0.08);
       --nav-pill-border: rgba(255, 255, 255, 0.24);
-      --nav-pill-border-top: rgba(255, 255, 255, 0.70);
-      --nav-pill-border-bottom: rgba(0, 0, 0, 0.35);
-      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.55), inset 0 -1px 2px rgba(0, 0, 0, 0.35);
+      --nav-pill-border-top: rgba(255, 255, 255, 0.78);
+      --nav-pill-border-bottom: rgba(255, 255, 255, 0.14);
+      --nav-pill-shadow: 0 6px 18px -4px rgba(0, 0, 0, 0.44), inset 0 1px 1px rgba(255, 255, 255, 0.58), inset 0 -1px 1.5px rgba(0, 0, 0, 0.25);
       --text: #F8FAFC;
-      --text-muted: #8E9EAF;
+      --text-muted: #9AA3B0;
 
-      /* Liquid Glass Tokens */
-      --glass-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.015) 100%), rgba(12, 19, 32, 0.48);
-      --glass-bg-hover: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.025) 100%), rgba(16, 26, 44, 0.55);
-      --glass-bg-active: linear-gradient(135deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 100%), rgba(22, 34, 58, 0.65);
+      /* Liquid Glass Neutral Graphite Tokens */
+      --glass-bg: linear-gradient(165deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 48%, rgba(255, 255, 255, 0.008) 100%), rgba(22, 24, 29, 0.48);
+      --glass-bg-hover: linear-gradient(165deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.035) 50%, rgba(255, 255, 255, 0.012) 100%), rgba(28, 31, 37, 0.54);
+      --glass-bg-active: linear-gradient(165deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.045) 50%, rgba(255, 255, 255, 0.02) 100%), rgba(34, 38, 46, 0.60);
       --glass-border: rgba(255, 255, 255, 0.12);
-      --glass-border-top: rgba(255, 255, 255, 0.38);
-      --glass-border-bottom: rgba(0, 0, 0, 0.35);
-      --glass-border-hover: rgba(255, 255, 255, 0.18);
-      --glass-border-top-hover: rgba(255, 255, 255, 0.55);
-      --glass-shadow: inset 0 1px 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.25), 0 16px 44px 0 rgba(0, 0, 0, 0.45);
-      --glass-shadow-hover: inset 0 1px 1.5px 0 rgba(255, 255, 255, 0.42), 0 20px 52px 0 rgba(0, 0, 0, 0.55);
-      --glass-blur: blur(28px) saturate(210%) brightness(108%);
+      --glass-border-top: rgba(255, 255, 255, 0.42);
+      --glass-border-bottom: rgba(0, 0, 0, 0.30);
+      --glass-border-hover: rgba(255, 255, 255, 0.19);
+      --glass-border-top-hover: rgba(255, 255, 255, 0.56);
+      --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(0, 0, 0, 0.24), 0 16px 40px rgba(0, 0, 0, 0.45);
+      --glass-shadow-hover: inset 0 1px 1px rgba(255, 255, 255, 0.38), 0 20px 48px rgba(0, 0, 0, 0.52);
+      --glass-blur: blur(28px) saturate(200%) brightness(106%);
 
       /* Accent & System Colors */
       --accent-mint: #39E8BD;
@@ -63,7 +63,7 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
       user-select: none;
       position: relative;
-      background: #0B111B;
+      background: #080A0D;
       color: #F8FAFC;
       text-transform: lowercase;
     }
@@ -127,7 +127,7 @@
       text-shadow: 0 0 14px rgba(56, 189, 248, 0.6);
     }
 
-    /* Modern Glass Navigation Capsule Dock */
+    /* Apple + Android LiquidGlassDock Top Capsule Dock */
     .nav-container {
       position: relative;
       display: inline-flex;
@@ -136,14 +136,16 @@
       border: 1px solid var(--nav-border);
       border-top-color: var(--nav-border-top);
       border-bottom-color: var(--nav-border-bottom);
-      border-radius: 20px;
-      padding: 6px;
+      border-radius: 9999px;
+      padding: 5px;
       box-shadow: var(--nav-shadow);
       backdrop-filter: var(--glass-blur);
       -webkit-backdrop-filter: var(--glass-blur);
+      touch-action: none;
+      overflow: hidden;
     }
 
-    /* Clean Elevated Glass Pill */
+    /* Interactive Deformable Droplet Lens ("капелька") */
     .nav-jelly-pill {
       position: absolute;
       top: 5px;
@@ -153,25 +155,24 @@
       border: 1px solid var(--nav-pill-border);
       border-top-color: var(--nav-pill-border-top);
       border-bottom-color: var(--nav-pill-border-bottom);
-      border-radius: 15px;
+      border-radius: 9999px;
       box-shadow: var(--nav-pill-shadow);
-      backdrop-filter: blur(24px);
-      -webkit-backdrop-filter: blur(24px);
+      backdrop-filter: blur(20px) saturate(210%) brightness(1.12);
+      -webkit-backdrop-filter: blur(20px) saturate(210%) brightness(1.12);
       pointer-events: none;
       z-index: 1;
       transform-origin: center center;
-      transition: left 260ms cubic-bezier(0.16, 1, 0.3, 1),
-                  width 260ms cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform, width;
       overflow: hidden;
     }
     .nav-jelly-pill::before {
       content: "";
       position: absolute;
       top: 1px;
-      left: 10%;
-      right: 10%;
-      height: 1px;
-      background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 50%, rgba(255, 255, 255, 0) 100%);
+      left: 8%;
+      right: 8%;
+      height: 1.5px;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.96) 50%, rgba(255, 255, 255, 0) 100%);
       border-radius: 9999px;
       pointer-events: none;
     }
@@ -179,8 +180,10 @@
       content: "";
       position: absolute;
       inset: 0;
-      border-radius: 15px;
-      background: radial-gradient(circle at 50% 0%, rgba(100, 233, 255, 0.18) 0%, rgba(100, 233, 255, 0) 65%);
+      border-radius: 9999px;
+      background:
+        radial-gradient(ellipse 80% 55% at 50% 10%, rgba(255, 255, 255, 0.22) 0%, transparent 65%),
+        radial-gradient(ellipse 65% 45% at 50% 100%, rgba(100, 233, 255, 0.16) 0%, transparent 70%);
       pointer-events: none;
     }
     .nav-item.is-active svg {
@@ -193,28 +196,31 @@
       z-index: 2;
       background: transparent;
       border: none;
-      color: var(--text-muted);
-      font-size: 14.5px;
+      color: rgba(214, 220, 229, 0.84);
+      font-size: 14px;
       font-weight: 500;
-      padding: 9px 24px;
-      border-radius: 14px;
+      padding: 8.5px 22px;
+      border-radius: 9999px;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 9px;
-      transition: color 150ms ease, background 150ms ease;
+      gap: 8px;
+      transition: color 150ms ease, transform 120ms cubic-bezier(0.23, 1, 0.32, 1);
     }
 
     .nav-item:hover {
-      color: var(--text);
-      background: rgba(255, 255, 255, 0.05);
+      color: #FFFFFF;
+    }
+
+    .nav-item:active {
+      transform: scale(0.96);
     }
 
     .nav-item.is-active {
       color: #FFFFFF;
       font-weight: 600;
-      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
     }
 
     .nav-item svg {
@@ -509,7 +515,7 @@
     .home-panel {
       display: flex !important;
       flex-direction: column !important;
-      gap: 18px !important;
+      gap: 13px !important;
       background: transparent !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
@@ -617,7 +623,7 @@
     .home-protocol {
       font-size: 13px !important;
       font-weight: 600 !important;
-      color: #38BDF8 !important;
+      color: rgba(214, 220, 229, 0.80) !important;
       background: transparent !important;
       border: none !important;
       padding: 0 !important;
@@ -973,11 +979,12 @@
     .home-metrics {
       display: grid !important;
       grid-template-columns: 1fr 1fr !important;
-      gap: 20px !important;
+      gap: 18px !important;
       border: none !important;
       border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
       border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-      padding: 14px 4px !important;
+      padding: 10px 4px !important;
+      margin: 0 !important;
       background: transparent !important;
     }
 
@@ -1502,12 +1509,13 @@
     }
 
     .svg-flag {
-      width: 22px;
-      height: 15px;
-      border-radius: 3px;
-      overflow: hidden;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.16);
+      width: auto;
+      height: auto;
+      border-radius: 0;
+      overflow: visible;
+      box-shadow: none;
+      border: none;
+      background: transparent;
       vertical-align: middle;
       display: inline-block;
       flex-shrink: 0;
@@ -1656,7 +1664,7 @@
       height: 22px;
       border-radius: 50%;
       background: #229ED9;
-      border: 2px solid #0B111B;
+      border: 2px solid #080A0D;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2072,14 +2080,14 @@
     .glass-modal-card {
       width: 90%;
       max-width: 440px;
-      background: rgba(14, 22, 38, 0.90);
-      backdrop-filter: blur(36px) saturate(180%);
-      -webkit-backdrop-filter: blur(36px) saturate(180%);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-top-color: rgba(255, 255, 255, 0.35);
-      border-radius: 24px;
+      background: linear-gradient(165deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0.025) 45%, rgba(255, 255, 255, 0.01) 100%), rgba(24, 26, 31, 0.78);
+      backdrop-filter: blur(36px) saturate(190%);
+      -webkit-backdrop-filter: blur(36px) saturate(190%);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-top-color: rgba(255, 255, 255, 0.42);
+      border-radius: 26px;
       padding: 24px 26px;
-      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.72), inset 0 1px 1px rgba(255, 255, 255, 0.28);
       text-align: left;
       transform: scale(0.96);
       transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
@@ -2452,9 +2460,9 @@
       position: relative;
       isolation: isolate;
       overflow: hidden;
-      background: linear-gradient(145deg, rgba(22, 35, 58, .94), rgba(12, 19, 32, .92)) !important;
-      border-color: rgba(166, 195, 255, .2) !important;
-      border-top-color: rgba(223, 235, 255, .42) !important;
+      background: linear-gradient(165deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 48%, rgba(255, 255, 255, 0.01) 100%), rgba(16, 18, 22, 0.78) !important;
+      border-color: rgba(255, 255, 255, 0.14) !important;
+      border-top-color: rgba(255, 255, 255, 0.42) !important;
     }
     .profile-starfield {
       position: absolute;
@@ -2562,23 +2570,20 @@
     :root {
       --liquid-glass-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 40%),
                               linear-gradient(180deg, rgba(38, 60, 84, 0.28) 0%, rgba(22, 37, 54, 0.18) 50%, rgba(14, 23, 36, 0.12) 100%);
-      --liquid-glass-card-border: rgba(255, 255, 255, 0.12);
-      --liquid-glass-card-border-top: rgba(255, 255, 255, 0.32);
-      --liquid-glass-card-border-bottom: rgba(0, 0, 0, 0.25);
-      --liquid-glass-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 12px 36px rgba(0, 0, 0, 0.35);
-      --liquid-glass-card-blur: blur(24px) saturate(160%);
+      --liquid-glass-card-border: rgba(255, 255, 255, 0.13);
+      --liquid-glass-card-border-top: rgba(255, 255, 255, 0.42);
+      --liquid-glass-card-border-bottom: rgba(255, 255, 255, 0.06);
+      --liquid-glass-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.22), 0 12px 34px rgba(0, 0, 0, 0.38);
+      --liquid-glass-card-blur: blur(26px) saturate(190%);
 
-      --liquid-glass-row-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, transparent 40%),
-                             linear-gradient(180deg, rgba(28, 44, 63, 0.26) 0%, rgba(18, 29, 42, 0.16) 100%);
-      --liquid-glass-row-bg-selected: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, transparent 40%),
-                                      linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.24) 100%);
-      --liquid-glass-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%),
-                              linear-gradient(180deg, rgba(45, 66, 90, 0.35) 0%, rgba(19, 31, 46, 0.20) 100%);
+      --liquid-glass-row-bg: linear-gradient(165deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.025) 45%, rgba(255, 255, 255, 0.01) 100%), rgba(24, 26, 31, 0.48);
+      --liquid-glass-row-bg-selected: linear-gradient(165deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.015) 100%), rgba(36, 40, 48, 0.56);
+      --liquid-glass-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.01) 100%), rgba(30, 33, 39, 0.54);
     }
 
     /* LiquidGlass Card Component */
     .liquid-glass-card {
-      background: var(--liquid-glass-card-bg) !important;
+      background: var(--liquid-glass-row-bg) !important;
       backdrop-filter: var(--liquid-glass-card-blur) !important;
       -webkit-backdrop-filter: var(--liquid-glass-card-blur) !important;
       border: 1px solid var(--liquid-glass-card-border) !important;
@@ -2589,15 +2594,15 @@
       position: relative !important;
     }
 
-    /* Authentic LiquidGlass Button — нейтральное стекло (Android DeyttUi.kt / Apple Design) */
+    /* Unified Apple + Mobile Liquid Glass Capsule Button */
     .btn-select-route, .home-measure, .btn-action-glass, #home-measure {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 48%, rgba(255, 255, 255, 0) 100%), rgba(28, 36, 48, 0.65) !important;
-      backdrop-filter: blur(24px) saturate(180%) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.18) !important;
-      border-top-color: rgba(255, 255, 255, 0.55) !important;
-      border-bottom-color: rgba(0, 0, 0, 0.35) !important;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.28), 0 4px 16px rgba(0, 0, 0, 0.32) !important;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.01) 100%), rgba(28, 31, 36, 0.52) !important;
+      backdrop-filter: blur(24px) saturate(190%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.16) !important;
+      border-top-color: rgba(255, 255, 255, 0.56) !important;
+      border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.30), inset 0 -1px 0 rgba(0, 0, 0, 0.25), 0 6px 18px rgba(0, 0, 0, 0.34) !important;
       border-radius: 9999px !important;
       color: #F8FAFC !important;
       font-weight: 600 !important;
@@ -2607,28 +2612,29 @@
       align-items: center !important;
       justify-content: center !important;
       gap: 8px !important;
-      transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+      transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease, box-shadow 180ms ease !important;
       text-transform: lowercase !important;
     }
     .btn-select-route:hover, .home-measure:hover, .btn-action-glass:hover, #home-measure:hover {
       color: #FFFFFF !important;
       filter: brightness(1.12) !important;
-      border-top-color: rgba(255, 255, 255, 0.75) !important;
-      box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 6px 20px rgba(0, 0, 0, 0.42) !important;
+      border-top-color: rgba(255, 255, 255, 0.78) !important;
+      box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.44), 0 8px 22px rgba(0, 0, 0, 0.42) !important;
     }
     .btn-select-route:active, .home-measure:active, .btn-action-glass:active, #home-measure:active {
       transform: scale(0.975) !important;
       filter: brightness(0.96) !important;
     }
     #home-measure, .home-measure {
-      margin-top: 10px !important;
+      margin-top: -2px !important;
     }
 
     .btn-select-route.is-selected {
-      border-color: rgba(56, 189, 248, 0.45) !important;
-      border-top-color: rgba(186, 230, 253, 0.65) !important;
-      color: #38BDF8 !important;
-      background: linear-gradient(180deg, rgba(56, 189, 248, 0.18) 0%, rgba(14, 165, 233, 0.08) 100%) !important;
+      border-color: rgba(100, 233, 255, 0.38) !important;
+      border-top-color: rgba(255, 255, 255, 0.72) !important;
+      color: #64E9FF !important;
+      background: linear-gradient(180deg, rgba(100, 233, 255, 0.16) 0%, rgba(100, 233, 255, 0.04) 55%, rgba(255, 255, 255, 0.01) 100%), rgba(30, 34, 40, 0.54) !important;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.36), 0 4px 16px rgba(0, 0, 0, 0.30) !important;
     }
 
     /* Subscription Refresh Card (Top of Routes Stage) */
@@ -2655,12 +2661,13 @@
       width: 44px;
       height: 44px;
       border-radius: 14px;
-      background: rgba(15, 23, 42, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-top-color: rgba(255, 255, 255, 0.28);
       display: flex;
       align-items: center;
       justify-content: center;
-      color: #38BDF8;
+      color: #64E9FF;
       flex-shrink: 0;
     }
     .refresh-texts {
@@ -2706,17 +2713,17 @@
       transform: translateY(-1px);
     }
     .quick-select-card.is-selected {
-      border-color: rgba(56, 189, 248, 0.35) !important;
-      border-top-color: rgba(186, 230, 253, 0.55) !important;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, transparent 40%),
-                  linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.24) 100%) !important;
+      border-color: rgba(255, 255, 255, 0.22) !important;
+      border-top-color: rgba(255, 255, 255, 0.52) !important;
+      background: var(--liquid-glass-row-bg-selected) !important;
     }
     .quick-select-icon {
       width: 44px;
       height: 44px;
       border-radius: 14px;
-      background: rgba(15, 23, 42, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-top-color: rgba(255, 255, 255, 0.28);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -3135,137 +3142,9 @@
     }
 
 
-    /* --- AUTHENTIC 1:1 LIQUIDGLASS SYSTEM (MOBILE PARITY) --- */
+    /* --- AUTHENTIC 1:1 LIQUIDGLASS SYSTEM (MOBILE + APPLE HIG PARITY) --- */
     #home-status-badge {
       display: none !important;
-    }
-
-    .home-action, #home-action, .compact-action, #compact-action {
-      width: 100% !important;
-      height: 56px !important;
-      min-height: 56px !important;
-      border-radius: 9999px !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      font-family: 'Inter Tight', sans-serif !important;
-      font-size: 16px !important;
-      font-weight: 700 !important;
-      letter-spacing: -0.01em !important;
-      cursor: pointer !important;
-      box-sizing: border-box !important;
-      transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, background 0.25s ease, border-color 0.25s ease !important;
-      backdrop-filter: blur(20px) saturate(150%) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
-      position: relative !important;
-      overflow: hidden !important;
-    }
-
-    .home-action:hover, #home-action:hover {
-      transform: translateY(-1px) !important;
-    }
-
-    .home-action:active, #home-action:active {
-      transform: scale(0.985) !important;
-    }
-
-    /* Disconnected / Idle State - Clean dark glass without neon glow or colored outline */
-    .home-action, #home-action,
-    .home-action[data-tone="idle"], #home-action[data-tone="idle"],
-    .compact-action[data-tone="idle"] {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(20, 28, 40, 0.60) 100%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.16) !important;
-      border-top: 1px solid rgba(255, 255, 255, 0.32) !important;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15), 0 4px 16px rgba(0, 0, 0, 0.35) !important;
-      color: #FFFFFF !important;
-    }
-
-    /* Connected State - Dark translucent emerald glass (NOT flat solid green!) */
-    .home-action[data-tone="connected"], #home-action[data-tone="connected"],
-    .home-action[data-tone="good"], #home-action[data-tone="good"],
-    .compact-action[data-tone="connected"], .compact-action[data-tone="good"] {
-      background: linear-gradient(180deg, rgba(99, 224, 180, 0.15) 0%, rgba(18, 40, 32, 0.55) 100%) !important;
-      border: 1.5px solid rgba(99, 224, 180, 0.75) !important;
-      box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.85), 0 0 26px rgba(99, 224, 180, 0.28) !important;
-      color: #FFFFFF !important;
-    }
-
-    /* Connecting / Checking State */
-    .home-action[data-tone="connecting"], #home-action[data-tone="connecting"],
-    .compact-action[data-tone="connecting"] {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(20, 35, 55, 0.60) 100%) !important;
-      border: 1px solid rgba(120, 175, 235, 0.45) !important;
-      border-top: 1px solid rgba(255, 255, 255, 0.35) !important;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 4px 16px rgba(0, 0, 0, 0.35) !important;
-      color: #FFFFFF !important;
-    }
-
-    /* Error State */
-    .home-action[data-tone="error"], #home-action[data-tone="error"],
-    .compact-action[data-tone="error"] {
-      background: linear-gradient(180deg, rgba(255, 130, 149, 0.16) 0%, rgba(45, 18, 24, 0.55) 100%) !important;
-      border: 1.5px solid rgba(255, 130, 149, 0.85) !important;
-      box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.85), 0 0 28px rgba(255, 130, 149, 0.35) !important;
-      color: #FFFFFF !important;
-    }
-
-    /* Clean LiquidGlass Pill Button for "обновить замер" (Parity with Mobile) */
-    .home-measure, #home-measure {
-      width: 100% !important;
-      height: 48px !important;
-      border-radius: 9999px !important;
-      background:
-        radial-gradient(130% 100% at 20% 0%, rgba(112, 182, 255, .16) 0%, rgba(112, 182, 255, 0) 56%),
-        linear-gradient(180deg, rgba(52, 70, 104, 0.42) 0%, rgba(14, 26, 44, 0.6) 100%) !important;
-      backdrop-filter: blur(26px) saturate(190%) !important;
-      -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
-      border: 1px solid rgba(129, 212, 250, 0.38) !important;
-      border-top: 1px solid rgba(226, 244, 255, 0.42) !important;
-      box-shadow:
-        0 0 0 1px rgba(6, 16, 38, 0.55),
-        0 0 18px -4px rgba(87, 199, 255, 0.38),
-        0 6px 20px rgba(0, 0, 0, 0.3),
-        inset 0 1px 1px rgba(255, 255, 255, 0.35),
-        inset 0 -8px 18px -10px rgba(0, 12, 34, 0.65) !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      gap: 9px !important;
-      color: #FFFFFF !important;
-      font-family: 'Inter Tight', sans-serif !important;
-      font-size: 14px !important;
-      font-weight: 600 !important;
-      cursor: pointer !important;
-      position: relative !important;
-      overflow: hidden !important;
-      transition: all 0.16s ease !important;
-    }
-    .home-measure::after, #home-measure::after {
-      content: "" !important;
-      position: absolute !important;
-      top: 1px !important;
-      left: 2px !important;
-      right: 2px !important;
-      height: 42% !important;
-      border-radius: 9999px 9999px 60% 60% / 9999px 9999px 30% 30% !important;
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0.02) 80%, transparent 100%) !important;
-      pointer-events: none !important;
-    }
-    .home-measure:hover, #home-measure:hover {
-      background: linear-gradient(180deg, rgba(80, 96, 128, 0.35) 0%, rgba(24, 38, 58, 0.58) 100%) !important;
-      border-color: rgba(255, 255, 255, 0.28) !important;
-      border-top-color: rgba(255, 255, 255, 0.55) !important;
-      box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.5),
-
-                  0 6px 20px rgba(0, 0, 0, 0.3) !important;
-      transform: translateY(-1px) !important;
-    }
-    .home-measure:active, #home-measure:active {
-      transform: scale(0.985) !important;
-      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3) !important;
-    }
-    .home-measure.is-measuring svg, #home-measure.is-measuring svg {
-      animation: spoke-spin 0.9s linear infinite !important;
     }
 
     /* 16-Spoke Radial Spinner (Exact LoadingSpan from Mobile) */
@@ -3279,21 +3158,6 @@
       vertical-align: middle;
       width: 15px;
       height: 15px;
-    }
-
-    /* Clean Card Layouts */
-    .liquid-glass-card {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 40%),
-                  linear-gradient(180deg, rgba(28, 44, 63, 0.35) 0%, rgba(18, 29, 42, 0.20) 100%) !important;
-      backdrop-filter: blur(20px) saturate(140%) !important;
-      -webkit-backdrop-filter: blur(20px) saturate(140%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.12) !important;
-      border-top-color: rgba(255, 255, 255, 0.26) !important;
-      border-bottom-color: rgba(255, 255, 255, 0.08) !important;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), 0 8px 32px rgba(0, 0, 0, 0.35) !important;
-      border-radius: 22px !important;
-      position: relative !important;
-      transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease;
     }
 
     /* Routes Container centered on Desktop */
@@ -3735,41 +3599,42 @@
         width: 40px !important;
         height: 40px !important;
         border-radius: 13.5px !important;
-        background: rgba(30, 48, 72, 0.55) !important;
-        border: 1px solid rgba(56, 189, 248, 0.28) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+        background: rgba(255, 255, 255, 0.07) !important;
+        border: 1px solid rgba(255, 255, 255, 0.14) !important;
+        border-top-color: rgba(255, 255, 255, 0.34) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
         flex-shrink: 0 !important;
       }
 
-      /* Compact Proportions for Auto-Select Card */
+      /* Compact Neutral Liquid Glass for Quick Select Cards */
       .quick-select-card {
         padding: 12px 16px !important;
-        border-radius: 18px !important;
-        background: linear-gradient(180deg, rgba(28, 43, 64, 0.55) 0%, rgba(17, 29, 45, 0.65) 100%) !important;
-        border: 1px solid rgba(255, 255, 255, 0.12) !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.26) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 4px 16px rgba(0, 0, 0, 0.22) !important;
-        backdrop-filter: blur(20px) saturate(160%) !important;
+        border-radius: 20px !important;
+        background: var(--liquid-glass-row-bg) !important;
+        border: 1px solid rgba(255, 255, 255, 0.13) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.40) !important;
+        box-shadow: var(--liquid-glass-card-shadow) !important;
+        backdrop-filter: blur(26px) saturate(190%) !important;
+        -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
       }
       .quick-select-card.is-selected {
-        background: linear-gradient(180deg, rgba(40, 74, 110, 0.65) 0%, rgba(22, 46, 72, 0.75) 100%) !important;
-        border-color: rgba(56, 189, 248, 0.45) !important;
-        border-top-color: rgba(255, 255, 255, 0.45) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 20px rgba(14, 165, 233, 0.25) !important;
+        background: var(--liquid-glass-row-bg-selected) !important;
+        border-color: rgba(255, 255, 255, 0.24) !important;
+        border-top-color: rgba(255, 255, 255, 0.56) !important;
       }
 
       /* LiquidGlass Pill Buttons for Route Selection (выбрать / выбрано) */
       .btn-select-route, .btn-action-glass {
         min-height: 36px !important;
-        padding: 6px 18px !important;
+        padding: 6px 16px !important;
         border-radius: 9999px !important;
-        font-size: 13px !important;
+        font-size: 12.5px !important;
         font-weight: 600 !important;
         cursor: pointer !important;
-        transition: all 180ms ease !important;
+        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease, box-shadow 180ms ease !important;
         display: inline-flex !important;
         align-items: center !important;
         justify-content: center !important;
@@ -3777,76 +3642,98 @@
         letter-spacing: -0.01em !important;
         position: relative !important;
         overflow: hidden !important;
-        background: linear-gradient(180deg, rgba(54, 76, 104, 0.50) 0%, rgba(18, 30, 46, 0.65) 100%) !important;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.01) 100%), rgba(28, 31, 36, 0.54) !important;
+        backdrop-filter: blur(20px) saturate(185%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(185%) !important;
         border: 1px solid rgba(255, 255, 255, 0.16) !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.35) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 2px 6px rgba(0, 0, 0, 0.2) !important;
-        color: #E2E8F0 !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.52) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 12px rgba(0, 0, 0, 0.28) !important;
+        color: #F2F5FC !important;
       }
-      .btn-select-route::after, .btn-action-glass::after {
-        content: "" !important;
-        position: absolute !important;
-        top: 1px !important;
-        left: 2px !important;
-        right: 2px !important;
-        height: 42% !important;
-        border-radius: 9999px 9999px 40% 40% / 9999px 9999px 20% 20% !important;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.04) 75%, transparent 100%) !important;
-        pointer-events: none !important;
+      .btn-select-route:hover, .btn-action-glass:hover {
+        filter: brightness(1.12) !important;
+        border-top-color: rgba(255, 255, 255, 0.72) !important;
       }
-      .btn-select-route.is-selected, .btn-action-glass.is-selected, .proto-selected-mark {
-        background: linear-gradient(180deg, #2494F8 0%, #1060C8 100%) !important;
-        border: 1px solid rgba(255, 255, 255, 0.26) !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.55) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), 0 4px 14px rgba(29, 140, 248, 0.40) !important;
-        color: #FFFFFF !important;
+      .btn-select-route:active, .btn-action-glass:active {
+        transform: scale(0.97) !important;
+      }
+      .btn-select-route.is-selected, .btn-action-glass.is-selected {
+        background: linear-gradient(180deg, rgba(100, 233, 255, 0.20) 0%, rgba(100, 233, 255, 0.05) 55%, rgba(255, 255, 255, 0.01) 100%), rgba(34, 38, 46, 0.58) !important;
+        border: 1px solid rgba(100, 233, 255, 0.42) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.72) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42), 0 4px 14px rgba(0, 0, 0, 0.30) !important;
+        color: #64E9FF !important;
+      }
+      .proto-selected-mark {
+        background: linear-gradient(180deg, rgba(57, 232, 189, 0.18) 0%, rgba(57, 232, 189, 0.06) 100%), rgba(24, 30, 28, 0.55) !important;
+        border: 1px solid rgba(57, 232, 189, 0.45) !important;
+        border-top-color: rgba(255, 255, 255, 0.45) !important;
+        color: #6EE7B7 !important;
       }
 
-      /* Country Flags: Full Container Fill */
+      /* Country Flags: Clean waving cloth with zero card/box backdrop */
       .country-flag-wrap {
         width: 44px !important;
         height: 30px !important;
-        border-radius: 6px !important;
-        overflow: hidden !important;
+        border-radius: 0 !important;
+        overflow: visible !important;
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
-        background: rgba(0, 0, 0, 0.25) !important;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35) !important;
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
       }
       .country-flag-wrap svg, .country-flag-wrap .svg-flag {
-        width: 100% !important;
-        height: 100% !important;
+        width: 44px !important;
+        height: 30px !important;
         display: block !important;
-        border-radius: 6px !important;
+        border-radius: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        overflow: visible !important;
       }
 
-      /* Profile and Settings LiquidGlass Buttons */
+      /* Profile and Settings LiquidGlass Capsule Buttons */
       .btn-profile-primary, .profile-btn-primary {
         min-height: 46px !important;
         border-radius: 9999px !important;
-        background: linear-gradient(180deg, #2494F8 0%, #1060C8 100%) !important;
-        border: 1px solid rgba(255, 255, 255, 0.24) !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.55) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 6px 18px rgba(29, 140, 248, 0.38) !important;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.05) 48%, rgba(255, 255, 255, 0.015) 100%), rgba(36, 40, 48, 0.58) !important;
+        backdrop-filter: blur(24px) saturate(195%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(195%) !important;
+        border: 1px solid rgba(100, 233, 255, 0.36) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.72) !important;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.42), 0 6px 20px rgba(0, 0, 0, 0.38) !important;
         color: #FFFFFF !important;
         font-weight: 700 !important;
         cursor: pointer !important;
         position: relative !important;
         overflow: hidden !important;
+        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease !important;
       }
       .btn-profile-secondary, .profile-btn-secondary {
         min-height: 46px !important;
         border-radius: 9999px !important;
-        background: linear-gradient(180deg, rgba(54, 76, 104, 0.45) 0%, rgba(18, 30, 46, 0.60) 100%) !important;
-        border: 1px solid rgba(255, 255, 255, 0.16) !important;
-        border-top: 1px solid rgba(255, 255, 255, 0.32) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 3px 10px rgba(0, 0, 0, 0.25) !important;
-        color: #E2E8F0 !important;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.035) 50%, rgba(255, 255, 255, 0.01) 100%), rgba(26, 28, 33, 0.52) !important;
+        backdrop-filter: blur(22px) saturate(185%) !important;
+        -webkit-backdrop-filter: blur(22px) saturate(185%) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.48) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 4px 14px rgba(0, 0, 0, 0.30) !important;
+        color: #F2F5FC !important;
         font-weight: 600 !important;
         cursor: pointer !important;
         position: relative !important;
         overflow: hidden !important;
+        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease !important;
+      }
+      .btn-profile-primary:hover, .profile-btn-primary:hover,
+      .btn-profile-secondary:hover, .profile-btn-secondary:hover {
+        filter: brightness(1.10) !important;
+      }
+      .btn-profile-primary:active, .profile-btn-primary:active,
+      .btn-profile-secondary:active, .profile-btn-secondary:active {
+        transform: scale(0.975) !important;
       }
 
 
@@ -4067,19 +3954,15 @@
       }
 
       /* ================================================================
-         PHONE-PARITY LIQUIDGLASS v2 — кодовый порт DeyttUi.kt (0.11.127)
-         Слои телефона (LiquidGlassDrawable): fill → gloss (верх 40%) →
-         inner lip → rim. Обод = фон border-box под прозрачной рамкой,
-         fill = padding-box; связка mask+conic на ::before рендерилась
-         с артефактом «второй таблетки» и полностью убрана.
-         Никакого неона, блюра и hover-подъёма — на телефоне их нет.
+         APPLE LIQUID GLASS + ANDROID DeyttUi / LiquidGlassDock SYSTEM
+         Neutral smoked translucent glass + real backdrop-filter lensing +
+         directional top Fresnel rim + reduced-transparency/motion support.
          ================================================================ */
       @property --glass-rim { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
       @property --glass-fill { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
       @keyframes glass-rim-spin { to { --glass-rim: 360deg; } }
       @keyframes glass-fill-spin { to { --glass-fill: -216deg; } }
 
-      /* --- мёртвые псевдоэлементы прошлых версий (источник артефакта) --- */
       #home-action::before, .home-action::before,
       #compact-action::before, .compact-action::before,
       #home-action::after, .home-action::after,
@@ -4090,260 +3973,190 @@
         display: none !important;
       }
 
-      /* --- «подключиться»: connectionGlassBackground(IDLE)
-             fill-shimmer 0x481E3854…, rim-shimmer 0xEEFFFFFF→0x300369A1,
-             обод 1.35dp, gloss 0x18, lip 0x18FFFFFF/0x12000000 --- */
+      /* Primary Connect Pill: Neutral Smoked Liquid Glass + Specular Edge Rim */
       #home-action, .home-action, #compact-action, .compact-action {
         height: 56px !important;
         min-height: 56px !important;
-        padding: 0 14px !important;
-        border-radius: 28px !important;
+        padding: 0 18px !important;
+        border-radius: 9999px !important;
         border: 1.35px solid transparent !important;
         font-family: "Inter Tight", sans-serif !important;
-        font-size: 13.5px !important;
-        font-weight: 620 !important;
-        letter-spacing: 0 !important;
-        color: #F2F5FC !important;
+        font-size: 14.5px !important;
+        font-weight: 650 !important;
+        letter-spacing: -0.01em !important;
+        color: #FFFFFF !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
+          linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.04) 46%, rgba(255, 255, 255, 0.01) 100%) padding-box,
           conic-gradient(from var(--glass-fill) at 50% 50%,
-            rgba(30, 56, 84, 0.28) 0%, rgba(18, 36, 56, 0.16) 25%,
-            rgba(24, 50, 76, 0.22) 50%, rgba(18, 36, 56, 0.16) 75%,
-            rgba(30, 56, 84, 0.28) 100%) padding-box,
-          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
-          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
-          linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08)) border-box !important;
+            rgba(255, 255, 255, 0.07) 0%, rgba(24, 26, 31, 0.44) 25%,
+            rgba(255, 255, 255, 0.05) 50%, rgba(24, 26, 31, 0.44) 75%,
+            rgba(255, 255, 255, 0.07) 100%) padding-box,
+          linear-gradient(180deg, rgba(25, 27, 32, 0.56), rgba(18, 20, 24, 0.52)) padding-box,
+          linear-gradient(180deg, rgba(255, 255, 255, 0.56) 0%, rgba(255, 255, 255, 0.14) 55%, rgba(255, 255, 255, 0.22) 100%) border-box !important;
         box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.09),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-          0 2px 8px rgba(8, 14, 26, 0.35) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
+          inset 0 1px 1px rgba(255, 255, 255, 0.34),
+          inset 0 -1px 1px rgba(0, 0, 0, 0.28),
+          0 10px 26px rgba(0, 0, 0, 0.38) !important;
+        backdrop-filter: blur(26px) saturate(195%) !important;
+        -webkit-backdrop-filter: blur(26px) saturate(195%) !important;
         text-shadow: none !important;
         overflow: hidden !important;
-        animation: glass-rim-spin 5.5s linear infinite,
-          glass-fill-spin 5.5s linear infinite !important;
-        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease !important;
+        animation: glass-rim-spin 5.5s linear infinite, glass-fill-spin 5.5s linear infinite !important;
+        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease, box-shadow 180ms ease !important;
       }
       #home-action:hover, .home-action:hover,
       #compact-action:hover, .compact-action:hover {
-        filter: brightness(1.07) !important;
+        filter: brightness(1.10) !important;
       }
       #home-action:active, .home-action:active,
       #compact-action:active, .compact-action:active {
-        transform: scale(0.985) !important;
-        transition-duration: 120ms, 160ms !important;
+        transform: scale(0.975) !important;
       }
 
-      /* CONNECTED: изумруд 0x351F3A30→0x2010201A, shimmer 0xD834D399 */
+      /* Connected: Translucent Emerald Liquid Glass + Glowing Top Specular */
       #home-action[data-tone="connected"], .home-action[data-tone="connected"],
       #home-action[data-tone="good"], .home-action[data-tone="good"],
       #compact-action[data-tone="connected"], .compact-action[data-tone="connected"],
       #compact-action[data-tone="good"], .compact-action[data-tone="good"] {
         border-color: transparent !important;
-        border-top-color: transparent !important;
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.09),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-          0 2px 8px rgba(8, 14, 26, 0.35) !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
-          conic-gradient(from var(--glass-fill) at 50% 50%,
-            rgba(26, 62, 46, 0.27) 0%, rgba(15, 36, 26, 0.14) 25%,
-            rgba(22, 52, 36, 0.21) 50%, rgba(15, 36, 26, 0.14) 75%,
-            rgba(26, 62, 46, 0.27) 100%) padding-box,
-          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.01) 100%) padding-box,
+          linear-gradient(180deg, rgba(24, 58, 44, 0.56), rgba(14, 34, 26, 0.52)) padding-box,
           conic-gradient(from var(--glass-rim) at 50% 50%,
-            rgba(255, 255, 255, 0.93) 0%, rgba(52, 211, 153, 0.85) 16.7%,
-            rgba(5, 150, 105, 0.46) 33.3%, rgba(4, 120, 87, 0.16) 50%,
-            rgba(5, 150, 105, 0.46) 66.7%, rgba(52, 211, 153, 0.85) 83.3%,
-            rgba(255, 255, 255, 0.93) 100%) border-box !important;
+            rgba(255, 255, 255, 0.94) 0%, rgba(57, 232, 189, 0.85) 18%,
+            rgba(16, 185, 129, 0.38) 36%, rgba(16, 185, 129, 0.16) 52%,
+            rgba(16, 185, 129, 0.38) 68%, rgba(57, 232, 189, 0.85) 84%,
+            rgba(255, 255, 255, 0.94) 100%) border-box !important;
+        box-shadow:
+          inset 0 1px 1px rgba(255, 255, 255, 0.42),
+          inset 0 -1px 1px rgba(0, 0, 0, 0.26),
+          0 8px 26px rgba(16, 185, 129, 0.26) !important;
       }
 
-      /* CONNECTING: fill как в покое, блик 0xF0FFFFFF→0x280369A1 */
+      /* Connecting: Neutral Glass + Crisp Ice Specular Orbit */
       #home-action[data-tone="connecting"], .home-action[data-tone="connecting"],
       #compact-action[data-tone="connecting"], .compact-action[data-tone="connecting"] {
         border-color: transparent !important;
-        border-top-color: transparent !important;
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.09),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-          0 2px 8px rgba(8, 14, 26, 0.35) !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
-          conic-gradient(from var(--glass-fill) at 50% 50%,
-            rgba(30, 56, 84, 0.28) 0%, rgba(18, 36, 56, 0.16) 25%,
-            rgba(24, 50, 76, 0.22) 50%, rgba(18, 36, 56, 0.16) 75%,
-            rgba(30, 56, 84, 0.28) 100%) padding-box,
-          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.04) 45%, rgba(255, 255, 255, 0.01) 100%) padding-box,
+          linear-gradient(180deg, rgba(28, 32, 38, 0.58), rgba(20, 22, 27, 0.54)) padding-box,
           conic-gradient(from var(--glass-rim) at 50% 50%,
-            rgba(240, 255, 255, 0.94) 0%, rgba(56, 189, 248, 0.85) 16.7%,
-            rgba(2, 132, 199, 0.38) 33.3%, rgba(3, 105, 161, 0.16) 50%,
-            rgba(2, 132, 199, 0.38) 66.7%, rgba(56, 189, 248, 0.85) 83.3%,
-            rgba(240, 255, 255, 0.94) 100%) border-box !important;
+            rgba(255, 255, 255, 0.96) 0%, rgba(100, 233, 255, 0.85) 18%,
+            rgba(56, 189, 248, 0.34) 36%, rgba(56, 189, 248, 0.14) 52%,
+            rgba(56, 189, 248, 0.34) 68%, rgba(100, 233, 255, 0.85) 84%,
+            rgba(255, 255, 255, 0.96) 100%) border-box !important;
       }
 
-      /* ERROR: 0x38352630→0x221E141C, блик 0xD8F43F5E */
+      /* Error: Translucent Smoked Coral Glass */
       #home-action[data-tone="error"], .home-action[data-tone="error"],
       #compact-action[data-tone="error"], .compact-action[data-tone="error"] {
         border-color: transparent !important;
-        border-top-color: transparent !important;
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.09),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-          0 2px 8px rgba(8, 14, 26, 0.35) !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
-          conic-gradient(from var(--glass-fill) at 50% 50%,
-            rgba(62, 26, 34, 0.27) 0%, rgba(36, 16, 22, 0.16) 25%,
-            rgba(48, 20, 28, 0.21) 50%, rgba(36, 16, 22, 0.16) 75%,
-            rgba(62, 26, 34, 0.27) 100%) padding-box,
-          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
+          linear-gradient(180deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.01) 100%) padding-box,
+          linear-gradient(180deg, rgba(58, 24, 32, 0.56), rgba(34, 16, 20, 0.52)) padding-box,
           conic-gradient(from var(--glass-rim) at 50% 50%,
-            rgba(240, 255, 255, 0.94) 0%, rgba(244, 63, 94, 0.85) 16.7%,
-            rgba(190, 18, 60, 0.44) 33.3%, rgba(136, 19, 55, 0.19) 50%,
-            rgba(190, 18, 60, 0.44) 66.7%, rgba(244, 63, 94, 0.85) 83.3%,
-            rgba(240, 255, 255, 0.94) 100%) border-box !important;
+            rgba(255, 255, 255, 0.92) 0%, rgba(251, 113, 133, 0.86) 18%,
+            rgba(225, 29, 72, 0.42) 36%, rgba(136, 19, 55, 0.18) 52%,
+            rgba(225, 29, 72, 0.42) 68%, rgba(251, 113, 133, 0.86) 84%,
+            rgba(255, 255, 255, 0.92) 100%) border-box !important;
       }
 
-      /* STOPPING/disabled: глухое стекло без блика (на телефоне shimmerStroke=null) */
+      /* Stopping / Disabled: Muted Neutral Liquid Glass */
       #home-action[data-tone="stopping"], .home-action[data-tone="stopping"],
       #compact-action[data-tone="stopping"], .compact-action[data-tone="stopping"],
       #home-action:disabled, .home-action:disabled,
       #compact-action:disabled, .compact-action:disabled {
-        border-color: transparent !important;
-        border-top-color: transparent !important;
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.09),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-          0 2px 8px rgba(8, 14, 26, 0.35) !important;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.094), rgba(255, 255, 255, 0) 40%) padding-box,
-          linear-gradient(180deg, rgba(43, 57, 75, 0.21), rgba(19, 28, 41, 0.13)) padding-box,
-          linear-gradient(180deg, #10161F, #0A0F16) padding-box,
-          linear-gradient(135deg, rgba(255, 255, 255, 0.31) 0%, rgba(60, 82, 104, 0.19) 34%,
-            rgba(82, 98, 122, 0.15) 72%, rgba(255, 255, 255, 0.16) 100%) border-box !important;
+        border-color: rgba(255, 255, 255, 0.14) !important;
+        border-top-color: rgba(255, 255, 255, 0.34) !important;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(24, 26, 30, 0.50) 100%) !important;
         animation: none !important;
       }
 
-      /* --- «обновить замер»: glassButtonBackground(0x40364C68→0x22121E2E),
-             r24, обод 0.85dp [#2CFFFFFF,#12FFFFFF,#0C82B4E8,#12FFFFFF], gloss 0x12 --- */
+      /* Secondary Pill: "обновить замер" & Update Button */
       #home-measure, .home-measure {
-        height: 48px !important;
-        min-height: 48px !important;
-        border-radius: 24px !important;
-        border: 0.85px solid transparent !important;
-        font-size: 14px !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        margin-top: -2px !important;
+        border-radius: 9999px !important;
+        border: 1px solid rgba(255, 255, 255, 0.16) !important;
+        border-top-color: rgba(255, 255, 255, 0.56) !important;
+        border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        font-size: 13.5px !important;
         font-weight: 600 !important;
-        letter-spacing: 0 !important;
-        color: #F2F5FC !important;
+        letter-spacing: -0.01em !important;
+        color: #F8FAFC !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 40%) padding-box,
-          linear-gradient(180deg, rgba(54, 76, 104, 0.25), rgba(18, 30, 46, 0.13)) padding-box,
-          linear-gradient(135deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.07) 34%,
-            rgba(130, 180, 232, 0.05) 72%, rgba(255, 255, 255, 0.07) 100%) border-box !important;
-        box-shadow: 0 2px 6px rgba(8, 14, 26, 0.3) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 46%, rgba(255, 255, 255, 0.01) 100%),
+          rgba(26, 28, 34, 0.48) !important;
+        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.30), inset 0 -1px 0 rgba(0, 0, 0, 0.25), 0 6px 18px rgba(0, 0, 0, 0.30) !important;
+        backdrop-filter: blur(24px) saturate(190%) !important;
+        -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
         animation: none !important;
-        transition: transform 140ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease !important;
+        transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease, border-color 160ms ease !important;
       }
       #home-measure:hover, .home-measure:hover {
-        filter: brightness(1.07) !important;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 40%) padding-box,
-          linear-gradient(180deg, rgba(54, 76, 104, 0.25), rgba(18, 30, 46, 0.13)) padding-box,
-          linear-gradient(135deg, rgba(255, 255, 255, 0.17) 0%, rgba(255, 255, 255, 0.07) 34%,
-            rgba(130, 180, 232, 0.05) 72%, rgba(255, 255, 255, 0.07) 100%) border-box !important;
+        filter: brightness(1.12) !important;
+        border-top-color: rgba(255, 255, 255, 0.78) !important;
       }
       #home-measure:active, .home-measure:active {
-        transform: scale(0.985) !important;
-        transition-duration: 120ms, 160ms !important;
+        transform: scale(0.975) !important;
       }
 
-      /* --- «выбрать/выбрано»: пилюля строки телефона 60×36dp, r18 --- */
+      /* Compact Route Selector Pill ("выбрать/выбрано") */
       .btn-select-route {
-        min-width: 60px !important;
+        min-width: 66px !important;
         min-height: 36px !important;
-        padding: 6px 8px !important;
-        border-radius: 18px !important;
-        border: 0.95px solid transparent !important;
-        font-size: 12px !important;
-        font-weight: 700 !important;
-        color: #F2F5FC !important;
+        padding: 6px 14px !important;
+        border-radius: 9999px !important;
+        border: 1px solid rgba(255, 255, 255, 0.16) !important;
+        border-top-color: rgba(255, 255, 255, 0.52) !important;
+        font-size: 12.5px !important;
+        font-weight: 650 !important;
+        color: #F5F7FA !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0) 40%) padding-box,
-          linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 50%, rgba(12, 19, 29, 0.12) 100%) padding-box,
-          linear-gradient(135deg, rgba(255, 255, 255, 0.165) 0%, rgba(112, 168, 224, 0.07) 34%,
-            rgba(80, 128, 184, 0.04) 72%, rgba(255, 255, 255, 0.08) 100%) border-box !important;
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.09),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-          0 2px 6px rgba(8, 14, 26, 0.3) !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.01) 100%),
+          rgba(26, 28, 33, 0.48) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 12px rgba(0, 0, 0, 0.26) !important;
+        backdrop-filter: blur(20px) saturate(185%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(185%) !important;
         animation: none !important;
       }
-      .btn-select-route:hover { filter: brightness(1.07) !important; }
-      .btn-select-route:active { transform: scale(0.99) !important; }
-      /* emphasis: glassRowBackground(true, 18), текст SKY 0xFF29B9F0 */
+      .btn-select-route:hover { filter: brightness(1.12) !important; }
+      .btn-select-route:active { transform: scale(0.97) !important; }
       .btn-select-route.is-selected {
-        color: #29B9F0 !important;
-        border-color: transparent !important;
-        border-top-color: transparent !important;
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.09),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-          0 2px 6px rgba(8, 14, 26, 0.3) !important;
+        color: #64E9FF !important;
+        border-color: rgba(100, 233, 255, 0.42) !important;
+        border-top-color: rgba(255, 255, 255, 0.72) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.40), 0 4px 14px rgba(0, 0, 0, 0.28) !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.086), rgba(255, 255, 255, 0) 40%) padding-box,
-          linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 50%, rgba(15, 25, 38, 0.17) 100%) padding-box,
-          linear-gradient(135deg, rgba(255, 255, 255, 0.27) 0%, rgba(120, 186, 240, 0.125) 34%,
-            rgba(88, 156, 216, 0.07) 72%, rgba(255, 255, 255, 0.12) 100%) border-box !important;
+          linear-gradient(180deg, rgba(100, 233, 255, 0.20) 0%, rgba(100, 233, 255, 0.05) 55%, rgba(255, 255, 255, 0.01) 100%),
+          rgba(32, 36, 42, 0.56) !important;
       }
 
-      /* --- карточки маршрутов: glassRowBackground(false, 22) на всех
-             (телефон рисует одно и то же стекло у подписки, автоподбора,
-             lte и стран); без блюра и неона --- */
+      /* Neutral Smoked Liquid Glass Cards (Routes, Profile, Settings) */
       .liquid-glass-card {
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.063), rgba(255, 255, 255, 0) 40%) padding-box,
-          linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 50%, rgba(12, 19, 29, 0.12) 100%) padding-box,
-          linear-gradient(135deg, rgba(255, 255, 255, 0.165) 0%, rgba(112, 168, 224, 0.07) 34%,
-            rgba(80, 128, 184, 0.04) 72%, rgba(255, 255, 255, 0.08) 100%) border-box !important;
-        border: 0.95px solid transparent !important;
+        background: var(--liquid-glass-row-bg) !important;
+        border: 1px solid rgba(255, 255, 255, 0.13) !important;
+        border-top-color: rgba(255, 255, 255, 0.42) !important;
+        border-bottom-color: rgba(255, 255, 255, 0.06) !important;
         border-radius: 22px !important;
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.06),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-          0 2px 10px rgba(8, 14, 26, 0.35) !important;
-        backdrop-filter: none !important;
-        -webkit-backdrop-filter: none !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.22), 0 10px 30px rgba(0, 0, 0, 0.34) !important;
+        backdrop-filter: blur(26px) saturate(190%) !important;
+        -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
       }
-      .liquid-glass-card:active { transform: scale(0.99) !important; }
-      /* emphasis: glassRowBackground(true, 22), обод 1dp */
+      .liquid-glass-card:active { transform: scale(0.992) !important; }
       .liquid-glass-card.is-selected {
-        border-color: transparent !important;
-        border-top-color: transparent !important;
-        border-width: 1px !important;
-        box-shadow:
-          inset 0 1px 0 rgba(255, 255, 255, 0.06),
-          inset 0 -1px 0 rgba(0, 0, 0, 0.07),
-          0 2px 10px rgba(8, 14, 26, 0.35) !important;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.086), rgba(255, 255, 255, 0) 40%) padding-box,
-          linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 50%, rgba(15, 25, 38, 0.17) 100%) padding-box,
-          linear-gradient(135deg, rgba(255, 255, 255, 0.27) 0%, rgba(120, 186, 240, 0.125) 34%,
-            rgba(88, 156, 216, 0.07) 72%, rgba(255, 255, 255, 0.12) 100%) border-box !important;
+        border-color: rgba(255, 255, 255, 0.24) !important;
+        border-top-color: rgba(255, 255, 255, 0.58) !important;
+        background: var(--liquid-glass-row-bg-selected) !important;
       }
       .country-accordion-header:hover { background: transparent !important; }
 
-      /* --- список стран: телефон кладёт spacer(8) между карточками --- */
       .countries-accordion-group {
         display: flex !important;
         flex-direction: column !important;
         gap: 8px !important;
       }
-
-      /* --- единые размеры блоков: все строки телефона 64dp --- */
       .country-accordion-header {
         min-height: 64px !important;
         box-sizing: border-box !important;
@@ -4355,11 +4168,15 @@
         box-sizing: border-box !important;
         padding: 12px 16px !important;
       }
-      .country-flag-wrap { width: 44px !important; height: 30px !important; }
+      .country-flag-wrap { width: 44px !important; height: 30px !important; background: transparent !important; box-shadow: none !important; border: none !important; overflow: visible !important; }
       .country-header-left { gap: 10px !important; }
-      /* перед «страны» телефон держит spacer(24): 14 flex-gap + 10 */
       #card-route-ru-de { margin-bottom: 10px !important; }
       .routes-section-label { margin: 0 0 0 2px !important; }
+
+      :is(.nav-item, button, .country-accordion-header, .proto-row, .setting-item, .profile-user-card):focus-visible {
+        outline: 2px solid rgba(100, 233, 255, 0.85) !important;
+        outline-offset: 2px !important;
+      }
 
       .network-atlas.reduce-motion #home-action, .network-atlas.reduce-motion .home-action,
       .network-atlas.reduce-motion #compact-action, .network-atlas.reduce-motion .compact-action,
@@ -4369,6 +4186,15 @@
       @media (prefers-reduced-motion: reduce) {
         #home-action, .home-action, #compact-action, .compact-action,
         #home-measure, .home-measure { animation: none !important; }
+      }
+      @media (prefers-reduced-transparency: reduce) {
+        .nav-container, .nav-jelly-pill, .liquid-glass-card, .quick-select-card,
+        #home-action, #home-measure, .btn-select-route, .btn-action-glass,
+        .btn-profile-primary, .btn-profile-secondary, .glass-modal-card {
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+          background: #1B1E24 !important;
+        }
       }
 
     </style>
@@ -5520,29 +5346,26 @@
     window.getSpokeSpinnerSvg = getSpokeSpinnerSvg;
 
     // Formatting protocol metrics: "Отклик: 139 мс  ·  Скорость: 39 мбит/с"
-    function formatProtoMetric(latency, speedMbps, stage, isEn = false) {
+    function formatProtoMetric(latency, speedMbps, stage, isEn = false, error = null) {
       const respPfx = isEn ? "Response: " : "Отклик: ";
       const spdPfx = isEn ? "  ·  Speed: " : "  ·  Скорость: ";
       const msUnit = isEn ? " ms" : " мс";
       const mbpsUnit = isEn ? " Mbps" : " мбит/с";
+      const hasError = stage === "error" || stage === "cancelled" || Boolean(error);
 
-      if (stage === "latency" || stage === "waiting_speed" || (stage !== "error" && latency == null && speedMbps == null)) {
-        return `${respPfx}${getSpokeSpinnerSvg(13)}${spdPfx}${getSpokeSpinnerSvg(13)}`;
+      if (stage === "error" || stage === "cancelled") {
+        const lat = latency != null ? `${latency}${msUnit}` : (isEn ? "error" : "ошибка");
+        const spd = speedMbps != null ? `${speedMbps}${mbpsUnit}` : (isEn ? "unavailable" : "недоступно");
+        return `${respPfx}${lat}${spdPfx}${spd}`;
       }
-      if (stage === "download") {
+      if (stage === "latency" || stage === "retry" || stage === "queued" || stage === "waiting_speed" || stage === "download" || (latency == null && speedMbps == null && !hasError)) {
         const lat = latency != null ? `${latency}${msUnit}` : getSpokeSpinnerSvg(13);
         const spd = speedMbps != null ? `${speedMbps}${mbpsUnit}` : getSpokeSpinnerSvg(13);
         return `${respPfx}${lat}${spdPfx}${spd}`;
       }
-      if (stage === "complete") {
-        const lat = latency != null ? `${latency}${msUnit}` : "—";
-        const spd = speedMbps != null ? `${speedMbps}${mbpsUnit}` : "—";
-        return `${respPfx}${lat}${spdPfx}${spd}`;
-      }
-      if (stage === "error") {
-        return `${respPfx}${isEn ? "error" : "ошибка"}${spdPfx}${isEn ? "unavailable" : "недоступно"}`;
-      }
-      return `${respPfx}—${spdPfx}—`;
+      const lat = latency != null ? `${latency}${msUnit}` : (!hasError ? getSpokeSpinnerSvg(13) : "—");
+      const spd = speedMbps != null ? `${speedMbps}${mbpsUnit}` : (!hasError ? getSpokeSpinnerSvg(13) : "—");
+      return `${respPfx}${lat}${spdPfx}${spd}`;
     }
 
     // Subscription Refresh State Machine (Top Banner & Global HUD)
@@ -5701,32 +5524,179 @@
       }, duration);
     }
 
-    // Navigation & Stage Controller
+    // Navigation & Stage Controller — Interactive Liquid Glass Spring Droplet ("капелька")
     const navContainer = document.getElementById("main-nav");
     const navPill = document.getElementById("nav-pill");
-    const navItems = document.querySelectorAll(".nav-item");
+    const navItems = Array.from(document.querySelectorAll(".nav-item"));
     const stageHome = document.getElementById("stage-home");
     const stageRoutes = document.getElementById("stage-routes");
     const stageProfile = document.getElementById("stage-profile");
     const stageSettings = document.getElementById("stage-settings");
     const allStages = [stageHome, stageRoutes, stageProfile, stageSettings];
 
+    const dockSpring = {
+      x: 0, w: 0, vx: 0, vw: 0, targetX: 0, targetW: 0,
+      initialized: false, rafId: 0, dragging: false, grabOffsetX: 0, pointerDownX: 0
+    };
+
+    function getNavItemMetrics(item) {
+      if (!navContainer || !item) return { x: 0, w: 0 };
+      const containerRect = navContainer.getBoundingClientRect();
+      const targetRect = item.getBoundingClientRect();
+      return { x: targetRect.left - containerRect.left, w: targetRect.width };
+    }
+
+    function applyDockDropletTransform() {
+      if (!navPill) return;
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+        document.getElementById("stage-home")?.classList.contains("reduce-motion");
+      const speed = Math.abs(dockSpring.vx);
+      const stretchX = (!reduced && !dockSpring.dragging) ? Math.min(0.14, speed * 0.0045) : (dockSpring.dragging ? 0.05 : 0);
+      const squashY = stretchX * 0.42;
+      navPill.style.width = dockSpring.w.toFixed(2) + "px";
+      navPill.style.transform = `translate3d(${dockSpring.x.toFixed(2)}px, 0, 0) scale(${(1 + stretchX).toFixed(4)}, ${(1 - squashY).toFixed(4)})`;
+    }
+
+    function stepDockSpring() {
+      dockSpring.rafId = 0;
+      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+        document.getElementById("stage-home")?.classList.contains("reduce-motion");
+      if (reduced || dockSpring.dragging) {
+        if (reduced) {
+          dockSpring.x = dockSpring.targetX;
+          dockSpring.w = dockSpring.targetW;
+          dockSpring.vx = 0;
+          dockSpring.vw = 0;
+        }
+        applyDockDropletTransform();
+        return;
+      }
+      const stiffness = 0.24;
+      const damping = 0.68;
+      const fx = (dockSpring.targetX - dockSpring.x) * stiffness;
+      const fw = (dockSpring.targetW - dockSpring.w) * stiffness;
+      dockSpring.vx = (dockSpring.vx + fx) * damping;
+      dockSpring.vw = (dockSpring.vw + fw) * damping;
+      dockSpring.x += dockSpring.vx;
+      dockSpring.w += dockSpring.vw;
+
+      const settled = Math.abs(dockSpring.targetX - dockSpring.x) < 0.15 &&
+        Math.abs(dockSpring.targetW - dockSpring.w) < 0.15 &&
+        Math.abs(dockSpring.vx) < 0.08 &&
+        Math.abs(dockSpring.vw) < 0.08;
+      if (settled) {
+        dockSpring.x = dockSpring.targetX;
+        dockSpring.w = dockSpring.targetW;
+        dockSpring.vx = 0;
+        dockSpring.vw = 0;
+        applyDockDropletTransform();
+        return;
+      }
+      applyDockDropletTransform();
+      dockSpring.rafId = requestAnimationFrame(stepDockSpring);
+    }
+
     function updatePillPosition(targetItem, animateJelly = true) {
       if (!navContainer || !navPill || !targetItem) return;
-      const containerRect = navContainer.getBoundingClientRect();
-      const targetRect = targetItem.getBoundingClientRect();
-
-      const left = targetRect.left - containerRect.left;
-      const width = targetRect.width;
-
-      navPill.style.left = left + "px";
-      navPill.style.width = width + "px";
-
-      if (animateJelly) {
-        targetItem.classList.remove("has-shaken");
-        void targetItem.offsetWidth;
-        targetItem.classList.add("has-shaken");
+      const { x, w } = getNavItemMetrics(targetItem);
+      if (w <= 0) return;
+      dockSpring.targetX = x;
+      dockSpring.targetW = w;
+      if (!dockSpring.initialized || !animateJelly) {
+        dockSpring.x = x;
+        dockSpring.w = w;
+        dockSpring.vx = 0;
+        dockSpring.vw = 0;
+        dockSpring.initialized = true;
+        applyDockDropletTransform();
+        return;
       }
+      if (!dockSpring.rafId) dockSpring.rafId = requestAnimationFrame(stepDockSpring);
+    }
+
+    function activateDockItem(item, notifyCSharp = true, animate = true) {
+      if (!item) return;
+      navItems.forEach(btn => {
+        const active = btn === item;
+        btn.classList.toggle("is-active", active);
+        btn.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      updatePillPosition(item, animate);
+      const tab = item.dataset.tab;
+      switchStage(tab);
+      if (notifyCSharp) postHost("tab:" + tab);
+    }
+
+    if (navContainer) {
+      let capturedPointerId = null;
+      let dragActivated = false;
+      navContainer.addEventListener("pointerdown", e => {
+        if (e.button !== 0 || !navItems.length) return;
+        const containerRect = navContainer.getBoundingClientRect();
+        const activeBtn = navItems.find(b => b.classList.contains("is-active")) || navItems[0];
+        if (!dockSpring.initialized) updatePillPosition(activeBtn, false);
+        const relX = e.clientX - containerRect.left;
+        dockSpring.pointerDownX = e.clientX;
+        dockSpring.grabOffsetX = Math.max(0, Math.min(dockSpring.w, relX - dockSpring.x));
+        dragActivated = false;
+        capturedPointerId = e.pointerId;
+      });
+      navContainer.addEventListener("pointermove", e => {
+        if (capturedPointerId !== e.pointerId || !navItems.length) return;
+        if (!dragActivated && Math.abs(e.clientX - dockSpring.pointerDownX) > 6) {
+          dragActivated = true;
+          dockSpring.dragging = true;
+          try { navContainer.setPointerCapture(e.pointerId); } catch (_) {}
+        }
+        if (!dragActivated) return;
+        const containerRect = navContainer.getBoundingClientRect();
+        const minX = 5;
+        const maxX = Math.max(minX, containerRect.width - dockSpring.w - 5);
+        const prevX = dockSpring.x;
+        dockSpring.x = Math.max(minX, Math.min(maxX, (e.clientX - containerRect.left) - dockSpring.grabOffsetX));
+        dockSpring.vx = (dockSpring.x - prevX) * 0.65;
+        const centerX = dockSpring.x + dockSpring.w * 0.5;
+        let nearest = navItems[0];
+        let bestDist = Infinity;
+        for (const btn of navItems) {
+          const m = getNavItemMetrics(btn);
+          const dist = Math.abs(centerX - (m.x + m.w * 0.5));
+          if (dist < bestDist) { bestDist = dist; nearest = btn; }
+        }
+        if (nearest) {
+          dockSpring.w += (getNavItemMetrics(nearest).w - dockSpring.w) * 0.35;
+          navItems.forEach(btn => btn.classList.toggle("is-active", btn === nearest));
+        }
+        applyDockDropletTransform();
+      });
+      const finishDockPointer = e => {
+        if (capturedPointerId !== e.pointerId) return;
+        const wasDragged = dragActivated;
+        capturedPointerId = null;
+        dragActivated = false;
+        dockSpring.dragging = false;
+        try { if (navContainer.hasPointerCapture(e.pointerId)) navContainer.releasePointerCapture(e.pointerId); } catch (_) {}
+        if (!wasDragged) return;
+        const projectedCenter = dockSpring.x + dockSpring.w * 0.5 + dockSpring.vx * 2.5;
+        let targetBtn = navItems[0];
+        let bestDist = Infinity;
+        for (const btn of navItems) {
+          const m = getNavItemMetrics(btn);
+          const dist = Math.abs(projectedCenter - (m.x + m.w * 0.5));
+          if (dist < bestDist) { bestDist = dist; targetBtn = btn; }
+        }
+        if (targetBtn) {
+          targetBtn.dataset.skipNextClick = "1";
+          setTimeout(() => { delete targetBtn.dataset.skipNextClick; }, 60);
+          activateDockItem(targetBtn, true, true);
+        }
+      };
+      navContainer.addEventListener("pointerup", finishDockPointer);
+      navContainer.addEventListener("pointercancel", finishDockPointer);
+      window.addEventListener("resize", () => {
+        const activeBtn = navItems.find(b => b.classList.contains("is-active"));
+        if (activeBtn) updatePillPosition(activeBtn, false);
+      });
     }
 
     function switchStage(stageId) {
@@ -5764,62 +5734,52 @@
 
     navItems.forEach(item => {
       item.addEventListener("click", () => {
-        navItems.forEach(btn => {
-          btn.classList.remove("is-active");
-          btn.setAttribute("aria-selected", "false");
-        });
-        item.classList.add("is-active");
-        item.setAttribute("aria-selected", "true");
-        updatePillPosition(item, true);
-
-        const tab = item.dataset.tab;
-        switchStage(tab);
-        postHost('tab:' + tab);
+        if (item.dataset.skipNextClick) {
+          delete item.dataset.skipNextClick;
+          return;
+        }
+        activateDockItem(item, true, true);
       });
     });
 
     window.deyttSwitchStage = function(stageId) {
       const item = document.querySelector(`.nav-item[data-tab="${stageId}"]`);
       if (item) {
-        navItems.forEach(btn => {
-          btn.classList.remove("is-active");
-          btn.setAttribute("aria-selected", "false");
-        });
-        item.classList.add("is-active");
-        item.setAttribute("aria-selected", "true");
-        updatePillPosition(item, false);
+        activateDockItem(item, false, false);
+      } else {
+        switchStage(stageId);
       }
-      switchStage(stageId);
     };
 
     let flagInstance = 0;
-    function getFlagSvg(code, w = 34, h = 24) {
+    function getFlagSvg(code, w = 44, h = 30) {
       const c = String(code || "").toUpperCase();
       const clipId = `wave-clip-${c.toLowerCase()}-${++flagInstance}`;
       const gradId = `wave-shade-${c.toLowerCase()}-${flagInstance}`;
-      const pathD = "M 2 3.5 C 7.5 1.8, 14 5.2, 20.5 3.2 C 24.5 2, 28 2.6, 30 3.6 C 29.6 8.5, 30.4 13.5, 30 18.5 C 28 17.5, 24.5 16.9, 20.5 18.1 C 14 20.1, 7.5 16.7, 2 18.4 Z";
-      const waveShade = `<linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.28"/><stop offset="26%" stop-color="#000000" stop-opacity="0.22"/><stop offset="62%" stop-color="#FFFFFF" stop-opacity="0.26"/><stop offset="86%" stop-color="#000000" stop-opacity="0.18"/><stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.10"/></linearGradient>`;
-      const commonOverlay = `<rect width="32" height="22" fill="url(#${gradId})"/><path d="${pathD}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.75"/>`;
+      // Flowing S-wave cloth silhouette ("завитушка"): clear double-wave ripple with tapered edges, no box/frame
+      const pathD = "M 3.5 7.2 C 11.5 1.4, 21.0 11.8, 30.5 6.4 C 35.2 3.8, 39.2 4.6, 41.2 6.6 C 39.2 12.2, 39.2 18.4, 41.2 23.6 C 39.2 21.6, 35.2 20.8, 30.5 23.4 C 21.0 28.8, 11.5 18.4, 3.5 24.2 C 5.2 18.4, 5.2 12.8, 3.5 7.2 Z";
+      const waveShade = `<linearGradient id="${gradId}" x1="0" y1="0.1" x2="1" y2="0.25"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.24"/><stop offset="22%" stop-color="#FFFFFF" stop-opacity="0.34"/><stop offset="48%" stop-color="#000000" stop-opacity="0.24"/><stop offset="76%" stop-color="#FFFFFF" stop-opacity="0.28"/><stop offset="100%" stop-color="#000000" stop-opacity="0.16"/></linearGradient>`;
+      const commonOverlay = `<rect width="44" height="30" fill="url(#${gradId})"/><path d="${pathD}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.65"/>`;
 
       if (c === "NL") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="32" height="7.33" fill="#D22B3A"/><rect y="7.33" width="32" height="7.34" fill="#FAF8F5"/><rect y="14.67" width="32" height="7.33" fill="#2C58A0"/>${commonOverlay}</g></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="44" height="10" fill="#D42C3B"/><rect y="10" width="44" height="10" fill="#FAF8F5"/><rect y="20" width="44" height="10" fill="#2A58A4"/>${commonOverlay}</g></svg>`;
       }
       if (c === "DE") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="32" height="7.33" fill="#16181D"/><rect y="7.33" width="32" height="7.34" fill="#DE2E3D"/><rect y="14.67" width="32" height="7.33" fill="#FFCE38"/>${commonOverlay}</g></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="44" height="10" fill="#17191E"/><rect y="10" width="44" height="10" fill="#DE2E3D"/><rect y="20" width="44" height="10" fill="#FFCE38"/>${commonOverlay}</g></svg>`;
       }
       if (c === "RU") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="32" height="7.33" fill="#FAF8F5"/><rect y="7.33" width="32" height="7.34" fill="#3B74C4"/><rect y="14.67" width="32" height="7.33" fill="#D22B3A"/>${commonOverlay}</g></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="44" height="10" fill="#FAF8F5"/><rect y="10" width="44" height="10" fill="#3B74C4"/><rect y="20" width="44" height="10" fill="#D42C3B"/>${commonOverlay}</g></svg>`;
       }
       if (c === "FI") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="32" height="22" fill="#FAF8F5"/><rect x="8.5" width="5.5" height="22" fill="#2662A6"/><rect y="8" width="32" height="5" fill="#2662A6"/>${commonOverlay}</g></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="44" height="30" fill="#FAF8F5"/><rect x="11.5" width="7" height="30" fill="#2662A6"/><rect y="11" width="44" height="7.5" fill="#2662A6"/>${commonOverlay}</g></svg>`;
       }
       if (c === "IT") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="10.6" height="22" fill="#009246"/><rect x="10.6" width="10.7" height="22" fill="#FAF8F5"/><rect x="21.3" width="10.7" height="22" fill="#CE2B37"/>${commonOverlay}</g></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="14.6" height="30" fill="#009246"/><rect x="14.6" width="14.8" height="30" fill="#FAF8F5"/><rect x="29.4" width="14.6" height="30" fill="#CE2B37"/>${commonOverlay}</g></svg>`;
       }
       if (c === "RU-DE") {
-        return `<span class="dual-flag" style="display:inline-flex;align-items:center;gap:3px;">${getFlagSvg("RU", 26, 18)}<span style="opacity:0.4;font-size:10px;">→</span>${getFlagSvg("DE", 26, 18)}</span>`;
+        return `<span class="dual-flag" style="display:inline-flex;align-items:center;gap:2px;">${getFlagSvg("RU", 28, 19)}<span style="opacity:0.45;font-size:10px;">→</span>${getFlagSvg("DE", 28, 19)}</span>`;
       }
-      return `<svg class="svg-flag" viewBox="0 0 24 24" width="${w}" height="${h}" fill="none"><circle cx="12" cy="12" r="9.5" stroke="#38BDF8" stroke-width="1.8"/><circle cx="12" cy="12" r="5" stroke="#38BDF8" stroke-width="1.4" opacity="0.6"/><circle cx="12" cy="12" r="2" fill="#38BDF8"/></svg>`;
+      return `<svg class="svg-flag" viewBox="0 0 24 24" width="${w}" height="${h}" fill="none"><circle cx="12" cy="12" r="9.5" stroke="#64E9FF" stroke-width="1.8"/><circle cx="12" cy="12" r="5" stroke="#64E9FF" stroke-width="1.4" opacity="0.6"/><circle cx="12" cy="12" r="2" fill="#64E9FF"/></svg>`;
     }
     window.getFlagSvg = getFlagSvg;
 
@@ -5920,30 +5880,34 @@
       const msUnit = en ? "ms" : "мс";
       const spdUnit = en ? "mbps" : "мбит/с";
       const row = findProtoRow(tag);
+      const hasError = stage === "error" || stage === "cancelled" || Boolean(error);
       if (row) {
         const latEl = row.querySelector("[data-metric-latency], .proto-latency");
         const spdEl = row.querySelector("[data-metric-speed], .proto-speed");
         const dot = row.querySelector(".ping-dot, .grade-dot");
 
-        if (stage === "latency" || stage === "waiting_speed" || stage === "download") {
+        if (stage === "latency" || stage === "retry" || stage === "queued" || stage === "waiting_speed" || stage === "download") {
+          row.classList.add("is-probing");
           if (latEl) latEl.innerHTML = latency != null ? `${latency} ${msUnit}` : getSpokeSpinnerSvg(13);
           if (spdEl) spdEl.innerHTML = speedMbps != null ? `${speedMbps} ${spdUnit}` : getSpokeSpinnerSvg(13);
           if (dot) dot.classList.add("is-probing");
         } else if (stage === "complete") {
           row.classList.remove("is-probing");
           if (latEl) {
-            latEl.textContent = latency != null ? `${latency} ${msUnit}` : "—";
+            if (latency != null) latEl.textContent = `${latency} ${msUnit}`;
+            else if (!hasError) latEl.innerHTML = getSpokeSpinnerSvg(13);
+            else latEl.textContent = "—";
             latEl.classList.toggle("good", latency != null && latency < 150);
           }
           if (spdEl) {
             if (speedMbps != null) {
               spdEl.textContent = `${speedMbps} ${spdUnit}`;
-              spdEl.classList.toggle("good", speedMbps > 50);
-            } else if (!error) {
+            } else if (!hasError) {
               spdEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(13) : "…";
             } else {
               spdEl.textContent = "—";
             }
+            spdEl.classList.toggle("good", speedMbps != null && speedMbps > 50);
           }
           if (dot) {
             dot.classList.remove("is-probing");
@@ -5956,11 +5920,19 @@
             row.dataset.probeLatency = latency;
             updateCountryRankings(row.closest(".country-accordion"));
           }
-        } else if (stage === "error") {
+        } else {
           row.classList.remove("is-probing");
           if (dot) dot.classList.remove("is-probing");
-          if (latEl) latEl.textContent = latency != null ? `${latency} ${msUnit}` : "—";
-          if (spdEl) spdEl.textContent = speedMbps != null ? `${speedMbps} ${spdUnit}` : "—";
+          if (latEl) {
+            if (latency != null) latEl.textContent = `${latency} ${msUnit}`;
+            else if (!hasError) latEl.innerHTML = getSpokeSpinnerSvg(13);
+            else latEl.textContent = "—";
+          }
+          if (spdEl) {
+            if (speedMbps != null) spdEl.textContent = `${speedMbps} ${spdUnit}`;
+            else if (!hasError) spdEl.innerHTML = getSpokeSpinnerSvg(13);
+            else spdEl.textContent = "—";
+          }
         }
       }
 
@@ -6434,8 +6406,14 @@
         const button = card.querySelector(".btn-select-route");
         const en = document.documentElement.lang === "en";
         if (button) button.textContent = selected ? (en ? "active ✓" : "активен ✓") : (en ? "select" : "выбрать");
-        if (route.stage || route.latency != null || route.speed != null)
+        if (route.stage || route.latency != null || route.speed != null || route.error) {
           window.deyttUpdateRouteProbe(route.tag || route.id, route.latency, route.speed, route.stage || "complete", route.error || null);
+        } else {
+          const latEl = card.querySelector("[data-metric-latency], .proto-latency");
+          const spdEl = card.querySelector("[data-metric-speed], .proto-speed");
+          if (latEl && typeof getSpokeSpinnerSvg === "function") latEl.innerHTML = getSpokeSpinnerSvg(13);
+          if (spdEl && typeof getSpokeSpinnerSvg === "function") spdEl.innerHTML = getSpokeSpinnerSvg(13);
+        }
       });
       document.querySelectorAll(".country-accordion").forEach(accordion => {
         const rows = [...accordion.querySelectorAll(".proto-row:not([hidden])")];
@@ -6507,7 +6485,7 @@
         const code = /^(NL|DE|RU|FI|IT|RU-DE|EU)$/.test(routeCountryCode) ? routeCountryCode : "";
         element.dataset.country = code;
         element.classList.toggle("is-generic", !code);
-        element.innerHTML = (code && code !== "AUTO") ? getFlagSvg(code, 34, 24) : '<svg viewBox="0 0 24 24" width="22" height="22" stroke="#38BDF8" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>';
+        element.innerHTML = (code && code !== "AUTO") ? getFlagSvg(code, 44, 30) : '<svg viewBox="0 0 24 24" width="22" height="22" stroke="#64E9FF" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>';
         element.setAttribute("aria-label", code);
       }
 
@@ -7480,9 +7458,19 @@
       setTimeout(() => btn?.classList.remove("is-measuring"), 6000);
     });
 
-    // Initialize pill position
+    // Initialize pill position & upgrade waving country flags
     window.addEventListener("DOMContentLoaded", () => {
       try { initProfileGalaxyShader(); } catch (e) {}
+      document.querySelectorAll(".country-accordion[data-country-key]").forEach(acc => {
+        const key = (acc.dataset.countryKey || "").toUpperCase();
+        const wrap = acc.querySelector(".country-flag-wrap");
+        if (wrap && key && typeof getFlagSvg === "function") wrap.innerHTML = getFlagSvg(key, 44, 30);
+      });
+      document.querySelectorAll(".proto-row [data-metric-latency], .proto-row [data-metric-speed]").forEach(el => {
+        if ((el.textContent || "").trim() === "—" && typeof getSpokeSpinnerSvg === "function") {
+          el.innerHTML = getSpokeSpinnerSvg(13);
+        }
+      });
       const activeTab = document.querySelector(".nav-item.is-active");
       if (activeTab) updatePillPosition(activeTab, false);
     });
