@@ -1873,7 +1873,7 @@ internal sealed class EngineController
         if (received == 0)
             return new DownloadMeasurement(null, "Сервер скорости вернул пустой ответ.", true);
 
-        if (!timedOut && contentLength is > 0 && received < expectedBytes)
+        if (!timedOut && contentLength is > 0 && received < expectedBytes && received < minimumReliableBytes)
             return new DownloadMeasurement(null, "Сервер скорости вернул неполный объём данных.", true);
 
         var elapsed = Stopwatch.GetElapsedTime(sampleStarted).TotalMilliseconds;

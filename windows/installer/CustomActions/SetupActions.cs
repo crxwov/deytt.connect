@@ -282,7 +282,12 @@ namespace DeyttConnect.Setup
         {
             if (!File.Exists(executable)) throw new FileNotFoundException("Не найден файл приложения.", executable);
             Directory.CreateDirectory(desktop);
-            var shortcutPath = Path.Combine(desktop, "deytt.connect.lnk");
+            var legacyShortcut = Path.Combine(desktop, "deytt.connect.lnk");
+            if (File.Exists(legacyShortcut))
+            {
+                try { File.Delete(legacyShortcut); } catch { }
+            }
+            var shortcutPath = Path.Combine(desktop, "connect.lnk");
             var link = (IShellLinkW)new ShellLink();
             try
             {
@@ -293,11 +298,11 @@ namespace DeyttConnect.Setup
                     var target = new System.Text.StringBuilder(32768);
                     link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
                     if (!string.Equals(Path.GetFullPath(target.ToString()), Path.GetFullPath(executable), StringComparison.OrdinalIgnoreCase))
-                        throw new IOException("на рабочем столе уже есть другой ярлык с именем deytt.connect. переименуйте его и повторите попытку.");
+                        throw new IOException("на рабочем столе уже есть другой ярлык с именем connect. переименуйте его и повторите попытку.");
                 }
                 link.SetPath(executable);
                 link.SetWorkingDirectory(Path.GetDirectoryName(executable));
-                link.SetDescription("deytt./connect — подключение к VPN");
+                link.SetDescription("./connect — подключение к VPN");
                 var iconPath = Path.Combine(Path.GetDirectoryName(executable) ?? string.Empty, "Assets", "deyttconnect.ico");
                 if (File.Exists(iconPath))
                     link.SetIconLocation(iconPath, 0);
@@ -417,18 +422,21 @@ namespace DeyttConnect.Setup
             // Do not remove an unrelated/replaced shortcut or user data. Major upgrades skip this action.
             try
             {
-                var path = Path.Combine(session.CustomActionData["Desktop"], "deytt.connect.lnk");
-                if (!File.Exists(path)) return ActionResult.Success;
-                var link = (IShellLinkW)new ShellLink();
-                try
+                foreach (var shortcutName in new[] { "connect.lnk", "deytt.connect.lnk" })
                 {
-                    ((IPersistFile)link).Load(path, 0);
-                    var target = new System.Text.StringBuilder(32768);
-                    link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
-                    if (string.Equals(target.ToString(), session.CustomActionData["Executable"], StringComparison.OrdinalIgnoreCase))
-                        File.Delete(path);
+                    var path = Path.Combine(session.CustomActionData["Desktop"], shortcutName);
+                    if (!File.Exists(path)) continue;
+                    var link = (IShellLinkW)new ShellLink();
+                    try
+                    {
+                        ((IPersistFile)link).Load(path, 0);
+                        var target = new System.Text.StringBuilder(32768);
+                        link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
+                        if (string.Equals(target.ToString(), session.CustomActionData["Executable"], StringComparison.OrdinalIgnoreCase))
+                            File.Delete(path);
+                    }
+                    finally { Marshal.FinalReleaseComObject(link); }
                 }
-                finally { Marshal.FinalReleaseComObject(link); }
             }
             catch (Exception exception) { session.Log("Optional desktop shortcut cleanup: {0}", exception.Message); }
             return ActionResult.Success;

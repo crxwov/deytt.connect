@@ -839,7 +839,7 @@
       const cy = this.centerY;
       const maxJump = this.radius * this.zoom * .24;
       const maxJumpSq = maxJump * maxJump;
-      const pointStep = this.cameraMoving ? 2 : 1;
+      const pointStep = 1; // Always full-resolution borders during rotation and idle (no jumping/simplification)
 
       const strokeLines = (lines, style, width, alpha) => {
         const len = lines.length;
@@ -1037,7 +1037,7 @@
       traceLand();
       context.save();
       const isLight = document.documentElement.dataset.theme === "light";
-      const relief = this.cameraMoving || (this.options.landDepth === false && !isLight) ? 0 : (isLight ? 1.5 : clamp(globeRadius * .014, 2, 5));
+      const relief = (this.options.landDepth === false && !isLight) ? 0 : (isLight ? 1.5 : clamp(globeRadius * .014, 2, 5));
       if (relief) {
         context.save();
         const shadowOffsetX = isLight ? 0.6 : (relief * .24);
@@ -1653,6 +1653,7 @@
           el.setAttribute("data-label-key", key);
           el.onclick = (e) => {
             e.stopPropagation();
+            if (this.dragDistance > 6 || this.dragging || Math.abs(this.velocityLon) > 0.05) return;
             if (typeof window.deyttSelectRouteFromAtlas === "function") {
               window.deyttSelectRouteFromAtlas(key);
             }

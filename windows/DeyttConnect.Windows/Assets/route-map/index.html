@@ -12,18 +12,18 @@
     :root {
       --header-bg: transparent;
       --header-border: transparent;
-      /* Навбар: стекло телефона glassRowBackground(false, 28) */
-      --nav-bg: linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 55%, rgba(12, 19, 29, 0.12) 100%);
-      --nav-border: rgba(255, 255, 255, 0.165);
-      --nav-border-top: rgba(255, 255, 255, 0.30);
-      --nav-border-bottom: rgba(80, 128, 184, 0.14);
-      --nav-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(0, 0, 0, 0.18);
-      /* Выбранный пункт: glassRowBackground(true, 20) */
-      --nav-pill-bg: linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 55%, rgba(15, 25, 38, 0.17) 100%);
-      --nav-pill-border: rgba(255, 255, 255, 0.27);
-      --nav-pill-border-top: rgba(255, 255, 255, 0.44);
-      --nav-pill-border-bottom: rgba(88, 156, 216, 0.20);
-      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.14), inset 0 0 0 1px rgba(112, 168, 224, 0.10);
+      /* Навбар: аутентичное нейтральное стекло Liquid Glass (Android LiquidGlassDock / Apple Design) */
+      --nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(16, 22, 32, 0.72);
+      --nav-border: rgba(255, 255, 255, 0.14);
+      --nav-border-top: rgba(255, 255, 255, 0.38);
+      --nav-border-bottom: rgba(0, 0, 0, 0.40);
+      --nav-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.30);
+      /* Выбранный пункт: капелька / sliding lens capsule */
+      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 45%, rgba(255, 255, 255, 0.01) 100%), rgba(38, 48, 64, 0.65);
+      --nav-pill-border: rgba(255, 255, 255, 0.24);
+      --nav-pill-border-top: rgba(255, 255, 255, 0.70);
+      --nav-pill-border-bottom: rgba(0, 0, 0, 0.35);
+      --nav-pill-shadow: 0 4px 16px -2px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.55), inset 0 -1px 2px rgba(0, 0, 0, 0.35);
       --text: #F8FAFC;
       --text-muted: #8E9EAF;
 
@@ -146,22 +146,46 @@
     /* Clean Elevated Glass Pill */
     .nav-jelly-pill {
       position: absolute;
-      top: 6px;
+      top: 5px;
       left: 0;
-      height: calc(100% - 12px);
+      height: calc(100% - 10px);
       background: var(--nav-pill-bg);
       border: 1px solid var(--nav-pill-border);
       border-top-color: var(--nav-pill-border-top);
       border-bottom-color: var(--nav-pill-border-bottom);
-      border-radius: 14px;
+      border-radius: 15px;
       box-shadow: var(--nav-pill-shadow);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
       pointer-events: none;
       z-index: 1;
       transform-origin: center center;
-      transition: left 240ms cubic-bezier(0.2, 0.9, 0.3, 1),
-                  width 240ms cubic-bezier(0.2, 0.9, 0.3, 1);
+      transition: left 260ms cubic-bezier(0.16, 1, 0.3, 1),
+                  width 260ms cubic-bezier(0.16, 1, 0.3, 1);
+      overflow: hidden;
+    }
+    .nav-jelly-pill::before {
+      content: "";
+      position: absolute;
+      top: 1px;
+      left: 10%;
+      right: 10%;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.95) 50%, rgba(255, 255, 255, 0) 100%);
+      border-radius: 9999px;
+      pointer-events: none;
+    }
+    .nav-jelly-pill::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 15px;
+      background: radial-gradient(circle at 50% 0%, rgba(100, 233, 255, 0.18) 0%, rgba(100, 233, 255, 0) 65%);
+      pointer-events: none;
+    }
+    .nav-item.is-active svg {
+      stroke: #64E9FF !important;
+      filter: drop-shadow(0 0 6px rgba(100, 233, 255, 0.45)) !important;
     }
 
     .nav-item {
@@ -591,37 +615,37 @@
     }
 
     .home-protocol {
-      font-size: 12px !important;
+      font-size: 13px !important;
       font-weight: 600 !important;
       color: #38BDF8 !important;
-      background: rgba(56, 189, 248, 0.12) !important;
-      border: 1px solid rgba(56, 189, 248, 0.28) !important;
-      padding: 1px 7px !important;
-      border-radius: 6px !important;
+      background: transparent !important;
+      border: none !important;
+      padding: 0 !important;
+      border-radius: 0 !important;
       margin: 0 !important;
       white-space: nowrap !important;
       letter-spacing: 0.02em !important;
       line-height: 1.3 !important;
+      box-shadow: none !important;
     }
 
-    .route-flag-pill {
+    .route-flag-pill, #home-flag, #compact-flag {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
-      width: 44px !important;
-      height: 44px !important;
-      border-radius: 14px !important;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 100%), rgba(12, 19, 32, 0.4) !important;
-      backdrop-filter: blur(16px) saturate(190%) !important;
-      -webkit-backdrop-filter: blur(16px) saturate(190%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.15) !important;
-      border-top-color: rgba(255, 255, 255, 0.48) !important;
-      border-bottom-color: rgba(0, 0, 0, 0.3) !important;
-      font-size: 20px !important;
+      width: auto !important;
+      height: auto !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      border: none !important;
       flex-shrink: 0 !important;
       position: relative !important;
-      overflow: hidden !important;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.35), 0 6px 18px rgba(0, 0, 0, 0.35) !important;
+      overflow: visible !important;
+      box-shadow: none !important;
+      padding: 0 !important;
+      margin: 0 !important;
     }
 
     .home-city {
@@ -905,22 +929,16 @@
       .network-atlas .action-dots i { animation: none !important; opacity: .16 !important; }
     }
 
-    /* Connection Uptime Row (visible only while VPN is genuinely connected) */
-    .home-uptime {
-      display: inline-flex !important;
-      align-items: center !important;
-      gap: 8px !important;
-      margin: -6px 0 -4px 4px !important;
-      font-size: 12.5px !important;
-      font-weight: 500 !important;
-      color: #8E9EAF !important;
-      font-variant-numeric: tabular-nums !important;
-      letter-spacing: 0.01em !important;
-    }
-    .home-uptime[hidden],
-    .compact-uptime[hidden] {
+    /* Connection Uptime Row & Telemetry Note — hidden per user request */
+    .home-uptime,
+    #home-uptime,
+    .compact-uptime,
+    #compact-uptime,
+    .measurement-note,
+    #home-measurement-note {
       display: none !important;
     }
+
     .home-uptime__dot {
       width: 7px !important;
       height: 7px !important;
@@ -2571,36 +2589,41 @@
       position: relative !important;
     }
 
-    /* Clean LiquidGlass Pill Button — вторичное стекло телефона
-       (glassButtonBackground: 0x40364C68 → 0x22121E2E, обод [#2CFFFFFF,#12FFFFFF,#0C82B4E8,#12FFFFFF]) */
-    .btn-select-route, .home-measure, .btn-action-glass {
-      background: linear-gradient(180deg, rgba(62, 86, 116, 0.34) 0%, rgba(30, 46, 66, 0.24) 46%, rgba(14, 24, 38, 0.20) 100%) !important;
-      backdrop-filter: blur(16px) saturate(160%) !important;
-      -webkit-backdrop-filter: blur(16px) saturate(160%) !important;
-      border: 1px solid rgba(120, 175, 235, 0.28) !important;
-      border-top-color: rgba(240, 249, 255, 0.50) !important;
-      border-bottom-color: rgba(255, 255, 255, 0.13) !important;
-      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), inset 0 -1px 0 rgba(0, 0, 0, 0.26), 0 4px 12px rgba(0, 0, 0, 0.25) !important;
+    /* Authentic LiquidGlass Button — нейтральное стекло (Android DeyttUi.kt / Apple Design) */
+    .btn-select-route, .home-measure, .btn-action-glass, #home-measure {
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 48%, rgba(255, 255, 255, 0) 100%), rgba(28, 36, 48, 0.65) !important;
+      backdrop-filter: blur(24px) saturate(180%) !important;
+      -webkit-backdrop-filter: blur(24px) saturate(180%) !important;
+      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      border-top-color: rgba(255, 255, 255, 0.55) !important;
+      border-bottom-color: rgba(0, 0, 0, 0.35) !important;
+      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.28), 0 4px 16px rgba(0, 0, 0, 0.32) !important;
       border-radius: 9999px !important;
-      color: #F2F5FC !important;
+      color: #F8FAFC !important;
       font-weight: 600 !important;
-      font-size: 13px !important;
-      padding: 7px 18px !important;
+      font-size: 13.5px !important;
       cursor: pointer !important;
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
       gap: 8px !important;
-      transition: all 180ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+      transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1) !important;
       text-transform: lowercase !important;
     }
-    .btn-select-route:hover, .home-measure:hover, .btn-action-glass:hover {
-      filter: brightness(1.18) !important;
-      border-top-color: rgba(255, 255, 255, 0.5) !important;
+    .btn-select-route:hover, .home-measure:hover, .btn-action-glass:hover, #home-measure:hover {
+      color: #FFFFFF !important;
+      filter: brightness(1.12) !important;
+      border-top-color: rgba(255, 255, 255, 0.75) !important;
+      box-shadow: inset 0 1px 1.5px rgba(255, 255, 255, 0.4), 0 6px 20px rgba(0, 0, 0, 0.42) !important;
     }
-    .btn-select-route:active, .home-measure:active, .btn-action-glass:active {
-      transform: scale(0.985) !important;
+    .btn-select-route:active, .home-measure:active, .btn-action-glass:active, #home-measure:active {
+      transform: scale(0.975) !important;
+      filter: brightness(0.96) !important;
     }
+    #home-measure, .home-measure {
+      margin-top: 10px !important;
+    }
+
     .btn-select-route.is-selected {
       border-color: rgba(56, 189, 248, 0.45) !important;
       border-top-color: rgba(186, 230, 253, 0.65) !important;
@@ -5205,7 +5228,7 @@
         <span class="settings-section-title">обновления</span>
         <div class="liquid-glass-card" style="padding: 20px 22px; border-radius: 18px; display: flex; flex-direction: column; gap: 14px;">
           <div>
-            <strong style="color: #FFFFFF; font-size: 15px; display: block; font-family: 'Unbounded', sans-serif;" id="settings-app-version">deytt./connect</strong>
+            <strong style="color: #FFFFFF; font-size: 15px; display: block; font-family: 'Unbounded', sans-serif;" id="settings-app-version">./connect</strong>
             <span style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px; display: block;" id="settings-app-status">канал ./beta</span>
           </div>
           <button class="home-measure" id="btn-check-updates" type="button" style="height: 44px !important;">
@@ -5770,29 +5793,33 @@
     };
 
     let flagInstance = 0;
-    function getFlagSvg(code, w = "100%", h = "100%") {
+    function getFlagSvg(code, w = 34, h = 24) {
       const c = String(code || "").toUpperCase();
-      const rx = 3;
-      const clipId = `flag-${c.toLowerCase()}-${++flagInstance}`;
+      const clipId = `wave-clip-${c.toLowerCase()}-${++flagInstance}`;
+      const gradId = `wave-shade-${c.toLowerCase()}-${flagInstance}`;
+      const pathD = "M 2 3.5 C 7.5 1.8, 14 5.2, 20.5 3.2 C 24.5 2, 28 2.6, 30 3.6 C 29.6 8.5, 30.4 13.5, 30 18.5 C 28 17.5, 24.5 16.9, 20.5 18.1 C 14 20.1, 7.5 16.7, 2 18.4 Z";
+      const waveShade = `<linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.28"/><stop offset="26%" stop-color="#000000" stop-opacity="0.22"/><stop offset="62%" stop-color="#FFFFFF" stop-opacity="0.26"/><stop offset="86%" stop-color="#000000" stop-opacity="0.18"/><stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.10"/></linearGradient>`;
+      const commonOverlay = `<rect width="32" height="22" fill="url(#${gradId})"/><path d="${pathD}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.75"/>`;
+
       if (c === "NL") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="24" height="5.33" fill="#C93D4B"/><rect y="5.33" width="24" height="5.34" fill="#F7F7F4"/><rect y="10.67" width="24" height="5.33" fill="#31579A"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="32" height="7.33" fill="#D22B3A"/><rect y="7.33" width="32" height="7.34" fill="#FAF8F5"/><rect y="14.67" width="32" height="7.33" fill="#2C58A0"/>${commonOverlay}</g></svg>`;
       }
       if (c === "DE") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="24" height="5.33" fill="#17191E"/><rect y="5.33" width="24" height="5.34" fill="#C83C4A"/><rect y="10.67" width="24" height="5.33" fill="#F0C66B"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="32" height="7.33" fill="#16181D"/><rect y="7.33" width="32" height="7.34" fill="#DE2E3D"/><rect y="14.67" width="32" height="7.33" fill="#FFCE38"/>${commonOverlay}</g></svg>`;
       }
       if (c === "RU") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="24" height="5.33" fill="#F7F7F4"/><rect y="5.33" width="24" height="5.34" fill="#477CC0"/><rect y="10.67" width="24" height="5.33" fill="#C83C4A"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="32" height="7.33" fill="#FAF8F5"/><rect y="7.33" width="32" height="7.34" fill="#3B74C4"/><rect y="14.67" width="32" height="7.33" fill="#D22B3A"/>${commonOverlay}</g></svg>`;
       }
       if (c === "FI") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="24" height="16" fill="#F7F7F4"/><rect x="6.5" width="4.5" height="16" fill="#3973B4"/><rect y="6" width="24" height="4" fill="#3973B4"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="32" height="22" fill="#FAF8F5"/><rect x="8.5" width="5.5" height="22" fill="#2662A6"/><rect y="8" width="32" height="5" fill="#2662A6"/>${commonOverlay}</g></svg>`;
       }
       if (c === "IT") {
-        return `<svg class="svg-flag" viewBox="0 0 24 16" width="${w}" height="${h}"><clipPath id="${clipId}"><rect width="24" height="16" rx="${rx}"/></clipPath><g clip-path="url(#${clipId})"><rect width="8" height="16" fill="#168B4B"/><rect x="8" width="8" height="16" fill="#F7F7F4"/><rect x="16" width="8" height="16" fill="#D0474D"/></g><rect width="24" height="16" rx="${rx}" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1"/></svg>`;
+        return `<svg class="svg-flag wave-flag" viewBox="0 0 32 22" width="${w}" height="${h}" style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.45));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="10.6" height="22" fill="#009246"/><rect x="10.6" width="10.7" height="22" fill="#FAF8F5"/><rect x="21.3" width="10.7" height="22" fill="#CE2B37"/>${commonOverlay}</g></svg>`;
       }
       if (c === "RU-DE") {
-        return `<span class="dual-flag">${getFlagSvg("RU", 18, 12)}<span style="opacity:0.5;font-size:10px;margin:0 1px;">→</span>${getFlagSvg("DE", 18, 12)}</span>`;
+        return `<span class="dual-flag" style="display:inline-flex;align-items:center;gap:3px;">${getFlagSvg("RU", 26, 18)}<span style="opacity:0.4;font-size:10px;">→</span>${getFlagSvg("DE", 26, 18)}</span>`;
       }
-      return `<span class="flag-fallback">${c}</span>`;
+      return `<svg class="svg-flag" viewBox="0 0 24 24" width="${w}" height="${h}" fill="none"><circle cx="12" cy="12" r="9.5" stroke="#38BDF8" stroke-width="1.8"/><circle cx="12" cy="12" r="5" stroke="#38BDF8" stroke-width="1.4" opacity="0.6"/><circle cx="12" cy="12" r="2" fill="#38BDF8"/></svg>`;
     }
     window.getFlagSvg = getFlagSvg;
 
@@ -5909,8 +5936,14 @@
             latEl.classList.toggle("good", latency != null && latency < 150);
           }
           if (spdEl) {
-            spdEl.textContent = speedMbps != null ? `${speedMbps} ${spdUnit}` : "—";
-            spdEl.classList.toggle("good", speedMbps != null && speedMbps > 50);
+            if (speedMbps != null) {
+              spdEl.textContent = `${speedMbps} ${spdUnit}`;
+              spdEl.classList.toggle("good", speedMbps > 50);
+            } else if (!error) {
+              spdEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(13) : "…";
+            } else {
+              spdEl.textContent = "—";
+            }
           }
           if (dot) {
             dot.classList.remove("is-probing");
@@ -6474,7 +6507,7 @@
         const code = /^(NL|DE|RU|FI|IT|RU-DE|EU)$/.test(routeCountryCode) ? routeCountryCode : "";
         element.dataset.country = code;
         element.classList.toggle("is-generic", !code);
-        element.innerHTML = (code && code !== "AUTO") ? getFlagSvg(code, 22, 15) : '<svg viewBox="0 0 24 24" width="22" height="22" stroke="#38BDF8" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>';
+        element.innerHTML = (code && code !== "AUTO") ? getFlagSvg(code, 34, 24) : '<svg viewBox="0 0 24 24" width="22" height="22" stroke="#38BDF8" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/></svg>';
         element.setAttribute("aria-label", code);
       }
 
@@ -6576,8 +6609,8 @@
             const latEl = row.querySelector("[data-metric-latency], .proto-latency");
             const spdEl = row.querySelector("[data-metric-speed], .proto-speed");
             const dot = row.querySelector(".ping-dot, .grade-dot");
-            if (latEl) latEl.textContent = "…";
-            if (spdEl) spdEl.textContent = "…";
+            if (latEl) latEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(13) : "…";
+            if (spdEl) spdEl.innerHTML = typeof getSpokeSpinnerSvg === "function" ? getSpokeSpinnerSvg(13) : "…";
             if (dot) dot.classList.add("is-probing");
           });
 

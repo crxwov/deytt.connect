@@ -68,35 +68,18 @@
 
   function renderUptime() {
     const row = root.querySelector("#home-uptime");
-    const label = root.querySelector("#home-uptime-label");
-    const value = root.querySelector("#home-uptime-value");
     const compactValue = root.querySelector("#compact-uptime");
-    if (!Number.isFinite(uptimeStartMs) || uptimeStartMs <= 0) {
-      if (row) row.hidden = true;
-      if (compactValue) compactValue.hidden = true;
-      return;
-    }
-    const text = formatUptime(Date.now() - uptimeStartMs);
-    if (label) label.textContent = language === "en" ? "connected for" : "в сети";
-    if (value) value.textContent = text;
-    if (row) row.hidden = false;
-    if (compactValue) {
-      compactValue.textContent = text;
-      compactValue.hidden = false;
-    }
+    if (row) row.hidden = true;
+    if (compactValue) compactValue.hidden = true;
   }
 
-  function syncUptimeTimer(connectedAtUnixMs) {
-    const valid = Number.isFinite(connectedAtUnixMs) && connectedAtUnixMs > 0;
-    uptimeStartMs = valid ? connectedAtUnixMs : null;
+  function syncUptimeTimer() {
+    uptimeStartMs = null;
     if (uptimeTimerId) {
       window.clearInterval(uptimeTimerId);
       uptimeTimerId = 0;
     }
     renderUptime();
-    if (valid) {
-      uptimeTimerId = window.setInterval(renderUptime, 1000);
-    }
   }
 
   function motionIsReduced() {
@@ -254,7 +237,7 @@
         flag.dataset.country = code;
         flag.classList.toggle("is-generic", !code);
         if (code && typeof window.getFlagSvg === "function") {
-          flag.innerHTML = window.getFlagSvg(code, 22, 15);
+          flag.innerHTML = window.getFlagSvg(code, 34, 24);
         } else if (code) {
           flag.textContent = code;
         } else {
@@ -427,8 +410,10 @@
     root.querySelector("#compact-speed").textContent = (hasSpeedValue ? state.speed + " " + (language === "en" ? "mbit/s" : "мбит/с") : "—");
     latencyMetric.dataset.tone = state.latencyTone || "normal";
     speedMetric.dataset.tone = state.speedTone || "normal";
-    note.textContent = state.measurementLabel || "";
-    note.hidden = !state.measurementLabel;
+    if (note) {
+      note.textContent = "";
+      note.hidden = true;
+    }
     const measure = root.querySelector("#home-measure");
     if (measure) {
       const label = state.measurementActionLabel || (language === "en" ? "refresh measurement" : "обновить замеры");

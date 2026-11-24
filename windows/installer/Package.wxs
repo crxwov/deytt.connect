@@ -1,14 +1,14 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
   <Package Id="DEYTT.Connect.Windows"
            ProductCode="$(var.SetupProductCode)"
-           Name="deytt./connect"
+           Name="./connect"
            Manufacturer="deytt."
            Language="1049"
            Version="$(var.ProductVersion)"
            Scope="perMachine">
     <Icon Id="DeyttConnectProductIcon.exe" SourceFile="$(var.PackageStageDir)/Assets/deyttconnect.ico" />
     <Property Id="ARPPRODUCTICON" Value="DeyttConnectProductIcon.exe" />
-    <MajorUpgrade Schedule="afterInstallInitialize" IgnoreLanguage="yes" AllowSameVersionUpgrades="yes" DowngradeErrorMessage="на компьютере уже установлена более новая версия deytt./connect." />
+    <MajorUpgrade Schedule="afterInstallInitialize" IgnoreLanguage="yes" AllowSameVersionUpgrades="yes" DowngradeErrorMessage="на компьютере уже установлена более новая версия ./connect." />
     <Property Id="REINSTALLMODE" Value="amus" />
     <MediaTemplate EmbedCab="yes" />
 
@@ -38,7 +38,7 @@
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="ARPNOREPAIR" Value="1" />
     <Property Id="ARPURLINFOABOUT" Value="https://deytt.space" />
-    <Property Id="ARPCOMMENTS" Value="Приложение deytt./connect для VPN." />
+    <Property Id="ARPCOMMENTS" Value="Приложение ./connect для VPN." />
     <SetProperty Id="ARPINSTALLLOCATION" Value="[INSTALLFOLDER]" After="CostFinalize" Sequence="execute" Condition="NOT REMOVE~=&quot;ALL&quot;" />
     <Binary Id="SetupActions" SourceFile="$(var.DeyttConnect.SetupActions.TargetDir)DeyttConnect.SetupActions.CA.dll" />
     <CustomAction Id="DetectLegacyService" BinaryRef="SetupActions" DllEntry="DetectLegacyService" Execute="immediate" Return="check" />
@@ -66,7 +66,7 @@
     <Property Id="WINDOWS_BUILD"><RegistrySearch Id="FindWindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" /></Property>
     <UIRef Id="DeyttSetupUI" />
     <Launch Condition="Installed OR (VersionNT64 AND WINDOWS_BUILD &gt;= 17763)"
-            Message="deytt./connect требует 64-разрядную Windows 10 версии 1809 или новее." />
+            Message="./connect требует 64-разрядную Windows 10 версии 1809 или новее." />
     <Launch Condition="ALLOWEDUSERSID &gt;&lt; &quot;S-1-&quot;"
             Message="не удалось определить учётную запись windows. запустите установщик из учётной записи, в которой будете пользоваться приложением." />
     <Launch Condition="NOT EXISTING_SERVICE_PATH OR CONNECT_SERVICE_COMPATIBLE = &quot;1&quot; OR REMOVE~=&quot;ALL&quot;"
@@ -156,7 +156,7 @@
       </Directory>
     </StandardDirectory>
 
-    <Feature Id="MainFeature" Title="deytt./connect" Level="1">
+    <Feature Id="MainFeature" Title="./connect" Level="1">
       <ComponentRef Id="VpnServiceComponent" />
       <ComponentRef Id="AllowedUserSidComponent" />
       <ComponentRef Id="UiExecutableComponent" />

@@ -37,7 +37,7 @@
                                 chrome:WindowDecorationProperties.ElementRole="TitleBar" />
 
                         <Border x:Name="NavDockBorder" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                CornerRadius="20" Background="#B20B1220" BorderBrush="#26FFFFFF"
+                                CornerRadius="20" Background="#B2182230" BorderBrush="#33FFFFFF"
                                 BorderThickness="1" Padding="4"
                                 BoxShadow="0 4 20 0 #40000000"
                                 chrome:WindowDecorationProperties.ElementRole="User">
