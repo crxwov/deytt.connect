@@ -1822,10 +1822,10 @@ public partial class MainWindow : Window
         var detail = route.Protocol switch
         {
             "VLESS" or "TROJAN" => route.CountryCode == "RU"
-                ? Copy("прямой · speed", "direct · speed")
-                : Copy("каскад · stable", "cascade · stable"),
-            "HYSTERIA2" => Copy("прямой · speed", "direct · speed"),
-            "TUIC" => Copy("прямой · speed", "direct · speed"),
+                ? Copy("прямой | speed", "direct | speed")
+                : Copy("каскад | stable", "cascade | stable"),
+            "HYSTERIA2" => Copy("прямой | speed", "direct | speed"),
+            "TUIC" => Copy("прямой | speed", "direct | speed"),
             "LTE" => Copy("Белые списки LTE · лимит 10 ГБ в месяц", "Whitelist LTE · 10 GB monthly limit"),
             "AWG31" => route.ProfileName ?? Copy("прямой · amneziawg", "direct · amneziawg"),
             _ => route.ProtocolName,

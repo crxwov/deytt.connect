@@ -333,10 +333,10 @@ public partial class MainWindow
                 "LTE" => Copy("Белые списки LTE · лимит 10 ГБ в месяц", "Whitelist LTE · 10 GB monthly limit"),
                 "RU-DE" => Copy("Двойной маршрут · Санкт-Петербург → Франкфурт", "Double route · Saint Petersburg → Frankfurt"),
                 "VLESS" or "TROJAN" => route.CountryCode == "RU"
-                    ? Copy("Прямой маршрут · speed", "Direct route · speed")
-                    : Copy("Каскадный маршрут · stable", "Cascade route · stable"),
-                "HYSTERIA2" => Copy("Быстрый QUIC-маршрут · speed", "Fast QUIC route · speed"),
-                "TUIC" => Copy("Оптимизированный QUIC-маршрут · speed", "Optimized QUIC route · speed"),
+                    ? Copy("Прямой маршрут | speed", "Direct route | speed")
+                    : Copy("Каскадный маршрут | stable", "Cascade route | stable"),
+                "HYSTERIA2" => Copy("Быстрый QUIC-маршрут | speed", "Fast QUIC route | speed"),
+                "TUIC" => Copy("Оптимизированный QUIC-маршрут | speed", "Optimized QUIC route | speed"),
                 "AWG31" => route.ProfileName ?? Copy("Прямой маршрут · amneziawg", "Direct route · amneziawg"),
                 _ => route.ProfileName ?? route.ProtocolName,
             };
