@@ -5780,7 +5780,21 @@
       return { label, ops };
     });
 
-    // WebGL2 Real-Time DockRefraction Renderer (Exact port of Android LiquidGlassDock.kt)
+    // Configurable Liquid Glass optical model parameters (glass-level.mp4 + LiquidGlassDock.kt)
+    const LIQUID_GLASS_OPTICS = {
+      refractionStrength: 1.45,
+      refractionHeight: 11.0,
+      bevelWidth: 9.0,
+      surfaceThickness: 12.5,
+      refractiveIndex: 1.48,
+      highlightIntensity: 0.24,
+      tintOpacity: 0.34,
+      blurRadius: 0.35,
+      dispersion: 0.14
+    };
+    window.DEYTT_LIQUID_GLASS_OPTICS = LIQUID_GLASS_OPTICS;
+
+    // WebGL2 Real-Time Optical Liquid Glass Renderer (3D Rounded-Rect SDF + Snell Refraction + Fresnel)
     const dockGl = (() => {
       if (!navContainer || !navGlassCanvas || reduceTransparencyQuery.matches) return null;
       const gl = navGlassCanvas.getContext("webgl2", {
@@ -5798,11 +5812,17 @@
         precision highp float;
         uniform vec2 u_resolution;
         uniform float u_scale;
-        uniform vec4 u_dock;
-        uniform vec4 u_lens;
-        uniform vec4 u_motion;
-        uniform float u_hoverMix;
-        uniform float u_reducedMotion;
+        uniform vec4 u_dock;    // x=halfW, y=halfH, z=inset, w=cornerR
+        uniform vec4 u_lens;    // x=cx, y=cy, z=halfW, w=halfH
+        uniform float u_moveLight;
+        uniform float u_refractionStrength;
+        uniform float u_refractionHeight;
+        uniform float u_bevelWidth;
+        uniform float u_surfaceThickness;
+        uniform float u_refractiveIndex;
+        uniform float u_highlightIntensity;
+        uniform float u_blurRadius;
+        uniform float u_dispersion;
         uniform sampler2D u_backdrop;
         out vec4 fragColor;
 
@@ -5810,8 +5830,8 @@
           vec2 q = abs(p) - b + r;
           return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
         }
-        vec2 roundRectNormal(vec2 p, vec2 b, float r) {
-          vec2 e = vec2(max(1.25, u_scale), 0.0);
+        vec2 roundRectGrad(vec2 p, vec2 b, float r) {
+          vec2 e = vec2(max(1.0, 0.85 * u_scale), 0.0);
           return normalize(vec2(
             sdRoundRect(p + e.xy, b, r) - sdRoundRect(p - e.xy, b, r),
             sdRoundRect(p + e.yx, b, r) - sdRoundRect(p - e.yx, b, r)
@@ -5821,81 +5841,104 @@
           vec2 clamped = clamp(px, vec2(0.5), u_resolution - vec2(0.5));
           return texture(u_backdrop, clamped / u_resolution);
         }
+        vec4 sampleRefracted(vec2 px, float blurPx) {
+          vec4 c = sampleBackdrop(px);
+          if (blurPx <= 0.05) return c;
+          vec2 o = vec2(blurPx * u_scale);
+          vec4 b = (sampleBackdrop(px + vec2(o.x, 0.0)) + sampleBackdrop(px - vec2(o.x, 0.0)) +
+                    sampleBackdrop(px + vec2(0.0, o.y)) + sampleBackdrop(px - vec2(0.0, o.y))) * 0.25;
+          return mix(c, b, 0.35);
+        }
+
         void main() {
+          // Top-down device pixel coordinates matching Canvas2D u_backdrop
           vec2 p = vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y);
           vec2 center = u_resolution * 0.5;
           vec2 dockPos = p - center;
 
-          float inset = u_dock.z;
-          vec2 bodyHalf = max(u_dock.xy - vec2(0.0, inset), vec2(2.0));
+          // 1. Outer dock capsule SDF
+          float dockInset = u_dock.z;
+          vec2 bodyHalf = max(u_dock.xy - vec2(0.0, dockInset * 0.25), vec2(2.0));
           float bodyR = bodyHalf.y;
           float dockDist = sdRoundRect(dockPos, bodyHalf, bodyR);
-          float bodyAlpha = 1.0 - smoothstep(-1.05 * u_scale, 1.05 * u_scale, dockDist);
+          float bodyAlpha = 1.0 - smoothstep(-1.0 * u_scale, 1.0 * u_scale, dockDist);
           if (bodyAlpha <= 0.001) discard;
 
-          vec2 bodyNormal = roundRectNormal(dockPos, bodyHalf, bodyR);
-          float bevel = smoothstep(-inset, 0.0, dockDist);
+          vec2 bodyGrad = roundRectGrad(dockPos, bodyHalf, bodyR);
+          float dockBevel = smoothstep(-dockInset, 0.0, dockDist);
 
-          float tension = clamp(u_motion.z, 0.0, 1.0);
-          float refraction = clamp(u_motion.x, 0.0, 1.5);
-          float stabilization = clamp(u_motion.w, 0.0, 1.0);
-
+          // 2. Active droplet lens SDF (convex rounded capsule)
           vec2 local = p - u_lens.xy;
-          float side = min(abs(local.x) / max(u_lens.z, 1.0), 1.0);
-          vec2 contour = vec2(local.x, local.y * (1.0 + 0.11 * tension * side * side));
-          float lensRadius = min(u_lens.z, u_lens.w) * (0.82 + 0.13 * tension);
-          float lensDist = sdRoundRect(contour, u_lens.zw, lensRadius);
-          float lensAlpha = 1.0 - smoothstep(-1.15 * u_scale, 1.15 * u_scale, lensDist);
+          float lensRadius = min(u_lens.z, u_lens.w) * 0.92;
+          float lensDist = sdRoundRect(local, u_lens.zw, lensRadius);
+          float lensAlpha = 1.0 - smoothstep(-1.1 * u_scale, 1.1 * u_scale, lensDist);
 
-          vec2 lensNormal = roundRectNormal(contour, u_lens.zw, lensRadius);
-          float rim = smoothstep(-inset * 0.85, 0.0, lensDist);
-          float fold = rim * rim;
-
-          float slowBend = (0.68 + refraction * 1.55) * fold;
-          float fastBend = 0.48 * rim * (1.0 - rim);
-          float bend = mix(slowBend, fastBend, stabilization);
-          float restMag = 0.036 + 0.022 * u_hoverMix;
-          float focus = mix(restMag + refraction * 0.032, 0.14 * refraction * (1.0 - rim), stabilization);
-          if (u_reducedMotion > 0.5) {
-            bend = 0.22 * fold;
-            focus = 0.015;
-          }
-
-          vec2 samplePoint = p - bodyNormal * inset * 0.72 * bevel;
-          vec2 bentPoint = p - local * focus - lensNormal * inset * bend;
-          samplePoint = mix(samplePoint, bentPoint, lensAlpha);
-
+          // Base sample point (subtle capsule bevel bend outside droplet)
+          vec2 samplePoint = p - bodyGrad * (dockInset * 0.45 * dockBevel);
           vec4 tex = sampleBackdrop(samplePoint);
           vec3 color = tex.rgb;
           float baseAlpha = tex.a;
 
-          // Crisp TIR inner depth shadow just inside the glass bevel (authentic Apple dark crystal)
-          float darkEdge = smoothstep(-inset * 1.45, -inset * 0.60, lensDist) * (1.0 - smoothstep(-inset * 0.60, -0.45 * u_scale, lensDist));
-          color *= 1.0 - 0.28 * darkEdge * lensAlpha;
+          // Subtle directional Fresnel rim on outer dock container
+          float dockTop = max(dot(bodyGrad, normalize(vec2(-0.32, -0.95))), 0.0);
+          float dockBot = max(dot(bodyGrad, normalize(vec2(0.32, 0.95))), 0.0);
+          float dockRimMask = smoothstep(-1.6 * u_scale, 0.0, dockDist);
+          vec3 light = vec3(0.84, 0.91, 1.0) * ((0.065 * pow(dockTop, 3.0) + 0.025 * pow(dockBot, 3.0) + 0.008) * dockRimMask);
 
-          // Focused RGB chromatic dispersion strictly inside outer 3px meniscus rim
-          float activeChroma = max(refraction * (1.0 - stabilization * 0.45), 0.30 * u_hoverMix + 0.12);
-          if (u_reducedMotion > 0.5) activeChroma = 0.05;
-          float fade = smoothstep(0.04, 0.16, fold) * smoothstep(0.05, 0.20, activeChroma);
-          if (fade > 0.001 && lensAlpha > 0.001) {
-            vec2 disp = lensNormal * inset * activeChroma * 0.38 * fold * fade * lensAlpha;
-            vec4 texR = sampleBackdrop(samplePoint + disp);
-            vec4 texB = sampleBackdrop(samplePoint - disp);
-            color.r = texR.r;
-            color.b = texB.b;
-            baseAlpha = max(baseAlpha, max(texR.a, texB.a) * 0.85);
+          if (lensAlpha > 0.001) {
+            // 3. Continuous surface height profile across bevelWidth (flat center -> curved convex rim)
+            float bevelPx = max(2.0 * u_scale, u_bevelWidth * u_scale);
+            float u = clamp(1.0 + lensDist / bevelPx, 0.0, 1.0);
+            float slope = (u / sqrt(max(0.04, 1.0 - u * u))) * (u_refractionHeight / max(u_bevelWidth, 1.0));
+
+            // 4. 3D surface normal N = normalize(grad * slope, 1.0)
+            vec2 lensGrad = roundRectGrad(local, u_lens.zw, lensRadius);
+            vec3 N = normalize(vec3(lensGrad * slope, 1.0));
+
+            // 5. Snell's Law refraction R = refract(I, N, 1 / n)
+            float eta = 1.0 / max(1.01, u_refractiveIndex);
+            vec3 refr = refract(vec3(0.0, 0.0, -1.0), N, eta);
+
+            // 6. UV offset: flat center stays transparent/clean; curved bevel pulls/warps adjacent pixels
+            float edgeCurve = smoothstep(0.0, 0.92, u);
+            vec2 radialBend = refr.xy * (u_surfaceThickness * u_scale * u_refractionStrength) * (0.45 + 0.55 * edgeCurve);
+            vec2 lensMag = local * (0.028 * (1.0 - 0.65 * edgeCurve));
+            vec2 lensSamplePt = p + radialBend - lensMag;
+
+            // 7. Sample refracted pixels (with optional minimal blur) & conditional dispersion
+            vec4 lensTex = sampleRefracted(lensSamplePt, u_blurRadius);
+            vec3 lensRgb = lensTex.rgb;
+            float lensA = lensTex.a;
+
+            float dispMask = smoothstep(0.30, 0.95, u) * u_dispersion;
+            if (dispMask > 0.004) {
+              vec2 disp = lensGrad * (bevelPx * dispMask * 0.42);
+              vec4 texR = sampleBackdrop(lensSamplePt + disp);
+              vec4 texB = sampleBackdrop(lensSamplePt - disp);
+              lensRgb.r = texR.r;
+              lensRgb.b = texB.b;
+              lensA = max(lensA, max(texR.a, texB.a) * 0.85);
+            }
+
+            // Soft internal dark glass depth along inner bevel curvature
+            float F0 = pow((u_refractiveIndex - 1.0) / (u_refractiveIndex + 1.0), 2.0);
+            float fresnel = F0 + (1.0 - F0) * pow(1.0 - clamp(N.z, 0.0, 1.0), 3.2);
+            float internalDepth = smoothstep(0.18, 0.80, u) * (1.0 - smoothstep(0.80, 1.0, u));
+            lensRgb *= 1.0 - 0.22 * internalDepth * (1.0 - fresnel);
+
+            // 8. Normal-based Fresnel + non-uniform directional lighting (no flat uniform border)
+            vec2 topDir = normalize(vec2(-0.42 + u_moveLight * 0.65, -0.91));
+            vec2 botDir = normalize(vec2(0.34, 0.94));
+            float topSpec = pow(max(dot(lensGrad, topDir), 0.0), 4.5);
+            float botSpec = pow(max(dot(lensGrad, botDir), 0.0), 4.0);
+            float rimBand = smoothstep(0.15, 0.96, u);
+            float glint = ((0.85 * topSpec + 0.42 * botSpec) * rimBand + 0.22 * fresnel) * u_highlightIntensity;
+            vec3 lensLight = vec3(0.86, 0.93, 1.0) * glint;
+
+            color = mix(color, lensRgb, lensAlpha);
+            baseAlpha = mix(baseAlpha, lensA, lensAlpha);
+            light = mix(light, lensLight, lensAlpha);
           }
-
-          // Razor-thin Apple opposing corner specular catchlights (no milky interior glow!)
-          float capsuleTop = max(dot(bodyNormal, normalize(vec2(-0.35, -0.94))), 0.0);
-          float capsuleBot = max(dot(bodyNormal, normalize(vec2(0.35, 0.94))), 0.0);
-          vec3 light = vec3(0.86, 0.92, 1.0) * ((0.085 * pow(capsuleTop, 3.0) + 0.035 * pow(capsuleBot, 3.0) + 0.012) * smoothstep(-1.6 * u_scale, 0.0, dockDist));
-          float top = max(dot(lensNormal, normalize(vec2(-0.42 + u_motion.y * 0.85, -0.91))), 0.0);
-          float bounce = max(dot(lensNormal, normalize(vec2(0.34, 0.94))), 0.0);
-          float crispRim = smoothstep(-2.4 * u_scale, 0.0, lensDist);
-          float glint = (0.24 * pow(top, 6.0) + 0.11 * pow(bounce, 5.0)) * crispRim * crispRim;
-          float gleam = glint * (1.0 + stabilization * refraction * 0.55 + 0.20 * u_hoverMix) + 0.014 * fold;
-          light = mix(light, vec3(0.92, 0.96, 1.0) * gleam, lensAlpha);
 
           float lightAlpha = clamp(max(max(light.r, light.g), light.b) * 1.15, 0.0, 1.0);
           float outAlpha = clamp(baseAlpha + lightAlpha * (1.0 - baseAlpha), 0.0, 1.0) * bodyAlpha;
@@ -5947,9 +5990,15 @@
         uScale: gl.getUniformLocation(prog, "u_scale"),
         uDock: gl.getUniformLocation(prog, "u_dock"),
         uLens: gl.getUniformLocation(prog, "u_lens"),
-        uMotion: gl.getUniformLocation(prog, "u_motion"),
-        uHoverMix: gl.getUniformLocation(prog, "u_hoverMix"),
-        uReducedMotion: gl.getUniformLocation(prog, "u_reducedMotion"),
+        uMoveLight: gl.getUniformLocation(prog, "u_moveLight"),
+        uRefrStrength: gl.getUniformLocation(prog, "u_refractionStrength"),
+        uRefrHeight: gl.getUniformLocation(prog, "u_refractionHeight"),
+        uBevelWidth: gl.getUniformLocation(prog, "u_bevelWidth"),
+        uSurfaceThickness: gl.getUniformLocation(prog, "u_surfaceThickness"),
+        uRefractiveIndex: gl.getUniformLocation(prog, "u_refractiveIndex"),
+        uHighlightIntensity: gl.getUniformLocation(prog, "u_highlightIntensity"),
+        uBlurRadius: gl.getUniformLocation(prog, "u_blurRadius"),
+        uDispersion: gl.getUniformLocation(prog, "u_dispersion"),
         uBackdrop: gl.getUniformLocation(prog, "u_backdrop")
       };
     })();
@@ -5961,10 +6010,8 @@
     function drawDockCssFallback(metrics) {
       if (!navPill || !metrics.length) return;
       const lens = indexToLensMetrics(dockState.pos, metrics);
-      const stretchX = !isReducedMotion() ? Math.min(0.14, Math.abs(dockState.posVel) * 0.015 + dockState.shape * 0.05) : 0;
-      const squashY = stretchX * 0.42;
       navPill.style.width = lens.w.toFixed(2) + "px";
-      navPill.style.transform = `translate3d(${(lens.cx - lens.w * 0.5).toFixed(2)}px, 0, 0) scale(${(1 + stretchX).toFixed(4)}, ${(1 - squashY).toFixed(4)})`;
+      navPill.style.transform = `translate3d(${(lens.cx - lens.w * 0.5).toFixed(2)}px, 0, 0)`;
     }
 
     function renderDockFrame() {
@@ -5996,12 +6043,12 @@
       const ctx = dockGl.bCtx;
       ctx.clearRect(0, 0, wPx, hPx);
 
-      // Subtle star hints + translucent dark obsidian glass wash (backdrop-filter handles globe/scroll blur underneath)
+      // Step 1: Capture live background behind dock (stars + active 2D globe canvas if visible)
       const starsCanvas = document.getElementById("stars-canvas");
       if (starsCanvas && starsCanvas.width > 0 && window.innerWidth > 0 && window.innerHeight > 0) {
         try {
           ctx.save();
-          ctx.globalAlpha = 0.42;
+          ctx.globalAlpha = 0.60;
           const sx = starsCanvas.width / window.innerWidth;
           const sy = starsCanvas.height / window.innerHeight;
           ctx.drawImage(
@@ -6013,11 +6060,30 @@
           ctx.restore();
         } catch (_) {}
       }
+      const atlasCanvas = stageHome?.querySelector("canvas[data-atlas-interactive]");
+      if (atlasCanvas && atlasCanvas.width > 0 && stageHome && !stageHome.classList.contains("is-blurred")) {
+        try {
+          const ar = atlasCanvas.getBoundingClientRect();
+          if (ar.width > 0 && ar.height > 0) {
+            const ax = atlasCanvas.width / ar.width;
+            const ay = atlasCanvas.height / ar.height;
+            ctx.save();
+            ctx.globalAlpha = 0.55;
+            ctx.drawImage(
+              atlasCanvas,
+              Math.max(0, (rect.left - ar.left) * ax), Math.max(0, (rect.top - ar.top) * ay),
+              Math.max(1, rect.width * ax), Math.max(1, rect.height * ay),
+              0, 0, wPx, hPx
+            );
+            ctx.restore();
+          }
+        } catch (_) {}
+      }
 
-      ctx.fillStyle = "rgba(8, 13, 24, 0.34)";
+      ctx.fillStyle = `rgba(8, 13, 24, ${LIQUID_GLASS_OPTICS.tintOpacity})`;
       ctx.fillRect(0, 0, wPx, hPx);
 
-      // Paint 4 accessible tab icons + text directly into refraction backdrop for live warping + smoothstep tint
+      // Draw stationary dock icons + labels into u_backdrop so moving glass refracts them cleanly
       const iconPx = 17 * dpr;
       const gapPx = (rect.width < 520 ? 6 : 8) * dpr;
       const compactIconsOnly = metrics[0].width < 52;
@@ -6043,7 +6109,6 @@
         const startX = m.centerX * dpr - totalW * 0.5;
         const midY = (m.top + m.height * 0.5) * dpr;
 
-        // Draw icon scaled from 24x24 viewBox
         ctx.save();
         ctx.translate(startX, midY - iconPx * 0.5);
         const sc = iconPx / 24;
@@ -6076,15 +6141,10 @@
       }
 
       const lens = indexToLensMetrics(dockState.pos, metrics);
-      const reduced = isReducedMotion();
-      const phase = (dockState.pos - Math.round(dockState.pos)) * Math.PI;
-      const travel = Math.abs(Math.sin(phase));
-      const ripple = travel * Math.sin(phase * 4);
-      const tension = reduced ? 0 : Math.max(0, Math.min(1, dockState.shape * Math.max(travel, dockState.glidePulse, dockState.hoverMix * 0.35)));
-      const refraction = reduced ? 0 : Math.max(travel + ripple * 0.16, dockState.glidePulse, dockState.hoverMix * 0.45);
-      const lensWidthPx = (lens.w * 0.94 + tension * 8) * dpr;
-      const lensHeightPx = Math.max(24, (rect.height - 10) * 0.94) * dpr;
-      const insetPx = 4.5 * dpr;
+      const lensWidthPx = (lens.w * 0.94) * dpr;
+      const lensHeightPx = Math.max(24, rect.height - 8) * dpr;
+      const insetPx = 4.0 * dpr;
+      const moveLight = isReducedMotion() ? 0 : Math.max(-1, Math.min(1, dockState.posVel * 0.18));
 
       const gl = dockGl.gl;
       gl.viewport(0, 0, wPx, hPx);
@@ -6101,9 +6161,15 @@
       gl.uniform1f(dockGl.uScale, dpr);
       gl.uniform4f(dockGl.uDock, wPx * 0.5, hPx * 0.5, insetPx, (hPx * 0.5) - insetPx);
       gl.uniform4f(dockGl.uLens, lens.cx * dpr, hPx * 0.5, lensWidthPx * 0.5, lensHeightPx * 0.5);
-      gl.uniform4f(dockGl.uMotion, refraction, dockState.glideLight, tension, dockState.stabilization);
-      gl.uniform1f(dockGl.uHoverMix, reduced ? 0 : dockState.hoverMix);
-      gl.uniform1f(dockGl.uReducedMotion, reduced ? 1 : 0);
+      gl.uniform1f(dockGl.uMoveLight, moveLight);
+      gl.uniform1f(dockGl.uRefrStrength, LIQUID_GLASS_OPTICS.refractionStrength);
+      gl.uniform1f(dockGl.uRefrHeight, LIQUID_GLASS_OPTICS.refractionHeight);
+      gl.uniform1f(dockGl.uBevelWidth, LIQUID_GLASS_OPTICS.bevelWidth);
+      gl.uniform1f(dockGl.uSurfaceThickness, LIQUID_GLASS_OPTICS.surfaceThickness);
+      gl.uniform1f(dockGl.uRefractiveIndex, LIQUID_GLASS_OPTICS.refractiveIndex);
+      gl.uniform1f(dockGl.uHighlightIntensity, LIQUID_GLASS_OPTICS.highlightIntensity);
+      gl.uniform1f(dockGl.uBlurRadius, LIQUID_GLASS_OPTICS.blurRadius);
+      gl.uniform1f(dockGl.uDispersion, LIQUID_GLASS_OPTICS.dispersion);
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
 
@@ -6114,75 +6180,30 @@
       dockState.lastTimeMs = nowMs;
 
       const reduced = isReducedMotion();
-      const targetHoverMix = (dockState.hovering || dockState.dragging) ? 1 : 0;
-      dockState.hoverMix += (targetHoverMix - dockState.hoverMix) * Math.min(1, dt * 14);
-
-      if (dockState.glideStartedAt > 0 && !reduced) {
-        const progress = Math.min(1, (nowMs - dockState.glideStartedAt) / 285);
-        const inv = 1 - progress;
-        dockState.pos = dockState.glideTarget + (dockState.glideFrom - dockState.glideTarget) * inv * inv;
-        const pulse = Math.sin(progress * Math.PI) * (1 - progress * 0.4);
-        dockState.glidePulse = pulse;
-        dockState.glideLight = pulse * Math.max(-1, Math.min(1, dockState.glideTarget - dockState.glideFrom));
-        dockState.stabilization = Math.min(1, pulse * 3.5);
-        if (progress >= 1) {
-          dockState.pos = dockState.glideTarget;
-          dockState.posVel = 0;
-          dockState.glideStartedAt = 0;
-          dockState.glidePulse = 0;
-          dockState.glideLight = 0;
-        }
-      } else if (reduced) {
+      if (reduced) {
         dockState.pos = dockState.targetPos;
         dockState.posVel = 0;
-        dockState.shape = 0;
-        dockState.shapeVel = 0;
-        dockState.stabilization = 0;
       } else if (!dockState.dragging) {
-        // Critically damped analytic spring (matching LiquidGlassDock.kt ω₀ = 17..24)
-        const omega = dockState.hovering ? 24 : 17;
+        // Critically damped smooth glide (zero overshoot/jelly; optical refraction carries the visual weight)
+        const omega = dockState.hovering ? 22 : 18;
         const offset = dockState.pos - dockState.targetPos;
         const exp = Math.exp(-omega * dt);
         const factor = dockState.posVel + omega * offset;
-        dockState.pos = dockState.targetPos + (offset + factor * dt) * exp;
+        dockState.pos = Math.max(0, Math.min(Math.max(0, navItems.length - 1),
+          dockState.targetPos + (offset + factor * dt) * exp));
         dockState.posVel = (dockState.posVel - omega * factor * dt) * exp;
-      }
-
-      // Shape elasticity spring (ω₀ = 23) responding to instantaneous velocity & acceleration
-      if (!reduced) {
-        const instVel = Math.max(-6, Math.min(6, (dockState.pos - dockState.lastLensPos) / Math.max(0.004, dt)));
-        dockState.lastLensPos = dockState.pos;
-        const speed = Math.abs(instVel);
-        const pull = Math.min(1, speed * 0.34 + Math.abs(instVel) * 0.08) * dockState.gestureElasticity;
-        const omegaS = 23;
-        const expS = Math.exp(-omegaS * dt);
-        const offS = dockState.shape - pull;
-        const facS = dockState.shapeVel + omegaS * offS;
-        dockState.shape = pull + (offS + facS * dt) * expS;
-        dockState.shapeVel = (dockState.shapeVel - omegaS * facS * dt) * expS;
-        if (dockState.glideStartedAt === 0) {
-          const fastBlendTarget = Math.max(0, Math.min(1, (speed - 2.2) / 3.0));
-          dockState.stabilization += (fastBlendTarget - dockState.stabilization) * (dtMs / (dtMs + 10));
-        }
       }
 
       renderDockFrame();
 
       const settled = reduced || (
-        dockState.glideStartedAt === 0 &&
         !dockState.dragging &&
         Math.abs(dockState.pos - dockState.targetPos) < 0.0015 &&
-        Math.abs(dockState.posVel) < 0.01 &&
-        Math.abs(dockState.shape) < 0.004 &&
-        Math.abs(dockState.hoverMix - targetHoverMix) < 0.008
+        Math.abs(dockState.posVel) < 0.01
       );
       if (settled && !dockState.hovering && !dockState.dragging) {
         dockState.pos = dockState.targetPos;
         dockState.posVel = 0;
-        dockState.shape = 0;
-        dockState.shapeVel = 0;
-        dockState.hoverMix = 0;
-        dockState.stabilization = 0;
         dockState.lastTimeMs = 0;
         renderDockFrame();
         return;
@@ -6196,28 +6217,19 @@
       }
     }
 
-    function updatePillPosition(targetItem, animateJelly = true) {
+    function updatePillPosition(targetItem, animate = true) {
       if (!navContainer || !targetItem) return;
       const idx = Math.max(0, navItems.indexOf(targetItem));
       dockState.activeIdx = idx;
-      if (!dockState.initialized || !animateJelly || isReducedMotion()) {
+      if (!dockState.initialized || !animate || isReducedMotion()) {
         dockState.pos = idx;
         dockState.targetPos = idx;
         dockState.posVel = 0;
-        dockState.shape = 0;
-        dockState.glideStartedAt = 0;
         dockState.initialized = true;
         renderDockFrame();
         return;
       }
-      const dist = Math.abs(idx - dockState.pos);
       dockState.targetPos = idx;
-      if (dist >= 1.35) {
-        dockState.glideFrom = dockState.pos;
-        dockState.glideTarget = idx;
-        dockState.glideStartedAt = performance.now();
-        dockState.gestureElasticity = 0.90 + Math.random() * 0.25;
-      }
       ensureDockAnimating();
     }
 
