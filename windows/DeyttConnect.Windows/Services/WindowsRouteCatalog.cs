@@ -39,6 +39,44 @@ public static class WindowsRouteCatalog
     private static readonly Regex RegionPrefix = new("^(NL|DE|RU|FI|IT)(?:$|[-_\\s])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
+    public static string FormatRouteTitle(WindowsRoute route)
+    {
+        if (route.Protocol == "AUTO")
+            return "✦ автоподбор";
+        if (route.Protocol == "LTE")
+            return "🇪🇺 lte • белые списки";
+        var isRu = string.Equals(route.CountryCode, "RU", StringComparison.OrdinalIgnoreCase);
+        var isDirect = isRu || route.Protocol is "HYSTERIA2" or "TUIC" || route.Protocol.StartsWith("AWG", StringComparison.OrdinalIgnoreCase);
+        var mark = isDirect ? "[⚡]" : "[🛰️]";
+        var mode = isDirect ? "(speed)" : "(stable)";
+        var cc = route.CountryCode.ToLowerInvariant();
+        var proto = route.Protocol switch
+        {
+            "VLESS" => route.Detail is "reality" ? "reality" : "vless",
+            "TROJAN" => "trojan",
+            "HYSTERIA2" => "hysteria",
+            "TUIC" => "tuic",
+            "AWG31" or "AWG15" => route.ProfileName ?? (route.Protocol == "AWG15" ? "amneziawg 1.5" : "amneziawg 3.1"),
+            _ => route.ProtocolName.ToLowerInvariant(),
+        };
+        return $"{mark}  {cc} • {proto} {mode}";
+    }
+
+    public static string FormatRouteDetail(WindowsRoute route, bool english = false)
+    {
+        return route.Protocol switch
+        {
+            "AUTO" => english ? "Select an available exit automatically" : "Выбрать доступный выход автоматически",
+            "LTE" => english ? "Whitelist LTE · 30 GB monthly limit" : "Белые списки LTE · лимит 30 ГБ в месяц",
+            "VLESS" or "TROJAN" => route.CountryCode == "RU"
+                ? (english ? "direct route" : "прямой маршрут")
+                : (english ? "cascade route" : "каскадный маршрут"),
+            "HYSTERIA2" or "TUIC" => english ? "direct route" : "прямой маршрут",
+            "AWG31" or "AWG15" => route.ProfileName ?? (english ? "direct · amneziawg" : "прямой · amneziawg"),
+            _ => route.ProtocolName,
+        };
+    }
+
     public static IReadOnlyList<WindowsRoute> Parse(
         JsonElement profile,
         IReadOnlyList<WindowsAwgProfile>? awgProfiles = null)
