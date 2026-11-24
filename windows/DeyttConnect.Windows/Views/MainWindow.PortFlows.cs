@@ -332,19 +332,28 @@ public partial class MainWindow
                 "AUTO" => Copy("Выбрать доступный выход автоматически", "Select an available exit automatically"),
                 "LTE" => Copy("Белые списки LTE · лимит 10 ГБ в месяц", "Whitelist LTE · 10 GB monthly limit"),
                 "RU-DE" => Copy("Двойной маршрут · Санкт-Петербург → Франкфурт", "Double route · Saint Petersburg → Frankfurt"),
-                "VLESS" or "TROJAN" => Copy("WebSocket + TLS", "WebSocket + TLS"),
-                "HYSTERIA2" => Copy("Быстрый QUIC-маршрут", "Fast QUIC route"),
-                "TUIC" => Copy("Оптимизированный QUIC-маршрут", "Optimized QUIC route"),
-                "AWG31" => route.ProfileName ?? AwgProtocolTitle(route.Protocol),
+                "VLESS" or "TROJAN" => route.CountryCode == "RU"
+                    ? Copy("Прямой маршрут · speed", "Direct route · speed")
+                    : Copy("Каскадный маршрут · stable", "Cascade route · stable"),
+                "HYSTERIA2" => Copy("Быстрый QUIC-маршрут · speed", "Fast QUIC route · speed"),
+                "TUIC" => Copy("Оптимизированный QUIC-маршрут · speed", "Optimized QUIC route · speed"),
+                "AWG31" => route.ProfileName ?? Copy("Прямой маршрут · amneziawg", "Direct route · amneziawg"),
                 _ => route.ProfileName ?? route.ProtocolName,
             };
             var selected = route.Id == _selectedRoute;
+            var mark = route.CountryCode == "RU" || route.Protocol is "HYSTERIA2" or "TUIC" || route.Protocol.StartsWith("AWG", StringComparison.OrdinalIgnoreCase)
+                ? "[⚡]"
+                : "[🛰️]";
+            var title = route.Protocol switch
+            {
+                "AUTO" => Copy("Автоподбор", "Auto-select"),
+                "LTE" => "lte • белые списки",
+                "RU-DE" => Copy("LTE + белые списки · RU → DE", "LTE + whitelist · RU → DE"),
+                _ => $"{mark} {route.ProtocolName.ToLowerInvariant()}",
+            };
             var labels = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
             labels.Children.Add(DeyttTheme.TextBlock(
-                route.Protocol == "AUTO" ? Copy("Автоподбор", "Auto-select") :
-                route.Protocol == "LTE" ? "lte • белые списки" :
-                route.Protocol == "RU-DE" ? Copy("LTE + белые списки · RU → DE", "LTE + whitelist · RU → DE") :
-                route.ProtocolName,
+                title,
                 15, DeyttTheme.Text, FontWeight.SemiBold));
             labels.Children.Add(DeyttTheme.TextBlock(detail, 11, DeyttTheme.Muted));
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("42,*,Auto"), MinHeight = 66 };

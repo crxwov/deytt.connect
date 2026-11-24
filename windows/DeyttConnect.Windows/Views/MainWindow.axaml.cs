@@ -1809,20 +1809,25 @@ public partial class MainWindow : Window
             Spacing = 2,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
+        var mark = route.CountryCode == "RU" || route.Protocol is "HYSTERIA2" or "TUIC" || IsAwgProtocol(route.Protocol)
+            ? "[⚡]"
+            : "[🛰️]";
         var protocolTitle = IsAwgProtocol(route.Protocol)
-            ? AwgProtocolTitle(route.Protocol)
-            : route.ProtocolName;
+            ? $"{mark} {AwgProtocolTitle(route.Protocol)}"
+            : $"{mark} {route.ProtocolName.ToLowerInvariant()}";
         var protocolTitleText = DeyttTheme.RawTextBlock(protocolTitle, 14,
             DeyttTheme.Text, FontWeight.SemiBold, wrap: false);
         protocolTitleText.TextTrimming = TextTrimming.CharacterEllipsis;
         labels.Children.Add(protocolTitleText);
         var detail = route.Protocol switch
         {
-            "VLESS" or "TROJAN" => "WebSocket + TLS",
-            "HYSTERIA2" => "QUIC · UDP",
-            "TUIC" => "QUIC · UDP · BBR",
+            "VLESS" or "TROJAN" => route.CountryCode == "RU"
+                ? Copy("прямой · speed", "direct · speed")
+                : Copy("каскад · stable", "cascade · stable"),
+            "HYSTERIA2" => Copy("прямой · speed", "direct · speed"),
+            "TUIC" => Copy("прямой · speed", "direct · speed"),
             "LTE" => Copy("Белые списки LTE · лимит 10 ГБ в месяц", "Whitelist LTE · 10 GB monthly limit"),
-            "AWG31" => route.ProfileName ?? "UDP · AmneziaWG",
+            "AWG31" => route.ProfileName ?? Copy("прямой · amneziawg", "direct · amneziawg"),
             _ => route.ProtocolName,
         };
         var protocolDetail = DeyttTheme.RawTextBlock(detail, 13, DeyttTheme.Muted, wrap: false);
