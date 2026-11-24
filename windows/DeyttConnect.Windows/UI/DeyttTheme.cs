@@ -15,11 +15,11 @@ internal static class DeyttTheme
         Color BlueSurface, Color SkySurface, Color MintSurface);
 
     private static readonly Palette Dark = new(
-        Color.Parse("#080A0D"), Color.Parse("#0F1115"), Color.Parse("#16181D"), Color.Parse("#1E2127"),
-        Color.Parse("#F5F7FA"), Color.Parse("#A8B0BC"), Color.Parse("#2B2F37"), Color.Parse("#64E9FF"),
-        Color.Parse("#38BDF8"), Color.Parse("#1F232A"), Color.Parse("#373D47"), Color.Parse("#39E8BD"),
-        Color.Parse("#FFC76E"), Color.Parse("#FF8295"), Color.Parse("#080A0D"), Color.Parse("#2B2F37"),
-        Color.Parse("#22262E"), Color.Parse("#22262E"), Color.Parse("#17362F"));
+        Color.Parse("#080D17"), Color.Parse("#0B1220"), Color.Parse("#111A29"), Color.Parse("#162235"),
+        Color.Parse("#F2F5FC"), Color.Parse("#B2BED1"), Color.Parse("#27364B"), Color.Parse("#6378F6"),
+        Color.Parse("#4558D6"), Color.Parse("#192743"), Color.Parse("#354A71"), Color.Parse("#39E8BD"),
+        Color.Parse("#FFC76E"), Color.Parse("#FF8295"), Color.Parse("#080D17"), Color.Parse("#27364B"),
+        Color.Parse("#1B2942"), Color.Parse("#192743"), Color.Parse("#17362F"));
 
     private static readonly Palette Light = new(
         Color.Parse("#F6F7FB"), Colors.White, Colors.White, Color.Parse("#EEF1F8"),
@@ -152,8 +152,8 @@ internal static class DeyttTheme
                 EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
                 GradientStops =
                 {
-                    new GradientStop(Color.Parse(IsDark ? "#BA262930" : "#E4FFFFFF"), 0),
-                    new GradientStop(Color.Parse(IsDark ? "#CC14161A" : "#D8F2F4F8"), 1),
+                    new GradientStop(Color.Parse(IsDark ? "#BF344256" : "#E4FFFFFF"), 0),
+                    new GradientStop(Color.Parse(IsDark ? "#C4101B2C" : "#D8F2F4F8"), 1),
                 },
             },
             BorderBrush = new LinearGradientBrush
@@ -212,18 +212,28 @@ internal static class DeyttTheme
             EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
             GradientStops =
             {
-                new GradientStop(Color.Parse(IsDark ? "#38FFFFFF" : "#EEFFFFFF"), 0),
-                new GradientStop(Color.Parse(IsDark ? "#1C1E2228" : "#D4E8EEF4"), 0.55),
-                new GradientStop(Color.Parse(IsDark ? "#2216181D" : "#C8DFE6EE"), 1),
+                new GradientStop(Color.Parse(IsDark ? "#63445770" : "#EEFFFFFF"), 0),
+                new GradientStop(Color.Parse(IsDark ? "#28101D2C" : "#D4E8EEF4"), 1),
             },
         };
-        surface.BorderBrush = Brush(Color.FromArgb(IsDark ? (byte)115 : (byte)180, 255, 255, 255));
+        surface.BorderBrush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0.15, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0.92, 1, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.Parse(IsDark ? "#54FFFFFF" : "#B4FFFFFF"), 0),
+                new GradientStop(Color.Parse(IsDark ? "#15E0EEFA" : "#66CFE4F8"), 0.27),
+                new GradientStop(Color.Parse(IsDark ? "#1489B9E7" : "#4489B9E7"), 0.71),
+                new GradientStop(Color.Parse(IsDark ? "#2BCDE6FF" : "#80CDE6FF"), 1),
+            },
+        };
         surface.BorderThickness = new Thickness(1);
         surface.BoxShadow = new BoxShadows(new BoxShadow
         {
             Blur = 18,
             OffsetY = 5,
-            Color = Color.Parse(IsDark ? "#4D000000" : "#20000000"),
+            Color = Color.Parse(IsDark ? "#4D040A14" : "#20000000"),
         });
     }
 

@@ -12,33 +12,33 @@
     :root {
       --header-bg: transparent;
       --header-border: transparent;
-      /* Навбар: нейтральный Liquid Glass (Apple HIG + Android LiquidGlassDock) */
-      --nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0.03) 44%, rgba(255, 255, 255, 0.01) 100%), rgba(22, 24, 28, 0.46);
+      /* Навбар: Android LiquidGlassDock + Apple HIG преломляющее стекло */
+      --nav-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.015) 44%, transparent 100%), rgba(18, 24, 34, 0.635);
       --nav-border: rgba(255, 255, 255, 0.15);
-      --nav-border-top: rgba(255, 255, 255, 0.46);
-      --nav-border-bottom: rgba(255, 255, 255, 0.07);
-      --nav-shadow: 0 14px 36px -6px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(0, 0, 0, 0.28);
-      /* Капелька / sliding lens capsule */
-      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0.08) 46%, rgba(255, 255, 255, 0.02) 100%), rgba(255, 255, 255, 0.08);
-      --nav-pill-border: rgba(255, 255, 255, 0.24);
-      --nav-pill-border-top: rgba(255, 255, 255, 0.78);
-      --nav-pill-border-bottom: rgba(255, 255, 255, 0.14);
-      --nav-pill-shadow: 0 6px 18px -4px rgba(0, 0, 0, 0.44), inset 0 1px 1px rgba(255, 255, 255, 0.58), inset 0 -1px 1.5px rgba(0, 0, 0, 0.25);
-      --text: #F8FAFC;
-      --text-muted: #9AA3B0;
+      --nav-border-top: rgba(255, 255, 255, 0.42);
+      --nav-border-bottom: rgba(137, 185, 231, 0.10);
+      --nav-shadow: 0 14px 36px -6px rgba(4, 9, 18, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.20), inset 0 -1px 0 rgba(0, 0, 0, 0.24);
+      /* Капелька / sliding lens capsule (CSS fallback) */
+      --nav-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.06) 46%, rgba(100, 233, 255, 0.04) 100%), rgba(52, 67, 87, 0.54);
+      --nav-pill-border: rgba(255, 255, 255, 0.22);
+      --nav-pill-border-top: rgba(255, 255, 255, 0.76);
+      --nav-pill-border-bottom: rgba(137, 185, 231, 0.18);
+      --nav-pill-shadow: 0 6px 18px -4px rgba(4, 9, 18, 0.46), inset 0 1px 1px rgba(255, 255, 255, 0.52), inset 0 -1px 1.5px rgba(0, 0, 0, 0.25);
+      --text: #F2F5FC;
+      --text-muted: #98A6BF;
 
-      /* Liquid Glass Neutral Graphite Tokens */
-      --glass-bg: linear-gradient(165deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.02) 48%, rgba(255, 255, 255, 0.008) 100%), rgba(22, 24, 29, 0.48);
-      --glass-bg-hover: linear-gradient(165deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.035) 50%, rgba(255, 255, 255, 0.012) 100%), rgba(28, 31, 37, 0.54);
-      --glass-bg-active: linear-gradient(165deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.045) 50%, rgba(255, 255, 255, 0.02) 100%), rgba(34, 38, 46, 0.60);
-      --glass-border: rgba(255, 255, 255, 0.12);
-      --glass-border-top: rgba(255, 255, 255, 0.42);
-      --glass-border-bottom: rgba(0, 0, 0, 0.30);
-      --glass-border-hover: rgba(255, 255, 255, 0.19);
-      --glass-border-top-hover: rgba(255, 255, 255, 0.56);
-      --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), inset 0 -1px 0 rgba(0, 0, 0, 0.24), 0 16px 40px rgba(0, 0, 0, 0.45);
-      --glass-shadow-hover: inset 0 1px 1px rgba(255, 255, 255, 0.38), 0 20px 48px rgba(0, 0, 0, 0.52);
-      --glass-blur: blur(28px) saturate(200%) brightness(106%);
+      /* Полупрозрачный Liquid Glass (1:1 с Android DeyttUi) */
+      --glass-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.065) 0%, rgba(255, 255, 255, 0) 40%), linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 52%, rgba(12, 19, 29, 0.12) 100%);
+      --glass-bg-hover: linear-gradient(180deg, rgba(255, 255, 255, 0.095) 0%, rgba(255, 255, 255, 0) 42%), linear-gradient(180deg, rgba(34, 54, 78, 0.36) 0%, rgba(22, 36, 52, 0.24) 52%, rgba(14, 23, 35, 0.16) 100%);
+      --glass-bg-active: linear-gradient(180deg, rgba(255, 255, 255, 0.11) 0%, rgba(255, 255, 255, 0) 42%), linear-gradient(180deg, rgba(38, 64, 94, 0.42) 0%, rgba(24, 41, 60, 0.28) 52%, rgba(16, 27, 41, 0.20) 100%);
+      --glass-border: rgba(112, 168, 224, 0.16);
+      --glass-border-top: rgba(255, 255, 255, 0.32);
+      --glass-border-bottom: rgba(80, 128, 184, 0.10);
+      --glass-border-hover: rgba(120, 186, 240, 0.28);
+      --glass-border-top-hover: rgba(255, 255, 255, 0.48);
+      --glass-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.16), 0 8px 24px rgba(4, 9, 18, 0.34);
+      --glass-shadow-hover: inset 0 1px 1px rgba(255, 255, 255, 0.20), 0 14px 34px rgba(4, 9, 18, 0.42);
+      --glass-blur: blur(22px) saturate(175%);
 
       /* Accent & System Colors */
       --accent-mint: #39E8BD;
@@ -63,8 +63,8 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
       user-select: none;
       position: relative;
-      background: #080A0D;
-      color: #F8FAFC;
+      background: #080D17;
+      color: #F2F5FC;
       text-transform: lowercase;
     }
 
@@ -143,6 +143,31 @@
       -webkit-backdrop-filter: var(--glass-blur);
       touch-action: none;
       overflow: hidden;
+      isolation: isolate;
+    }
+    .nav-container.has-webgl-dock {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: 0 14px 36px -6px rgba(4, 9, 18, 0.56);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    .nav-glass-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border-radius: 9999px;
+      pointer-events: none;
+      z-index: 1;
+      display: block;
+    }
+    .nav-container.has-webgl-dock .nav-jelly-pill {
+      opacity: 0;
+      visibility: hidden;
+    }
+    .nav-container.has-webgl-dock .nav-label-wrap {
+      opacity: 0;
     }
 
     /* Interactive Deformable Droplet Lens ("капелька") */
@@ -1664,7 +1689,7 @@
       height: 22px;
       border-radius: 50%;
       background: #229ED9;
-      border: 2px solid #080A0D;
+      border: 2px solid #080D17;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2570,15 +2595,19 @@
     :root {
       --liquid-glass-card-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 40%),
                               linear-gradient(180deg, rgba(38, 60, 84, 0.28) 0%, rgba(22, 37, 54, 0.18) 50%, rgba(14, 23, 36, 0.12) 100%);
-      --liquid-glass-card-border: rgba(255, 255, 255, 0.13);
-      --liquid-glass-card-border-top: rgba(255, 255, 255, 0.42);
-      --liquid-glass-card-border-bottom: rgba(255, 255, 255, 0.06);
-      --liquid-glass-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.22), 0 12px 34px rgba(0, 0, 0, 0.38);
-      --liquid-glass-card-blur: blur(26px) saturate(190%);
+      --liquid-glass-card-border: rgba(112, 168, 224, 0.16);
+      --liquid-glass-card-border-top: rgba(255, 255, 255, 0.30);
+      --liquid-glass-card-border-bottom: rgba(80, 128, 184, 0.10);
+      --liquid-glass-card-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 8px 26px rgba(4, 10, 20, 0.36);
+      --liquid-glass-card-blur: blur(22px) saturate(175%);
 
-      --liquid-glass-row-bg: linear-gradient(165deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.025) 45%, rgba(255, 255, 255, 0.01) 100%), rgba(24, 26, 31, 0.48);
-      --liquid-glass-row-bg-selected: linear-gradient(165deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.015) 100%), rgba(36, 40, 48, 0.56);
-      --liquid-glass-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 50%, rgba(255, 255, 255, 0.01) 100%), rgba(30, 33, 39, 0.54);
+      /* Route rows / country cards: exact translucent Android DeyttUi.glassRowBackground */
+      --liquid-glass-row-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.063) 0%, rgba(255, 255, 255, 0) 40%),
+                             linear-gradient(180deg, rgba(28, 44, 63, 0.28) 0%, rgba(18, 29, 42, 0.17) 52%, rgba(12, 19, 29, 0.12) 100%);
+      --liquid-glass-row-bg-selected: linear-gradient(180deg, rgba(255, 255, 255, 0.086) 0%, rgba(255, 255, 255, 0) 40%),
+                                      linear-gradient(180deg, rgba(34, 58, 86, 0.38) 0%, rgba(22, 37, 55, 0.25) 52%, rgba(15, 25, 38, 0.17) 100%);
+      --liquid-glass-pill-bg: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 42%),
+                              linear-gradient(180deg, rgba(68, 87, 112, 0.38) 0%, rgba(16, 29, 44, 0.16) 100%);
     }
 
     /* LiquidGlass Card Component */
@@ -2594,15 +2623,15 @@
       position: relative !important;
     }
 
-    /* Unified Apple + Mobile Liquid Glass Capsule Button */
+    /* Unified Android DeyttUi.glassButtonBackground Pill */
     .btn-select-route, .home-measure, .btn-action-glass, #home-measure {
-      background: linear-gradient(180deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.01) 100%), rgba(28, 31, 36, 0.52) !important;
-      backdrop-filter: blur(24px) saturate(190%) !important;
-      -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
-      border: 1px solid rgba(255, 255, 255, 0.16) !important;
-      border-top-color: rgba(255, 255, 255, 0.56) !important;
-      border-bottom-color: rgba(255, 255, 255, 0.08) !important;
-      box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.30), inset 0 -1px 0 rgba(0, 0, 0, 0.25), 0 6px 18px rgba(0, 0, 0, 0.34) !important;
+      background: var(--liquid-glass-pill-bg) !important;
+      backdrop-filter: blur(22px) saturate(175%) !important;
+      -webkit-backdrop-filter: blur(22px) saturate(175%) !important;
+      border: 1px solid rgba(137, 185, 231, 0.20) !important;
+      border-top-color: rgba(255, 255, 255, 0.36) !important;
+      border-bottom-color: rgba(205, 230, 255, 0.18) !important;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 4px 14px rgba(4, 10, 20, 0.30) !important;
       border-radius: 9999px !important;
       color: #F8FAFC !important;
       font-weight: 600 !important;
@@ -3955,16 +3984,12 @@
 
       /* ================================================================
          APPLE LIQUID GLASS + ANDROID DeyttUi / LiquidGlassDock SYSTEM
-         Neutral smoked translucent glass + real backdrop-filter lensing +
-         directional top Fresnel rim + reduced-transparency/motion support.
+         Dark-navy canvas harmony + Android translucent blue-slate glass +
+         strict edge-only rim glow (zero interior gradient bleed).
          ================================================================ */
       @property --glass-rim { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
-      @property --glass-fill { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
       @keyframes glass-rim-spin { to { --glass-rim: 360deg; } }
-      @keyframes glass-fill-spin { to { --glass-fill: -216deg; } }
 
-      #home-action::before, .home-action::before,
-      #compact-action::before, .compact-action::before,
       #home-action::after, .home-action::after,
       #compact-action::after, .compact-action::after,
       #home-measure::before, .home-measure::before,
@@ -3973,133 +3998,213 @@
         display: none !important;
       }
 
-      /* Primary Connect Pill: Neutral Smoked Liquid Glass + Specular Edge Rim */
+      /* Primary Connect Pill: Pure Translucent Android Glass Interior + Edge-Only Rim */
       #home-action, .home-action, #compact-action, .compact-action {
         height: 56px !important;
         min-height: 56px !important;
-        padding: 0 18px !important;
+        padding: 0 22px !important;
         border-radius: 9999px !important;
-        border: 1.35px solid transparent !important;
+        border: none !important;
         font-family: "Inter Tight", sans-serif !important;
         font-size: 14.5px !important;
-        font-weight: 650 !important;
+        font-weight: 640 !important;
         letter-spacing: -0.01em !important;
-        color: #FFFFFF !important;
-        background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.04) 46%, rgba(255, 255, 255, 0.01) 100%) padding-box,
-          conic-gradient(from var(--glass-fill) at 50% 50%,
-            rgba(255, 255, 255, 0.07) 0%, rgba(24, 26, 31, 0.44) 25%,
-            rgba(255, 255, 255, 0.05) 50%, rgba(24, 26, 31, 0.44) 75%,
-            rgba(255, 255, 255, 0.07) 100%) padding-box,
-          linear-gradient(180deg, rgba(25, 27, 32, 0.56), rgba(18, 20, 24, 0.52)) padding-box,
-          linear-gradient(180deg, rgba(255, 255, 255, 0.56) 0%, rgba(255, 255, 255, 0.14) 55%, rgba(255, 255, 255, 0.22) 100%) border-box !important;
-        box-shadow:
-          inset 0 1px 1px rgba(255, 255, 255, 0.34),
-          inset 0 -1px 1px rgba(0, 0, 0, 0.28),
-          0 10px 26px rgba(0, 0, 0, 0.38) !important;
-        backdrop-filter: blur(26px) saturate(195%) !important;
-        -webkit-backdrop-filter: blur(26px) saturate(195%) !important;
-        text-shadow: none !important;
+        color: #F2F5FC !important;
+        position: relative !important;
+        isolation: isolate !important;
         overflow: hidden !important;
-        animation: glass-rim-spin 5.5s linear infinite, glass-fill-spin 5.5s linear infinite !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094) 0%, rgba(255, 255, 255, 0) 40%),
+          linear-gradient(180deg, rgba(45, 66, 90, 0.25) 0%, rgba(19, 31, 46, 0.14) 100%) !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.16),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+          0 6px 20px rgba(4, 10, 22, 0.34) !important;
+        backdrop-filter: blur(22px) saturate(180%) !important;
+        -webkit-backdrop-filter: blur(22px) saturate(180%) !important;
+        text-shadow: none !important;
+        animation: none !important;
         transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease, box-shadow 180ms ease !important;
       }
+      #compact-action, .compact-action {
+        height: 46px !important;
+        min-height: 46px !important;
+        padding: 0 22px !important;
+        font-size: 14px !important;
+      }
+
+      /* Strict Perimeter-Only Specular Rim Ring via Mask Exclusion */
+      #home-action::before, .home-action::before,
+      #compact-action::before, .compact-action::before {
+        content: "" !important;
+        display: block !important;
+        position: absolute !important;
+        inset: 0 !important;
+        border-radius: inherit !important;
+        padding: 1.35px !important;
+        background: conic-gradient(from var(--glass-rim) at 50% 50%,
+          rgba(240, 249, 255, 0.62) 0deg,
+          rgba(96, 165, 250, 0.34) 72deg,
+          rgba(56, 189, 248, 0.62) 150deg,
+          rgba(255, 255, 255, 0.22) 235deg,
+          rgba(96, 165, 250, 0.36) 305deg,
+          rgba(240, 249, 255, 0.62) 360deg) !important;
+        -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
+        -webkit-mask-composite: xor !important;
+        mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
+        mask-composite: exclude !important;
+        pointer-events: none !important;
+        z-index: 2 !important;
+        opacity: 0.92 !important;
+        animation: glass-rim-spin 6.5s linear infinite !important;
+      }
+
       #home-action:hover, .home-action:hover,
       #compact-action:hover, .compact-action:hover {
         filter: brightness(1.10) !important;
       }
       #home-action:active, .home-action:active,
       #compact-action:active, .compact-action:active {
-        transform: scale(0.975) !important;
+        transform: scale(0.985) !important;
       }
 
-      /* Connected: Translucent Emerald Liquid Glass + Glowing Top Specular */
+      /* Connected: Translucent Emerald Interior + Edge-Only Mint Glow */
       #home-action[data-tone="connected"], .home-action[data-tone="connected"],
       #home-action[data-tone="good"], .home-action[data-tone="good"],
       #compact-action[data-tone="connected"], .compact-action[data-tone="connected"],
       #compact-action[data-tone="good"], .compact-action[data-tone="good"] {
-        border-color: transparent !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.01) 100%) padding-box,
-          linear-gradient(180deg, rgba(24, 58, 44, 0.56), rgba(14, 34, 26, 0.52)) padding-box,
-          conic-gradient(from var(--glass-rim) at 50% 50%,
-            rgba(255, 255, 255, 0.94) 0%, rgba(57, 232, 189, 0.85) 18%,
-            rgba(16, 185, 129, 0.38) 36%, rgba(16, 185, 129, 0.16) 52%,
-            rgba(16, 185, 129, 0.38) 68%, rgba(57, 232, 189, 0.85) 84%,
-            rgba(255, 255, 255, 0.94) 100%) border-box !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094) 0%, rgba(255, 255, 255, 0) 40%),
+          linear-gradient(180deg, rgba(31, 58, 48, 0.22) 0%, rgba(16, 32, 26, 0.13) 100%) !important;
         box-shadow:
-          inset 0 1px 1px rgba(255, 255, 255, 0.42),
-          inset 0 -1px 1px rgba(0, 0, 0, 0.26),
-          0 8px 26px rgba(16, 185, 129, 0.26) !important;
+          inset 0 1px 0 rgba(255, 255, 255, 0.18),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+          0 6px 22px rgba(16, 185, 129, 0.18) !important;
+      }
+      #home-action[data-tone="connected"]::before, .home-action[data-tone="connected"]::before,
+      #home-action[data-tone="good"]::before, .home-action[data-tone="good"]::before,
+      #compact-action[data-tone="connected"]::before, .compact-action[data-tone="connected"]::before,
+      #compact-action[data-tone="good"]::before, .compact-action[data-tone="good"]::before {
+        background: conic-gradient(from var(--glass-rim) at 50% 50%,
+          rgba(246, 255, 252, 0.72) 0deg,
+          rgba(52, 211, 153, 0.44) 72deg,
+          rgba(16, 185, 129, 0.72) 150deg,
+          rgba(255, 255, 255, 0.22) 235deg,
+          rgba(52, 211, 153, 0.42) 305deg,
+          rgba(246, 255, 252, 0.72) 360deg) !important;
       }
 
-      /* Connecting: Neutral Glass + Crisp Ice Specular Orbit */
+      /* Connecting / Checking: Translucent Glass + Animated Cyan Rim Sweep */
       #home-action[data-tone="connecting"], .home-action[data-tone="connecting"],
       #compact-action[data-tone="connecting"], .compact-action[data-tone="connecting"] {
-        border-color: transparent !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.04) 45%, rgba(255, 255, 255, 0.01) 100%) padding-box,
-          linear-gradient(180deg, rgba(28, 32, 38, 0.58), rgba(20, 22, 27, 0.54)) padding-box,
-          conic-gradient(from var(--glass-rim) at 50% 50%,
-            rgba(255, 255, 255, 0.96) 0%, rgba(100, 233, 255, 0.85) 18%,
-            rgba(56, 189, 248, 0.34) 36%, rgba(56, 189, 248, 0.14) 52%,
-            rgba(56, 189, 248, 0.34) 68%, rgba(100, 233, 255, 0.85) 84%,
-            rgba(255, 255, 255, 0.96) 100%) border-box !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.094) 0%, rgba(255, 255, 255, 0) 40%),
+          linear-gradient(180deg, rgba(45, 66, 90, 0.26) 0%, rgba(19, 31, 46, 0.15) 100%) !important;
+      }
+      #home-action[data-tone="connecting"]::before, .home-action[data-tone="connecting"]::before,
+      #compact-action[data-tone="connecting"]::before, .compact-action[data-tone="connecting"]::before {
+        background: conic-gradient(from var(--glass-rim) at 50% 50%,
+          rgba(244, 251, 255, 0.90) 0deg,
+          rgba(120, 201, 240, 0.65) 48deg,
+          rgba(96, 165, 250, 0.26) 110deg,
+          rgba(56, 189, 248, 0.52) 180deg,
+          rgba(96, 165, 250, 0.22) 255deg,
+          rgba(120, 201, 240, 0.60) 318deg,
+          rgba(244, 251, 255, 0.90) 360deg) !important;
+        animation: glass-rim-spin 3.2s linear infinite !important;
       }
 
-      /* Error: Translucent Smoked Coral Glass */
+      /* Error: Translucent Coral Glass + Edge-Only Rose Rim */
       #home-action[data-tone="error"], .home-action[data-tone="error"],
       #compact-action[data-tone="error"], .compact-action[data-tone="error"] {
-        border-color: transparent !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.20) 0%, rgba(255, 255, 255, 0.03) 45%, rgba(255, 255, 255, 0.01) 100%) padding-box,
-          linear-gradient(180deg, rgba(58, 24, 32, 0.56), rgba(34, 16, 20, 0.52)) padding-box,
-          conic-gradient(from var(--glass-rim) at 50% 50%,
-            rgba(255, 255, 255, 0.92) 0%, rgba(251, 113, 133, 0.86) 18%,
-            rgba(225, 29, 72, 0.42) 36%, rgba(136, 19, 55, 0.18) 52%,
-            rgba(225, 29, 72, 0.42) 68%, rgba(251, 113, 133, 0.86) 84%,
-            rgba(255, 255, 255, 0.92) 100%) border-box !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0) 40%),
+          linear-gradient(180deg, rgba(53, 38, 48, 0.22) 0%, rgba(30, 20, 28, 0.14) 100%) !important;
+      }
+      #home-action[data-tone="error"]::before, .home-action[data-tone="error"]::before,
+      #compact-action[data-tone="error"]::before, .compact-action[data-tone="error"]::before {
+        background: conic-gradient(from var(--glass-rim) at 50% 50%,
+          rgba(255, 241, 242, 0.72) 0deg,
+          rgba(244, 63, 94, 0.45) 72deg,
+          rgba(251, 113, 133, 0.68) 150deg,
+          rgba(255, 255, 255, 0.20) 235deg,
+          rgba(244, 63, 94, 0.42) 305deg,
+          rgba(255, 241, 242, 0.72) 360deg) !important;
       }
 
-      /* Stopping / Disabled: Muted Neutral Liquid Glass */
+      /* Stopping / Disabled: Muted Static Glass */
       #home-action[data-tone="stopping"], .home-action[data-tone="stopping"],
       #compact-action[data-tone="stopping"], .compact-action[data-tone="stopping"],
       #home-action:disabled, .home-action:disabled,
       #compact-action:disabled, .compact-action:disabled {
-        border-color: rgba(255, 255, 255, 0.14) !important;
-        border-top-color: rgba(255, 255, 255, 0.34) !important;
-        background: linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(24, 26, 30, 0.50) 100%) !important;
+        background: linear-gradient(180deg, rgba(43, 57, 75, 0.21) 0%, rgba(19, 28, 41, 0.125) 100%) !important;
+        opacity: 0.72 !important;
+      }
+      #home-action[data-tone="stopping"]::before, .home-action[data-tone="stopping"]::before,
+      #compact-action[data-tone="stopping"]::before, .compact-action[data-tone="stopping"]::before,
+      #home-action:disabled::before, .home-action:disabled::before,
+      #compact-action:disabled::before, .compact-action:disabled::before {
+        background: linear-gradient(135deg,
+          rgba(255, 255, 255, 0.31) 0%, rgba(60, 82, 104, 0.19) 34%,
+          rgba(82, 98, 122, 0.15) 72%, rgba(255, 255, 255, 0.18) 100%) !important;
         animation: none !important;
       }
 
-      /* Secondary Pill: "обновить замер" & Update Button */
+      /* Zoomed-in Floating Compact Dock Bar (.home-compact): True Apple/Android Liquid Glass */
+      .network-atlas .home-compact {
+        border-radius: 26px !important;
+        padding: 14px 18px !important;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.085) 0%, rgba(255, 255, 255, 0) 42%),
+          linear-gradient(180deg, rgba(28, 44, 63, 0.34) 0%, rgba(18, 29, 42, 0.22) 55%, rgba(10, 17, 28, 0.16) 100%) !important;
+        border: 1px solid rgba(137, 185, 231, 0.18) !important;
+        border-top-color: rgba(255, 255, 255, 0.38) !important;
+        border-bottom-color: rgba(137, 185, 231, 0.12) !important;
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.18),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.16),
+          0 14px 38px rgba(4, 9, 18, 0.46) !important;
+        backdrop-filter: blur(26px) saturate(185%) !important;
+        -webkit-backdrop-filter: blur(26px) saturate(185%) !important;
+      }
+      .home-compact .compact-route { gap: 11px !important; }
+      .home-compact #compact-flag { width: auto !important; height: auto !important; }
+      .home-compact #compact-flag svg { width: 38px !important; height: 28px !important; display: block !important; }
+      .home-compact .compact-metrics {
+        border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+        padding-top: 9px !important;
+        margin-top: 2px !important;
+        gap: 14px !important;
+      }
+
+      /* Secondary Pill: "обновить замер" & Update Button (Android glassButtonBackground parity) */
       #home-measure, .home-measure {
         height: 46px !important;
         min-height: 46px !important;
         margin-top: -2px !important;
-        border-radius: 9999px !important;
-        border: 1px solid rgba(255, 255, 255, 0.16) !important;
-        border-top-color: rgba(255, 255, 255, 0.56) !important;
-        border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+        border-radius: 24px !important;
+        border: 1px solid rgba(137, 185, 231, 0.20) !important;
+        border-top-color: rgba(255, 255, 255, 0.36) !important;
+        border-bottom-color: rgba(205, 230, 255, 0.18) !important;
         font-size: 13.5px !important;
-        font-weight: 600 !important;
+        font-weight: 580 !important;
         letter-spacing: -0.01em !important;
-        color: #F8FAFC !important;
+        color: #F2F5FC !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 46%, rgba(255, 255, 255, 0.01) 100%),
-          rgba(26, 28, 34, 0.48) !important;
-        box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.30), inset 0 -1px 0 rgba(0, 0, 0, 0.25), 0 6px 18px rgba(0, 0, 0, 0.30) !important;
-        backdrop-filter: blur(24px) saturate(190%) !important;
-        -webkit-backdrop-filter: blur(24px) saturate(190%) !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 42%),
+          linear-gradient(180deg, rgba(68, 87, 112, 0.38) 0%, rgba(16, 29, 44, 0.16) 100%) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 4px 14px rgba(4, 10, 20, 0.28) !important;
+        backdrop-filter: blur(22px) saturate(175%) !important;
+        -webkit-backdrop-filter: blur(22px) saturate(175%) !important;
         animation: none !important;
         transition: transform 120ms cubic-bezier(0.23, 1, 0.32, 1), filter 160ms ease, border-color 160ms ease !important;
       }
       #home-measure:hover, .home-measure:hover {
         filter: brightness(1.12) !important;
-        border-top-color: rgba(255, 255, 255, 0.78) !important;
+        border-top-color: rgba(255, 255, 255, 0.56) !important;
       }
       #home-measure:active, .home-measure:active {
-        transform: scale(0.975) !important;
+        transform: scale(0.985) !important;
       }
 
       /* Compact Route Selector Pill ("выбрать/выбрано") */
@@ -4107,47 +4212,47 @@
         min-width: 66px !important;
         min-height: 36px !important;
         padding: 6px 14px !important;
-        border-radius: 9999px !important;
-        border: 1px solid rgba(255, 255, 255, 0.16) !important;
-        border-top-color: rgba(255, 255, 255, 0.52) !important;
+        border-radius: 24px !important;
+        border: 1px solid rgba(137, 185, 231, 0.20) !important;
+        border-top-color: rgba(255, 255, 255, 0.36) !important;
         font-size: 12.5px !important;
-        font-weight: 650 !important;
-        color: #F5F7FA !important;
+        font-weight: 620 !important;
+        color: #F2F5FC !important;
         background:
-          linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 48%, rgba(255, 255, 255, 0.01) 100%),
-          rgba(26, 28, 33, 0.48) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 4px 12px rgba(0, 0, 0, 0.26) !important;
-        backdrop-filter: blur(20px) saturate(185%) !important;
-        -webkit-backdrop-filter: blur(20px) saturate(185%) !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0) 44%),
+          linear-gradient(180deg, rgba(68, 87, 112, 0.36) 0%, rgba(16, 29, 44, 0.16) 100%) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 3px 10px rgba(4, 10, 20, 0.24) !important;
+        backdrop-filter: blur(20px) saturate(175%) !important;
+        -webkit-backdrop-filter: blur(20px) saturate(175%) !important;
         animation: none !important;
       }
       .btn-select-route:hover { filter: brightness(1.12) !important; }
       .btn-select-route:active { transform: scale(0.97) !important; }
       .btn-select-route.is-selected {
         color: #64E9FF !important;
-        border-color: rgba(100, 233, 255, 0.42) !important;
-        border-top-color: rgba(255, 255, 255, 0.72) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.40), 0 4px 14px rgba(0, 0, 0, 0.28) !important;
+        border-color: rgba(120, 186, 240, 0.34) !important;
+        border-top-color: rgba(255, 255, 255, 0.52) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 4px 12px rgba(4, 10, 20, 0.28) !important;
         background:
-          linear-gradient(180deg, rgba(100, 233, 255, 0.20) 0%, rgba(100, 233, 255, 0.05) 55%, rgba(255, 255, 255, 0.01) 100%),
-          rgba(32, 36, 42, 0.56) !important;
+          linear-gradient(180deg, rgba(255, 255, 255, 0.10) 0%, rgba(255, 255, 255, 0) 44%),
+          linear-gradient(180deg, rgba(34, 58, 86, 0.44) 0%, rgba(18, 32, 48, 0.22) 100%) !important;
       }
 
-      /* Neutral Smoked Liquid Glass Cards (Routes, Profile, Settings) */
+      /* Translucent Route Cards & Glass Containers (Нидерланды, Германия, Россия, Финдия — 1:1 Android DeyttUi) */
       .liquid-glass-card {
         background: var(--liquid-glass-row-bg) !important;
-        border: 1px solid rgba(255, 255, 255, 0.13) !important;
-        border-top-color: rgba(255, 255, 255, 0.42) !important;
-        border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+        border: 1px solid rgba(112, 168, 224, 0.16) !important;
+        border-top-color: rgba(255, 255, 255, 0.30) !important;
+        border-bottom-color: rgba(80, 128, 184, 0.10) !important;
         border-radius: 22px !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 0 rgba(0, 0, 0, 0.22), 0 10px 30px rgba(0, 0, 0, 0.34) !important;
-        backdrop-filter: blur(26px) saturate(190%) !important;
-        -webkit-backdrop-filter: blur(26px) saturate(190%) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 8px 26px rgba(4, 10, 20, 0.34) !important;
+        backdrop-filter: blur(22px) saturate(175%) !important;
+        -webkit-backdrop-filter: blur(22px) saturate(175%) !important;
       }
       .liquid-glass-card:active { transform: scale(0.992) !important; }
       .liquid-glass-card.is-selected {
-        border-color: rgba(255, 255, 255, 0.24) !important;
-        border-top-color: rgba(255, 255, 255, 0.58) !important;
+        border-color: rgba(120, 186, 240, 0.28) !important;
+        border-top-color: rgba(255, 255, 255, 0.42) !important;
         background: var(--liquid-glass-row-bg-selected) !important;
       }
       .country-accordion-header:hover { background: transparent !important; }
@@ -4168,32 +4273,60 @@
         box-sizing: border-box !important;
         padding: 12px 16px !important;
       }
-      .country-flag-wrap { width: 44px !important; height: 30px !important; background: transparent !important; box-shadow: none !important; border: none !important; overflow: visible !important; }
+      .country-flag-wrap { width: 44px !important; height: 32px !important; background: transparent !important; box-shadow: none !important; border: none !important; overflow: visible !important; }
       .country-header-left { gap: 10px !important; }
       #card-route-ru-de { margin-bottom: 10px !important; }
       .routes-section-label { margin: 0 0 0 2px !important; }
 
+      .btn-profile-primary, .profile-btn-primary,
+      .btn-profile-secondary, .profile-btn-secondary {
+        border-radius: 24px !important;
+        background: var(--liquid-glass-pill-bg) !important;
+        border: 1px solid rgba(137, 185, 231, 0.22) !important;
+        border-top-color: rgba(255, 255, 255, 0.38) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), 0 4px 14px rgba(4, 10, 20, 0.28) !important;
+        backdrop-filter: blur(22px) saturate(175%) !important;
+        -webkit-backdrop-filter: blur(22px) saturate(175%) !important;
+      }
+      .glass-modal-card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, transparent 40%), linear-gradient(180deg, rgba(52, 66, 86, 0.78) 0%, rgba(16, 27, 44, 0.84) 100%) !important;
+        border: 1px solid rgba(137, 185, 231, 0.24) !important;
+        border-top-color: rgba(255, 255, 255, 0.42) !important;
+        backdrop-filter: blur(28px) saturate(185%) !important;
+        -webkit-backdrop-filter: blur(28px) saturate(185%) !important;
+      }
+
       :is(.nav-item, button, .country-accordion-header, .proto-row, .setting-item, .profile-user-card):focus-visible {
-        outline: 2px solid rgba(100, 233, 255, 0.85) !important;
+        outline: 2px solid rgba(100, 233, 255, 0.88) !important;
         outline-offset: 2px !important;
       }
 
-      .network-atlas.reduce-motion #home-action, .network-atlas.reduce-motion .home-action,
-      .network-atlas.reduce-motion #compact-action, .network-atlas.reduce-motion .compact-action,
+      .network-atlas.reduce-motion #home-action::before, .network-atlas.reduce-motion .home-action::before,
+      .network-atlas.reduce-motion #compact-action::before, .network-atlas.reduce-motion .compact-action::before,
       .network-atlas.reduce-motion #home-measure, .network-atlas.reduce-motion .home-measure {
         animation: none !important;
       }
       @media (prefers-reduced-motion: reduce) {
-        #home-action, .home-action, #compact-action, .compact-action,
+        #home-action::before, .home-action::before, #compact-action::before, .compact-action::before,
         #home-measure, .home-measure { animation: none !important; }
       }
       @media (prefers-reduced-transparency: reduce) {
         .nav-container, .nav-jelly-pill, .liquid-glass-card, .quick-select-card,
-        #home-action, #home-measure, .btn-select-route, .btn-action-glass,
+        .network-atlas .home-compact, #home-action, .home-action, #compact-action, .compact-action,
+        #home-measure, .home-measure, .btn-select-route, .btn-action-glass,
         .btn-profile-primary, .btn-profile-secondary, .glass-modal-card {
           backdrop-filter: none !important;
           -webkit-backdrop-filter: none !important;
-          background: #1B1E24 !important;
+          background: #141E2E !important;
+        }
+        .nav-container.has-webgl-dock .nav-label-wrap { opacity: 1 !important; }
+        .nav-glass-canvas { display: none !important; }
+      }
+      @media (forced-colors: active) {
+        .liquid-glass-card, #home-action, #compact-action, #home-measure, .btn-select-route,
+        .network-atlas .home-compact, .nav-container {
+          border: 1px solid ButtonText !important;
+          forced-color-adjust: auto;
         }
       }
 
@@ -4208,6 +4341,7 @@
 
     <!-- Capsule Navigation Dock -->
     <nav class="nav-container" id="main-nav" role="tablist">
+      <canvas class="nav-glass-canvas" id="nav-glass-canvas" aria-hidden="true"></canvas>
       <div class="nav-jelly-pill" id="nav-pill"></div>
 
       <button class="nav-item is-active" id="tab-home" data-tab="home" role="tab" aria-selected="true">
@@ -5524,8 +5658,9 @@
       }, duration);
     }
 
-    // Navigation & Stage Controller — Interactive Liquid Glass Spring Droplet ("капелька")
+    // Navigation & Stage Controller — Real-Time WebGL2 LiquidGlassDock (Android AGSL + Apple Optical Chromatic Refraction)
     const navContainer = document.getElementById("main-nav");
+    const navGlassCanvas = document.getElementById("nav-glass-canvas");
     const navPill = document.getElementById("nav-pill");
     const navItems = Array.from(document.querySelectorAll(".nav-item"));
     const stageHome = document.getElementById("stage-home");
@@ -5534,84 +5669,555 @@
     const stageSettings = document.getElementById("stage-settings");
     const allStages = [stageHome, stageRoutes, stageProfile, stageSettings];
 
-    const dockSpring = {
-      x: 0, w: 0, vx: 0, vw: 0, targetX: 0, targetW: 0,
-      initialized: false, rafId: 0, dragging: false, grabOffsetX: 0, pointerDownX: 0
+    const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const reduceTransparencyQuery = window.matchMedia("(prefers-reduced-transparency: reduce)");
+    const isReducedMotion = () => reduceMotionQuery.matches || document.getElementById("stage-home")?.classList.contains("reduce-motion");
+
+    const dockState = {
+      activeIdx: Math.max(0, navItems.findIndex(b => b.classList.contains("is-active"))),
+      pos: 0,
+      posVel: 0,
+      targetPos: 0,
+      shape: 0,
+      shapeVel: 0,
+      hovering: false,
+      hoverMix: 0,
+      dragging: false,
+      dragStartX: 0,
+      dragOriginPos: 0,
+      lastLensPos: 0,
+      lastTimeMs: 0,
+      lastMotionMs: 0,
+      glideStartedAt: 0,
+      glideFrom: 0,
+      glideTarget: 0,
+      glidePulse: 0,
+      glideLight: 0,
+      stabilization: 0,
+      gestureElasticity: 1,
+      rafId: 0,
+      initialized: false
     };
+    dockState.pos = dockState.activeIdx;
+    dockState.targetPos = dockState.activeIdx;
+    dockState.lastLensPos = dockState.activeIdx;
 
-    function getNavItemMetrics(item) {
-      if (!navContainer || !item) return { x: 0, w: 0 };
-      const containerRect = navContainer.getBoundingClientRect();
-      const targetRect = item.getBoundingClientRect();
-      return { x: targetRect.left - containerRect.left, w: targetRect.width };
+    function getDockButtonMetrics() {
+      if (!navContainer || !navItems.length) return [];
+      const cr = navContainer.getBoundingClientRect();
+      return navItems.map(btn => {
+        const br = btn.getBoundingClientRect();
+        return {
+          btn,
+          left: br.left - cr.left,
+          top: br.top - cr.top,
+          width: br.width,
+          height: br.height,
+          centerX: (br.left - cr.left) + br.width * 0.5
+        };
+      });
     }
 
-    function applyDockDropletTransform() {
-      if (!navPill) return;
-      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-        document.getElementById("stage-home")?.classList.contains("reduce-motion");
-      const speed = Math.abs(dockSpring.vx);
-      const stretchX = (!reduced && !dockSpring.dragging) ? Math.min(0.14, speed * 0.0045) : (dockSpring.dragging ? 0.05 : 0);
-      const squashY = stretchX * 0.42;
-      navPill.style.width = dockSpring.w.toFixed(2) + "px";
-      navPill.style.transform = `translate3d(${dockSpring.x.toFixed(2)}px, 0, 0) scale(${(1 + stretchX).toFixed(4)}, ${(1 - squashY).toFixed(4)})`;
+    function indexToLensMetrics(posFloat, metrics) {
+      if (!metrics.length) return { cx: 0, w: 0, h: 0 };
+      const last = metrics.length - 1;
+      const clamped = Math.max(-0.05, Math.min(last + 0.05, posFloat));
+      const base = Math.max(0, Math.min(last, clamped));
+      const i0 = Math.floor(base);
+      const i1 = Math.min(last, i0 + 1);
+      const t = base - i0;
+      const m0 = metrics[i0];
+      const m1 = metrics[i1];
+      let cx = m0.centerX + (m1.centerX - m0.centerX) * t;
+      if (clamped < 0) cx += clamped * m0.width * 0.45;
+      else if (clamped > last) cx += (clamped - last) * m1.width * 0.45;
+      const w = m0.width + (m1.width - m0.width) * t;
+      return { cx, w, h: Math.max(m0.height, m1.height) };
     }
 
-    function stepDockSpring() {
-      dockSpring.rafId = 0;
-      const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
-        document.getElementById("stage-home")?.classList.contains("reduce-motion");
-      if (reduced || dockSpring.dragging) {
-        if (reduced) {
-          dockSpring.x = dockSpring.targetX;
-          dockSpring.w = dockSpring.targetW;
-          dockSpring.vx = 0;
-          dockSpring.vw = 0;
+    function clientXToPos(clientX, metrics) {
+      if (!navContainer || !metrics.length) return 0;
+      const cr = navContainer.getBoundingClientRect();
+      const relX = clientX - cr.left;
+      if (relX <= metrics[0].centerX) return 0;
+      const last = metrics.length - 1;
+      if (relX >= metrics[last].centerX) return last;
+      for (let i = 0; i < last; i++) {
+        const a = metrics[i].centerX;
+        const b = metrics[i + 1].centerX;
+        if (relX >= a && relX <= b) {
+          return i + (b > a ? (relX - a) / (b - a) : 0);
         }
-        applyDockDropletTransform();
-        return;
       }
-      const stiffness = 0.24;
-      const damping = 0.68;
-      const fx = (dockSpring.targetX - dockSpring.x) * stiffness;
-      const fw = (dockSpring.targetW - dockSpring.w) * stiffness;
-      dockSpring.vx = (dockSpring.vx + fx) * damping;
-      dockSpring.vw = (dockSpring.vw + fw) * damping;
-      dockSpring.x += dockSpring.vx;
-      dockSpring.w += dockSpring.vw;
+      return dockState.activeIdx;
+    }
 
-      const settled = Math.abs(dockSpring.targetX - dockSpring.x) < 0.15 &&
-        Math.abs(dockSpring.targetW - dockSpring.w) < 0.15 &&
-        Math.abs(dockSpring.vx) < 0.08 &&
-        Math.abs(dockSpring.vw) < 0.08;
-      if (settled) {
-        dockSpring.x = dockSpring.targetX;
-        dockSpring.w = dockSpring.targetW;
-        dockSpring.vx = 0;
-        dockSpring.vw = 0;
-        applyDockDropletTransform();
+    // Build Canvas2D draw callbacks directly from existing DOM SVGs (zero duplicated icon geometry)
+    const navTabDrawables = navItems.map(btn => {
+      const svg = btn.querySelector("svg");
+      const label = (btn.querySelector(".nav-label-wrap span")?.textContent || btn.textContent || "").trim();
+      const ops = [];
+      if (svg) {
+        for (const el of svg.children) {
+          const tag = el.tagName.toLowerCase();
+          if (tag === "path") {
+            const d = el.getAttribute("d");
+            if (d) ops.push({ type: "path", path: new Path2D(d) });
+          } else if (tag === "circle") {
+            ops.push({
+              type: "circle",
+              cx: parseFloat(el.getAttribute("cx") || "0"),
+              cy: parseFloat(el.getAttribute("cy") || "0"),
+              r: parseFloat(el.getAttribute("r") || "0")
+            });
+          } else if (tag === "line") {
+            ops.push({
+              type: "line",
+              x1: parseFloat(el.getAttribute("x1") || "0"),
+              y1: parseFloat(el.getAttribute("y1") || "0"),
+              x2: parseFloat(el.getAttribute("x2") || "0"),
+              y2: parseFloat(el.getAttribute("y2") || "0")
+            });
+          }
+        }
+      }
+      return { label, ops };
+    });
+
+    // WebGL2 Real-Time DockRefraction Renderer (Exact port of Android LiquidGlassDock.kt)
+    const dockGl = (() => {
+      if (!navContainer || !navGlassCanvas || reduceTransparencyQuery.matches) return null;
+      const gl = navGlassCanvas.getContext("webgl2", {
+        alpha: true,
+        antialias: false,
+        premultipliedAlpha: false,
+        preserveDrawingBuffer: false
+      });
+      if (!gl) return null;
+
+      const vsSrc = `#version 300 es
+        in vec2 a_pos;
+        void main() { gl_Position = vec4(a_pos, 0.0, 1.0); }`;
+      const fsSrc = `#version 300 es
+        precision highp float;
+        uniform vec2 u_resolution;
+        uniform float u_scale;
+        uniform vec4 u_dock;
+        uniform vec4 u_lens;
+        uniform vec4 u_motion;
+        uniform float u_hoverMix;
+        uniform float u_reducedMotion;
+        uniform sampler2D u_backdrop;
+        out vec4 fragColor;
+
+        float sdRoundRect(vec2 p, vec2 b, float r) {
+          vec2 q = abs(p) - b + r;
+          return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+        }
+        vec2 roundRectNormal(vec2 p, vec2 b, float r) {
+          vec2 e = vec2(max(1.25, u_scale), 0.0);
+          return normalize(vec2(
+            sdRoundRect(p + e.xy, b, r) - sdRoundRect(p - e.xy, b, r),
+            sdRoundRect(p + e.yx, b, r) - sdRoundRect(p - e.yx, b, r)
+          ) + 1e-5);
+        }
+        vec3 sampleBackdrop(vec2 px) {
+          vec2 clamped = clamp(px, vec2(0.5), u_resolution - vec2(0.5));
+          return texture(u_backdrop, clamped / u_resolution).rgb;
+        }
+        void main() {
+          vec2 p = vec2(gl_FragCoord.x, u_resolution.y - gl_FragCoord.y);
+          vec2 center = u_resolution * 0.5;
+          vec2 dockPos = p - center;
+
+          float inset = u_dock.z;
+          vec2 bodyHalf = max(u_dock.xy - vec2(0.0, inset), vec2(2.0));
+          float bodyR = bodyHalf.y;
+          float dockDist = sdRoundRect(dockPos, bodyHalf, bodyR);
+          float bodyAlpha = 1.0 - smoothstep(-1.05 * u_scale, 1.05 * u_scale, dockDist);
+          if (bodyAlpha <= 0.001) discard;
+
+          vec2 bodyNormal = roundRectNormal(dockPos, bodyHalf, bodyR);
+          float bevel = smoothstep(-inset, 0.0, dockDist);
+          float bodyRim = smoothstep(-2.2 * u_scale, 0.0, dockDist);
+
+          float tension = clamp(u_motion.z, 0.0, 1.0);
+          float refraction = clamp(u_motion.x, 0.0, 1.5);
+          float stabilization = clamp(u_motion.w, 0.0, 1.0);
+
+          vec2 local = p - u_lens.xy;
+          float side = min(abs(local.x) / max(u_lens.z, 1.0), 1.0);
+          vec2 contour = vec2(local.x, local.y * (1.0 + 0.11 * tension * side * side));
+          float lensRadius = min(u_lens.z, u_lens.w) * (0.82 + 0.13 * tension);
+          float lensDist = sdRoundRect(contour, u_lens.zw, lensRadius);
+          float lensAlpha = 1.0 - smoothstep(-1.15 * u_scale, 1.15 * u_scale, lensDist);
+
+          vec2 lensNormal = roundRectNormal(contour, u_lens.zw, lensRadius);
+          float rim = smoothstep(-inset * 1.45, 0.0, lensDist);
+          float fold = rim * rim;
+
+          float slowBend = (0.70 + refraction * 1.75) * fold;
+          float fastBend = 0.55 * rim * (1.0 - rim);
+          float bend = mix(slowBend, fastBend, stabilization);
+          float restMag = 0.025 + 0.026 * u_hoverMix;
+          float focus = mix(restMag + refraction * 0.024, 0.16 * refraction * (1.0 - rim), stabilization);
+          if (u_reducedMotion > 0.5) {
+            bend = 0.22 * fold;
+            focus = 0.012;
+          }
+
+          vec2 samplePoint = p - bodyNormal * inset * 0.90 * bevel;
+          vec2 bentPoint = p - local * focus - lensNormal * inset * bend;
+          samplePoint = mix(samplePoint, bentPoint, lensAlpha);
+
+          vec3 color = sampleBackdrop(samplePoint);
+
+          // Chromatic RGB dispersion along beveled droplet perimeter
+          float activeChroma = max(refraction * (1.0 - stabilization * 0.50), 0.34 * u_hoverMix + 0.18);
+          if (u_reducedMotion > 0.5) activeChroma = 0.06;
+          float fade = smoothstep(0.02, 0.10, fold) * smoothstep(0.04, 0.22, activeChroma);
+          if (fade > 0.001 && lensAlpha > 0.001) {
+            vec2 disp = lensNormal * inset * activeChroma * 0.36 * fold * fade * lensAlpha;
+            color.r = sampleBackdrop(samplePoint + disp).r;
+            color.b = sampleBackdrop(samplePoint - disp).b;
+          }
+
+          // Subtle internal liquid lens luminescence
+          float innerGlow = smoothstep(0.0, -u_lens.w * 0.7, lensDist) * (0.045 + 0.030 * u_hoverMix);
+          color += vec3(0.54, 0.78, 0.98) * innerGlow * lensAlpha;
+
+          // Capsule rim + Android directional droplet specular glints
+          vec3 light = vec3(0.72, 0.83, 0.96) * ((0.12 * max(-bodyNormal.y, 0.0) + 0.028) * bodyRim);
+          float top = max(dot(lensNormal, normalize(vec2(-0.42 + u_motion.y * 0.85, -0.91))), 0.0);
+          float bounce = max(dot(lensNormal, normalize(vec2(0.34, 0.94))), 0.0);
+          float glint = (0.19 * top * top + 0.12 * bounce * bounce) * rim * rim * rim;
+          float gleam = glint * (1.0 + stabilization * refraction * 0.8 + 0.25 * u_hoverMix) + 0.038 * fold;
+          light = mix(light, vec3(0.78, 0.88, 1.0) * gleam, lensAlpha);
+
+          fragColor = vec4(color + light, bodyAlpha);
+        }`;
+
+      const compile = (type, src) => {
+        const sh = gl.createShader(type);
+        gl.shaderSource(sh, src);
+        gl.compileShader(sh);
+        if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+          gl.deleteShader(sh);
+          return null;
+        }
+        return sh;
+      };
+      const vs = compile(gl.VERTEX_SHADER, vsSrc);
+      const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+      if (!vs || !fs) return null;
+      const prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+      const locPos = gl.getAttribLocation(prog, "a_pos");
+      gl.enableVertexAttribArray(locPos);
+      gl.vertexAttribPointer(locPos, 2, gl.FLOAT, false, 0, 0);
+
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+      const backdropCanvas = document.createElement("canvas");
+      const bCtx = backdropCanvas.getContext("2d");
+
+      return {
+        gl, prog, tex, backdropCanvas, bCtx,
+        uRes: gl.getUniformLocation(prog, "u_resolution"),
+        uScale: gl.getUniformLocation(prog, "u_scale"),
+        uDock: gl.getUniformLocation(prog, "u_dock"),
+        uLens: gl.getUniformLocation(prog, "u_lens"),
+        uMotion: gl.getUniformLocation(prog, "u_motion"),
+        uHoverMix: gl.getUniformLocation(prog, "u_hoverMix"),
+        uReducedMotion: gl.getUniformLocation(prog, "u_reducedMotion"),
+        uBackdrop: gl.getUniformLocation(prog, "u_backdrop")
+      };
+    })();
+
+    if (dockGl && navContainer) {
+      navContainer.classList.add("has-webgl-dock");
+    }
+
+    function drawDockCssFallback(metrics) {
+      if (!navPill || !metrics.length) return;
+      const lens = indexToLensMetrics(dockState.pos, metrics);
+      const stretchX = !isReducedMotion() ? Math.min(0.14, Math.abs(dockState.posVel) * 0.015 + dockState.shape * 0.05) : 0;
+      const squashY = stretchX * 0.42;
+      navPill.style.width = lens.w.toFixed(2) + "px";
+      navPill.style.transform = `translate3d(${(lens.cx - lens.w * 0.5).toFixed(2)}px, 0, 0) scale(${(1 + stretchX).toFixed(4)}, ${(1 - squashY).toFixed(4)})`;
+    }
+
+    function renderDockFrame() {
+      const metrics = getDockButtonMetrics();
+      if (!metrics.length || !navContainer) return;
+
+      if (!dockGl || reduceTransparencyQuery.matches) {
+        navContainer.classList.remove("has-webgl-dock");
+        drawDockCssFallback(metrics);
         return;
       }
-      applyDockDropletTransform();
-      dockSpring.rafId = requestAnimationFrame(stepDockSpring);
+      if (!navContainer.classList.contains("has-webgl-dock")) {
+        navContainer.classList.add("has-webgl-dock");
+      }
+
+      const rect = navContainer.getBoundingClientRect();
+      if (rect.width <= 2 || rect.height <= 2) return;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const wPx = Math.max(4, Math.round(rect.width * dpr));
+      const hPx = Math.max(4, Math.round(rect.height * dpr));
+
+      if (navGlassCanvas.width !== wPx || navGlassCanvas.height !== hPx) {
+        navGlassCanvas.width = wPx;
+        navGlassCanvas.height = hPx;
+        dockGl.backdropCanvas.width = wPx;
+        dockGl.backdropCanvas.height = hPx;
+      }
+
+      const ctx = dockGl.bCtx;
+      ctx.clearRect(0, 0, wPx, hPx);
+      ctx.fillStyle = "#080D17";
+      ctx.fillRect(0, 0, wPx, hPx);
+
+      // Reflect stars behind top capsule & faint globe/stage aura into refraction texture
+      const starsCanvas = document.getElementById("stars-canvas");
+      if (starsCanvas && starsCanvas.width > 0 && window.innerWidth > 0 && window.innerHeight > 0) {
+        try {
+          const sx = starsCanvas.width / window.innerWidth;
+          const sy = starsCanvas.height / window.innerHeight;
+          ctx.drawImage(
+            starsCanvas,
+            Math.max(0, rect.left * sx), Math.max(0, rect.top * sy),
+            Math.max(1, rect.width * sx), Math.max(1, rect.height * sy),
+            0, 0, wPx, hPx
+          );
+        } catch (_) {}
+      }
+
+      // Soft horizon shimmer + Android DockRefraction glass tint wash (0xA2121822)
+      const glow = ctx.createRadialGradient(wPx * 0.5, hPx * 1.15, hPx * 0.1, wPx * 0.5, hPx * 1.15, wPx * 0.48);
+      glow.addColorStop(0, "rgba(62, 138, 212, 0.22)");
+      glow.addColorStop(1, "rgba(18, 24, 34, 0)");
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, wPx, hPx);
+
+      ctx.fillStyle = "rgba(18, 24, 34, 0.635)";
+      ctx.fillRect(0, 0, wPx, hPx);
+
+      // Paint 4 accessible tab icons + text directly into refraction backdrop for live warping + smoothstep tint
+      const iconPx = 17 * dpr;
+      const gapPx = (rect.width < 520 ? 6 : 8) * dpr;
+      const compactIconsOnly = metrics[0].width < 52;
+      const fontSize = (rect.width < 760 ? 13 : 14) * dpr;
+
+      for (let i = 0; i < metrics.length; i++) {
+        const m = metrics[i];
+        const tab = navTabDrawables[i];
+        const proximity = Math.max(0, Math.min(1, 1 - Math.abs(i - dockState.pos)));
+        const tint = proximity * proximity * (3 - 2 * proximity);
+        const cr = Math.round(214 + (100 - 214) * tint);
+        const cg = Math.round(220 + (233 - 220) * tint);
+        const cb = Math.round(229 + (255 - 229) * tint);
+        const strokeColor = `rgb(${cr}, ${cg}, ${cb})`;
+        const textColor = `rgba(${cr}, ${cg}, ${cb}, ${(0.88 + 0.12 * tint).toFixed(3)})`;
+        const weight = tint > 0.5 ? 600 : 500;
+
+        ctx.save();
+        ctx.font = `${weight} ${fontSize}px "Inter Tight", -apple-system, "Segoe UI", sans-serif`;
+        ctx.textBaseline = "middle";
+        const textW = compactIconsOnly ? 0 : ctx.measureText(tab.label).width;
+        const totalW = iconPx + (compactIconsOnly ? 0 : gapPx + textW);
+        const startX = m.centerX * dpr - totalW * 0.5;
+        const midY = (m.top + m.height * 0.5) * dpr;
+
+        // Draw icon scaled from 24x24 viewBox
+        ctx.save();
+        ctx.translate(startX, midY - iconPx * 0.5);
+        const sc = iconPx / 24;
+        ctx.scale(sc, sc);
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2.05;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        for (const op of tab.ops) {
+          if (op.type === "path") {
+            ctx.stroke(op.path);
+          } else if (op.type === "circle") {
+            ctx.beginPath();
+            ctx.arc(op.cx, op.cy, op.r, 0, Math.PI * 2);
+            ctx.stroke();
+          } else if (op.type === "line") {
+            ctx.beginPath();
+            ctx.moveTo(op.x1, op.y1);
+            ctx.lineTo(op.x2, op.y2);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+
+        if (!compactIconsOnly) {
+          ctx.fillStyle = textColor;
+          ctx.fillText(tab.label, startX + iconPx + gapPx, midY + 0.4 * dpr);
+        }
+        ctx.restore();
+      }
+
+      const lens = indexToLensMetrics(dockState.pos, metrics);
+      const reduced = isReducedMotion();
+      const phase = (dockState.pos - Math.round(dockState.pos)) * Math.PI;
+      const travel = Math.abs(Math.sin(phase));
+      const ripple = travel * Math.sin(phase * 4);
+      const tension = reduced ? 0 : Math.max(0, Math.min(1, dockState.shape * Math.max(travel, dockState.glidePulse, dockState.hoverMix * 0.35)));
+      const refraction = reduced ? 0 : Math.max(travel + ripple * 0.16, dockState.glidePulse, dockState.hoverMix * 0.45);
+      const lensWidthPx = (lens.w * 0.94 + tension * 8) * dpr;
+      const lensHeightPx = Math.max(24, (rect.height - 10) * 0.94) * dpr;
+      const insetPx = 4.5 * dpr;
+
+      const gl = dockGl.gl;
+      gl.viewport(0, 0, wPx, hPx);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(dockGl.prog);
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, dockGl.tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, dockGl.backdropCanvas);
+      gl.uniform1i(dockGl.uBackdrop, 0);
+
+      gl.uniform2f(dockGl.uRes, wPx, hPx);
+      gl.uniform1f(dockGl.uScale, dpr);
+      gl.uniform4f(dockGl.uDock, wPx * 0.5, hPx * 0.5, insetPx, (hPx * 0.5) - insetPx);
+      gl.uniform4f(dockGl.uLens, lens.cx * dpr, hPx * 0.5, lensWidthPx * 0.5, lensHeightPx * 0.5);
+      gl.uniform4f(dockGl.uMotion, refraction, dockState.glideLight, tension, dockState.stabilization);
+      gl.uniform1f(dockGl.uHoverMix, reduced ? 0 : dockState.hoverMix);
+      gl.uniform1f(dockGl.uReducedMotion, reduced ? 1 : 0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    function stepDockPhysics(nowMs) {
+      dockState.rafId = 0;
+      const dtMs = dockState.lastTimeMs ? Math.max(6, Math.min(48, nowMs - dockState.lastTimeMs)) : 16;
+      const dt = dtMs * 0.001;
+      dockState.lastTimeMs = nowMs;
+
+      const reduced = isReducedMotion();
+      const targetHoverMix = (dockState.hovering || dockState.dragging) ? 1 : 0;
+      dockState.hoverMix += (targetHoverMix - dockState.hoverMix) * Math.min(1, dt * 14);
+
+      if (dockState.glideStartedAt > 0 && !reduced) {
+        const progress = Math.min(1, (nowMs - dockState.glideStartedAt) / 285);
+        const inv = 1 - progress;
+        dockState.pos = dockState.glideTarget + (dockState.glideFrom - dockState.glideTarget) * inv * inv;
+        const pulse = Math.sin(progress * Math.PI) * (1 - progress * 0.4);
+        dockState.glidePulse = pulse;
+        dockState.glideLight = pulse * Math.max(-1, Math.min(1, dockState.glideTarget - dockState.glideFrom));
+        dockState.stabilization = Math.min(1, pulse * 3.5);
+        if (progress >= 1) {
+          dockState.pos = dockState.glideTarget;
+          dockState.posVel = 0;
+          dockState.glideStartedAt = 0;
+          dockState.glidePulse = 0;
+          dockState.glideLight = 0;
+        }
+      } else if (reduced) {
+        dockState.pos = dockState.targetPos;
+        dockState.posVel = 0;
+        dockState.shape = 0;
+        dockState.shapeVel = 0;
+        dockState.stabilization = 0;
+      } else if (!dockState.dragging) {
+        // Critically damped analytic spring (matching LiquidGlassDock.kt ω₀ = 17..24)
+        const omega = dockState.hovering ? 24 : 17;
+        const offset = dockState.pos - dockState.targetPos;
+        const exp = Math.exp(-omega * dt);
+        const factor = dockState.posVel + omega * offset;
+        dockState.pos = dockState.targetPos + (offset + factor * dt) * exp;
+        dockState.posVel = (dockState.posVel - omega * factor * dt) * exp;
+      }
+
+      // Shape elasticity spring (ω₀ = 23) responding to instantaneous velocity & acceleration
+      if (!reduced) {
+        const instVel = Math.max(-6, Math.min(6, (dockState.pos - dockState.lastLensPos) / Math.max(0.004, dt)));
+        dockState.lastLensPos = dockState.pos;
+        const speed = Math.abs(instVel);
+        const pull = Math.min(1, speed * 0.34 + Math.abs(instVel) * 0.08) * dockState.gestureElasticity;
+        const omegaS = 23;
+        const expS = Math.exp(-omegaS * dt);
+        const offS = dockState.shape - pull;
+        const facS = dockState.shapeVel + omegaS * offS;
+        dockState.shape = pull + (offS + facS * dt) * expS;
+        dockState.shapeVel = (dockState.shapeVel - omegaS * facS * dt) * expS;
+        if (dockState.glideStartedAt === 0) {
+          const fastBlendTarget = Math.max(0, Math.min(1, (speed - 2.2) / 3.0));
+          dockState.stabilization += (fastBlendTarget - dockState.stabilization) * (dtMs / (dtMs + 10));
+        }
+      }
+
+      renderDockFrame();
+
+      const settled = reduced || (
+        dockState.glideStartedAt === 0 &&
+        !dockState.dragging &&
+        Math.abs(dockState.pos - dockState.targetPos) < 0.0015 &&
+        Math.abs(dockState.posVel) < 0.01 &&
+        Math.abs(dockState.shape) < 0.004 &&
+        Math.abs(dockState.hoverMix - targetHoverMix) < 0.008
+      );
+      if (settled && !dockState.hovering && !dockState.dragging) {
+        dockState.pos = dockState.targetPos;
+        dockState.posVel = 0;
+        dockState.shape = 0;
+        dockState.shapeVel = 0;
+        dockState.hoverMix = 0;
+        dockState.stabilization = 0;
+        dockState.lastTimeMs = 0;
+        renderDockFrame();
+        return;
+      }
+      dockState.rafId = requestAnimationFrame(stepDockPhysics);
+    }
+
+    function ensureDockAnimating() {
+      if (!dockState.rafId) {
+        dockState.rafId = requestAnimationFrame(stepDockPhysics);
+      }
     }
 
     function updatePillPosition(targetItem, animateJelly = true) {
-      if (!navContainer || !navPill || !targetItem) return;
-      const { x, w } = getNavItemMetrics(targetItem);
-      if (w <= 0) return;
-      dockSpring.targetX = x;
-      dockSpring.targetW = w;
-      if (!dockSpring.initialized || !animateJelly) {
-        dockSpring.x = x;
-        dockSpring.w = w;
-        dockSpring.vx = 0;
-        dockSpring.vw = 0;
-        dockSpring.initialized = true;
-        applyDockDropletTransform();
+      if (!navContainer || !targetItem) return;
+      const idx = Math.max(0, navItems.indexOf(targetItem));
+      dockState.activeIdx = idx;
+      if (!dockState.initialized || !animateJelly || isReducedMotion()) {
+        dockState.pos = idx;
+        dockState.targetPos = idx;
+        dockState.posVel = 0;
+        dockState.shape = 0;
+        dockState.glideStartedAt = 0;
+        dockState.initialized = true;
+        renderDockFrame();
         return;
       }
-      if (!dockSpring.rafId) dockSpring.rafId = requestAnimationFrame(stepDockSpring);
+      const dist = Math.abs(idx - dockState.pos);
+      dockState.targetPos = idx;
+      if (dist >= 1.35) {
+        dockState.glideFrom = dockState.pos;
+        dockState.glideTarget = idx;
+        dockState.glideStartedAt = performance.now();
+        dockState.gestureElasticity = 0.90 + Math.random() * 0.25;
+      }
+      ensureDockAnimating();
     }
 
     function activateDockItem(item, notifyCSharp = true, animate = true) {
@@ -5630,73 +6236,83 @@
     if (navContainer) {
       let capturedPointerId = null;
       let dragActivated = false;
+
+      navContainer.addEventListener("pointerenter", e => {
+        if (e.pointerType === "touch" || !navItems.length) return;
+        dockState.hovering = true;
+        dockState.gestureElasticity = 0.90 + Math.random() * 0.22;
+        dockState.targetPos = clientXToPos(e.clientX, getDockButtonMetrics());
+        ensureDockAnimating();
+      });
+
+      navContainer.addEventListener("pointerleave", () => {
+        if (dockState.dragging) return;
+        dockState.hovering = false;
+        dockState.targetPos = dockState.activeIdx;
+        ensureDockAnimating();
+      });
+
       navContainer.addEventListener("pointerdown", e => {
         if (e.button !== 0 || !navItems.length) return;
-        const containerRect = navContainer.getBoundingClientRect();
-        const activeBtn = navItems.find(b => b.classList.contains("is-active")) || navItems[0];
-        if (!dockSpring.initialized) updatePillPosition(activeBtn, false);
-        const relX = e.clientX - containerRect.left;
-        dockSpring.pointerDownX = e.clientX;
-        dockSpring.grabOffsetX = Math.max(0, Math.min(dockSpring.w, relX - dockSpring.x));
+        dockState.dragStartX = e.clientX;
+        dockState.dragOriginPos = dockState.pos;
+        dockState.gestureElasticity = 0.88 + Math.random() * 0.26;
         dragActivated = false;
         capturedPointerId = e.pointerId;
       });
+
       navContainer.addEventListener("pointermove", e => {
-        if (capturedPointerId !== e.pointerId || !navItems.length) return;
-        if (!dragActivated && Math.abs(e.clientX - dockSpring.pointerDownX) > 6) {
-          dragActivated = true;
-          dockSpring.dragging = true;
-          try { navContainer.setPointerCapture(e.pointerId); } catch (_) {}
+        if (!navItems.length) return;
+        const metrics = getDockButtonMetrics();
+        if (capturedPointerId === e.pointerId) {
+          if (!dragActivated && Math.abs(e.clientX - dockState.dragStartX) > 6) {
+            dragActivated = true;
+            dockState.dragging = true;
+            dockState.glideStartedAt = 0;
+            try { navContainer.setPointerCapture(e.pointerId); } catch (_) {}
+          }
+          if (dragActivated) {
+            const p = clientXToPos(e.clientX, metrics);
+            dockState.pos = p;
+            dockState.targetPos = p;
+            ensureDockAnimating();
+            return;
+          }
         }
-        if (!dragActivated) return;
-        const containerRect = navContainer.getBoundingClientRect();
-        const minX = 5;
-        const maxX = Math.max(minX, containerRect.width - dockSpring.w - 5);
-        const prevX = dockSpring.x;
-        dockSpring.x = Math.max(minX, Math.min(maxX, (e.clientX - containerRect.left) - dockSpring.grabOffsetX));
-        dockSpring.vx = (dockSpring.x - prevX) * 0.65;
-        const centerX = dockSpring.x + dockSpring.w * 0.5;
-        let nearest = navItems[0];
-        let bestDist = Infinity;
-        for (const btn of navItems) {
-          const m = getNavItemMetrics(btn);
-          const dist = Math.abs(centerX - (m.x + m.w * 0.5));
-          if (dist < bestDist) { bestDist = dist; nearest = btn; }
+        if (e.pointerType !== "touch") {
+          dockState.hovering = true;
+          dockState.targetPos = clientXToPos(e.clientX, metrics);
+          ensureDockAnimating();
         }
-        if (nearest) {
-          dockSpring.w += (getNavItemMetrics(nearest).w - dockSpring.w) * 0.35;
-          navItems.forEach(btn => btn.classList.toggle("is-active", btn === nearest));
-        }
-        applyDockDropletTransform();
       });
+
       const finishDockPointer = e => {
         if (capturedPointerId !== e.pointerId) return;
         const wasDragged = dragActivated;
         capturedPointerId = null;
         dragActivated = false;
-        dockSpring.dragging = false;
+        dockState.dragging = false;
         try { if (navContainer.hasPointerCapture(e.pointerId)) navContainer.releasePointerCapture(e.pointerId); } catch (_) {}
         if (!wasDragged) return;
-        const projectedCenter = dockSpring.x + dockSpring.w * 0.5 + dockSpring.vx * 2.5;
-        let targetBtn = navItems[0];
-        let bestDist = Infinity;
-        for (const btn of navItems) {
-          const m = getNavItemMetrics(btn);
-          const dist = Math.abs(projectedCenter - (m.x + m.w * 0.5));
-          if (dist < bestDist) { bestDist = dist; targetBtn = btn; }
-        }
+        const projected = Math.max(0, Math.min(navItems.length - 1, Math.round(dockState.pos + dockState.posVel * 0.08)));
+        const targetBtn = navItems[projected];
         if (targetBtn) {
           targetBtn.dataset.skipNextClick = "1";
           setTimeout(() => { delete targetBtn.dataset.skipNextClick; }, 60);
           activateDockItem(targetBtn, true, true);
         }
       };
+
       navContainer.addEventListener("pointerup", finishDockPointer);
       navContainer.addEventListener("pointercancel", finishDockPointer);
       window.addEventListener("resize", () => {
-        const activeBtn = navItems.find(b => b.classList.contains("is-active"));
-        if (activeBtn) updatePillPosition(activeBtn, false);
-      });
+        renderDockFrame();
+      }, { passive: true });
+      reduceTransparencyQuery.addEventListener?.("change", () => renderDockFrame());
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => renderDockFrame());
+      }
+      requestAnimationFrame(() => renderDockFrame());
     }
 
     function switchStage(stageId) {
@@ -5751,35 +6367,88 @@
       }
     };
 
-    let flagInstance = 0;
-    function getFlagSvg(code, w = 44, h = 30) {
-      const c = String(code || "").toUpperCase();
-      const clipId = `wave-clip-${c.toLowerCase()}-${++flagInstance}`;
-      const gradId = `wave-shade-${c.toLowerCase()}-${flagInstance}`;
-      // Flowing S-wave cloth silhouette ("завитушка"): clear double-wave ripple with tapered edges, no box/frame
-      const pathD = "M 3.5 7.2 C 11.5 1.4, 21.0 11.8, 30.5 6.4 C 35.2 3.8, 39.2 4.6, 41.2 6.6 C 39.2 12.2, 39.2 18.4, 41.2 23.6 C 39.2 21.6, 35.2 20.8, 30.5 23.4 C 21.0 28.8, 11.5 18.4, 3.5 24.2 C 5.2 18.4, 5.2 12.8, 3.5 7.2 Z";
-      const waveShade = `<linearGradient id="${gradId}" x1="0" y1="0.1" x2="1" y2="0.25"><stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.24"/><stop offset="22%" stop-color="#FFFFFF" stop-opacity="0.34"/><stop offset="48%" stop-color="#000000" stop-opacity="0.24"/><stop offset="76%" stop-color="#FFFFFF" stop-opacity="0.28"/><stop offset="100%" stop-color="#000000" stop-opacity="0.16"/></linearGradient>`;
-      const commonOverlay = `<rect width="44" height="30" fill="url(#${gradId})"/><path d="${pathD}" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.65"/>`;
+    // Official Google Noto Color Emoji Waving Flags (third_party/region-flags/waved-svg) — instant offline parity with mobile
+    const NOTO_WAVED_SHADE = '<path fill="#1A1A1A" opacity="0.2" d="M8,195.25 C178.83,110.03 349.03,140.83 521.26,167.28 C676.47,191.12 833.42,211.85 992,132.75 L992,804.75 C821.17,889.97 650.97,859.17 478.74,832.72 C323.53,808.88 166.58,788.15 8,867.25 L8,195.25 M39.25,214.64 L39.25,819.14 C345.81,690.88 650.43,915.18 960.75,785.36 L960.75,180.86 C654.19,309.12 349.57,84.82 39.25,214.64"/>';
+    const NOTO_EU_STARS = [
+      "M500,238.67 L488.74,272.43 L506.07,280.88 L500,238.67","M500,238.67 L511.26,275.92 L493.93,279 L500,238.67",
+      "M534.66,269.79 L498.22,264.19 L498.22,282.85 L534.66,269.79","M534.66,269.79 L505.18,287.21 L494.47,270.45 L534.66,269.79",
+      "M521.42,309.51 L510.16,272.27 L492.83,275.36 L521.42,309.51","M521.42,309.51 L491.94,283.01 L502.65,269.57 L521.42,309.51",
+      "M465.34,259.13 L501.78,264.74 L501.78,283.41 L465.34,259.13","M465.34,259.13 L494.82,285.61 L505.53,272.16 L465.34,259.13",
+      "M478.58,302.9 L489.84,269.13 L507.17,277.58 L478.58,302.9","M478.58,302.9 L508.06,285.51 L497.35,268.75 L478.58,302.9",
+      "M500,686.67 L488.74,720.43 L506.07,728.88 L500,686.67","M500,686.67 L511.26,723.92 L493.93,727 L500,686.67",
+      "M534.66,717.79 L498.22,712.19 L498.22,730.85 L534.66,717.79","M534.66,717.79 L505.18,735.21 L494.47,718.45 L534.66,717.79",
+      "M521.42,757.51 L510.16,720.27 L492.83,723.36 L521.42,757.51","M521.42,757.51 L491.94,731.01 L502.65,717.57 L521.42,757.51",
+      "M465.34,707.13 L501.78,712.74 L501.78,731.41 L465.34,707.13","M465.34,707.13 L494.82,733.61 L505.53,720.16 L465.34,707.13",
+      "M478.58,750.9 L489.84,717.13 L507.17,725.58 L478.58,750.9","M478.58,750.9 L508.06,733.51 L497.35,716.75 L478.58,750.9",
+      "M281.33,438.24 L270.07,473.54 L287.4,479.69 L281.33,438.24","M281.33,438.24 L292.6,474.11 L275.27,479.39 L281.33,438.24",
+      "M315.99,465.59 C303.97,464.84 291.94,464.29 279.55,464 L279.55,482.66 L315.99,465.59","M315.99,465.59 L286.51,486.13 L275.8,470.76 C289.06,468.76 302.33,467.06 315.99,465.59",
+      "M302.76,506.59 L291.49,470.59 L274.16,475.89 L302.76,506.59","M302.76,506.59 L273.27,483.67 L283.98,468.81 L302.76,506.59",
+      "M246.67,463.91 C258.7,463.69 270.72,463.75 283.12,464.09 L283.12,482.75 C271.09,476.27 259.06,470.03 246.67,463.91","M246.67,463.91 L276.16,485.87 L286.87,471.04 C273.6,468.37 260.34,465.98 246.67,463.91",
+      "M259.91,505.52 L271.17,470.08 L288.5,476.25 L259.91,505.52","M259.91,505.52 L289.4,484.08 L278.69,468.67 L259.91,505.52",
+      "M369.24,317.99 L398.73,299.53 L388.02,283.1 L369.24,317.99","M369.24,317.99 L380.51,283.75 L397.84,291.62 L369.24,317.99",
+      "M356.01,274.87 L385.49,300.04 L396.2,286.25 L356.01,274.87","M356.01,274.87 L392.45,278.94 L392.45,297.61 L356.01,274.87",
+      "M390.67,252.93 L379.4,287.09 L396.73,294.96 L390.67,252.93","M390.67,252.93 L401.93,289.85 L384.6,293.47 L390.67,252.93",
+      "M412.09,323.22 L382.6,297.55 L393.31,283.75 L412.09,323.22","M412.09,323.22 L400.83,286.23 L383.5,289.87 L412.09,323.22",
+      "M425.33,283.29 L395.84,301.31 L385.13,284.9 L425.33,283.29","M425.33,283.29 L388.88,278.51 L388.88,297.17 L425.33,283.29",
+      "M332.05,396.47 L320.79,360.14 L303.46,364.88 L332.05,396.47","M332.05,396.47 L302.57,372.63 L313.28,358.12 L332.05,396.47",
+      "M289.21,394.02 L318.69,373.56 L307.98,357.82 L289.21,394.02","M289.21,394.02 L300.47,358.97 L317.8,365.71 L289.21,394.02",
+      "M275.97,351.92 L305.45,374.93 L316.16,360.45 C302.9,357.36 289.63,354.51 275.97,351.92","M275.97,351.92 C288,352.16 300.02,352.64 312.41,353.37 L312.41,372.04 L275.97,351.92",
+      "M345.29,355.85 L315.81,375.53 L305.1,359.81 C318.36,358.25 331.62,356.95 345.29,355.85","M345.29,355.85 L308.85,353.17 L308.85,371.83 L345.29,355.85",
+      "M310.63,327.47 L321.89,363.69 L304.56,368.42 L310.63,327.47","M310.63,327.47 L299.37,362.4 L316.7,369.12 L310.63,327.47",
+      "M345.29,579.85 L308.85,577.17 L308.85,595.83 L345.29,579.85","M345.29,579.85 L315.81,599.53 L305.1,583.81 C318.36,582.25 331.62,580.95 345.29,579.85",
+      "M332.05,620.47 L320.79,584.14 L303.46,588.88 L332.05,620.47","M332.05,620.47 L302.57,596.63 L313.28,582.12 L332.05,620.47",
+      "M289.21,618.02 L318.69,597.56 L307.98,581.82 L289.21,618.02","M289.21,618.02 L300.47,582.97 L317.8,589.71 L289.21,618.02",
+      "M310.63,551.47 L321.89,587.69 L304.56,592.42 L310.63,551.47","M310.63,551.47 L299.37,586.4 L316.7,593.12 L310.63,551.47",
+      "M275.97,575.92 C288,576.16 300.02,576.64 312.41,577.37 L312.41,596.04 L275.97,575.92","M275.97,575.92 L305.45,598.93 L316.16,584.45 C302.9,581.36 289.63,578.51 275.97,575.92",
+      "M425.33,671.27 L388.88,666.49 L388.88,685.15 L425.33,671.27","M425.33,671.27 L395.84,689.29 L385.13,672.88 L425.33,671.27",
+      "M412.09,711.2 L400.83,674.21 L383.5,677.84 L412.09,711.2","M412.09,711.2 L382.6,685.53 L393.31,671.73 L412.09,711.2",
+      "M369.24,705.97 L398.73,687.51 L388.02,671.08 L369.24,705.97","M369.24,705.97 L380.51,671.73 L397.84,679.6 L369.24,705.97",
+      "M390.67,640.91 L401.93,677.83 L384.6,681.45 L390.67,640.91","M390.67,640.91 L379.4,675.07 L396.73,682.94 L390.67,640.91",
+      "M356.01,662.85 L392.45,666.92 L392.45,685.59 L356.01,662.85","M356.01,662.85 L385.49,688.02 L396.2,674.23 L356.01,662.85",
+      "M718.67,487.09 L729.93,522.81 L712.6,528.19 L718.67,487.09","M718.67,487.09 L707.4,522.24 L724.73,528.5 L718.67,487.09",
+      "M684.01,511.33 C696.03,512.09 708.06,512.63 720.45,512.93 L720.45,531.6 L684.01,511.33","M684.01,511.33 L713.49,534.68 L724.2,519.85 C710.94,517.34 697.67,514.52 684.01,511.33",
+      "M697.24,553.82 L708.51,518.8 L725.84,525.04 L697.24,553.82","M697.24,553.82 L726.73,532.85 L716.02,517.51 L697.24,553.82",
+      "M753.33,513.02 C741.3,513.24 729.28,513.17 716.88,512.84 L716.88,531.51 C728.91,525.67 740.93,519.59 753.33,513.02","M753.33,513.02 L723.84,534.95 L713.13,519.57 C726.4,517.73 739.66,515.59 753.33,513.02",
+      "M740.09,554.89 L728.83,519.32 L711.5,524.68 L740.09,554.89","M740.09,554.89 L710.6,532.44 L721.31,517.64 L740.09,554.89",
+      "M630.76,354.44 L601.27,329.01 L611.98,315.24 L630.76,354.44","M630.76,354.44 L619.49,317.67 L602.16,321.33 L630.76,354.44",
+      "M643.99,314.07 L614.51,332.79 L603.8,316.38 L643.99,314.07","M643.99,314.07 L607.55,310 L607.55,328.67 L643.99,314.07",
+      "M609.33,284.42 L620.6,321.27 L603.27,324.95 L609.33,284.42","M609.33,284.42 L598.07,318.52 L615.4,326.43 L609.33,284.42",
+      "M587.91,349.21 L617.4,330.99 L606.69,314.59 L587.91,349.21","M587.91,349.21 L599.17,315.18 L616.5,323.09 L587.91,349.21",
+      "M574.67,305.66 L604.16,331.52 L614.87,317.73 L574.67,305.66","M574.67,305.66 L611.12,310.44 L611.12,329.11 L574.67,305.66",
+      "M667.95,439.93 L679.21,405.25 L696.54,412.05 L667.95,439.93","M667.95,439.93 L697.43,419.88 L686.72,404.19 L667.95,439.93",
+      "M710.79,442.39 L681.31,418.95 L692.02,404.5 L710.79,442.39","M710.79,442.39 L699.53,406.42 L682.2,411.22 L710.79,442.39",
+      "M724.03,401.01 L694.55,421.89 L683.84,406.16 C697.1,404.74 710.36,403.06 724.03,401.01","M724.03,401.01 C712,400.77 699.98,400.28 687.59,399.55 L687.59,418.22 L724.03,401.01",
+      "M654.71,397.08 L684.19,421.29 L694.9,406.8 C681.64,403.85 668.38,400.63 654.71,397.08","M654.71,397.08 L691.15,399.76 L691.15,418.42 L654.71,397.08",
+      "M689.37,373.86 L678.11,408.65 L695.44,415.47 L689.37,373.86","M689.37,373.86 L700.63,409.95 L683.3,414.76 L689.37,373.86",
+      "M654.71,621.08 L691.15,623.76 L691.15,642.42 L654.71,621.08","M654.71,621.08 L684.19,645.29 L694.9,630.8 C681.64,627.85 668.38,624.63 654.71,621.08",
+      "M667.95,663.93 L679.21,629.25 L696.54,636.05 L667.95,663.93","M667.95,663.93 L697.43,643.88 L686.72,628.19 L667.95,663.93",
+      "M710.79,666.39 L681.31,642.95 L692.02,628.5 L710.79,666.39","M710.79,666.39 L699.53,630.42 L682.2,635.22 L710.79,666.39",
+      "M689.37,597.86 L678.11,632.65 L695.44,639.47 L689.37,597.86","M689.37,597.86 L700.63,633.95 L683.3,638.76 L689.37,597.86",
+      "M724.03,625.01 C712,624.77 699.98,624.28 687.59,623.55 L687.59,642.22 L724.03,625.01","M724.03,625.01 L694.55,645.89 L683.84,630.16 C697.1,628.74 710.36,627.06 724.03,625.01",
+      "M574.67,693.64 L611.12,698.42 L611.12,717.09 L574.67,693.64","M574.67,693.64 L604.16,719.5 L614.87,705.71 L574.67,693.64",
+      "M587.91,737.19 L599.17,703.16 L616.5,711.07 L587.91,737.19","M587.91,737.19 L617.4,718.97 L606.69,702.57 L587.91,737.19",
+      "M630.76,742.42 L601.27,716.99 L611.98,703.22 L630.76,742.42","M630.76,742.42 L619.49,705.65 L602.16,709.31 L630.76,742.42",
+      "M609.33,672.41 L598.07,706.49 L615.4,714.41 L609.33,672.41","M609.33,672.41 L620.6,709.25 L603.27,712.93 L609.33,672.41",
+      "M643.99,702.05 L607.55,697.98 L607.55,716.65 L643.99,702.05","M643.99,702.05 L614.51,720.77 L603.8,704.36 L643.99,702.05"
+    ].map(d => `<path d="${d}"/>`).join("");
+    const NOTO_WAVED_FLAGS = {
+      DE: '<path fill="#000" d="M8,195.25 C178.83,110.03 349.03,140.83 521.26,167.28 C676.47,191.12 833.42,211.85 992,132.75 L992,804.75 C821.17,889.97 650.97,859.17 478.74,832.72 C323.53,808.88 166.58,788.15 8,867.25 L8,195.25"/><path fill="#D00" d="M8,419.25 C178.83,334.03 349.03,364.83 521.26,391.28 C676.47,415.12 833.42,435.85 992,356.75 L992,804.75 C821.17,889.97 650.97,859.17 478.74,832.72 C323.53,808.88 166.58,788.15 8,867.25 L8,419.25"/><path fill="#FFCE00" d="M8,643.25 C178.83,558.03 349.03,588.83 521.26,615.28 C676.47,639.12 833.42,659.85 992,580.75 L992,804.75 C821.17,889.97 650.97,859.17 478.74,832.72 C323.53,808.88 166.58,788.15 8,867.25 L8,643.25"/>' + NOTO_WAVED_SHADE,
+      NL: '<path fill="#21468B" d="M8,195.25 C178.83,110.03 349.03,140.83 521.26,167.28 C676.47,191.12 833.42,211.85 992,132.75 L992,804.75 C821.17,889.97 650.97,859.17 478.74,832.72 C323.53,808.88 166.58,788.15 8,867.25 L8,195.25"/><path fill="#FFF" d="M8,195.25 C178.83,110.03 349.03,140.83 521.26,167.28 C676.47,191.12 833.42,211.85 992,132.75 L992,580.75 C821.17,665.97 650.97,635.17 478.74,608.72 C323.53,584.88 166.58,564.15 8,643.25 L8,195.25"/><path fill="#AE1C28" d="M8,195.25 C178.83,110.03 349.03,140.83 521.26,167.28 C676.47,191.12 833.42,211.85 992,132.75 L992,356.75 C821.17,441.97 650.97,411.17 478.74,384.72 C323.53,360.88 166.58,340.15 8,419.25 L8,195.25"/>' + NOTO_WAVED_SHADE,
+      RU: '<path fill="#fff" d="M8,195.25 C178.83,110.03 349.03,140.83 521.26,167.28 C676.47,191.12 833.42,211.85 992,132.75 L992,468.75 C821.17,553.97 650.97,523.17 478.74,496.72 C323.53,472.88 166.58,452.15 8,531.25 L8,195.25"/><path fill="#d52b1e" d="M8,531.25 C178.83,446.03 349.03,476.83 521.26,503.28 C676.47,527.12 833.42,547.85 992,468.75 L992,804.75 C821.17,889.97 650.97,859.17 478.74,832.72 C323.53,808.88 166.58,788.15 8,867.25 L8,531.25"/><path fill="#0039a6" d="M8,419.25 C178.83,334.03 349.03,364.83 521.26,391.28 C676.47,415.12 833.42,435.85 992,356.75 L992,580.75 C821.17,665.97 650.97,635.17 478.74,608.72 C323.53,584.88 166.58,564.15 8,643.25 L8,419.25"/>' + NOTO_WAVED_SHADE,
+      FI: '<path fill="#fff" d="M8,195.25 C178.83,110.03 349.03,140.83 521.26,167.28 C676.47,191.12 833.42,211.85 992,132.75 L992,804.75 C821.17,889.97 650.97,859.17 478.74,832.72 C323.53,808.88 166.58,788.15 8,867.25 L8,195.25"/><path fill="#003580" d="M8,439.61 C178.83,354.39 349.03,385.19 521.26,411.65 C676.47,435.49 833.42,456.22 992,377.11 L992,560.39 C821.17,645.61 650.97,614.81 478.74,588.35 C323.53,564.51 166.58,543.78 8,622.89 L8,439.61"/><path fill="#003580" d="M281.33,139.58 C335.46,140.98 389.57,147.51 445.33,155.68 L445.33,827.68 C391.22,819.75 337.09,813.03 281.33,811.58 L281.33,139.58"/>' + NOTO_WAVED_SHADE,
+      IT: '<path fill="#009246" d="M8,195.25 C178.83,110.03 349.03,140.83 521.26,167.28 C676.47,191.12 833.42,211.85 992,132.75 L992,804.75 C821.17,889.97 650.97,859.17 478.74,832.72 C323.53,808.88 166.58,788.15 8,867.25 L8,195.25"/><path fill="#fff" d="M336,142.59 C551.4,160.35 770.28,243.35 992,132.75 L992,804.75 C774.68,913.17 559.73,833.04 336,814.59 L336,142.59"/><path fill="#ce2b37" d="M664,185.41 C772.09,194.23 880.66,188.29 992,132.75 L992,804.75 C883.68,858.79 775.59,866.52 664,857.41 L664,185.41"/>' + NOTO_WAVED_SHADE,
+      EU: '<path fill="#039" d="M8,195.25 C178.83,110.03 349.03,140.83 521.26,167.28 C676.47,191.12 833.42,211.85 992,132.75 L992,804.75 C821.17,889.97 650.97,859.17 478.74,832.72 C323.53,808.88 166.58,788.15 8,867.25 L8,195.25"/><g fill="#fc0">' + NOTO_EU_STARS + '</g>' + NOTO_WAVED_SHADE
+    };
 
-      if (c === "NL") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="44" height="10" fill="#D42C3B"/><rect y="10" width="44" height="10" fill="#FAF8F5"/><rect y="20" width="44" height="10" fill="#2A58A4"/>${commonOverlay}</g></svg>`;
-      }
-      if (c === "DE") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="44" height="10" fill="#17191E"/><rect y="10" width="44" height="10" fill="#DE2E3D"/><rect y="20" width="44" height="10" fill="#FFCE38"/>${commonOverlay}</g></svg>`;
-      }
-      if (c === "RU") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="44" height="10" fill="#FAF8F5"/><rect y="10" width="44" height="10" fill="#3B74C4"/><rect y="20" width="44" height="10" fill="#D42C3B"/>${commonOverlay}</g></svg>`;
-      }
-      if (c === "FI") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="44" height="30" fill="#FAF8F5"/><rect x="11.5" width="7" height="30" fill="#2662A6"/><rect y="11" width="44" height="7.5" fill="#2662A6"/>${commonOverlay}</g></svg>`;
-      }
-      if (c === "IT") {
-        return `<svg class="svg-flag wave-flag" viewBox="0 0 44 30" width="${w}" height="${h}" style="filter: drop-shadow(0 5px 10px rgba(0,0,0,0.48));"><defs><clipPath id="${clipId}"><path d="${pathD}"/></clipPath>${waveShade}</defs><g clip-path="url(#${clipId})"><rect width="14.6" height="30" fill="#009246"/><rect x="14.6" width="14.8" height="30" fill="#FAF8F5"/><rect x="29.4" width="14.6" height="30" fill="#CE2B37"/>${commonOverlay}</g></svg>`;
+    function getFlagSvg(code, w = 44, h = 32) {
+      const c = String(code || "").toUpperCase();
+      if (NOTO_WAVED_FLAGS[c]) {
+        return `<svg class="svg-flag" viewBox="4 125 992 750" width="${w}" height="${h}" aria-hidden="true" style="filter: drop-shadow(0 4px 10px rgba(4,9,18,0.46));">${NOTO_WAVED_FLAGS[c]}</svg>`;
       }
       if (c === "RU-DE") {
-        return `<span class="dual-flag" style="display:inline-flex;align-items:center;gap:2px;">${getFlagSvg("RU", 28, 19)}<span style="opacity:0.45;font-size:10px;">→</span>${getFlagSvg("DE", 28, 19)}</span>`;
+        return `<span class="dual-flag" style="display:inline-flex;align-items:center;gap:2px;">${getFlagSvg("RU", 26, 20)}<span style="opacity:0.45;font-size:10px;">→</span>${getFlagSvg("DE", 26, 20)}</span>`;
       }
-      return `<svg class="svg-flag" viewBox="0 0 24 24" width="${w}" height="${h}" fill="none"><circle cx="12" cy="12" r="9.5" stroke="#64E9FF" stroke-width="1.8"/><circle cx="12" cy="12" r="5" stroke="#64E9FF" stroke-width="1.4" opacity="0.6"/><circle cx="12" cy="12" r="2" fill="#64E9FF"/></svg>`;
+      return `<svg class="svg-flag" viewBox="0 0 24 24" width="${w}" height="${h}" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9.5" stroke="#64E9FF" stroke-width="1.8"/><circle cx="12" cy="12" r="5" stroke="#64E9FF" stroke-width="1.4" opacity="0.6"/><circle cx="12" cy="12" r="2" fill="#64E9FF"/></svg>`;
     }
     window.getFlagSvg = getFlagSvg;
 
