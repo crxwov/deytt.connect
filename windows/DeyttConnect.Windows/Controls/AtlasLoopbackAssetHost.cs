@@ -9,6 +9,7 @@ internal sealed class AtlasLoopbackAssetHost : IDisposable
     private static readonly IReadOnlyDictionary<string, string> AssetTypes = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["/index.html"] = "text/html; charset=utf-8",
+        ["/dock-optics.js"] = "application/javascript; charset=utf-8",
         ["/atlas-init.js"] = "application/javascript; charset=utf-8",
         ["/network-atlas.js"] = "application/javascript; charset=utf-8",
         ["/network-atlas.css"] = "text/css; charset=utf-8",

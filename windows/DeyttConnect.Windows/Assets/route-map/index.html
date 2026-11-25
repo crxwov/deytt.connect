@@ -8,6 +8,8 @@
   <script defer src="network-atlas.js?v=20261107_48"></script>
   <script defer src="atlas-init.js?v=20261107_48"></script>
 
+  <script src="dock-optics.js"></script>
+
   <style>
     :root {
       color-scheme: dark;
@@ -146,6 +148,52 @@
       color: var(--text-muted);
       font: 600 13px "Segoe UI", sans-serif;
       cursor: pointer;
+    }
+
+    .nav-container.has-webgl-dock {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+    /* Align both optical layers to the measured dock border box. */
+    .nav-backdrop-lens {
+      display: none;
+      position: absolute;
+      top: -1px;
+      left: -1px;
+      pointer-events: none;
+      backdrop-filter: url(#nav-dock-refraction);
+    }
+    .nav-container.has-backdrop-lens .nav-backdrop-lens { display: block; }
+    .nav-glass-canvas {
+      position: absolute;
+      inset: -1px;
+      width: calc(100% + 2px);
+      height: calc(100% + 2px);
+      border-radius: 9999px;
+      pointer-events: none;
+      z-index: 1;
+      display: none;
+    }
+    .nav-container.has-webgl-dock .nav-glass-canvas { display: block; }
+    .nav-container.has-webgl-dock .nav-label-wrap {
+      opacity: 0;
+    }
+
+    .nav-container.has-webgl-dock::before { display: none; }
+    .nav-container.has-webgl-dock .nav-item.is-active {
+      background: transparent;
+      color: var(--text);
+    }
+    @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+      .nav-glass-canvas, .nav-backdrop-lens { display: none !important; }
+      .nav-container.has-webgl-dock .nav-label-wrap { opacity: 1 !important; }
+      .nav-container.has-webgl-dock .nav-item.is-active {
+        background: var(--selection);
+        color: var(--on-selection);
+      }
     }
 
     .nav-item:hover { color: var(--text); background: var(--surface-interactive); }
@@ -4274,6 +4322,14 @@
   </style>
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="nav-dock-refraction" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feImage id="nav-dock-displacement-image" x="0" y="0" width="100%" height="100%"
+        preserveAspectRatio="none" result="displacement-map" />
+      <feDisplacementMap id="nav-dock-displacement" in="SourceGraphic" in2="displacement-map"
+        xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </svg>
   <!-- Header Bar -->
   <header class="desktop-header">
     <div class="brand-area">
@@ -4282,6 +4338,9 @@
 
     <!-- Capsule Navigation Dock -->
     <nav class="nav-container" id="main-nav" role="tablist">
+      <span class="nav-backdrop-lens" id="nav-backdrop-lens" aria-hidden="true"></span>
+      <canvas class="nav-glass-canvas" id="nav-glass-canvas" aria-hidden="true"></canvas>
+
 
       <button class="nav-item is-active" id="tab-home" data-tab="home" role="tab" aria-selected="true">
         <span class="nav-label-wrap">
@@ -5587,21 +5646,445 @@
     }
 
     // Navigation and stage controller.
+    const navContainer = document.getElementById("main-nav");
+    const navGlassCanvas = document.getElementById("nav-glass-canvas");
     const navItems = Array.from(document.querySelectorAll(".nav-item"));
     const stageHome = document.getElementById("stage-home");
     const stageRoutes = document.getElementById("stage-routes");
     const stageProfile = document.getElementById("stage-profile");
     const stageSettings = document.getElementById("stage-settings");
+    const allStages = [stageHome, stageRoutes, stageProfile, stageSettings];
 
-    function activateDockItem(item, notifyCSharp = true) {
-      if (!item) return;
-      navItems.forEach(button => {
-        const active = button === item;
-        button.classList.toggle("is-active", active);
-        button.setAttribute("aria-selected", String(active));
+    const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const reduceTransparencyQuery = window.matchMedia("(prefers-reduced-transparency: reduce)");
+    const isReducedMotion = () => reduceMotionQuery.matches || document.getElementById("stage-home")?.classList.contains("reduce-motion");
+
+    const dockState = {
+      activeIdx: Math.max(0, navItems.findIndex(b => b.classList.contains("is-active"))),
+      pos: 0,
+      posVel: 0,
+      targetPos: 0,
+      shape: 0,
+      shapeVel: 0,
+      hovering: false,
+      hoverMix: 0,
+      dragging: false,
+      dragStartX: 0,
+      dragOriginPos: 0,
+      lastLensPos: 0,
+      lastTimeMs: 0,
+      lastMotionMs: 0,
+      glideStartedAt: 0,
+      glideFrom: 0,
+      glideTarget: 0,
+      glidePulse: 0,
+      glideLight: 0,
+      stabilization: 0,
+      gestureElasticity: 1,
+      rafId: 0,
+      initialized: false
+    };
+    dockState.pos = dockState.activeIdx;
+    dockState.targetPos = dockState.activeIdx;
+    dockState.lastLensPos = dockState.activeIdx;
+
+    function getDockButtonMetrics() {
+      if (!navContainer || !navItems.length) return [];
+      const cr = navContainer.getBoundingClientRect();
+      return navItems.map(btn => {
+        const br = btn.getBoundingClientRect();
+        return {
+          btn,
+          left: br.left - cr.left,
+          top: br.top - cr.top,
+          width: br.width,
+          height: br.height,
+          centerX: (br.left - cr.left) + br.width * 0.5
+        };
       });
-      switchStage(item.dataset.tab);
-      if (notifyCSharp) postHost("tab:" + item.dataset.tab);
+    }
+
+    function indexToLensMetrics(posFloat, metrics) {
+      if (!metrics.length) return { cx: 0, w: 0, h: 0 };
+      const last = metrics.length - 1;
+      const clamped = Math.max(-0.05, Math.min(last + 0.05, posFloat));
+      const base = Math.max(0, Math.min(last, clamped));
+      const i0 = Math.floor(base);
+      const i1 = Math.min(last, i0 + 1);
+      const t = base - i0;
+      const m0 = metrics[i0];
+      const m1 = metrics[i1];
+      let cx = m0.centerX + (m1.centerX - m0.centerX) * t;
+      if (clamped < 0) cx += clamped * m0.width * 0.45;
+      else if (clamped > last) cx += (clamped - last) * m1.width * 0.45;
+      const w = m0.width + (m1.width - m0.width) * t;
+      return { cx, w, h: Math.max(m0.height, m1.height) };
+    }
+
+    function clientXToPos(clientX, metrics) {
+      if (!navContainer || !metrics.length) return 0;
+      const cr = navContainer.getBoundingClientRect();
+      const relX = clientX - cr.left;
+      if (relX <= metrics[0].centerX) return 0;
+      const last = metrics.length - 1;
+      if (relX >= metrics[last].centerX) return last;
+      for (let i = 0; i < last; i++) {
+        const a = metrics[i].centerX;
+        const b = metrics[i + 1].centerX;
+        if (relX >= a && relX <= b) {
+          return i + (b > a ? (relX - a) / (b - a) : 0);
+        }
+      }
+      return dockState.activeIdx;
+    }
+
+    // Build Canvas2D draw callbacks directly from existing DOM SVGs (zero duplicated icon geometry)
+    const navTabDrawables = navItems.map(btn => {
+      const svg = btn.querySelector("svg");
+      const label = (btn.querySelector(".nav-label-wrap span")?.textContent || btn.textContent || "").trim();
+      const ops = [];
+      if (svg) {
+        for (const el of svg.children) {
+          const tag = el.tagName.toLowerCase();
+          if (tag === "path") {
+            const d = el.getAttribute("d");
+            if (d) ops.push({ type: "path", path: new Path2D(d) });
+          } else if (tag === "circle") {
+            ops.push({
+              type: "circle",
+              cx: parseFloat(el.getAttribute("cx") || "0"),
+              cy: parseFloat(el.getAttribute("cy") || "0"),
+              r: parseFloat(el.getAttribute("r") || "0")
+            });
+          } else if (tag === "line") {
+            ops.push({
+              type: "line",
+              x1: parseFloat(el.getAttribute("x1") || "0"),
+              y1: parseFloat(el.getAttribute("y1") || "0"),
+              x2: parseFloat(el.getAttribute("x2") || "0"),
+              y2: parseFloat(el.getAttribute("y2") || "0")
+            });
+          }
+        }
+      }
+      return { label, ops };
+    });
+
+    let dockGl = navGlassCanvas
+      ? window.createDockOptics?.(navGlassCanvas)
+      : null;
+    // Chromium applies the same ray offsets to the browser's actual backdrop.
+    // Keep canvas sources for WebKit, where URL backdrop filters are unavailable.
+    let applyBackdropLens;
+    const supportsBackdropLens = /Chrom(?:e|ium)\//.test(navigator.userAgent) &&
+      CSS.supports("backdrop-filter", "url(#nav-dock-refraction)");
+    const dockBackdrop = dockGl ? document.createElement("canvas") : null;
+    const dockBackdropContext = dockBackdrop?.getContext("2d");
+
+    navGlassCanvas?.addEventListener("webglcontextlost", event => {
+      event.preventDefault();
+      renderDockFrame();
+    });
+    navGlassCanvas?.addEventListener("webglcontextrestored", () => {
+      dockGl = window.createDockOptics?.(navGlassCanvas);
+      renderDockFrame();
+    });
+
+    function renderDockFrame() {
+      const metrics = getDockButtonMetrics();
+      if (!metrics.length || !navContainer) return;
+
+      if (!dockBackdropContext || !dockGl || dockGl.gl.isContextLost() || reduceTransparencyQuery.matches) {
+        navContainer.classList.remove("has-webgl-dock", "has-backdrop-lens");
+        return;
+      }
+      if (!navContainer.classList.contains("has-webgl-dock")) {
+        navContainer.classList.add("has-webgl-dock");
+      }
+
+      const rect = navContainer.getBoundingClientRect();
+      if (rect.width <= 2 || rect.height <= 2) return;
+      const dpr = Math.min(2, window.devicePixelRatio || 1);
+      const wPx = Math.max(4, Math.round(rect.width * dpr));
+      const hPx = Math.max(4, Math.round(rect.height * dpr));
+
+      if (navGlassCanvas.width !== wPx || navGlassCanvas.height !== hPx) {
+        navGlassCanvas.width = wPx;
+        navGlassCanvas.height = hPx;
+        dockBackdrop.width = wPx;
+        dockBackdrop.height = hPx;
+      }
+
+      const ctx = dockBackdropContext;
+      ctx.clearRect(0, 0, wPx, hPx);
+
+      const lens = indexToLensMetrics(dockState.pos, metrics);
+      const lensWidth = Math.max(1, Math.round(lens.w * 0.96 * dpr)) / dpr;
+      const lensHeight = Math.round(Math.max(26, rect.height - 4) * dpr) / dpr;
+      const centerY = hPx / (2 * dpr);
+      if (supportsBackdropLens && applyBackdropLens === undefined) {
+        applyBackdropLens = window.createDockBackdropFilter(
+          document.getElementById("nav-backdrop-lens"),
+          document.getElementById("nav-dock-displacement-image"),
+          document.getElementById("nav-dock-displacement")
+        );
+      }
+      const hasBackdropLens = applyBackdropLens?.(lens.cx, centerY, lensWidth, lensHeight, dpr) ?? false;
+      navContainer.classList.toggle("has-backdrop-lens", hasBackdropLens);
+      if (!hasBackdropLens) {
+        // Canvas background sources for engines without compositor refraction.
+        const starsCanvas = document.getElementById("stars-canvas");
+        if (starsCanvas && starsCanvas.width > 0 && window.innerWidth > 0 && window.innerHeight > 0) {
+          try {
+            ctx.save();
+            ctx.globalAlpha = 0.85;
+            const sx = starsCanvas.width / window.innerWidth;
+            const sy = starsCanvas.height / window.innerHeight;
+            ctx.drawImage(
+              starsCanvas,
+              Math.max(0, rect.left * sx), Math.max(0, rect.top * sy),
+              Math.max(1, rect.width * sx), Math.max(1, rect.height * sy),
+              0, 0, wPx, hPx
+            );
+            ctx.restore();
+          } catch (_) {}
+        }
+        const atlasCanvas = stageHome?.querySelector("canvas[data-atlas-interactive]");
+        if (atlasCanvas && atlasCanvas.width > 0 && stageHome && !stageHome.classList.contains("is-blurred")) {
+          try {
+            const ar = atlasCanvas.getBoundingClientRect();
+            if (ar.width > 0 && ar.height > 0) {
+              const ax = atlasCanvas.width / ar.width;
+              const ay = atlasCanvas.height / ar.height;
+              ctx.save();
+              ctx.globalAlpha = 0.75;
+              ctx.drawImage(
+                atlasCanvas,
+                Math.max(0, (rect.left - ar.left) * ax), Math.max(0, (rect.top - ar.top) * ay),
+                Math.max(1, rect.width * ax), Math.max(1, rect.height * ay),
+                0, 0, wPx, hPx
+              );
+              ctx.restore();
+            }
+          } catch (_) {}
+        }
+      }
+
+      // Draw stationary dock icons + labels into u_backdrop so moving glass refracts them cleanly
+      const iconPx = 17 * dpr;
+      const gapPx = (rect.width < 520 ? 6 : 8) * dpr;
+      const compactIconsOnly = metrics[0].width < 52;
+      const fontSize = (rect.width < 760 ? 13 : 14) * dpr;
+
+      for (let i = 0; i < metrics.length; i++) {
+        const m = metrics[i];
+        const tab = navTabDrawables[i];
+        const proximity = Math.max(0, Math.min(1, 1 - Math.abs(i - dockState.pos)));
+        const tint = proximity * proximity * (3 - 2 * proximity);
+        const cr = Math.round(214 + (100 - 214) * tint);
+        const cg = Math.round(220 + (233 - 220) * tint);
+        const cb = Math.round(229 + (255 - 229) * tint);
+        const strokeColor = `rgb(${cr}, ${cg}, ${cb})`;
+        const textColor = `rgba(${cr}, ${cg}, ${cb}, ${(0.88 + 0.12 * tint).toFixed(3)})`;
+        const weight = tint > 0.5 ? 600 : 500;
+
+        ctx.save();
+        ctx.font = `${weight} ${fontSize}px "Inter Tight", -apple-system, "Segoe UI", sans-serif`;
+        ctx.textBaseline = "middle";
+        const textW = compactIconsOnly ? 0 : ctx.measureText(tab.label).width;
+        const totalW = iconPx + (compactIconsOnly ? 0 : gapPx + textW);
+        const startX = m.centerX * dpr - totalW * 0.5;
+        const midY = (m.top + m.height * 0.5) * dpr;
+
+        ctx.save();
+        ctx.translate(startX, midY - iconPx * 0.5);
+        const sc = iconPx / 24;
+        ctx.scale(sc, sc);
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2.05;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        for (const op of tab.ops) {
+          if (op.type === "path") {
+            ctx.stroke(op.path);
+          } else if (op.type === "circle") {
+            ctx.beginPath();
+            ctx.arc(op.cx, op.cy, op.r, 0, Math.PI * 2);
+            ctx.stroke();
+          } else if (op.type === "line") {
+            ctx.beginPath();
+            ctx.moveTo(op.x1, op.y1);
+            ctx.lineTo(op.x2, op.y2);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+
+        if (!compactIconsOnly) {
+          ctx.fillStyle = textColor;
+          ctx.fillText(tab.label, startX + iconPx + gapPx, midY + 0.4 * dpr);
+        }
+        ctx.restore();
+      }
+
+      dockGl.draw(dockBackdrop, dpr, [
+        lens.cx, centerY, lensWidth / 2, lensHeight / 2
+      ], true, true);
+    }
+
+    function stepDockPhysics(nowMs) {
+      dockState.rafId = 0;
+      const dtMs = dockState.lastTimeMs ? Math.max(6, Math.min(48, nowMs - dockState.lastTimeMs)) : 16;
+      const dt = dtMs * 0.001;
+      dockState.lastTimeMs = nowMs;
+
+      const reduced = isReducedMotion();
+      if (reduced) {
+        dockState.pos = dockState.targetPos;
+        dockState.posVel = 0;
+      } else if (!dockState.dragging) {
+        // Critically damped smooth glide (zero overshoot/jelly; optical refraction carries the visual weight)
+        const omega = dockState.hovering ? 22 : 18;
+        const offset = dockState.pos - dockState.targetPos;
+        const exp = Math.exp(-omega * dt);
+        const factor = dockState.posVel + omega * offset;
+        dockState.pos = Math.max(0, Math.min(Math.max(0, navItems.length - 1),
+          dockState.targetPos + (offset + factor * dt) * exp));
+        dockState.posVel = (dockState.posVel - omega * factor * dt) * exp;
+      }
+
+      renderDockFrame();
+
+      const settled = reduced || (
+        !dockState.dragging &&
+        Math.abs(dockState.pos - dockState.targetPos) < 0.0015 &&
+        Math.abs(dockState.posVel) < 0.01
+      );
+      if (settled && !dockState.hovering && !dockState.dragging) {
+        dockState.pos = dockState.targetPos;
+        dockState.posVel = 0;
+        dockState.lastTimeMs = 0;
+        renderDockFrame();
+        return;
+      }
+      dockState.rafId = requestAnimationFrame(stepDockPhysics);
+    }
+
+    function ensureDockAnimating() {
+      if (!dockState.rafId) {
+        dockState.rafId = requestAnimationFrame(stepDockPhysics);
+      }
+    }
+
+    function updatePillPosition(targetItem, animate = true) {
+      if (!navContainer || !targetItem) return;
+      const idx = Math.max(0, navItems.indexOf(targetItem));
+      dockState.activeIdx = idx;
+      if (!dockState.initialized || !animate || isReducedMotion()) {
+        dockState.pos = idx;
+        dockState.targetPos = idx;
+        dockState.posVel = 0;
+        dockState.initialized = true;
+        renderDockFrame();
+        return;
+      }
+      dockState.targetPos = idx;
+      ensureDockAnimating();
+    }
+
+    function activateDockItem(item, notifyCSharp = true, animate = true) {
+      if (!item) return;
+      navItems.forEach(btn => {
+        const active = btn === item;
+        btn.classList.toggle("is-active", active);
+        btn.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      updatePillPosition(item, animate);
+      const tab = item.dataset.tab;
+      switchStage(tab);
+      if (notifyCSharp) postHost("tab:" + tab);
+    }
+
+    if (navContainer) {
+      let capturedPointerId = null;
+      let dragActivated = false;
+
+      navContainer.addEventListener("pointerenter", e => {
+        if (e.pointerType === "touch" || !navItems.length) return;
+        dockState.hovering = true;
+        dockState.gestureElasticity = 0.90 + Math.random() * 0.22;
+        dockState.targetPos = clientXToPos(e.clientX, getDockButtonMetrics());
+        ensureDockAnimating();
+      });
+
+      navContainer.addEventListener("pointerleave", () => {
+        if (dockState.dragging) return;
+        dockState.hovering = false;
+        dockState.targetPos = dockState.activeIdx;
+        ensureDockAnimating();
+      });
+
+      navContainer.addEventListener("pointerdown", e => {
+        if (e.button !== 0 || !navItems.length) return;
+        dockState.dragStartX = e.clientX;
+        dockState.dragOriginPos = dockState.pos;
+        dockState.gestureElasticity = 0.88 + Math.random() * 0.26;
+        dragActivated = false;
+        capturedPointerId = e.pointerId;
+      });
+
+      navContainer.addEventListener("pointermove", e => {
+        if (!navItems.length) return;
+        const metrics = getDockButtonMetrics();
+        if (capturedPointerId === e.pointerId) {
+          if (!dragActivated && Math.abs(e.clientX - dockState.dragStartX) > 6) {
+            dragActivated = true;
+            dockState.dragging = true;
+            dockState.glideStartedAt = 0;
+            try { navContainer.setPointerCapture(e.pointerId); } catch (_) {}
+          }
+          if (dragActivated) {
+            const p = clientXToPos(e.clientX, metrics);
+            dockState.pos = p;
+            dockState.targetPos = p;
+            ensureDockAnimating();
+            return;
+          }
+        }
+        if (e.pointerType !== "touch") {
+          dockState.hovering = true;
+          dockState.targetPos = clientXToPos(e.clientX, metrics);
+          ensureDockAnimating();
+        }
+      });
+
+      const finishDockPointer = e => {
+        if (capturedPointerId !== e.pointerId) return;
+        const wasDragged = dragActivated;
+        capturedPointerId = null;
+        dragActivated = false;
+        dockState.dragging = false;
+        try { if (navContainer.hasPointerCapture(e.pointerId)) navContainer.releasePointerCapture(e.pointerId); } catch (_) {}
+        if (!wasDragged) return;
+        const projected = Math.max(0, Math.min(navItems.length - 1, Math.round(dockState.pos + dockState.posVel * 0.08)));
+        const targetBtn = navItems[projected];
+        if (targetBtn) {
+          targetBtn.dataset.skipNextClick = "1";
+          setTimeout(() => { delete targetBtn.dataset.skipNextClick; }, 60);
+          activateDockItem(targetBtn, true, true);
+        }
+      };
+
+      navContainer.addEventListener("pointerup", finishDockPointer);
+      navContainer.addEventListener("pointercancel", finishDockPointer);
+      window.addEventListener("resize", () => {
+        renderDockFrame();
+      }, { passive: true });
+      reduceTransparencyQuery.addEventListener?.("change", () => renderDockFrame());
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(() => renderDockFrame());
+      }
+      requestAnimationFrame(() => renderDockFrame());
     }
 
     function switchStage(stageId) {
@@ -5640,13 +6123,19 @@
     };
 
     navItems.forEach(item => {
-      item.addEventListener("click", () => activateDockItem(item));
+      item.addEventListener("click", () => {
+        if (item.dataset.skipNextClick) {
+          delete item.dataset.skipNextClick;
+          return;
+        }
+        activateDockItem(item, true, true);
+      });
     });
 
     window.deyttSwitchStage = function(stageId) {
       const item = document.querySelector(`.nav-item[data-tab="${stageId}"]`);
       if (item) {
-        activateDockItem(item, false);
+        activateDockItem(item, false, false);
       } else {
         switchStage(stageId);
       }

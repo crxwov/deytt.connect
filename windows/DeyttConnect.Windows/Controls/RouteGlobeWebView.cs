@@ -47,7 +47,7 @@ public sealed class RouteGlobeWebView : ContentControl
     private const int MaximumAutomaticRetries = 2;
     private readonly bool _disableNativeInitialization;
     private static readonly string[] RequiredAtlasAssets =
-        ["index.html", "network-atlas.css", "network-atlas.js", "atlas-init.js", "world-land.json"];
+        ["index.html", "network-atlas.css", "network-atlas.js", "atlas-init.js", "dock-optics.js", "world-land.json"];
     private static readonly HashSet<string> RouteKeys = new(StringComparer.Ordinal)
     {
         "auto", "nl", "de", "fi", "ru", "it", "ru-de",

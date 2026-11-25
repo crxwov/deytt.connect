@@ -28,7 +28,7 @@
              Exclude="..\..\app\src\main\assets\route-map\index.html;..\..\app\src\main\assets\route-map\network-atlas.css;..\..\app\src\main\assets\route-map\atlas-init.js;..\..\app\src\main\assets\route-map\network-atlas.js"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="Assets\route-map\index.html;Assets\route-map\network-atlas.css;Assets\route-map\atlas-init.js;Assets\route-map\network-atlas.js"
+    <Content Include="Assets\route-map\index.html;Assets\route-map\network-atlas.css;Assets\route-map\atlas-init.js;Assets\route-map\network-atlas.js;Assets\route-map\dock-optics.js"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\ProtocolMarks\amnezia-mark.svg"
