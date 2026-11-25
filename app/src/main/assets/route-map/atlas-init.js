@@ -6,9 +6,18 @@
   window.deyttMapUserLocation = null;
   window.deyttMapEgressCountry = null;
   window.deyttMapActiveAutoRoute = null;
+  window.deyttMapConnected = false;
   window.deyttMapTrafficActive = false;
   window.deyttMapReducedMotion = false;
+  window.deyttMapOverviewMode = false;
+  window.deyttMapViewportAnchor = null;
+  window.deyttSetMapViewportAnchor = function (x, y, width, height) {
+    window.deyttMapViewportAnchor = { x, y, width, height };
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setViewportAnchor(x, y, width, height);
+  };
   const windowsProfile = new URLSearchParams(window.location.search).get("profile") === "windows";
+  const initialZoom = window.DeyttAtlasBridge ? 1.28 : windowsProfile ? 1.0 : 1.1;
+  const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
   if (windowsProfile) document.documentElement.dataset.atlasProfile = "windows";
   function updateInteractionHint() {
     if (!windowsProfile) return;
@@ -37,7 +46,7 @@
     const atlas = window.deyttMapAtlas;
     if (!atlas) return;
     const scale = Number(factor);
-    atlas.targetZoom = Math.max(.82, Math.min(32, atlas.targetZoom * (Number.isFinite(scale) ? scale : 1)));
+    atlas.targetZoom = atlas.clampZoom(atlas.targetZoom * (Number.isFinite(scale) ? scale : 1));
     atlas.staticDirty = true;
     atlas.start();
   };
@@ -46,7 +55,7 @@
     if (!atlas) return;
     atlas.targetLon = 15;
     atlas.targetLat = 50;
-    atlas.targetZoom = 1.1;
+    atlas.targetZoom = initialZoom;
     atlas.velocityLon = 0;
     atlas.staticDirty = true;
     atlas.start();
@@ -55,10 +64,22 @@
     window.deyttMapRoute = route;
     if (window.deyttMapAtlas) {
       window.deyttMapAtlas.setRoute(route, false);
-      window.deyttMapAtlas.showcaseFocused = route !== "auto";
+      window.deyttMapAtlas.showcaseFocused = !window.deyttMapOverviewMode && route !== "auto";
       window.deyttMapAtlas.start();
     }
     updateInteractionHint();
+  };
+  window.deyttSetMapOverviewMode = function (active) {
+    window.deyttMapOverviewMode = Boolean(active);
+    root.classList.toggle("is-overview-mode", window.deyttMapOverviewMode);
+    const atlas = window.deyttMapAtlas;
+    if (!atlas) return;
+    atlas.overviewMode = window.deyttMapOverviewMode;
+    if (atlas.overviewMode) {
+      window.deyttResetMapView();
+      atlas.lastFocusSignature = null;
+      atlas.focusRoute();
+    }
   };
   window.deyttSetMapLanguage = function (language) {
     window.deyttMapLanguage = language === "en" ? "en" : "ru";
@@ -73,12 +94,35 @@
     window.deyttMapActiveAutoRoute = routeKey || null;
     if (window.deyttMapAtlas) window.deyttMapAtlas.setActiveAutoRoute(window.deyttMapActiveAutoRoute);
   };
+  window.deyttSetMapConnected = function (active) {
+    window.deyttMapConnected = Boolean(active);
+    if (window.deyttMapAtlas) window.deyttMapAtlas.setConnected(window.deyttMapConnected);
+  };
+  window.deyttMapConnectionPhase = "IDLE";
+  window.deyttSetMapConnectionPhase = function (phase, isAuto, targetRoute) {
+    window.deyttMapConnectionPhase = String(phase || "IDLE");
+    if (window.deyttMapAtlas) {
+      window.deyttMapAtlas.setConnectionPhase(window.deyttMapConnectionPhase, isAuto, targetRoute);
+    }
+  };
   window.deyttSetMapTrafficActive = function (active) {
     window.deyttMapTrafficActive = Boolean(active);
     if (window.deyttMapAtlas) window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
   };
+  window.deyttSelectTrafficFlow = function (flow) {
+    if (window.deyttMapAtlas) window.deyttMapAtlas.selectTrafficFlow(flow);
+  };
+  window.deyttSetMapBackdropStage = function (active) {
+    root.classList.toggle("is-backdrop-stage", Boolean(active));
+  };
+  window.deyttSetMapBackdropProgress = function (progress) {
+    const value = Math.max(0, Math.min(1, Number(progress) || 0));
+    root.style.setProperty("--backdrop-blur", (value * 28).toFixed(2) + "px");
+    root.style.setProperty("--backdrop-opacity", (1 - value * .6).toFixed(3));
+  };
   window.deyttSetMapReducedMotion = function (enabled) {
     const next = Boolean(enabled);
+    root.classList.toggle("is-reduced-motion", next);
     if (window.deyttMapReducedMotion === next) return;
     window.deyttMapReducedMotion = next;
     const atlas = window.deyttMapAtlas;
@@ -109,6 +153,7 @@
   };
 
   window.DeyttAtlas.create(root, {
+    initialZoom: initialZoom,
     variant: "showcase",
     route: "auto",
     topologyUrl: "world-land.json",
@@ -116,8 +161,8 @@
     wheelZoomOnly: windowsProfile,
     pixelRatioFloor: windowsProfile ? 1.6 : 1,
     pixelRatioCap: windowsProfile ? 2.25 : undefined,
-    labelScale: windowsProfile ? 1.34 : 1,
-    labelFontFamily: windowsProfile ? 'system-ui, "Segoe UI", sans-serif' : undefined,
+    labelScale: windowsPalette ? 0.9 : windowsProfile ? 1.34 : 1,
+    labelFontFamily: windowsPalette ? '"Inter Tight", "Segoe UI", sans-serif' : windowsProfile ? 'system-ui, "Segoe UI", sans-serif' : undefined,
     routeFocusMinZoom: windowsProfile ? 4.2 : undefined,
     routeFocusMaxZoom: windowsProfile ? 8.5 : undefined,
     routeFocusSingleZoom: windowsProfile ? 8.5 : undefined,
@@ -125,12 +170,19 @@
     routeFocusScale: windowsProfile ? 1.06 : undefined,
   }).then(function (atlas) {
     window.deyttMapAtlas = atlas;
+    if (window.deyttMapViewportAnchor) {
+      const anchor = window.deyttMapViewportAnchor;
+      atlas.setViewportAnchor(anchor.x, anchor.y, anchor.width, anchor.height);
+    }
+    // Reapply native mode after async creation: an earlier setter cannot reset an atlas that does not exist yet.
+    window.deyttSetMapOverviewMode(window.deyttMapOverviewMode);
     const systemReducedMotion = atlas.reducedMotion;
     atlas.reducedMotion = {
       get matches() { return window.deyttMapReducedMotion || systemReducedMotion.matches; }
     };
     window.deyttMapAtlas.setLanguage(window.deyttMapLanguage);
     window.deyttMapAtlas.setTrafficActive(window.deyttMapTrafficActive);
+    window.deyttMapAtlas.setConnected(window.deyttMapConnected);
     window.deyttSetMapReducedMotion(window.deyttMapReducedMotion);
     const status = root.querySelector("[data-atlas-status]");
     if (status) {
@@ -144,6 +196,10 @@
     if (window.deyttMapUserLocation) {
       const location = window.deyttMapUserLocation;
       window.deyttMapAtlas.setUserLocation(location.latitude, location.longitude, location.details);
+    }
+    if (window.deyttMapOverviewMode) {
+      window.deyttMapAtlas.lastFocusSignature = null;
+      window.deyttMapAtlas.focusRoute();
     }
     updateInteractionHint();
     notifyHost("atlas-ready");

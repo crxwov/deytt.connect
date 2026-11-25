@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="32dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Supersonic QUIC / TUIC Delta Dart -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M22,12 L3,3 L7,12 L3,21 Z" />
+    <path
+        android:fillColor="#E0F2FE"
+        android:pathData="M22,12 L7,12 L3,3 Z" />
+    <path
+        android:fillColor="#0284C7"
+        android:pathData="M7,12 L3,21 L12,14.5 Z" />
+    <!-- Speed Shockwaves -->
+    <path
+        android:strokeColor="#7DD3FC"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M2,7 L5,7 M1,12 L4,12 M2,17 L5,17" />
+</vector>

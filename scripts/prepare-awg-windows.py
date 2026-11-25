@@ -6,10 +6,13 @@ import subprocess
 
 
 def prepare(go_executable: str, destination: Path, patch: Path) -> None:
-    version = subprocess.check_output([go_executable, "version"], text=True).strip()
+    marker = destination / ".deytt-boottime"
+    if marker.is_file() and (destination / "bin/go.exe").is_file():
+        return
+    version = subprocess.check_output([go_executable, "version"], encoding="utf-8").strip()
     if not version.startswith("go version go1.25.14 windows/"):
         raise ValueError("AWG Windows builds require the reviewed Go 1.25.14 SDK")
-    sdk = Path(subprocess.check_output([go_executable, "env", "GOROOT"], text=True).strip())
+    sdk = Path(subprocess.check_output([go_executable, "env", "GOROOT"], encoding="utf-8").strip())
     marker = destination / ".deytt-boottime"
     import hashlib
     identity = hashlib.sha256(patch.read_bytes()).hexdigest()
@@ -21,7 +24,7 @@ def prepare(go_executable: str, destination: Path, patch: Path) -> None:
         executable = destination / "bin/go.exe"
         if (executable.is_file()
                 and hashlib.sha256(executable.read_bytes()).digest() == hashlib.sha256(Path(go_executable).read_bytes()).digest()
-                and subprocess.run(["git", "-C", str(destination), "apply", "--reverse", "--check", str(patch.resolve())],
+                and subprocess.run(["git", "-C", str(destination), "apply", "--unidiff-zero", "--ignore-space-change", "--ignore-whitespace", "--reverse", "--check", str(patch.resolve())],
                                    capture_output=True).returncode == 0):
             marker.write_text(identity + "\n")
             return
@@ -29,8 +32,10 @@ def prepare(go_executable: str, destination: Path, patch: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     # Gradle creates declared output directories before running the task.
     shutil.copytree(sdk, destination, dirs_exist_ok=True)
-    subprocess.run(["git", "-C", str(destination), "apply", "--check", str(patch.resolve())], check=True)
-    subprocess.run(["git", "-C", str(destination), "apply", str(patch.resolve())], check=True)
+    # Keep git apply inside this generated SDK when the checkout uses a worktree pointer.
+    subprocess.run(["git", "-C", str(destination), "init", "--quiet"], check=True)
+    subprocess.run(["git", "-C", str(destination), "apply", "--unidiff-zero", "--ignore-space-change", "--ignore-whitespace", "--check", str(patch.resolve())], check=True)
+    subprocess.run(["git", "-C", str(destination), "apply", "--unidiff-zero", "--ignore-space-change", "--ignore-whitespace", str(patch.resolve())], check=True)
     marker.write_text(identity + "\n")
 
 

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <objectAnimator android:propertyName="translateX" android:startOffset="140" android:duration="1" android:valueFrom="4.00000" android:valueTo="20.24000" android:valueType="floatType" android:interpolator="@android:interpolator/linear" />
+    <objectAnimator android:propertyName="translateX" android:startOffset="320" android:duration="1" android:valueFrom="20.24000" android:valueTo="45.70200" android:valueType="floatType" android:interpolator="@android:interpolator/linear" />
+    <objectAnimator android:propertyName="translateX" android:startOffset="500" android:duration="1" android:valueFrom="45.70200" android:valueTo="98.71400" android:valueType="floatType" android:interpolator="@android:interpolator/linear" />
+    <objectAnimator android:propertyName="translateX" android:startOffset="680" android:duration="420" android:valueFrom="98.71400" android:valueTo="90.88400" android:valueType="floatType" android:interpolator="@interpolator/startup_align" />
+</set>

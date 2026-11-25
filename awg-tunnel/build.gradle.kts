@@ -191,9 +191,12 @@ val prepareWindowsAwgGo by tasks.registering {
     inputs.file(runtimePatch)
     outputs.dir(windowsAwgSdk)
     doLast {
+        val rootToolchainGo = file("../../.toolchain/go1.25.14-windows/go/bin/go.exe")
+        val goExe = providers.environmentVariable("DEYTT_AWG_GO").orNull
+            ?: (if (rootToolchainGo.isFile) rootToolchainGo.absolutePath else "go")
         project.exec {
             commandLine("python", file("../scripts/prepare-awg-windows.py"),
-                "--go", providers.environmentVariable("DEYTT_AWG_GO").orNull ?: "go",
+                "--go", goExe,
                 "--output", windowsAwgSdk.get().asFile, "--patch", runtimePatch)
         }
     }

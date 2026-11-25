@@ -3,6 +3,14 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+val libXrayAndroidAar = listOf(
+    rootProject.file(".toolchain/libxray-v26.10.21/android/libxray-android/libXray.aar"),
+    rootProject.file("../.toolchain/libxray-v26.10.21/android/libxray-android/libXray.aar"),
+).firstOrNull { it.isFile } ?: rootProject.file(".toolchain/libxray-v26.10.21/android/libxray-android/libXray.aar")
+if (!libXrayAndroidAar.isFile) {
+    throw GradleException("Pinned libXray AAR is missing. Run scripts/fetch-libxray.sh android first.")
+}
+
 android {
     namespace = "space.deytt.connect"
     compileSdk = 35
@@ -13,15 +21,17 @@ android {
     }
 
     defaultConfig {
-        applicationId = if (providers.gradleProperty("isolatedQa").orNull == "true") "space.deytt.connect.qa" else "space.deytt.connect"
+        applicationId = if (providers.gradleProperty("isolatedQa").orNull == "true") {
+            providers.gradleProperty("qaApplicationId").orNull ?: "space.deytt.connect.qa"
+        } else "space.deytt.connect"
         minSdk = 24
         targetSdk = 35
         // One APK covers supported phones and emulators without ABI-specific downloads.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
         versionCode = if (providers.gradleProperty("isolatedQa").orNull == "true") {
             providers.gradleProperty("qaVersionCode").orNull?.toInt() ?: 27
-        } else 66
-        versionName = "0.11.6"
+        } else 167
+        versionName = "0.11.167"
         testInstrumentationRunner = providers.gradleProperty("qaRunner").orNull
             ?: "space.deytt.connect.SubscriptionReliabilityInstrumentation"
     }
@@ -60,11 +70,12 @@ android {
 dependencies {
     // GPL-3.0-or-later shared sing-box engine, pinned for reproducible builds.
     implementation("com.github.singbox-android:libbox:1.14.1")
+    implementation(files(libXrayAndroidAar))
     implementation(project(":awg-tunnel"))
     implementation(project(":openflux-tunnel"))
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.viewpager2:viewpager2:1.1.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }
-

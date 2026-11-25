@@ -4,31 +4,38 @@
   const DEG = Math.PI / 180;
   const TAU = Math.PI * 2;
   const MAX_ZOOM = 32;
+  const SAVE_DATA_PIXEL_RATIO_CAP = 1.5;
+  const MOBILE_PIXEL_RATIO_CAP = 3;
+  const DESKTOP_PIXEL_RATIO_CAP = 2.25;
+  const ANDROID_GEOGRAPHY_PIXEL_RATIO_CAP = 2;
   const ZOOM_EASE_MS = 120;
   const PAN_EASE_MS = 120;
-  const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
+  const NODE_TAP_CORE_RADIUS = 12;
+  const LOCATION_ORDER = ["ru", "fi", "nl", "de", "it"];
+  const COUNTRY_ACCENTS = { nl: "#7AC6FF", de: "#F4C681", fi: "#86E4D4", ru: "#CFB4F7", it: "#F39D9C" };
+  const CONNECTED_LABEL_SIDE_PENALTY = 10000;
   const LABEL_OFFSETS = {
     nl: { x: -24, y: -42, align: "right" },
     de: { x: -24, y: 54, align: "right" },
-    fi: { x: -22, y: -42, align: "right" },
+    fi: { x: -22, y: -38, align: "right" },
     it: { x: -24, y: 52, align: "right" },
-    ru: { x: 24, y: -42, align: "left" },
+    ru: { x: 20, y: -84, align: "left" },
     user: { x: 22, y: -38, align: "left" }
   };
   const COMPACT_LABEL_OFFSETS = {
     nl: { x: -20, y: -42, align: "right" },
     de: { x: -20, y: 56, align: "right" },
-    fi: { x: -18, y: -82, align: "right" },
+    fi: { x: -20, y: -38, align: "right" },
     it: { x: -22, y: 54, align: "right" },
-    ru: { x: 18, y: -42, align: "left" },
-    user: { x: 18, y: -62, align: "left" }
+    ru: { x: 18, y: -84, align: "left" },
+    user: { x: 18, y: 50, align: "left" }
   };
   const LOCATIONS = {
     nl: { code: "nl", city: "Амстердам", country: "Нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
     de: { code: "de", city: "Франкфурт-на-Майне", country: "Германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
     fi: { code: "fi", city: "Хельсинки", country: "Финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
     ru: { code: "ru", city: "Санкт-Петербург", country: "Россия", countryId: "643", lat: 59.9311, lon: 30.3609 },
-    it: { code: "it", city: "выход", country: "Италия", countryId: "380", lat: 42.5, lon: 12.5 }
+    it: { code: "it", city: "Милан", country: "Италия", countryId: "380", lat: 45.4642, lon: 9.19 }
   };
   const COUNTRY_EXIT_KEYS = { NL: "nl", DE: "de", FI: "fi", RU: "ru", IT: "it" };
   const ROUTES = {
@@ -38,7 +45,7 @@
       nodes: ["nl", "de", "fi", "ru", "it"],
       links: [],
       steps: [["вы", "устройство"], ["auto", "проверка точек"], ["nl / de / fi / ru / it", "доступные выходы"], ["web", "интернет"]],
-      description: "общий адрес выбирает доступный выход из амстердама, франкфурта, хельсинки, санкт-петербурга или италии по состоянию сети."
+      description: "общий адрес выбирает доступный выход из амстердама, франкфурта, хельсинки, санкт-петербурга или милана по состоянию сети."
     },
     nl: {
       title: "нидерланды",
@@ -72,8 +79,8 @@
       title: "италия",
       eyebrow: "прямой маршрут",
       nodes: ["it"], links: [],
-      steps: [["вы", "устройство"], ["it", "точка в италии"], ["web", "интернет"]],
-      description: "соединение входит в сеть и выходит в интернет через точку в италии."
+      steps: [["вы", "устройство"], ["it", "милан · италия"], ["web", "интернет"]],
+      description: "соединение входит в сеть и выходит в интернет через милан, италия."
     },
     "ru-de": {
       title: "россия + германия",
@@ -90,6 +97,7 @@
     "франкфурт-на-майне": "Frankfurt am Main",
     "германия": "Germany",
     "хельсинки": "Helsinki",
+    "милан": "Milan",
     "финляндия": "Finland",
     "италия": "Italy",
     "выход": "Exit",
@@ -111,7 +119,7 @@
       title: "Auto-select",
       eyebrow: "available exits",
       steps: [["you", "device"], ["auto", "checking nodes"], ["nl / de / fi / ru / it", "available exits"], ["web", "internet"]],
-      description: "The shared entry chooses an available exit in Amsterdam, Frankfurt, Helsinki, Saint Petersburg, or Italy based on network conditions."
+      description: "The shared entry chooses an available exit in Amsterdam, Frankfurt, Helsinki, Saint Petersburg, or Milan based on network conditions."
     },
     nl: {
       title: "Netherlands",
@@ -140,8 +148,8 @@
     it: {
       title: "Italy",
       eyebrow: "direct route",
-      steps: [["you", "device"], ["it", "exit in Italy"], ["web", "internet"]],
-      description: "Traffic enters the network and reaches the internet through an exit in Italy."
+      steps: [["you", "device"], ["it", "Milan · Italy"], ["web", "internet"]],
+      description: "Traffic enters the network and reaches the internet through Milan, Italy."
     },
     "ru-de": {
       title: "Russia + Germany",
@@ -170,6 +178,13 @@
   function normalize(point) {
     const length = Math.hypot(point.x, point.y, point.z) || 1;
     return { x: point.x / length, y: point.y / length, z: point.z / length };
+  }
+  function cross(a, b) {
+    return {
+      x: a.y * b.z - a.z * b.y,
+      y: a.z * b.x - a.x * b.z,
+      z: a.x * b.y - a.y * b.x
+    };
   }
   function locationFromVector(point) {
     return { lat: Math.asin(clamp(point.y, -1, 1)) / DEG, lon: Math.atan2(point.z, point.x) / DEG };
@@ -220,7 +235,13 @@
       });
     }
     function polygonRecord(rings) {
-      return { rings: rings.map(unwrapRing) };
+      const geographicRings = rings.map(unwrapRing);
+      return {
+        rings: geographicRings,
+        vectors: geographicRings.map(function (points) {
+          return points.map(function (point) { return vector(point[1], point[0]); });
+        })
+      };
     }
     function geometryPolygons(geometry) {
       const groups = geometry.type === "Polygon" ? [geometry.arcs] : geometry.arcs;
@@ -250,7 +271,10 @@
     });
     return {
       boundaryLines: decoded.map(boundaryLine),
-      targetBoundaryLines: targetBoundaryLines
+      targetBoundaryLines: targetBoundaryLines,
+      landPolygons: countries.flatMap(function (country) {
+        return country.polygons.map(function (polygon) { return { rings: polygon.vectors }; });
+      })
     };
   }
 
@@ -263,6 +287,10 @@
       this.options = options || {};
       this.wheelZoomOnly = Boolean(this.options.wheelZoomOnly);
       this.variant = this.options.variant || "home";
+      this.idleMotionTimer = 0;
+      this.idleFrameTimer = 0;
+      this.idleMotionStart = 0;
+      this.idleMotionOffset = 0;
       this.selectOnTap = this.options.selectOnTap !== false;
       this.root.dataset.atlasVariant = this.variant;
       this.route = "auto";
@@ -275,10 +303,14 @@
       this.lastFocusSignature = null;
       this.availableLocationKeys = new Set(LOCATION_ORDER);
       this.showcaseFocused = false;
+      this.overviewMode = false;
+      this.connected = false;
       this.hovered = null;
       this.annotationFilter = null;
       this.dragging = false;
       this.activePointers = new Map();
+      this.gesturePointers = new Set();
+      this.gestureStartedInsideGlobe = false;
       this.pinchDistance = 0;
       this.centerLon = Number.isFinite(this.options.initialLon) ? this.options.initialLon : 15;
       this.centerLat = Number.isFinite(this.options.initialLat) ? this.options.initialLat : 50;
@@ -290,6 +322,9 @@
       this.velocityLon = 0;
       this.width = 0;
       this.height = 0;
+      this.centerX = 0;
+      this.centerY = 0;
+      this.viewportAnchor = null;
       this.radius = 0;
       this.lastFrame = 0;
       this.frame = 0;
@@ -297,16 +332,29 @@
       this.reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
       this.boundaryLines = [];
       this.targetBoundaryLines = [];
+      this.landPolygons = [];
       this.pixelRatio = 1;
       this.staticCanvas = document.createElement("canvas");
       this.staticContext = this.staticCanvas.getContext("2d");
+      this.routeOverlayCanvas = document.createElement("canvas");
+      this.routeOverlayContext = this.routeOverlayCanvas.getContext("2d");
+      this.foregroundOverlayCanvas = document.createElement("canvas");
+      this.foregroundOverlayContext = this.foregroundOverlayCanvas.getContext("2d");
+      this.overlayCacheSignature = "";
+      this.overlayCacheBuildCount = 0;
+      this.cachedRouteLinks = [];
       this.staticDirty = true;
       this.renderCount = 0;
       this.staticRenderCount = 0;
       this.cameraMoving = false;
       this.trafficActive = false;
       this.trafficStartedAt = 0;
+      this.selectedTrafficFlow = null;
+      this.routeHitSegments = [];
+      this.pointerDown = null;
+      this.suppressNextClick = false;
       this.projectedNodes = {};
+      this.routeSegments = [];
       this.bind();
     }
 
@@ -328,6 +376,7 @@
       const geography = decodeTopology(topology);
       this.boundaryLines = geography.boundaryLines;
       this.targetBoundaryLines = geography.targetBoundaryLines;
+      this.landPolygons = geography.landPolygons;
       this.root.dataset.atlasStatus = "ready";
       this.root.classList.add("is-ready");
       this.resize();
@@ -339,6 +388,14 @@
 
     bind() {
       this.canvas.addEventListener("pointerdown", (event) => {
+        this.resetIdleMotion();
+        if (this.gesturePointers.size === 0) {
+          this.gestureStartedInsideGlobe = this.isInsideVisibleGlobe(event.clientX, event.clientY);
+        }
+        this.gesturePointers.add(event.pointerId);
+        if (!this.gestureStartedInsideGlobe) return;
+        this.pointerDown = { x: event.clientX, y: event.clientY };
+        this.suppressNextClick = false;
         this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
         this.dragging = true;
         this.velocityLon = 0;
@@ -351,6 +408,7 @@
         }
       });
       this.canvas.addEventListener("pointermove", (event) => {
+        if (this.gesturePointers.has(event.pointerId) && !this.gestureStartedInsideGlobe) return;
         const box = this.canvas.getBoundingClientRect();
         const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
         if (this.activePointers.has(event.pointerId)) this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -358,7 +416,7 @@
           const points = Array.from(this.activePointers.values()).slice(0, 2);
           const distance = Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
           if (!this.wheelZoomOnly && this.pinchDistance > 0 && distance > 0) {
-            this.targetZoom = clamp(this.targetZoom * distance / this.pinchDistance, .82, MAX_ZOOM);
+            this.targetZoom = this.clampZoom(this.targetZoom * distance / this.pinchDistance);
             this.staticDirty = true;
           }
           this.pinchDistance = distance;
@@ -366,6 +424,8 @@
           return;
         }
         if (this.dragging) {
+          if (this.pointerDown && Math.hypot(event.clientX - this.pointerDown.x, event.clientY - this.pointerDown.y) > 6)
+            this.suppressNextClick = true;
           const dx = event.clientX - this.lastPointer.x;
           const dy = event.clientY - this.lastPointer.y;
           // Use the intended zoom level so drag speed stays consistent while a
@@ -381,15 +441,24 @@
         this.start();
       });
       this.canvas.addEventListener("wheel", (event) => {
+        if (!this.isInsideVisibleGlobe(event.clientX, event.clientY)) return;
+        this.resetIdleMotion();
         event.preventDefault();
         const delta = event.deltaMode === 1 ? event.deltaY * 18 : event.deltaY;
         // Normalize large mouse-wheel bursts so the camera never jumps between frames.
         const normalizedDelta = clamp(delta, -160, 160);
-        this.targetZoom = clamp(this.targetZoom * Math.exp(-normalizedDelta * .00135), .82, MAX_ZOOM);
+        this.targetZoom = this.clampZoom(this.targetZoom * Math.exp(-normalizedDelta * .00135));
         this.staticDirty = true;
         this.start();
       }, { passive: false });
       const release = (event) => {
+        if (!this.gesturePointers.has(event.pointerId)) return;
+        this.gesturePointers.delete(event.pointerId);
+        if (event.type === "pointercancel") this.suppressNextClick = false;
+        if (!this.gestureStartedInsideGlobe) {
+          if (this.gesturePointers.size === 0) this.gestureStartedInsideGlobe = false;
+          return;
+        }
         this.activePointers.delete(event.pointerId);
         this.pinchDistance = 0;
         this.dragging = this.activePointers.size > 0;
@@ -397,19 +466,28 @@
         if (remaining) this.lastPointer = remaining;
         else this.root.classList.remove("is-dragging");
         if (event.pointerType === "touch") this.setHovered(null);
+        if (this.gesturePointers.size === 0) this.gestureStartedInsideGlobe = false;
         this.start();
       };
-      this.canvas.addEventListener("pointerup", release);
-      this.canvas.addEventListener("pointercancel", release);
+      // An outside-start mouse drag is intentionally not captured, so finish
+      // its bookkeeping at document level if the pointer is released off-canvas.
+      document.addEventListener("pointerup", release);
+      document.addEventListener("pointercancel", release);
       this.canvas.addEventListener("pointerleave", () => {
         if (!this.dragging) this.setHovered(null);
       });
       this.canvas.addEventListener("click", (event) => {
+        if (this.suppressNextClick) { this.suppressNextClick = false; return; }
         const box = this.canvas.getBoundingClientRect();
         const pointer = { x: event.clientX - box.left, y: event.clientY - box.top };
-        // Touch clears hover during pointerup, so resolve the tap from its
-        // coordinates instead of relying on the last mouse-hovered node.
         this.updateHover(pointer);
+        const flow = this.findTrafficLineAt(pointer, 14);
+        const node = this.projectedNodes[this.hovered];
+        // Short links can lie entirely inside the nodes' generous touch padding.
+        if (flow && (!node || Math.hypot(pointer.x - node.x, pointer.y - node.y) > NODE_TAP_CORE_RADIUS)) {
+          try { window.DeyttAtlasBridge?.onTrafficTap?.(flow); } catch (_) { /* Native view may be closing. */ }
+          return;
+        }
         if (this.hovered && typeof window.deyttMapNodeTapped === "function") {
           window.deyttMapNodeTapped(this.hovered);
           return;
@@ -428,15 +506,16 @@
         if (event.key === "ArrowRight") this.targetLon += 9;
         if (event.key === "ArrowUp") this.targetLat = clamp(this.targetLat + 7, -62, 72);
         if (event.key === "ArrowDown") this.targetLat = clamp(this.targetLat - 7, -62, 72);
-        if (event.key === "+" || event.key === "=") this.targetZoom = clamp(this.targetZoom * 1.2, .82, MAX_ZOOM);
-        if (event.key === "-" || event.key === "_") this.targetZoom = clamp(this.targetZoom / 1.2, .82, MAX_ZOOM);
-        if (event.key === "0") this.targetZoom = 1;
+        if (event.key === "+" || event.key === "=") this.targetZoom = this.clampZoom(this.targetZoom * 1.2);
+        if (event.key === "-" || event.key === "_") this.targetZoom = this.clampZoom(this.targetZoom / 1.2);
+        if (event.key === "0") this.targetZoom = this.clampZoom(1);
         this.staticDirty = true;
         this.start();
       });
       new ResizeObserver(() => this.resize()).observe(this.canvas);
       new IntersectionObserver((entries) => {
         this.visible = entries[0].isIntersecting;
+        this.resetIdleMotion();
         if (this.visible) this.start();
       }, { rootMargin: "180px 0px" }).observe(this.canvas);
       new MutationObserver(() => {
@@ -445,9 +524,11 @@
       }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
       this.reducedMotion.addEventListener("change", () => {
         this.staticDirty = true;
+        this.resetIdleMotion();
         this.start();
       });
       document.addEventListener("visibilitychange", () => {
+        this.resetIdleMotion();
         if (document.hidden && this.frame) {
           cancelAnimationFrame(this.frame);
           this.frame = 0;
@@ -463,27 +544,54 @@
       const previousWidth = this.width;
       const previousHeight = this.height;
       const pixelRatioCap = this.options.pixelRatioCap ||
-        (rectangle.width < 520 || (navigator.connection && navigator.connection.saveData) ? 1.5 : 2);
+        (navigator.connection && navigator.connection.saveData
+          ? SAVE_DATA_PIXEL_RATIO_CAP
+          : rectangle.width < 520 ? MOBILE_PIXEL_RATIO_CAP : DESKTOP_PIXEL_RATIO_CAP);
       const pixelRatioFloor = Math.min(this.options.pixelRatioFloor || 1, pixelRatioCap);
       const ratio = Math.min(Math.max(window.devicePixelRatio || 1, pixelRatioFloor), pixelRatioCap);
       this.pixelRatio = ratio;
       this.width = Math.max(1, Math.round(rectangle.width));
       this.height = Math.max(1, Math.round(rectangle.height));
-      if (this.width !== previousWidth || this.height !== previousHeight) this.labelPlacements.clear();
+      if ((!window.DeyttAtlasBridge && (this.width !== previousWidth || this.height !== previousHeight)) ||
+          (this.width < 520) !== (previousWidth < 520)) this.labelPlacements.clear();
       this.canvas.width = Math.round(this.width * ratio);
       this.canvas.height = Math.round(this.height * ratio);
       this.context.setTransform(ratio, 0, 0, ratio, 0, 0);
-      this.staticCanvas.width = this.canvas.width;
-      this.staticCanvas.height = this.canvas.height;
-      this.staticContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-      this.radius = Math.min(this.width, this.height) * (this.width < 520 ? 0.405 : 0.43);
+      // Keep text at device resolution while limiting geography raster work on Android.
+      const geographyRatio = window.DeyttAtlasBridge ? Math.min(ratio, ANDROID_GEOGRAPHY_PIXEL_RATIO_CAP) : ratio;
+      this.staticCanvas.width = Math.round(this.width * geographyRatio);
+      this.staticCanvas.height = Math.round(this.height * geographyRatio);
+      this.staticContext.setTransform(geographyRatio, 0, 0, geographyRatio, 0, 0);
+      [this.routeOverlayCanvas, this.foregroundOverlayCanvas].forEach((canvas) => {
+        canvas.width = this.canvas.width;
+        canvas.height = this.canvas.height;
+      });
+      this.routeOverlayContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+      this.foregroundOverlayContext.setTransform(ratio, 0, 0, ratio, 0, 0);
+      const anchor = this.viewportAnchor;
+      this.centerX = anchor ? anchor.x + anchor.width / 2 : this.width / 2;
+      this.centerY = anchor ? anchor.y + anchor.height / 2 : this.height / 2;
+      this.radius = Math.min(anchor ? anchor.width : this.width, anchor ? anchor.height : this.height) * (this.width < 520 ? 0.405 : 0.43);
       this.staticDirty = true;
       this.start();
     }
 
+    setViewportAnchor(x, y, width, height) {
+      if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
+      this.viewportAnchor = { x, y, width, height };
+      this.resize();
+    }
+
+    isInsideVisibleGlobe(clientX, clientY) {
+      if (window.DeyttAtlasBridge) return true;
+      const box = this.canvas.getBoundingClientRect();
+      const radius = Math.max(0, this.radius * this.zoom - .5);
+      return Math.hypot(clientX - box.left - box.width / 2, clientY - box.top - box.height / 2) <= radius;
+    }
+
     basis() {
-      const phi = this.centerLat * DEG;
-      const lambda = this.centerLon * DEG;
+      const phi = (this.centerLat + (this.idleMotionLatOffset || 0)) * DEG;
+      const lambda = (this.centerLon + this.idleMotionOffset) * DEG;
       return {
         east: { x: -Math.sin(lambda), y: 0, z: Math.cos(lambda) },
         north: { x: -Math.sin(phi) * Math.cos(lambda), y: Math.cos(phi), z: -Math.sin(phi) * Math.sin(lambda) },
@@ -493,18 +601,55 @@
 
     projectVector(point, lift) {
       const basis = this.currentBasis;
-      const scale = this.radius * this.zoom * (lift || 1);
+      const l = lift || 1;
+      const scale = this.radius * this.zoom * l;
       return {
-        x: this.width / 2 + dot(point, basis.east) * scale,
-        y: this.height / 2 - dot(point, basis.north) * scale,
+        x: this.centerX + dot(point, basis.east) * scale,
+        y: this.centerY - dot(point, basis.north) * scale,
         z: dot(point, basis.forward),
-        lift: lift || 1
+        lift: l
       };
     }
 
     projectLocation(location, lift) { return this.projectVector(vector(location.lat, location.lon), lift); }
 
+    clampZoom(value) { return clamp(value, .82, MAX_ZOOM); }
+
     colors() {
+      if (document.documentElement.dataset.atlasPalette === "android") return {
+        matte: true,
+        sphereLight: "#232323", sphereMid: "#101010", sphereShade: "#000000",
+        sphereEdge: "transparent", atmosphere: "transparent", atmosphereSoft: "transparent", rimLight: "transparent",
+        grid: null, land: "#5C5C5C", landDim: "#323232", landHot: "#848484",
+        landHighlight: "#707070", landRelief: "#101010", landLow: "#0D0D0D",
+        border: "#ABABAB", borderAlpha: .28, borderWidth: .7, borderHot: "#A8D0C0",
+        borderGlow: "transparent", route: "#A89570", routeHot: "#DEBD83",
+        download: "#DEBD83", downloadHot: "#F1DAB1", upload: "#91D4BC", uploadHot: "#C2E9DB",
+        control: "#AEB1CD", controlHot: "#D9DAE9",
+        node: "#F5F5F5", nodeCore: "#91D4BC", label: "#F5F5F5", labelMuted: "#A9A9A9",
+        labelBg: "rgba(13,13,13,.86)", labelLeader: "#A0A0A0", labelBorder: "#525252"
+      };
+      const windowsPalette = document.documentElement.dataset.atlasPalette === "windows";
+      const windowsDark = document.documentElement.dataset.theme !== "light";
+      if (windowsPalette) return windowsDark ? {
+        sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
+        sphereEdge: "rgba(80,100,130,.22)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+        grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
+        landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
+        border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
+        download: "#FFBD32", downloadHot: "#FFE08A", upload: "#39E8BD", uploadHot: "#90F4DA",
+        control: "#B897FF", controlHot: "#D9C9FF",
+        node: "#F2F5FC", nodeCore: "#39E8BD", label: "#E6ECF5", labelMuted: "#A3B0C2", labelBg: "rgba(15,23,35,.88)", labelLeader: "#A3B0C2", labelBorder: "rgba(163,176,194,.16)"
+      } : {
+        sphereLight: "#D2E5F8", sphereMid: "#BFDBF4", sphereShade: "#A9CFEF",
+        sphereEdge: "rgba(89,131,173,.58)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
+        grid: null, land: "#1299DC", landDim: "#0D86C7", landHot: "#22A6ED", landAlpha: 1,
+        landHighlight: "#22A6ED", landRelief: "rgba(18,55,95,.22)", landLow: "#0974AC",
+        border: "#BAE6FD", borderAlpha: .60, borderWidth: .8, borderHot: "#10A889", borderGlow: "rgba(16,168,137,.22)", route: "#D99000", routeHot: "#F0A900",
+        download: "#D99000", downloadHot: "#FFC857", upload: "#10A889", uploadHot: "#79D6C1",
+        control: "#6E5BB4", controlHot: "#A58CEB",
+        node: "#FFFFFF", nodeCore: "#123A67", label: "#1B2938", labelMuted: "#4D6175", labelBg: "rgba(246,247,251,.96)", labelLeader: "#354B60", labelBorder: "rgba(53,75,96,.22)"
+      };
       const observatory = this.variant === "observatory";
       if (observatory) return {
         sphereLight: "#101832", sphereMid: "#0a1122", sphereShade: "#060a15", sphereEdge: "rgba(129,226,255,.42)", atmosphere: "rgba(99,126,255,.20)", atmosphereSoft: "rgba(99,126,255,.1)", rimLight: "rgba(129,226,255,.4)",
@@ -534,8 +679,8 @@
 
     drawSphere(colors) {
       const context = this.context;
-      const x = this.width / 2;
-      const y = this.height / 2;
+      const x = this.centerX;
+      const y = this.centerY;
       const radius = this.radius * this.zoom;
 
       /* Outer atmosphere: a wide luminous halo that breathes slightly while
@@ -556,7 +701,7 @@
 
       const gradient = context.createRadialGradient(x - radius * .36, y - radius * .42, radius * .03, x + radius * .12, y + radius * .16, radius * 1.14);
       gradient.addColorStop(0, colors.sphereLight);
-      gradient.addColorStop(.55, colors.sphereLight);
+      gradient.addColorStop(colors.matte ? .26 : .55, colors.sphereLight);
       gradient.addColorStop(.86, colors.sphereMid);
       gradient.addColorStop(1, colors.sphereShade);
       context.save();
@@ -565,6 +710,10 @@
       context.clip();
       context.fillStyle = gradient;
       context.fill();
+      if (colors.matte) {
+        context.restore();
+        return;
+      }
       /* Lit limb: two short bright arcs on the light side only — left-top
        * and right-bottom of the light source — instead of a full outline. */
       context.save();
@@ -601,17 +750,173 @@
       context.fill();
     }
 
+    drawLand(colors) {
+      const context = this.context;
+      if (!this.landPolygons.length) return;
+      const horizon = 0.012;
+      const basis = this.currentBasis;
+      const east = basis.east;
+      const north = basis.north;
+      const fwd = basis.forward;
+      const scale = this.radius * this.zoom * 1.001;
+      const cx = this.centerX;
+      const cy = this.centerY;
+      const globeX = cx, globeY = cy;
+      const globeRadius = this.radius * this.zoom;
+
+      const findHorizon = (from, to) => {
+        const zFrom = from.x * fwd.x + from.y * fwd.y + from.z * fwd.z;
+        const zTo = to.x * fwd.x + to.y * fwd.y + to.z * fwd.z;
+        const denom = zTo - zFrom;
+        const t = Math.abs(denom) > 1e-6 ? clamp((horizon - zFrom) / denom, 0, 1) : 0.5;
+        const px = from.x + t * (to.x - from.x);
+        const py = from.y + t * (to.y - from.y);
+        const pz = from.z + t * (to.z - from.z);
+        const len = Math.hypot(px, py, pz) || 1;
+        const nx = px / len, ny = py / len, nz = pz / len;
+        return {
+          x: cx + (nx * east.x + ny * east.y + nz * east.z) * scale,
+          y: cy - (nx * north.x + ny * north.y + nz * north.z) * scale,
+          z: horizon
+        };
+      };
+
+      if (!this.projectedRingScratch) this.projectedRingScratch = [];
+      const scratch = this.projectedRingScratch;
+
+      const pathForRing = (ring) => {
+        const len = ring.length;
+        if (len < 3) return [];
+        while (scratch.length < len) scratch.push({ x: 0, y: 0, z: 0 });
+        let firstHidden = -1;
+        let visibleCount = 0;
+        for (let i = 0; i < len; i++) {
+          const pt = ring[i];
+          const z = pt.x * fwd.x + pt.y * fwd.y + pt.z * fwd.z;
+          scratch[i].z = z;
+          if (z <= horizon) {
+            if (firstHidden < 0) firstHidden = i;
+          } else {
+            visibleCount++;
+            scratch[i].x = cx + (pt.x * east.x + pt.y * east.y + pt.z * east.z) * scale;
+            scratch[i].y = cy - (pt.x * north.x + pt.y * north.y + pt.z * north.z) * scale;
+          }
+        }
+        if (visibleCount === 0) return [];
+        if (firstHidden < 0) return [scratch.slice(0, len)];
+        const segments = [];
+        let segment = [];
+        for (let step = 0; step < len; step += 1) {
+          const index = (firstHidden + step) % len;
+          const nextIndex = (index + 1) % len;
+          const current = scratch[index];
+          const next = scratch[nextIndex];
+          const currentVisible = current.z > horizon;
+          const nextVisible = next.z > horizon;
+          if (currentVisible && nextVisible) {
+            if (!segment.length) segment.push(current);
+            segment.push(next);
+          } else if (currentVisible && !nextVisible) {
+            if (!segment.length) segment.push(current);
+            segment.push(findHorizon(ring[index], ring[nextIndex]));
+            if (segment.length > 2) segments.push(segment);
+            segment = [];
+          } else if (!currentVisible && nextVisible) {
+            segment = [findHorizon(ring[index], ring[nextIndex]), next];
+          }
+        }
+        if (segment.length > 2) segments.push(segment);
+        return segments;
+      };
+
+      const landPath = new Path2D();
+      const traceClippedRing = (segment, globeX, globeY) => {
+        const first = segment[0];
+        const last = segment[segment.length - 1];
+        landPath.moveTo(first.x, first.y);
+        for (let index = 1; index < segment.length; index += 1)
+          landPath.lineTo(segment[index].x, segment[index].y);
+
+        if (first.z > horizon + .05 || last.z > horizon + .05) {
+          landPath.closePath();
+          return;
+        }
+
+        // A clipped land boundary ends on the globe horizon. Closing it with
+        // one straight chord cuts a visible wedge across the sphere. Follow
+        // the shorter horizon arc instead so the clipped polygon stays on the
+        // globe's silhouette.
+        const globeRadius = this.radius * this.zoom * 1.001;
+        const startAngle = Math.atan2(first.y - globeY, first.x - globeX);
+        const endAngle = Math.atan2(last.y - globeY, last.x - globeX);
+        const arc = Math.atan2(Math.sin(startAngle - endAngle), Math.cos(startAngle - endAngle));
+        landPath.arc(globeX, globeY, globeRadius, endAngle, endAngle + arc, arc < 0);
+        landPath.closePath();
+      };
+
+      const landLight = context.createLinearGradient(
+        globeX - globeRadius * .62, globeY - globeRadius * .68,
+        globeX + globeRadius * .58, globeY + globeRadius * .72);
+      landLight.addColorStop(0, colors.landHighlight || colors.land);
+      landLight.addColorStop(.22, colors.land);
+      landLight.addColorStop(.68, colors.landDim);
+      landLight.addColorStop(1, colors.landLow || colors.landDim);
+      const landEdge = context.createLinearGradient(
+        globeX - globeRadius * .72, globeY - globeRadius * .7,
+        globeX + globeRadius * .62, globeY + globeRadius * .74);
+      landEdge.addColorStop(0, colors.landHighlight || colors.land);
+      landEdge.addColorStop(.52, colors.landDim);
+      landEdge.addColorStop(1, colors.landRelief || colors.landLow || colors.landDim);
+      const traceLand = () => {
+        this.landPolygons.forEach((polygon) => polygon.rings.forEach((ring) => {
+          pathForRing(ring).forEach((segment) => traceClippedRing(segment, globeX, globeY));
+        }));
+      };
+      // Zoom and native viewport changes only transform the same projected coastline.
+      const cached = this.landPathCache;
+      if (cached && cached.lon === this.centerLon && cached.lat === this.centerLat && cached.polygons === this.landPolygons) {
+        landPath.addPath(cached.path, new DOMMatrix().translate(cx, cy).scale(scale / cached.scale).translate(-cached.cx, -cached.cy));
+      } else {
+        traceLand();
+        this.landPathCache = { path: landPath, lon: this.centerLon, lat: this.centerLat, polygons: this.landPolygons, scale, cx, cy };
+      }
+      context.save();
+      const isLight = document.documentElement.dataset.theme === "light";
+      const relief = this.options.landDepth === false && !isLight ? 0 : (isLight ? 1.5 : clamp(globeRadius * .014, 2, 5));
+      if (relief) {
+        context.save();
+        const shadowOffsetX = isLight ? 0.6 : (relief * .24);
+        const shadowOffsetY = isLight ? 1.4 : (relief * .56);
+        context.translate(shadowOffsetX, shadowOffsetY);
+        context.fillStyle = colors.landRelief || (isLight ? "rgba(18,55,95,.22)" : "rgba(12,22,34,.64)");
+        context.globalAlpha = isLight ? .50 : .68;
+        context.fill(landPath, "evenodd");
+        context.restore();
+      }
+
+      context.fillStyle = landLight;
+      context.globalAlpha = colors.landAlpha ?? .98;
+      context.shadowColor = "transparent";
+      context.shadowBlur = 0;
+      context.fill(landPath, "evenodd");
+      context.shadowColor = "transparent";
+      context.shadowBlur = 0;
+      context.shadowOffsetX = 0;
+      context.shadowOffsetY = 0;
+      context.globalAlpha = isLight ? .45 : (relief ? .48 : .20);
+      context.lineWidth = isLight ? 0.8 : clamp(globeRadius * .0032, .8, 1.3);
+      context.strokeStyle = landEdge;
+      context.stroke(landPath);
+      context.restore();
+    }
+
     drawBorders(colors) {
       const context = this.context;
-      // Keep the same topology while the camera moves. Decimating every second
-      // point during pan/zoom made country outlines visibly change shape.
-      const pointStep = 1;
+      this.drawLand(colors);
       const trace = (points, lift) => {
-        context.beginPath();
         let drawing = false;
         let previous = null;
-        points.forEach((border, index) => {
-          if (pointStep > 1 && index % pointStep) return;
+        points.forEach((border) => {
           const projected = this.projectVector(border.vector, lift);
           const jump = previous && Math.hypot(projected.x - previous.x, projected.y - previous.y) > this.radius * this.zoom * .24;
           if (projected.z <= .012 || jump) {
@@ -635,10 +940,9 @@
         context.globalAlpha = alpha;
         context.shadowColor = shadowColor || "transparent";
         context.shadowBlur = shadowBlur || 0;
-        lines.forEach((line) => {
-          trace(line.points || line, 1.002);
-          context.stroke();
-        });
+        context.beginPath();
+        lines.forEach((line) => trace(line.points || line, 1.002));
+        context.stroke();
         context.restore();
       };
       const borderAlpha = colors.borderAlpha || (this.variant === "observatory" ? .38 : .28);
@@ -654,78 +958,83 @@
       strokeLines(activeLines, colors.borderHot, this.width < 520 ? .82 : 1.05, .72);
     }
 
-    drawArc(fromKey, toKey, colors, emphasized, flowDirection) {
-      const context = this.context;
-      const from = fromKey === "user" ? vector(this.userLocation.lat, this.userLocation.lon) : vector(LOCATIONS[fromKey].lat, LOCATIONS[fromKey].lon);
-      const to = vector(LOCATIONS[toKey].lat, LOCATIONS[toKey].lon);
-      const segments = 48;
-      const baseLift = fromKey === "user" ? .16 : .11;
-      const points = [];
-      for (let index = 0; index <= segments; index += 1) {
-        const amount = index / segments;
-        points.push(this.projectVector(slerp(from, to, amount), 1 + Math.sin(amount * Math.PI) * baseLift));
-      }
-      const visible = points.filter((point) => point.z > -.02);
-      if (visible.length < 2) return;
-      const routeColor = colors.route;
-      const routeHotColor = colors.routeHot;
-      const gradient = context.createLinearGradient(visible[0].x, visible[0].y, visible[visible.length - 1].x, visible[visible.length - 1].y);
-      gradient.addColorStop(0, routeColor);
-      gradient.addColorStop(.54, routeHotColor);
-      gradient.addColorStop(1, routeColor);
-      const trace = (points) => {
-        context.beginPath();
-        let drawing = false;
-        points.forEach((point) => {
-          if (point.z <= -.02) { drawing = false; return; }
-          if (!drawing) context.moveTo(point.x, point.y);
-          else context.lineTo(point.x, point.y);
-          drawing = true;
-        });
-      };
-      trace(points);
-      context.strokeStyle = routeColor;
-      context.lineWidth = emphasized ? 7 : 5;
-      context.globalAlpha = emphasized ? .12 : .07;
-      context.shadowColor = routeHotColor;
-      context.shadowBlur = emphasized ? 16 : 7;
-      context.stroke();
-      trace(points);
-      context.strokeStyle = gradient;
-      context.lineWidth = emphasized ? 2.1 : 1.4;
-      context.globalAlpha = emphasized ? .92 : .7;
-      context.shadowBlur = emphasized ? 8 : 4;
-      context.stroke();
-      context.shadowBlur = 0;
-      context.globalAlpha = 1;
+    drawRoutes(colors, time, drawPackets = true) {
+      this.routeHitSegments = [];
+      const links = this.routeLinks();
+      this.drawTrafficLines(links);
+      if (drawPackets && this.trafficActive) this.drawTraffic(links, time || performance.now());
+      return links;
     }
 
-    drawRoutes(colors, time) {
-      const route = ROUTES[this.route];
-      const activeRoute = this.route === "auto" && this.autoExitRouteKey
-        ? ROUTES[this.autoExitRouteKey]
-        : route;
-      (activeRoute || route).links.forEach((link) => {
-        if (link.every((key) => this.availableLocationKeys.has(key))) {
-          this.drawArc(link[0], link[1], colors, true);
-        }
-      });
-      const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
-      if (this.userLocation && firstHop) {
-        this.drawArc("user", firstHop, colors, true);
-      }
-      if (this.trafficActive) this.drawTraffic(colors, time || performance.now());
-    }
-
-    drawTraffic(colors, time) {
-      const activeRoute = this.route === "auto" && this.autoExitRouteKey
-        ? ROUTES[this.autoExitRouteKey]
-        : ROUTES[this.route];
-      const links = (activeRoute || ROUTES[this.route]).links.filter((link) =>
+    routeLinks() {
+      const activeRoute = this.activeRouteDefinition();
+      const links = (activeRoute ? activeRoute.links : []).filter((link) =>
         link.every((key) => this.availableLocationKeys.has(key))
       );
       const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
       if (this.userLocation && firstHop) links.unshift(["user", firstHop]);
+      return links;
+    }
+
+    drawTrafficLines(links) {
+      const context = this.context;
+      const dark = document.documentElement.dataset.theme === "dark";
+      this.trafficStreams().filter(stream => this.selectedTrafficFlow == null || stream.id === this.selectedTrafficFlow).forEach(stream => {
+        const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
+        directed.forEach(([fromKey, toKey]) => {
+          const points = [];
+          for (let i = 0; i <= 80; i++) {
+            points.push(this.projectLanePoint(fromKey, toKey, i / 80, stream.lane));
+          }
+          const emphasized = this.selectedTrafficFlow === stream.id;
+
+          // Elevated Glowing 3D Traffic Beam
+          context.save();
+          context.beginPath();
+          points.forEach((point, i) => {
+            if (point.z <= -.02) return;
+            if (!i || points[i - 1].z <= -.02) context.moveTo(point.x, point.y);
+            else context.lineTo(point.x, point.y);
+          });
+          context.lineCap = context.lineJoin = "round";
+          context.strokeStyle = stream.color;
+          context.globalAlpha = emphasized ? .32 : dark ? .20 : .14;
+          context.lineWidth = emphasized ? 3.8 : 2.4;
+          context.shadowBlur = 0;
+          context.stroke();
+
+          const sheen = context.createLinearGradient(points[0].x, points[0].y, points[80].x, points[80].y);
+          sheen.addColorStop(0, stream.color);
+          sheen.addColorStop(.22, stream.color);
+          sheen.addColorStop(.5, stream.bright);
+          sheen.addColorStop(.78, stream.color);
+          sheen.addColorStop(1, stream.color);
+          context.strokeStyle = sheen;
+          context.globalAlpha = 1;
+          context.lineWidth = emphasized ? 2.0 : 1.3;
+          context.stroke();
+
+          if (emphasized) {
+            context.globalAlpha = .90;
+            context.strokeStyle = "#FFFFFF";
+            context.lineWidth = 0.7;
+            context.shadowBlur = 0;
+            context.stroke();
+          }
+          context.restore();
+
+          for (let i = 1; i < points.length; i++) {
+            const a = points[i - 1], b = points[i];
+            if (a.z <= -.02 || b.z <= -.02) continue;
+            this.routeHitSegments.push({ stream: stream.id, a, b });
+            this.routeSegments.push({ left: Math.min(a.x, b.x), top: Math.min(a.y, b.y),
+              right: Math.max(a.x, b.x), bottom: Math.max(a.y, b.y) });
+          }
+        });
+      });
+    }
+
+    drawTraffic(links, time) {
 
       if (!links.length) {
         // Without the location opt-in there is no truthful origin point for a
@@ -734,54 +1043,155 @@
         if (!exit) return;
         const point = this.projectLocation(LOCATIONS[exit], 1.018);
         if (point.z <= .015) return;
-        const phase = this.reducedMotion.matches ? .5 : ((time - this.trafficStartedAt) % 1_800) / 1_800;
         const context = this.context;
-        context.save();
-        context.globalAlpha = (1 - phase) * .38;
-        context.beginPath();
-        context.arc(point.x, point.y, 7 + phase * 9, 0, TAU);
-        context.strokeStyle = colors.routeHot;
-        context.lineWidth = 1.5;
-        context.shadowColor = colors.routeHot;
-        context.shadowBlur = 8;
-        context.stroke();
-        context.restore();
+        this.trafficStreams().forEach((stream, index) => {
+          if (this.selectedTrafficFlow != null && stream.id !== this.selectedTrafficFlow) return;
+          const phase = this.reducedMotion.matches ? .5 : ((time - this.trafficStartedAt) / (stream.duration * 2) + stream.phase) % 1;
+          const orbit = 9 + index * 5;
+          context.save(); context.globalAlpha = .22; context.beginPath(); context.arc(point.x, point.y, orbit, 0, TAU);
+          context.strokeStyle = stream.color; context.lineWidth = 1; context.stroke(); context.restore();
+          for (let packet = 0; packet < (this.reducedMotion.matches ? 1 : 4); packet++) {
+            const angle = (phase + packet / 4) * TAU;
+            this.drawTrafficDot(point.x + Math.cos(angle) * orbit, point.y + Math.sin(angle) * orbit, stream, packet === 0, .82);
+          }
+        });
         return;
       }
 
-      const linkDuration = 1800;
-      const routeDuration = linkDuration * links.length;
       const elapsed = Math.max(0, time - this.trafficStartedAt);
-      const packetCount = this.reducedMotion.matches ? 1 : 2;
-      for (let packet = 0; packet < packetCount; packet += 1) {
-        const routePosition = this.reducedMotion.matches
-          ? links.length * .52
-          : (((elapsed / routeDuration + packet / packetCount) % 1) * links.length);
-        const linkIndex = Math.min(links.length - 1, Math.floor(routePosition));
-        const progress = routePosition - linkIndex;
-        const [fromKey, toKey] = links[linkIndex];
-        const fromLocation = fromKey === "user" ? this.userLocation : LOCATIONS[fromKey];
-        const from = vector(fromLocation.lat, fromLocation.lon);
-        const to = vector(LOCATIONS[toKey].lat, LOCATIONS[toKey].lon);
-        const lift = fromKey === "user" ? .16 : .11;
-        for (let tail = 2; tail >= 0; tail -= 1) {
-          const amount = progress - tail * .055;
-          if (amount < 0 || amount > 1) continue;
-          const point = this.projectVector(slerp(from, to, amount), 1 + Math.sin(amount * Math.PI) * lift);
+      const trafficFade = Math.min(1, elapsed / 280);
+      this.trafficStreams().filter(stream => this.selectedTrafficFlow == null || stream.id === this.selectedTrafficFlow).forEach(stream => {
+        const directed = stream.reverse ? links.slice().reverse().map(link => [link[1], link[0]]) : links;
+        const count = this.reducedMotion.matches ? 1 : 5;
+        for (let packet = 0; packet < count; packet++) {
+          const position = this.reducedMotion.matches ? directed.length * .52 : ((elapsed / (stream.duration * directed.length) + packet / count + stream.phase) % 1) * directed.length;
+          const linkIndex = Math.min(directed.length - 1, Math.floor(position)), amount = position - linkIndex;
+          const [fromKey, toKey] = directed[linkIndex], point = this.projectLanePoint(fromKey, toKey, amount, stream.lane);
           if (point.z <= -.02) continue;
-          const context = this.context;
-          context.save();
-          context.globalAlpha = (tail === 0 ? .95 : .58 - tail * .14) *
-            (this.reducedMotion.matches ? .82 : 1);
-          context.beginPath();
-          context.arc(point.x, point.y, tail === 0 ? 2.8 : 1.8 - tail * .25, 0, TAU);
-          context.fillStyle = tail === 0 ? colors.routeHot : colors.route;
-          context.shadowColor = colors.routeHot;
-          context.shadowBlur = tail === 0 ? 10 : 5;
-          context.fill();
-          context.restore();
+          if (!this.reducedMotion.matches && packet === 0) this.drawTrafficTrail(directed, position, stream, trafficFade);
+          this.drawTrafficDot(point.x, point.y, stream, packet % 4 === 0, trafficFade, .84 + (packet % 3) * .10);
         }
+      });
+    }
+
+    trafficStreams() {
+      if (document.documentElement.dataset.atlasPalette === "android") {
+        const colors = this.colors();
+        return [
+          { id: "upload", color: colors.upload, bright: colors.uploadHot, lane: -1, duration: 3400, phase: 0 },
+          { id: "download", color: colors.download, bright: colors.downloadHot, lane: 0, duration: 3000, phase: .34, reverse: true },
+          { id: "control", color: colors.control, bright: colors.controlHot, lane: 1, duration: 3800, phase: .68 },
+        ];
       }
+      return document.documentElement.dataset.theme === "dark" ? [
+        { id: "upload", color: "#FF7798", bright: "#FFE2EA", lane: -1, duration: 3400, phase: 0 },
+        { id: "download", color: "#FFCE55", bright: "#FFF4CB", lane: 0, duration: 3000, phase: .34, reverse: true },
+        { id: "control", color: "#AF8CFF", bright: "#EFE5FF", lane: 1, duration: 3800, phase: .68 }
+      ] : [
+        { id: "upload", color: "#FF5278", bright: "#FFCDDD", lane: -1, duration: 3400, phase: 0 },
+        { id: "download", color: "#F6AD11", bright: "#FFE9A6", lane: 0, duration: 3000, phase: .34, reverse: true },
+        { id: "control", color: "#824BFF", bright: "#D9C5FF", lane: 1, duration: 3800, phase: .68 }
+      ];
+    }
+
+    projectLanePoint(fromKey, toKey, amount, lane, ground = false) {
+      const fromLocation = fromKey === "user" ? this.userLocation : LOCATIONS[fromKey];
+      const toLocation = toKey === "user" ? this.userLocation : LOCATIONS[toKey];
+      if (!fromLocation || !toLocation) return { x: 0, y: 0, z: -1, lift: 1 };
+      const from = vector(fromLocation.lat, fromLocation.lon), to = vector(toLocation.lat, toLocation.lon);
+      const omega = Math.acos(clamp(dot(from, to), -1, 1));
+      const bell = Math.sin(amount * Math.PI);
+
+      // Subtle 3D radial altitude for depth/occlusion without over-projecting
+      const peakAltitude = 0.025 + Math.min(0.04, omega * 0.06);
+      const lift = ground ? 1.002 : (1.012 + bell * peakAltitude);
+
+      const start = this.projectVector(from, lift);
+      const end = this.projectVector(to, lift);
+      const point = this.projectVector(slerp(from, to, amount), lift);
+      const dx = end.x - start.x, dy = end.y - start.y;
+      const length = Math.hypot(dx, dy) || 1;
+
+      if (ground) {
+        return { x: point.x, y: point.y, z: point.z, lift, bell };
+      }
+
+      // Normal perpendicular to the route chord
+      let nx = -dy / length;
+      let ny = dx / length;
+
+      // Ensure normal points outward/upward over the curvature of the Earth into space
+      const midX = (start.x + end.x) / 2;
+      const midY = (start.y + end.y) / 2;
+      const vx = midX - this.centerX;
+      const vy = midY - this.centerY;
+      const vDist = Math.hypot(vx, vy);
+      if (vDist > 10) {
+        if (nx * vx + ny * vy < 0) { nx = -nx; ny = -ny; }
+      } else {
+        if (ny > 0) { nx = -nx; ny = -ny; }
+      }
+
+      // Responsive 3D Bridge Arch:
+      // - Spacing scales down dynamically when globe is smaller / zoomed out
+      // - Top line (lane = 1) has a balanced, moderate curve instead of extreme bending
+      // - Middle line (lane = 0) remains clearly arched upward
+      // - Bottom line (lane = -1) remains parallelly arched upward, never sagging
+      const globeScale = (this.radius * (this.zoom || 1)) || 160;
+      const zoomFactor = clamp(globeScale / 180, 0.65, 1.25);
+      const laneSpacing = Math.max(7.5, Math.min(13, 10.5 * zoomFactor));
+      const minBottomArch = Math.max(4, Math.min(7.5, length * 0.035 * zoomFactor));
+      const baseArch = minBottomArch + laneSpacing;
+      const laneArch = baseArch + (lane || 0) * laneSpacing;
+      const offset = bell * laneArch;
+
+      return {
+        x: point.x + nx * offset,
+        y: point.y + ny * offset,
+        z: point.z,
+        lift: lift,
+        bell: bell
+      };
+    }
+
+    drawTrafficTrail(links, position, stream, fade = 1) {
+      const points = [];
+      for (let step = 10; step >= 0; step--) {
+        const sample = position - .105 * step / 10;
+        if (sample < 0 || sample >= links.length) continue;
+        const index = Math.floor(sample), [from, to] = links[index];
+        points.push(this.projectLanePoint(from, to, sample - index, stream.lane));
+      }
+      const context = this.context; context.save(); context.lineCap = context.lineJoin = "round"; context.shadowColor = stream.color; context.shadowBlur = 2;
+      for (let i = 1; i < points.length; i++) { const a = points[i-1], b = points[i]; if (a.z <= -.02 || b.z <= -.02) continue; const intensity = i / (points.length - 1); context.beginPath(); context.moveTo(a.x, a.y); context.lineTo(b.x, b.y); context.globalAlpha = intensity * .72 * fade; context.strokeStyle = intensity > .7 ? stream.bright : stream.color; context.lineWidth = .42 + intensity * .82; context.stroke(); }
+      context.restore();
+    }
+
+    drawTrafficDot(x, y, stream, head, alpha = 1, size = 1) {
+      this.trafficSprites ||= new Map();
+      const key = stream.color + "|" + stream.bright + "|" + head;
+      let sprite = this.trafficSprites.get(key);
+      if (!sprite) {
+        sprite = document.createElement("canvas"); sprite.width = sprite.height = 48;
+        const paint = sprite.getContext("2d"); paint.scale(2, 2); const radius = head ? 2.05 : 1.55;
+        const halo = paint.createRadialGradient(12, 12, .5, 12, 12, 4.8); halo.addColorStop(0, stream.color + "58"); halo.addColorStop(1, stream.color + "00"); paint.fillStyle = halo; paint.fillRect(4, 4, 16, 16);
+        const sphere = paint.createRadialGradient(11.2, 11.0, .1, 12, 12, radius); sphere.addColorStop(0, "#FFFFFF"); sphere.addColorStop(.32, stream.bright); sphere.addColorStop(1, stream.color);
+        paint.beginPath(); paint.arc(12, 12, radius, 0, TAU); paint.fillStyle = sphere; paint.shadowColor = stream.color; paint.shadowBlur = head ? 2.8 : 1.6; paint.fill();
+        if (head) { paint.beginPath(); paint.arc(11.4, 11.0, .4, 0, TAU); paint.fillStyle = "#FFFFFF"; paint.fill(); }
+        this.trafficSprites.set(key, sprite);
+      }
+      this.context.globalAlpha = alpha; this.context.drawImage(sprite, x - 12 * size, y - 12 * size, 24 * size, 24 * size); this.context.globalAlpha = 1;
+    }
+
+    findTrafficLineAt(pointer, tolerance) {
+      let closest = tolerance, flow = null;
+      this.routeHitSegments.forEach(segment => { const dx = segment.b.x - segment.a.x, dy = segment.b.y - segment.a.y; const t = clamp(((pointer.x - segment.a.x) * dx + (pointer.y - segment.a.y) * dy) / Math.max(.001, dx * dx + dy * dy), 0, 1); const distance = Math.hypot(pointer.x - segment.a.x - dx * t, pointer.y - segment.a.y - dy * t); if (distance < closest) { closest = distance; flow = segment.stream; } });
+      return flow;
+    }
+
+    selectTrafficFlow(flow) {
+      this.selectedTrafficFlow = ["upload", "download", "control"].includes(flow) ? flow : null;
+      this.start();
     }
 
     activeRouteNodeKeys() {
@@ -793,13 +1203,44 @@
       return ROUTES[this.route].nodes;
     }
 
+    activeRouteDefinition() {
+      if (this.route === "auto") {
+        if (this.autoExitRouteKey && ROUTES[this.autoExitRouteKey]) return ROUTES[this.autoExitRouteKey];
+        if (this.connected) return null;
+      }
+      return ROUTES[this.route] || null;
+    }
+
     drawNode(key, location, colors, kind) {
+      const active = kind === "user" || this.activeRouteNodeKeys().includes(key);
+      if (this.connected && kind !== "user" && !active) return;
       const context = this.context;
       const projected = this.projectLocation(location, 1.008);
       this.projectedNodes[key] = projected;
       if (projected.z <= 0.015) return;
-      const active = kind === "user" || this.activeRouteNodeKeys().includes(key);
       const hovered = this.hovered === key;
+      if (window.DeyttAtlasBridge) {
+        const tint = COUNTRY_ACCENTS[key] || colors.routeHot;
+        const radius = active || hovered ? 2.8 : 2.1;
+        context.save();
+        context.beginPath();
+        context.arc(projected.x, projected.y, radius, 0, TAU);
+        context.fillStyle = tint;
+        context.shadowColor = tint;
+        context.shadowBlur = active || hovered ? 4 : 2;
+        context.fill();
+        if (active || hovered) {
+          context.beginPath();
+          context.arc(projected.x, projected.y, 5, 0, TAU);
+          context.shadowBlur = 0;
+          context.globalAlpha = .32;
+          context.strokeStyle = tint;
+          context.lineWidth = .7;
+          context.stroke();
+        }
+        context.restore();
+        return;
+      }
       const outer = active || hovered ? (hovered ? 12 : 8) : 0;
       if (outer) {
         context.beginPath();
@@ -809,16 +1250,17 @@
         context.globalAlpha = 1;
       }
       context.beginPath();
-      context.arc(projected.x, projected.y, hovered ? 5 : active ? 4.1 : 2.1, 0, TAU);
+      const radius = hovered ? 5 : active ? 4.1 : 2.1;
+      context.arc(projected.x, projected.y, radius, 0, TAU);
       context.fillStyle = kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.landDim;
       context.shadowColor = kind === "user" ? colors.routeHot : active || hovered ? colors.nodeCore : colors.border;
-      context.shadowBlur = hovered ? 18 : active ? 12 : 3;
+      context.shadowBlur = hovered ? 9 : active ? 6 : 0;
       context.fill();
       context.shadowBlur = 0;
       if (active || hovered) {
         context.beginPath();
-        context.arc(projected.x, projected.y, hovered ? 5 : 4.1, 0, TAU);
-        context.lineWidth = 1;
+        context.arc(projected.x, projected.y, radius, 0, TAU);
+        context.lineWidth = 1.15;
         context.strokeStyle = kind === "user" ? colors.node : colors.routeHot;
         context.stroke();
       }
@@ -827,90 +1269,149 @@
     drawLabel(key, colors, occupied) {
       const point = this.projectedNodes[key];
       if (!point || point.z <= .03) return;
+      if (window.DeyttAtlasBridge && !this.isAndroidViewportAnchorVisible(point)) return;
       if (this.annotationFilter && key !== "user" && !this.annotationFilter.has(key)) return;
       const active = key === "user" || this.activeRouteNodeKeys().includes(key);
-      const autoCandidate = this.route === "auto" && ROUTES.auto.nodes.includes(key);
+      if (this.connected && key !== "user" && !active) return;
+      const autoCandidate = !this.connected && this.route === "auto" && ROUTES.auto.nodes.includes(key);
       if (!active && !autoCandidate && this.hovered !== key) return;
       const context = this.context;
       const location = key === "user" ? this.userLocation : LOCATIONS[key];
       const compact = this.width < 520;
+      const glass = Boolean(window.DeyttAtlasBridge) && !colors.matte;
       const labelScale = this.options.labelScale || 1;
-      const offset = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
+      const baseOffset = compact ? COMPACT_LABEL_OFFSETS[key] : LABEL_OFFSETS[key];
+      const offset = { x: baseOffset.x * labelScale, y: baseOffset.y * labelScale, align: baseOffset.align };
       const title = key === "user" ? (this.copy(location.city) || this.copy("ваша сеть")) : this.copy(location.city);
       const meta = key === "user" ? (location.country || this.copy("вход в сеть")) : location.code + " · " + this.copy(location.country);
       const titleFontSize = Math.round((compact ? 9 : 10) * labelScale);
       const metaFontSize = Math.round((compact ? 7 : 8) * labelScale);
-      const inset = Math.round((compact ? 10 : 12) * labelScale);
-      const height = Math.round((compact ? 35 : 39) * labelScale);
-      const titleFont = "700 " + titleFontSize + "px " + (this.options.labelFontFamily || "ui-monospace, SFMono-Regular, Menlo, monospace");
-      const metaFont = "600 " + metaFontSize + "px ui-monospace, SFMono-Regular, Menlo, monospace";
+      const inset = Math.round((glass ? 8 : compact ? 10 : 12) * labelScale);
+      const height = Math.round((glass ? (compact ? 30 : 33) : (compact ? 35 : 39)) * labelScale);
+      const fontFamily = this.options.labelFontFamily || '"Segoe UI", sans-serif';
+      const titleFont = (glass ? "550 " : "700 ") + titleFontSize + "px " + fontFamily;
+      const metaFont = (glass ? "500 " : "600 ") + metaFontSize + "px " + fontFamily;
       context.save();
       context.font = titleFont;
       const titleWidth = context.measureText(title).width;
       context.font = metaFont;
       const width = Math.max(titleWidth, context.measureText(meta).width) + inset * 2;
+      const preferredSide = this.connected && window.DeyttAtlasBridge ? (key === "user" ? 1 : -1) : 0;
       // Prefer nearby labels; score all alternatives instead of falling back
       // to (8,8), which detached crowded user labels from their actual pin.
-      const alternatives = [offset,
-        { x: 14, y: -height / 2 - 12, align: "left" },
-        { x: -14, y: -height / 2 - 12, align: "right" },
-        { x: 14, y: height / 2 + 12, align: "left" },
-        { x: -14, y: height / 2 + 12, align: "right" },
-        { x: -width / 2, y: -height - 30, align: "left" },
-        { x: -width / 2, y: height + 30, align: "left" }
+      const alternatives = key === "ru" ? [
+        offset,
+        { x: 18 * labelScale, y: -height / 2 - 32 * labelScale, align: "left" },
+        { x: -width / 2, y: -height - 28 * labelScale, align: "left" },
+        { x: -14 * labelScale, y: -height / 2 - 32 * labelScale, align: "right" },
+        { x: 18 * labelScale, y: height / 2 + 18 * labelScale, align: "left" },
+        { x: -width / 2, y: height + 24 * labelScale, align: "left" }
+      ] : [
+        offset,
+        { x: 14 * labelScale, y: -height / 2 - 12 * labelScale, align: "left" },
+        { x: -14 * labelScale, y: -height / 2 - 12 * labelScale, align: "right" },
+        { x: 14 * labelScale, y: height / 2 + 12 * labelScale, align: "left" },
+        { x: -14 * labelScale, y: height / 2 + 12 * labelScale, align: "right" },
+        { x: -width / 2, y: -height - 30 * labelScale, align: "left" },
+        { x: -width / 2, y: height + 30 * labelScale, align: "left" }
       ];
-      let placementIndex = this.labelPlacements.get(key);
-      if (placementIndex == null || placementIndex >= alternatives.length) {
-        let bestScore = Infinity;
-        placementIndex = 0;
-        for (let index = 0; index < alternatives.length; index += 1) {
-          const candidate = alternatives[index];
-          const candidateLeft = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
-          const candidateTop = clamp(point.y + candidate.y - height / 2, 8, this.height - height - 8);
-          const overlap = occupied.reduce((sum, label) => sum +
-            Math.max(0, Math.min(candidateLeft + width + 6, label.left + label.width + 6) - Math.max(candidateLeft - 6, label.left - 6)) *
-            Math.max(0, Math.min(candidateTop + height + 6, label.top + label.height + 6) - Math.max(candidateTop - 6, label.top - 6)), 0);
-          const dx = point.x - clamp(point.x, candidateLeft, candidateLeft + width);
-          const dy = point.y - clamp(point.y, candidateTop, candidateTop + height);
-          const coveringPin = Object.values(this.projectedNodes).some(p => p.z > .03 && p.x > candidateLeft - 5 && p.x < candidateLeft + width + 5 && p.y > candidateTop - 5 && p.y < candidateTop + height + 5);
-          const score = overlap * 100 + dx * dx + dy * dy + (coveringPin ? 100000 : 0);
-          if (score < bestScore) { bestScore = score; placementIndex = index; }
-        }
-        this.labelPlacements.set(key, placementIndex);
+      const previousPlacement = this.labelPlacements.get(key);
+      let placementIndex = -1;
+      let bestScore = Infinity;
+      for (let index = 0; index < alternatives.length; index += 1) {
+        const candidate = alternatives[index];
+        const candidateLeft = clamp(point.x + candidate.x - (candidate.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
+        const candidateTop = clamp(point.y + candidate.y - height / 2, 8, this.height - height - 8);
+        const overlapsLabel = occupied.some(label =>
+          candidateLeft < label.left + label.width + 5 && candidateLeft + width + 5 > label.left &&
+          candidateTop < label.top + label.height + 5 && candidateTop + height + 5 > label.top);
+        const coversPin = Object.values(this.projectedNodes).some(p => p.z > .03 &&
+          p.x > candidateLeft - 5 && p.x < candidateLeft + width + 5 &&
+          p.y > candidateTop - 5 && p.y < candidateTop + height + 5);
+        const routeCrossings = this.routeSegments.reduce((count, segment) => count + Number(
+          segment.left < candidateLeft + width + 4 && segment.right > candidateLeft - 4 &&
+          segment.top < candidateTop + height + 4 && segment.bottom > candidateTop - 4), 0);
+        const dx = point.x - clamp(point.x, candidateLeft, candidateLeft + width);
+        const dy = point.y - clamp(point.y, candidateTop, candidateTop + height);
+        const oppositeSide = preferredSide > 0 ? candidateLeft < point.x + 5 :
+          preferredSide < 0 && candidateLeft + width > point.x - 5;
+        const score = (coversPin ? 1e9 : 0) + (overlapsLabel ? 1e8 : 0) + routeCrossings * 1e5 +
+          (oppositeSide ? CONNECTED_LABEL_SIDE_PENALTY : 0) +
+          dx * dx + dy * dy + (candidate.y > 0 ? 900 : 0) - (previousPlacement === index ? 30 : 0);
+        if (score < bestScore) { bestScore = score; placementIndex = index; }
       }
+      if (placementIndex < 0) { context.restore(); return; }
+      this.labelPlacements.set(key, placementIndex);
       const placement = alternatives[placementIndex];
       const left = clamp(point.x + placement.x - (placement.align === "right" ? width : 0), 8, Math.max(8, this.width - width - 8));
       const top = clamp(point.y + placement.y - height / 2, 8, this.height - height - 8);
+      const labelOverlap = occupied.some(label => left < label.left + label.width + 5 && left + width + 5 > label.left &&
+        top < label.top + label.height + 5 && top + height + 5 > label.top);
+      const pinOverlap = Object.values(this.projectedNodes).some(p => p.z > .03 &&
+        p.x > left - 5 && p.x < left + width + 5 && p.y > top - 5 && p.y < top + height + 5);
+      const routeOverlap = this.routeSegments.some(segment =>
+        segment.left < left + width + 4 && segment.right > left - 4 &&
+        segment.top < top + height + 4 && segment.bottom > top - 4);
+      // Keep pins visible when a dense route leaves no collision-free label slot.
+      if (labelOverlap || pinOverlap || routeOverlap) {
+        context.restore();
+        return;
+      }
       const endX = clamp(point.x, left + 5, left + width - 5);
       const endY = clamp(point.y, top + 5, top + height - 5);
       context.beginPath();
       context.moveTo(point.x, point.y);
       context.lineTo(endX, endY);
-      context.strokeStyle = key === "user" ? colors.node : active ? colors.nodeCore : colors.border;
-      context.lineWidth = 1;
-      context.globalAlpha = active ? .7 : .35;
+      context.strokeStyle = key === "user" ? colors.node : active ? colors.borderHot : colors.border;
+      context.lineWidth = glass ? .65 : 1;
+      context.globalAlpha = glass ? .3 : active ? .75 : .35;
       context.stroke();
+
       occupied.push({ left: left, top: top, width: width, height: height });
       context.beginPath();
-      context.roundRect(left, top, width, height, Math.round((compact ? 10 : 12) * labelScale));
-      context.fillStyle = colors.labelBg;
-      context.globalAlpha = active ? .96 : .68;
-      context.shadowColor = "rgba(16,29,65,.22)";
-      context.shadowBlur = 18;
-      context.fill();
-      context.shadowBlur = 0;
-      context.strokeStyle = this.hovered === key ? colors.borderHot : colors.border;
-      context.globalAlpha = active ? (this.hovered === key ? .9 : .65) : .35;
+      context.roundRect(left, top, width, height, Math.round((glass ? 8 : compact ? 10 : 12) * labelScale));
+      const accent = COUNTRY_ACCENTS[key] || colors.routeHot || "#7AC6FF";
+      if (glass && this.staticCanvas && this.staticCanvas.width) {
+        const sourceX = this.staticCanvas.width / this.width;
+        const sourceY = this.staticCanvas.height / this.height;
+        context.save();
+        context.clip();
+        // The geography is cached separately, so this lens never samples labels or itself.
+        context.globalAlpha = 1;
+        context.drawImage(this.staticCanvas, (left + width * .045) * sourceX, (top + height * .045) * sourceY,
+          width * .91 * sourceX, height * .91 * sourceY, left, top, width, height);
+        const tint = context.createLinearGradient(left, top, left, top + height);
+        tint.addColorStop(0, "rgba(14,26,41,.68)");
+        tint.addColorStop(.28, "rgba(10,22,37,.76)");
+        tint.addColorStop(1, "rgba(7,17,30,.84)");
+        context.fillStyle = tint;
+        context.fillRect(left, top, width, height);
+        context.restore();
+        const rim = context.createLinearGradient(left, top, left + width, top + height);
+        rim.addColorStop(0, "rgba(230,246,255,.46)");
+        rim.addColorStop(.48, "rgba(169,202,231,.09)");
+        rim.addColorStop(1, accent + (active || this.hovered === key ? "60" : "34"));
+        context.strokeStyle = rim;
+        context.globalAlpha = 1;
+      } else {
+        context.fillStyle = colors.labelBg;
+        context.globalAlpha = colors.matte ? 1 : active ? .96 : .68;
+        context.fill();
+        context.strokeStyle = this.hovered === key ? (colors.borderHot || "#38BDF8") : active ? colors.borderHot : (colors.labelBorder || colors.border);
+        context.globalAlpha = colors.matte ? .9 : active ? .65 : .35;
+      }
+      context.lineWidth = glass ? .7 : 1;
       context.stroke();
+
       context.textBaseline = "middle";
       context.textAlign = "left";
-      context.fillStyle = active ? colors.label : colors.labelMuted;
+      context.fillStyle = glass ? "#F0F6FF" : (active || colors.matte) ? colors.label : colors.labelMuted;
       context.globalAlpha = 1;
       context.font = titleFont;
-      context.fillText(title.toLowerCase(), left + inset, top + Math.round((compact ? 11 : 12) * labelScale));
-      context.fillStyle = colors.labelMuted;
+      context.fillText(title.toLowerCase(), left + inset, top + Math.round((glass ? (compact ? 9 : 10) : (compact ? 11 : 12)) * labelScale));
+      context.fillStyle = glass ? "#B9C9DC" : colors.labelMuted;
       context.font = metaFont;
-      context.fillText(meta.toLowerCase(), left + inset, top + Math.round((compact ? 25 : 28) * labelScale));
+      context.fillText(meta.toLowerCase(), left + inset, top + Math.round((glass ? (compact ? 21 : 23) : (compact ? 25 : 28)) * labelScale));
       context.restore();
     }
 
@@ -920,11 +1421,19 @@
         if (this.availableLocationKeys.has(key)) this.drawNode(key, LOCATIONS[key], colors, "server");
       });
       if (this.userLocation) this.drawNode("user", this.userLocation, colors, "user");
+    }
+
+    drawLabels(colors) {
       const occupied = [];
-      if (this.userLocation) this.drawLabel("user", colors, occupied);
+      if (this.hovered) this.drawLabel(this.hovered, colors, occupied);
+      if (this.userLocation && this.hovered !== "user") this.drawLabel("user", colors, occupied);
       LOCATION_ORDER.forEach((key) => {
-        if (this.availableLocationKeys.has(key)) this.drawLabel(key, colors, occupied);
+        if (this.availableLocationKeys.has(key) && this.hovered !== key) this.drawLabel(key, colors, occupied);
       });
+    }
+
+    isAndroidViewportAnchorVisible(point) {
+      return point.x >= 0 && point.x <= this.width && point.y >= 0 && point.y <= this.height;
     }
 
     renderStatic(colors) {
@@ -938,7 +1447,7 @@
         context.beginPath();
         const clipRadius = this.radius * this.zoom - .5;
         if (clipRadius > 0) {
-          context.arc(this.width / 2, this.height / 2, clipRadius, 0, TAU);
+          context.arc(this.centerX, this.centerY, clipRadius, 0, TAU);
           context.clip();
           this.drawBorders(colors);
         }
@@ -950,21 +1459,55 @@
       this.staticRenderCount += 1;
     }
 
+    overlaySignature(colors) {
+      const root = document.documentElement;
+      return JSON.stringify([
+        this.staticRenderCount, this.width, this.height, this.pixelRatio,
+        this.centerLon, this.centerLat, this.zoom, this.centerX, this.centerY, this.radius,
+        root.dataset.theme, root.dataset.atlasPalette, root.dataset.atlasBackdrop,
+        this.root.classList.contains("is-backdrop-stage"), colors,
+        this.variant, this.showcaseFocused, this.overviewMode, this.connected, this.hovered,
+        this.route, this.autoExitCountry, this.autoExitRouteKey,
+        Array.from(this.availableLocationKeys).sort(), this.userLocation, this.language,
+        this.annotationFilter && Array.from(this.annotationFilter).sort(), this.selectedTrafficFlow,
+        this.options.labelScale, this.options.labelFontFamily
+      ]);
+    }
+
+    renderOverlayCache(colors, time) {
+      const liveContext = this.context;
+      try {
+        this.context = this.routeOverlayContext;
+        this.context.clearRect(0, 0, this.width, this.height);
+        this.routeSegments = [];
+        this.cachedRouteLinks = this.drawRoutes(colors, time, false);
+
+        this.context = this.foregroundOverlayContext;
+        this.context.clearRect(0, 0, this.width, this.height);
+        this.drawNodes(colors);
+        this.drawLabels(colors);
+      } finally {
+        this.context = liveContext;
+      }
+      this.overlayCacheSignature = this.overlaySignature(colors);
+      this.overlayCacheBuildCount += 1;
+    }
+
     render(time) {
       this.frame = 0;
       if (!this.visible || document.hidden || !this.width) return;
-      const wasCameraMoving = this.cameraMoving;
-      const cameraMoving = this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
+      if (window.DeyttAtlasBridge && !this.viewportAnchor) return;
+      const idleActive = this.idleMotionStart > 0 && this.variant === "home" && !this.reducedMotion.matches;
+      const idleCycle = idleActive ? ((time - this.idleMotionStart) / 8000) * TAU : 0;
+      const nextIdleOffset = idleActive ? Math.sin(idleCycle) * 5.8 : 0;
+      const nextIdleLatOffset = idleActive ? Math.cos(idleCycle) * 2.2 : 0;
+      if (Math.abs(nextIdleOffset - this.idleMotionOffset) > .001 || Math.abs(nextIdleLatOffset - (this.idleMotionLatOffset || 0)) > .001) this.staticDirty = true;
+      this.idleMotionOffset = nextIdleOffset;
+      this.idleMotionLatOffset = nextIdleLatOffset;
+      const cameraMoving = idleActive || this.dragging || Math.abs(this.targetZoom - this.zoom) > .006 || Math.abs(this.targetLon - this.centerLon) > .06 || Math.abs(this.targetLat - this.centerLat) > .06;
       this.cameraMoving = cameraMoving;
-      if (wasCameraMoving && !cameraMoving) this.labelPlacements.clear();
-      // The atlas only animates while the user pans or zooms. Once the camera
-      // settles, static routes and labels stay still and consume no frame loop.
-      const frameInterval = !cameraMoving && this.trafficActive && !this.reducedMotion.matches ? 33 : 0;
+      // Static geography and route overlays stay cached; only packets change each frame.
       const elapsed = this.lastFrame ? time - this.lastFrame : 16;
-      if (frameInterval > 0 && elapsed < frameInterval && !this.dragging) {
-        this.start();
-        return;
-      }
       const delta = Math.min(48, elapsed);
       this.lastFrame = time;
       const previousLon = this.centerLon;
@@ -988,18 +1531,71 @@
       if (Math.abs(this.targetLon - this.centerLon) < .01) this.centerLon = this.targetLon;
       if (Math.abs(this.targetLat - this.centerLat) < .01) this.centerLat = this.targetLat;
       if (Math.abs(this.targetZoom - this.zoom) < .002) this.zoom = this.targetZoom;
-      if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001 || Math.abs(this.zoom - previousZoom) > .0001) {
+      if (Math.abs(this.centerLon - previousLon) > .0001 || Math.abs(this.centerLat - previousLat) > .0001) {
+        this.staticDirty = true;
+      } else if (Math.abs(this.zoom - previousZoom) > .0001 && (!this.staticCamera || Math.abs(this.zoom - this.staticCamera.zoom) > 0.25)) {
         this.staticDirty = true;
       }
+      const cameraSettled = !idleActive && !this.dragging && Math.abs(this.targetLon - this.centerLon) <= .01 &&
+        Math.abs(this.targetLat - this.centerLat) <= .01 && Math.abs(this.targetZoom - this.zoom) <= .002 && Math.abs(this.velocityLon) <= .001;
       this.currentBasis = this.basis();
       this.context.clearRect(0, 0, this.width, this.height);
       const colors = this.colors();
       if (this.staticDirty) this.renderStatic(colors);
       this.context.drawImage(this.staticCanvas, 0, 0, this.width, this.height);
-      this.drawRoutes(colors, time);
-      this.drawNodes(colors);
+      if (!cameraSettled) {
+        this.routeSegments = [];
+        this.drawRoutes(colors, time);
+        if (this.connectionAnimationActive(time)) this.drawConnectionAnimation(time);
+        this.drawNodes(colors);
+        this.drawLabels(colors);
+      } else {
+        const signature = this.overlaySignature(colors);
+        if (signature !== this.overlayCacheSignature) this.renderOverlayCache(colors, time);
+        this.context.drawImage(this.routeOverlayCanvas, 0, 0, this.width, this.height);
+        const activeLinks = (this.cachedRouteLinks && this.cachedRouteLinks.length) ? this.cachedRouteLinks : (this.cachedRouteLinks = this.routeLinks());
+        if (this.trafficActive) this.drawTraffic(activeLinks, time || performance.now());
+        if (this.connectionAnimationActive(time)) this.drawConnectionAnimation(time);
+        this.context.drawImage(this.foregroundOverlayCanvas, 0, 0, this.width, this.height);
+      }
       this.renderCount += 1;
-      if (Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001 || (this.trafficActive && !this.reducedMotion.matches)) this.start();
+      const cameraNeedsFrames = Math.abs(this.targetLon - this.centerLon) > .01 || Math.abs(this.targetLat - this.centerLat) > .01 || Math.abs(this.targetZoom - this.zoom) > .002 || Math.abs(this.velocityLon) > .001;
+      const connectionAnim = this.connectionAnimationActive(time);
+      if (cameraNeedsFrames || ((connectionAnim || this.trafficActive) &&
+          !this.reducedMotion.matches && !window.deyttMapReducedMotion)) this.start();
+      else if (idleActive && !this.idleFrameTimer) {
+        this.idleFrameTimer = window.setTimeout(() => {
+          this.idleFrameTimer = 0;
+          this.start();
+        }, 40);
+      }
+    }
+
+    resetIdleMotion() {
+      if (this.idleMotionTimer) window.clearTimeout(this.idleMotionTimer);
+      if (this.idleFrameTimer) window.clearTimeout(this.idleFrameTimer);
+      this.idleMotionTimer = 0;
+      this.idleFrameTimer = 0;
+      if (this.idleMotionOffset) {
+        this.centerLon += this.idleMotionOffset;
+        this.targetLon += this.idleMotionOffset;
+        this.idleMotionOffset = 0;
+        this.staticDirty = true;
+      }
+      if (this.idleMotionLatOffset) {
+        this.centerLat += this.idleMotionLatOffset;
+        this.targetLat += this.idleMotionLatOffset;
+        this.idleMotionLatOffset = 0;
+        this.staticDirty = true;
+      }
+      this.idleMotionStart = 0;
+      if (this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
+      this.idleMotionTimer = window.setTimeout(() => {
+        this.idleMotionTimer = 0;
+        if (this.variant !== "home" || this.reducedMotion.matches || !this.visible || document.hidden) return;
+        this.idleMotionStart = performance.now();
+        this.start();
+      }, 30000);
     }
 
     start() {
@@ -1022,15 +1618,14 @@
       if (this.hovered === key) return;
       this.hovered = key;
       this.canvas.style.cursor = key ? "pointer" : this.dragging ? "grabbing" : "grab";
-      // Hover affects only live route labels and nodes. Redrawing the cached
-      // sphere and geography here caused needless high-DPI work and visible
-      // softness while the pointer crossed country markers.
+      // Hover invalidates only the foreground overlay, not the high-DPI geography.
       if (this.tooltip) this.tooltip.hidden = true;
       this.start();
     }
 
     setRoute(key, announce) {
       if (!ROUTES[key]) return;
+      this.resetIdleMotion();
       if (this.variant === "showcase" && announce !== false) this.showcaseFocused = true;
       const routeChanged = !this.routeInitialized || this.route !== key;
       this.route = key;
@@ -1146,7 +1741,10 @@
         : null;
       if (this.autoExitRouteKey === nextRouteKey) return;
       this.autoExitRouteKey = nextRouteKey;
-      if (this.route === "auto" && nextRouteKey) this.focusRoute();
+      if (this.route === "auto" && nextRouteKey) {
+        if (this.connectionIsAuto && this.connectionPhase === "CONNECTED") this.connectionBurstAt = performance.now();
+        this.focusRoute();
+      }
       // Egress metadata changes the active endpoint, never the user's camera
       // after an active route is selected. The first active route update frames
       // the actual path; later country corrections only refresh its marker.
@@ -1158,8 +1756,155 @@
       const next = Boolean(active);
       if (this.trafficActive === next) return;
       this.trafficActive = next;
-      this.trafficStartedAt = next ? performance.now() : 0;
+      if (next) {
+        if (!this.trafficStartedAt) this.trafficStartedAt = performance.now();
+        this.overlayCacheSignature = "";
+      } else {
+        this.trafficStartedAt = 0;
+      }
       this.start();
+    }
+
+    setConnected(active) {
+      const next = Boolean(active);
+      if (this.connected === next) return;
+      this.connected = next;
+      if (!next) {
+        this.autoExitCountry = null;
+        this.autoExitRouteKey = null;
+      }
+      this.labelPlacements.clear();
+      this.start();
+    }
+
+    setConnectionPhase(phase, isAuto, targetRoute) {
+      const nextPhase = String(phase || "IDLE");
+      const wasConnecting = this.connectionPhase === "STARTING" || this.connectionPhase === "CHECKING";
+      const isNowConnected = nextPhase === "CONNECTED";
+      if (isNowConnected && wasConnecting) {
+        this.connectionBurstAt = performance.now();
+      }
+      this.connectionPhase = nextPhase;
+      this.connectionIsAuto = Boolean(isAuto);
+      this.connectionTargetRoute = targetRoute || null;
+      if (nextPhase === "STARTING" || nextPhase === "CHECKING") {
+        if (!this.connectionPhaseStartedAt || !wasConnecting) {
+          this.connectionPhaseStartedAt = performance.now();
+        }
+      } else {
+        this.connectionPhaseStartedAt = 0;
+      }
+      this.start();
+    }
+
+    connectionAnimationActive(time) {
+      const now = time || performance.now();
+      if (this.root.classList.contains("is-backdrop-stage")) return false;
+      if (this.connectionPhase === "STARTING" || this.connectionPhase === "CHECKING") return true;
+      if (this.connectionBurstAt && (now - this.connectionBurstAt < 800)) return true;
+      return false;
+    }
+
+    drawConnectionAnimation(time) {
+      const context = this.context;
+      const phase = this.connectionPhase;
+      const isAuto = this.connectionIsAuto;
+      const elapsed = time - (this.connectionPhaseStartedAt || time);
+      const userLoc = this.userLocation;
+      const reduce = this.reducedMotion.matches || window.deyttMapReducedMotion;
+      const confirmedRoute = this.connectionTargetRoute || (isAuto ? this.autoExitRouteKey : this.route);
+      const confirmedKey = confirmedRoute && (ROUTES[confirmedRoute]?.nodes || [confirmedRoute])
+        .find(key => LOCATIONS[key] && this.availableLocationKeys.has(key));
+
+      // 1. Gentle, minimalist connection ripple on successful connect
+      if (!reduce && phase === "CONNECTED" && this.connectionBurstAt && (time - this.connectionBurstAt < 800)) {
+        const burstT = (time - this.connectionBurstAt) / 800;
+        const burstLoc = confirmedKey ? LOCATIONS[confirmedKey] : null;
+        if (burstLoc) {
+          const pt = this.projectLocation(burstLoc, 1.010);
+          if (pt.z > 0.015) {
+            context.save();
+            const ringR = 5 + burstT * 22;
+            const ringAlpha = (1 - burstT) * 0.6;
+            context.beginPath();
+            context.arc(pt.x, pt.y, ringR, 0, TAU);
+            context.strokeStyle = "rgba(0, 245, 180, " + ringAlpha.toFixed(2) + ")";
+            context.lineWidth = Math.max(1, (1 - burstT) * 1.8);
+            context.stroke();
+            context.restore();
+          }
+        }
+      }
+
+      if (phase !== "STARTING" && phase !== "CHECKING") return;
+
+      context.save();
+
+      if (isAuto) {
+        const candidateKeys = confirmedKey ? [confirmedKey] : LOCATION_ORDER.filter(key => this.availableLocationKeys.has(key));
+        candidateKeys.forEach((key, index) => {
+          const point = this.projectLocation(LOCATIONS[key], 1.010);
+          if (point.z <= .015) return;
+          const phaseOffset = index * .19;
+          const progress = reduce ? .35 : ((elapsed / 1050 + phaseOffset) % 1);
+          const opacity = reduce ? .48 : Math.sin(Math.PI * progress) * .48;
+          const accent = confirmedKey ? "#7CEAC0" : COUNTRY_ACCENTS[key];
+          context.beginPath();
+          context.arc(point.x, point.y, 6 + progress * 10, 0, TAU);
+          context.globalAlpha = opacity;
+          context.strokeStyle = accent;
+          context.lineWidth = confirmedKey ? 1.25 : .85;
+          context.stroke();
+
+          if (userLoc && !reduce) {
+            const samplePosition = this.projectLanePoint("user", key, progress, 0);
+            if (samplePosition.z > -.02) {
+              context.beginPath();
+              context.arc(samplePosition.x, samplePosition.y, confirmedKey ? 2.5 : 1.8, 0, TAU);
+              context.fillStyle = accent;
+              context.fill();
+            }
+          }
+        });
+      } else {
+        // ============================================
+        // MINIMALIST DIRECT ROUTE CONNECTION
+        // ============================================
+        const targetKey = this.connectionTargetRoute || this.activeRouteNodeKeys()[0] || this.route;
+        const targetLoc = LOCATIONS[targetKey];
+
+        // Soft, calm breathing glow at the target node
+        if (targetLoc) {
+          const pt = this.projectLocation(targetLoc, 1.010);
+          if (pt.z > 0.015) {
+            const breathe = reduce ? .4 : .5 + .5 * Math.sin(elapsed * .004);
+            context.beginPath();
+            context.arc(pt.x, pt.y, 5 + breathe * 5, 0, TAU);
+            context.strokeStyle = phase === "CHECKING"
+              ? "rgba(0, 245, 180, " + (0.3 + breathe * 0.35).toFixed(2) + ")"
+              : "rgba(0, 212, 255, " + (0.3 + breathe * 0.35).toFixed(2) + ")";
+            context.lineWidth = 1.3;
+            context.stroke();
+          }
+        }
+
+        // Single neat light pulse traveling along the route
+        if (userLoc && targetLoc && !reduce) {
+          const pulseDuration = phase === "CHECKING" ? 750 : 850;
+          const t = (elapsed % pulseDuration) / pulseDuration;
+          const pt = this.projectLanePoint("user", targetKey, t, 0);
+          if (pt.z > -0.02) {
+            context.beginPath();
+            context.arc(pt.x, pt.y, 2.3, 0, TAU);
+            context.fillStyle = phase === "CHECKING" ? "#00F5A0" : "#00D4FF";
+            context.shadowColor = phase === "CHECKING" ? "#00F5A0" : "#00D4FF";
+            context.shadowBlur = 3.5;
+            context.fill();
+          }
+        }
+      }
+
+      context.restore();
     }
 
     focusRoute() {
@@ -1187,6 +1932,11 @@
       const target = locationFromVector(center);
       this.targetLat = clamp(target.lat, -62, 72);
       this.targetLon = nearestLongitude(this.centerLon, target.lon);
+      if (this.overviewMode) {
+        this.targetZoom = this.clampZoom(this.targetZoom);
+        this.staticDirty = true;
+        return;
+      }
       // Desktop opens on the selected segment; wheel zoom reveals the whole globe.
       // Other clients retain the established Android/site framing.
       if (Number.isFinite(this.options.routeFocusMinZoom)) {

@@ -1,0 +1,734 @@
+package space.deytt.connect
+
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URI
+import java.net.URL
+import java.net.URLDecoder
+import java.net.URLEncoder
+import org.json.JSONArray
+import org.json.JSONObject
+
+data class ImportedSubscription(
+    val url: String,
+    val summary: ProfileSummary,
+    val metadata: SubscriptionMetadata,
+    val awg15Available: Boolean,
+    val awg31Available: Boolean,
+    val warnings: List<String> = emptyList(),
+)
+
+internal class OpenFluxUnavailableException(message: String) : IOException(message)
+
+object SubscriptionClient {
+    private const val MAX_SUBSCRIPTION_BYTES = 2 * 1024 * 1024
+    private const val MAX_AWG_PROFILE_BYTES = 256 * 1024
+
+    fun import(
+        context: android.content.Context,
+        rawUrl: String,
+        beforeCommit: () -> Unit = {},
+        onStage: (String) -> Unit = {},
+    ): ImportedSubscription {
+        val headers = SubscriptionRequestIdentity.headers(context)
+        val coreBudget = SubscriptionRequestBudget(25_000)
+        var awg15Budget: SubscriptionRequestBudget? = null
+        var awg31Budget: SubscriptionRequestBudget? = null
+        var otherOptionalBudget: SubscriptionRequestBudget? = null
+        var openFluxBudget: SubscriptionRequestBudget? = null
+        try {
+            return import(context, rawUrl, SubscriptionHttpTransport { url, accept ->
+                val budget = if (url.contains("format=openflux")) {
+                    openFluxBudget ?: SubscriptionRequestBudget(8_000).also { openFluxBudget = it }
+                } else if (accept == "application/json") coreBudget else {
+                    // Give each generation its own bounded deadline. A slow or
+                    // unavailable legacy endpoint must not consume the 3.1
+                    // endpoint's entire optional-fetch window (or vice versa).
+                    when {
+                        url.contains("format=amneziawg31") ->
+                            awg31Budget ?: SubscriptionRequestBudget(6_000).also { awg31Budget = it }
+                        url.contains("format=amneziawg") ->
+                            awg15Budget ?: SubscriptionRequestBudget(6_000).also { awg15Budget = it }
+                        else -> otherOptionalBudget ?: SubscriptionRequestBudget(8_000).also {
+                            otherOptionalBudget = it
+                        }
+                    }
+                }
+                requestUrlConnection(url, accept, headers, budget)
+            }, onStage, onBeforeCommit = {
+                if (TelegramSessionStore.read(context) != headers["X-TG-App-Token"]) {
+                    throw SubscriptionCancelledException()
+                }
+                beforeCommit()
+            })
+        } catch (error: SubscriptionHttpFailure) {
+            if (error.statusCode == 401 && error.code == "session_expired") {
+                TelegramSessionStore.clearIfMatches(context, headers["X-TG-App-Token"])
+            }
+            throw error
+        }
+    }
+
+    internal fun import(
+        context: android.content.Context,
+        rawUrl: String,
+        transport: SubscriptionHttpTransport,
+        onStage: (String) -> Unit = {},
+        onBeforeCommit: () -> Unit = {},
+    ): ImportedSubscription {
+        val baseUrl = normalizeBaseUrl(rawUrl)
+        val url = appendQueryParameter(withFormat(baseUrl, "singbox"), "route_engines", "xray-v1")
+        onStage("download")
+
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        val singboxFuture = pool.submit(java.util.concurrent.Callable {
+            request(url, "application/json", required = true, transport = transport)!!
+        })
+        val awgFuture = pool.submit(java.util.concurrent.Callable {
+            fetchAwgGenerations(baseUrl, transport)
+        })
+
+        val response = try {
+            singboxFuture.get()
+        } catch (e: java.util.concurrent.ExecutionException) {
+            pool.shutdownNow()
+            throw (e.cause ?: e)
+        }
+
+        val content = try {
+            CdnLteProfile.attach(response.body, response.cdnLteMetadata).also(XrayRouteProfile::validate)
+        } catch (error: Exception) {
+            pool.shutdownNow()
+            throw SubscriptionPayloadException()
+        }
+        onStage("validate")
+        val summary = validateDownloadedProfile(content)
+        val metadata = SubscriptionMetadata.parse(response.profileTitle, response.userInfo)
+        val awgStore = AwgProfileStore(context)
+        onStage("awg")
+        val awgResults = try {
+            awgFuture.get()
+        } catch (e: java.util.concurrent.ExecutionException) {
+            pool.shutdownNow()
+            throw (e.cause ?: e)
+        } finally {
+            pool.shutdown()
+        }
+        // An optional AWG endpoint must not make a valid core subscription unusable.
+        // Keep a last-known-good family when its gateway is temporarily failing.
+        fun mergedProfiles(previousAwgProfiles: List<AwgProfile>) = awgResults.flatMap { result ->
+            val previousFamily = previousAwgProfiles.filter { it.version == result.version }
+            when (result.state) {
+                AwgFetchState.NOT_AVAILABLE,
+                AwgFetchState.TRANSIENT_FAILURE -> previousFamily
+                AwgFetchState.PARTIAL_FAILURE -> {
+                    val stale = previousFamily.filter { profile ->
+                        result.failedIds.contains(profile.id.substringAfter(':', profile.id))
+                    }
+                    (result.profiles + stale).distinctBy(AwgProfile::id)
+                }
+                else -> result.profiles
+            }
+        }.filter { profile ->
+            // A corrupt last-known-good file must never make the required
+            // sing-box import fail; simply omit that optional profile.
+            runCatching { AwgProfileStore.validate(profile.config) }.isSuccess
+        }
+        checkCancellation()
+        onStage("save")
+        val warnings = awgResults.mapNotNull { it.warning }.toMutableList()
+        val awgProfiles = synchronized(AtomicSubscriptionFile.lock) {
+            checkCancellation()
+            onBeforeCommit()
+            val settings = context.getSharedPreferences("profile_settings", android.content.Context.MODE_PRIVATE)
+            val previousUrl = getSavedSubscriptionUrl(context)
+            // Read ownership and last-good files under the commit lock: another
+            // completed import must not be replaced by an older fallback snapshot.
+            val sameSubscription = previousUrl != null && runCatching {
+                normalizeBaseUrl(previousUrl) == baseUrl
+            }.getOrDefault(false)
+            val profiles = mergedProfiles(if (sameSubscription) awgStore.profiles() else emptyList())
+            // Invalidate ownership before the multi-file commit. After a process/disk
+            // failure no old account's AWG config may be reused for a new source.
+            if (!settings.edit().remove("subscription_url").commit()) throw SubscriptionStorageException()
+            try {
+                SubscriptionStore(context).commitValidated(content, awgStore, profiles) {
+                    OpenFluxProfileStore(context).clear()
+                }
+            } catch (error: IOException) {
+                throw SubscriptionStorageException()
+            }
+            val routes = RouteCatalog.from(content, profiles)
+            val availableRouteIds = routes.mapTo(mutableSetOf()) { it.id }
+            if (SelectedRouteStore(context).read().id !in availableRouteIds) {
+                routes.firstOrNull { it.protocol == RouteProtocol.AUTO }
+                    ?.let { SelectedRouteStore(context).save(it) }
+            }
+            if (runCatching { SubscriptionMetadataStore(context).save(metadata) }.isFailure) {
+                warnings += "Маршруты сохранены, но сведения о тарифе не обновились. Повторите обновление позже."
+            }
+            val edit = settings.edit().putString("subscription_url", LocalSecretCipher.encrypt(baseUrl))
+            if (warnings.isEmpty()) edit.remove("subscription_warning")
+            else edit.putString("subscription_warning", warnings.joinToString("\n"))
+            if (!edit.commit()) throw SubscriptionStorageException()
+            profiles
+        }
+        return ImportedSubscription(
+            baseUrl,
+            summary,
+            metadata,
+            awgProfiles.any { it.version == "15" },
+            awgProfiles.any { it.version == "31" },
+            warnings = warnings,
+        )
+    }
+
+    internal fun activeSubscriptionWarning(warning: String?): String? =
+        warning?.lineSequence()
+            ?.filterNot { it.contains("Cups", ignoreCase = true) }
+            ?.joinToString("\n")
+            ?.takeIf(String::isNotBlank)
+
+    fun getSavedSubscriptionUrl(context: android.content.Context): String? =
+        SubscriptionStore.getSavedSubscriptionUrl(context)
+
+    fun saveSubscriptionUrl(context: android.content.Context, url: String): Boolean =
+        SubscriptionStore.saveSubscriptionUrl(context, url)
+
+    internal fun validateDownloadedProfile(content: String): ProfileSummary = try {
+        ProfileValidator.validate(content).also {
+            // The UI requires an automatic route. Check that contract before
+            // replacing the last-good file, not in the success screen afterward.
+            RouteCatalog.from(content, emptyList())
+        }
+    } catch (error: Exception) {
+        throw SubscriptionPayloadException()
+    }
+
+    internal data class SubscriptionResponse(
+        val body: String,
+        val profileTitle: String?,
+        val userInfo: String?,
+        val awgServers: String?,
+        val cdnLteMetadata: String?,
+    )
+
+    internal enum class AwgFetchState { AVAILABLE, NOT_AVAILABLE, PARTIAL_FAILURE, TRANSIENT_FAILURE }
+
+    internal data class OpenFluxFetchResult(
+        val profiles: List<OpenFluxProfile> = emptyList(),
+        val keepPrevious: Boolean = false,
+        val warning: String? = null,
+    ) {
+        fun availableProfiles(previous: List<OpenFluxProfile>, nowSeconds: Long = System.currentTimeMillis() / 1000): List<OpenFluxProfile> =
+            (if (keepPrevious) previous else profiles).filter { it.isCurrent(nowSeconds) }
+
+        fun requireProfiles(previous: List<OpenFluxProfile>, nowSeconds: Long = System.currentTimeMillis() / 1000): List<OpenFluxProfile> {
+            val usable = availableProfiles(previous, nowSeconds)
+            if (usable.isEmpty()) throw OpenFluxUnavailableException(warning
+                ?: "Обход Cups сейчас недоступен для этой подписки. Попробуйте позже или выберите другой маршрут.")
+            return usable
+        }
+    }
+
+    /** Refresh a managed lease without replacing the running sing-box/AWG profile. */
+    internal fun refreshOpenFlux(context: android.content.Context, requireAvailable: Boolean = false): List<OpenFluxProfile> {
+        val baseUrl = getSavedSubscriptionUrl(context)?.let(::normalizeBaseUrl) ?: return emptyList()
+        val headers = SubscriptionRequestIdentity.headers(context)
+        val owner = OpenFluxProfileStore.ownerKey(baseUrl, headers["X-TG-App-Token"])
+        val budget = SubscriptionRequestBudget(12_000)
+        val result = fetchOpenFluxProfiles(baseUrl, SubscriptionHttpTransport { url, accept ->
+            requestUrlConnection(url, accept, headers, budget)
+        })
+        return synchronized(AtomicSubscriptionFile.lock) {
+            if (OpenFluxProfileStore.owner(context) != owner) throw SubscriptionCancelledException()
+            val store = OpenFluxProfileStore(context)
+            val previous = if (result.keepPrevious) store.profiles(owner) else emptyList()
+            // A denied/empty response revokes cached credentials before reporting
+            // the error. Transient failures may only retain an unexpired lease.
+            if (!result.keepPrevious) store.save(owner, result.profiles)
+            // Renewal needs an explicit empty list for revocation; startup needs
+            // an actionable error. Do not turn a terminal response into a retry.
+            if (requireAvailable) result.requireProfiles(previous) else result.availableProfiles(previous)
+        }
+    }
+
+    internal fun fetchOpenFluxProfiles(baseUrl: String, transport: SubscriptionHttpTransport): OpenFluxFetchResult {
+        return try {
+            val response = request(withFormat(baseUrl, "openflux"), "application/json", false, transport)
+                ?: return OpenFluxFetchResult(keepPrevious = true,
+                    warning = "Сервер подписки пока не поддерживает обход Cups. Выберите другой маршрут.")
+            OpenFluxFetchResult(OpenFluxProfile.parse(response.body))
+        } catch (error: Exception) {
+            if (error is SubscriptionCancelledException) throw error
+            val denied = error is SubscriptionHttpFailure && error.statusCode in setOf(401, 403, 409, 410)
+            OpenFluxFetchResult(keepPrevious = !denied,
+                warning = when {
+                    error is SubscriptionHttpFailure && error.statusCode in setOf(401, 410) ->
+                        "Для обхода Cups войдите в аккаунт заново и повторите подключение."
+                    error is SubscriptionHttpFailure && error.statusCode == 409 ->
+                        "Обход Cups недоступен: достигнут лимит устройств аккаунта. Проверьте устройства в профиле."
+                    error is SubscriptionHttpFailure && error.statusCode == 403 && error.code == "device_blocked" ->
+                        "Обход Cups недоступен: устройство заблокировано. Обратитесь в поддержку."
+                    error is SubscriptionHttpFailure && error.statusCode == 403 ->
+                        "Обход Cups недоступен для этого аккаунта. Проверьте подписку и вход в аккаунт."
+                    error is SubscriptionHttpFailure && error.statusCode in setOf(429, 502, 503, 504) ->
+                        "Сервер обхода Cups временно недоступен или занят. Повторите позже либо выберите другой маршрут."
+                    error is IOException ->
+                        "Не удалось получить профиль Cups. Проверьте интернет и повторите подключение."
+                    else -> "Сервер вернул некорректный профиль Cups. Повторите позже либо выберите другой маршрут."
+                })
+        }
+    }
+
+    internal data class AwgFetchResult(
+        val version: String,
+        val profiles: List<AwgProfile>,
+        val state: AwgFetchState,
+        val warning: String? = null,
+        val failedIds: Set<String> = emptySet(),
+    )
+
+    internal data class SubscriptionHttpResponse(
+        val statusCode: Int,
+        val body: String = "",
+        val profileTitle: String? = null,
+        val userInfo: String? = null,
+        val awgServers: String? = null,
+        val cdnLteMetadata: String? = null,
+        val retryAfterMillis: Long? = null,
+    )
+
+    internal fun interface SubscriptionHttpTransport {
+        @Throws(IOException::class)
+        fun get(url: String, accept: String): SubscriptionHttpResponse
+    }
+
+    internal fun requestForTest(
+        url: String,
+        accept: String,
+        required: Boolean,
+        transport: SubscriptionHttpTransport,
+    ): SubscriptionResponse? = request(url, accept, required, transport)
+
+    internal fun normalizeBaseUrlForTest(rawUrl: String): String = normalizeBaseUrl(rawUrl)
+
+    internal fun fetchAwgProfilesForTest(
+        baseUrl: String,
+        format: String,
+        version: String,
+        transport: SubscriptionHttpTransport,
+    ): AwgFetchResult = fetchAwgProfiles(baseUrl, format, version, transport)
+
+    internal fun fetchAwgGenerationsForTest(
+        baseUrl: String,
+        transport: SubscriptionHttpTransport,
+    ): List<AwgFetchResult> = fetchAwgGenerations(baseUrl, transport)
+
+    private fun fetchAwgGenerations(
+        baseUrl: String,
+        transport: SubscriptionHttpTransport,
+    ): List<AwgFetchResult> {
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        return try {
+            val f15 = pool.submit(java.util.concurrent.Callable {
+                fetchAwgProfiles(baseUrl, "amneziawg", "15", transport)
+            })
+            val f31 = pool.submit(java.util.concurrent.Callable {
+                fetchAwgProfiles(baseUrl, "amneziawg31", "31", transport)
+            })
+            listOf(f15.get(), f31.get())
+        } catch (e: java.util.concurrent.ExecutionException) {
+            throw (e.cause ?: e)
+        } finally {
+            pool.shutdown()
+        }
+    }
+
+    private fun request(
+        url: String,
+        accept: String,
+        required: Boolean,
+        transport: SubscriptionHttpTransport,
+    ): SubscriptionResponse? {
+        var lastError: IOException? = null
+        repeat(SubscriptionRetryPolicy.MAX_ATTEMPTS) { attempt ->
+            checkCancellation()
+            try {
+                return requestOnce(url, accept, required, transport)
+            } catch (error: IOException) {
+                lastError = error
+                if (attempt < SubscriptionRetryPolicy.MAX_ATTEMPTS - 1 && SubscriptionRetryPolicy.shouldRetry(error)) {
+                    val serverDelay = (error as? SubscriptionHttpFailure)?.retryAfterMillis
+                    // Long rate limits should return control to the user, never
+                    // hammer the server or occupy a worker for minutes.
+                    if (serverDelay != null && serverDelay > 5_000) throw error
+                    try {
+                        Thread.sleep(maxOf(SubscriptionRetryPolicy.delayMillis(attempt), serverDelay ?: 0))
+                    } catch (interrupted: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        throw SubscriptionCancelledException()
+                    }
+                } else {
+                    throw error
+                }
+            }
+        }
+        throw lastError ?: IOException("Не удалось получить подписку")
+    }
+
+    private fun requestOnce(
+        url: String,
+        accept: String,
+        required: Boolean,
+        transport: SubscriptionHttpTransport,
+    ): SubscriptionResponse? {
+        val response = transport.get(url, accept)
+        val responseCode = response.statusCode
+        if (!required && responseCode == 404) return null
+        if (responseCode in 300..399) {
+            throw SubscriptionHttpFailure(
+                responseCode,
+                "Сервер подписки вернул недопустимое перенаправление",
+            )
+        }
+        if (responseCode !in 200..299) {
+            val detail = when (responseCode) {
+                401, 403 -> "Ссылка на подписку недействительна или срок её действия истёк"
+                404 -> "Ссылка на подписку не найдена"
+                502, 503, 504 -> "Сервер подписки временно недоступен (HTTP $responseCode)"
+                else -> "Сервер подписки ответил HTTP $responseCode"
+            }
+            val code = runCatching { JSONObject(response.body).let { it.optString("error").ifBlank { it.optString("detail") } } }.getOrDefault("")
+            throw SubscriptionHttpFailure(responseCode, detail, code, response.retryAfterMillis)
+        }
+        if (responseCode != 200) throw SubscriptionPayloadException()
+        return SubscriptionResponse(
+            body = response.body,
+            profileTitle = response.profileTitle,
+            userInfo = response.userInfo,
+            awgServers = response.awgServers,
+            cdnLteMetadata = response.cdnLteMetadata,
+        )
+    }
+
+    private fun requestUrlConnection(
+        url: String, accept: String, headers: Map<String, String>, budget: SubscriptionRequestBudget,
+    ): SubscriptionHttpResponse {
+        budget.check()
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "GET"
+            connectTimeout = minOf(6_000, budget.remainingMillis())
+            // First carrier provisioning can take ~45 seconds. Its optional
+            // endpoint has a separate total deadline and must receive that window.
+            readTimeout = if (url.contains("format=openflux")) budget.remainingMillis()
+                else minOf(8_000, budget.remainingMillis())
+            useCaches = false
+            // A subscription URL is a bearer token. Do not let the HTTP stack
+            // silently forward it to an untrusted host.
+            instanceFollowRedirects = false
+            headers.forEach { (name, value) -> setRequestProperty(name, value) }
+            setRequestProperty("Accept", accept)
+            setRequestProperty("Cache-Control", "no-cache")
+            setRequestProperty("Connection", "keep-alive")
+            setRequestProperty("User-Agent", "deytt-connect/${BuildConfig.VERSION_NAME}")
+        }
+
+        return budget.withConnection(connection) {
+            val responseCode = connection.responseCode
+            SubscriptionHttpResponse(
+                statusCode = responseCode,
+                body = if (responseCode in 200..299) {
+                    connection.inputStream.use { readLimitedUtf8(it, budget) }
+                } else {
+                    // Status must remain authoritative if a proxy sends a broken
+                    // error body; never turn an access denial into a retryable EOF.
+                    try {
+                        connection.errorStream?.use { readLimitedUtf8(it, budget) }.orEmpty()
+                    } catch (error: IOException) {
+                        budget.check()
+                        ""
+                    }
+                },
+                profileTitle = connection.getHeaderField("Profile-Title"),
+                userInfo = connection.getHeaderField("Subscription-Userinfo"),
+                awgServers = connection.getHeaderField("X-Deytt-Awg-Servers"),
+                cdnLteMetadata = connection.getHeaderField("X-Deytt-Cdn-Lte"),
+                retryAfterMillis = parseRetryAfter(connection.getHeaderField("Retry-After")),
+            )
+        }
+    }
+
+    private fun normalizeBaseUrl(rawUrl: String): String {
+        val uri = runCatching { URI(rawUrl.trim()) }.getOrElse {
+            throw IllegalArgumentException("Укажите полную HTTPS-ссылку на подписку")
+        }
+        require(uri.scheme.equals("https", ignoreCase = true)) {
+            "Для защиты токена нужна HTTPS-ссылка на подписку"
+        }
+        require(!uri.host.isNullOrBlank()) { "Укажите полную HTTPS-ссылку на подписку" }
+        require(uri.port == -1 || uri.port == 443) { "Ссылка на подписку имеет недопустимый порт" }
+        require(uri.userInfo == null) { "Ссылка на подписку имеет недопустимый формат" }
+        require(SubscriptionHostPolicy.isAllowed(uri.host)) {
+            "Ссылка должна вести на официальный домен deytt.space"
+        }
+
+        val query = uri.rawQuery.orEmpty().split('&').mapNotNull { pair ->
+            if (pair.isBlank()) return@mapNotNull null
+            val separator = pair.indexOf('=')
+            val name = decodeQueryComponent(if (separator >= 0) pair.substring(0, separator) else pair)
+            if (name.lowercase() in setOf("format", "server_id", "route_engines")) null else pair
+        }.joinToString("&").ifBlank { null }
+        return buildUrl(uri, query)
+    }
+
+    private fun withFormat(baseUrl: String, format: String): String {
+        val uri = URI(baseUrl)
+        val query = listOfNotNull(uri.rawQuery, encodedQueryParameter("format", format))
+            .joinToString("&")
+        return buildUrl(uri, query)
+    }
+
+    private fun appendQueryParameter(url: String, name: String, value: String): String {
+        val uri = URI(url)
+        val query = listOfNotNull(uri.rawQuery, encodedQueryParameter(name, value)).joinToString("&")
+        return buildUrl(uri, query)
+    }
+
+    private fun buildUrl(uri: URI, query: String?): String = buildString {
+        append(uri.scheme).append("://").append(uri.rawAuthority).append(uri.rawPath.orEmpty())
+        if (!query.isNullOrBlank()) append('?').append(query)
+    }
+
+    private fun encodedQueryParameter(name: String, value: String): String =
+        "${encodeQueryComponent(name)}=${encodeQueryComponent(value)}"
+
+    private fun encodeQueryComponent(value: String): String =
+        URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
+
+    private fun decodeQueryComponent(value: String): String =
+        runCatching { URLDecoder.decode(value, Charsets.UTF_8.name()) }.getOrElse {
+            throw IllegalArgumentException("Ссылка на подписку имеет недопустимый формат")
+        }
+
+    private fun fetchAwgProfiles(
+        baseUrl: String,
+        format: String,
+        version: String,
+        transport: SubscriptionHttpTransport,
+    ): AwgFetchResult {
+        return try {
+            val first = request(
+                withFormat(baseUrl, format),
+                "text/plain",
+                required = false,
+                transport = transport,
+            )
+                ?: return AwgFetchResult(version, emptyList(), AwgFetchState.NOT_AVAILABLE)
+            val servers = try { JSONArray(first.awgServers ?: "[]") } catch (error: Exception) {
+                throw SubscriptionPayloadException()
+            }
+            if (servers.length() > 16) throw SubscriptionPayloadException()
+            val advertisedIds = mutableSetOf<String>()
+            for (index in 0 until servers.length()) {
+                val item = servers.optJSONObject(index) ?: throw SubscriptionPayloadException()
+                val id = item.optString("id").trim()
+                if (id.isEmpty() || id.length > 128 || !advertisedIds.add(id)) throw SubscriptionPayloadException()
+            }
+            val failedIds = mutableSetOf<String>()
+            var failedRequestsAreTransient = true
+            val profiles = if (servers.length() == 0) {
+                listOf(AwgProfile("awg$version", version, "основной", "awg", first.body)).also {
+                    requireAwgProfileSize(first.body)
+                    it.forEach { profile -> AwgProfileStore.validate(profile.config) }
+                }
+            } else {
+                val serverItems = mutableListOf<Pair<Int, JSONObject>>()
+                for (index in 0 until servers.length()) {
+                    val server = servers.optJSONObject(index) ?: continue
+                    val id = server.optString("id").trim()
+                    if (id.isNotBlank()) serverItems.add(Pair(index, server))
+                }
+
+                val profilesList = mutableListOf<AwgProfile>()
+                val itemsToFetch = mutableListOf<Pair<Int, JSONObject>>()
+
+                for ((index, server) in serverItems) {
+                    val id = server.optString("id").trim()
+                    if (index == 0) {
+                        val usedFirst = runCatching {
+                            val profile = AwgProfile(
+                                id = "awg$version:$id",
+                                version = version,
+                                label = server.optString("label", id),
+                                shortLabel = server.optString("short_label", id.uppercase()),
+                                config = first.body,
+                            )
+                            requireAwgProfileSize(profile.config)
+                            AwgProfileStore.validate(profile.config)
+                            profilesList.add(profile)
+                        }.isSuccess
+                        if (!usedFirst) itemsToFetch.add(Pair(index, server))
+                    } else {
+                        itemsToFetch.add(Pair(index, server))
+                    }
+                }
+
+                if (itemsToFetch.isNotEmpty()) {
+                    val pool = java.util.concurrent.Executors.newFixedThreadPool(minOf(4, itemsToFetch.size))
+                    try {
+                        val tasks = itemsToFetch.map { (_, server) ->
+                            val id = server.optString("id").trim()
+                            val url = appendQueryParameter(withFormat(baseUrl, format), "server_id", id)
+                            java.util.concurrent.Callable {
+                                val outcome = runCatching {
+                                    request(url, "text/plain", required = true, transport = transport)
+                                }
+                                Triple(id, server, outcome)
+                            }
+                        }
+                        val futures = pool.invokeAll(tasks)
+                        for (future in futures) {
+                            val (id, server, outcome) = future.get()
+                            if (outcome.isFailure) {
+                                val error = outcome.exceptionOrNull()!!
+                                val ex = error as? Exception ?: IOException(error.message, error)
+                                if (isAccessFailure(ex) || error is SubscriptionCancelledException) throw error
+                                failedIds += id
+                                if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) != true) {
+                                    failedRequestsAreTransient = false
+                                }
+                            } else {
+                                val response = outcome.getOrNull()
+                                if (response == null) {
+                                    failedIds += id
+                                    failedRequestsAreTransient = false
+                                } else {
+                                    val profile = AwgProfile(
+                                        id = "awg$version:$id",
+                                        version = version,
+                                        label = server.optString("label", id),
+                                        shortLabel = server.optString("short_label", id.uppercase()),
+                                        config = response.body,
+                                    )
+                                    requireAwgProfileSize(profile.config)
+                                    AwgProfileStore.validate(profile.config)
+                                    profilesList.add(profile)
+                                }
+                            }
+                        }
+                    } finally {
+                        pool.shutdown()
+                    }
+                }
+                profilesList
+            }
+            if (servers.length() > 0 && profiles.isEmpty() && failedIds.isEmpty()) {
+                throw IOException("Сервер не вернул ни одного профиля AmneziaWG")
+            }
+            if (profiles.isEmpty() && failedIds.isNotEmpty()) {
+                AwgFetchResult(
+                    version = version,
+                    profiles = emptyList(),
+                    state = AwgFetchState.PARTIAL_FAILURE,
+                    warning = awgWarning(version, availableCount = 0, temporary = failedRequestsAreTransient),
+                    failedIds = failedIds,
+                )
+            } else if (failedIds.isNotEmpty()) {
+                AwgFetchResult(
+                    version = version,
+                    profiles = profiles,
+                    state = AwgFetchState.PARTIAL_FAILURE,
+                    warning = awgWarning(version, availableCount = profiles.size, temporary = failedRequestsAreTransient),
+                    failedIds = failedIds,
+                )
+            } else {
+                AwgFetchResult(version, profiles, AwgFetchState.AVAILABLE)
+            }
+        } catch (error: Exception) {
+            if (isAccessFailure(error) || error is SubscriptionCancelledException) throw error
+            AwgFetchResult(
+                version = version,
+                profiles = emptyList(),
+                state = AwgFetchState.TRANSIENT_FAILURE,
+                warning = awgWarning(version, error),
+            )
+        }
+    }
+
+    private fun isAccessFailure(error: Exception): Boolean =
+        error is SubscriptionHttpFailure && error.statusCode in setOf(401, 403, 409)
+
+    private fun requireAwgProfileSize(config: String) {
+        if (config.toByteArray(Charsets.UTF_8).size > MAX_AWG_PROFILE_BYTES) {
+            throw SubscriptionPayloadException()
+        }
+    }
+
+    private fun awgName(version: String): String = when (version) {
+        "15" -> "amneziawg 1.5"
+        "31" -> "amneziawg 3.1"
+        else -> "amneziawg"
+    }
+
+    private fun awgWarning(version: String, availableCount: Int, temporary: Boolean): String {
+        val name = awgName(version)
+        return if (temporary) {
+            if (availableCount == 0) {
+                "$name: серверы временно недоступны. Доступных точек нет. Повторите обновление позже."
+            } else {
+                "$name: часть серверов временно не ответила. Доступные точки уже добавлены. Обновите подписку, если нужной точки нет."
+            }
+        } else {
+            if (availableCount == 0) {
+                "$name пока недоступен. Основная подписка добавлена, повторите обновление позже."
+            } else {
+                "$name: часть точек не обновилась. Доступные точки добавлены, повторите позже."
+            }
+        }
+    }
+
+    private fun awgWarning(version: String, error: Exception): String {
+        val name = awgName(version)
+        val reason = SubscriptionRetryPolicy.safeFailureSummary(error)
+        return if ((error as? IOException)?.let(SubscriptionRetryPolicy::shouldRetry) == true) {
+            "$name: дополнительные профили временно недоступны ($reason). Основная подписка добавлена, обновите её позже."
+        } else {
+            "$name не удалось обновить ($reason). Основная подписка добавлена, повторите попытку позже."
+        }
+    }
+
+    internal fun parseRetryAfter(value: String?, nowMillis: Long = System.currentTimeMillis()): Long? {
+        val raw = value?.trim()?.takeIf { it.length <= 64 } ?: return null
+        raw.toLongOrNull()?.let { return it.coerceIn(0, 86_400) * 1_000 }
+        return runCatching {
+            java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", java.util.Locale.US).apply {
+                isLenient = false
+                timeZone = java.util.TimeZone.getTimeZone("GMT")
+            }.parse(raw)?.time?.minus(nowMillis)?.coerceIn(0, 86_400_000)
+        }.getOrNull()
+    }
+
+    private fun checkCancellation() {
+        if (Thread.currentThread().isInterrupted) throw SubscriptionCancelledException()
+    }
+
+    private fun readLimitedUtf8(stream: InputStream, budget: SubscriptionRequestBudget): String {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var total = 0
+        while (true) {
+            budget.check()
+            val count = stream.read(buffer)
+            if (count < 0) break
+            total += count
+            if (total > MAX_SUBSCRIPTION_BYTES) {
+                throw SubscriptionPayloadException()
+            }
+            output.write(buffer, 0, count)
+        }
+        return output.toString(Charsets.UTF_8.name())
+    }
+}

@@ -7,6 +7,16 @@ import org.junit.Test
 
 class VpnRuntimeStateTest {
     @Test
+    fun selectionPreservesUserConnectionIntentRatherThanTemporaryDiagnosticTunnel() {
+        assertFalse(VpnControlDecision.shouldReconnectOnSelection(false, false, false))
+        assertTrue(VpnControlDecision.shouldReconnectOnSelection(true, false, false))
+        assertTrue(VpnControlDecision.shouldReconnectOnSelection(false, true, false))
+        assertTrue(VpnControlDecision.shouldReconnectOnSelection(false, false, true))
+        assertFalse(VpnControlDecision.shouldReconnectOnSelection(true, true, true, diagnosticWasConnected = false))
+        assertTrue(VpnControlDecision.shouldReconnectOnSelection(false, false, false, diagnosticWasConnected = true))
+    }
+
+    @Test
     fun queuedConnectResumesOnlyForItsUnchangedIdleRouteAndIntent() {
         assertTrue(VpnControlDecision.canResumeQueuedStart("openflux:DE", "openflux:DE", 4L, 4L, false, false))
         assertFalse(VpnControlDecision.canResumeQueuedStart("openflux:DE", "route:IT:VLESS", 4L, 4L, false, false))
