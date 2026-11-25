@@ -235,6 +235,8 @@ public sealed class GraphiteSetup : IEmbeddedUI
             ForeColor = TextInk;
             Font = new Font("Segoe UI", 10);
             Text = "./connect — установка";
+            using (var iconStream = typeof(Wizard).Assembly.GetManifestResourceStream("deyttconnect.ico"))
+                if (iconStream is not null) Icon = new Icon(iconStream);
             AccessibleName = Text;
             StartPosition = FormStartPosition.CenterScreen;
             FormBorderStyle = FormBorderStyle.None;
@@ -251,9 +253,18 @@ public sealed class GraphiteSetup : IEmbeddedUI
 
             var header = new Panel { Bounds = new Rectangle(1, 1, 622, 64), BackColor = RaisedInk };
             Controls.Add(header);
-            header.Controls.Add(Label("./", 18, BrandInk, 26, 14, 31, 34, true));
-            header.Controls.Add(Label("connect", 18, TextInk, 56, 14, 130, 34, true));
-            _close = Button("×", 568, 14, 38, 36, false);
+            header.Paint += (_, e) =>
+            {
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                using var logoFont = new Font("Segoe UI", 18, FontStyle.Bold);
+                using var brandBrush = new SolidBrush(BrandInk);
+                using var textBrush = new SolidBrush(TextInk);
+                var fmt = StringFormat.GenericTypographic;
+                e.Graphics.DrawString("./", logoFont, brandBrush, 26, 15, fmt);
+                var markWidth = e.Graphics.MeasureString("./", logoFont, PointF.Empty, fmt).Width;
+                e.Graphics.DrawString("connect", logoFont, textBrush, 26 + markWidth, 15, fmt);
+            };
+            _close = Button("×", 568, 14, 38, 36, false, 8);
             _close.AccessibleName = "закрыть установщик";
             _close.Click += (_, _) => Close();
             header.Controls.Add(_close);
@@ -349,7 +360,7 @@ public sealed class GraphiteSetup : IEmbeddedUI
             _copy.Text = "подождите, пока windows завершит работу с файлами и службой vpn.";
             _track.Visible = true;
             _secondary.Text = "отмена";
-            _primary.Enabled = false;
+            _primary.Visible = false;
             _start(_selected);
         }
 
@@ -379,6 +390,7 @@ public sealed class GraphiteSetup : IEmbeddedUI
             _launch.Visible = _shortcut.Visible && !reboot;
             if (reboot) _launch.Checked = false;
             _primary.Text = "готово";
+            _primary.Visible = true;
             _primary.Enabled = true;
             _secondary.Visible = false;
             _close.Enabled = true;
@@ -421,15 +433,70 @@ public sealed class GraphiteSetup : IEmbeddedUI
             new() { Text = text, ForeColor = color, Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular),
                 Bounds = new Rectangle(x, y, w, h), BackColor = Color.Transparent, UseMnemonic = false };
 
-        private static Button Button(string text, int x, int y, int w, int h, bool primary)
+        private static Button Button(string text, int x, int y, int w, int h, bool primary, int radius = 10) =>
+            new RoundedButton(text, x, y, w, h, primary, radius);
+
+        private sealed class RoundedButton : Button
         {
-            var button = new Button { Text = text, Bounds = new Rectangle(x, y, w, h),
-                BackColor = primary ? TextInk : RaisedInk, ForeColor = primary ? BackgroundInk : TextInk,
-                FlatStyle = FlatStyle.Flat, UseVisualStyleBackColor = false, Cursor = Cursors.Hand };
-            button.FlatAppearance.BorderColor = primary ? TextInk : LineInk;
-            button.FlatAppearance.MouseOverBackColor = primary ? Color.White : Color.FromArgb(41, 41, 41);
-            button.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(197, 197, 197) : LineInk;
-            return button;
+            private readonly bool _primary;
+            private readonly int _radius;
+            private bool _hovered;
+            private bool _pressed;
+
+            public RoundedButton(string text, int x, int y, int w, int h, bool primary, int radius)
+            {
+                _primary = primary;
+                _radius = radius;
+                Text = text;
+                Bounds = new Rectangle(x, y, w, h);
+                FlatStyle = FlatStyle.Flat;
+                FlatAppearance.BorderSize = 0;
+                BackColor = primary ? TextInk : RaisedInk;
+                ForeColor = primary ? BackgroundInk : TextInk;
+                Cursor = Cursors.Hand;
+                SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+                UpdateRegion();
+            }
+
+            protected override void OnSizeChanged(EventArgs e) { base.OnSizeChanged(e); UpdateRegion(); }
+            protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
+            protected override void OnMouseLeave(EventArgs e) { _hovered = false; _pressed = false; Invalidate(); base.OnMouseLeave(e); }
+            protected override void OnMouseDown(MouseEventArgs e) { _pressed = true; Invalidate(); base.OnMouseDown(e); }
+            protected override void OnMouseUp(MouseEventArgs e) { _pressed = false; Invalidate(); base.OnMouseUp(e); }
+
+            private void UpdateRegion()
+            {
+                using var path = RoundedRect(new Rectangle(0, 0, Width, Height), _radius);
+                Region = new Region(path);
+            }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                var fill = _primary
+                    ? (_pressed ? Color.FromArgb(197, 197, 197) : _hovered ? Color.White : TextInk)
+                    : (_pressed ? LineInk : _hovered ? Color.FromArgb(41, 41, 41) : RaisedInk);
+                var border = _primary ? fill : LineInk;
+                using var path = RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), _radius);
+                using var brush = new SolidBrush(fill);
+                using var pen = new Pen(border, 1f);
+                e.Graphics.FillPath(brush, path);
+                e.Graphics.DrawPath(pen, path);
+                TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, ForeColor,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+            }
+
+            private static System.Drawing.Drawing2D.GraphicsPath RoundedRect(Rectangle bounds, int radius)
+            {
+                int d = radius * 2;
+                var path = new System.Drawing.Drawing2D.GraphicsPath();
+                path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
+                path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);
+                path.AddArc(bounds.Right - d, bounds.Bottom - d, d, d, 0, 90);
+                path.AddArc(bounds.X, bounds.Bottom - d, d, d, 90, 90);
+                path.CloseFigure();
+                return path;
+            }
         }
 
         private static CheckBox Checkbox(string text, int y) =>

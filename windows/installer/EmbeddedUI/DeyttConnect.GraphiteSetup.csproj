@@ -16,5 +16,6 @@
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
     <ProjectReference Include="../CustomActions/DeyttConnect.SetupActions.csproj" />
     <Content Include="EmbeddedUI.config" CopyToOutputDirectory="PreserveNewest" />
+    <EmbeddedResource Include="..\..\DeyttConnect.Windows\Assets\deyttconnect.ico" LogicalName="deyttconnect.ico" />
   </ItemGroup>
 </Project>
