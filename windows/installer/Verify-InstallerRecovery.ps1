@@ -161,7 +161,7 @@ foreach($dialog in $dialogNames) {
  $artAsset=Row "SELECT ``Text`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='BrandArt'"
  Check ($artAsset.Text -eq 'SetupPanel') "$dialog does not reference the graphite panel"
  $interactive=QueryRows "SELECT ``Y`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND (``Type``='PushButton' OR ``Type``='CheckBox')"
- foreach($y in $interactive) { Check ([int]$y -ge $artSize.Second) "$dialog has interactive controls behind the panel" }
+ foreach($y in $interactive) { Check ([int]$y -ge 275) "$dialog has interactive controls outside the footer" }
  foreach($captionId in @('Caption','BrandCaption','BrandCaptionSecondLine')) {
   Check ((QueryRows "SELECT ``Control`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='$captionId'").Count -eq 0) "$dialog must not add the removed tagline"
  }
