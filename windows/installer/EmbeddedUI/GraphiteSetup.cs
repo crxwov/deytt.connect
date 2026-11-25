@@ -126,15 +126,22 @@ public sealed class GraphiteSetup : IEmbeddedUI
                 Report(wizard => wizard.CanCancel = _allowCancel);
                 break;
             case InstallMessage.InstallEnd when record is not null && record.FieldCount >= 3 &&
-                string.Equals(record.GetString(2), _productCode, StringComparison.OrdinalIgnoreCase):
+                string.Equals(record.GetString(2)?.Trim(), _productCode, StringComparison.OrdinalIgnoreCase):
                 var result = record.GetInteger(3);
-                if (result >= 0) _result = result;
-                _reboot = _result is 3010 or 1641;
+                // MSI 4.5+ INSTALLMESSAGE_INSTALLEND field 3 uses Win32 dialog IDs (1=IDOK, 2=IDCANCEL, 3=IDABORT).
+                _result = result switch
+                {
+                    1 or 0 or 3010 or 1641 => 0,
+                    2 or 1602 => 1602,
+                    _ => result
+                };
+                if (result is 3010 or 1641) _reboot = true;
                 break;
             case InstallMessage.FatalExit:
             case InstallMessage.Error:
             case InstallMessage.OutOfDiskSpace:
-                _error = record?.ToString();
+                var msg = record?.ToString();
+                if (!string.IsNullOrWhiteSpace(msg)) _error = msg;
                 if (buttons == MessageButtons.OK)
                     return MessageResult.OK;
                 break;
@@ -200,10 +207,10 @@ public sealed class GraphiteSetup : IEmbeddedUI
         private static readonly Color TextInk = Color.FromArgb(245, 245, 245);
         private static readonly Color MutedInk = Color.FromArgb(174, 174, 174);
         private static readonly Color BrandInk = Color.FromArgb(122, 211, 236);
-        private readonly Label _step;
-        private readonly Label _heading;
-        private readonly Label _copy;
-        private readonly Label _progressText;
+        private readonly Control _step;
+        private readonly Control _heading;
+        private readonly Control _copy;
+        private readonly Control _progressText;
         private readonly Panel _track;
         private readonly Panel _fill;
         private readonly Button _secondary;
@@ -270,11 +277,11 @@ public sealed class GraphiteSetup : IEmbeddedUI
             header.Controls.Add(_close);
             header.Controls.Add(Label("windows · x64", 9, MutedInk, 445, 22, 105, 22));
             foreach (Control control in header.Controls)
-                if (control is Label) control.MouseDown += Drag;
+                if (control is SmoothLabel) control.MouseDown += Drag;
             header.MouseDown += Drag;
             Controls.Add(new Panel { Bounds = new Rectangle(1, 65, 622, 1), BackColor = LineInk });
 
-            _step = Label("", 10, MutedInk, 30, 94, 180, 22);
+            _step = Label("", 10, MutedInk, 30, 94, 320, 22);
             _heading = Label("", 23, TextInk, 30, 123, 564, 49, true);
             _copy = Label("", 11, MutedInk, 30, 182, 564, 85);
             _progressText = Label("", 10, MutedInk, 30, 294, 564, 36);
@@ -317,7 +324,7 @@ public sealed class GraphiteSetup : IEmbeddedUI
         private void Welcome()
         {
             _confirming = false;
-            _step.Text = $"./connect {_version}";
+            _step.Text = _mode == "update" ? $"обновление до {_version}" : $"версия {_version}";
             _heading.Text = _mode == "update" ? "обновление" : _mode == "maintenance" ? "управление приложением" : "установка";
             _copy.Text = _mode == "update"
                 ? $"версия {_previous} → {_version}\r\nвход и настройки сохранятся."
@@ -325,6 +332,7 @@ public sealed class GraphiteSetup : IEmbeddedUI
                     ? "восстановите файлы приложения или удалите ./connect."
                     : "установите ./connect, чтобы выбрать маршрут и подключиться.";
             _primary.Text = _mode == "maintenance" ? "восстановить" : "продолжить";
+            _secondary.Bounds = new Rectangle(294, 365, 136, 40);
             _secondary.Text = _mode == "maintenance" ? "удалить" : "отмена";
         }
 
@@ -332,7 +340,7 @@ public sealed class GraphiteSetup : IEmbeddedUI
         {
             _selected = operation;
             _confirming = true;
-            _step.Text = $"./connect {_version}";
+            _step.Text = $"версия {_version}";
             _heading.Text = operation == Operation.Remove ? "удалить приложение?"
                 : operation == Operation.Repair ? "восстановить файлы?"
                 : _mode == "update" ? "подтвердите обновление" : "всё готово к установке";
@@ -341,6 +349,7 @@ public sealed class GraphiteSetup : IEmbeddedUI
                 : "windows может запросить права администратора.";
             _primary.Text = operation == Operation.Remove ? "удалить" : operation == Operation.Repair
                 ? "восстановить" : _mode == "update" ? "обновить" : "установить";
+            _secondary.Bounds = new Rectangle(294, 365, 136, 40);
             _secondary.Text = "назад";
         }
 
@@ -368,11 +377,13 @@ public sealed class GraphiteSetup : IEmbeddedUI
             }
 
             _running = true;
+            _step.Text = _selected == Operation.Remove ? "удаление" : $"версия {_version}";
             _heading.Text = _selected == Operation.Remove ? "удаляем ./connect" : "применяем изменения";
             _copy.Text = "подождите, пока windows завершит работу с файлами и службой vpn.";
             _track.Visible = true;
-            _secondary.Text = "отмена";
             _primary.Visible = false;
+            _secondary.Bounds = new Rectangle(446, 365, 148, 40);
+            _secondary.Text = "отмена";
             _start(_selected);
         }
 
@@ -391,7 +402,7 @@ public sealed class GraphiteSetup : IEmbeddedUI
             _success = success;
             _track.Visible = false;
             _progressText.Text = "";
-            _step.Text = $"./connect {_version}";
+            _step.Text = $"версия {_version}";
             _heading.Text = cancelled ? "операция отменена" : !success ? "операция не завершилась" :
                 _selected == Operation.Remove ? "приложение удалено" : "всё готово";
             _copy.Text = cancelled ? "windows завершила отмену операции." : !success
@@ -405,6 +416,7 @@ public sealed class GraphiteSetup : IEmbeddedUI
             _primary.Visible = true;
             _primary.Enabled = true;
             _secondary.Visible = false;
+            _secondary.Bounds = new Rectangle(294, 365, 136, 40);
             _close.Visible = true;
             _close.Enabled = true;
             _primary.Focus();
@@ -442,9 +454,41 @@ public sealed class GraphiteSetup : IEmbeddedUI
         [DllImport("user32.dll")] private static extern bool ReleaseCapture();
         [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hwnd, uint msg, IntPtr wParam, IntPtr lParam);
 
-        private static Label Label(string text, int size, Color color, int x, int y, int w, int h, bool bold = false) =>
-            new() { Text = text, ForeColor = color, Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular),
-                Bounds = new Rectangle(x, y, w, h), BackColor = Color.Transparent, UseMnemonic = false };
+        private static Control Label(string text, int size, Color color, int x, int y, int w, int h, bool bold = false) =>
+            new SmoothLabel(text, size, color, x, y, w, h, bold);
+
+        private sealed class SmoothLabel : Control
+        {
+            private string _text;
+
+            public SmoothLabel(string text, int size, Color color, int x, int y, int w, int h, bool bold)
+            {
+                _text = text;
+                ForeColor = color;
+                Font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular);
+                Bounds = new Rectangle(x, y, w, h);
+                BackColor = BackgroundInk;
+                SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
+            }
+
+            public override string Text
+            {
+                get => _text;
+                set { _text = value ?? ""; Invalidate(); }
+            }
+
+            protected override void OnPaintBackground(PaintEventArgs pevent) { }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                e.Graphics.Clear(Parent?.BackColor ?? BackColor);
+                if (string.IsNullOrEmpty(_text)) return;
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                using var brush = new SolidBrush(ForeColor);
+                using var fmt = new StringFormat(StringFormatFlags.LineLimit) { Trimming = StringTrimming.EllipsisWord };
+                e.Graphics.DrawString(_text, Font, brush, new RectangleF(0, 0, Width, Height), fmt);
+            }
+        }
 
         private static Button Button(string text, int x, int y, int w, int h, bool primary, int radius = 10) =>
             new RoundedButton(text, x, y, w, h, primary, radius);
@@ -468,40 +512,38 @@ public sealed class GraphiteSetup : IEmbeddedUI
                 ForeColor = primary ? BackgroundInk : TextInk;
                 Cursor = Cursors.Hand;
                 SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true);
-                UpdateRegion();
             }
 
-            protected override void OnSizeChanged(EventArgs e) { base.OnSizeChanged(e); UpdateRegion(); }
+            protected override bool ShowFocusCues => false;
+            protected override void OnPaintBackground(PaintEventArgs pevent) { }
             protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
             protected override void OnMouseLeave(EventArgs e) { _hovered = false; _pressed = false; Invalidate(); base.OnMouseLeave(e); }
             protected override void OnMouseDown(MouseEventArgs e) { _pressed = true; Invalidate(); base.OnMouseDown(e); }
             protected override void OnMouseUp(MouseEventArgs e) { _pressed = false; Invalidate(); base.OnMouseUp(e); }
 
-            private void UpdateRegion()
-            {
-                using var path = RoundedRect(new Rectangle(0, 0, Width, Height), _radius);
-                Region = new Region(path);
-            }
-
             protected override void OnPaint(PaintEventArgs e)
             {
+                e.Graphics.Clear(Parent?.BackColor ?? BackgroundInk);
                 e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                e.Graphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+                e.Graphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
                 var fill = _primary
                     ? (_pressed ? Color.FromArgb(197, 197, 197) : _hovered ? Color.White : TextInk)
                     : (_pressed ? LineInk : _hovered ? Color.FromArgb(41, 41, 41) : RaisedInk);
                 var border = _primary ? fill : LineInk;
-                using var path = RoundedRect(new Rectangle(0, 0, Width - 1, Height - 1), _radius);
+                using var path = RoundedRect(new RectangleF(0.5f, 0.5f, Width - 2f, Height - 2f), _radius);
                 using var brush = new SolidBrush(fill);
                 using var pen = new Pen(border, 1f);
                 e.Graphics.FillPath(brush, path);
                 e.Graphics.DrawPath(pen, path);
-                TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, ForeColor,
-                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
+                using var textBrush = new SolidBrush(ForeColor);
+                using var fmt = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                e.Graphics.DrawString(Text, Font, textBrush, new RectangleF(0, 0, Width, Height), fmt);
             }
 
-            private static System.Drawing.Drawing2D.GraphicsPath RoundedRect(Rectangle bounds, int radius)
+            private static System.Drawing.Drawing2D.GraphicsPath RoundedRect(RectangleF bounds, float radius)
             {
-                int d = radius * 2;
+                float d = radius * 2f;
                 var path = new System.Drawing.Drawing2D.GraphicsPath();
                 path.AddArc(bounds.X, bounds.Y, d, d, 180, 90);
                 path.AddArc(bounds.Right - d, bounds.Y, d, d, 270, 90);

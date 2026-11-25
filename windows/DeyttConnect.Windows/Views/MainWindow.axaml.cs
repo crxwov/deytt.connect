@@ -3465,6 +3465,7 @@ public partial class MainWindow : Window
         var tags = _routes.Where(route => route.CountryCode is not ("AUTO" or "EU" or "RU-DE") &&
                 route.Tag != DeyttConnect.Protocol.CdnLteProfile.RouteTag &&
                 _routeProbeResults.GetValueOrDefault(route.Tag)?.Stage != "complete")
+            .OrderBy(route => route.CountryCode switch { "NL" => 0, "DE" => 1, "RU" => 2, "FI" => 3, "IT" => 4, _ => 5 })
             .Select(route => route.Tag).Distinct(StringComparer.Ordinal)
             .Take(WindowsPipeProtocol.MaximumProbeRouteCount).ToArray();
         if (tags.Length == 0)

@@ -251,11 +251,18 @@ public sealed class EngineControllerProbeTests
     }
 
     [Fact]
-    public async Task RouteMeasurementStartsOneSpeedCheckWhileOtherRoutesStillMeasureLatency()
+    public async Task RouteMeasurementFinishesAllLatenciesInParallelBeforeTopToBottomSpeedChecks()
     {
-        var endpoints = new[] { ProbeEndpoint("route:NL:VLESS"), ProbeEndpoint("awg31:cnA") };
+        var endpoints = new[]
+        {
+            ProbeEndpoint("route:NL:VLESS"),
+            ProbeEndpoint("route:NL:TROJAN"),
+            ProbeEndpoint("awg31:cnA"),
+        };
         var latencyFinished = new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
-        var firstSpeedStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allLatenciesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var startedCount = 0;
+        var speedOrder = new List<string>();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         var activeSpeedChecks = 0;
         var maximumSpeedChecks = 0;
@@ -264,19 +271,19 @@ public sealed class EngineControllerProbeTests
             timeout.Token, _ => { },
             async (endpoint, _, token, _) =>
             {
-                if (endpoint == endpoints[1])
-                    await firstSpeedStarted.Task.WaitAsync(token);
+                if (Interlocked.Increment(ref startedCount) == endpoints.Length)
+                    allLatenciesStarted.TrySetResult();
+                await allLatenciesStarted.Task.WaitAsync(token);
+                // Make last endpoint respond earliest to prove speed still runs top-to-bottom.
+                if (endpoint == endpoints[0])
+                    await Task.Delay(30, token);
                 latencyFinished[endpoint.RouteTag] = true;
                 return 20;
             },
             async (endpoint, _, _, report) =>
             {
-                Assert.True(latencyFinished.ContainsKey(endpoint.RouteTag));
-                if (endpoint == endpoints[0])
-                {
-                    Assert.Single(latencyFinished);
-                    firstSpeedStarted.TrySetResult();
-                }
+                Assert.Equal(endpoints.Length, latencyFinished.Count);
+                speedOrder.Add(endpoint.RouteTag);
                 var active = Interlocked.Increment(ref activeSpeedChecks);
                 maximumSpeedChecks = Math.Max(maximumSpeedChecks, active);
                 report(1000, 1000, 500);
@@ -286,19 +293,20 @@ public sealed class EngineControllerProbeTests
             });
 
         Assert.Equal(1, maximumSpeedChecks);
+        Assert.Equal(endpoints.Select(e => e.RouteTag), speedOrder);
         Assert.All(results, result => Assert.Equal("complete", result.Stage));
         Assert.All(results, result => Assert.NotNull(result.LatencyMilliseconds));
     }
 
     [Fact]
-    public async Task RouteMeasurementCapsLatencyConcurrencyAtFourAndPublishesEveryRoute()
+    public async Task RouteMeasurementRunsAllLatenciesInParallelAndPublishesEveryRoute()
     {
         var endpoints = Enumerable.Range(0, 9)
             .Select(index => ProbeEndpoint($"route:{index}:VLESS"))
             .ToArray();
         var latencyFinished = new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
         var published = new ConcurrentBag<ServiceProbeResult>();
-        var fourLatenciesStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allLatenciesStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var latencyStarted = 0;
         var activeLatencies = 0;
         var maximumLatencies = 0;
@@ -314,9 +322,9 @@ public sealed class EngineControllerProbeTests
                 UpdateMaximum(ref maximumLatencies, active);
                 try
                 {
-                    if (Interlocked.Increment(ref latencyStarted) == 4)
-                        fourLatenciesStarted.TrySetResult(true);
-                    await fourLatenciesStarted.Task.WaitAsync(token);
+                    if (Interlocked.Increment(ref latencyStarted) == endpoints.Length)
+                        allLatenciesStarted.TrySetResult(true);
+                    await allLatenciesStarted.Task.WaitAsync(token);
                     report(1, 40);
                     await Task.Delay(20, token);
                     latencyFinished[endpoint.RouteTag] = true;
@@ -329,7 +337,7 @@ public sealed class EngineControllerProbeTests
             },
             async (endpoint, _, token, report) =>
             {
-                Assert.True(latencyFinished.ContainsKey(endpoint.RouteTag));
+                Assert.Equal(endpoints.Length, latencyFinished.Count);
                 var active = Interlocked.Increment(ref activeSpeedChecks);
                 UpdateMaximum(ref maximumSpeedChecks, active);
                 try
@@ -344,7 +352,7 @@ public sealed class EngineControllerProbeTests
                 }
             });
 
-        Assert.Equal(4, maximumLatencies);
+        Assert.Equal(endpoints.Length, maximumLatencies);
         Assert.Equal(1, maximumSpeedChecks);
         Assert.All(results, result => Assert.Equal("complete", result.Stage));
         Assert.All(results, result => Assert.Equal(40, result.LatencyMilliseconds));
