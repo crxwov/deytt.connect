@@ -5647,7 +5647,9 @@
 
     // Navigation and stage controller.
     const navContainer = document.getElementById("main-nav");
-    const navGlassCanvas = document.getElementById("nav-glass-canvas");
+    const navGlassCanvas = new URLSearchParams(window.location.search).get("profile") === "windows"
+      ? null
+      : document.getElementById("nav-glass-canvas");
     const navItems = Array.from(document.querySelectorAll(".nav-item"));
     const stageHome = document.getElementById("stage-home");
     const stageRoutes = document.getElementById("stage-routes");
