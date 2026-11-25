@@ -52,7 +52,7 @@ public static class WindowsRouteCatalog
         var cc = route.CountryCode.ToLowerInvariant();
         var proto = route.Protocol switch
         {
-            "VLESS" => route.Detail is "reality" ? "reality" : "vless",
+            "VLESS" => VlessTransportLabel(route.Detail),
             "TROJAN" => "trojan",
             "HYSTERIA2" => "hysteria",
             "TUIC" => "tuic",
@@ -61,6 +61,13 @@ public static class WindowsRouteCatalog
         };
         return $"{mark}  {cc} • {proto} {mode}";
     }
+
+    public static string VlessTransportLabel(string? detail) => detail switch
+    {
+        "reality" or "xhttp" or "ws" or "httpupgrade" or "tcp" or "tls" => detail,
+        "websocket + tls" => "ws",
+        _ => "vless",
+    };
 
     public static string FormatRouteDetail(WindowsRoute route, bool english = false)
     {
@@ -140,6 +147,7 @@ public static class WindowsRouteCatalog
             routes.Add(new WindowsRoute(CdnLteProfile.RouteTag, CdnLteProfile.RouteTag,
                 "EU", "Европа", "🇪🇺", "LTE", "lte • белые списки"));
 
+        var xrayTransports = XrayRouteProfile.DescribeTransports(profile);
         foreach (var country in Countries)
         foreach (var protocol in Protocols)
         {
@@ -147,9 +155,9 @@ public static class WindowsRouteCatalog
             if (outboundTags.Contains(tag))
                 routes.Add(new WindowsRoute(tag, tag, country.Code, country.Name, country.Flag,
                     protocol.Code, protocol.Name,
-                    Detail: outboundByTag.TryGetValue(tag, out var outbound)
-                        ? DescribeTransport(outbound)
-                        : null));
+                    Detail: xrayTransports.TryGetValue(tag, out var xrayTransport)
+                        ? xrayTransport
+                        : outboundByTag.TryGetValue(tag, out var outbound) ? DescribeTransport(outbound) : null));
         }
 
         foreach (var awgProfile in (awgProfiles ?? []).Take(32))

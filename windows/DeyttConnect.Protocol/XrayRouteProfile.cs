@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 
@@ -16,6 +17,10 @@ public static class XrayRouteProfile
     public sealed record Runtime(string Profile, string Xray, IReadOnlyList<int> Ports);
 
     public static void Validate(string profile) => ReadRoutes(JsonNode.Parse(profile)!.AsObject());
+
+    public static IReadOnlyDictionary<string, string> DescribeTransports(JsonElement profile) =>
+        ReadRoutes(JsonObject.Create(profile)!).ToDictionary(
+            route => route.Tag, route => route.Stream["network"]!.GetValue<string>(), StringComparer.Ordinal);
 
     public static async Task<Runtime?> PrepareAsync(string profile,
         Func<string, CancellationToken, Task<IPAddress[]>> resolve, CancellationToken cancellationToken)

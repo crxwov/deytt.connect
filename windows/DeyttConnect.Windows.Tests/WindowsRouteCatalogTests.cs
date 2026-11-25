@@ -39,6 +39,35 @@ public sealed class WindowsRouteCatalogTests
     }
 
     [Fact]
+    public void XrayTransportTakesPrecedenceOverRealityInTheRouteTitle()
+    {
+        const string source = """
+            {
+              "inbounds":[{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
+              "outbounds":[
+                {"type":"urltest","tag":"автоподбор","outbounds":["route:NL:VLESS"]},
+                {"type":"vless","tag":"route:NL:VLESS","tls":{"reality":{"enabled":true}}},
+                {"type":"vless","tag":"route:IT:VLESS","tls":{"reality":{"enabled":true}}}
+              ],
+              "route":{"final":"автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]},
+              "deytt":{"xray_routes":{"version":1,"routes":{
+                "route:NL:VLESS":{
+                  "protocol":"vless","transport":"xhttp","host":"tr-nl.deytt.space","port":18443,
+                  "sni":"deytt.space","uuid":"12345678-1234-1234-1234-123456789abc",
+                  "path":"/stream","mode":"auto","alpn":["h2"],"fingerprint":"firefox"
+                }
+              }}}
+            }
+            """;
+        using var profile = JsonDocument.Parse(source);
+        var routes = WindowsRouteCatalog.Parse(profile.RootElement);
+        Assert.Contains("nl • xhttp (stable)", WindowsRouteCatalog.FormatRouteTitle(
+            Assert.Single(routes, route => route.Id == "route:NL:VLESS")));
+        Assert.Contains("it • reality (stable)", WindowsRouteCatalog.FormatRouteTitle(
+            Assert.Single(routes, route => route.Id == "route:IT:VLESS")));
+    }
+
+    [Fact]
     public void DefaultRouteMayTargetANetworkEndpoint()
     {
         var outbounds = new JsonArray

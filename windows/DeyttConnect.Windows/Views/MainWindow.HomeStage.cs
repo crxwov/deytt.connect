@@ -441,8 +441,11 @@ public partial class MainWindow
             return Copy("Автоматически", "Automatic");
         return route.Protocol switch
         {
-            "VLESS" when route.Detail is "reality" => "./vless+reality",
-            "VLESS" => "./vless+ws",
+            "VLESS" => WindowsRouteCatalog.VlessTransportLabel(route.Detail) switch
+            {
+                "vless" => "./vless",
+                var transport => $"./vless+{transport}",
+            },
             "TROJAN" => "./trojan",
             "HYSTERIA2" => "./hysteria",
             "TUIC" => "./tuic",
