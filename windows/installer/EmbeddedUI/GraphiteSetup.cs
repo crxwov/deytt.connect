@@ -299,7 +299,19 @@ public sealed class GraphiteSetup : IEmbeddedUI
 
         private bool _confirming;
         public string ProgressText { set => _progressText.Text = value; }
-        public bool CanCancel { set { _secondary.Enabled = value; _close.Enabled = value; } }
+        public bool CanCancel
+        {
+            set
+            {
+                _secondary.Enabled = value;
+                _close.Enabled = value;
+                if (_running)
+                {
+                    _secondary.Visible = value;
+                    _close.Visible = value;
+                }
+            }
+        }
         public void SetProgress(int percentage) => _fill.Width = _track.Width * percentage / 100;
 
         private void Welcome()
@@ -393,6 +405,7 @@ public sealed class GraphiteSetup : IEmbeddedUI
             _primary.Visible = true;
             _primary.Enabled = true;
             _secondary.Visible = false;
+            _close.Visible = true;
             _close.Enabled = true;
             _primary.Focus();
         }
