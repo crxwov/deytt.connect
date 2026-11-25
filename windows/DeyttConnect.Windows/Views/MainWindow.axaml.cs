@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private const double WorkAreaHeightInset = 48;
 
     private enum MainTab { Home, Routes, Profile, Settings, Support, Setup }
+    private const string RouteOverviewProbe = "*";
     private enum RouteCountryProbeState { Queued, Running, Cancelled, NeedsDisconnect, ServiceUnavailable, Failed }
     private sealed record RouteCountryProbeRequest(string CountryCode, string[] RouteTags);
     private sealed class PageViewCache(Grid view, int stateFingerprint)
@@ -185,7 +186,7 @@ public partial class MainWindow : Window
         _startupFlowStarted = true;
         _sessionRestoreComplete = true;
         _language = fixture.Language;
-        if (fixture.ThemePreference is "system" or "light" or "dark")
+        if (fixture.ThemePreference is "system" or "light" or "dark" or "legacy")
             _themePreference = fixture.ThemePreference;
         ApplyVisualPreferences();
         _selectedRoute = fixture.SelectedRoute;
@@ -464,7 +465,7 @@ public partial class MainWindow : Window
         _activeTab = tab;
         _shellViewModel.ActivePage = tab.ToString();
         if (tab == MainTab.Routes)
-            StartNextCountryProbe();
+            Dispatcher.UIThread.Post(StartRouteOverviewProbe, DispatcherPriority.Background);
         var pageFingerprint = GetPageStateFingerprint(tab);
         Control page;
         if (IsPersistentPage(tab) && _pageViews.TryGetValue(tab, out var cachedPage))
@@ -717,17 +718,8 @@ public partial class MainWindow : Window
                     state.Add(device.LastSeen, StringComparer.Ordinal);
                     state.Add(device.OsVersion, StringComparer.Ordinal);
                 }
-                foreach (var session in _sessions)
-                {
-                    state.Add(session.Id, StringComparer.Ordinal);
-                    state.Add(session.Label, StringComparer.Ordinal);
-                    state.Add(session.Current);
-                    state.Add(session.CreatedAt, StringComparer.Ordinal);
-                    state.Add(session.ExpiresAt, StringComparer.Ordinal);
-                }
                 state.Add(_profileLoadIssue, StringComparer.Ordinal);
                 state.Add(_profileRefreshInProgress);
-                state.Add(_sessionLoadIssue, StringComparer.Ordinal);
                 state.Add(_profileActionStatus, StringComparer.Ordinal);
                 state.Add(_profileActionRetry is not null);
                 state.Add(_profileDevicesExpanded);
@@ -1046,10 +1038,10 @@ public partial class MainWindow : Window
         var dark = _themePreference switch
         {
             "light" => false,
-            "dark" => true,
+            "dark" or "legacy" => true,
             _ => _systemDarkTheme,
         };
-        DeyttTheme.SetDark(dark);
+        DeyttTheme.SetDark(dark, _themePreference == "legacy");
         DeyttTheme.ReduceMotion = _reduceMotion;
         RequestedThemeVariant = dark
             ? Avalonia.Styling.ThemeVariant.Dark
@@ -1061,7 +1053,7 @@ public partial class MainWindow : Window
         }
         Background = DeyttTheme.Brush(DeyttTheme.Background);
         ShellGrid.Background = DeyttTheme.Brush(DeyttTheme.Background);
-        WorkspaceHeader.Background = new SolidColorBrush(Color.Parse("#080D17"));
+        WorkspaceHeader.Background = DeyttTheme.Brush(DeyttTheme.Header);
         WorkspaceHeader.BorderBrush = Brushes.Transparent;
         WorkspaceHeader.BorderThickness = new Thickness(0);
         WorkspaceBrand.Foreground = Brushes.White;
@@ -1077,9 +1069,9 @@ public partial class MainWindow : Window
             control.BorderBrush = new SolidColorBrush(Color.FromArgb(36, 255, 255, 255));
             control.BorderThickness = new Thickness(1);
             control.CornerRadius = new CornerRadius(12);
-            control.Foreground = DeyttTheme.Brush(Color.Parse("#E2E8F0"));
+            control.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
         }
-        CloseWindowButton.Foreground = DeyttTheme.Brush(Color.Parse("#94A3B8"));
+        CloseWindowButton.Foreground = DeyttTheme.Brush(DeyttTheme.Muted);
         TopHomeNav.InvalidateVisual();
         TopRoutesNav.InvalidateVisual();
         TopProfileNav.InvalidateVisual();
@@ -2468,46 +2460,6 @@ public partial class MainWindow : Window
                     () => ShowHappDeviceDetails(device), preserveCase: true));
             }
         }
-        content.Children.Add(DeyttTheme.Spacer(5));
-        content.Children.Add(DeyttTheme.TextBlock(Copy("СЕАНСЫ ПРИЛОЖЕНИЯ", "APP SESSIONS"),
-            9, DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono));
-        if (!signedIn)
-        {
-            content.Children.Add(SettingsEntry("↗", Copy("Войти, чтобы управлять сеансами", "Sign in to manage sessions"),
-                Copy("Можно завершить старые входы на других устройствах", "End old app sessions on other devices"),
-                "›", ShowSignInDialog));
-        }
-        else if (loading)
-        {
-            content.Children.Add(DeyttTheme.TextBlock(Copy("Загружаем сеансы…", "Loading sessions…"),
-                12, DeyttTheme.Muted));
-        }
-        else if (_sessionLoadIssue is not null)
-        {
-            content.Children.Add(SettingsEntry("↻", Copy("Сеансы не загружены", "Sessions unavailable"),
-                _sessionLoadIssue, Copy("повторить", "retry"), () => _ = RefreshSignedInAccountAsync()));
-        }
-        else if (_sessions.Count == 0)
-        {
-            content.Children.Add(DeyttTheme.TextBlock(Copy("Активных сеансов приложения нет.",
-                "There are no active app sessions."), 12, DeyttTheme.Muted));
-        }
-        else
-        {
-            foreach (var session in _sessions)
-            {
-                var osLower = (session.DeviceOs ?? "").ToLowerInvariant();
-                var labelLower = session.Label.ToLowerInvariant();
-                var isDesktop = osLower.Contains("win") || osLower.Contains("mac") || osLower.Contains("linux") || labelLower.Contains("windows") || labelLower.Contains("desktop");
-                var icon = isDesktop ? "💻" : "📱";
-                content.Children.Add(SettingsEntry(icon, session.Label,
-                    session.Current
-                        ? Copy("Это устройство · текущий сеанс", "This device · current session")
-                        : $"{Copy("Вход", "Signed in")}: {FormatLastSeen(session.CreatedAt)}",
-                    session.Current ? Copy("текущий", "current") : Copy("управлять", "manage"),
-                    () => _ = ManageSessionAsync(session), preserveCase: true));
-            }
-        }
         content.Children.Add(SettingsEntry("+", Copy("Обновить список", "Refresh list"),
             Copy("Заново загрузить устройства и доступ", "Reload devices and access"), "↻", () =>
             {
@@ -2941,7 +2893,11 @@ public partial class MainWindow : Window
         }
 
         if (_selectedRoute == routeId)
+        {
+            if (_activeTab == MainTab.Routes)
+                ShowTab(MainTab.Home);
             return;
+        }
 
         if (WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
@@ -3005,9 +2961,10 @@ public partial class MainWindow : Window
     {
         _selectedRoute = route.Id;
         SavePreferences();
-        // The atlas keeps its own visible stage; forcing the native tab back to Home here
-        // desynced _activeTab from the stage the user actually sees and froze route probing.
-        RenderActiveTabPreservingScroll();
+        if (_activeTab == MainTab.Routes)
+            ShowTab(MainTab.Home);
+        else
+            RenderActiveTabPreservingScroll();
         if (!IsVisible || WindowState == Avalonia.Controls.WindowState.Minimized)
             ShowFromTray();
     }
@@ -3410,6 +3367,11 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_activeRouteProbeCountry == RouteOverviewProbe &&
+            routeTags.All(tag => _activeRouteProbeTags.Contains(tag) ||
+                _routeProbeResults.GetValueOrDefault(tag)?.Stage == "complete"))
+            return;
+
         var availableTags = _routes.Select(route => route.Tag).ToHashSet(StringComparer.Ordinal);
         var request = new RouteCountryProbeRequest(countryCode,
             routeTags.Where(availableTags.Contains).Distinct(StringComparer.Ordinal).ToArray());
@@ -3485,6 +3447,34 @@ public partial class MainWindow : Window
         _routeCountryProbeStates.Clear();
         if (_routeProbeInProgress && !_routeProbeCancelRequested)
             _ = CancelRouteProbeAsync(renderProgress: false);
+    }
+
+    private void StartRouteOverviewProbe()
+    {
+        if (_qaFixture || _activeTab != MainTab.Routes || _routeProbeInProgress || _vpnActionInProgress ||
+            _activeRouteProbeCountry is not null || _keysSnapshot?.ProfileJson is not { Length: > 0 })
+            return;
+
+        if (!_vpnServiceAvailable || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
+        {
+            PushRouteProbeHint(!_vpnServiceAvailable
+                ? RouteCountryProbeState.ServiceUnavailable : RouteCountryProbeState.NeedsDisconnect);
+            return;
+        }
+
+        var tags = _routes.Where(route => route.CountryCode is not ("AUTO" or "EU" or "RU-DE") &&
+                route.Tag != DeyttConnect.Protocol.CdnLteProfile.RouteTag &&
+                _routeProbeResults.GetValueOrDefault(route.Tag)?.Stage != "complete")
+            .Select(route => route.Tag).Distinct(StringComparer.Ordinal)
+            .Take(WindowsPipeProtocol.MaximumProbeRouteCount).ToArray();
+        if (tags.Length == 0)
+        {
+            StartNextCountryProbe();
+            return;
+        }
+
+        _activeRouteProbeCountry = RouteOverviewProbe;
+        _ = ProbeRoutesAsync(tags, RouteOverviewProbe);
     }
 
     private void StartNextCountryProbe()
@@ -4180,7 +4170,6 @@ public partial class MainWindow : Window
         var awgTrafficTask = LoadAwgTrafficForRefreshAsync(token, cancellationToken);
         var proxyTrafficTask = LoadProxyTrafficForRefreshAsync(token, cancellationToken);
         var avatarTask = RefreshTelegramAvatarAsync(token, cancellationToken);
-        var sessionsTask = LoadSessionsForRefreshAsync(token, cancellationToken);
         if (verifiedAccount is not null)
         {
             _account = verifiedAccount;
@@ -4190,7 +4179,7 @@ public partial class MainWindow : Window
 
         try
         {
-            await Task.WhenAll(accountTask, subscriptionTask, awgTrafficTask, proxyTrafficTask, avatarTask, sessionsTask);
+            await Task.WhenAll(accountTask, subscriptionTask, awgTrafficTask, proxyTrafficTask, avatarTask);
             if (_sessionToken != token)
                 return false;
             _account = await accountTask;
@@ -4201,7 +4190,6 @@ public partial class MainWindow : Window
             var proxyTraffic = await proxyTrafficTask;
             _proxyTraffic = proxyTraffic.Traffic;
             _proxyTrafficState = proxyTraffic.State;
-            _sessions = await sessionsTask ?? [];
             _routes = _keysSnapshot.Routes;
             _profileLoadIssue = _keysSnapshot.HappAvailable
                 ? null
@@ -4211,6 +4199,8 @@ public partial class MainWindow : Window
                 _selectedRoute = "auto";
                 SavePreferences();
             }
+            if (_activeTab == MainTab.Routes)
+                Dispatcher.UIThread.Post(StartRouteOverviewProbe, DispatcherPriority.Background);
             Services.UiDiagnostics.Log($"RefreshAccountDataAsync success (happAvailable={_keysSnapshot.HappAvailable}, routes={_routes.Count})");
             return _keysSnapshot.HappAvailable;
         }
@@ -4295,32 +4285,6 @@ public partial class MainWindow : Window
         catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
             return ("error", null);
-        }
-    }
-
-    private async Task<IReadOnlyList<TelegramAppSession>?> LoadSessionsForRefreshAsync(
-        string token,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var sessions = await _telegramApi.GetSessionsAsync(token, cancellationToken);
-            _sessionLoadIssue = null;
-            return sessions;
-        }
-        catch (TelegramApiException error) when (error.IsUnauthorized)
-        {
-            throw;
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
-        {
-            _sessionLoadIssue = Copy("Проверь интернет и повтори обновление.",
-                "Check your connection and refresh again.");
-            return null;
         }
     }
 
@@ -5015,77 +4979,6 @@ public partial class MainWindow : Window
         string? cancelLabel = null) =>
         ConfirmInShellAsync(title, message, confirmLabel, cancelLabel);
 
-    private async Task ManageSessionAsync(TelegramAppSession session)
-    {
-        var sessionToken = _sessionToken;
-        if (_sessionRevokesInFlight.Contains(session.Id))
-            return;
-        var detail = session.Current
-            ? Copy("Это текущий сеанс на этом устройстве.", "This is the current session on this device.")
-            : Copy("Этот сеанс можно завершить. VPN-ключи останутся действительными.",
-                "You can end this session. VPN keys will remain valid.");
-        if (!string.IsNullOrWhiteSpace(session.DeviceOs))
-            detail += $"\n{Copy("ОС", "OS")}: {session.DeviceOs}";
-        if (!string.IsNullOrWhiteSpace(session.DeviceModel))
-            detail += $"\n{Copy("Устройство", "Device")}: {session.DeviceModel}";
-        detail += $"\n{Copy("Вход", "Signed in")}: {FormatLastSeen(session.CreatedAt)}";
-        if (!string.IsNullOrWhiteSpace(session.ExpiresAt))
-            detail += $"\n{Copy("Действует до", "Valid until")}: {FormatLastSeen(session.ExpiresAt)}";
-
-        if (session.Current)
-        {
-            ShowInfoDialog(session.Label, detail);
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(session.Id))
-        {
-            ShowInfoDialog(session.Label, detail);
-            return;
-        }
-        var confirmation = detail + "\n" + Copy(
-            "На другом устройстве потребуется снова войти через Telegram. VPN-ключи останутся действительными.",
-            "The other device will need to sign in through Telegram again. VPN keys will remain valid.");
-        if (!await ConfirmDialogAsync(Copy("Завершить сеанс?", "End this session?"), confirmation,
-                Copy("Завершить", "End session")))
-            return;
-
-        var token = _sessionToken;
-        if (token is null)
-        {
-            ShowSignInDialog();
-            return;
-        }
-        if (token != sessionToken)
-            return;
-        if (!_sessionRevokesInFlight.Add(session.Id))
-            return;
-        try
-        {
-            await _telegramApi.RevokeSessionAsync(token, session.Id);
-            if (_sessionToken != token)
-                return;
-            await RefreshAccountDataAsync(token);
-            ShowTab(MainTab.Profile);
-        }
-        catch (TelegramApiException error) when (error.IsUnauthorized)
-        {
-            ClearLocalSession();
-            ShowTab(MainTab.Profile);
-            ShowInfoDialog(Copy("Сеанс истёк", "Session expired"),
-                Copy("Войди через Telegram ещё раз.", "Sign in with Telegram again."));
-        }
-        catch (Exception error) when (error is TelegramApiException or HttpRequestException or TaskCanceledException or IOException)
-        {
-            ShowInfoDialog(Copy("Не удалось завершить сеанс", "Could not end session"),
-                Copy("Сервер не подтвердил действие. Обнови список и повтори попытку.",
-                    "The server did not confirm the action. Refresh the list and try again."));
-        }
-        finally
-        {
-            _sessionRevokesInFlight.Remove(session.Id);
-        }
-    }
-
     private bool ClearLocalSession()
     {
         ResetRouteViewState();
@@ -5106,13 +4999,11 @@ public partial class MainWindow : Window
         ClearTelegramAvatar();
         _keysSnapshot = null;
         ClearAwgTraffic();
-        _sessions = [];
         _routes = [];
         _selectedRoute = "auto";
         _paymentFlow.Reset();
         _profileActionStatus = null;
         _profileActionRetry = null;
-        _sessionLoadIssue = null;
         if (cleared)
             _profileLoadIssue = null;
         SavePreferences();

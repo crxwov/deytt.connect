@@ -154,25 +154,24 @@ foreach($dialog in @('SetupWelcome','SetupReady','SetupProgress','SetupComplete'
 $dialogNames=@('SetupWelcome','SetupMaintenance','SetupRemoveConfirm','SetupReady','SetupProgress','SetupComplete')
 foreach($dialog in $dialogNames) {
  $size=Row "SELECT ``Width``,``Height`` FROM ``Dialog`` WHERE ``Dialog``='$dialog'"
- Check ($size.Number -eq 568 -and $size.Second -eq 348) "$dialog dimensions changed"
- $brand=Row "SELECT ``Text`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='Brand'"
- Check ($brand.Text -eq '{\SetupBrand}./connect') "$dialog must use the single-line ./connect wordmark"
- $brandControl=Controls $dialog | Where-Object Id -eq 'Brand'
- Check (($brandControl.X + $brandControl.Width/2) -eq 112 -and
-        ($brandControl.Y + $brandControl.Height/2) -eq 174) "$dialog wordmark must be centered in the sidebar"
+ Check ($size.Number -eq 484 -and $size.Second -eq 324) "$dialog dimensions changed"
  $art=Row "SELECT ``X``,``Y`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='BrandArt'"
  $artSize=Row "SELECT ``Width``,``Height`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='BrandArt'"
- Check ($art.Number -eq 0 -and $art.Second -eq 0 -and $artSize.Number -eq 224 -and $artSize.Second -eq 348) "$dialog brand art dimensions changed"
+ Check ($art.Number -eq 0 -and $art.Second -eq 0 -and $artSize.Number -eq 484 -and $artSize.Second -eq 274) "$dialog brand art dimensions changed"
+ $artAsset=Row "SELECT ``Text`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='BrandArt'"
+ Check ($artAsset.Text -eq 'SetupPanel') "$dialog does not reference the graphite panel"
+ $interactive=QueryRows "SELECT ``Y`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND (``Type``='PushButton' OR ``Type``='CheckBox')"
+ foreach($y in $interactive) { Check ([int]$y -ge $artSize.Second) "$dialog has interactive controls behind the panel" }
  foreach($captionId in @('Caption','BrandCaption','BrandCaptionSecondLine')) {
   Check ((QueryRows "SELECT ``Control`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='$captionId'").Count -eq 0) "$dialog must not add the removed tagline"
  }
  foreach($control in (Controls $dialog)) {
   Check ($control.X -ge 0 -and $control.Y -ge 0 -and $control.Width -ge 0 -and $control.Height -ge 0 -and
-         $control.X + $control.Width -le 568 -and $control.Y + $control.Height -le 348) "$dialog.$($control.Id) extends outside its dialog"
+         $control.X + $control.Width -le $size.Number -and $control.Y + $control.Height -le $size.Second) "$dialog.$($control.Id) extends outside its dialog"
  }
 }
 $mainControls=@(
- @('SetupWelcome','Step'),@('SetupWelcome','Title'),@('SetupWelcome','UpdateTitle'),@('SetupWelcome','Intro'),@('SetupWelcome','UpdateIntro'),@('SetupWelcome','FeatureOne'),@('SetupWelcome','FeatureOneBody'),@('SetupWelcome','Version'),
+ @('SetupWelcome','Step'),@('SetupWelcome','Title'),@('SetupWelcome','UpdateTitle'),@('SetupWelcome','Intro'),@('SetupWelcome','UpdateIntro'),@('SetupWelcome','FeatureOne'),@('SetupWelcome','Version'),
  @('SetupMaintenance','Step'),@('SetupMaintenance','Title'),@('SetupMaintenance','Intro'),
  @('SetupRemoveConfirm','Step'),@('SetupRemoveConfirm','Title'),@('SetupRemoveConfirm','Intro'),@('SetupRemoveConfirm','Account'),
  @('SetupReady','Step'),@('SetupReady','Title'),@('SetupReady','UpdateTitle'),@('SetupReady','Details'),@('SetupReady','PathLabel'),@('SetupReady','Path'),
@@ -181,19 +180,26 @@ $mainControls=@(
 )
 foreach($item in $mainControls) {
  $control=Row "SELECT ``X``,``Width`` FROM ``Control`` WHERE ``Dialog_``='$($item[0])' AND ``Control``='$($item[1])'"
- Check ($control.Number -eq 252 -and $control.Second -eq 288) "Main-column layout changed for $($item[0]).$($item[1])"
+ Check ($control.Number -eq 30 -and $control.Second -eq 424) "Main-column layout changed for $($item[0]).$($item[1])"
 }
 $bottomButtons=@(
- @('SetupWelcome','Cancel',340),@('SetupWelcome','Next',448),
- @('SetupMaintenance','Cancel',340),@('SetupMaintenance','Remove',448),
- @('SetupRemoveConfirm','Cancel',340),@('SetupRemoveConfirm','Remove',448),
- @('SetupReady','Back',252),@('SetupReady','Cancel',344),@('SetupReady','Install',448),
- @('SetupProgress','Cancel',448),@('SetupComplete','Finish',448)
+ @('SetupWelcome','Cancel',248),@('SetupWelcome','Next',358),
+ @('SetupMaintenance','Cancel',248),@('SetupMaintenance','Remove',358),
+ @('SetupRemoveConfirm','Cancel',248),@('SetupRemoveConfirm','Remove',358),
+ @('SetupReady','Back',30),@('SetupReady','Cancel',252),@('SetupReady','Install',358),
+ @('SetupProgress','Cancel',358),@('SetupComplete','Finish',358)
 )
 foreach($item in $bottomButtons) {
  $position=Row "SELECT ``X``,``Y`` FROM ``Control`` WHERE ``Dialog_``='$($item[0])' AND ``Control``='$($item[1])'"
- Check ($position.Number -eq $item[2] -and $position.Second -eq 316) "Bottom button alignment changed for $($item[0]).$($item[1])"
+ Check ($position.Number -eq $item[2] -and $position.Second -eq 287) "Bottom button alignment changed for $($item[0]).$($item[1])"
 }
+$embeddedGuard=Row 'SELECT `Condition` FROM `LaunchCondition` WHERE `Condition`=''NOT MSICLIENTUSESEMBEDDEDUI OR GRAPHITE_SETUP_CONFIRMED = "1" OR UPGRADINGPRODUCTCODE'''
+$session.Property('MSICLIENTUSESEMBEDDEDUI')='1'
+Check ($session.EvaluateCondition($embeddedGuard.Text) -eq 0) 'Embedded UI startup failure must stop the installation'
+$session.Property('GRAPHITE_SETUP_CONFIRMED')='1'
+Check ($session.EvaluateCondition($embeddedGuard.Text) -eq 1) 'Embedded UI confirmation must permit execution'
+$session.Property('GRAPHITE_SETUP_CONFIRMED')=''
+$session.Property('MSICLIENTUSESEMBEDDEDUI')=''
 $progressSequence=Row 'SELECT `Sequence` FROM `InstallUISequence` WHERE `Action`=''ProgressDlg'''
 $customProgressSequence=Row 'SELECT `Sequence` FROM `InstallUISequence` WHERE `Action`=''SetupProgress'''
 $executeSequence=Row 'SELECT `Sequence` FROM `InstallUISequence` WHERE `Action`=''ExecuteAction'''
@@ -204,7 +210,7 @@ $progressSubscriptions=QueryRows 'SELECT `Event` FROM `EventMapping` WHERE `Dial
 Check ($progressSubscriptions.Count -eq 1) 'SetupProgress.Action must not overlap a second stock status subscription'
 $setupProgressControls=Controls 'SetupProgress'
 $actionControl=$setupProgressControls | Where-Object Id -eq 'Action'
-$overlappingActionControls=$setupProgressControls | Where-Object { $_.Id -ne 'Action' -and $_.X -lt ($actionControl.X+$actionControl.Width) -and ($_.X+$_.Width) -gt $actionControl.X -and $_.Y -lt ($actionControl.Y+$actionControl.Height) -and ($_.Y+$_.Height) -gt $actionControl.Y }
+$overlappingActionControls=$setupProgressControls | Where-Object { $_.Id -notin @('Action','BrandArt') -and $_.X -lt ($actionControl.X+$actionControl.Width) -and ($_.X+$_.Width) -gt $actionControl.X -and $_.Y -lt ($actionControl.Y+$actionControl.Height) -and ($_.Y+$_.Height) -gt $actionControl.Y }
 Check ($overlappingActionControls.Count -eq 0) 'SetupProgress.ActionText area overlaps another control'
 $null=Row 'SELECT `Control` FROM `Control` WHERE `Dialog_`=''SetupComplete'' AND `Control`=''Desktop'''
 $launch=Row 'SELECT `Control` FROM `Control` WHERE `Dialog_`=''SetupComplete'' AND `Control`=''LaunchConnect'' AND `Type`=''CheckBox'' AND `Property`=''LAUNCH_CONNECT'''

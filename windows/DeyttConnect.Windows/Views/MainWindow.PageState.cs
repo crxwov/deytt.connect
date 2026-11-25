@@ -32,9 +32,7 @@ public partial class MainWindow
 
     private TelegramAccount? _account { get => _profileViewModel.Account; set => _profileViewModel.Account = value; }
     private TelegramKeysSnapshot? _keysSnapshot { get => _profileViewModel.KeysSnapshot; set => _profileViewModel.KeysSnapshot = value; }
-    private IReadOnlyList<TelegramAppSession> _sessions { get => _profileViewModel.Sessions; set => _profileViewModel.Sessions = value; }
     private string? _profileLoadIssue { get => _profileViewModel.ProfileLoadIssue; set => _profileViewModel.ProfileLoadIssue = value; }
-    private string? _sessionLoadIssue { get => _profileViewModel.SessionLoadIssue; set => _profileViewModel.SessionLoadIssue = value; }
     private string? _profileActionStatus { get => _profileViewModel.ActionStatus; set => _profileViewModel.ActionStatus = value; }
     private Func<Task>? _profileActionRetry { get => _profileViewModel.ActionRetry; set => _profileViewModel.ActionRetry = value; }
     private bool _profileRefreshInProgress { get => _profileViewModel.RefreshInProgress; set => _profileViewModel.RefreshInProgress = value; }

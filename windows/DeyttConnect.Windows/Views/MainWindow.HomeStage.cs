@@ -266,6 +266,7 @@ public partial class MainWindow
         map.TrafficActive = IsVpnDisplayConnected();
         map.ReducedMotion = _reduceMotion;
         map.DarkTheme = DeyttTheme.IsDark;
+        map.LegacyTheme = _themePreference == "legacy";
         // A normal IP lookup follows the machine's upstream VPN; it cannot prove
         // which exit the DEYTT tunnel selected.
         map.EgressCountryCode = null;
@@ -563,11 +564,13 @@ public partial class MainWindow
             if (device is not null)
                 ShowHappDeviceDetails(device);
         };
-        map.TelegramSessionManagementRequested += id =>
+        map.ThemeChanged += theme =>
         {
-            var session = _sessions.FirstOrDefault(item => string.Equals(item.Id, id, StringComparison.Ordinal));
-            if (session is not null)
-                _ = ManageSessionAsync(session);
+            if (_themePreference == theme) return;
+            _themePreference = theme;
+            ApplyVisualPreferences();
+            SavePreferences();
+            RenderActiveTabPreservingScroll();
         };
         map.SubscriptionKeyCopyRequested += () => _ = CopySubscriptionKeyToClipboardAsync();
         map.SignInRequested += () => ShowSignInDialog();
@@ -965,6 +968,7 @@ public partial class MainWindow
         map.TrafficActive = IsVpnDisplayConnected();
         map.ReducedMotion = _reduceMotion;
         map.DarkTheme = DeyttTheme.IsDark;
+        map.LegacyTheme = _themePreference == "legacy";
         map.EgressCountryCode = null;
         map.ActiveAutoRouteKey = IsVpnDisplayConnected()
             ? ConfirmedHomeRouteKey()
@@ -1018,7 +1022,8 @@ public partial class MainWindow
         var devices = (_keysSnapshot?.HappDevices ?? []).Select(d => new
         {
             id = d.Id,
-            icon = d.Os?.Contains("android", StringComparison.OrdinalIgnoreCase) == true ? "📱" : "💻",
+            isMobile = d.Os?.Contains("android", StringComparison.OrdinalIgnoreCase) == true ||
+                       d.Os?.Contains("ios", StringComparison.OrdinalIgnoreCase) == true,
             name = string.IsNullOrWhiteSpace(d.Model) ? Copy("Устройство Happ", "Happ device") : d.Model,
             detail = string.Join(" · ", new[]
             {
@@ -1029,21 +1034,6 @@ public partial class MainWindow
             }.Where(value => !string.IsNullOrWhiteSpace(value))),
             isActive = !d.Blocked,
             isBlocked = d.Blocked
-        }).Cast<object>().ToList();
-
-        var sessions = _sessions.Select(session => new
-        {
-            id = session.Id,
-            label = session.Label,
-            current = session.Current,
-            detail = string.Join(" · ", new[]
-            {
-                session.Current ? Copy("текущий сеанс", "current session") : null,
-                $"{Copy("вход", "signed in")}: {FormatLastSeen(session.CreatedAt)}",
-                string.IsNullOrWhiteSpace(session.ExpiresAt)
-                    ? null
-                    : $"{Copy("до", "until")}: {FormatLastSeen(session.ExpiresAt)}",
-            }.Where(value => !string.IsNullOrWhiteSpace(value))),
         }).Cast<object>().ToList();
 
         var subKey = _keysSnapshot?.AwgProfiles.FirstOrDefault()?.Config
@@ -1061,8 +1051,6 @@ public partial class MainWindow
             sub?.DeviceLimit is > 0 ? sub.DeviceLimit : null,
             subKey,
             devices,
-            sessions,
-            _sessionLoadIssue,
             mainQuota,
             awgQuota,
             proxyQuota

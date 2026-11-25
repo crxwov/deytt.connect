@@ -718,14 +718,40 @@
     colors() {
       const windowsHome = document.documentElement.dataset.atlasProfile === "windows";
       const observatory = this.variant === "observatory";
+      const appTheme = document.documentElement.dataset.appTheme;
+      if (windowsHome && appTheme === "light") return {
+        sphereLight: "#e3e3e3", sphereMid: "#c9c9c9", sphereShade: "#a8a8a8",
+        sphereEdge: "rgba(50,50,50,.3)", grid: null,
+        land: "#969696", landDim: "#757575", landHot: "#7a7a7a",
+        landHighlight: "#a6a6a6", landRelief: "#828282", landLow: "#606060",
+        border: "#242424", borderAlpha: .27, borderWidth: .65,
+        borderHot: "#0d7665", borderGlow: "rgba(25,90,76,.22)", route: "#8e5703", routeHot: "#a86f00",
+        download: "#8e5703", downloadHot: "#a86f00", upload: "#096952", uploadHot: "#168269",
+        control: "#6141ad", controlHot: "#7453bb", node: "#f5f5f5", nodeCore: "#086a55",
+        label: "#f5f5f5", labelMuted: "#b9b9b9", labelBg: "#222"
+      };
+      if (windowsHome && appTheme === "legacy") return {
+        sphereLight: "#34465b", sphereMid: "#243345", sphereShade: "#111b29",
+        sphereEdge: "rgba(141,161,185,.38)", grid: null,
+        land: "#768ca4", landDim: "#607287", landHot: "#71869e",
+        landHighlight: "#a4b8d0", landRelief: "#121d2b", landLow: "#506277",
+        border: "#aab8c9", borderAlpha: .38, borderWidth: .8,
+        borderHot: "#39e8bd", borderGlow: "rgba(57,232,189,.24)", route: "#ffbd32", routeHot: "#ffc857",
+        download: "#ffbd32", downloadHot: "#ffe08a", upload: "#39e8bd", uploadHot: "#90f4da",
+        control: "#b897ff", controlHot: "#d9c9ff", node: "#f2f5fc", nodeCore: "#39e8bd",
+        label: "#e6ecf5", labelMuted: "#a3b0c2", labelBg: "#0f1723"
+      };
       if (windowsHome) return {
-        sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
-        sphereEdge: "rgba(141,161,185,.38)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",
-        grid: null, land: "rgba(118,140,164,.93)", landDim: "rgba(96,114,135,.92)", landHot: "#71869E",
-        landHighlight: "rgba(194,216,240,.29)", landRelief: "rgba(18,29,43,.74)", landLow: "rgba(80,98,119,.96)",
-        border: "#AAB8C9", borderAlpha: .38, borderWidth: .8, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)", route: "#FFBD32", routeHot: "#FFC857",
-        download: "#FFBD32", downloadHot: "#FFE08A", upload: "#39E8BD", uploadHot: "#90F4DA",
-        node: "#F2F5FC", nodeCore: "#39E8BD", label: "#F2F5FC", labelMuted: "#98A6BF", labelBg: "rgba(17,26,41,.94)"
+        graphite: true,
+        sphereLight: "#242424", sphereMid: "#131313", sphereShade: "#080808",
+        sphereEdge: "rgba(128,128,128,.15)",
+        grid: null, land: "#484848", landDim: "#313131", landHot: "#555555",
+        landHighlight: "#626262", landRelief: "#080808", landLow: "#202020",
+        border: "#9a9a9a", borderAlpha: .25, borderWidth: .65, borderHot: "#39E8BD", borderGlow: "rgba(57,232,189,.24)",
+        route: "#FFBD32", routeHot: "#FFC857", download: "#FFBD32", downloadHot: "#FFE08A",
+        upload: "#39E8BD", uploadHot: "#90F4DA", control: "#B897FF", controlHot: "#D9C9FF",
+        node: "#F5F5F5", nodeCore: "#39E8BD", label: "#F5F5F5", labelMuted: "#A0A0A0",
+        labelBg: "rgba(16,16,16,.96)", labelLeader: "#a0a0a0", labelBorder: "rgba(160,160,160,.26)"
       };
       if (observatory) return {
         sphereLight: "#101832", sphereMid: "#0a1122", sphereShade: "#060a15", sphereEdge: "rgba(129,226,255,.42)", atmosphere: "rgba(99,126,255,.20)", atmosphereSoft: "rgba(99,126,255,.1)", rimLight: "rgba(129,226,255,.4)",
@@ -780,7 +806,7 @@
 
       const gradient = context.createRadialGradient(x - radius * .36, y - radius * .42, radius * .03, x + radius * .12, y + radius * .16, radius * 1.14);
       gradient.addColorStop(0, colors.sphereLight);
-      gradient.addColorStop(.55, colors.sphereLight);
+      gradient.addColorStop(.55, colors.graphite ? colors.sphereMid : colors.sphereLight);
       gradient.addColorStop(.86, colors.sphereMid);
       gradient.addColorStop(1, colors.sphereShade);
       context.save();
@@ -817,6 +843,7 @@
       context.beginPath();
       context.arc(x, y, radius, 0, TAU);
       context.stroke();
+      if (colors.graphite) return;
       const gloss = context.createRadialGradient(x - radius * .42, y - radius * .48, 0, x - radius * .42, y - radius * .48, radius * .82);
       gloss.addColorStop(0, "rgba(255,255,255,.16)");
       gloss.addColorStop(.44, "rgba(255,255,255,.03)");
@@ -1808,6 +1835,20 @@
           context.arc(this.centerX, this.centerY, clipRadius, 0, TAU);
           context.clip();
           this.drawBorders(colors);
+          if (colors.graphite && clipRadius > 0) {
+            // One broad light source across ocean, continents and borders.
+            // Static geometry is shaded before live routes and markers are drawn.
+            const x = this.centerX;
+            const y = this.centerY;
+            const r = clipRadius;
+            const shade = context.createRadialGradient(x - .39 * r, y - .48 * r, .17 * r, x - .23 * r, y - .30 * r, 1.42 * r);
+            shade.addColorStop(0, "rgba(5,5,5,0)");
+            shade.addColorStop(.5, "rgba(5,5,5,.12)");
+            shade.addColorStop(.83, "rgba(5,5,5,.52)");
+            shade.addColorStop(1, "rgba(5,5,5,.95)");
+            context.fillStyle = shade;
+            context.fillRect(x - r, y - r, 2 * r, 2 * r);
+          }
         }
         context.restore();
       } finally {

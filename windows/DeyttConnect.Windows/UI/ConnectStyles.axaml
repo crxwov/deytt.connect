@@ -1,7 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Styles.Resources>
-    <SolidColorBrush x:Key="AppTextBrush" Color="#F2F5FC" />
-    <SolidColorBrush x:Key="AppFocusBrush" Color="#6378F6" />
+    <SolidColorBrush x:Key="AppTextBrush" Color="#F5F5F5" />
+    <SolidColorBrush x:Key="AppFocusBrush" Color="#E5E7E9" />
   </Styles.Resources>
   <FluentTheme />
   <Style Selector="TextBlock">

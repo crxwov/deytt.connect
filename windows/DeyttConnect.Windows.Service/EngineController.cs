@@ -1729,7 +1729,7 @@ internal sealed class EngineController
             StringComparer.Ordinal);
         using var latencyConcurrency = new SemaphoreSlim(4, 4);
 
-        async Task MeasureLatencyForEndpointAsync(ProbeRouteEndpoint endpoint)
+        async Task<ProbeRouteEndpoint> MeasureLatencyForEndpointAsync(ProbeRouteEndpoint endpoint)
         {
             long? latency;
             var acquired = false;
@@ -1746,7 +1746,7 @@ internal sealed class EngineController
                 var cancelled = new ServiceProbeResult(endpoint.RouteTag, null, null, null, "cancelled");
                 latencyResults[endpoint.RouteTag] = cancelled;
                 publish(cancelled);
-                return;
+                return endpoint;
             }
             finally
             {
@@ -1760,77 +1760,90 @@ internal sealed class EngineController
                 latency is null || error is not null ? "error" : "waiting_speed");
             latencyResults[endpoint.RouteTag] = result;
             publish(result);
+            return endpoint;
         }
 
-        await Task.WhenAll(endpoints.Select(MeasureLatencyForEndpointAsync)).ConfigureAwait(false);
-
-        foreach (var endpoint in endpoints)
+        // Start the first bandwidth measurement as soon as that route responds.
+        // The remaining latency tasks keep running, with a single download at a time.
+        var latencyTasks = endpoints.Select(MeasureLatencyForEndpointAsync).ToArray();
+        var pending = latencyTasks.ToList();
+        try
         {
-            var result = latencyResults[endpoint.RouteTag];
-            if (result.LatencyMilliseconds is null || !canMeasureSpeed)
-                continue;
-
-            long received = 0;
-            long totalBytes = 0;
-            long? liveSpeed = null;
-            string? error = null;
-            long? speed = null;
-            var cancelled = false;
-            for (var attempt = 1; attempt <= 2; attempt++)
+            while (pending.Count > 0 && !cancellationToken.IsCancellationRequested)
             {
-                received = 0;
-                totalBytes = 0;
-                liveSpeed = null;
-                publish(result with { BytesPerSecond = liveSpeed, Error = null,
-                    Stage = attempt == 1 ? "waiting_speed" : "retry", Attempt = attempt });
-                try
+                var finished = await Task.WhenAny(pending).ConfigureAwait(false);
+                pending.Remove(finished);
+                var endpoint = await finished.ConfigureAwait(false);
+                var result = latencyResults[endpoint.RouteTag];
+                if (result.LatencyMilliseconds is null || !canMeasureSpeed)
+                    continue;
+
+                long received = 0;
+                long totalBytes = 0;
+                long? liveSpeed = null;
+                string? error = null;
+                long? speed = null;
+                var cancelled = false;
+                for (var attempt = 1; attempt <= 2; attempt++)
                 {
-                    var download = await measureDownload(endpoint, token, cancellationToken,
-                        (currentReceived, currentTotal, currentSpeed) =>
-                        {
-                            received = currentReceived;
-                            totalBytes = currentTotal;
-                            liveSpeed = currentSpeed;
-                            publish(result with { BytesPerSecond = liveSpeed, Error = null, Stage = "download",
-                                Attempt = attempt, BytesReceived = received, TotalBytes = totalBytes });
-                        }).ConfigureAwait(false);
-                    speed = download.BytesPerSecond;
-                    error = download.Error;
-                    if (speed is not null || !download.Retryable)
+                    received = 0;
+                    totalBytes = 0;
+                    liveSpeed = null;
+                    publish(result with { BytesPerSecond = liveSpeed, Error = null,
+                        Stage = attempt == 1 ? "waiting_speed" : "retry", Attempt = attempt });
+                    try
+                    {
+                        var download = await measureDownload(endpoint, token, cancellationToken,
+                            (currentReceived, currentTotal, currentSpeed) =>
+                            {
+                                received = currentReceived;
+                                totalBytes = currentTotal;
+                                liveSpeed = currentSpeed;
+                                publish(result with { BytesPerSecond = liveSpeed, Error = null, Stage = "download",
+                                    Attempt = attempt, BytesReceived = received, TotalBytes = totalBytes });
+                            }).ConfigureAwait(false);
+                        speed = download.BytesPerSecond;
+                        error = download.Error;
+                        if (speed is not null || !download.Retryable)
+                            break;
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        cancelled = true;
                         break;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        error = "Сервер скорости не ответил вовремя.";
+                    }
+                    catch (HttpRequestException)
+                    {
+                        error = "HTTPS-запрос скорости не прошёл через маршрут.";
+                    }
+                    catch (IOException)
+                    {
+                        error = "Соединение с сервером скорости прервалось.";
+                    }
                 }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-                {
-                    cancelled = true;
-                    break;
-                }
-                catch (OperationCanceledException)
-                {
-                    error = "Сервер скорости не ответил вовремя.";
-                }
-                catch (HttpRequestException)
-                {
-                    error = "HTTPS-запрос скорости не прошёл через маршрут.";
-                }
-                catch (IOException)
-                {
-                    error = "Соединение с сервером скорости прервалось.";
-                }
-            }
 
-            result = result with
-            {
-                BytesPerSecond = cancelled || error is not null ? null : speed,
-                Error = cancelled ? null : error,
-                Stage = cancelled ? "cancelled" : error is null ? "complete" : "error",
-                Attempt = null,
-                BytesReceived = received == 0 ? null : received,
-                TotalBytes = totalBytes == 0 ? null : totalBytes,
-            };
-            latencyResults[endpoint.RouteTag] = result;
-            publish(result);
-            if (cancelled)
-                break;
+                result = result with
+                {
+                    BytesPerSecond = cancelled || error is not null ? null : speed,
+                    Error = cancelled ? null : error,
+                    Stage = cancelled ? "cancelled" : error is null ? "complete" : "error",
+                    Attempt = null,
+                    BytesReceived = received == 0 ? null : received,
+                    TotalBytes = totalBytes == 0 ? null : totalBytes,
+                };
+                latencyResults[endpoint.RouteTag] = result;
+                publish(result);
+                if (cancelled)
+                    break;
+            }
+        }
+        finally
+        {
+            await Task.WhenAll(latencyTasks).ConfigureAwait(false);
         }
 
         if (cancellationToken.IsCancellationRequested)

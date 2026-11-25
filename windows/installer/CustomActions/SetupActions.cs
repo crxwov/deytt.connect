@@ -131,7 +131,7 @@ namespace DeyttConnect.Setup
             return "install";
         }
 
-        private static Version FindInstalledConnectVersion(Session session)
+        internal static Version FindInstalledConnectVersion(Session session, bool includeAllRelatedProducts = false)
         {
             var currentProductCode = session["ProductCode"];
             var upgradeProductCodes = session["WIX_UPGRADE_DETECTED"] ?? "";
@@ -143,7 +143,7 @@ namespace DeyttConnect.Setup
                 var code = product.ProductCode;
                 var isCurrent = string.Equals(NormalizeProductCode(code), NormalizeProductCode(currentProductCode), StringComparison.OrdinalIgnoreCase);
                 var isUpgradeCandidate = ContainsProductCode(upgradeProductCodes, code);
-                if (!isCurrent && !isUpgradeCandidate) continue;
+                if (!includeAllRelatedProducts && !isCurrent && !isUpgradeCandidate) continue;
 
                 var version = product.ProductVersion;
                 if (version != null && (newest == null || version.CompareTo(newest) > 0))
@@ -343,22 +343,12 @@ namespace DeyttConnect.Setup
             session["FINISH_ACTIONS_OK"] = "";
             try
             {
-                var executable = Path.Combine(session["INSTALLFOLDER"], "DeyttConnect.Windows.exe");
-                if (session["CREATE_DESKTOP_SHORTCUT"] == "1")
-                    CreateDesktopShortcut(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), executable);
-                if (ShouldLaunchConnect(session["LAUNCH_CONNECT"], session["CAN_LAUNCH_CONNECT"],
-                    session["REBOOTNEEDED"]))
+                var issue = FinishInstalledConnect(session["INSTALLFOLDER"], session["CREATE_DESKTOP_SHORTCUT"] == "1",
+                    ShouldLaunchConnect(session["LAUNCH_CONNECT"], session["CAN_LAUNCH_CONNECT"], session["REBOOTNEEDED"]));
+                if (issue != null)
                 {
-                    if (!StopInstalledConnect(executable))
-                    {
-                        session["FINISH_ERROR"] = "приложение установлено. не удалось перезапустить deytt./connect. закройте приложение и нажмите «Готово» ещё раз.";
-                        return ActionResult.Success;
-                    }
-                    if (!LaunchConnect(executable))
-                    {
-                        session["FINISH_ERROR"] = "приложение установлено. не удалось открыть deytt./connect. откройте его из меню «пуск» после завершения установки.";
-                        return ActionResult.Success;
-                    }
+                    session["FINISH_ERROR"] = issue;
+                    return ActionResult.Success;
                 }
                 session["FINISH_ACTIONS_OK"] = "1";
             }
@@ -368,6 +358,19 @@ namespace DeyttConnect.Setup
                 session["FINISH_ERROR"] = "приложение установлено. не удалось выполнить выбранное действие: " + exception.Message.ToLowerInvariant() + " можно снять галочку и завершить установку.";
             }
             return ActionResult.Success;
+        }
+
+        internal static string FinishInstalledConnect(string installDirectory, bool desktopShortcut, bool launch)
+        {
+            var executable = Path.Combine(installDirectory, "DeyttConnect.Windows.exe");
+            if (desktopShortcut)
+                CreateDesktopShortcut(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), executable);
+            if (!launch) return null;
+            if (!StopInstalledConnect(executable))
+                return "приложение установлено. не удалось закрыть прежний экземпляр ./connect.";
+            if (!LaunchConnect(executable))
+                return "приложение установлено. откройте ./connect из меню «пуск».";
+            return null;
         }
 
         [CustomAction]

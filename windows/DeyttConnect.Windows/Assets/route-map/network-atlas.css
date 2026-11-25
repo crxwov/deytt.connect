@@ -660,61 +660,6 @@ html[data-theme="light"] .traffic-inspector__path, html[data-theme="light"] .tra
 }
 
 /* Floating Toast HUD & Card Pop Feedback */
-.routes-toast-hud {
-  position: fixed;
-  top: 48px;
-  left: 50%;
-  transform: translateX(-50%) translateY(-22px) scale(0.96);
-  opacity: 0;
-  pointer-events: none;
-  z-index: 999999;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 22px;
-  border-radius: 9999px;
-  background: rgba(15, 23, 42, 0.90);
-  backdrop-filter: blur(24px) saturate(190%);
-  -webkit-backdrop-filter: blur(24px) saturate(190%);
-  border: 1px solid rgba(57, 232, 189, 0.38);
-  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 28px rgba(57, 232, 189, 0.28);
-  color: #F8FAFC;
-  font-size: 13.5px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.35s ease, border-color 0.3s ease, box-shadow 0.3s ease;
-}
-.routes-toast-hud.is-visible {
-  transform: translateX(-50%) translateY(0) scale(1);
-  opacity: 1;
-}
-.routes-toast-hud.toast-error {
-  border-color: rgba(255, 130, 149, 0.45);
-  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 28px rgba(255, 130, 149, 0.24);
-}
-.routes-toast-hud.toast-info {
-  border-color: rgba(56, 189, 248, 0.45);
-  box-shadow: 0 12px 32px -4px rgba(0, 0, 0, 0.55), 0 0 28px rgba(56, 189, 248, 0.24);
-}
-.routes-toast-hud .toast-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(57, 232, 189, 0.16);
-  color: #39E8BD;
-  flex-shrink: 0;
-}
-.routes-toast-hud.toast-error .toast-icon {
-  background: rgba(255, 130, 149, 0.16);
-  color: #FF8295;
-}
-.routes-toast-hud.toast-info .toast-icon {
-  background: rgba(56, 189, 248, 0.16);
-  color: #38BDF8;
-}
 .refresh-card-pop {
   animation: refreshCardPopAnim 0.75s cubic-bezier(0.16, 1, 0.3, 1);
 }

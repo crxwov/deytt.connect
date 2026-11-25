@@ -251,24 +251,32 @@ public sealed class EngineControllerProbeTests
     }
 
     [Fact]
-    public async Task RouteMeasurementFinishesAllLatenciesBeforeSequentialSpeedChecks()
+    public async Task RouteMeasurementStartsOneSpeedCheckWhileOtherRoutesStillMeasureLatency()
     {
         var endpoints = new[] { ProbeEndpoint("route:NL:VLESS"), ProbeEndpoint("awg31:cnA") };
         var latencyFinished = new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
+        var firstSpeedStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         var activeSpeedChecks = 0;
         var maximumSpeedChecks = 0;
 
         var results = await EngineController.MeasureRoutesAsync(endpoints, "HEAD", new string('t', 32),
-            CancellationToken.None, _ => { },
-            async (endpoint, _, _, _) =>
+            timeout.Token, _ => { },
+            async (endpoint, _, token, _) =>
             {
-                await Task.Delay(10);
+                if (endpoint == endpoints[1])
+                    await firstSpeedStarted.Task.WaitAsync(token);
                 latencyFinished[endpoint.RouteTag] = true;
                 return 20;
             },
             async (endpoint, _, _, report) =>
             {
-                Assert.Equal(endpoints.Length, latencyFinished.Count);
+                Assert.True(latencyFinished.ContainsKey(endpoint.RouteTag));
+                if (endpoint == endpoints[0])
+                {
+                    Assert.Single(latencyFinished);
+                    firstSpeedStarted.TrySetResult();
+                }
                 var active = Interlocked.Increment(ref activeSpeedChecks);
                 maximumSpeedChecks = Math.Max(maximumSpeedChecks, active);
                 report(1000, 1000, 500);
@@ -319,9 +327,9 @@ public sealed class EngineControllerProbeTests
                     Interlocked.Decrement(ref activeLatencies);
                 }
             },
-            async (_, _, token, report) =>
+            async (endpoint, _, token, report) =>
             {
-                Assert.Equal(endpoints.Length, latencyFinished.Count);
+                Assert.True(latencyFinished.ContainsKey(endpoint.RouteTag));
                 var active = Interlocked.Increment(ref activeSpeedChecks);
                 UpdateMaximum(ref maximumSpeedChecks, active);
                 try

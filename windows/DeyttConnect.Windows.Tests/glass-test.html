@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<title>стенд преломления deytt./connect</title>
+<style>
+  body { margin: 20px; font: 16px system-ui; color: #0f172a; background: #f8fafc; }
+  canvas { display: block; width: min(100%, 640px); height: auto; }
+  figure { margin: 0 0 16px; }
+</style>
+<figure><figcaption>исходная текстура</figcaption><canvas width="640" height="154" id="source"></canvas></figure>
+<figure><figcaption>только преломление</figcaption><canvas width="640" height="154" id="optic"></canvas></figure>
+<figure><figcaption>преломление и отражение</figcaption><canvas width="640" height="154" id="material"></canvas></figure>
+<output id="result">проверка webgl2</output>
+<script src="../DeyttConnect.Windows/Assets/route-map/dock-optics.js"></script>
+<script>
+  const source = document.getElementById("source");
+  const ctx = source.getContext("2d");
+  const { width, height } = source;
+  const tile = 14;
+  for (let y = 0; y < height; y += tile) {
+    for (let x = 0; x < width; x += tile) {
+      ctx.fillStyle = (x / tile + y / tile) % 2 ? "#0f172a" : "#f8fafc";
+      ctx.fillRect(x, y, tile, tile);
+    }
+  }
+
+  const lens = [210, 76, 74, 26];
+  const uiLens = [460, 76, 74, 26];
+  ctx.fillStyle = "#0f172a";
+  ctx.fillRect(347, 69, 227, 17);
+  ctx.fillStyle = "#f8fafc";
+  ctx.font = "bold 15px system-ui";
+  ctx.fillText("routes        profile        settings", 352, 82);
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(567, 77, 5, 0, Math.PI * 2);
+  ctx.stroke();
+
+  const input = ctx.getImageData(0, 0, width, height).data;
+  const canvas = document.getElementById("optic");
+  const material = document.getElementById("material");
+  try {
+    const renderer = createDockOptics(canvas);
+    const materialRenderer = createDockOptics(material);
+    const comparison = document.createElement("canvas");
+    comparison.width = width;
+    comparison.height = height;
+    const compose = comparison.getContext("2d");
+    function verify(renderer, reflections) {
+      renderer.draw(source, 1, lens, reflections);
+      compose.drawImage(source, 0, 0);
+      compose.drawImage(renderer.gl.canvas, 0, 0);
+      const pixels = compose.getImageData(0, 0, width, height).data;
+      renderer.draw(source, 1, uiLens, reflections);
+      compose.drawImage(renderer.gl.canvas, 0, 0);
+      return { pixels, combined: compose.getImageData(0, 0, width, height) };
+    }
+    const optics = verify(renderer, false);
+    const finished = verify(materialRenderer, true);
+    const delta = (pixels, x, y) => Math.abs(pixels[(y * width + x) * 4] - input[(y * width + x) * 4]);
+    const count = (x0, y0, x1, y1, predicate) => {
+      let total = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          if (predicate(x, y)) total++;
+        }
+      }
+      return total;
+    };
+    const changed = (x, y) => delta(optics.pixels, x, y) > 80;
+    const perimeter = [
+      count(139, 65, 154, 87, changed),
+      count(266, 65, 281, 87, changed),
+      count(175, 51, 245, 66, changed),
+      count(175, 87, 245, 101, changed)
+    ];
+    if (perimeter.some(value => value < 35)) throw new Error("insufficient refraction: " + perimeter);
+    if (delta(optics.pixels, 210, 76) > 2 || delta(optics.pixels, 96, 76) > 2) {
+      throw new Error("center/exterior pixel drift");
+    }
+    const reflected = count(136, 50, 284, 102, (x, y) => {
+      const index = (y * width + x) * 4;
+      return Math.abs(finished.pixels[index] - optics.pixels[index]) >= 8;
+    });
+    if (reflected < 35) throw new Error("missing geometry-based reflection");
+    for (const [target, data] of [[canvas, optics.combined], [material, finished.combined]]) {
+      const display = document.createElement("canvas");
+      display.width = width;
+      display.height = height;
+      display.getContext("2d").putImageData(data, 0, 0);
+      target.replaceWith(display);
+    }
+    document.getElementById("result").textContent = "ok: " + perimeter.join(", ") + " / " + reflected;
+  } catch (error) {
+    document.getElementById("result").textContent = "ошибка: " + error.message;
+  }
+</script>
+</html>

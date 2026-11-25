@@ -83,9 +83,7 @@ internal sealed class ProfileViewModel : ObservablePageViewModel
 {
     private TelegramAccount? _account;
     private TelegramKeysSnapshot? _keysSnapshot;
-    private IReadOnlyList<TelegramAppSession> _sessions = [];
     private string? _profileLoadIssue;
-    private string? _sessionLoadIssue;
     private string? _actionStatus;
     private Func<Task>? _actionRetry;
     private bool _refreshInProgress;
@@ -95,9 +93,7 @@ internal sealed class ProfileViewModel : ObservablePageViewModel
 
     public TelegramAccount? Account { get => _account; set => SetProperty(ref _account, value); }
     public TelegramKeysSnapshot? KeysSnapshot { get => _keysSnapshot; set => SetProperty(ref _keysSnapshot, value); }
-    public IReadOnlyList<TelegramAppSession> Sessions { get => _sessions; set => SetProperty(ref _sessions, value); }
     public string? ProfileLoadIssue { get => _profileLoadIssue; set => SetProperty(ref _profileLoadIssue, value); }
-    public string? SessionLoadIssue { get => _sessionLoadIssue; set => SetProperty(ref _sessionLoadIssue, value); }
     public string? ActionStatus { get => _actionStatus; set => SetProperty(ref _actionStatus, value); }
     public Func<Task>? ActionRetry { get => _actionRetry; set => SetProperty(ref _actionRetry, value); }
     public bool RefreshInProgress { get => _refreshInProgress; set => SetProperty(ref _refreshInProgress, value); }
@@ -113,7 +109,7 @@ internal sealed class SettingsViewModel : ObservablePageViewModel
     private bool _regionConsentGranted;
     private bool _regionConsentAsked;
     private bool _reduceMotion;
-    private string _themePreference = "system";
+    private string _themePreference = "dark";
     private string _windowChromePreference = "deytt";
     private string? _preferencesIssue;
     private bool _appearanceExpanded = true;

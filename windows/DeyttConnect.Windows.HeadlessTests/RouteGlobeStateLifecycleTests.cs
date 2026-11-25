@@ -19,7 +19,7 @@ public sealed class RouteGlobeStateLifecycleTests
             var mainQuota = new { state = "ready", usedBytes = 25L, limitBytes = 100L, expiresAt = "2026-11-11T00:00:00Z" };
             var awgQuota = new { state = "ready", usedBytes = 75L, limitBytes = 200L, expiresAt = "2026-10-29T00:00:00Z" };
             var proxyQuota = new { state = "ready", usedBytes = 45L, limitBytes = 300L, expiresAt = "2026-11-01T00:00:00Z" };
-            globe.UpdateProfileData(true, "qa", "qa", 1, true, "ultra", null, null, null, null, [], [], null, mainQuota, awgQuota, proxyQuota);
+            globe.UpdateProfileData(true, "qa", "qa", 1, true, "ultra", null, null, null, null, [], mainQuota, awgQuota, proxyQuota);
             using var profile = JsonDocument.Parse(Field<string>(globe, "_profileDataJson"));
             Assert.Equal(25, profile.RootElement.GetProperty("mainQuota").GetProperty("usedBytes").GetInt64());
             Assert.Equal(75, profile.RootElement.GetProperty("awgQuota").GetProperty("usedBytes").GetInt64());
@@ -31,7 +31,7 @@ public sealed class RouteGlobeStateLifecycleTests
             Assert.Contains("\"usedBytes\":75", script);
             Assert.Contains("\"usedBytes\":45", script);
 
-            globe.UpdateProfileData(false, null, null, null, false, null, null, null, null, null, [], [], null,
+            globe.UpdateProfileData(false, null, null, null, false, null, null, null, null, null, [],
                 new { state = "absent" }, new { state = "absent" }, new { state = "absent" });
             using var signedOut = JsonDocument.Parse(Field<string>(globe, "_profileDataJson"));
             Assert.False(signedOut.RootElement.GetProperty("isSignedIn").GetBoolean());
@@ -128,12 +128,12 @@ public sealed class RouteGlobeStateLifecycleTests
     }
 
     [AvaloniaFact]
-    public async Task Profile_bridge_dispatches_renew_and_preserves_session_identifier_case()
+    public async Task Profile_bridge_dispatches_renew_and_happ_device_management()
     {
         var (window, globe) = CreateReadyHost();
-        string? sessionId = null;
+        long? deviceId = null;
         var renewRequests = 0;
-        globe.TelegramSessionManagementRequested += value => sessionId = value;
+        globe.HappDeviceManagementRequested += value => deviceId = value;
         globe.RenewRequested += () => renewRequests++;
         var webView = Field<NativeWebView>(globe, "_webView");
         var onMessage = typeof(RouteGlobeWebView).GetMethod("OnWebMessageReceived",
@@ -141,12 +141,12 @@ public sealed class RouteGlobeStateLifecycleTests
         try
         {
             onMessage.Invoke(globe, [webView, new WebMessageReceivedEventArgs
-                { Body = "\"profile:session:manage:AbC-09xY\"" }]);
+                { Body = "\"profile:device:manage:27\"" }]);
             onMessage.Invoke(globe, [webView, new WebMessageReceivedEventArgs
                 { Body = "\"profile:renew\"" }]);
             await DrainAsync();
 
-            Assert.Equal("AbC-09xY", sessionId);
+            Assert.Equal(27L, deviceId);
             Assert.Equal(1, renewRequests);
         }
         finally { window.Close(); }

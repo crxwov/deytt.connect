@@ -197,7 +197,6 @@ public partial class MainWindow
         _routes = payload.Subscription.Routes;
         _selectedRoute = result.SelectedRoute.Id;
         _profileLoadIssue = null;
-        _sessionLoadIssue = null;
         SavePreferences();
         ShowTab(_activeTab);
     }

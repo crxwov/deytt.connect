@@ -248,8 +248,6 @@
     }
 
     let rawProto = (state.protocol || "").toLowerCase().replace(/^\.\//, "");
-    const compactRouteTag = prefix === "compact-" && countryCode && rawProto
-      ? `${countryCode}./${rawProto}` : "";
 
     if (isAuto) {
       const subText = (state.city && state.city.toLowerCase() !== "auto-select")
@@ -276,9 +274,9 @@
       }
       if (protocol) {
         protocol.textContent = `${countryCode}./${rawProto}`;
-        protocol.hidden = prefix === "compact-";
+        protocol.hidden = false;
       }
-      if (city) city.textContent = compactRouteTag || state.city || "";
+      if (city) city.textContent = state.city || (prefix === "compact-" ? state.country : "") || "";
       if (subtitle) {
         if (isAutoActive) {
           subtitle.hidden = false;
@@ -296,7 +294,7 @@
         protocol.textContent = state.protocol || "";
         protocol.hidden = !state.protocol;
       }
-      if (city) city.textContent = compactRouteTag || state.city || "";
+      if (city) city.textContent = state.city || (prefix === "compact-" ? state.country : "") || "";
       if (subtitle) {
         subtitle.hidden = Boolean(state.country || state.protocol || (countryCode && rawProto));
       }
@@ -446,6 +444,9 @@
     document.documentElement.dataset.theme = document.documentElement.dataset.theme || "dark";
     root.querySelector("#latency-label").textContent = strings[language].latency;
     root.querySelector("#speed-label").textContent = strings[language].speed;
+    root.querySelector("#compact-latency-label").textContent = strings[language].latency;
+    root.querySelector("#compact-speed-label").textContent = strings[language].speed;
+    root.querySelector("#compact-uptime-label").textContent = language === "en" ? "online" : "в сети";
     root.querySelector("#home-latency-unit").textContent = language === "en" ? "ms" : "мс";
     root.querySelector("#home-speed-unit").textContent = language === "en" ? "mbit/s" : "мбит/с";
     ["upload", "download", "control"].forEach((id, index) => {
@@ -476,9 +477,13 @@
   window.deyttSetMapLanguage = setLanguage;
   window.deyttSetMapImmersive = setImmersive;
   window.deyttSetMapTheme = function (theme) {
-    const next = theme === "light" ? "light" : "dark";
-    if (document.documentElement.dataset.theme === next) return;
-    document.documentElement.dataset.theme = next;
+    const next = theme === "legacy" || theme === "light" ? theme : "dark";
+    if (document.documentElement.dataset.appTheme === next) return;
+    document.documentElement.dataset.appTheme = next;
+    document.documentElement.dataset.theme = next === "light" ? "light" : "dark";
+    const picker = document.getElementById("experiment-theme");
+    if (picker) picker.value = next;
+    window.renderAtlasBackground?.();
     if (window.deyttMapAtlas) {
       window.deyttMapAtlas.markMapDirty();
       window.deyttMapAtlas.start();
@@ -692,8 +697,8 @@
         updateZoomPresentation();
       }
     };
-    atlas.colors = function () {
-      const dark = windowsProfile || document.documentElement.dataset.theme !== "light";
+    if (!windowsProfile) atlas.colors = function () {
+      const dark = document.documentElement.dataset.theme !== "light";
       return dark ? {
         sphereLight: "#34465B", sphereMid: "#243345", sphereShade: "#111B29",
         sphereEdge: "rgba(80,100,130,.22)", atmosphere: "rgba(0,0,0,0)", atmosphereSoft: "rgba(0,0,0,0)", rimLight: "rgba(0,0,0,0)",

@@ -15,6 +15,13 @@ internal static class DeyttTheme
         Color BlueSurface, Color SkySurface, Color MintSurface);
 
     private static readonly Palette Dark = new(
+        Color.Parse("#050505"), Color.Parse("#101010"), Color.Parse("#101010"), Color.Parse("#171717"),
+        Color.Parse("#F5F5F5"), Color.Parse("#A0A0A0"), Color.Parse("#2A2A2A"), Color.Parse("#A0A0A0"),
+        Color.Parse("#474747"), Color.Parse("#202020"), Color.Parse("#646464"), Color.Parse("#39E8BD"),
+        Color.Parse("#FFC76E"), Color.Parse("#FF8295"), Color.Parse("#050505"), Color.Parse("#2A2A2A"),
+        Color.Parse("#202020"), Color.Parse("#171717"), Color.Parse("#17362F"));
+
+    private static readonly Palette Legacy = new(
         Color.Parse("#080D17"), Color.Parse("#0B1220"), Color.Parse("#111A29"), Color.Parse("#162235"),
         Color.Parse("#F2F5FC"), Color.Parse("#B2BED1"), Color.Parse("#27364B"), Color.Parse("#6378F6"),
         Color.Parse("#4558D6"), Color.Parse("#192743"), Color.Parse("#354A71"), Color.Parse("#39E8BD"),
@@ -22,19 +29,19 @@ internal static class DeyttTheme
         Color.Parse("#1B2942"), Color.Parse("#192743"), Color.Parse("#17362F"));
 
     private static readonly Palette Light = new(
-        Color.Parse("#F6F7FB"), Colors.White, Colors.White, Color.Parse("#EEF1F8"),
-        Color.Parse("#111823"), Color.Parse("#46546B"), Color.Parse("#E0E5EF"), Color.Parse("#4F63E8"),
-        Color.Parse("#4558D6"), Color.Parse("#E4E8FB"), Color.Parse("#C7D0F2"), Color.Parse("#117A68"),
-        Color.Parse("#986300"), Color.Parse("#B4233B"), Color.Parse("#F6F7FB"), Color.Parse("#E0E5EF"),
-        Color.Parse("#E4E8FB"), Color.Parse("#E9EDFF"), Color.Parse("#E1F2ED"));
+        Color.Parse("#F5F5F5"), Colors.White, Colors.White, Color.Parse("#EEEEEE"),
+        Color.Parse("#101010"), Color.Parse("#545454"), Color.Parse("#D9D9D9"), Color.Parse("#474747"),
+        Color.Parse("#383838"), Color.Parse("#E5E5E5"), Color.Parse("#767676"), Color.Parse("#117A68"),
+        Color.Parse("#986300"), Color.Parse("#B4233B"), Color.Parse("#F5F5F5"), Color.Parse("#D9D9D9"),
+        Color.Parse("#E5E5E5"), Color.Parse("#EEEEEE"), Color.Parse("#E1F2ED"));
 
     private static Palette _palette = Dark;
     public static bool IsDark { get; private set; } = true;
     public static bool ReduceMotion { get; set; }
-    public static void SetDark(bool isDark)
+    public static void SetDark(bool isDark, bool useLegacy = false)
     {
         IsDark = isDark;
-        _palette = isDark ? Dark : Light;
+        _palette = useLegacy ? Legacy : isDark ? Dark : Light;
     }
 
     public static Color Background => _palette.Background;
@@ -58,31 +65,13 @@ internal static class DeyttTheme
     public static Color SkySurface => _palette.SkySurface;
     public static Color MintSurface => _palette.MintSurface;
     public static Color DialogAccent => Color.Parse("#38BDF8");
-    public static Color DialogActionTop => Color.Parse("#1D8CF8");
-    public static Color DialogActionBottom => Color.Parse("#1170DC");
+    public static Color DialogActionTop => Color.Parse("#454545");
+    public static Color DialogActionBottom => DialogActionTop;
     public static Color DialogSelected => IsDark ? Color.Parse("#2439E8BD") : Color.Parse("#24117A68");
     public static Color DialogSelectionLine => Color.FromArgb(125, Mint.R, Mint.G, Mint.B);
     public static Color DialogLine => IsDark ? Color.Parse("#2EFFFFFF") : Color.Parse("#283B5877");
-    public static Brush DialogSurface => new LinearGradientBrush
-    {
-        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-        EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
-        GradientStops =
-        {
-            new GradientStop(Color.Parse(IsDark ? "#17FFFFFF" : "#B3FFFFFF"), 0),
-            new GradientStop(Color.Parse(IsDark ? "#05FFFFFF" : "#40FFFFFF"), 1),
-        },
-    };
-    public static Brush DialogActionFill => new LinearGradientBrush
-    {
-        StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-        EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-        GradientStops =
-        {
-            new GradientStop(DialogActionTop, 0),
-            new GradientStop(DialogActionBottom, 1),
-        },
-    };
+    public static Brush DialogSurface => Brush(Surface2);
+    public static Brush DialogActionFill => Brush(DialogActionTop);
 
     public static FontFamily InterTight { get; } = new("fonts:DEYTT#Inter Tight");
     public static FontFamily Unbounded { get; } = new("fonts:DEYTT#Unbounded");
@@ -146,26 +135,8 @@ internal static class DeyttTheme
     {
         return new Border
         {
-            Background = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops =
-                {
-                    new GradientStop(Color.Parse(IsDark ? "#BF344256" : "#E4FFFFFF"), 0),
-                    new GradientStop(Color.Parse(IsDark ? "#C4101B2C" : "#D8F2F4F8"), 1),
-                },
-            },
-            BorderBrush = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-                GradientStops =
-                {
-                    new GradientStop(Color.FromArgb(IsDark ? (byte)135 : (byte)200, 255, 255, 255), 0),
-                    new GradientStop(Color.FromArgb(60, Line.R, Line.G, Line.B), 1),
-                },
-            },
+            Background = Brush(Surface2),
+            BorderBrush = Brush(Line),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(radius),
             Padding = padding ?? new Thickness(18),
@@ -206,28 +177,8 @@ internal static class DeyttTheme
 
     public static void StyleDialogPrimarySurface(Border surface)
     {
-        surface.Background = new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
-            GradientStops =
-            {
-                new GradientStop(Color.Parse(IsDark ? "#63445770" : "#EEFFFFFF"), 0),
-                new GradientStop(Color.Parse(IsDark ? "#28101D2C" : "#D4E8EEF4"), 1),
-            },
-        };
-        surface.BorderBrush = new LinearGradientBrush
-        {
-            StartPoint = new RelativePoint(0.15, 0, RelativeUnit.Relative),
-            EndPoint = new RelativePoint(0.92, 1, RelativeUnit.Relative),
-            GradientStops =
-            {
-                new GradientStop(Color.Parse(IsDark ? "#54FFFFFF" : "#B4FFFFFF"), 0),
-                new GradientStop(Color.Parse(IsDark ? "#15E0EEFA" : "#66CFE4F8"), 0.27),
-                new GradientStop(Color.Parse(IsDark ? "#1489B9E7" : "#4489B9E7"), 0.71),
-                new GradientStop(Color.Parse(IsDark ? "#2BCDE6FF" : "#80CDE6FF"), 1),
-            },
-        };
+        surface.Background = Brush(Surface2);
+        surface.BorderBrush = Brush(SelectedLine);
         surface.BorderThickness = new Thickness(1);
         surface.BoxShadow = new BoxShadows(new BoxShadow
         {

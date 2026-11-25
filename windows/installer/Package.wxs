@@ -31,10 +31,11 @@
 
     <Property Id="CONNECT_SERVICE_COMPATIBLE" Secure="yes" />
     <Property Id="WEBVIEW2_PRESENT" Secure="yes" />
+    <Property Id="GRAPHITE_SETUP_CONFIRMED" Secure="yes" />
     <Property Id="SETUP_MODE" Secure="yes" />
     <Property Id="SETUP_INSTALLED_VERSION" Secure="yes" />
     <Property Id="SETUP_COMMIT_LABEL" Value="&amp;Установить" />
-    <Binary Id="SetupSidebar" SourceFile="$(sys.SOURCEFILEDIR)Assets/Sidebar.bmp" />
+    <Binary Id="SetupPanel" SourceFile="$(sys.SOURCEFILEDIR)Assets/SetupPanel.png" />
     <Property Id="ARPNOMODIFY" Value="1" />
     <Property Id="ARPNOREPAIR" Value="1" />
     <Property Id="ARPURLINFOABOUT" Value="https://deytt.space" />
@@ -65,6 +66,8 @@
     </InstallExecuteSequence>
     <Property Id="WINDOWS_BUILD"><RegistrySearch Id="FindWindowsBuild" Root="HKLM" Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion" Name="CurrentBuildNumber" Type="raw" /></Property>
     <UIRef Id="DeyttSetupUI" />
+    <Launch Condition="NOT MSICLIENTUSESEMBEDDEDUI OR GRAPHITE_SETUP_CONFIRMED = &quot;1&quot; OR UPGRADINGPRODUCTCODE"
+            Message="не удалось получить подтверждение в мастере ./connect. установка остановлена." />
     <Launch Condition="Installed OR (VersionNT64 AND WINDOWS_BUILD &gt;= 17763)"
             Message="./connect требует 64-разрядную Windows 10 версии 1809 или новее." />
     <Launch Condition="ALLOWEDUSERSID &gt;&lt; &quot;S-1-&quot;"

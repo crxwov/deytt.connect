@@ -77,6 +77,7 @@ public sealed class RouteGlobeWebView : ContentControl
     private bool _reducedMotion;
     private bool _immersiveMode;
     private bool _darkTheme = true;
+    private bool _legacyTheme;
     private HomePresentationSnapshot? _homePresentation;
     private IReadOnlyList<WindowsRoute>? _routesCatalog;
     private IReadOnlyDictionary<string, WindowsRouteProbeResult>? _probesCatalog;
@@ -158,7 +159,7 @@ public sealed class RouteGlobeWebView : ContentControl
     public event Action<string>? CountryProbeRequested;
 
     public event Action<long>? HappDeviceManagementRequested;
-    public event Action<string>? TelegramSessionManagementRequested;
+    public event Action<string>? ThemeChanged;
     public event Action? SubscriptionKeyCopyRequested;
     public event Action? SubscriptionRefreshRequested;
     public event Action? ExitRequested;
@@ -263,8 +264,6 @@ public sealed class RouteGlobeWebView : ContentControl
         int? deviceLimit,
         string? subscriptionKey,
         IReadOnlyList<object>? devices,
-        IReadOnlyList<object>? sessions,
-        string? sessionsLoadIssue,
         object mainQuota,
         object awgQuota,
         object proxyQuota)
@@ -282,8 +281,6 @@ public sealed class RouteGlobeWebView : ContentControl
             deviceLimit,
             subscriptionKey,
             devices,
-            sessions,
-            sessionsLoadIssue,
             mainQuota,
             awgQuota,
             proxyQuota
@@ -395,6 +392,17 @@ public sealed class RouteGlobeWebView : ContentControl
         {
             if (_darkTheme == value) return;
             _darkTheme = value;
+            QueueStateUpdate();
+        }
+    }
+
+    public bool LegacyTheme
+    {
+        get => _legacyTheme;
+        set
+        {
+            if (_legacyTheme == value) return;
+            _legacyTheme = value;
             QueueStateUpdate();
         }
     }
@@ -1155,22 +1163,23 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
             });
             return;
         }
-        const string sessionManagementPrefix = "profile:session:manage:";
-        if (node.StartsWith(sessionManagementPrefix, StringComparison.Ordinal))
-        {
-            // Session identifiers are opaque server values; keep their original casing.
-            var sessionId = originalNode[sessionManagementPrefix.Length..];
-            if (sessionId.Length is > 0 and <= 256)
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (!_atlasFailed && ReferenceEquals(sender, _webView))
-                        TelegramSessionManagementRequested?.Invoke(sessionId);
-                });
-            return;
-        }
         if (node == "profile:import" || node == "settings:import")
         {
             Dispatcher.UIThread.Post(() => ImportRequested?.Invoke());
+            return;
+        }
+        const string themePrefix = "settings:theme:";
+        if (node.StartsWith(themePrefix, StringComparison.Ordinal))
+        {
+            var theme = node[themePrefix.Length..];
+            if (theme is "dark" or "legacy" or "light")
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                        ThemeChanged?.Invoke(theme);
+                });
+            }
             return;
         }
         if (node.StartsWith("settings:set_language:", StringComparison.Ordinal))
@@ -1489,7 +1498,7 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         if (OperatingSystem.IsWindows())
             script.AppendLine("window.invokeCSharpAction = function(node) { if (window.chrome && window.chrome.webview) window.chrome.webview.postMessage(String(node || '')); };");
         script.Append("window.deyttSetMapTheme && window.deyttSetMapTheme(")
-            .Append(JsonSerializer.Serialize(_darkTheme ? "dark" : "light")).AppendLine(");");
+            .Append(JsonSerializer.Serialize(_legacyTheme ? "legacy" : _darkTheme ? "dark" : "light")).AppendLine(");");
         script.Append("window.deyttSetMapRoute && window.deyttSetMapRoute(")
             .Append(JsonSerializer.Serialize(_selectedRoute)).AppendLine(");");
         script.Append("window.deyttSetMapLanguage && window.deyttSetMapLanguage(")

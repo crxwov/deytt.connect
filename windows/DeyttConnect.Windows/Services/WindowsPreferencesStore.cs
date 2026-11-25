@@ -10,7 +10,7 @@ public sealed record WindowsPreferences(
     bool ReduceMotion = false,
     bool MapRegionConsentGranted = false,
     bool MapRegionConsentAsked = false,
-    string ThemePreference = "system",
+    string ThemePreference = "dark",
     string WindowChromePreference = "deytt");
 
 public static class WindowsPreferencesStore
@@ -41,7 +41,7 @@ public static class WindowsPreferencesStore
                 value.ReduceMotion,
                 value.MapRegionConsentGranted,
                 value.MapRegionConsentAsked,
-                value.ThemePreference is "system" or "light" or "dark" ? value.ThemePreference : "system",
+                value.ThemePreference is "system" or "light" or "dark" or "legacy" ? value.ThemePreference : "system",
                 value.WindowChromePreference is "deytt" or "system" ? value.WindowChromePreference : "deytt");
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
@@ -60,7 +60,7 @@ public static class WindowsPreferencesStore
             preferences.ReduceMotion,
             preferences.MapRegionConsentGranted,
             preferences.MapRegionConsentAsked,
-            preferences.ThemePreference is "system" or "light" or "dark" ? preferences.ThemePreference : "system",
+            preferences.ThemePreference is "system" or "light" or "dark" or "legacy" ? preferences.ThemePreference : "system",
             preferences.WindowChromePreference is "deytt" or "system" ? preferences.WindowChromePreference : "deytt");
         var path = PreferencesPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
