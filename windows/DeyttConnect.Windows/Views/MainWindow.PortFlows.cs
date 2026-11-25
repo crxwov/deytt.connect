@@ -445,38 +445,131 @@ public partial class MainWindow
         }
     }
 
-    private async Task ShowUpdateDialogAsync()
+    private Task ShowUpdateDialogAsync() => ShowUpdateDialogCoreAsync(null);
+
+    private async Task ShowUpdateDialogCoreAsync(WindowsUpdateRelease? preloadedRelease)
     {
         var linux = OperatingSystem.IsLinux();
-        var status = DeyttTheme.TextBlock(Copy("проверяем обновления…", "checking for updates…"),
+        var installedVersion = WindowsUpdateClient.GetInstalledVersion()?.ToString(3) ?? "0.0.0";
+        var headline = DeyttTheme.TextBlock(
+            preloadedRelease is not null
+                ? Copy("доступно обновление ./connect", "./connect update available")
+                : Copy("обновления ./connect", "./connect updates"),
+            22, DeyttTheme.Text, FontWeight.Bold);
+        var status = DeyttTheme.TextBlock(
+            Copy("проверяем сервер deytt.space и github…", "checking deytt.space server and github…"),
             13, DeyttTheme.Muted);
-        var openRelease = DeyttTheme.Action(
-            DeyttTheme.TextBlock(Copy("Открыть все релизы", "Open all releases"), 13,
-                DeyttTheme.Sky, FontWeight.SemiBold),
-            () => OpenExternal("https://github.com/crxwov/deytt.connect/releases"));
-        var packageButton = DeyttTheme.PrimaryButton(linux
-            ? Copy("скачать пакет", "download package")
-            : Copy("Скачать и запустить обновление", "Download and start update"), () => { });
+
+        var currentVersionLabel = DeyttTheme.TextBlock(installedVersion, 14, DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, false);
+        var nextVersionLabel = DeyttTheme.TextBlock("—", 14, DeyttTheme.Mint, FontWeight.Bold, DeyttTheme.JetBrainsMono, false);
+        var packageMetaLabel = DeyttTheme.TextBlock("", 12, DeyttTheme.Muted);
+        var versionRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"),
+            ColumnSpacing = 10,
+        };
+        var currentCol = new StackPanel
+        {
+            Spacing = 2,
+            Children = { DeyttTheme.TextBlock(Copy("установлено", "installed"), 11, DeyttTheme.Muted), currentVersionLabel },
+        };
+        var arrow = DeyttTheme.TextBlock("→", 16, DeyttTheme.Muted, FontWeight.SemiBold, wrap: false);
+        arrow.VerticalAlignment = VerticalAlignment.Center;
+        var nextCol = new StackPanel
+        {
+            Spacing = 2,
+            Children = { DeyttTheme.TextBlock(Copy("новая версия", "latest"), 11, DeyttTheme.Mint), nextVersionLabel },
+        };
+        Grid.SetColumn(arrow, 1);
+        Grid.SetColumn(nextCol, 2);
+        versionRow.Children.Add(currentCol);
+        versionRow.Children.Add(arrow);
+        versionRow.Children.Add(nextCol);
+
+        var versionPanel = DeyttTheme.DialogPanel(new StackPanel
+        {
+            Spacing = 6,
+            Children = { versionRow, packageMetaLabel },
+        }, radius: 14, padding: new Thickness(14, 12));
+        versionPanel.IsVisible = false;
+
+        var notesText = DeyttTheme.TextBlock("", 13, DeyttTheme.Text);
+        notesText.LineHeight = 19;
+        var notesPanel = DeyttTheme.Card(new StackPanel
+        {
+            Spacing = 8,
+            Children =
+            {
+                DeyttTheme.TextBlock(Copy("что изменилось", "what changed"), 12, DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono),
+                new ScrollViewer
+                {
+                    MaxHeight = 185,
+                    HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+                    VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+                    Content = notesText,
+                },
+            },
+        }, fill: DeyttTheme.Surface, stroke: DeyttTheme.Line, radius: 14, padding: new Thickness(14, 12));
+        notesPanel.IsVisible = false;
+
+        var progressBar = new ProgressBar
+        {
+            Minimum = 0,
+            Maximum = 100,
+            Value = 0,
+            Height = 6,
+            CornerRadius = new CornerRadius(3),
+            Foreground = DeyttTheme.Brush(DeyttTheme.Mint),
+            Background = DeyttTheme.Brush(DeyttTheme.Line),
+            IsVisible = false,
+        };
+
+        var downloadLabel = DeyttTheme.TextBlock(
+            linux ? Copy("скачать пакет", "download package") : Copy("обновить сейчас", "update now"),
+            16, Colors.White, FontWeight.SemiBold, wrap: false);
+        var packageButton = DeyttTheme.DialogPrimaryButton(downloadLabel, () => { });
         packageButton.IsVisible = false;
         var download = (Button)packageButton.Child!;
         AutomationProperties.SetAutomationId(download, "ManualUpdateDownloadButton");
+
+        ShellContentDialog? activeModal = null;
+        var dismissButton = DeyttTheme.Action(
+            DeyttTheme.TextBlock(Copy("позже", "later"), 13, DeyttTheme.Muted, FontWeight.SemiBold, wrap: false),
+            () => activeModal?.Close());
         var cancelDownloadButton = DeyttTheme.Action(
-            DeyttTheme.TextBlock(Copy("Отменить загрузку", "Cancel download"), 13,
-                DeyttTheme.Muted, FontWeight.SemiBold), () => { });
+            DeyttTheme.TextBlock(Copy("отменить загрузку", "cancel download"), 13, DeyttTheme.Muted, FontWeight.SemiBold, wrap: false),
+            () => { });
         cancelDownloadButton.IsVisible = false;
+        var openRelease = DeyttTheme.Action(
+            DeyttTheme.TextBlock(Copy("все релизы", "all releases"), 13, DeyttTheme.Muted, FontWeight.SemiBold, wrap: false),
+            () => OpenExternal("https://github.com/crxwov/deytt.connect/releases"));
+
+        var footerBar = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            ColumnSpacing = 12,
+        };
+        Grid.SetColumn(dismissButton, 0);
+        Grid.SetColumn(cancelDownloadButton, 0);
+        Grid.SetColumn(openRelease, 2);
+        footerBar.Children.Add(dismissButton);
+        footerBar.Children.Add(cancelDownloadButton);
+        footerBar.Children.Add(openRelease);
+
         var body = new StackPanel
         {
-            Spacing = 13,
+            Spacing = 12,
             Children =
             {
-                DeyttTheme.TextBlock(linux ? Copy("релизы для linux", "linux releases") : Copy("КАНАЛ WINDOWS", "WINDOWS CHANNEL"), 9,
-                    DeyttTheme.Sky, FontWeight.SemiBold, DeyttTheme.JetBrainsMono),
-                DeyttTheme.TextBlock(Copy("Обновления приложения", "Application updates"),
-                    22, DeyttTheme.Text, FontWeight.Bold),
+                DeyttTheme.TextBlock(linux ? "deytt./update · linux" : "deytt./update · windows", 11,
+                    DeyttTheme.Mint, FontWeight.SemiBold, DeyttTheme.JetBrainsMono),
+                headline,
                 status,
+                versionPanel,
+                notesPanel,
+                progressBar,
                 packageButton,
-                cancelDownloadButton,
-                openRelease,
+                footerBar,
             },
         };
         using var cancellation = new CancellationTokenSource();
@@ -488,6 +581,44 @@ public partial class MainWindow
 
         cancelDownloadButton.Click += (_, _) => downloadCancellation?.Cancel();
 
+        void PresentRelease(WindowsUpdateRelease candidate)
+        {
+            var nextVer = WindowsUpdateClient.GetDisplayVersion(candidate);
+            var sourceHost = Uri.TryCreate(candidate.AssetUrl, UriKind.Absolute, out var uri) &&
+                             (uri.Host.Equals("deytt.space", StringComparison.OrdinalIgnoreCase) ||
+                              uri.Host.Equals("ru.deytt.space", StringComparison.OrdinalIgnoreCase))
+                ? "deytt.space"
+                : "github";
+            nextVersionLabel.Text = nextVer;
+            versionPanel.IsVisible = true;
+
+            var formattedNotes = WindowsUpdateClient.FormatDisplayNotes(candidate.Notes);
+            notesText.Text = string.IsNullOrWhiteSpace(formattedNotes)
+                ? Copy("улучшения стабильности, интерфейса и скорости работы ./connect.",
+                    "stability, interface, and performance improvements for ./connect.")
+                : formattedNotes;
+            notesPanel.IsVisible = true;
+
+            if (candidate.CanDownloadVerifiedPackage)
+            {
+                var megabytes = candidate.AssetSize!.Value / (1024d * 1024d);
+                packageMetaLabel.Text = $"{candidate.AssetName} · {megabytes:0.0} мб · {sourceHost}";
+                status.Text = Copy("готово к загрузке и проверке sha-256.",
+                    "ready to download and verify sha-256.");
+                downloadLabel.Text = linux
+                    ? Copy($"скачать {nextVer}", $"download {nextVer}")
+                    : Copy($"обновить до {nextVer}", $"update to {nextVer}");
+                packageButton.IsVisible = true;
+            }
+            else
+            {
+                packageMetaLabel.Text = $"{candidate.AssetName} · {sourceHost}";
+                status.Text = Copy(
+                    "для этого пакета не переданы sha-256 и размер; автоматическая проверка невозможна.",
+                    "sha-256 and size metadata are missing for this package; verified download is unavailable.");
+            }
+        }
+
         async Task BeginDownloadAsync()
         {
             if (release is null || !release.CanDownloadVerifiedPackage || downloadInFlight)
@@ -495,47 +626,61 @@ public partial class MainWindow
 
             downloadInFlight = true;
             download.IsEnabled = false;
+            dismissButton.IsVisible = false;
             cancelDownloadButton.IsVisible = true;
+            progressBar.Value = 0;
+            progressBar.IsVisible = true;
             downloadCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellation.Token);
-            status.Text = Copy("Загружаем пакет и сверяем SHA-256…", "Downloading package and checking SHA-256…");
+            status.Text = Copy("загружаем пакет и сверяем sha-256…", "downloading package and checking sha-256…");
             try
             {
                 Action<long, long> onProgress = (received, total) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-                    {
-                        if (dialogIsOpen)
-                        {
-                            var percent = total > 0 ? Math.Clamp(received * 100 / total, 0, 100) : 0;
-                            status.Text = Copy($"Загрузка и проверка · {percent}%",
-                                $"Downloading and verifying · {percent}%");
-                        }
-                    });
+                {
+                    if (!dialogIsOpen)
+                        return;
+                    var percent = total > 0 ? Math.Clamp(received * 100.0 / total, 0, 100) : 0;
+                    progressBar.Value = percent;
+                    var recvMb = received / (1024d * 1024d);
+                    var totalMb = total / (1024d * 1024d);
+                    status.Text = total > 0
+                        ? Copy($"загрузка · {percent:0}% · {recvMb:0.0} / {totalMb:0.0} мб",
+                            $"downloading · {percent:0}% · {recvMb:0.0} / {totalMb:0.0} mb")
+                        : Copy($"загрузка · {recvMb:0.0} мб", $"downloading · {recvMb:0.0} mb");
+                });
                 var package = await (_manualUpdateDownload?.Invoke(release, onProgress, downloadCancellation.Token) ??
                                      DownloadAndLaunchUpdateAsync(release, onProgress, downloadCancellation.Token));
 
                 if (!dialogIsOpen)
                     return;
 
+                progressBar.Value = 100;
                 var megabytes = package.Size / (1024d * 1024d);
                 status.Text = linux
                     ? Copy($"пакет проверен · sha-256 {package.Sha256}\nустановите его менеджером пакетов: {package.FilePath}",
                         $"package verified · sha-256 {package.Sha256}\ninstall it with your package manager: {package.FilePath}")
                     : release.PackageKind == WindowsUpdatePackageKind.Msi
-                    ? Copy($"MSI проверен · {megabytes:0.0} МБ · SHA-256 {package.Sha256}\nЗапущен установщик Windows.",
-                        $"MSI verified · {megabytes:0.0} MB · SHA-256 {package.Sha256}\nWindows Installer has started.")
-                    : Copy($"ZIP проверен · {megabytes:0.0} МБ · SHA-256 {package.Sha256}\nПроводник выделил архив. Распаковка остаётся под вашим контролем.",
-                        $"ZIP verified · {megabytes:0.0} MB · SHA-256 {package.Sha256}\nFile Explorer selected the archive. Extraction remains under your control.");
+                    ? Copy($"msi проверен · {megabytes:0.0} мб · sha-256 {package.Sha256}\nзапущен установщик windows.",
+                        $"msi verified · {megabytes:0.0} mb · sha-256 {package.Sha256}\nwindows installer has started.")
+                    : Copy($"zip проверен · {megabytes:0.0} мб · sha-256 {package.Sha256}\nпроводник выделил архив.",
+                        $"zip verified · {megabytes:0.0} mb · sha-256 {package.Sha256}\nfile explorer selected the archive.");
                 packageButton.IsVisible = false;
             }
             catch (OperationCanceledException) when (downloadCancellation?.IsCancellationRequested == true)
             {
                 if (dialogIsOpen)
-                    status.Text = Copy("Загрузка отменена. Можно попробовать ещё раз.",
-                        "Download cancelled. You can try again.");
+                {
+                    progressBar.IsVisible = false;
+                    status.Text = Copy("загрузка отменена. можно попробовать ещё раз.",
+                        "download cancelled. you can try again.");
+                }
             }
             catch (System.ComponentModel.Win32Exception error) when (error.NativeErrorCode == 1223)
             {
                 if (dialogIsOpen)
-                    status.Text = Copy("Запуск установки отменён.", "Installer launch was cancelled.");
+                {
+                    progressBar.IsVisible = false;
+                    status.Text = Copy("запуск установки отменён.", "installer launch was cancelled.");
+                }
             }
             catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
                                           UnauthorizedAccessException or System.Security.SecurityException or
@@ -543,8 +688,11 @@ public partial class MainWindow
                                           InvalidOperationException)
             {
                 if (dialogIsOpen)
-                    status.Text = Copy("Не удалось загрузить, проверить или открыть пакет обновления.",
-                        "Could not download, verify, or open the update package.");
+                {
+                    progressBar.IsVisible = false;
+                    status.Text = Copy("не удалось загрузить, проверить или открыть пакет обновления.",
+                        "could not download, verify, or open the update package.");
+                }
             }
             finally
             {
@@ -554,6 +702,7 @@ public partial class MainWindow
                 {
                     downloadInFlight = false;
                     cancelDownloadButton.IsVisible = false;
+                    dismissButton.IsVisible = true;
                     download.IsEnabled = true;
                 }
             }
@@ -562,6 +711,13 @@ public partial class MainWindow
 
         async Task LoadLatestReleaseAsync()
         {
+            if (preloadedRelease is not null)
+            {
+                release = preloadedRelease;
+                PresentRelease(release);
+                return;
+            }
+
             try
             {
                 release = await (_manualUpdateLookup?.Invoke(cancellation.Token) ??
@@ -571,44 +727,33 @@ public partial class MainWindow
                 if (release is null)
                 {
                     status.Text = Copy(
-                        "установлена последняя доступная версия для этого формата пакета.",
-                        "the latest available version for this package format is installed.");
+                        $"установлена последняя версия ({installedVersion}) для этого формата пакета.",
+                        $"you are on the latest version ({installedVersion}) for this package format.");
                 }
                 else
                 {
-                    var releaseDetails = $"{release.Tag}\n{release.Name}\n{release.Notes}";
-                    if (release.CanDownloadVerifiedPackage)
-                    {
-                        var megabytes = release.AssetSize!.Value / (1024d * 1024d);
-                        status.Text = $"{releaseDetails}\n\n{release.AssetName} · {megabytes:0.0} MB";
-                        packageButton.IsVisible = true;
-                    }
-                    else
-                    {
-                        status.Text = releaseDetails + "\n\n" + Copy(
-                            "Для этого пакета нет корректных данных GitHub о SHA-256 и размере. Проверить загрузку не удаётся.",
-                            "GitHub has not provided valid SHA-256 and size metadata for this package. Its download cannot be verified.");
-                    }
+                    PresentRelease(release);
                 }
             }
             catch (OperationCanceledException)
             {
                 if (dialogIsOpen && !cancellation.IsCancellationRequested)
-                    status.Text = Copy("Проверка заняла слишком много времени. Попробуйте ещё раз.",
-                        "The update check timed out. Try again.");
+                    status.Text = Copy("проверка заняла слишком много времени. попробуйте ещё раз.",
+                        "the update check timed out. try again.");
             }
             catch (Exception error) when (error is HttpRequestException or JsonException or IOException or
                                           InvalidDataException)
             {
                 if (dialogIsOpen)
-                    status.Text = Copy("Не удалось проверить релизы. Проверьте подключение и повторите.",
-                        "Could not check releases. Check the connection and try again.");
+                    status.Text = Copy("не удалось проверить релизы. проверьте подключение и повторите.",
+                        "could not check releases. check the connection and try again.");
             }
         }
 
         var releaseLookup = Task.CompletedTask;
-        await ShowContentInShellAsync(Copy("Обновления", "Updates"), body, 540, modal =>
+        await ShowContentInShellAsync(Copy("обновления", "updates"), body, 560, modal =>
         {
+            activeModal = modal;
             dialogIsOpen = true;
             modal.Closed += () =>
             {

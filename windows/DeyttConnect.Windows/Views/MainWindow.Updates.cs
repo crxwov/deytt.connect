@@ -22,38 +22,15 @@ public partial class MainWindow
         {
             var release = await WindowsUpdateClient.FindLatestWindowsReleaseAsync(
                 cancellation.Token, kind);
-            if (release is null || !release.CanDownloadVerifiedPackage ||
-                !WindowsUpdateClient.IsReleaseForInstallation(release, kind))
+            var installed = WindowsUpdateClient.GetInstalledVersion()?.ToString(3) ?? "-";
+            var candidateVersion = release is null ? "-" : WindowsUpdateClient.GetDisplayVersion(release);
+            var isNewer = release is not null && release.CanDownloadVerifiedPackage &&
+                          WindowsUpdateClient.IsReleaseForInstallation(release, kind);
+            UiDiagnostics.Log($"startup update check: installed={installed} latest={candidateVersion} newer={isNewer} asset={release?.AssetName ?? "-"}");
+            if (!isNewer || !IsVisible || cancellation.IsCancellationRequested)
                 return;
 
-            if (OperatingSystem.IsLinux())
-            {
-                var openUpdates = await ConfirmInShellAsync(
-                    Copy("доступно обновление", "update available"),
-                    Copy($"доступен пакет {release.AssetName}. скачать его через настройки?",
-                        $"package {release.AssetName} is available. download it from settings?"),
-                    Copy("обновления", "updates"));
-                if (openUpdates && IsVisible && !cancellation.IsCancellationRequested)
-                    await ShowUpdateDialogAsync();
-                return;
-            }
-
-            var accepted = await ConfirmInShellAsync(
-                Copy("Доступно обновление DEYTT Connect", "DEYTT Connect update available"),
-                kind == WindowsUpdatePackageKind.Msi
-                    ? Copy($"Установлена версия {WindowsUpdateClient.GetInstalledVersion()?.ToString(3)}. Доступна версия {release.Tag}. Скачать и запустить установщик?",
-                        $"Version {WindowsUpdateClient.GetInstalledVersion()?.ToString(3)} is installed. Version {release.Tag} is available. Download and launch the installer?")
-                    : Copy($"Установлена версия {WindowsUpdateClient.GetInstalledVersion()?.ToString(3)}. Доступна версия {release.Tag}. Скачать проверенный ZIP?",
-                        $"Version {WindowsUpdateClient.GetInstalledVersion()?.ToString(3)} is installed. Version {release.Tag} is available. Download the verified ZIP?"),
-                Copy("Обновить", "Update"));
-            if (!accepted || cancellation.IsCancellationRequested)
-                return;
-
-            var package = await DownloadAndLaunchUpdateAsync(release, null, cancellation.Token);
-            if (kind == WindowsUpdatePackageKind.PortableZip && IsVisible)
-                await ShowInfoInShellAsync(Copy("Архив обновления проверен", "Update archive verified"),
-                    Copy($"Проводник выделил {Path.GetFileName(package.FilePath)}. Распакуйте его в новую папку, затем запустите новую версию.",
-                        $"File Explorer selected {Path.GetFileName(package.FilePath)}. Extract it to a new folder, then run the new version."));
+            await ShowUpdateDialogCoreAsync(release);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
@@ -61,21 +38,12 @@ public partial class MainWindow
         catch (System.ComponentModel.Win32Exception error) when (error.NativeErrorCode == 1223)
         {
         }
-        catch (OperationCanceledException)
+        catch (Exception error) when (error is OperationCanceledException or HttpRequestException or IOException or
+                                      InvalidDataException or UnauthorizedAccessException or
+                                      System.Security.SecurityException or System.ComponentModel.Win32Exception or
+                                      JsonException or InvalidOperationException)
         {
-            if (IsVisible)
-                await ShowInfoInShellAsync(Copy("Не удалось проверить обновления", "Could not check for updates"),
-                    Copy("Проверка заняла слишком много времени. Попробуйте вручную в настройках.",
-                        "The update check timed out. Try again manually in Settings."));
-        }
-        catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or
-                                      UnauthorizedAccessException or System.Security.SecurityException or
-                                      System.ComponentModel.Win32Exception or JsonException or InvalidOperationException)
-        {
-            if (IsVisible)
-                await ShowInfoInShellAsync(Copy("Не удалось обновить приложение", "Could not update the app"),
-                    Copy("Проверьте подключение и повторите проверку в настройках.",
-                        "Check your connection and try again from Settings."));
+            UiDiagnostics.Log($"startup update check skipped: {error.GetType().Name}");
         }
         finally
         {

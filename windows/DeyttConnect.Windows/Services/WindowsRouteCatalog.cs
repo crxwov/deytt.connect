@@ -212,8 +212,9 @@ public static class WindowsRouteCatalog
             return null;
         var hasTls = outbound.TryGetProperty("tls", out var tls) && tls.ValueKind == JsonValueKind.Object;
         if (hasTls &&
-            (!tls.TryGetProperty("reality", out var reality) || reality.ValueKind != JsonValueKind.Object ||
-             !reality.TryGetProperty("enabled", out var enabled) || enabled.ValueKind != JsonValueKind.False))
+            tls.TryGetProperty("reality", out var reality) &&
+            reality.ValueKind == JsonValueKind.Object &&
+            (!reality.TryGetProperty("enabled", out var enabled) || enabled.ValueKind != JsonValueKind.False))
             return "reality";
         if (outbound.TryGetProperty("transport", out var transport) &&
             ReadString(transport, "type") is { Length: > 0 } transportType)

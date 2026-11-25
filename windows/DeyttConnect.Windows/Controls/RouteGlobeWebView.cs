@@ -334,7 +334,7 @@ public sealed class RouteGlobeWebView : ContentControl
 
     public void PushRouteProbeProgress(WindowsRouteProbeResult probe)
     {
-        Services.UiDiagnostics.Log($"push probe: {probe.RouteTag} stage={probe.Stage} latency={probe.LatencyMilliseconds?.ToString() ?? "null"} ready={_pageReady} atlasFailed={_atlasFailed}");
+        Services.UiDiagnostics.Log($"push probe: {probe.RouteTag} stage={probe.Stage} latency={probe.LatencyMilliseconds?.ToString() ?? "null"} error={probe.Error ?? "-"} ready={_pageReady} atlasFailed={_atlasFailed}");
         if (_atlasFailed || !_attachedToVisualTree || !_pageReady || _webView is null) return;
         var speedMbps = probe.BytesPerSecond is > 0 ? (long?)(probe.BytesPerSecond.Value * 8 / 1_000_000.0) : null;
         var script = $"window.deyttUpdateRouteProbe && window.deyttUpdateRouteProbe({JsonSerializer.Serialize(probe.RouteTag)}, {JsonSerializer.Serialize(probe.LatencyMilliseconds)}, {JsonSerializer.Serialize(speedMbps)}, {JsonSerializer.Serialize(probe.Stage)}, {JsonSerializer.Serialize(probe.Error)});";

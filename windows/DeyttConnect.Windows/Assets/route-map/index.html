@@ -3837,12 +3837,6 @@
     body :is(#home-action, #compact-action)::after { content: none !important; }
     body :is(#home-action, #compact-action):hover { background: #fff !important; transform: none !important; }
     body :is(#home-action, #compact-action):active { background: #bfbfbf !important; transform: none !important; }
-    body :is(#home-action, #compact-action):is([data-tone="connected"], [data-tone="good"]) {
-      color: #c6f4e5 !important;
-      background: #14251f !important;
-      border-color: #36785f !important;
-    }
-    body :is(#home-action, #compact-action):is([data-tone="connected"], [data-tone="good"]):hover { background: #203b30 !important; }
     :is(#home-action, #compact-action)[data-tone="error"] {
       color: #ffd1d6 !important;
       background: #321b1f !important;
@@ -4119,7 +4113,7 @@
         margin-inline-end: 4px;
         grid-auto-columns: auto;
       }
-      .home-compact #compact-action { grid-column: 3; min-height: 39px; padding-inline: 14px; }
+      .home-compact #compact-action { grid-column: 3; min-height: 36px; padding: 5px 14px; font-size: 12.5px; font-weight: 500; letter-spacing: 0.01em; }
       .home-compact #immersive-exit { grid-column: 4; }
       .home-compact .compact-error { grid-row: 2; }
     }
@@ -4177,27 +4171,32 @@
       color: #fff !important;
     }
     body :is(#home-action, #compact-action):is([data-tone="connected"], [data-tone="good"]) {
-      color: #d6faeb !important;
-      background: #10241c !important;
-      border-color: #2fc78c !important;
-      box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.22), 0 8px 22px -10px rgba(16, 185, 129, 0.34) !important;
+      color: var(--text) !important;
+      background: var(--surface-raised) !important;
+      border-color: rgba(52, 211, 153, 0.78) !important;
+      box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.24), 0 0 14px -4px rgba(52, 211, 153, 0.38) !important;
     }
     body :is(#home-action, #compact-action):is([data-tone="connected"], [data-tone="good"]):hover {
-      background: #163327 !important;
-      border-color: #4ade9f !important;
+      background: var(--surface-interactive) !important;
+      color: var(--text) !important;
+      border-color: rgba(74, 222, 159, 0.94) !important;
+      box-shadow: inset 0 0 0 1px rgba(74, 222, 159, 0.34), 0 0 16px -3px rgba(52, 211, 153, 0.46) !important;
     }
     html[data-app-theme="light"] body :is(#home-action, #compact-action):is([data-tone="connected"], [data-tone="good"]) {
-      color: #0b4a33 !important;
-      background: #e9f7f0 !important;
-      border-color: #168a5c !important;
-      box-shadow: inset 0 0 0 1px rgba(22, 138, 92, 0.16) !important;
+      color: var(--text) !important;
+      background: var(--surface-raised) !important;
+      border-color: rgba(16, 138, 92, 0.72) !important;
+      box-shadow: inset 0 0 0 1px rgba(16, 138, 92, 0.18), 0 0 12px -4px rgba(16, 138, 92, 0.24) !important;
     }
     html[data-app-theme="light"] body :is(#home-action, #compact-action):is([data-tone="connected"], [data-tone="good"]):hover {
-      background: #d8f0e4 !important;
-      border-color: #106f49 !important;
+      background: var(--surface-interactive) !important;
+      color: var(--text) !important;
+      border-color: rgba(16, 111, 73, 0.9) !important;
+      box-shadow: inset 0 0 0 1px rgba(16, 111, 73, 0.26), 0 0 14px -3px rgba(16, 138, 92, 0.32) !important;
     }
     #compact-action:is([data-tone="connected"], [data-tone="good"]) .compact-action-dot {
       background: #34d399;
+      box-shadow: 0 0 6px rgba(52, 211, 153, 0.7);
     }
     html[data-app-theme] .network-atlas .home-compact {
       background: color-mix(in srgb, var(--surface) 86%, transparent) !important;

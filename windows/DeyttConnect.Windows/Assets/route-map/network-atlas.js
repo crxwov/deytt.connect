@@ -655,7 +655,7 @@
 
     setCanvasResolution(ratio) {
       const detailRatio = this.preferredPixelRatio;
-      const padding = this.options.stableGeography ? 64 : 0;
+      const padding = this.options.stableGeography ? 128 : 0;
       const staticWidth = this.width + padding * 2, staticHeight = this.height + padding * 2;
       if (Math.abs(this.pixelRatio - ratio) < .01 && this.staticCanvas.width === Math.round(staticWidth * ratio)
         && this.staticCanvas.height === Math.round(staticHeight * ratio)
@@ -1940,9 +1940,15 @@
         const scale = this.zoom / this.staticCamera.zoom;
         const x = this.centerX - this.staticCamera.x * scale;
         const y = this.centerY - this.staticCamera.y * scale;
+        const pad = this.staticPadding || 0;
+        const uncovered = (x - pad * scale) > 0.5 ||
+          (y - pad * scale) > 0.5 ||
+          (x + (this.width + pad) * scale) < this.width - 0.5 ||
+          (y + (this.height + pad) * scale) < this.height - 0.5;
         const affineSettled = Math.abs(this.targetZoom - this.zoom) < 0.002 && Math.abs(this.targetCenterX - this.centerX) < 0.1 && Math.abs(this.targetCenterY - this.centerY) < 0.1;
-        // Re-rasterize static layer crisply once zoom/pan settles, or if scale deviation is large
-        if ((affineSettled && (scale !== 1 || x !== 0 || y !== 0)) || (wasCameraMoving && !cameraMoving) || scale < 0.65 || scale > 1.45) {
+        // Re-rasterize static layer crisply once zoom/pan settles, if scale deviates too far,
+        // or immediately before CSS zoom/pan exposes an uncovered edge of the cached canvas.
+        if (uncovered || (affineSettled && (scale !== 1 || x !== 0 || y !== 0)) || (wasCameraMoving && !cameraMoving) || scale < 0.8 || scale > 1.35) {
           this.staticDirty = true;
         }
       }

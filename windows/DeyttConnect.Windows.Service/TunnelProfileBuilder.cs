@@ -100,7 +100,7 @@ internal static class TunnelProfileBuilder
         root["log"] = new JsonObject
         {
             ["disabled"] = false,
-            ["level"] = "trace",
+            ["level"] = "error",
         };
 
         // Privileged service security boundaries: user profiles must never control

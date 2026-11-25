@@ -16,9 +16,9 @@ public sealed class WindowsRouteCatalogTests
               "inbounds": [{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
               "outbounds": [
                 {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:DE:VLESS"]},
-                {"type":"vless","tag":"route:DE:VLESS"},
+                {"type":"vless","tag":"route:DE:VLESS","tls":{"enabled":true,"reality":{"enabled":true,"public_key":"k"}}},
                 {"type":"tuic","tag":"route:DE:TUIC"},
-                {"type":"vless","tag":"route:IT:VLESS"},
+                {"type":"vless","tag":"route:IT:VLESS","tls":{"enabled":true},"transport":{"type":"ws"}},
                 {"type":"direct","tag":"direct"}
               ],
               "route": {"final":"🇪🇺 автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}
@@ -29,9 +29,12 @@ public sealed class WindowsRouteCatalogTests
         var routes = WindowsRouteCatalog.Parse(profile.RootElement);
 
         Assert.Equal(new[] { "auto", "route:DE:VLESS", "route:DE:TUIC", "route:IT:VLESS" }, routes.Select(route => route.Id));
+        var deVless = Assert.Single(routes, route => route.Id == "route:DE:VLESS");
+        Assert.Equal("reality", deVless.Detail);
         var italy = Assert.Single(routes, route => route.CountryCode == "IT");
         Assert.Equal("италия", italy.CountryName);
         Assert.Equal("🇮🇹", italy.Flag);
+        Assert.Equal("websocket + tls", italy.Detail);
         Assert.Equal("TUIC", Assert.Single(routes, route => route.Id == "route:DE:TUIC").ProtocolName);
     }
 
