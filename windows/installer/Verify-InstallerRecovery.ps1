@@ -157,7 +157,7 @@ foreach($dialog in $dialogNames) {
  Check ($size.Number -eq 484 -and $size.Second -eq 324) "$dialog dimensions changed"
  $art=Row "SELECT ``X``,``Y`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='BrandArt'"
  $artSize=Row "SELECT ``Width``,``Height`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='BrandArt'"
- Check ($art.Number -eq 0 -and $art.Second -eq 0 -and $artSize.Number -eq 484 -and $artSize.Second -eq 274) "$dialog brand art dimensions changed"
+ Check ($art.Number -eq 0 -and $art.Second -eq 0 -and $artSize.Number -eq 484 -and $artSize.Second -eq 324) "$dialog brand art dimensions changed"
  $artAsset=Row "SELECT ``Text`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND ``Control``='BrandArt'"
  Check ($artAsset.Text -eq 'SetupPanel') "$dialog does not reference the graphite panel"
  $interactive=QueryRows "SELECT ``Y`` FROM ``Control`` WHERE ``Dialog_``='$dialog' AND (``Type``='PushButton' OR ``Type``='CheckBox')"
