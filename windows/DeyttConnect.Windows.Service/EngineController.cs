@@ -162,8 +162,12 @@ internal sealed class EngineController
             SetSnapshot(new ServiceSnapshot("starting", "Подготовка VPN…", routeTag));
 
             var lteSocksPort = routeTag == CdnLteProfile.RouteTag ? AllocateLoopbackPort() : (int?)null;
+            var xrayRoutes = lteSocksPort is null && awgConfig is null
+                ? await XrayRouteProfile.PrepareAsync(profile, ResolveDnsAddressesAsync, cancellationToken)
+                    .ConfigureAwait(false)
+                : null;
             // A full TUN must bootstrap on the physical network; binding it to Happ creates a routing loop.
-            var runtimeProfile = TunnelProfileBuilder.Build(profile, routeTag, awgConfig,
+            var runtimeProfile = TunnelProfileBuilder.Build(xrayRoutes?.Profile ?? profile, routeTag, awgConfig,
                 null, customBypassDomains, customBypassProcesses, splitTunnelMode,
                 cdnLteSocksPort: lteSocksPort);
             preflight = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -188,21 +192,12 @@ internal sealed class EngineController
             (runtimeProfile, _activeRouteTelemetry) = ActiveRouteTelemetry.Create(runtimeProfile, routeTag);
             _profilePath = WritePrivateProfile(runtimeProfile);
 
-            if (lteSocksPort is int socksPort)
+            if (lteSocksPort.HasValue || xrayRoutes is not null)
             {
-                var dialer = FindXrayDialer(null);
-                var xrayConfig = CdnLteProfile.BuildXrayConfig(profile, socksPort);
-                if (OperatingSystem.IsLinux())
-                {
-                    var linuxConfig = JsonNode.Parse(xrayConfig)!.AsObject();
-                    // The CDN endpoint is resolved before TUN starts. Keep its socket on the uplink.
-                    linuxConfig["outbounds"]![0]!["streamSettings"]!["sockopt"] =
-                        new JsonObject { ["interface"] = dialer.InterfaceName };
-                    xrayConfig = linuxConfig.ToJsonString();
-                }
-                _xrayProfilePath = WritePrivateProfile(xrayConfig);
-                var xray = StartOwnedXray(_xrayProfilePath, dialer.InterfaceName, dialer.DnsEndpoint);
-                await WaitForXraySocksAsync(xray, socksPort, cancellationToken).ConfigureAwait(false);
+                var xrayConfig = xrayRoutes?.Xray ?? CdnLteProfile.BuildXrayConfig(profile, lteSocksPort!.Value);
+                var socksPorts = xrayRoutes?.Ports ?? new[] { lteSocksPort!.Value };
+                var xray = await StartProfileXrayAsync(xrayConfig, socksPorts, cancellationToken)
+                    .ConfigureAwait(false);
                 _ = MonitorXrayAsync(xray);
             }
 
@@ -306,7 +301,9 @@ internal sealed class EngineController
                     _probeProgress[endpoint.RouteTag] = new ServiceProbeResult(endpoint.RouteTag, null, null, null,
                         "latency", 1);
             }
-            var probeProfile = TunnelProfileBuilder.BuildProbeProfile(profile, endpoints,
+            var xrayRoutes = await XrayRouteProfile.PrepareAsync(profile, ResolveDnsAddressesAsync, probeToken)
+                .ConfigureAwait(false);
+            var probeProfile = TunnelProfileBuilder.BuildProbeProfile(xrayRoutes?.Profile ?? profile, endpoints,
                 FindActiveHappTunnel());
             var resolvedProbe = await ResolveProbeAwgHostsAsync(probeProfile, endpoints,
                 ResolveDnsAddressesAsync, probeToken).ConfigureAwait(false);
@@ -328,6 +325,9 @@ internal sealed class EngineController
             var enginePath = GetEnginePath();
             if (!File.Exists(enginePath))
                 return ProbeError("Не найдено ядро VPN. Переустановите приложение.");
+
+            if (xrayRoutes is not null)
+                await StartProfileXrayAsync(xrayRoutes.Xray, xrayRoutes.Ports, probeToken).ConfigureAwait(false);
 
             var runtimeDiagnostic = new EngineRuntimeDiagnostic();
             var process = StartOwnedEngine(enginePath, _profilePath, runtimeDiagnostic);
@@ -2379,6 +2379,25 @@ internal sealed class EngineController
 
     private static bool IsAnyAddress(IPAddress address) =>
         address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any);
+
+    private async Task<Process> StartProfileXrayAsync(string config, IReadOnlyList<int> ports,
+        CancellationToken cancellationToken)
+    {
+        var dialer = FindXrayDialer(null);
+        if (OperatingSystem.IsLinux())
+        {
+            var profile = JsonNode.Parse(config)!.AsObject();
+            // The upstream addresses were resolved before TUN starts. Keep their sockets on the uplink.
+            foreach (var outbound in profile["outbounds"]!.AsArray())
+                outbound!["streamSettings"]!["sockopt"] = new JsonObject { ["interface"] = dialer.InterfaceName };
+            config = profile.ToJsonString();
+        }
+        _xrayProfilePath = WritePrivateProfile(config);
+        var process = StartOwnedXray(_xrayProfilePath, dialer.InterfaceName, dialer.DnsEndpoint);
+        foreach (var port in ports)
+            await WaitForXraySocksAsync(process, port, cancellationToken).ConfigureAwait(false);
+        return process;
+    }
 
     private Process StartOwnedXray(string profilePath, string interfaceName, string dnsEndpoint)
     {

@@ -247,8 +247,8 @@ public sealed class TelegramApiClient
         var profileUri = new UriBuilder(subscriptionUri!)
         {
             Query = string.IsNullOrEmpty(subscriptionUri!.Query)
-                ? "format=singbox"
-                : $"{subscriptionUri.Query.TrimStart('?')}&format=singbox",
+                ? "format=singbox&route_engines=xray-v1"
+                : $"{subscriptionUri.Query.TrimStart('?')}&format=singbox&route_engines=xray-v1",
         }.Uri;
         using var request = new HttpRequestMessage(HttpMethod.Get, profileUri);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -288,6 +288,7 @@ public sealed class TelegramApiClient
             profileStage = "normalize";
             profileJson = WindowsSubscriptionProfileNormalizer.AddTunForEmptyInbounds(profileJson);
             profileJson = CdnLteProfile.Attach(profileJson, cdnLteMetadata);
+            XrayRouteProfile.Validate(profileJson);
             using var normalizedProfile = JsonDocument.Parse(profileJson);
             progress?.Report("optional");
             profileStage = "awg";
