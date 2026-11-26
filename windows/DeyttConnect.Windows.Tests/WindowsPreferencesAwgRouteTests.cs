@@ -8,6 +8,7 @@ public sealed class WindowsPreferencesAwgRouteTests
     [Theory]
     [InlineData("awg31")]
     [InlineData("awg31:aXQ")]
+    [InlineData("route:DE:TUIC")]
     public void PreferencesAcceptCurrentAwgGeneration(string routeId)
     {
         Assert.True(WindowsPreferencesStore.IsKnownRoute(routeId));

@@ -17,6 +17,7 @@ internal static class RouteFlagVisual
             "RU" => HorizontalStripes(width, height, "#F7F7F4", "#477CC0", "#C83C4A"),
             "FI" => FinnishFlag(width, height),
             "IT" => VerticalStripes(width, height, "#168B4B", "#F7F7F4", "#D0474D"),
+            "EU" => EuropeanFlag(width, height),
             "RU-DE" => DoubleFlag(width, height),
             _ => Fallback(code, width, height),
         };
@@ -85,21 +86,37 @@ internal static class RouteFlagVisual
         return columns;
     }
 
+    private static Control EuropeanFlag(double width, double height) => new TextBlock
+    {
+        Text = "🇪🇺",
+        FontSize = height * 0.78,
+        HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        TextAlignment = TextAlignment.Center,
+    };
+
     private static Control DoubleFlag(double width, double height)
     {
-        var pair = new StackPanel
+        var flagWidth = Math.Max(2, (width - 12) / 2);
+        var pair = new Grid
         {
-            Orientation = Avalonia.Layout.Orientation.Horizontal,
-            Spacing = 2,
+            Width = width - 2,
+            ColumnDefinitions = new ColumnDefinitions("*,10,*"),
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
-        pair.Children.Add(Frame(HorizontalStripes(width * 0.36, height * 0.58,
-            "#F7F7F4", "#477CC0", "#C83C4A"), width * 0.36, height * 0.58));
-        pair.Children.Add(DeyttTheme.TextBlock("→", 8, DeyttTheme.Muted,
-            FontWeight.SemiBold, wrap: false));
-        pair.Children.Add(Frame(HorizontalStripes(width * 0.36, height * 0.58,
-            "#17191E", "#C83C4A", "#F0C66B"), width * 0.36, height * 0.58));
+        pair.Children.Add(Frame(HorizontalStripes(flagWidth, height * 0.58,
+            "#F7F7F4", "#477CC0", "#C83C4A"), flagWidth, height * 0.58));
+        var arrow = DeyttTheme.TextBlock("→", 13, DeyttTheme.Muted,
+            FontWeight.SemiBold, wrap: false);
+        arrow.TextAlignment = TextAlignment.Center;
+        arrow.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+        Grid.SetColumn(arrow, 1);
+        pair.Children.Add(arrow);
+        var destination = Frame(HorizontalStripes(flagWidth, height * 0.58,
+            "#17191E", "#C83C4A", "#F0C66B"), flagWidth, height * 0.58);
+        Grid.SetColumn(destination, 2);
+        pair.Children.Add(destination);
         return pair;
     }
 
@@ -145,6 +162,7 @@ internal static class RouteFlagVisual
         "RU" => "флаг россии",
         "FI" => "флаг финляндии",
         "IT" => "флаг италии",
+        "EU" => "флаг европы",
         "RU-DE" => "флаги россии и германии",
         "AUTO" => "автоматический выбор маршрута",
         "IP" => "регион, определённый по ip",

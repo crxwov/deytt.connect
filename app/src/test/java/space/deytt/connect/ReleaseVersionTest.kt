@@ -8,6 +8,8 @@ class ReleaseVersionTest {
     @Test
     fun comparesStableVersionsAndRejectsDowngrades() {
         assertTrue(ReleaseVersion.isNewer("v0.8.0", "0.7.0"))
+        assertTrue(ReleaseVersion.isNewer("connect./0.11.109", "0.11.108"))
+        assertFalse(ReleaseVersion.isNewer("connect./0.11.108", "0.11.108"))
         assertFalse(ReleaseVersion.isNewer("v0.6.0-debug", "0.7.0"))
         assertFalse(ReleaseVersion.isNewer("not-a-version", "0.7.0"))
     }

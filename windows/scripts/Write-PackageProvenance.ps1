@@ -95,7 +95,7 @@ $enginePath = Resolve-PackageFile @('DeyttVpnEngine.exe', 'vpn/DeyttVpnEngine.ex
 $mapDirectory = Resolve-PackageFile @('Assets/route-map/index.html', 'app/Assets/route-map/index.html') 'the offline route map'
 $mapRoot = Split-Path -Parent $mapDirectory
 $mapAssets = [ordered]@{}
-foreach ($assetName in @('index.html', 'atlas-init.js', 'network-atlas.css', 'network-atlas.js', 'world-land.json')) {
+foreach ($assetName in @('index.html', 'atlas-init.js', 'dock-optics.js', 'network-atlas.css', 'network-atlas.js', 'world-land.json')) {
     $assetPath = Join-Path $mapRoot $assetName
     if (-not (Test-Path -LiteralPath $assetPath -PathType Leaf)) {
         throw "Package route map is missing required asset: $assetName"

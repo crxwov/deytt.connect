@@ -1,0 +1,133 @@
+package space.deytt.connect
+
+import org.json.JSONArray
+import org.json.JSONObject
+
+data class ProfileSummary(
+    val outboundCount: Int,
+    val protocols: Set<String>,
+    val hasTunInbound: Boolean,
+)
+
+object ProfileValidator {
+    private val networkProtocols = setOf("hysteria2", "tuic", "vless", "trojan", "wireguard", "shadowsocks")
+    private val nonNetworkTypes = setOf("urltest", "selector", "direct", "block", "dns")
+    private val legacyTunFields = setOf(
+        "inet4_address",
+        "inet6_address",
+        "inet4_route_address",
+        "inet6_route_address",
+        "inet4_route_exclude_address",
+        "inet6_route_exclude_address",
+    )
+
+    fun validate(content: String): ProfileSummary {
+        val root = try {
+            JSONObject(content)
+        } catch (error: Exception) {
+            throw IllegalArgumentException("Сервер вернул невалидный JSON", error)
+        }
+
+        val inbounds = root.optJSONArray("inbounds")
+            ?: throw IllegalArgumentException("В подписке отсутствует inbounds")
+        val tun = findType(inbounds, "tun")
+        if (tun == null) {
+            throw IllegalArgumentException("Подписка не содержит системный TUN-вход")
+        }
+        if (legacyTunFields.any(tun::has)) {
+            throw IllegalArgumentException(
+                "Профиль устарел: импортируйте подписку заново для обновления TUN-конфигурации",
+            )
+        }
+        if (!tun.has("address")) {
+            throw IllegalArgumentException("В подписке не задан современный адрес TUN")
+        }
+
+        val outbounds = root.optJSONArray("outbounds")
+            ?: throw IllegalArgumentException("В подписке отсутствует outbounds")
+        val protocols = mutableSetOf<String>()
+        val tags = mutableSetOf<String>()
+        var hasNetworkOutbound = false
+        fun inspect(items: JSONArray) {
+            for (index in 0 until items.length()) {
+                val outbound = items.optJSONObject(index)
+                    ?: throw IllegalArgumentException("В подписке некорректный сетевой выход")
+                val tag = outbound.opt("tag") as? String
+                require(!tag.isNullOrBlank() && tags.add(tag)) {
+                    "В подписке отсутствует или повторяется имя сетевого выхода"
+                }
+                val type = outbound.optString("type").lowercase()
+                if (type in networkProtocols) protocols += type
+                // Keep compatibility with future engine protocols. A group,
+                // direct or blocked route alone cannot provide a VPN connection.
+                if (type.isNotBlank() && type !in nonNetworkTypes) hasNetworkOutbound = true
+            }
+        }
+        inspect(outbounds)
+        root.optJSONArray("endpoints")?.let(::inspect)
+        if (!hasNetworkOutbound) {
+            throw IllegalArgumentException("В подписке нет рабочего сетевого выхода")
+        }
+        if ((0 until outbounds.length()).any { index ->
+                outbounds.optJSONObject(index)?.optString("type") == "dns"
+            }) {
+            throw IllegalArgumentException(
+                "Профиль устарел: обновите подписку для нового DNS-маршрута",
+            )
+        }
+        if ((0 until outbounds.length()).any { index ->
+                outbounds.optJSONObject(index)?.optString("type") == "wireguard"
+            }) {
+            throw IllegalArgumentException(
+                "Профиль устарел: обновите подписку для нового WireGuard-маршрута",
+            )
+        }
+        if ((0 until outbounds.length()).any { index ->
+                outbounds.optJSONObject(index)?.optJSONObject("tls")?.has("sni") == true
+            }) {
+            throw IllegalArgumentException(
+                "Профиль устарел: обновите подписку для нового TLS-маршрута",
+            )
+        }
+
+        val dns = root.optJSONObject("dns")
+        val dnsServers = dns?.optJSONArray("servers")
+        if (dnsServers != null && (0 until dnsServers.length()).any { index ->
+                dnsServers.optJSONObject(index)?.has("address") == true
+            }) {
+            throw IllegalArgumentException(
+                "Профиль устарел: обновите подписку для нового DNS-формата",
+            )
+        }
+
+        val route = root.optJSONObject("route")
+            ?: throw IllegalArgumentException("В подписке отсутствует route")
+        val finalTag = route.opt("final") as? String
+        if (finalTag.isNullOrBlank() || finalTag !in tags) {
+            throw IllegalArgumentException("В подписке не задан существующий маршрут по умолчанию")
+        }
+
+        val routeRules = route.optJSONArray("rules")
+        val hasDnsHijack = routeRules != null && (0 until routeRules.length()).any { index ->
+            routeRules.optJSONObject(index)?.let { rule ->
+                rule.optString("protocol") == "dns" &&
+                    rule.optString("action") == "hijack-dns"
+            } == true
+        }
+        if (!hasDnsHijack) {
+            throw IllegalArgumentException(
+                "В подписке отсутствует современный DNS-перехват",
+            )
+        }
+
+        return ProfileSummary(outbounds.length(), protocols, hasTunInbound = true)
+    }
+
+    private fun findType(items: JSONArray, expected: String): JSONObject? {
+        for (index in 0 until items.length()) {
+            val item = items.optJSONObject(index)
+            if (item?.optString("type") == expected) return item
+        }
+        return null
+    }
+}

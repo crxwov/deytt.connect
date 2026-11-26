@@ -1,0 +1,16 @@
+[Unit]
+Description=deytt./connect vpn service
+Requires=deytt-connect.socket
+After=deytt-connect.socket network.target
+
+[Service]
+ExecStart=/usr/lib/deytt-connect/DeyttConnect.Windows.Service
+RuntimeDirectory=deytt-connect
+RuntimeDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=2
+KillMode=mixed
+TimeoutStopSec=20
+NoNewPrivileges=yes
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE

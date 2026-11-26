@@ -13,6 +13,7 @@ public sealed class WindowsPipeProtocolTests
     [InlineData(WindowsPipeCommand.Status, "{\"command\":\"status\"}")]
     [InlineData(WindowsPipeCommand.CancelProbe, "{\"command\":\"cancel-probe\"}")]
     [InlineData(WindowsPipeCommand.ProbeProgress, "{\"command\":\"probe-progress\"}")]
+    [InlineData(WindowsPipeCommand.MeasureTunnelLatency, "{\"command\":\"measure-tunnel-latency\"}")]
     public void Request_UsesExistingCommandWireNames(WindowsPipeCommand command, string expected)
     {
         var json = Encoding.UTF8.GetString(WindowsPipeProtocol.SerializeRequest(new WindowsPipeRequest
@@ -84,7 +85,8 @@ public sealed class WindowsPipeProtocolTests
     {
         var snapshot = new WindowsTunnelSnapshot("connected", "Подключено", "nl-vless",
             DateTimeOffset.Parse("2026-09-30T12:00:00+00:00"),
-            [new WindowsRouteProbeResult("nl", 12, 2048, null)]);
+            [new WindowsRouteProbeResult("nl", 12, 2048, null)],
+            TunnelLatencyMilliseconds: 86, TunnelLatencyError: "HTTPS check failed");
 
         var json = Encoding.UTF8.GetString(WindowsPipeProtocol.SerializeResponse(snapshot));
         Assert.DoesNotContain("\"error\":null", json, StringComparison.Ordinal);
@@ -92,6 +94,8 @@ public sealed class WindowsPipeProtocolTests
         Assert.Equal(snapshot.State, restored.State);
         Assert.Equal(snapshot.Detail, restored.Detail);
         Assert.Equal(snapshot.ProbeResults![0], restored.ProbeResults![0]);
+        Assert.Equal(snapshot.TunnelLatencyMilliseconds, restored.TunnelLatencyMilliseconds);
+        Assert.Equal(snapshot.TunnelLatencyError, restored.TunnelLatencyError);
     }
 
     [Fact]

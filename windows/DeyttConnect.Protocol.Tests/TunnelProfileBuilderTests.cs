@@ -7,6 +7,119 @@ namespace DeyttConnect.Protocol.Tests;
 public sealed class TunnelProfileBuilderTests
 {
     private const string AutoTag = "🌍 автоподбор";
+
+    [Fact]
+    public async Task CanStopAndReconnectWhileConnectionDnsIsPending()
+    {
+        const string routeTag = "route:NL:VLESS";
+        const string server = "reconnect.example.test";
+        var profile = JsonNode.Parse(Profile(routeTag))!.AsObject();
+        profile["outbounds"]!.AsArray().OfType<JsonObject>()
+            .Single(outbound => outbound["tag"]!.GetValue<string>() == routeTag)["server"] = server;
+        var dnsStarted = new SemaphoreSlim(0);
+        using var testDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        var engine = new EngineController(async (host, token) =>
+        {
+            if (host != server)
+                return [];
+            dnsStarted.Release();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return [];
+        });
+
+        for (var attempt = 0; attempt < 5; ++attempt)
+        {
+            var started = await engine.ConnectAsync(profile.ToJsonString(), routeTag, null, testDeadline.Token)
+                .WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Equal("starting", started.State);
+            await dnsStarted.WaitAsync(testDeadline.Token);
+            var stopped = await engine.StopAsync().WaitAsync(TimeSpan.FromSeconds(1.8));
+            Assert.Equal("disconnected", stopped.State);
+            Assert.Equal("disconnected", engine.Snapshot.State);
+        }
+    }
+
+    [Theory]
+    [InlineData("urltest")]
+    [InlineData("selector")]
+    public void AutomaticSelectionUsesOnlyEuropeanSingleCountryServers(string type)
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS", "route:DE:TROJAN", "route:DE:TUIC", "route:FI:HYSTERIA2",
+            "route:IT:VLESS", "route:RU:VLESS", "route:RU-DE:CHAIN"))!.AsObject();
+        var automatic = profile["outbounds"]![0]!.AsObject();
+        automatic["type"] = type;
+        automatic["outbounds"] = new JsonArray("route:RU:VLESS", "route:RU-DE:CHAIN", "route:NL:VLESS");
+        automatic["default"] = "route:RU:VLESS";
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), AutoTag))!;
+        var selector = runtime["outbounds"]!.AsArray().OfType<JsonObject>()
+            .Single(outbound => outbound["tag"]!.GetValue<string>() == AutoTag);
+        Assert.Equal(new[] { "route:DE:TROJAN", "route:DE:TUIC", "route:FI:HYSTERIA2", "route:IT:VLESS", "route:NL:VLESS" },
+            selector["outbounds"]!.AsArray().Select(tag => tag!.GetValue<string>()));
+        Assert.False(selector.ContainsKey("default"));
+        Assert.DoesNotContain("route:RU", selector["outbounds"]!.ToJsonString());
+    }
+
+    [Fact]
+    public void AutomaticSelectionCannotFallBackToRussiaOrRussianDetour()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS", "route:RU:VLESS"))!.AsObject();
+        profile["outbounds"]![1]!["detour"] = "route:RU:VLESS";
+        Assert.Throws<InvalidDataException>(() => TunnelProfileBuilder.Build(profile.ToJsonString(), AutoTag));
+        Assert.Throws<InvalidDataException>(() => TunnelProfileBuilder.Build(Profile("route:RU:VLESS"), AutoTag));
+    }
+
+    [Fact]
+    public void ExplicitRussianRouteRemainsAvailable()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:RU:VLESS"), "route:RU:VLESS"))!;
+        Assert.Equal("route:RU:VLESS", runtime["route"]!["final"]!.GetValue<string>());
+    }
+    [Theory]
+    [InlineData(true, "trace")]
+    [InlineData(false, "info")]
+    public void WindowsRuntimeKeepsErrorsOnConsoleWithoutSubscriptionLogFiles(bool disabled, string level)
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        profile["log"] = new JsonObject
+        {
+            ["disabled"] = disabled,
+            ["level"] = level,
+            ["output"] = "untrusted-subscription-output.log",
+        };
+
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), "route:NL:VLESS"))!;
+        Assert.False(runtime["log"]!["disabled"]!.GetValue<bool>());
+        Assert.Equal("error", runtime["log"]!["level"]!.GetValue<string>());
+        Assert.False(runtime["log"]!.AsObject().ContainsKey("output"));
+    }
+
+    [Fact]
+    public void WindowsRuntimeStripsPrivilegedExperimentalCertificateAndServicesSections()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        profile["experimental"] = new JsonObject
+        {
+            ["cache_file"] = new JsonObject
+            {
+                ["path"] = @"C:\Windows\System32\drivers\etc\hosts",
+            },
+        };
+        profile["certificate"] = new JsonObject { ["store"] = "system" };
+        profile["services"] = new JsonArray(new JsonObject { ["type"] = "test" });
+
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), "route:NL:VLESS"))!.AsObject();
+        Assert.False(runtime.ContainsKey("experimental"));
+        Assert.False(runtime.ContainsKey("certificate"));
+        Assert.False(runtime.ContainsKey("services"));
+
+        var (telemetryProfile, _) = ActiveRouteTelemetry.Create(runtime.ToJsonString(), "route:NL:VLESS");
+        var telemetryJson = JsonNode.Parse(telemetryProfile)!.AsObject();
+        Assert.True(telemetryJson.ContainsKey("experimental"));
+        var experimental = telemetryJson["experimental"]!.AsObject();
+        Assert.True(experimental.ContainsKey("clash_api"));
+        Assert.False(experimental.ContainsKey("cache_file"));
+    }
+
     private const string LegacyAwgProfile = """
         [Interface]
         PrivateKey = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
@@ -35,7 +148,11 @@ public sealed class TunnelProfileBuilderTests
             new JsonObject { ["type"] = "urltest", ["tag"] = AutoTag },
         };
         foreach (var tag in routeTags)
-            outbounds.Add(new JsonObject { ["type"] = "vless", ["tag"] = tag });
+            outbounds.Add(new JsonObject
+            {
+                ["type"] = tag.EndsWith(":TUIC", StringComparison.Ordinal) ? "tuic" : "vless",
+                ["tag"] = tag,
+            });
 
         return new JsonObject
         {
@@ -118,6 +235,7 @@ public sealed class TunnelProfileBuilderTests
 
         var tun = Assert.Single(inbounds);
         Assert.Equal("tun", tun!["type"]!.GetValue<string>());
+        Assert.Equal("deytt-connect", tun["interface_name"]!.GetValue<string>());
         Assert.Equal("subscription-tun", tun["tag"]!.GetValue<string>());
         Assert.False(tun.AsObject().ContainsKey("dns_mode"));
     }
@@ -138,6 +256,78 @@ public sealed class TunnelProfileBuilderTests
         var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:IT:VLESS"), "route:IT:VLESS"))!;
 
         Assert.Equal("route:IT:VLESS", runtime["route"]!["final"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void BuildAcceptsTuicRouteWhenAdvertisedBySubscription()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:DE:TUIC"), "route:DE:TUIC"))!;
+
+        Assert.Equal("route:DE:TUIC", runtime["route"]!["final"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void ConnectionPrunesUnusedWireGuardEndpointsAndTheirSelectors()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        profile["endpoints"] = new JsonArray(new JsonObject
+        {
+            ["type"] = "wireguard",
+            ["tag"] = "unused-wg",
+            ["address"] = new JsonArray("10.8.0.2/32"),
+            ["peers"] = new JsonArray(new JsonObject { ["address"] = "unavailable.invalid" }),
+        });
+        profile["outbounds"]!.AsArray().Add(new JsonObject
+        {
+            ["type"] = "selector",
+            ["tag"] = "unused-wg-selector",
+            ["outbounds"] = new JsonArray("unused-wg"),
+        });
+
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), "route:NL:VLESS"))!.AsObject();
+
+        Assert.False(runtime.ContainsKey("endpoints"));
+        Assert.DoesNotContain(runtime["outbounds"]!.AsArray(), outbound =>
+            outbound!["tag"]!.GetValue<string>() == "unused-wg-selector");
+        Assert.Contains(runtime["outbounds"]!.AsArray(), outbound =>
+            outbound!["tag"]!.GetValue<string>() == "route:NL:VLESS");
+    }
+
+    [Fact]
+    public void ConnectionKeepsDetoursPolicyTargetsAndObjectDnsResolverDependencies()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        var outbounds = profile["outbounds"]!.AsArray();
+        outbounds[1]!["detour"] = "transport-hop";
+        outbounds[1]!["domain_resolver"] = new JsonObject { ["server"] = "bootstrap-dns" };
+        outbounds.Add(new JsonObject { ["type"] = "direct", ["tag"] = "transport-hop" });
+        outbounds.Add(new JsonObject { ["type"] = "direct", ["tag"] = "policy-hop" });
+        profile["route"]!["rules"] = new JsonArray(new JsonObject
+        {
+            ["ip_cidr"] = new JsonArray("192.0.2.0/24"), ["outbound"] = "policy-hop",
+        });
+        profile["dns"]!["servers"] = new JsonArray(
+            new JsonObject { ["type"] = "local", ["tag"] = "local-dns" },
+            new JsonObject { ["type"] = "https", ["tag"] = "remote-dns", ["server"] = "192.0.2.53" },
+            new JsonObject
+            {
+                ["type"] = "https", ["tag"] = "bootstrap-dns", ["server"] = "resolver.example.test",
+                ["domain_resolver"] = new JsonObject { ["server"] = "bootstrap-local" },
+            },
+            new JsonObject { ["type"] = "local", ["tag"] = "bootstrap-local" },
+            new JsonObject { ["type"] = "local", ["tag"] = "unused-dns" });
+
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(profile.ToJsonString(), "route:NL:VLESS"))!;
+
+        var outboundTags = runtime["outbounds"]!.AsArray()
+            .Select(node => node!["tag"]!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("transport-hop", outboundTags);
+        Assert.Contains("policy-hop", outboundTags);
+        var dnsTags = runtime["dns"]!["servers"]!.AsArray()
+            .Select(node => node!["tag"]!.GetValue<string>()).ToHashSet(StringComparer.Ordinal);
+        Assert.Contains("bootstrap-dns", dnsTags);
+        Assert.Contains("bootstrap-local", dnsTags);
+        Assert.DoesNotContain("unused-dns", dnsTags);
     }
 
     [Fact]
@@ -237,5 +427,231 @@ public sealed class TunnelProfileBuilderTests
     {
         Assert.Throws<InvalidDataException>(() =>
             TunnelProfileBuilder.Build(Profile(routeTag), routeTag, "not a profile"));
+    }
+
+    [Fact]
+    public void BuildEnforcesIpv6LeakProtectionAndIpv4OnlyDnsStrategy()
+    {
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(Profile("route:DE:VLESS"), "route:DE:VLESS"))!;
+        var inbounds = runtime["inbounds"]!.AsArray();
+        var tun = Assert.Single(inbounds)!.AsObject();
+
+        var addresses = tun["address"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
+        Assert.Contains("172.19.0.1/30", addresses);
+        Assert.Contains("fdfe:dcba:9876::1/126", addresses);
+
+        Assert.Equal("mixed", tun["stack"]!.GetValue<string>());
+        Assert.True(tun["strict_route"]!.GetValue<bool>());
+
+        var dns = runtime["dns"]!.AsObject();
+        Assert.Equal("ipv4_only", dns["strategy"]!.GetValue<string>());
+
+        var rules = runtime["route"]!["rules"]!.AsArray();
+        var ipv6RejectRule = rules.OfType<JsonObject>().FirstOrDefault(r => r["ip_version"]?.GetValue<int>() == 6);
+        Assert.NotNull(ipv6RejectRule);
+        Assert.Equal("reject", ipv6RejectRule["action"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void GetTunAddressesReturnsBothIpv4AndIpv6Addresses()
+    {
+        var runtime = TunnelProfileBuilder.Build(Profile("route:DE:VLESS"), "route:DE:VLESS");
+        var addresses = TunnelProfileBuilder.GetTunAddresses(runtime);
+
+        Assert.Equal(2, addresses.Count);
+        Assert.Equal("172.19.0.1/30", addresses[0]);
+        Assert.Equal("fdfe:dcba:9876::1/126", addresses[1]);
+    }
+
+    [Fact]
+    public void BuildAppliesCustomBypassDomainsAndProcesses()
+    {
+        var customDomains = new[] { "mycustomdomain.com", "*.customsub.org" };
+        var customProcesses = new[] { "game.exe", "customapp.exe" };
+        var runtime = JsonNode.Parse(TunnelProfileBuilder.Build(
+            Profile("route:DE:VLESS"), "route:DE:VLESS", null, null,
+            customDomains, customProcesses))!;
+
+        Assert.True(runtime["route"]!["find_process"]!.GetValue<bool>());
+        var rules = runtime["route"]!["rules"]!.AsArray();
+
+        var processRule = rules.OfType<JsonObject>().FirstOrDefault(r => r.ContainsKey("process_name"));
+        Assert.NotNull(processRule);
+        Assert.Equal("direct", processRule["outbound"]!.GetValue<string>());
+        var procNames = processRule["process_name"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
+        Assert.Contains("game.exe", procNames);
+        Assert.Contains("customapp.exe", procNames);
+
+        var domainRules = rules.OfType<JsonObject>().Where(r => r["outbound"]?.GetValue<string>() == "direct").ToArray();
+        var allSuffixes = domainRules
+            .Where(r => r.ContainsKey("domain_suffix"))
+            .SelectMany(r => r["domain_suffix"]!.AsArray().Select(n => n!.GetValue<string>()))
+            .ToArray();
+        Assert.Contains("customsub.org", allSuffixes);
+        Assert.Contains("mycustomdomain.com", allSuffixes);
+    }
+
+    [Fact]
+    public void WindowsPipeProtocolSerializesCustomBypass()
+    {
+        var request = new WindowsPipeRequest
+        {
+            Command = WindowsPipeCommand.Connect,
+            Profile = "{}",
+            RouteTag = "route:DE:HYSTERIA2",
+            CustomBypassDomains = new[] { "2ip.io", "example.com" },
+            CustomBypassProcesses = new[] { "curl.exe", "discord" }
+        };
+
+        var payload = WindowsPipeProtocol.SerializeRequest(request);
+        var deserialized = WindowsPipeProtocol.DeserializeRequest(payload);
+
+        Assert.NotNull(deserialized.CustomBypassDomains);
+        Assert.Equal(new[] { "2ip.io", "example.com" }, deserialized.CustomBypassDomains);
+        Assert.NotNull(deserialized.CustomBypassProcesses);
+        Assert.Equal(new[] { "curl.exe", "discord" }, deserialized.CustomBypassProcesses);
+    }
+
+    [Fact]
+    public void BuildAppliesVpnOnlyMode()
+    {
+        var profile = Profile("route:NL:VLESS");
+        var customDomains = new[] { "targetdomain.com", "*.targetsub.org" };
+        var customProcesses = new[] { "game.exe", "customapp" };
+
+        var runtimeJson = TunnelProfileBuilder.Build(
+            profile,
+            "route:NL:VLESS",
+            customBypassDomains: customDomains,
+            customBypassProcesses: customProcesses,
+            splitTunnelMode: "vpn_only");
+
+        var runtime = JsonNode.Parse(runtimeJson)!.AsObject();
+
+        // In vpn_only mode, default route is direct!
+        Assert.Equal("direct", runtime["route"]!["final"]!.GetValue<string>());
+        Assert.True(runtime["route"]!["find_process"]!.GetValue<bool>());
+
+        // Direct outbound must exist
+        var outbounds = runtime["outbounds"]!.AsArray();
+        Assert.Contains(outbounds.OfType<JsonObject>(), o => o["tag"]?.GetValue<string>() == "direct");
+
+        var rules = runtime["route"]!["rules"]!.AsArray();
+
+        // Process rule should route to VPN (route:NL:VLESS)
+        var processRule = rules.OfType<JsonObject>().FirstOrDefault(r => r.ContainsKey("process_name"));
+        Assert.NotNull(processRule);
+        Assert.Equal("route:NL:VLESS", processRule["outbound"]!.GetValue<string>());
+        var procNames = processRule["process_name"]!.AsArray().Select(n => n!.GetValue<string>()).ToArray();
+        Assert.Contains("game.exe", procNames);
+        Assert.Contains("customapp", procNames);
+        Assert.Contains("customapp.exe", procNames);
+
+        // Domain rule should route to VPN (route:NL:VLESS)
+        var vpnDomainRules = rules.OfType<JsonObject>()
+            .Where(r => r["outbound"]?.GetValue<string>() == "route:NL:VLESS" && r.ContainsKey("domain_suffix"))
+            .ToArray();
+        var allVpnSuffixes = vpnDomainRules
+            .SelectMany(r => r["domain_suffix"]!.AsArray().Select(n => n!.GetValue<string>()))
+            .ToArray();
+        Assert.Contains("targetsub.org", allVpnSuffixes);
+        Assert.Contains("targetdomain.com", allVpnSuffixes);
+
+        // DNS should have final local-dns and route custom domains to remote-dns
+        Assert.Equal("local-dns", runtime["dns"]!["final"]!.GetValue<string>());
+        var dnsRules = runtime["dns"]!["rules"]!.AsArray();
+        var customDnsRule = dnsRules.OfType<JsonObject>().FirstOrDefault(r => r["action"]?.GetValue<string>() == "route");
+        Assert.NotNull(customDnsRule);
+        Assert.Equal("remote-dns", customDnsRule["server"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public void WindowsPipeProtocolSerializesSplitTunnelMode()
+    {
+        var request = new WindowsPipeRequest
+        {
+            Command = WindowsPipeCommand.Connect,
+            Profile = "{}",
+            RouteTag = "route:DE:HYSTERIA2",
+            CustomBypassDomains = new[] { "2ip.io" },
+            CustomBypassProcesses = new[] { "curl.exe" },
+            SplitTunnelMode = "vpn_only"
+        };
+
+        var payload = WindowsPipeProtocol.SerializeRequest(request);
+        var deserialized = WindowsPipeProtocol.DeserializeRequest(payload);
+
+        Assert.Equal("vpn_only", deserialized.SplitTunnelMode);
+        Assert.Equal(new[] { "2ip.io" }, deserialized.CustomBypassDomains);
+        Assert.Equal(new[] { "curl.exe" }, deserialized.CustomBypassProcesses);
+    }
+
+    [Fact]
+    public void LegacyFullModeNormalizesToBypassAndNeverBypassesCloudflareCanary()
+    {
+        var profile = JsonNode.Parse(Profile("route:NL:VLESS"))!.AsObject();
+        profile["route"] = new JsonObject
+        {
+            ["final"] = "route:NL:VLESS",
+            ["rules"] = new JsonArray
+            {
+                new JsonObject { ["action"] = "sniff" },
+                new JsonObject { ["domain_suffix"] = new JsonArray("ru", "gosuslugi.ru"), ["outbound"] = "direct" },
+            },
+        };
+        profile["dns"] = new JsonObject
+        {
+            ["servers"] = new JsonArray
+            {
+                new JsonObject { ["tag"] = "remote-dns", ["detour"] = "route:NL:VLESS" },
+                new JsonObject { ["tag"] = "local-dns" },
+            },
+            ["rules"] = new JsonArray
+            {
+                new JsonObject { ["domain_suffix"] = new JsonArray("ru"), ["action"] = "route", ["server"] = "local-dns" },
+            },
+            ["final"] = "remote-dns",
+        };
+
+        var built = TunnelProfileBuilder.Build(
+            profile.ToJsonString(),
+            "route:NL:VLESS",
+            customBypassDomains: new[] { "local-site.example" },
+            customBypassProcesses: new[] { "steam.exe" },
+            splitTunnelMode: "full");
+
+        var runtime = JsonNode.Parse(built)!;
+        Assert.Equal("route:NL:VLESS", runtime["route"]!["final"]!.GetValue<string>());
+        Assert.Equal(1400, runtime["inbounds"]![0]!["mtu"]!.GetValue<int>());
+
+        var rules = runtime["route"]!["rules"]!.AsArray().OfType<JsonObject>().ToArray();
+        var directDomainRules = rules.Where(r => r["outbound"]?.GetValue<string>() == "direct" &&
+            (r.ContainsKey("domain_suffix") || r.ContainsKey("domain"))).ToArray();
+        var allDirectDomains = directDomainRules
+            .SelectMany(r => (r["domain_suffix"] as JsonArray ?? r["domain"] as JsonArray ?? [])
+                .Select(n => n!.GetValue<string>()))
+            .ToArray();
+
+        Assert.Contains("ru", allDirectDomains);
+        Assert.Contains("gosuslugi.ru", allDirectDomains);
+        Assert.Contains("local-site.example", allDirectDomains);
+        Assert.DoesNotContain("cp.cloudflare.com", allDirectDomains);
+
+        var directProcNames = rules
+            .Where(r => r["outbound"]?.GetValue<string>() == "direct" && r.ContainsKey("process_name"))
+            .SelectMany(r => r["process_name"]!.AsArray().Select(n => n!.GetValue<string>()))
+            .ToArray();
+        Assert.Contains("steam.exe", directProcNames);
+
+        var dnsRules = runtime["dns"]!["rules"]!.AsArray().OfType<JsonObject>().ToArray();
+        var localDnsDomains = dnsRules
+            .Where(r => r["server"]?.GetValue<string>() == "local-dns")
+            .SelectMany(r => (r["domain_suffix"] as JsonArray ?? r["domain"] as JsonArray ?? [])
+                .Select(n => n!.GetValue<string>()))
+            .ToArray();
+        Assert.Contains("ru", localDnsDomains);
+        Assert.Contains("local-site.example", localDnsDomains);
+        Assert.DoesNotContain("cp.cloudflare.com", localDnsDomains);
+        Assert.Equal("remote-dns", runtime["dns"]!["final"]!.GetValue<string>());
     }
 }

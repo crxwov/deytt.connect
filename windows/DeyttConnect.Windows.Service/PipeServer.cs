@@ -1,4 +1,5 @@
 using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text.Json;
@@ -19,6 +20,7 @@ internal static class PipeServer
     private const uint PipeRejectRemoteClients = 0x00000008;
     private const uint SecurityDescriptorRevision = 1;
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public static async Task RunAsync(string allowedUserSid, EngineController engine,
         CancellationToken cancellationToken)
     {
@@ -61,7 +63,42 @@ internal static class PipeServer
         }
     }
 
-    private static async Task ProcessClientAsync(NamedPipeServerStream pipe, EngineController engine,
+    public static async Task RunLinuxAsync(EngineController engine, CancellationToken cancellationToken)
+    {
+        // The listening socket and its access policy belong to systemd. Never bind a privileged
+        // service to a predictable path in a user-writable directory.
+        if (Environment.GetEnvironmentVariable("LISTEN_PID") != FormattableString.Invariant($"{Environment.ProcessId}") ||
+            Environment.GetEnvironmentVariable("LISTEN_FDS") != "1")
+            throw new InvalidOperationException("Start the VPN daemon using its systemd socket.");
+
+        using var listener = new Socket(new SafeSocketHandle((IntPtr)3, ownsHandle: true));
+        if (listener.LocalEndPoint is not UnixDomainSocketEndPoint endpoint ||
+            endpoint.ToString() != WindowsPipeProtocol.LinuxSocketPath)
+            throw new InvalidOperationException("The systemd VPN socket is invalid.");
+
+        var activeClients = new HashSet<Task>();
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                activeClients.RemoveWhere(task => task.IsCompleted);
+                if (activeClients.Count >= 15)
+                {
+                    await Task.WhenAny(activeClients).WaitAsync(cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                var client = await listener.AcceptAsync(cancellationToken).ConfigureAwait(false);
+                activeClients.Add(ProcessClientAsync(new NetworkStream(client, ownsSocket: true), engine, cancellationToken));
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        await Task.WhenAll(activeClients).ConfigureAwait(false);
+    }
+
+    private static async Task ProcessClientAsync(Stream pipe, EngineController engine,
         CancellationToken cancellationToken)
     {
         using (pipe)
@@ -88,7 +125,7 @@ internal static class PipeServer
         }
     }
 
-    private static async Task HandleClientAsync(NamedPipeServerStream pipe, EngineController engine,
+    private static async Task HandleClientAsync(Stream pipe, EngineController engine,
         CancellationToken cancellationToken)
     {
         var payload = await WindowsPipeProtocol.ReadFrameAsync(pipe, WindowsPipeProtocol.MaximumRequestBytes,
@@ -101,15 +138,18 @@ internal static class PipeServer
             case WindowsPipeCommand.Status:
                 result = engine.Snapshot;
                 break;
+            case WindowsPipeCommand.MeasureTunnelLatency:
+                result = await engine.MeasureTunnelLatencyAsync(cancellationToken).ConfigureAwait(false);
+                break;
             case WindowsPipeCommand.Disconnect:
-                engine.Stop();
-                result = engine.Snapshot;
+                result = await engine.StopAsync().ConfigureAwait(false);
                 break;
             case WindowsPipeCommand.Connect:
                 if (request.Profile is null || request.RouteTag is null)
                     throw new JsonException("Missing connection details.");
                 result = await engine.ConnectAsync(request.Profile, request.RouteTag, request.AwgConfig,
-                    cancellationToken).ConfigureAwait(false);
+                    cancellationToken, request.CustomBypassDomains, request.CustomBypassProcesses,
+                    request.SplitTunnelMode).ConfigureAwait(false);
                 break;
             case WindowsPipeCommand.Probe:
                 if (request.Profile is null || request.RouteTags is null || request.Method is null ||
@@ -136,7 +176,8 @@ internal static class PipeServer
             result.ConnectedAt, result.ProbeResults?.Select(probe => new WindowsRouteProbeResult(
                 probe.RouteTag, probe.LatencyMilliseconds, probe.BytesPerSecond, probe.Error,
                 probe.Stage, probe.Attempt, probe.BytesReceived, probe.TotalBytes)).ToArray(),
-            result.HealthCheckedAt);
+            result.HealthCheckedAt, result.ActiveRouteTag, result.TunnelLatencyMilliseconds,
+            result.TunnelLatencyError);
         var responsePayload = WindowsPipeProtocol.SerializeResponse(response);
         await WindowsPipeProtocol.WriteFrameAsync(pipe, responsePayload, WindowsPipeProtocol.MaximumResponseBytes,
             cancellationToken).ConfigureAwait(false);

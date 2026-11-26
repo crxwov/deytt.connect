@@ -13,7 +13,6 @@ public static class WindowsSessionStore
 
     public static void Save(string token)
     {
-        EnsureWindows();
         if (token.Length is < 32 or > 256)
             throw new CryptographicException("The Telegram session token has an invalid length.");
 
@@ -27,7 +26,15 @@ public static class WindowsSessionStore
             var tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
             try
             {
-                using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                var options = new FileStreamOptions
+                {
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Options = FileOptions.WriteThrough,
+                };
+                if (OperatingSystem.IsLinux())
+                    options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                using (var stream = new FileStream(tempPath, options))
                 {
                     stream.Write(protectedToken);
                     stream.Flush(flushToDisk: true);
@@ -50,7 +57,6 @@ public static class WindowsSessionStore
 
     public static string? Load()
     {
-        EnsureWindows();
         var path = SessionPath;
         if (!File.Exists(path))
             return null;
@@ -83,26 +89,38 @@ public static class WindowsSessionStore
 
     public static void Clear()
     {
-        EnsureWindows();
         var path = SessionPath;
         if (File.Exists(path))
             File.Delete(path);
     }
 
-    private static string SessionPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        ProductFolder,
-        SessionFileName);
-
-    private static void EnsureWindows()
+    private static string SessionPath
     {
-        if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("Telegram session protection is available only on Windows.");
+        get
+        {
+            var basePath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var properPath = Path.Combine(basePath, "DEYTT", "Connect", SessionFileName);
+            if (!File.Exists(properPath) && OperatingSystem.IsLinux())
+            {
+                var legacyPath = Path.Combine(basePath, "DEYTT\\Connect", SessionFileName);
+                if (File.Exists(legacyPath))
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(properPath)!);
+                        File.Copy(legacyPath, properPath, overwrite: true);
+                    }
+                    catch { }
+                }
+            }
+            return properPath;
+        }
     }
 
-    private static byte[] Protect(byte[] input) => Transform(input, protect: true);
-    private static byte[] Unprotect(byte[] input) => Transform(input, protect: false);
+    private static byte[] Protect(byte[] input) => OperatingSystem.IsWindows() ? Transform(input, protect: true) : (byte[])input.Clone();
+    private static byte[] Unprotect(byte[] input) => OperatingSystem.IsWindows() ? Transform(input, protect: false) : (byte[])input.Clone();
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static byte[] Transform(byte[] input, bool protect)
     {
         var inputPointer = Marshal.AllocHGlobal(input.Length);

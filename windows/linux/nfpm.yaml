@@ -1,0 +1,101 @@
+name: deytt-connect
+arch: amd64
+platform: linux
+version: "${DEYTT_PACKAGE_VERSION}"
+release: "1"
+section: net
+priority: optional
+maintainer: "deytt. <crxwov@users.noreply.github.com>"
+description: deytt./connect desktop VPN
+homepage: https://deytt.space
+license: GPL-3.0
+
+contents:
+  - src: ${DEYTT_PACKAGE_STAGE}/app/
+    expand: true
+    dst: /usr/lib/deytt-connect/
+    type: tree
+    file_info:
+      mode: 0755
+  - src: ${DEYTT_PACKAGE_STAGE}/deytt-connect.service
+    expand: true
+    dst: /usr/lib/systemd/system/deytt-connect.service
+    file_info:
+      mode: 0644
+  - src: ${DEYTT_PACKAGE_STAGE}/deytt-connect.socket
+    expand: true
+    dst: /usr/lib/systemd/system/deytt-connect.socket
+    file_info:
+      mode: 0644
+  - src: ${DEYTT_PACKAGE_STAGE}/deytt-connect.desktop
+    expand: true
+    dst: /usr/share/applications/deytt-connect.desktop
+    file_info:
+      mode: 0644
+  - src: ${DEYTT_PACKAGE_STAGE}/deytt-connect.png
+    expand: true
+    dst: /usr/share/icons/hicolor/512x512/apps/deytt-connect.png
+    file_info:
+      mode: 0644
+
+  - src: ${DEYTT_PACKAGE_STAGE}/deytt-connect
+    expand: true
+    dst: /usr/bin/deytt-connect
+    file_info:
+      mode: 0755
+  - src: ${DEYTT_PACKAGE_STAGE}/deytt-connect.sysusers
+    expand: true
+    dst: /usr/lib/sysusers.d/deytt-connect.conf
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: "@STAGE@/postinstall.sh"
+  preremove: "@STAGE@/preremove.sh"
+  postremove: "@STAGE@/postremove.sh"
+
+overrides:
+  deb:
+    depends:
+      - systemd
+      - libgcc-s1
+      - libstdc++6
+      - libgssapi-krb5-2
+      - tzdata
+      - libicu76 | libicu74 | libicu72 | libicu78
+      - libssl3t64 | libssl3
+      - libwebkit2gtk-4.1-0
+      - libgl1
+      - libx11-6
+      - xdg-utils
+      - ca-certificates
+      - iproute2
+      - iptables
+  rpm:
+    depends:
+      - systemd
+      - libicu
+      - krb5-libs
+      - tzdata
+      - openssl-libs
+      - webkit2gtk4.1
+      - libglvnd-glx
+      - libX11
+      - xdg-utils
+      - ca-certificates
+      - iproute
+      - iptables
+  archlinux:
+    depends:
+      - systemd
+      - icu
+      - krb5
+      - tzdata
+      - openssl
+      - webkit2gtk-4.1
+      - libglvnd
+      - libx11
+      - xdg-utils
+      - ca-certificates
+      - iproute2
+      - iptables

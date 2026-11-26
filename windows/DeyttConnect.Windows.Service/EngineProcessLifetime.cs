@@ -15,14 +15,19 @@ internal sealed class EngineProcessLifetime : IDisposable
     private const uint JobObjectLimitKillOnJobClose = 0x00002000;
     private const int JobObjectExtendedLimitInformationClass = 9;
     private SafeJobHandle? _job;
+    private Process? _process;
 
-    private EngineProcessLifetime(SafeJobHandle job) => _job = job;
+    private EngineProcessLifetime(SafeJobHandle? job, Process? process = null)
+    {
+        _job = job;
+        _process = process;
+    }
 
     public static EngineProcessLifetime Attach(Process process)
     {
         ArgumentNullException.ThrowIfNull(process);
         if (!OperatingSystem.IsWindows())
-            throw new PlatformNotSupportedException("Engine process jobs are available only on Windows.");
+            return new EngineProcessLifetime(null, process);
 
         SafeJobHandle? job = null;
         try
@@ -47,7 +52,7 @@ internal sealed class EngineProcessLifetime : IDisposable
             if (!AssignProcessToJobObject(job, process.SafeHandle))
                 throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not attach the VPN engine to its job.");
 
-            return new EngineProcessLifetime(job);
+            return new EngineProcessLifetime(job, process);
         }
         catch
         {
@@ -56,7 +61,15 @@ internal sealed class EngineProcessLifetime : IDisposable
         }
     }
 
-    public void Dispose() => Interlocked.Exchange(ref _job, null)?.Dispose();
+    public void Dispose()
+    {
+        Interlocked.Exchange(ref _job, null)?.Dispose();
+        if (_process is { HasExited: false } p)
+        {
+            try { p.Kill(); } catch { }
+        }
+        _process = null;
+    }
 
     [DllImport("kernel32.dll", EntryPoint = "CreateJobObjectW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern SafeJobHandle CreateJobObject(IntPtr jobAttributes, string? name);

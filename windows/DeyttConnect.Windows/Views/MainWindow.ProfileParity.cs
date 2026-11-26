@@ -13,6 +13,43 @@ public partial class MainWindow
 {
     private readonly HashSet<long> _happDeviceChangesInFlight = [];
     private readonly HashSet<string> _sessionRevokesInFlight = new(StringComparer.Ordinal);
+    private string? _telegramAvatarDataUrl = GetCachedTelegramAvatarDataUrl();
+
+    private static string? GetCachedTelegramAvatarDataUrl()
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DEYTT", "Connect");
+            var file = System.IO.Path.Combine(dir, "telegram-avatar.b64");
+            if (System.IO.File.Exists(file))
+            {
+                var s = System.IO.File.ReadAllText(file).Trim();
+                if (!string.IsNullOrEmpty(s) && s.StartsWith("data:image/"))
+                    return s;
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    internal static string NormalizeTariffDisplayName(string? value)
+    {
+        var name = value?.Trim();
+        if (string.IsNullOrEmpty(name))
+            return string.Empty;
+
+        var compact = new string(name.Where(char.IsLetterOrDigit).ToArray());
+        return compact.Equals("deyttultra", StringComparison.OrdinalIgnoreCase) ||
+               compact.Equals("ultra", StringComparison.OrdinalIgnoreCase)
+            ? "deytt. ultra"
+            : name;
+    }
+
+    internal static bool SubscriptionExpiryNeedsHighlight(DateTimeOffset? expiry, DateTimeOffset now) =>
+        expiry is DateTimeOffset value && value <= now.AddDays(8);
+
+    internal static bool SubscriptionDeviceLimitReached(int? used, int? limit) =>
+        used is int current && limit is > 0 && current >= limit.Value;
 
     private Control BuildTelegramIdentityEntry(TelegramAccount? account, bool signedIn, Action onClick)
     {
@@ -151,12 +188,14 @@ public partial class MainWindow
     private void SetTelegramAvatar(byte[]? bytes)
     {
         Bitmap? bitmap = null;
+        string? dataUrl = null;
         if (bytes is { Length: > 0 })
         {
             try
             {
                 using var stream = new MemoryStream(bytes);
                 bitmap = Bitmap.DecodeToWidth(stream, 256, BitmapInterpolationMode.HighQuality);
+                dataUrl = CreateTelegramAvatarDataUrl(bytes);
             }
             catch (Exception error) when (error is ArgumentException or InvalidDataException or NotSupportedException or InvalidOperationException)
             {
@@ -166,9 +205,33 @@ public partial class MainWindow
 
         var previous = _telegramAvatarBitmap;
         _telegramAvatarBitmap = bitmap;
+        _telegramAvatarDataUrl = dataUrl;
+        if (!string.IsNullOrEmpty(dataUrl))
+        {
+            try
+            {
+                var dir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DEYTT", "Connect");
+                System.IO.Directory.CreateDirectory(dir);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(dir, "telegram-avatar.b64"), dataUrl);
+            }
+            catch { }
+        }
+        _routeGlobe?.UpdateProfileAvatar(dataUrl);
         if (_profileAvatarImage is not null)
             _profileAvatarImage.Source = bitmap;
         previous?.Dispose();
+    }
+
+    private static string? CreateTelegramAvatarDataUrl(byte[] bytes)
+    {
+        string? mediaType = bytes.Length >= 8 && bytes[0] == 0x89 && bytes[1] == 0x50 &&
+            bytes[2] == 0x4E && bytes[3] == 0x47 && bytes[4] == 0x0D && bytes[5] == 0x0A &&
+            bytes[6] == 0x1A && bytes[7] == 0x0A ? "image/png" :
+            bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF ? "image/jpeg" :
+            bytes.Length >= 12 && bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F' &&
+            bytes[8] == 'W' && bytes[9] == 'E' && bytes[10] == 'B' && bytes[11] == 'P' ? "image/webp" :
+            bytes.Length >= 6 && bytes[0] == 'G' && bytes[1] == 'I' && bytes[2] == 'F' ? "image/gif" : null;
+        return mediaType is null ? null : $"data:{mediaType};base64,{Convert.ToBase64String(bytes)}";
     }
 
     private void ClearTelegramAvatar()
@@ -321,8 +384,8 @@ public partial class MainWindow
             ? Copy("Освободите место в тарифе, затем повторите восстановление доступа.",
                 "Free a slot in your plan, then retry restoring device access.")
             : deviceMissing
-                ? Copy("Устройство больше не зарегистрировано. Обновите список и повторите действие.",
-                    "This device is no longer registered. Refresh the list and retry the action.")
+                ? Copy("Устройство больше не зарегистрировано. Обновите список, чтобы увидеть актуальные устройства.",
+                    "This device is no longer registered. Refresh the list to see the current devices.")
                 : Copy("Сервер не подтвердил изменение. Проверьте подключение и обновите список.",
                     "The server did not confirm the change. Check your connection and refresh the list.");
         var retry = DeyttTheme.PrimaryButton(Copy("Обновить список", "Refresh list"), () => { });
@@ -338,10 +401,11 @@ public partial class MainWindow
             {
                 DeyttTheme.TextBlock(detail, 13, DeyttTheme.Muted),
                 retry,
-                retryChange,
                 close,
             },
         };
+        if (!deviceMissing)
+            content.Children.Insert(2, retryChange);
         var result = await ShowContentInShellAsync(title, content, 500, dialog =>
         {
             if (retry.Child is Button retryButton)

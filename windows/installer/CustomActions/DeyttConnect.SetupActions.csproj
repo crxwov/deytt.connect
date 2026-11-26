@@ -9,6 +9,7 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="DeyttConnect.GraphiteSetup" />
     <PackageReference Include="WixToolset.Dtf.CustomAction" Version="6.0.0" />
     <PackageReference Include="WixToolset.Dtf.WindowsInstaller" Version="6.0.0" />
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />

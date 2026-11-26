@@ -1,6 +1,10 @@
 using Avalonia;
 using Avalonia.Media.Fonts;
+using Avalonia.Threading;
 using System;
+using System.IO.Pipes;
+using System.Runtime.InteropServices;
+using System.Text;
 using DeyttConnect.Protocol;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.Views;
@@ -24,26 +28,180 @@ internal sealed record QaHomeFixture(
     bool RouteProbeInProgress = false,
     bool RouteProbeCancelRequested = false,
     string? ExpandedRouteCountry = null,
-    bool DisableNativeMapInitialization = false);
+    bool DisableNativeMapInitialization = false,
+    string? ThemePreference = null,
+    Func<CancellationToken, Task<WindowsUpdateRelease?>>? ManualUpdateLookup = null,
+    Func<WindowsUpdateRelease, Action<long, long>?, CancellationToken, Task<VerifiedWindowsUpdatePackage>>?
+        ManualUpdateDownload = null);
 
 sealed class Program
 {
+    private const string SingleInstanceMutexName = @"Local\DEYTT.Connect.Windows";
+    private const string WindowsActivationPipe = "DEYTT.Connect.Windows.Activate";
+    private static string? ActivationPipeName => OperatingSystem.IsWindows() ? WindowsActivationPipe
+        : Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") is { Length: > 0 } runtimeDirectory &&
+          Path.IsPathFullyQualified(runtimeDirectory)
+            ? Path.Combine(runtimeDirectory, "deytt-connect-activate.sock")
+            : null;
+    private static CancellationTokenSource? _activationCancellation;
+
+    [DllImport("shell32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern int SetCurrentProcessExplicitAppUserModelID(string appID);
+
+    [DllImport("shell32.dll", SetLastError = true)]
+    private static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
     // Initialization code. Don't use any Avalonia, third-party APIs or any
     // SynchronizationContext-reliant code before AppMain is called: things aren't initialized
     // yet and stuff might break.
     [STAThread]
     public static void Main(string[] args)
     {
+        if (OperatingSystem.IsWindows())
+        {
+            try
+            {
+                SetCurrentProcessExplicitAppUserModelID("DEYTT.Connect.Client");
+                SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero);
+            }
+            catch { }
+        }
+
         var appArguments = args.ToList();
+        string? importUrl = null;
         for (var index = appArguments.Count - 1; index >= 0; index--)
         {
             if (!SetupWindow.TryGetSubscriptionUrl(appArguments[index], out var subscriptionUrl))
                 continue;
-            App.InitialImportUrl = subscriptionUrl;
+            importUrl = subscriptionUrl;
             appArguments.RemoveAt(index);
         }
 
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(appArguments.ToArray());
+        Mutex? instanceMutex = null;
+        if (ActivationPipeName is { } activationPipe)
+        {
+            bool isPrimaryInstance;
+            instanceMutex = OperatingSystem.IsWindows()
+                ? new Mutex(initiallyOwned: true, SingleInstanceMutexName, out isPrimaryInstance)
+                : new Mutex(initiallyOwned: true, "DEYTT.Connect.Linux",
+                    new NamedWaitHandleOptions { CurrentUserOnly = true, CurrentSessionOnly = false },
+                    out isPrimaryInstance);
+            if (!isPrimaryInstance)
+            {
+                instanceMutex.Dispose();
+                SignalPrimaryInstance(activationPipe, importUrl);
+                return;
+            }
+        }
+
+        App.InitialImportUrl = importUrl;
+
+        try
+        {
+            BuildAvaloniaApp().StartWithClassicDesktopLifetime(appArguments.ToArray());
+        }
+        finally
+        {
+            StopActivationListener();
+            instanceMutex?.Dispose();
+        }
+    }
+
+    internal static void StartActivationListener(MainWindow mainWindow)
+    {
+        if (ActivationPipeName is not { } activationPipe)
+            return;
+        _activationCancellation = new CancellationTokenSource();
+        _ = ListenForActivationAsync(mainWindow, activationPipe, _activationCancellation.Token);
+    }
+
+    internal static void StopActivationListener()
+    {
+        _activationCancellation?.Cancel();
+        _activationCancellation?.Dispose();
+        _activationCancellation = null;
+    }
+
+    private static void SignalPrimaryInstance(string activationPipe, string? importUrl)
+    {
+        for (var attempt = 0; attempt < 10; attempt++)
+        {
+            try
+            {
+                using var client = new NamedPipeClientStream(".", activationPipe,
+                    PipeDirection.Out, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                client.Connect(timeout: 150);
+                using var writer = new StreamWriter(client, new UTF8Encoding(false), leaveOpen: true);
+                writer.WriteLine(string.IsNullOrWhiteSpace(importUrl)
+                    ? string.Empty
+                    : Convert.ToBase64String(Encoding.UTF8.GetBytes(importUrl)));
+                writer.Flush();
+                return;
+            }
+            catch (TimeoutException) when (attempt < 9)
+            {
+                Thread.Sleep(50);
+            }
+            catch (TimeoutException)
+            {
+                return;
+            }
+            catch (IOException) when (attempt < 9)
+            {
+                Thread.Sleep(50);
+            }
+            catch (IOException)
+            {
+                return;
+            }
+        }
+    }
+
+    private static async Task ListenForActivationAsync(MainWindow mainWindow, string activationPipe, CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await using var server = new NamedPipeServerStream(activationPipe, PipeDirection.In,
+                    maxNumberOfServerInstances: 1, PipeTransmissionMode.Byte,
+                    PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                await server.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
+                using var reader = new StreamReader(server, Encoding.UTF8, detectEncodingFromByteOrderMarks: false,
+                    leaveOpen: true);
+                var importUrl = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+                string? decodedImportUrl = null;
+                if (!string.IsNullOrWhiteSpace(importUrl))
+                {
+                    try
+                    {
+                        var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(importUrl));
+                        if (SetupWindow.TryGetSubscriptionUrl(decoded, out var normalized))
+                            decodedImportUrl = normalized;
+                    }
+                    catch (FormatException)
+                    {
+                        // Ignore malformed activation payloads and still raise the existing window.
+                    }
+                }
+                Dispatcher.UIThread.Post(() => mainWindow.ActivateFromExternalLaunch(decodedImportUrl));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (IOException) when (!cancellationToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+            }
+        }
     }
 
     // Avalonia configuration, don't remove; also used by visual designer.

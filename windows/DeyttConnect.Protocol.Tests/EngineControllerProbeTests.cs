@@ -251,24 +251,39 @@ public sealed class EngineControllerProbeTests
     }
 
     [Fact]
-    public async Task RouteMeasurementFinishesAllLatenciesBeforeSequentialSpeedChecks()
+    public async Task RouteMeasurementFinishesAllLatenciesInParallelBeforeTopToBottomSpeedChecks()
     {
-        var endpoints = new[] { ProbeEndpoint("route:NL:VLESS"), ProbeEndpoint("awg31:cnA") };
+        var endpoints = new[]
+        {
+            ProbeEndpoint("route:NL:VLESS"),
+            ProbeEndpoint("route:NL:TROJAN"),
+            ProbeEndpoint("awg31:cnA"),
+        };
         var latencyFinished = new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
+        var allLatenciesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var startedCount = 0;
+        var speedOrder = new List<string>();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
         var activeSpeedChecks = 0;
         var maximumSpeedChecks = 0;
 
         var results = await EngineController.MeasureRoutesAsync(endpoints, "HEAD", new string('t', 32),
-            CancellationToken.None, _ => { },
-            async (endpoint, _, _, _) =>
+            timeout.Token, _ => { },
+            async (endpoint, _, token, _) =>
             {
-                await Task.Delay(10);
+                if (Interlocked.Increment(ref startedCount) == endpoints.Length)
+                    allLatenciesStarted.TrySetResult();
+                await allLatenciesStarted.Task.WaitAsync(token);
+                // Make last endpoint respond earliest to prove speed still runs top-to-bottom.
+                if (endpoint == endpoints[0])
+                    await Task.Delay(30, token);
                 latencyFinished[endpoint.RouteTag] = true;
                 return 20;
             },
             async (endpoint, _, _, report) =>
             {
                 Assert.Equal(endpoints.Length, latencyFinished.Count);
+                speedOrder.Add(endpoint.RouteTag);
                 var active = Interlocked.Increment(ref activeSpeedChecks);
                 maximumSpeedChecks = Math.Max(maximumSpeedChecks, active);
                 report(1000, 1000, 500);
@@ -278,19 +293,20 @@ public sealed class EngineControllerProbeTests
             });
 
         Assert.Equal(1, maximumSpeedChecks);
+        Assert.Equal(endpoints.Select(e => e.RouteTag), speedOrder);
         Assert.All(results, result => Assert.Equal("complete", result.Stage));
         Assert.All(results, result => Assert.NotNull(result.LatencyMilliseconds));
     }
 
     [Fact]
-    public async Task RouteMeasurementCapsLatencyConcurrencyAtFourAndPublishesEveryRoute()
+    public async Task RouteMeasurementRunsAllLatenciesInParallelAndPublishesEveryRoute()
     {
         var endpoints = Enumerable.Range(0, 9)
             .Select(index => ProbeEndpoint($"route:{index}:VLESS"))
             .ToArray();
         var latencyFinished = new ConcurrentDictionary<string, bool>(StringComparer.Ordinal);
         var published = new ConcurrentBag<ServiceProbeResult>();
-        var fourLatenciesStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allLatenciesStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var latencyStarted = 0;
         var activeLatencies = 0;
         var maximumLatencies = 0;
@@ -306,9 +322,9 @@ public sealed class EngineControllerProbeTests
                 UpdateMaximum(ref maximumLatencies, active);
                 try
                 {
-                    if (Interlocked.Increment(ref latencyStarted) == 4)
-                        fourLatenciesStarted.TrySetResult(true);
-                    await fourLatenciesStarted.Task.WaitAsync(token);
+                    if (Interlocked.Increment(ref latencyStarted) == endpoints.Length)
+                        allLatenciesStarted.TrySetResult(true);
+                    await allLatenciesStarted.Task.WaitAsync(token);
                     report(1, 40);
                     await Task.Delay(20, token);
                     latencyFinished[endpoint.RouteTag] = true;
@@ -319,7 +335,7 @@ public sealed class EngineControllerProbeTests
                     Interlocked.Decrement(ref activeLatencies);
                 }
             },
-            async (_, _, token, report) =>
+            async (endpoint, _, token, report) =>
             {
                 Assert.Equal(endpoints.Length, latencyFinished.Count);
                 var active = Interlocked.Increment(ref activeSpeedChecks);
@@ -336,7 +352,7 @@ public sealed class EngineControllerProbeTests
                 }
             });
 
-        Assert.Equal(4, maximumLatencies);
+        Assert.Equal(endpoints.Length, maximumLatencies);
         Assert.Equal(1, maximumSpeedChecks);
         Assert.All(results, result => Assert.Equal("complete", result.Stage));
         Assert.All(results, result => Assert.Equal(40, result.LatencyMilliseconds));
@@ -470,6 +486,96 @@ public sealed class EngineControllerProbeTests
 
         Assert.NotNull(result.BytesPerSecond);
         Assert.False(result.Retryable);
+    }
+
+    [Fact]
+    public async Task DownloadHeaderBudgetDoesNotCutOffFullSampleWindow()
+    {
+        using var handler = new DelayedHeaderHandler(
+            headerDelay: TimeSpan.FromMilliseconds(140),
+            chunkSize: 128 * 1024,
+            chunkCount: 2,
+            chunkInterval: TimeSpan.FromMilliseconds(40));
+        using var client = new System.Net.Http.HttpClient(handler)
+        {
+            Timeout = Timeout.InfiniteTimeSpan,
+        };
+
+        var progressCalls = 0;
+        var measurement = await EngineController.MeasureDownloadWithClientAsync(
+            client,
+            "test-token",
+            CancellationToken.None,
+            (_, _, _) => Interlocked.Increment(ref progressCalls),
+            headerTimeout: TimeSpan.FromMilliseconds(220),
+            sampleDuration: TimeSpan.FromMilliseconds(160));
+
+        Assert.Null(measurement.Error);
+        Assert.False(measurement.Retryable);
+        Assert.NotNull(measurement.BytesPerSecond);
+        Assert.True(measurement.BytesPerSecond > 0);
+        Assert.True(progressCalls > 0);
+    }
+
+    private sealed class DelayedHeaderHandler(
+        TimeSpan headerDelay,
+        int chunkSize,
+        int chunkCount,
+        TimeSpan chunkInterval) : System.Net.Http.HttpMessageHandler
+    {
+        protected override async Task<System.Net.Http.HttpResponseMessage> SendAsync(
+            System.Net.Http.HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(headerDelay, cancellationToken);
+            var response = new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new System.Net.Http.StreamContent(
+                    new PacedSampleStream(chunkSize, chunkCount, chunkInterval)),
+            };
+            response.Content.Headers.ContentLength = 32L * 1024L * 1024L;
+            return response;
+        }
+    }
+
+    private sealed class PacedSampleStream(
+        int chunkSize,
+        int chunkCount,
+        TimeSpan chunkInterval) : Stream
+    {
+        private int _chunksEmitted;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (_chunksEmitted >= chunkCount)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return 0;
+            }
+
+            if (_chunksEmitted > 0)
+            {
+                await Task.Delay(chunkInterval, cancellationToken);
+            }
+
+            _chunksEmitted++;
+            var toWrite = Math.Min(chunkSize, buffer.Length);
+            buffer.Span[..toWrite].Fill(0x5A);
+            return toWrite;
+        }
     }
 
     private static ProbeRouteEndpoint ProbeEndpoint(string routeTag) =>

@@ -6,12 +6,14 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 POLICY = json.loads((ROOT / "release/signing-policy.json").read_text())
+RELEASE_KEY_ALIAS = "deytt-connect"
 
 
 def run(*args):
@@ -28,69 +30,110 @@ def tool(name):
     return str(path)
 
 
+def keytool():
+    java_home = os.environ.get("JAVA_HOME")
+    candidate = Path(java_home) / "bin" / ("keytool.exe" if os.name == "nt" else "keytool") if java_home else None
+    found = candidate if candidate and candidate.is_file() else shutil.which("keytool")
+    if not found:
+        raise ValueError("JDK keytool is required to check the signing certificate")
+    return str(found)
+
+
+def normalize_fingerprint(value):
+    fingerprint = value.lower().replace(":", "")
+    if not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
+        raise ValueError("invalid signing certificate fingerprint")
+    return fingerprint
+
+
+def check_keystore_certificate(keystore, password_file):
+    """Check the selected PKCS#12 certificate without reading its password in Python."""
+    output = run(
+        keytool(), "-J-Duser.language=en", "-J-Duser.country=US", "-list", "-v",
+        "-keystore", str(keystore), "-storepass:file", str(password_file),
+        "-alias", RELEASE_KEY_ALIAS,
+    )
+    fingerprints = re.findall(r"^[ \t]*SHA256:[ \t]*([0-9a-fA-F:]+)$", output, re.M)
+    if (len(fingerprints) != 1 or
+            normalize_fingerprint(fingerprints[0]) != normalize_fingerprint(POLICY["certificate_sha256"])):
+        raise ValueError("selected keystore certificate does not match the approved release signer")
+
+
 def inspect_apk(apk, qa=False, expected_version=None, expected_version_code=None):
-    badging = run(tool("aapt"), "dump", "badging", str(apk))
-    package = POLICY["package"] + (".qa" if qa else "")
-    identities = badging.splitlines()
-    if not identities:
-        raise ValueError("aapt returned no package identity")
-    identity = identities[0]
-    if not identity.startswith(f"package: name='{package}' "):
-        raise ValueError("unexpected package identity")
-    if expected_version and f"versionName='{expected_version}'" not in identity:
-        raise ValueError("apk version name does not match the release tag")
-    if expected_version_code is not None and f"versionCode='{expected_version_code}'" not in identity:
-        raise ValueError("apk version code does not match the release policy")
-    if "application-debuggable" in badging:
-        raise ValueError("distribution apk must not be debuggable")
-    sdk = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
-    target = re.search(r"^targetSdkVersion:'(\d+)'", badging, re.M)
-    if not sdk or int(sdk[1]) != POLICY["min_sdk"] or not target or int(target[1]) < 35:
-        raise ValueError("unexpected android sdk policy")
-    allowed_permissions = {
-        "android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE",
-        "android.permission.CHANGE_NETWORK_STATE", "android.permission.FOREGROUND_SERVICE",
-        "android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED",
-        "android.permission.POST_NOTIFICATIONS", "android.permission.REQUEST_INSTALL_PACKAGES",
-        "android.permission.WAKE_LOCK",
-        package + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
-    }
-    permissions = set(re.findall(r"^uses-permission: name='([^']+)'", badging, re.M))
-    if permissions - allowed_permissions:
-        raise ValueError("unexpected permissions: " + ", ".join(sorted(permissions - allowed_permissions)))
-    with zipfile.ZipFile(apk) as archive:
-        names = archive.namelist()
-        if any(Path(name).name in {"libwg.so", "libwg-quick.so"} for name in names):
-            raise ValueError("unused root-management native tools must not ship")
-        if not any(name.endswith("/libwg-go.so") for name in names):
-            raise ValueError("amneziawg userspace backend missing")
-        if not any(name.endswith("/libdeytt-awg.so") for name in names):
-            raise ValueError("amneziawg domain-routing backend missing")
-        if not any(name.endswith("/libopenflux_jni.so") for name in names):
-            raise ValueError("OpenFlux transport backend missing")
-    run(tool("zipalign"), "-c", "-P", "16", "4", str(apk))
-    return identity
+    apk_path = Path(apk)
+    temp_dir = None
+    try:
+        try:
+            str(apk_path).encode("ascii")
+            inspect_path = apk_path
+        except UnicodeEncodeError:
+            temp_dir = tempfile.mkdtemp(prefix="apk-inspect-")
+            inspect_path = Path(temp_dir) / "inspect.apk"
+            shutil.copy2(apk_path, inspect_path)
+        badging = run(tool("aapt"), "dump", "badging", str(inspect_path))
+        package = POLICY["package"] + (".qa" if qa else "")
+        identities = badging.splitlines()
+        if not identities:
+            raise ValueError("aapt returned no package identity")
+        identity = identities[0]
+        if not identity.startswith(f"package: name='{package}' "):
+            raise ValueError("unexpected package identity")
+        if expected_version and f"versionName='{expected_version}'" not in identity:
+            raise ValueError("apk version name does not match the release tag")
+        if expected_version_code is not None and f"versionCode='{expected_version_code}'" not in identity:
+            raise ValueError("apk version code does not match the release policy")
+        if "application-debuggable" in badging:
+            raise ValueError("distribution apk must not be debuggable")
+        sdk = re.search(r"^sdkVersion:'(\d+)'", badging, re.M)
+        target = re.search(r"^targetSdkVersion:'(\d+)'", badging, re.M)
+        if not sdk or int(sdk[1]) != POLICY["min_sdk"] or not target or int(target[1]) < 35:
+            raise ValueError("unexpected android sdk policy")
+        allowed_permissions = {
+            "android.permission.INTERNET", "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.CHANGE_NETWORK_STATE", "android.permission.FOREGROUND_SERVICE",
+            "android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED",
+            "android.permission.POST_NOTIFICATIONS", "android.permission.REQUEST_INSTALL_PACKAGES",
+            # WorkManager reschedules the hourly subscription refresh after reboots.
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            "android.permission.WAKE_LOCK",
+            package + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+        }
+        permissions = set(re.findall(r"^uses-permission: name='([^']+)'", badging, re.M))
+        if permissions - allowed_permissions:
+            raise ValueError("unexpected permissions: " + ", ".join(sorted(permissions - allowed_permissions)))
+        with zipfile.ZipFile(inspect_path) as archive:
+            names = archive.namelist()
+            if len(names) != len(set(names)):
+                raise ValueError("apk contains duplicate ZIP entries")
+            if archive.testzip() is not None:
+                raise ValueError("apk ZIP entry failed its CRC check")
+            if any(Path(name).name in {"libwg.so", "libwg-quick.so"} for name in names):
+                raise ValueError("unused root-management native tools must not ship")
+            if not any(name.endswith("/libwg-go.so") for name in names):
+                raise ValueError("amneziawg userspace backend missing")
+            if not any(name.endswith("/libdeytt-awg.so") for name in names):
+                raise ValueError("amneziawg domain-routing backend missing")
+            if not any(name.endswith("/libopenflux_jni.so") for name in names):
+                raise ValueError("OpenFlux transport backend missing")
+        run(tool("zipalign"), "-c", "-P", "16", "4", str(inspect_path))
+        return identity
+    finally:
+        if temp_dir and Path(temp_dir).exists():
+            shutil.rmtree(temp_dir, ignore_errors=True)
 
 
-def verify(apk, qa=False, legacy_certificate_sha256=None, release_certificate_sha256=None,
-           expected_version=None, expected_version_code=None):
+def verify(apk, qa=False, expected_version=None, expected_version_code=None):
     identity = inspect_apk(apk, qa, expected_version, expected_version_code)
-    expected_legacy = (legacy_certificate_sha256 or POLICY["legacy_certificate_sha256"]).lower().replace(":", "")
-    expected_release = (release_certificate_sha256 or POLICY["release_certificate_sha256"]).lower().replace(":", "")
-    if not re.fullmatch(r"[0-9a-f]{64}", expected_legacy) or not re.fullmatch(r"[0-9a-f]{64}", expected_release):
-        raise ValueError("invalid expected signing certificate fingerprint")
-    # Independently validate the configured signer on both supported API ranges.
+    expected = normalize_fingerprint(POLICY["certificate_sha256"])
     # A cert in untrusted metadata is insufficient: apksigner verifies the APK.
-    for minimum, maximum, expected in (
-        (24, 27, expected_legacy),
-        (28, None, expected_release),
-    ):
+    # Check older API levels, current API 28+, and Android 16 explicitly.
+    for minimum, maximum in ((POLICY["min_sdk"], 27), (28, None), (36, 36)):
         args = [tool("apksigner"), "verify", "--print-certs", "--min-sdk-version", str(minimum)]
         if maximum is not None:
             args += ["--max-sdk-version", str(maximum)]
         output = run(*args, str(apk))
-        fingerprints = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([0-9a-f]+)$", output, re.M)
-        if fingerprints != [expected]:
+        fingerprints = re.findall(r"^Signer #\d+ certificate SHA-256 digest: ([0-9a-f]+)$", output, re.M | re.I)
+        if [fingerprint.lower() for fingerprint in fingerprints] != [expected]:
             raise ValueError(f"Unexpected signing certificate for API {minimum}")
     print(identity)
     print(f"verified release policy and signatures: {apk.name}")
@@ -102,76 +145,91 @@ def sign(args):
     inspect_apk(args.apk, args.qa, args.expected_version, args.expected_version_code)
     if args.output.resolve() == args.apk.resolve():
         raise ValueError("signing must not overwrite the unsigned input")
-    single_signer = POLICY["legacy_certificate_sha256"] == POLICY["release_certificate_sha256"]
     private_paths = [args.keystore, args.password_file]
-    if not single_signer:
-        if args.legacy_keystore is None or args.legacy_password_env not in os.environ:
-            raise ValueError("the configured signing policy requires the legacy signing credentials")
-        private_paths.append(args.legacy_keystore)
-    lineage_file = args.lineage_file or (ROOT / "release/signing-lineage.bin")
-    if not single_signer and not lineage_file.is_file():
-        raise ValueError("signing certificate lineage is unavailable")
     for private_path in private_paths:
         if private_path.resolve().is_relative_to(ROOT):
             raise ValueError("keep signing keys and passwords outside the source checkout")
         if not private_path.is_file():
             raise ValueError("signing credentials are unavailable")
+    check_keystore_certificate(args.keystore, args.password_file)
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix=".sign-", dir=args.output.parent) as temporary:
+    with tempfile.TemporaryDirectory(prefix=".sign-") as temporary:
+        safe_input = Path(temporary) / "input.apk"
+        shutil.copy2(args.apk, safe_input)
         output = Path(temporary) / args.output.name
         command = [
             tool("apksigner"), "sign", "--out", str(output),
-            "--debuggable-apk-permitted", "false", "--v4-signing-enabled", "false",
+            "--v1-signing-enabled", "true",
+            "--v2-signing-enabled", "true",
+            "--v3-signing-enabled", "true",
+            "--v4-signing-enabled", "false",
+            "--debuggable-apk-permitted", "false",
         ]
-        if single_signer:
-            command += ["--ks", str(args.keystore), "--ks-key-alias", "deytt-connect",
-                        "--ks-pass", "file:" + str(args.password_file)]
-        else:
-            command += [
-                "--rotation-min-sdk-version", str(POLICY["rotation_min_sdk"]),
-                "--lineage", str(lineage_file),
-                "--ks", str(args.legacy_keystore), "--ks-key-alias", args.legacy_key_alias,
-                "--ks-pass", "env:" + args.legacy_password_env,
-                "--next-signer", "--ks", str(args.keystore), "--ks-key-alias", "deytt-connect",
-                "--ks-pass", "file:" + str(args.password_file),
-            ]
-        run(*command, str(args.apk))
-        digest = verify(
-            output, args.qa, args.legacy_certificate_sha256, args.release_certificate_sha256,
-            args.expected_version, args.expected_version_code,
-        )
-        output.replace(args.output)
+        command += ["--ks", str(args.keystore), "--ks-key-alias", RELEASE_KEY_ALIAS,
+                    "--ks-pass", "file:" + str(args.password_file)]
+        run(*command, str(safe_input))
+        digest = verify(output, args.qa, args.expected_version, args.expected_version_code)
+        shutil.copy2(output, args.output)
     args.output.with_suffix(".apk.sha256").write_text(f"{digest}  {args.output.name}\n")
     print(f"SHA-256: {digest}")
 
 
-def main():
+def bundle(args):
+    if args.output.resolve() == args.apk.resolve():
+        raise ValueError("bundle output must not overwrite the APK")
+    if args.output.suffix.lower() != ".zip":
+        raise ValueError("install bundle output must be a .zip file")
+    digest = verify(args.apk, expected_version=args.expected_version,
+                    expected_version_code=args.expected_version_code)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".bundle-", dir=args.output.parent) as temporary:
+        output = Path(temporary) / args.output.name
+        with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.write(args.apk, "app-universal-release.apk")
+            archive.writestr("app-universal-release.apk.sha256",
+                             f"{digest}  app-universal-release.apk\n")
+        with zipfile.ZipFile(output) as archive:
+            if archive.namelist() != ["app-universal-release.apk", "app-universal-release.apk.sha256"]:
+                raise ValueError("install bundle contains unexpected ZIP entries")
+            if archive.testzip() is not None:
+                raise ValueError("install bundle ZIP entry failed its CRC check")
+            with archive.open("app-universal-release.apk") as source:
+                if hashlib.file_digest(source, "sha256").hexdigest() != digest:
+                    raise ValueError("bundled APK changed after signature verification")
+        output.replace(args.output)
+    print(f"created install bundle: {args.output.name}")
+
+
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("sign", "verify"):
+    for name in ("sign", "verify", "bundle"):
         command = commands.add_parser(name)
         command.add_argument("apk", type=Path)
-        command.add_argument("--qa", action="store_true", help="allow the isolated .qa package only")
-        command.add_argument("--legacy-certificate-sha256")
-        command.add_argument("--release-certificate-sha256")
         command.add_argument("--expected-version")
         command.add_argument("--expected-version-code", type=int)
+        if name in ("sign", "verify"):
+            command.add_argument("--qa", action="store_true", help="allow the isolated .qa package only")
         if name == "sign":
             command.add_argument("--output", type=Path, required=True)
             command.add_argument("--keystore", type=Path, required=True)
             command.add_argument("--password-file", type=Path, required=True)
-            command.add_argument("--legacy-keystore", type=Path)
-            command.add_argument("--legacy-key-alias", default="androiddebugkey")
-            command.add_argument("--legacy-password-env", default="DEYTT_LEGACY_PASSWORD")
-            command.add_argument("--lineage-file", type=Path)
+        elif name == "bundle":
+            command.add_argument("--output", type=Path, required=True)
+    return parser
+
+
+def main():
+    parser = build_parser()
     args = parser.parse_args()
     try:
         if args.command == "sign":
             sign(args)
+        elif args.command == "bundle":
+            bundle(args)
         else:
             print("SHA-256: " + verify(
-                args.apk, args.qa, args.legacy_certificate_sha256, args.release_certificate_sha256,
-                args.expected_version, args.expected_version_code,
+                args.apk, args.qa, args.expected_version, args.expected_version_code,
             ))
     except subprocess.CalledProcessError as error:
         # Passwords are passed by file/env reference, never command arguments.

@@ -1,18 +1,22 @@
 <resources>
     <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
         <item name="android:fontFamily">sans</item>
-        <item name="android:windowBackground">#080B12</item>
-        <item name="android:colorAccent">#8B96FF</item>
-        <item name="android:navigationBarColor">#080B12</item>
-        <item name="android:statusBarColor">#080B12</item>
+        <item name="android:windowBackground">#000000</item>
+        <item name="android:colorAccent">#E5E7E9</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:statusBarColor">#000000</item>
         <item name="android:windowLightStatusBar">false</item>
     </style>
+    <style name="AppTheme.Starting" parent="@style/AppTheme">
+        <item name="android:windowBackground">#000000</item>
+    </style>
+    <style name="AppTheme.MainStarting" parent="@style/AppTheme.Starting" />
     <style name="DeyttDialogTheme" parent="android:style/Theme.Material.Dialog.Alert">
-        <item name="android:colorAccent">#6BDDF2</item>
-        <item name="android:colorBackground">#111823</item>
+        <item name="android:colorAccent">#E5E7E9</item>
+        <item name="android:colorBackground">#171717</item>
         <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:textColorPrimary">#F2F5FC</item>
-        <item name="android:textColorSecondary">#9AA8BC</item>
+        <item name="android:textColorPrimary">#F5F5F5</item>
+        <item name="android:textColorSecondary">#A0A0A0</item>
         <item name="android:fontFamily">sans-serif</item>
         <item name="android:windowNoTitle">true</item>
     </style>

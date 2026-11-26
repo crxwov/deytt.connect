@@ -1,10 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="DeyttConnect.Windows.Views.SupportView">
-    <Grid RowDefinitions="Auto,*" Background="#080B12">
+    <Grid RowDefinitions="Auto,*" Background="#101010">
         <Border Grid.Row="0"
-                Background="#0A1018"
-                BorderBrush="#202B38"
+                Background="#101010"
+                BorderBrush="#2A2A2A"
                 BorderThickness="0,0,0,1"
                 Padding="22,17">
             <Grid RowDefinitions="Auto,Auto">
@@ -15,20 +15,20 @@
                                    FontFamily="fonts:DEYTT#JetBrains Mono"
                                    FontSize="9"
                                    FontWeight="SemiBold"
-                                   Foreground="#8291A8" />
+                                   Foreground="#A0A0A0" />
                         <TextBlock x:Name="HeaderTitle"
                                    Text="поддержка"
                                    FontSize="21"
                                    FontWeight="SemiBold"
-                                   Foreground="#F2F5FC" />
+                                   Foreground="#F5F5F5" />
                     </StackPanel>
                     <Button x:Name="RefreshButton"
                             Grid.Column="1"
                             Classes="deytt-button"
                             Margin="0,0,9,0"
                             Padding="13,9"
-                            Background="#111823"
-                            BorderBrush="#283548"
+                            Background="#171717"
+                            BorderBrush="#2A2A2A"
                             BorderThickness="1"
                             CornerRadius="12"
                             Content="обновить" />
@@ -36,8 +36,8 @@
                             Grid.Column="2"
                             Classes="deytt-button"
                             Padding="13,9"
-                            Background="#111823"
-                            BorderBrush="#283548"
+                            Background="#171717"
+                            BorderBrush="#2A2A2A"
                             BorderThickness="1"
                             CornerRadius="12"
                             Content="назад" />
@@ -62,17 +62,17 @@
                         <TextBlock x:Name="HelpIntro"
                                    Text="центр помощи"
                                    FontSize="15"
-                                   Foreground="#9AA8BC"
+                                   Foreground="#A0A0A0"
                                    TextWrapping="Wrap"
                                    Margin="2,0,2,8" />
                         <Button x:Name="HelpCenterButton"
                                 Classes="deytt-button"
                                 HorizontalContentAlignment="Stretch"
                                 Padding="0">
-                            <Border Background="#111823" BorderBrush="#283548" BorderThickness="1"
+                            <Border Background="#171717" BorderBrush="#2A2A2A" BorderThickness="1"
                                     CornerRadius="16" Padding="16,14">
                                 <Grid ColumnDefinitions="42,*,Auto" ColumnSpacing="12">
-                                    <Border Width="38" Height="38" CornerRadius="12" Background="#1B303D">
+                                    <Border Width="38" Height="38" CornerRadius="12" Background="#2A2A2A">
                                         <TextBlock Text="◉" Foreground="#6BDDF2" FontSize="18"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
@@ -80,7 +80,7 @@
                                         <TextBlock x:Name="HelpCenterTitle" Text="центр помощи"
                                                    FontSize="16" FontWeight="SemiBold" />
                                         <TextBlock x:Name="HelpCenterSubtitle" Text="написать в поддержку и посмотреть обращения"
-                                                   FontSize="12" Foreground="#9AA8BC" TextWrapping="Wrap" />
+                                                   FontSize="12" Foreground="#A0A0A0" TextWrapping="Wrap" />
                                     </StackPanel>
                                     <TextBlock Grid.Column="2" Text="›" FontSize="20" Foreground="#6BDDF2"
                                                VerticalAlignment="Center" />
@@ -91,10 +91,10 @@
                                 Classes="deytt-button"
                                 HorizontalContentAlignment="Stretch"
                                 Padding="0">
-                            <Border Background="#111823" BorderBrush="#283548" BorderThickness="1"
+                            <Border Background="#171717" BorderBrush="#2A2A2A" BorderThickness="1"
                                     CornerRadius="16" Padding="16,14">
                                 <Grid ColumnDefinitions="42,*,Auto" ColumnSpacing="12">
-                                    <Border Width="38" Height="38" CornerRadius="12" Background="#1B303D">
+                                    <Border Width="38" Height="38" CornerRadius="12" Background="#2A2A2A">
                                         <TextBlock Text="§" Foreground="#6BDDF2" FontSize="18"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
@@ -102,7 +102,7 @@
                                         <TextBlock x:Name="HelpTermsTitle" Text="условия использования"
                                                    FontSize="16" FontWeight="SemiBold" />
                                         <TextBlock x:Name="HelpTermsSubtitle" Text="пользовательское соглашение"
-                                                   FontSize="12" Foreground="#9AA8BC" TextWrapping="Wrap" />
+                                                   FontSize="12" Foreground="#A0A0A0" TextWrapping="Wrap" />
                                     </StackPanel>
                                     <TextBlock Grid.Column="2" Text="›" FontSize="20" Foreground="#6BDDF2"
                                                VerticalAlignment="Center" />
@@ -113,10 +113,10 @@
                                 Classes="deytt-button"
                                 HorizontalContentAlignment="Stretch"
                                 Padding="0">
-                            <Border Background="#111823" BorderBrush="#283548" BorderThickness="1"
+                            <Border Background="#171717" BorderBrush="#2A2A2A" BorderThickness="1"
                                     CornerRadius="16" Padding="16,14">
                                 <Grid ColumnDefinitions="42,*,Auto" ColumnSpacing="12">
-                                    <Border Width="38" Height="38" CornerRadius="12" Background="#1B303D">
+                                    <Border Width="38" Height="38" CornerRadius="12" Background="#2A2A2A">
                                         <TextBlock Text="◇" Foreground="#6BDDF2" FontSize="18"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
@@ -124,7 +124,7 @@
                                         <TextBlock x:Name="HelpPrivacyTitle" Text="конфиденциальность"
                                                    FontSize="16" FontWeight="SemiBold" />
                                         <TextBlock x:Name="HelpPrivacySubtitle" Text="политика обработки данных"
-                                                   FontSize="12" Foreground="#9AA8BC" TextWrapping="Wrap" />
+                                                   FontSize="12" Foreground="#A0A0A0" TextWrapping="Wrap" />
                                     </StackPanel>
                                     <TextBlock Grid.Column="2" Text="›" FontSize="20" Foreground="#6BDDF2"
                                                VerticalAlignment="Center" />
@@ -136,8 +136,8 @@
             </Grid>
             <Grid x:Name="SupportPane" RowDefinitions="Auto,*,Auto" IsVisible="True">
                 <Border Grid.Row="0"
-                        Background="#111823"
-                        BorderBrush="#283548"
+                        Background="#171717"
+                        BorderBrush="#2A2A2A"
                         BorderThickness="1"
                         CornerRadius="14"
                         Padding="14,10"
@@ -146,14 +146,14 @@
                         <Ellipse x:Name="StatusDot"
                                  Width="8"
                                  Height="8"
-                                 Fill="#9AA8BC"
+                                 Fill="#A0A0A0"
                                  VerticalAlignment="Center"
                                  Margin="0,0,10,0" />
                         <TextBlock x:Name="StatusText"
                                    Grid.Column="1"
                                    Text="загрузка приостановлена"
                                    FontSize="12"
-                                   Foreground="#9AA8BC"
+                                   Foreground="#A0A0A0"
                                    TextWrapping="Wrap"
                                    VerticalAlignment="Center" />
                         <Button x:Name="RetryButton"
@@ -174,8 +174,8 @@
                 </ScrollViewer>
 
                 <Grid x:Name="SignedOutPanel" Grid.Row="1" IsVisible="False">
-                    <Border Background="#111823"
-                            BorderBrush="#283548"
+                    <Border Background="#171717"
+                            BorderBrush="#2A2A2A"
                             BorderThickness="1"
                             CornerRadius="22"
                             Padding="30"
@@ -189,14 +189,14 @@
                             <TextBlock x:Name="SignInDescription"
                                        Text="подключите telegram, чтобы написать команде и посмотреть историю обращений."
                                        FontSize="14"
-                                       Foreground="#9AA8BC"
+                                       Foreground="#A0A0A0"
                                        TextWrapping="Wrap" />
                             <Button x:Name="SignInButton"
                                     Classes="deytt-button"
                                     HorizontalAlignment="Stretch"
                                     Padding="16,13"
-                                    Background="#1B303D"
-                                    BorderBrush="#2F5A69"
+                                    Background="#2A2A2A"
+                                    BorderBrush="#474747"
                                     BorderThickness="1"
                                     CornerRadius="14"
                                     Content="подключить telegram" />
@@ -206,8 +206,8 @@
 
                 <Border x:Name="ComposerCard"
                         Grid.Row="2"
-                        Background="#111823"
-                        BorderBrush="#283548"
+                        Background="#171717"
+                        BorderBrush="#2A2A2A"
                         BorderThickness="1"
                         CornerRadius="19"
                         Padding="15,13"
@@ -218,14 +218,14 @@
                                    FontFamily="fonts:DEYTT#JetBrains Mono"
                                    FontSize="9"
                                    FontWeight="SemiBold"
-                                   Foreground="#8291A8"
+                                   Foreground="#A0A0A0"
                                    VerticalAlignment="Center" />
                         <TextBlock x:Name="CharacterCount"
                                    Grid.Column="1"
                                    Text="0 / 4000"
                                    FontFamily="fonts:DEYTT#JetBrains Mono"
                                    FontSize="9"
-                                   Foreground="#8291A8"
+                                   Foreground="#A0A0A0"
                                    VerticalAlignment="Center" />
                         <TextBox x:Name="Composer"
                                  Grid.Row="1"
@@ -237,13 +237,13 @@
                                  TextWrapping="Wrap"
                                  MaxLength="4000"
                                  PlaceholderText="опишите вопрос минимум в пяти символах"
-                                 Background="#192331"
-                                 BorderBrush="#283548"
+                                 Background="#202020"
+                                 BorderBrush="#2A2A2A"
                                  BorderThickness="1"
                                  CornerRadius="13"
                                  Padding="12,10"
                                  FontSize="14"
-                                 Foreground="#F2F5FC" />
+                                 Foreground="#F5F5F5" />
                         <StackPanel Grid.Row="2"
                                     Grid.ColumnSpan="2"
                                     Orientation="Horizontal"
@@ -252,8 +252,8 @@
                             <Button x:Name="CloseTicketButton"
                                     Classes="deytt-button"
                                     Padding="13,9"
-                                    Background="#192331"
-                                    BorderBrush="#283548"
+                                    Background="#202020"
+                                    BorderBrush="#2A2A2A"
                                     BorderThickness="1"
                                     CornerRadius="12"
                                     Content="закрыть обращение"
@@ -261,8 +261,8 @@
                             <Button x:Name="SendButton"
                                     Classes="deytt-button"
                                     Padding="16,9"
-                                    Background="#1B303D"
-                                    BorderBrush="#2F5A69"
+                                    Background="#2A2A2A"
+                                    BorderBrush="#474747"
                                     BorderThickness="1"
                                     CornerRadius="12"
                                     Content="отправить · ctrl+enter" />
@@ -273,8 +273,8 @@
 
             <Grid x:Name="DocumentPane" RowDefinitions="Auto,*" IsVisible="False">
                 <Border Grid.Row="0"
-                        Background="#111823"
-                        BorderBrush="#283548"
+                        Background="#171717"
+                        BorderBrush="#2A2A2A"
                         BorderThickness="1"
                         CornerRadius="17"
                         Padding="17,13"
@@ -288,7 +288,7 @@
                             <TextBlock x:Name="DocumentStatus"
                                        Text="загрузка приостановлена"
                                        FontSize="11"
-                                       Foreground="#9AA8BC"
+                                       Foreground="#A0A0A0"
                                        TextWrapping="Wrap" />
                         </StackPanel>
                         <Button x:Name="DocumentRetryButton"
@@ -303,8 +303,8 @@
                 <ScrollViewer Grid.Row="1"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
-                    <Border Background="#111823"
-                            BorderBrush="#283548"
+                    <Border Background="#171717"
+                            BorderBrush="#2A2A2A"
                             BorderThickness="1"
                             CornerRadius="19"
                             Padding="24,22">

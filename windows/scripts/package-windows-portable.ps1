@@ -7,6 +7,8 @@ param(
 
     [string] $ArchivePath = '',
 
+    [string] $ArtifactRoot = '',
+
     [string] $CompilerPath = (Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe')
 )
 
@@ -35,10 +37,12 @@ foreach ($path in @($outputPath, $archiveFullPath)) {
         throw "refusing to overwrite an existing portable artifact: $path"
     }
 }
-$repoRootPrefix = $repoRoot.TrimEnd('\') + '\'
-if ($outputPath -eq $repoRoot -or -not $outputPath.StartsWith($repoRootPrefix, [StringComparison]::OrdinalIgnoreCase) -or
-    -not $archiveFullPath.StartsWith($repoRootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'portable output paths must remain inside this repository, and the output directory cannot be its root.'
+$allowedArtifactRoot = if ([string]::IsNullOrWhiteSpace($ArtifactRoot)) { $repoRoot } else { [IO.Path]::GetFullPath($ArtifactRoot).TrimEnd('\') }
+if ($allowedArtifactRoot -eq [IO.Path]::GetPathRoot($allowedArtifactRoot).TrimEnd('\')) { throw 'the artifact root cannot be a drive root.' }
+$artifactRootPrefix = $allowedArtifactRoot.TrimEnd('\') + '\'
+if ($outputPath -eq $allowedArtifactRoot -or -not $outputPath.StartsWith($artifactRootPrefix, [StringComparison]::OrdinalIgnoreCase) -or
+    -not $archiveFullPath.StartsWith($artifactRootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw 'portable output paths must remain inside the explicit artifact root, and the output directory cannot be its root.'
 }
 $sourcePrefix = $sourcePath.TrimEnd('\') + '\'
 $outputPrefix = $outputPath.TrimEnd('\') + '\'
@@ -139,6 +143,7 @@ using System.Reflection;
         throw 'failed to build the portable launcher.'
     }
     Copy-Item -LiteralPath $launcherPath -Destination (Join-Path $stagePath 'deyttconnect.exe')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'windows\scripts\Uninstall-Portable.cmd') -Destination (Join-Path $stagePath 'uninstall.cmd')
 
     $readme = @"
 deytt./connect for Windows — portable build $productVersion
@@ -146,6 +151,12 @@ deytt./connect for Windows — portable build $productVersion
 Run deyttconnect.exe from this folder. Keep app/, service/, vpn/, and docs/
 beside it. The launcher starts the bundled UI. The VPN service is installed
 only after Windows asks for administrator permission from the app.
+
+Close the app, then run uninstall.cmd to remove its installed VPN service,
+local settings, sign-in, subscription cache and update downloads. Windows Apps
+also lists the portable VPN service after it is installed. You may then delete
+this extracted folder. The server device entry remains in your account;
+release it through the bot if you need to free a device slot.
 
 The app requires Microsoft Edge WebView2 Runtime. The bundled UI and VPN engine
 are self-contained. docs/ contains the license and third-party notices.
@@ -161,9 +172,9 @@ are self-contained. docs/ contains the license and third-party notices.
 
     $rootFiles = @(Get-ChildItem -LiteralPath $stagePath -File)
     $rootDirs = @(Get-ChildItem -LiteralPath $stagePath -Directory | Select-Object -ExpandProperty Name | Sort-Object)
-    if ($rootFiles.Count -ne 1 -or $rootFiles[0].Name -ne 'deyttconnect.exe' -or
+    if ((($rootFiles.Name | Sort-Object) -join ',') -ne 'deyttconnect.exe,uninstall.cmd' -or
         ($rootDirs -join ',') -ne 'app,docs,service,vpn') {
-        throw 'portable layout check failed: expected one launcher and app/docs/service/vpn folders.'
+        throw 'portable layout check failed: expected launch/remove entries and app/docs/service/vpn folders.'
     }
 
     Add-Type -AssemblyName System.IO.Compression.FileSystem

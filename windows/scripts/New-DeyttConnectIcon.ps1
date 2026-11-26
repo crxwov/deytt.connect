@@ -52,24 +52,24 @@ internal static class IconBuilder
             graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
             graphics.PixelOffsetMode = PixelOffsetMode.HighQuality;
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            graphics.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            graphics.TextRenderingHint = TextRenderingHint.AntiAlias;
 
-            var inset = size * 0.035f;
+            var inset = size * 0.055f;
             var bounds = new RectangleF(inset, inset, size - inset * 2, size - inset * 2);
-            using (var tile = RoundedRectangle(bounds, size * 0.21f))
-            using (var background = new SolidBrush(Color.FromArgb(255, 25, 35, 49)))
-            using (var border = new Pen(Color.FromArgb(255, 52, 68, 91), Math.Max(1, size / 128f)))
-            using (var white = new SolidBrush(Color.FromArgb(255, 242, 245, 252)))
+            using (var tile = RoundedRectangle(bounds, size * 0.228f))
+            using (var white = new SolidBrush(Color.FromArgb(255, 255, 255, 255)))
+            using (var border = new Pen(Color.FromArgb(255, 226, 232, 240), Math.Max(1f, size / 128f)))
+            using (var black = new SolidBrush(Color.FromArgb(255, 0, 0, 0)))
             using (var format = new StringFormat(StringFormat.GenericTypographic))
-            using (var mark = new Font(family, size * 0.43f, FontStyle.Regular, GraphicsUnit.Pixel))
+            using (var mark = new Font(family, size * 0.44f, FontStyle.Bold, GraphicsUnit.Pixel))
             {
-                graphics.FillPath(background, tile);
+                graphics.FillPath(white, tile);
                 graphics.DrawPath(border, tile);
                 format.Alignment = StringAlignment.Center;
                 format.LineAlignment = StringAlignment.Center;
                 format.FormatFlags |= StringFormatFlags.NoWrap;
-                graphics.DrawString("./c", mark, white,
-                    new RectangleF(size * 0.075f, size * 0.075f, size * 0.85f, size * 0.85f), format);
+                graphics.DrawString("./c", mark, black,
+                    new RectangleF(0, 0, size, size), format);
             }
             frame.Save(stream, ImageFormat.Png);
             return stream.ToArray();

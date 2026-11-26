@@ -24,6 +24,7 @@ class RouteNotificationFormattingTest {
         assertEquals("vless", RouteProtocol.VLESS.bypassNotificationLabel)
         assertEquals("trojan", RouteProtocol.TROJAN.bypassNotificationLabel)
         assertEquals("hysteria", RouteProtocol.HYSTERIA2.bypassNotificationLabel)
+        assertEquals("tuic", RouteProtocol.TUIC.bypassNotificationLabel)
         assertEquals("awg 1.5", RouteProtocol.AWG15.bypassNotificationLabel)
         assertEquals("awg 3.1", RouteProtocol.AWG31.bypassNotificationLabel)
         assertEquals("openflux", RouteProtocol.OPENFLUX.bypassNotificationLabel)
@@ -39,6 +40,7 @@ class RouteNotificationFormattingTest {
         }
 
         assertEquals("🇩🇪 ./de hysteria", formatManual("🇩🇪", "DE", RouteProtocol.HYSTERIA2))
+        assertEquals("🇳🇱 ./nl tuic", formatManual("🇳🇱", "NL", RouteProtocol.TUIC))
         assertEquals("🇳🇱 ./nl vless", formatManual("🇳🇱", "NL", RouteProtocol.VLESS))
         assertEquals("🇫🇮 ./fi trojan", formatManual("🇫🇮", "FI", RouteProtocol.TROJAN))
         assertEquals("🇷🇺 ./ru awg 1.5", formatManual("🇷🇺", "RU", RouteProtocol.AWG15))

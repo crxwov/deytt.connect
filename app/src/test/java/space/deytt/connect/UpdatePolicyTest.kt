@@ -11,6 +11,10 @@ class UpdatePolicyTest {
         val base = "https://github.com/crxwov/deytt.connect/releases/"
         assertTrue(ReleaseUrlPolicy.isOfficialPage(base + "tag/v0.9.0"))
         assertTrue(ReleaseUrlPolicy.isOfficialAsset(base + "download/v0.9.0/app-arm64-v8a-release.apk"))
+        assertTrue(ReleaseUrlPolicy.isOfficialPage("https://deytt.space/download/"))
+        assertTrue(ReleaseUrlPolicy.isOfficialPage("https://deytt.space/connect/"))
+        assertTrue(ReleaseUrlPolicy.isOfficialAsset("https://deytt.space/connect/releases/app-universal-release.apk"))
+        assertTrue(ReleaseUrlPolicy.isOfficialAsset("https://deytt.space/connect/app-universal-release.apk"))
         for (url in listOf(
             "http://github.com/crxwov/deytt.connect/releases/tag/v1",
             "https://github.com:8443/crxwov/deytt.connect/releases/tag/v1",

@@ -14,6 +14,7 @@ public enum WindowsPipeCommand
     Probe,
     CancelProbe,
     ProbeProgress,
+    MeasureTunnelLatency,
 }
 
 public sealed record WindowsPipeRequest
@@ -42,6 +43,15 @@ public sealed record WindowsPipeRequest
 
     [JsonPropertyName("awgProfiles")]
     public IReadOnlyDictionary<string, string>? AwgProfiles { get; init; }
+
+    [JsonPropertyName("customBypassDomains")]
+    public IReadOnlyList<string>? CustomBypassDomains { get; init; }
+
+    [JsonPropertyName("customBypassProcesses")]
+    public IReadOnlyList<string>? CustomBypassProcesses { get; init; }
+
+    [JsonPropertyName("splitTunnelMode")]
+    public string? SplitTunnelMode { get; init; }
 }
 
 public sealed record WindowsTunnelSnapshot(
@@ -50,7 +60,10 @@ public sealed record WindowsTunnelSnapshot(
     string? RouteTag = null,
     DateTimeOffset? ConnectedAt = null,
     IReadOnlyList<WindowsRouteProbeResult>? ProbeResults = null,
-    DateTimeOffset? HealthCheckedAt = null);
+    DateTimeOffset? HealthCheckedAt = null,
+    string? ActiveRouteTag = null,
+    long? TunnelLatencyMilliseconds = null,
+    string? TunnelLatencyError = null);
 
 public sealed record WindowsRouteProbeResult(
     string RouteTag,
@@ -64,6 +77,7 @@ public sealed record WindowsRouteProbeResult(
 
 public static class WindowsPipeProtocol
 {
+    public const string LinuxSocketPath = "/run/deytt-connect.sock";
     // The 2 MiB profile plus 4 MiB of AWG configs can expand several-fold when
     // JSON escapes Unicode and control characters. Keep enough bounded headroom.
     public const int MaximumRequestBytes = 40 * 1024 * 1024;
@@ -92,6 +106,9 @@ public static class WindowsPipeProtocol
             {
                 command = "connect", profile = request.Profile, routeTag = request.RouteTag,
                 awgConfig = request.AwgConfig,
+                customBypassDomains = request.CustomBypassDomains,
+                customBypassProcesses = request.CustomBypassProcesses,
+                splitTunnelMode = request.SplitTunnelMode,
             }, RequestOptions, MaximumRequestBytes),
             WindowsPipeCommand.Probe => Serialize(new
             {
@@ -102,6 +119,8 @@ public static class WindowsPipeProtocol
                 MaximumRequestBytes),
             WindowsPipeCommand.ProbeProgress => Serialize(new { command = "probe-progress" }, RequestOptions,
                 MaximumRequestBytes),
+            WindowsPipeCommand.MeasureTunnelLatency => Serialize(new { command = "measure-tunnel-latency" },
+                RequestOptions, MaximumRequestBytes),
             _ => throw new JsonException("Unsupported pipe command."),
         };
 
@@ -222,7 +241,10 @@ public static class WindowsTunnelCanaryRoute
     }
 }
 
-public sealed record WindowsTunnelCanaryInterface(IPAddress Address, int InterfaceIndex);
+public sealed record WindowsTunnelCanaryInterface(IPAddress Address, int InterfaceIndex)
+{
+    public string? Name { get; init; }
+}
 
 public sealed record WindowsTunnelHealthTransition(string State, int ConsecutiveFailures);
 
@@ -242,6 +264,7 @@ public sealed class WindowsPipeCommandJsonConverter : JsonConverter<WindowsPipeC
             "probe" => WindowsPipeCommand.Probe,
             "cancel-probe" => WindowsPipeCommand.CancelProbe,
             "probe-progress" => WindowsPipeCommand.ProbeProgress,
+            "measure-tunnel-latency" => WindowsPipeCommand.MeasureTunnelLatency,
             _ => throw new JsonException("Unsupported pipe command."),
         };
     }
@@ -255,6 +278,7 @@ public sealed class WindowsPipeCommandJsonConverter : JsonConverter<WindowsPipeC
             WindowsPipeCommand.Probe => "probe",
             WindowsPipeCommand.CancelProbe => "cancel-probe",
             WindowsPipeCommand.ProbeProgress => "probe-progress",
+            WindowsPipeCommand.MeasureTunnelLatency => "measure-tunnel-latency",
             _ => throw new JsonException("Unsupported pipe command."),
         });
 }

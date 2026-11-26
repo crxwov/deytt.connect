@@ -7,5 +7,6 @@
   <ItemGroup>
     <PackageReference Include="WixToolset.UI.wixext" Version="6.0.0" />
     <ProjectReference Include="CustomActions/DeyttConnect.SetupActions.csproj" />
+    <ProjectReference Include="EmbeddedUI/DeyttConnect.GraphiteSetup.csproj" />
   </ItemGroup>
 </Project>

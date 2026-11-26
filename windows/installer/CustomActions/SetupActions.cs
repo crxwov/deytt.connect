@@ -48,6 +48,43 @@ namespace DeyttConnect.Setup
                 return process != null;
         }
 
+        internal static bool IsInstalledConnectProcess(string processPath, string installedExecutable)
+        {
+            if (string.IsNullOrWhiteSpace(processPath) || string.IsNullOrWhiteSpace(installedExecutable)) return false;
+            try
+            {
+                return string.Equals(Path.GetFullPath(processPath), Path.GetFullPath(installedExecutable), StringComparison.OrdinalIgnoreCase);
+            }
+            catch (ArgumentException) { return false; }
+        }
+
+        private static bool StopInstalledConnect(string executable)
+        {
+            using (var current = Process.GetCurrentProcess())
+            {
+                foreach (var process in Process.GetProcessesByName(Path.GetFileNameWithoutExtension(executable)))
+                {
+                    using (process)
+                    {
+                        try
+                        {
+                            if (process.Id == current.Id || process.SessionId != current.SessionId) continue;
+                            if (!IsInstalledConnectProcess(process.MainModule.FileName, executable)) continue;
+                            process.CloseMainWindow();
+                            // A normal close hides this client to the tray, so stop only this matching process after a grace period.
+                            if (!process.WaitForExit(3000))
+                            {
+                                process.Kill();
+                                if (!process.WaitForExit(5000)) return false;
+                            }
+                        }
+                        catch (InvalidOperationException) { }
+                    }
+                }
+            }
+            return true;
+        }
+
         // Parse the executable, never an occurrence of its name in an argument.
         public static bool IsConnectService(string command)
         {
@@ -94,7 +131,7 @@ namespace DeyttConnect.Setup
             return "install";
         }
 
-        private static Version FindInstalledConnectVersion(Session session)
+        internal static Version FindInstalledConnectVersion(Session session, bool includeAllRelatedProducts = false)
         {
             var currentProductCode = session["ProductCode"];
             var upgradeProductCodes = session["WIX_UPGRADE_DETECTED"] ?? "";
@@ -106,7 +143,7 @@ namespace DeyttConnect.Setup
                 var code = product.ProductCode;
                 var isCurrent = string.Equals(NormalizeProductCode(code), NormalizeProductCode(currentProductCode), StringComparison.OrdinalIgnoreCase);
                 var isUpgradeCandidate = ContainsProductCode(upgradeProductCodes, code);
-                if (!isCurrent && !isUpgradeCandidate) continue;
+                if (!includeAllRelatedProducts && !isCurrent && !isUpgradeCandidate) continue;
 
                 var version = product.ProductVersion;
                 if (version != null && (newest == null || version.CompareTo(newest) > 0))
@@ -245,7 +282,12 @@ namespace DeyttConnect.Setup
         {
             if (!File.Exists(executable)) throw new FileNotFoundException("Не найден файл приложения.", executable);
             Directory.CreateDirectory(desktop);
-            var shortcutPath = Path.Combine(desktop, "deytt.connect.lnk");
+            var legacyShortcut = Path.Combine(desktop, "deytt.connect.lnk");
+            if (File.Exists(legacyShortcut))
+            {
+                try { File.Delete(legacyShortcut); } catch { }
+            }
+            var shortcutPath = Path.Combine(desktop, "connect.lnk");
             var link = (IShellLinkW)new ShellLink();
             try
             {
@@ -256,17 +298,40 @@ namespace DeyttConnect.Setup
                     var target = new System.Text.StringBuilder(32768);
                     link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
                     if (!string.Equals(Path.GetFullPath(target.ToString()), Path.GetFullPath(executable), StringComparison.OrdinalIgnoreCase))
-                        throw new IOException("на рабочем столе уже есть другой ярлык с именем deytt.connect. переименуйте его и повторите попытку.");
+                        throw new IOException("на рабочем столе уже есть другой ярлык с именем connect. переименуйте его и повторите попытку.");
                 }
                 link.SetPath(executable);
                 link.SetWorkingDirectory(Path.GetDirectoryName(executable));
-                link.SetDescription("deytt./connect — подключение к VPN");
-                link.SetIconLocation(executable, 0);
+                link.SetDescription("./connect — подключение к VPN");
+                var iconPath = Path.Combine(Path.GetDirectoryName(executable) ?? string.Empty, "Assets", "deyttconnect.ico");
+                if (File.Exists(iconPath))
+                    link.SetIconLocation(iconPath, 0);
+                else
+                    link.SetIconLocation(executable, 0);
                 link.SetShowCmd(1);
+                if (link is IPropertyStore propertyStore)
+                {
+                    try
+                    {
+                        var key = new PropertyKey(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
+                        using var propVar = PropVariant.FromString("DEYTT.Connect.Client");
+                        propertyStore.SetValue(ref key, propVar);
+                        propertyStore.Commit();
+                    }
+                    catch { }
+                }
                 persist.Save(shortcutPath, true);
+                try
+                {
+                    SHChangeNotify(0x08000000, 0, IntPtr.Zero, IntPtr.Zero);
+                }
+                catch { }
             }
             finally { Marshal.FinalReleaseComObject(link); }
         }
+
+        [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        internal static extern void SHChangeNotify(uint wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
 
         internal static bool ShouldLaunchConnect(string launch, string canLaunch, string rebootNeeded) =>
             launch == "1" && canLaunch == "1" && rebootNeeded != "1";
@@ -278,13 +343,11 @@ namespace DeyttConnect.Setup
             session["FINISH_ACTIONS_OK"] = "";
             try
             {
-                var executable = Path.Combine(session["INSTALLFOLDER"], "DeyttConnect.Windows.exe");
-                if (session["CREATE_DESKTOP_SHORTCUT"] == "1")
-                    CreateDesktopShortcut(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), executable);
-                if (ShouldLaunchConnect(session["LAUNCH_CONNECT"], session["CAN_LAUNCH_CONNECT"],
-                    session["REBOOTNEEDED"]) && !LaunchConnect(executable))
+                var issue = FinishInstalledConnect(session["INSTALLFOLDER"], session["CREATE_DESKTOP_SHORTCUT"] == "1",
+                    ShouldLaunchConnect(session["LAUNCH_CONNECT"], session["CAN_LAUNCH_CONNECT"], session["REBOOTNEEDED"]));
+                if (issue != null)
                 {
-                    session["FINISH_ERROR"] = "приложение установлено. не удалось открыть deytt./connect. откройте его из меню «пуск» после завершения установки.";
+                    session["FINISH_ERROR"] = issue;
                     return ActionResult.Success;
                 }
                 session["FINISH_ACTIONS_OK"] = "1";
@@ -293,6 +356,55 @@ namespace DeyttConnect.Setup
             {
                 session.Log("Finish setup failed: {0}", exception.Message);
                 session["FINISH_ERROR"] = "приложение установлено. не удалось выполнить выбранное действие: " + exception.Message.ToLowerInvariant() + " можно снять галочку и завершить установку.";
+            }
+            return ActionResult.Success;
+        }
+
+        internal static string FinishInstalledConnect(string installDirectory, bool desktopShortcut, bool launch)
+        {
+            var executable = Path.Combine(installDirectory, "DeyttConnect.Windows.exe");
+            if (desktopShortcut)
+                CreateDesktopShortcut(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), executable);
+            if (!launch) return null;
+            if (!StopInstalledConnect(executable))
+                return "приложение установлено. не удалось закрыть прежний экземпляр ./connect.";
+            if (!LaunchConnect(executable))
+                return "приложение установлено. откройте ./connect из меню «пуск».";
+            return null;
+        }
+
+        [CustomAction]
+        public static ActionResult PrepareConnectDataRemoval(Session session)
+        {
+            var data = new CustomActionData();
+            data["InstallDirectory"] = session["INSTALLFOLDER"];
+            var ownerSid = session["ALLOWEDUSERSID"];
+            using (var profile = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\" + ownerSid))
+            {
+                var profilePath = profile?.GetValue("ProfileImagePath") as string;
+                if (!string.IsNullOrEmpty(profilePath))
+                    data["UserDirectory"] = Path.Combine(Environment.ExpandEnvironmentVariables(profilePath), "AppData", "Local", "DEYTT", "Connect");
+            }
+            data["RuntimeDirectory"] = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "DEYTT", "Connect", "runtime");
+            session["RemoveConnectData"] = data.ToString();
+            return ActionResult.Success;
+        }
+
+        [CustomAction]
+        public static ActionResult RemoveConnectData(Session session)
+        {
+            // This action is never scheduled for a major upgrade.
+            try
+            {
+                var data = session.CustomActionData;
+                if (data.ContainsKey("UserDirectory")) ConnectDataCleanup.RemoveUserData(data["UserDirectory"]);
+                ConnectDataCleanup.RemoveRuntime(data["RuntimeDirectory"]);
+                ConnectDataCleanup.RemoveInstalledCache(data["InstallDirectory"]);
+            }
+            catch (Exception exception)
+            {
+                session.Log("Connect data cleanup failed: {0}", exception.GetType().Name);
+                return ActionResult.Failure;
             }
             return ActionResult.Success;
         }
@@ -313,18 +425,21 @@ namespace DeyttConnect.Setup
             // Do not remove an unrelated/replaced shortcut or user data. Major upgrades skip this action.
             try
             {
-                var path = Path.Combine(session.CustomActionData["Desktop"], "deytt.connect.lnk");
-                if (!File.Exists(path)) return ActionResult.Success;
-                var link = (IShellLinkW)new ShellLink();
-                try
+                foreach (var shortcutName in new[] { "connect.lnk", "deytt.connect.lnk" })
                 {
-                    ((IPersistFile)link).Load(path, 0);
-                    var target = new System.Text.StringBuilder(32768);
-                    link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
-                    if (string.Equals(target.ToString(), session.CustomActionData["Executable"], StringComparison.OrdinalIgnoreCase))
-                        File.Delete(path);
+                    var path = Path.Combine(session.CustomActionData["Desktop"], shortcutName);
+                    if (!File.Exists(path)) continue;
+                    var link = (IShellLinkW)new ShellLink();
+                    try
+                    {
+                        ((IPersistFile)link).Load(path, 0);
+                        var target = new System.Text.StringBuilder(32768);
+                        link.GetPath(target, target.Capacity, IntPtr.Zero, 0);
+                        if (string.Equals(target.ToString(), session.CustomActionData["Executable"], StringComparison.OrdinalIgnoreCase))
+                            File.Delete(path);
+                    }
+                    finally { Marshal.FinalReleaseComObject(link); }
                 }
-                finally { Marshal.FinalReleaseComObject(link); }
             }
             catch (Exception exception) { session.Log("Optional desktop shortcut cleanup: {0}", exception.Message); }
             return ActionResult.Success;
@@ -352,6 +467,49 @@ namespace DeyttConnect.Setup
         void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, uint reserved);
         void Resolve(IntPtr window, uint flags);
         void SetPath([MarshalAs(UnmanagedType.LPWStr)] string path);
+    }
+
+    [ComImport, InterfaceType(ComInterfaceType.InterfaceIsIUnknown), Guid("886d8eeb-8cf2-4446-8d02-cdba1dbdcf99")]
+    internal interface IPropertyStore
+    {
+        uint GetCount([Out] out uint cProps);
+        uint GetAt([In] uint iProp, out PropertyKey pkey);
+        uint GetValue([In] ref PropertyKey key, [Out] PropVariant pv);
+        uint SetValue([In] ref PropertyKey key, [In] PropVariant pv);
+        uint Commit();
+    }
+
+    [StructLayout(LayoutKind.Sequential, Pack = 4)]
+    internal struct PropertyKey
+    {
+        public Guid fmtid;
+        public uint pid;
+        public PropertyKey(Guid guid, uint id) { fmtid = guid; pid = id; }
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct PropVariant : IDisposable
+    {
+        [FieldOffset(0)] public ushort vt;
+        [FieldOffset(8)] public IntPtr pwszVal;
+
+        public static PropVariant FromString(string val)
+        {
+            return new PropVariant
+            {
+                vt = 31, // VT_LPWSTR
+                pwszVal = Marshal.StringToCoTaskMemUni(val)
+            };
+        }
+
+        public void Dispose()
+        {
+            if (pwszVal != IntPtr.Zero)
+            {
+                Marshal.FreeCoTaskMem(pwszVal);
+                pwszVal = IntPtr.Zero;
+            }
+        }
     }
 }
 

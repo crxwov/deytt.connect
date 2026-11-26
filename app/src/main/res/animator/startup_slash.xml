@@ -1,0 +1,28 @@
+<?xml version='1.0' encoding='utf-8'?>
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <objectAnimator android:startOffset="320" android:duration="100" android:interpolator="@android:interpolator/linear">
+        <propertyValuesHolder android:propertyName="translateY">
+            <keyframe android:fraction="0.0" android:value="-7" android:valueType="floatType" />
+            <keyframe android:fraction="0.5" android:value="-2" android:valueType="floatType" android:interpolator="@interpolator/startup_strike" />
+            <keyframe android:fraction="1.0" android:value="-3" android:valueType="floatType" android:interpolator="@interpolator/startup_strike" />
+        </propertyValuesHolder>
+        <propertyValuesHolder android:propertyName="rotation">
+            <keyframe android:fraction="0.0" android:value="0" android:valueType="floatType" />
+            <keyframe android:fraction="0.5" android:value="2.5" android:valueType="floatType" android:interpolator="@interpolator/startup_strike" />
+            <keyframe android:fraction="1.0" android:value="2" android:valueType="floatType" android:interpolator="@interpolator/startup_strike" />
+        </propertyValuesHolder>
+        <propertyValuesHolder android:propertyName="scaleX">
+            <keyframe android:fraction="0.0" android:value="1.22" android:valueType="floatType" />
+            <keyframe android:fraction="0.5" android:value="0.96" android:valueType="floatType" android:interpolator="@interpolator/startup_strike" />
+            <keyframe android:fraction="1.0" android:value="1" android:valueType="floatType" android:interpolator="@interpolator/startup_strike" />
+        </propertyValuesHolder>
+        <propertyValuesHolder android:propertyName="scaleY">
+            <keyframe android:fraction="0.0" android:value="1.22" android:valueType="floatType" />
+            <keyframe android:fraction="0.5" android:value="0.96" android:valueType="floatType" android:interpolator="@interpolator/startup_strike" />
+            <keyframe android:fraction="1.0" android:value="1" android:valueType="floatType" android:interpolator="@interpolator/startup_strike" />
+        </propertyValuesHolder>
+    </objectAnimator>
+    <objectAnimator android:propertyName="translateY" android:startOffset="680" android:duration="420" android:valueFrom="-3.00000" android:valueTo="0.00000" android:valueType="floatType" android:interpolator="@interpolator/startup_align" />
+    <objectAnimator android:propertyName="rotation" android:startOffset="680" android:duration="420" android:valueFrom="2.00000" android:valueTo="0.00000" android:valueType="floatType" android:interpolator="@interpolator/startup_align" />
+    <objectAnimator android:propertyName="translateX" android:startOffset="680" android:duration="420" android:valueFrom="16.24000" android:valueTo="13.63000" android:valueType="floatType" android:interpolator="@interpolator/startup_align" />
+</set>

@@ -1,3 +1,4 @@
+using DeyttConnect.Protocol;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using DeyttConnect.Windows.Services;
@@ -15,8 +16,9 @@ public sealed class WindowsRouteCatalogTests
               "inbounds": [{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
               "outbounds": [
                 {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:DE:VLESS"]},
-                {"type":"vless","tag":"route:DE:VLESS"},
-                {"type":"vless","tag":"route:IT:VLESS"},
+                {"type":"vless","tag":"route:DE:VLESS","tls":{"enabled":true,"reality":{"enabled":true,"public_key":"k"}}},
+                {"type":"tuic","tag":"route:DE:TUIC"},
+                {"type":"vless","tag":"route:IT:VLESS","tls":{"enabled":true},"transport":{"type":"ws"}},
                 {"type":"direct","tag":"direct"}
               ],
               "route": {"final":"🇪🇺 автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}
@@ -26,10 +28,43 @@ public sealed class WindowsRouteCatalogTests
         using var profile = JsonDocument.Parse(source);
         var routes = WindowsRouteCatalog.Parse(profile.RootElement);
 
-        Assert.Equal(new[] { "auto", "route:DE:VLESS", "route:IT:VLESS" }, routes.Select(route => route.Id));
+        Assert.Equal(new[] { "auto", "route:DE:VLESS", "route:DE:TUIC", "route:IT:VLESS" }, routes.Select(route => route.Id));
+        var deVless = Assert.Single(routes, route => route.Id == "route:DE:VLESS");
+        Assert.Equal("reality", deVless.Detail);
         var italy = Assert.Single(routes, route => route.CountryCode == "IT");
         Assert.Equal("италия", italy.CountryName);
         Assert.Equal("🇮🇹", italy.Flag);
+        Assert.Equal("websocket + tls", italy.Detail);
+        Assert.Equal("TUIC", Assert.Single(routes, route => route.Id == "route:DE:TUIC").ProtocolName);
+    }
+
+    [Fact]
+    public void XrayTransportTakesPrecedenceOverRealityInTheRouteTitle()
+    {
+        const string source = """
+            {
+              "inbounds":[{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
+              "outbounds":[
+                {"type":"urltest","tag":"автоподбор","outbounds":["route:NL:VLESS"]},
+                {"type":"vless","tag":"route:NL:VLESS","tls":{"reality":{"enabled":true}}},
+                {"type":"vless","tag":"route:IT:VLESS","tls":{"reality":{"enabled":true}}}
+              ],
+              "route":{"final":"автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]},
+              "deytt":{"xray_routes":{"version":1,"routes":{
+                "route:NL:VLESS":{
+                  "protocol":"vless","transport":"xhttp","host":"tr-nl.deytt.space","port":18443,
+                  "sni":"deytt.space","uuid":"12345678-1234-1234-1234-123456789abc",
+                  "path":"/stream","mode":"auto","alpn":["h2"],"fingerprint":"firefox"
+                }
+              }}}
+            }
+            """;
+        using var profile = JsonDocument.Parse(source);
+        var routes = WindowsRouteCatalog.Parse(profile.RootElement);
+        Assert.Contains("nl • xhttp (stable)", WindowsRouteCatalog.FormatRouteTitle(
+            Assert.Single(routes, route => route.Id == "route:NL:VLESS")));
+        Assert.Contains("it • reality (stable)", WindowsRouteCatalog.FormatRouteTitle(
+            Assert.Single(routes, route => route.Id == "route:IT:VLESS")));
     }
 
     [Fact]
@@ -41,7 +76,7 @@ public sealed class WindowsRouteCatalogTests
             new JsonObject { ["type"] = "selector", ["tag"] = "route:RU-DE:CHAIN" },
         };
         foreach (var country in new[] { "NL", "RU", "DE", "FI", "IT" })
-        foreach (var protocol in new[] { "VLESS", "TROJAN", "HYSTERIA2" })
+        foreach (var protocol in new[] { "VLESS", "TROJAN", "HYSTERIA2", "TUIC" })
             outbounds.Add(new JsonObject { ["type"] = "selector", ["tag"] = $"route:{country}:{protocol}" });
 
         var source = new JsonObject
@@ -64,8 +99,158 @@ public sealed class WindowsRouteCatalogTests
         using var profile = JsonDocument.Parse(source);
         var routes = WindowsRouteCatalog.Parse(profile.RootElement);
 
-        Assert.Equal(17, routes.Count);
+        Assert.Equal(21, routes.Count);
     }
+
+    [Fact]
+    public void LteRouteParsedWithCorrectMiddleDotAndFlag()
+    {
+        const string baseProfile = """
+            {
+              "inbounds": [{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
+              "outbounds": [
+                {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:DE:VLESS"]},
+                {"type":"vless","tag":"route:DE:VLESS"}
+              ],
+              "route": {"final":"🇪🇺 автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}
+            }
+            """;
+
+        const string metadataJson = """
+            {
+              "version": 1,
+              "outbound": {
+                "tag": "route:DE:LTE",
+                "protocol": "vless",
+                "settings": {
+                  "vnext": [{
+                    "address": "front.deytt.space",
+                    "port": 443,
+                    "users": [{"id":"00000000-0000-4000-8000-000000000000","encryption":"none"}]
+                  }]
+                },
+                "streamSettings": {
+                  "network": "xhttp",
+                  "security": "tls",
+                  "tlsSettings": {
+                    "serverName": "front.deytt.space",
+                    "alpn": ["h2", "http/1.1"],
+                    "fingerprint": "chrome"
+                  },
+                  "xhttpSettings": {
+                    "path": "/api/v2/cdn-lte-stream/",
+                    "mode": "packet-up",
+                    "extra": {
+                      "uplinkHTTPMethod": "GET",
+                      "uplinkDataPlacement": "header",
+                      "uplinkDataKey": "data",
+                      "noSSEHeader": true,
+                      "scMaxEachPostBytes": 4096,
+                      "scMinPostsIntervalMs": 30,
+                      "serverMaxHeaderBytes": 32768
+                    }
+                  }
+                }
+              }
+            }
+            """;
+
+        var attached = CdnLteProfile.Attach(
+            baseProfile,
+            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(metadataJson)));
+
+        using var profile = JsonDocument.Parse(attached);
+        var routes = WindowsRouteCatalog.Parse(profile.RootElement);
+        var lte = Assert.Single(routes, r => r.Protocol == "LTE");
+        Assert.Equal("lte • белые списки", lte.ProtocolName);
+        Assert.Equal("🇪🇺", lte.Flag);
+        Assert.Equal("EU", lte.CountryCode);
+    }
+
+    [Theory]
+    [InlineData("/api/v2/cdn-lte-stream/")]
+    [InlineData("/api/v2/lte-9f2c1b7a4e/")]
+    public void LteAttachAcceptsRotatedXhttpPathShapes(string path)
+    {
+        const string baseProfile = """
+            {
+              "inbounds": [{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
+              "outbounds": [
+                {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:DE:VLESS"]},
+                {"type":"vless","tag":"route:DE:VLESS"}
+              ],
+              "route": {"final":"🇪🇺 автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}
+            }
+            """;
+
+        var attached = CdnLteProfile.Attach(
+            baseProfile,
+            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(LteMetadataJson(path))));
+
+        using var profile = JsonDocument.Parse(attached);
+        Assert.True(CdnLteProfile.HasValidMetadata(attached));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("api/v2/cdn-lte-stream/")]
+    public void LteAttachRejectsMalformedXhttpPath(string path)
+    {
+        const string baseProfile = """
+            {
+              "inbounds": [{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],
+              "outbounds": [
+                {"type":"urltest","tag":"🇪🇺 автоподбор","outbounds":["route:DE:VLESS"]},
+                {"type":"vless","tag":"route:DE:VLESS"}
+              ],
+              "route": {"final":"🇪🇺 автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}
+            }
+            """;
+
+        Assert.Throws<InvalidDataException>(() => CdnLteProfile.Attach(
+            baseProfile,
+            Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(LteMetadataJson(path)))));
+    }
+
+    private static string LteMetadataJson(string path) => $$"""
+        {
+          "version": 1,
+          "outbound": {
+            "tag": "route:DE:LTE",
+            "protocol": "vless",
+            "settings": {
+              "vnext": [{
+                "address": "front.deytt.space",
+                "port": 443,
+                "users": [{"id":"00000000-0000-4000-8000-000000000000","encryption":"none"}]
+              }]
+            },
+            "streamSettings": {
+              "network": "xhttp",
+              "security": "tls",
+              "tlsSettings": {
+                "serverName": "front.deytt.space",
+                "alpn": ["h2", "http/1.1"],
+                "fingerprint": "chrome"
+              },
+              "xhttpSettings": {
+                "path": "{{path}}",
+                "mode": "packet-up",
+                "extra": {
+                  "uplinkHTTPMethod": "GET",
+                  "uplinkDataPlacement": "header",
+                  "uplinkDataKey": "data",
+                  "noSSEHeader": true,
+                  "scMaxEachPostBytes": 4096,
+                  "scMinPostsIntervalMs": 30,
+                  "serverMaxHeaderBytes": 32768
+                }
+              }
+            }
+          }
+        }
+        """;
+
 
     [Fact]
     public void DuplicateTagsAcrossOutboundsAndEndpointsAreRejected()

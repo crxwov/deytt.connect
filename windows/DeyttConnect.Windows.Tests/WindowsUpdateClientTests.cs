@@ -243,5 +243,189 @@ public sealed class WindowsUpdateClientTests
 
         Assert.Null(WindowsUpdateClient.ParseLatestWindowsReleaseResponse(json));
     }
+
+    [Fact]
+    public void ParseLatestWindowsReleaseResponse_SelectsTheRequestedInstallerKind()
+    {
+        const string json = """
+            [{
+              "draft": false,
+              "prerelease": false,
+              "tag_name": "v0.8.51",
+              "html_url": "https://github.com/crxwov/deytt.connect/releases/tag/v0.8.51",
+              "assets": [
+                {
+                  "name": "deytt-connect-0.8.51-portable.zip",
+                  "browser_download_url": "https://github.com/crxwov/deytt.connect/releases/download/v0.8.51/deytt-connect-0.8.51-portable.zip",
+                  "size": 1000,
+                  "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                },
+                {
+                  "name": "deytt-connect-0.8.51.msi",
+                  "browser_download_url": "https://github.com/crxwov/deytt.connect/releases/download/v0.8.51/deytt-connect-0.8.51.msi",
+                  "size": 2000,
+                  "digest": "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+                }
+              ]
+            }]
+            """;
+
+        var release = WindowsUpdateClient.ParseLatestWindowsReleaseResponse(json, WindowsUpdatePackageKind.Msi);
+
+        Assert.NotNull(release);
+        Assert.Equal(WindowsUpdatePackageKind.Msi, release.PackageKind);
+        Assert.Equal("deytt-connect-0.8.51.msi", release.AssetName);
+        Assert.True(release.CanDownloadVerifiedPackage);
+
+        var portableRelease = WindowsUpdateClient.ParseLatestWindowsReleaseResponse(
+            json, WindowsUpdatePackageKind.PortableZip);
+        Assert.NotNull(portableRelease);
+        Assert.Equal(WindowsUpdatePackageKind.PortableZip, portableRelease.PackageKind);
+        Assert.Equal("deytt-connect-0.8.51-portable.zip", portableRelease.AssetName);
+    }
+
+    [Fact]
+    public void ParseLatestWindowsReleaseResponse_SelectsHighestVersionRegardlessOfPublicationOrder()
+    {
+        const string json = """
+            [
+              {"draft":false,"prerelease":false,"tag_name":"v0.8.51","html_url":"https://github.com/crxwov/deytt.connect/releases/tag/v0.8.51","assets":[
+                {"name":"deytt-connect-0.8.51-portable.zip","browser_download_url":"https://github.com/crxwov/deytt.connect/releases/download/v0.8.51/deytt-connect-0.8.51-portable.zip","size":1000,"digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},
+                {"name":"deytt-connect-0.8.51.msi","browser_download_url":"https://github.com/crxwov/deytt.connect/releases/download/v0.8.51/deytt-connect-0.8.51.msi","size":2000,"digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}]},
+              {"draft":false,"prerelease":false,"tag_name":"v0.8.52","html_url":"https://github.com/crxwov/deytt.connect/releases/tag/v0.8.52","assets":[
+                {"name":"deytt-connect-0.8.52.msi","browser_download_url":"https://github.com/crxwov/deytt.connect/releases/download/v0.8.52/deytt-connect-0.8.52.msi","size":2000,"digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}]},
+              {"draft":false,"prerelease":false,"tag_name":"v0.8.50","html_url":"https://github.com/crxwov/deytt.connect/releases/tag/v0.8.50","assets":[
+                {"name":"deytt-connect-0.8.50-portable.zip","browser_download_url":"https://github.com/crxwov/deytt.connect/releases/download/v0.8.50/deytt-connect-0.8.50-portable.zip","size":1000,"digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},
+                {"name":"deytt-connect-0.8.50.msi","browser_download_url":"https://github.com/crxwov/deytt.connect/releases/download/v0.8.50/deytt-connect-0.8.50.msi","size":2000,"digest":"sha256:0000000000000000000000000000000000000000000000000000000000000000"}]}
+            ]
+            """;
+
+        var msi = WindowsUpdateClient.ParseLatestWindowsReleaseResponse(json, WindowsUpdatePackageKind.Msi);
+        var portable = WindowsUpdateClient.ParseLatestWindowsReleaseResponse(json, WindowsUpdatePackageKind.PortableZip);
+        var any = WindowsUpdateClient.ParseLatestWindowsReleaseResponse(json);
+
+        Assert.Equal("v0.8.52", msi?.Tag);
+        Assert.Equal("deytt-connect-0.8.52.msi", msi?.AssetName);
+        Assert.Equal("v0.8.51", portable?.Tag);
+        Assert.Equal("deytt-connect-0.8.51-portable.zip", portable?.AssetName);
+        Assert.Equal("v0.8.52", any?.Tag);
+        Assert.True(msi!.CanDownloadVerifiedPackage);
+        Assert.True(portable!.CanDownloadVerifiedPackage);
+    }
+
+    [Theory]
+    [InlineData("v0.8.50", "0.8.50", false)]
+    [InlineData("V0.08.050", "0.8.50.0", false)]
+    [InlineData("v0.8.51", "0.8.50", true)]
+    [InlineData("v0.8.49", "0.8.50", false)]
+    [InlineData("v1.0.0", "0.99.99", true)]
+    [InlineData("v0.9.0", "0.8.99", true)]
+    [InlineData("v0.7.99", "0.8.0", false)]
+    [InlineData("v0.8.50.1", "0.8.50.0", true)]
+    public void IsNewerThan_NeverOffersSameOrOlderVersion(
+        string releaseTag,
+        string installed,
+        bool expected)
+    {
+        Assert.True(Version.TryParse(installed, out var installedVersion));
+
+        Assert.Equal(expected, WindowsUpdateClient.IsNewerThan(releaseTag, installedVersion));
+    }
+
+    [Fact]
+    public void GetCurrentInstallationKind_UsesPortableBundleMarkers()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "deytt-update-test-" + Guid.NewGuid().ToString("N"));
+        var app = Path.Combine(root, "app");
+        try
+        {
+            Directory.CreateDirectory(app);
+            Directory.CreateDirectory(Path.Combine(root, "service"));
+            Directory.CreateDirectory(Path.Combine(root, "vpn"));
+            File.WriteAllBytes(Path.Combine(root, "deyttconnect.exe"), []);
+            File.WriteAllBytes(Path.Combine(root, "service", "DeyttConnect.Windows.Service.exe"), []);
+            File.WriteAllBytes(Path.Combine(root, "vpn", "DeyttVpnEngine.exe"), []);
+
+            Assert.Equal(WindowsUpdatePackageKind.PortableZip,
+                WindowsUpdateClient.GetCurrentInstallationKind(app));
+            Assert.Equal(WindowsUpdatePackageKind.Msi,
+                WindowsUpdateClient.GetCurrentInstallationKind(
+                    Path.Combine(root, "Program Files", "DEYTT", "Connect")));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ParseLatestWindowsReleaseResponse_SupportsConnectSlashTagsAndCanonicalMsiAssets()
+    {
+        const string json = """
+            [{
+              "draft": false,
+              "prerelease": false,
+              "tag_name": "connect./0.11.128",
+              "name": "connect./0.11.128",
+              "body": "### что изменилось:\n- улучшен интерфейс\n\n### файлы:\n- `DEYTTConnect-Windows-0.11.143.msi` — для windows",
+              "html_url": "https://github.com/crxwov/deytt.connect/releases/tag/connect./0.11.128",
+              "assets": [{
+                "name": "DEYTTConnect-Windows-0.11.143.msi",
+                "browser_download_url": "https://github.com/crxwov/deytt.connect/releases/download/connect./0.11.128/DEYTTConnect-Windows-0.11.143.msi",
+                "size": 105431792,
+                "digest": "sha256:7ed03c499de619ec45f7e959403da374d9d2e627c1a17d1ba4d4fccaa89fdae8"
+              }]
+            }]
+            """;
+
+        var release = WindowsUpdateClient.ParseLatestWindowsReleaseResponse(json, WindowsUpdatePackageKind.Msi);
+
+        Assert.NotNull(release);
+        Assert.Equal("connect./0.11.128", release.Tag);
+        Assert.Equal("DEYTTConnect-Windows-0.11.143.msi", release.AssetName);
+        Assert.Equal("0.11.143", WindowsUpdateClient.GetDisplayVersion(release));
+        Assert.True(release.CanDownloadVerifiedPackage);
+        Assert.True(WindowsUpdateClient.IsNewerThan("connect./0.11.162", new Version(0, 11, 161)));
+        Assert.Equal("что изменилось:\n• улучшен интерфейс", WindowsUpdateClient.FormatDisplayNotes(release.Notes));
+    }
+
+    [Fact]
+    public void ParseServerManifestResponse_SelectsVerifiedDeyttSpaceMirrorMsiAndMergesGitHubNotes()
+    {
+        var sha = new string('b', 64);
+        var manifest = $$"""
+            {
+              "version": "0.11.162",
+              "tag": "connect./0.11.162",
+              "page_url": "https://deytt.space/download/",
+              "windows_msi_url": "https://deytt.space/connect/releases/DEYTTConnect-Windows-0.11.162.msi",
+              "windows_msi_size": 98765432,
+              "windows_msi_sha256": "{{sha}}"
+            }
+            """;
+
+        var serverRelease = WindowsUpdateClient.ParseServerManifestResponse(manifest, WindowsUpdatePackageKind.Msi);
+
+        Assert.NotNull(serverRelease);
+        Assert.True(serverRelease.CanDownloadVerifiedPackage);
+        Assert.Equal("0.11.162", WindowsUpdateClient.GetDisplayVersion(serverRelease));
+        Assert.Equal("https://deytt.space/connect/releases/DEYTTConnect-Windows-0.11.162.msi", serverRelease.AssetUrl);
+
+        var githubRelease = new WindowsUpdateRelease(
+            "connect./0.11.162",
+            "connect./0.11.162",
+            "### что изменилось:\n- починен зум глобуса",
+            "DEYTTConnect-Windows-0.11.162.msi",
+            "https://github.com/crxwov/deytt.connect/releases/download/connect./0.11.162/DEYTTConnect-Windows-0.11.162.msi",
+            98765432,
+            "sha256:" + sha,
+            WindowsUpdatePackageKind.Msi,
+            "0.11.162");
+        var merged = WindowsUpdateClient.MergeServerAndGitHubRelease(serverRelease, githubRelease);
+        Assert.NotNull(merged);
+        Assert.Equal(serverRelease.AssetUrl, merged.AssetUrl);
+        Assert.Contains("починен зум глобуса", merged.Notes);
+    }
 }
 

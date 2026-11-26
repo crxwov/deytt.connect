@@ -28,11 +28,11 @@ mkdir -p "$temp_dir/app" "$temp_dir/service"
   -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:NuGetAudit=false \
   -o "$temp_dir/service" --nologo
 
-atlas_source="$repo_root/app/src/main/assets/route-map"
+atlas_source="$repo_root/windows/DeyttConnect.Windows/Assets/route-map"
 atlas_output="$temp_dir/app/Assets/route-map"
 for asset in atlas-init.js index.html network-atlas.css network-atlas.js; do
   if [[ ! -s "$atlas_output/$asset" ]] || ! cmp -s "$atlas_source/$asset" "$atlas_output/$asset"; then
-    echo "The published DEYTT atlas asset is missing or differs from Android: $asset" >&2
+    echo "The published DEYTT atlas asset is missing or differs from the Windows source: $asset" >&2
     exit 1
   fi
 done

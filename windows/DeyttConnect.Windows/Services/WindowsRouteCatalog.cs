@@ -1,3 +1,4 @@
+using DeyttConnect.Protocol;
 using System.Text.Json;
 using DeyttConnect.Shared;
 using System.Text.RegularExpressions;
@@ -13,7 +14,8 @@ public sealed record WindowsRoute(
     string Protocol,
     string ProtocolName,
     string? ProfileId = null,
-    string? ProfileName = null);
+    string? ProfileName = null,
+    string? Detail = null);
 
 public static class WindowsRouteCatalog
 {
@@ -31,10 +33,56 @@ public static class WindowsRouteCatalog
         ("VLESS", "VLESS"),
         ("TROJAN", "Trojan"),
         ("HYSTERIA2", "Hysteria 2"),
+        ("TUIC", "TUIC"),
     ];
 
     private static readonly Regex RegionPrefix = new("^(NL|DE|RU|FI|IT)(?:$|[-_\\s])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    public static string FormatRouteTitle(WindowsRoute route)
+    {
+        if (route.Protocol == "AUTO")
+            return "✦ автоподбор";
+        if (route.Protocol == "LTE")
+            return "🇪🇺 lte • белые списки";
+        var isRu = string.Equals(route.CountryCode, "RU", StringComparison.OrdinalIgnoreCase);
+        var isDirect = isRu || route.Protocol is "HYSTERIA2" or "TUIC" || route.Protocol.StartsWith("AWG", StringComparison.OrdinalIgnoreCase);
+        var mark = isDirect ? "[⚡]" : "[🛰️]";
+        var mode = isDirect ? "(speed)" : "(stable)";
+        var cc = route.CountryCode.ToLowerInvariant();
+        var proto = route.Protocol switch
+        {
+            "VLESS" => VlessTransportLabel(route.Detail),
+            "TROJAN" => "trojan",
+            "HYSTERIA2" => "hysteria",
+            "TUIC" => "tuic",
+            "AWG31" or "AWG15" => route.ProfileName ?? (route.Protocol == "AWG15" ? "amneziawg 1.5" : "amneziawg 3.1"),
+            _ => route.ProtocolName.ToLowerInvariant(),
+        };
+        return $"{mark}  {cc} • {proto} {mode}";
+    }
+
+    public static string VlessTransportLabel(string? detail) => detail switch
+    {
+        "reality" or "xhttp" or "ws" or "httpupgrade" or "tcp" or "tls" => detail,
+        "websocket + tls" => "ws",
+        _ => "vless",
+    };
+
+    public static string FormatRouteDetail(WindowsRoute route, bool english = false)
+    {
+        return route.Protocol switch
+        {
+            "AUTO" => english ? "Select an available exit automatically" : "Выбрать доступный выход автоматически",
+            "LTE" => english ? "Whitelist LTE · 30 GB monthly limit" : "Белые списки LTE · лимит 30 ГБ в месяц",
+            "VLESS" or "TROJAN" => route.CountryCode == "RU"
+                ? (english ? "direct route" : "прямой маршрут")
+                : (english ? "cascade route" : "каскадный маршрут"),
+            "HYSTERIA2" or "TUIC" => english ? "direct route" : "прямой маршрут",
+            "AWG31" or "AWG15" => route.ProfileName ?? (english ? "direct · amneziawg" : "прямой · amneziawg"),
+            _ => route.ProtocolName,
+        };
+    }
 
     public static IReadOnlyList<WindowsRoute> Parse(
         JsonElement profile,
@@ -82,24 +130,34 @@ public static class WindowsRouteCatalog
 
         var autoTag = outboundItems.Select(item => ReadString(item, "tag"))
             .FirstOrDefault(tag => tag?.Contains("автоподбор", StringComparison.OrdinalIgnoreCase) == true);
-        var chainTag = "route:RU-DE:CHAIN";
         if (autoTag is null)
             throw new InvalidDataException("The subscription is missing the automatic route.");
+
+        var outboundByTag = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var item in outboundItems)
+            if (ReadString(item, "tag") is { Length: > 0 } itemTag)
+                outboundByTag[itemTag] = item;
 
         var routes = new List<WindowsRoute>
         {
             new("auto", autoTag, "AUTO", "Автоподбор", "✦", "AUTO", "Автоподбор"),
         };
-        if (outboundTags.Contains(chainTag))
-            routes.Add(new WindowsRoute("ru-de", chainTag, "RU-DE", "LTE + белые списки", "🇷🇺→🇩🇪", "CHAIN", "RU → DE"));
+        if (outboundTags.Contains(CdnLteProfile.RouteTag) &&
+            CdnLteProfile.HasValidMetadata(profile.GetRawText()))
+            routes.Add(new WindowsRoute(CdnLteProfile.RouteTag, CdnLteProfile.RouteTag,
+                "EU", "Европа", "🇪🇺", "LTE", "lte • белые списки"));
 
+        var xrayTransports = XrayRouteProfile.DescribeTransports(profile);
         foreach (var country in Countries)
         foreach (var protocol in Protocols)
         {
             var tag = $"route:{country.Code}:{protocol.Code}";
             if (outboundTags.Contains(tag))
                 routes.Add(new WindowsRoute(tag, tag, country.Code, country.Name, country.Flag,
-                    protocol.Code, protocol.Name));
+                    protocol.Code, protocol.Name,
+                    Detail: xrayTransports.TryGetValue(tag, out var xrayTransport)
+                        ? xrayTransport
+                        : outboundByTag.TryGetValue(tag, out var outbound) ? DescribeTransport(outbound) : null));
         }
 
         foreach (var awgProfile in (awgProfiles ?? []).Take(32))
@@ -151,6 +209,26 @@ public static class WindowsRouteCatalog
         value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
+
+    /// <summary>
+    /// Human-readable transport/security summary taken from the subscription outbound
+    /// itself (e.g. "reality" for VLESS Reality), never a hardcoded protocol label.
+    /// </summary>
+    private static string? DescribeTransport(JsonElement outbound)
+    {
+        if (ReadString(outbound, "type") is not ("vless" or "trojan"))
+            return null;
+        var hasTls = outbound.TryGetProperty("tls", out var tls) && tls.ValueKind == JsonValueKind.Object;
+        if (hasTls &&
+            tls.TryGetProperty("reality", out var reality) &&
+            reality.ValueKind == JsonValueKind.Object &&
+            (!reality.TryGetProperty("enabled", out var enabled) || enabled.ValueKind != JsonValueKind.False))
+            return "reality";
+        if (outbound.TryGetProperty("transport", out var transport) &&
+            ReadString(transport, "type") is { Length: > 0 } transportType)
+            return transportType == "ws" ? "websocket + tls" : transportType;
+        return hasTls ? "tls" : null;
+    }
 
     private static HashSet<string> CollectTags(IEnumerable<JsonElement> items)
     {

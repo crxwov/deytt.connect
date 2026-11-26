@@ -1,26 +1,60 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.NetworkInformation;
 
 namespace DeyttConnect.Windows.Service;
 
 internal static class RouteLatencyProbe
 {
-    private static readonly Uri[] ColdTargets =
+    internal static readonly Uri[] DefaultTargets =
     [
         new("https://cp.cloudflare.com/generate_204"),
         new("https://connectivitycheck.gstatic.com/generate_204"),
     ];
 
+    internal static readonly Dictionary<Uri, HttpStatusCode> DefaultExpectedStatuses = new()
+    {
+        [new("https://cp.cloudflare.com/generate_204")] = HttpStatusCode.NoContent,
+        [new("https://connectivitycheck.gstatic.com/generate_204")] = HttpStatusCode.NoContent,
+    };
+
     internal static readonly RouteLatencyProbeTimeouts ProductionTimeouts = new(
-        Overall: TimeSpan.FromSeconds(12),
-        Individual: TimeSpan.FromSeconds(6));
+        Overall: TimeSpan.FromSeconds(8),
+        Individual: TimeSpan.FromMilliseconds(2500));
+
+    internal static async Task<RouteLatencyProbeResult> MeasureServerAsync(IPAddress serverAddress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(serverAddress);
+        cancellationToken.ThrowIfCancellationRequested();
+        try
+        {
+            // shortcut: ICMP measures RTT to the selected server IP, not its protocol handshake; use a protocol-specific probe if transport latency is needed.
+            using var ping = new Ping();
+            var reply = await ping.SendPingAsync(serverAddress.ToString(), TimeSpan.FromSeconds(3),
+                new byte[32], null, cancellationToken).ConfigureAwait(false);
+            return reply.Status == IPStatus.Success
+                ? new RouteLatencyProbeResult(Math.Max(1, reply.RoundtripTime), null)
+                : new RouteLatencyProbeResult(null, "Сервер VPN не ответил на ICMP-пинг.");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (PingException)
+        {
+            return new RouteLatencyProbeResult(null, "Не удалось отправить ICMP-пинг до сервера VPN.");
+        }
+    }
 
     internal static async Task<RouteLatencyProbeResult> MeasureAsync(
         HttpClient proxyClient,
         CancellationToken cancellationToken,
         Action<RouteLatencyProbeObservation>? reportProgress = null,
-        RouteLatencyProbeTimeouts? timeouts = null)
+        RouteLatencyProbeTimeouts? timeouts = null,
+        IReadOnlyList<Uri>? targets = null,
+        IReadOnlyDictionary<Uri, HttpStatusCode>? expectedStatuses = null)
     {
         ArgumentNullException.ThrowIfNull(proxyClient);
         cancellationToken.ThrowIfCancellationRequested();
@@ -32,52 +66,68 @@ internal static class RouteLatencyProbe
         {
             return new RouteLatencyProbeResult(
                 LatencyMilliseconds: null,
-                Failure: "Не удалось выполнить HTTPS-проверку маршрута.",
-                UsedColdFallback: false);
+                Failure: "Не удалось выполнить HTTPS-проверку маршрута.");
         }
 
         using var overallCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         overallCancellation.CancelAfter(limits.Overall);
 
-        var coldOutcomes = new List<RouteLatencyProbeAttempt>(ColdTargets.Length * 2);
+        HttpStatusCode ExpectedStatus(Uri target) =>
+            expectedStatuses is not null && expectedStatuses.TryGetValue(target, out var status)
+                ? status
+                : (DefaultExpectedStatuses.TryGetValue(target, out var defaultStatus)
+                    ? defaultStatus
+                    : HttpStatusCode.NoContent);
+
+        var coldTargets = targets ?? DefaultTargets;
+        if (coldTargets.Count == 0) throw new ArgumentException("At least one latency target is required.", nameof(targets));
+        var coldOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count * 2);
         RouteLatencyProbeAttempt? selectedCold = null;
 
         for (var round = 1; round <= 2 && selectedCold is null && !overallCancellation.IsCancellationRequested; round++)
         {
-            using var coldCancellation = CancellationTokenSource.CreateLinkedTokenSource(overallCancellation.Token);
-            var coldTasks = ColdTargets.Select(target => MeasureRequestAsync(proxyClient, target,
-                coldCancellation.Token, cancellationToken, overallCancellation.Token, limits.Individual)).ToArray();
-            var pendingCold = new HashSet<Task<RouteLatencyProbeAttempt>>(coldTasks);
-            var roundOutcomes = new List<RouteLatencyProbeAttempt>(ColdTargets.Length);
-            try
+            using var roundCancellation = CancellationTokenSource.CreateLinkedTokenSource(overallCancellation.Token);
+            var roundOutcomes = new List<RouteLatencyProbeAttempt>(coldTargets.Count);
+            var coldTasks = coldTargets.Select(async target =>
             {
-                while (pendingCold.Count > 0 && selectedCold is null)
+                var outcome = await MeasureRequestAsync(proxyClient, target,
+                    ExpectedStatus(target),
+                    roundCancellation.Token, cancellationToken, overallCancellation.Token, limits.Individual)
+                    .ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                return outcome;
+            }).ToList();
+
+            while (coldTasks.Count > 0)
+            {
+                var completed = await Task.WhenAny(coldTasks).ConfigureAwait(false);
+                coldTasks.Remove(completed);
+                var outcome = await completed.ConfigureAwait(false);
+                coldOutcomes.Add(outcome);
+                roundOutcomes.Add(outcome);
+                reportProgress?.Invoke(new RouteLatencyProbeObservation(round,
+                    RouteLatencyProbePhase.ColdConnect, null));
+                if (outcome.LatencyMilliseconds is not null && selectedCold is null)
                 {
-                    var finished = await Task.WhenAny(pendingCold).ConfigureAwait(false);
-                    pendingCold.Remove(finished);
-                    var outcome = await finished.ConfigureAwait(false);
-                    cancellationToken.ThrowIfCancellationRequested();
-                    coldOutcomes.Add(outcome);
-                    roundOutcomes.Add(outcome);
-                    reportProgress?.Invoke(new RouteLatencyProbeObservation(round,
-                        RouteLatencyProbePhase.ColdConnect, outcome.LatencyMilliseconds));
-                    if (outcome.LatencyMilliseconds is not null)
-                        selectedCold = outcome;
+                    selectedCold = outcome;
+                    roundCancellation.Cancel();
+                    while (coldTasks.Count > 0)
+                    {
+                        var remaining = await Task.WhenAny(coldTasks).ConfigureAwait(false);
+                        coldTasks.Remove(remaining);
+                        try { await remaining.ConfigureAwait(false); }
+                        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+                    }
+                    break;
                 }
             }
-            finally
-            {
-                coldCancellation.Cancel();
-                try { await Task.WhenAll(coldTasks).ConfigureAwait(false); }
-                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
-            }
-            if (selectedCold is null && !roundOutcomes.Any(IsRetryable))
+
+            if (selectedCold is not null || !roundOutcomes.Any(IsRetryable) || round == 2 ||
+                overallCancellation.IsCancellationRequested)
                 break;
-            if (selectedCold is null && round == 1 && !overallCancellation.IsCancellationRequested)
-            {
-                try { await Task.Delay(200, overallCancellation.Token).ConfigureAwait(false); }
-                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
-            }
+
+            try { await Task.Delay(TimeSpan.FromMilliseconds(150), overallCancellation.Token).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { }
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -86,55 +136,58 @@ internal static class RouteLatencyProbe
         {
             return new RouteLatencyProbeResult(
                 LatencyMilliseconds: null,
-                Failure: DescribeFailure(coldOutcomes),
-                UsedColdFallback: false);
+                Failure: DescribeFailure(coldOutcomes));
         }
 
-        var coldLatency = selectedCold.LatencyMilliseconds!.Value;
         var warmLatencies = new List<long>(capacity: 3);
-
         for (var sample = 1; sample <= 3 && !overallCancellation.IsCancellationRequested; sample++)
         {
-            var outcome = await MeasureRequestAsync(
-                proxyClient,
-                selectedCold.Target,
-                overallCancellation.Token,
-                cancellationToken,
-                overallCancellation.Token,
-                limits.Individual).ConfigureAwait(false);
+            try
+            {
+                var outcome = await MeasureRequestAsync(
+                    proxyClient,
+                    selectedCold.Target,
+                    ExpectedStatus(selectedCold.Target),
+                    overallCancellation.Token,
+                    cancellationToken,
+                    overallCancellation.Token,
+                    limits.Individual).ConfigureAwait(false);
 
-            cancellationToken.ThrowIfCancellationRequested();
-            reportProgress?.Invoke(new RouteLatencyProbeObservation(
-                Attempt: sample,
-                Phase: RouteLatencyProbePhase.WarmSample,
-                LatencyMilliseconds: outcome.LatencyMilliseconds));
-
-            if (outcome.LatencyMilliseconds is long latency)
-                warmLatencies.Add(latency);
+                if (outcome.LatencyMilliseconds is long latency && latency > 0)
+                {
+                    warmLatencies.Add(latency);
+                    reportProgress?.Invoke(new RouteLatencyProbeObservation(
+                        Attempt: sample,
+                        Phase: RouteLatencyProbePhase.WarmSample,
+                        LatencyMilliseconds: latency));
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch { }
         }
 
         if (warmLatencies.Count == 0)
         {
             return new RouteLatencyProbeResult(
-                LatencyMilliseconds: coldLatency,
-                Failure: null,
-                UsedColdFallback: true);
+                LatencyMilliseconds: null,
+                Failure: "Не удалось получить повторный HTTPS-отклик через маршрут.");
         }
 
         warmLatencies.Sort();
-        var middle = warmLatencies.Count / 2;
-        var median = warmLatencies.Count % 2 == 1
-            ? warmLatencies[middle]
-            : (long)Math.Round((warmLatencies[middle - 1] + warmLatencies[middle]) / 2d, MidpointRounding.AwayFromZero);
-        return new RouteLatencyProbeResult(
-            LatencyMilliseconds: median,
-            Failure: null,
-            UsedColdFallback: false);
+        var finalLatency = warmLatencies.Count % 2 == 1
+            ? warmLatencies[warmLatencies.Count / 2]
+            : (long)Math.Round((warmLatencies[warmLatencies.Count / 2 - 1] + warmLatencies[warmLatencies.Count / 2]) / 2d,
+                MidpointRounding.AwayFromZero);
+        return new RouteLatencyProbeResult(finalLatency, null);
     }
 
     private static async Task<RouteLatencyProbeAttempt> MeasureRequestAsync(
         HttpClient client,
         Uri target,
+        HttpStatusCode expectedStatus,
         CancellationToken phaseCancellation,
         CancellationToken userCancellation,
         CancellationToken overallCancellation,
@@ -160,11 +213,11 @@ internal static class RouteLatencyProbe
 
             var elapsedMilliseconds = (long)Math.Max(1, Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             var isOriginalTarget = response.RequestMessage?.RequestUri == target;
-            var isExpectedResponse = response.StatusCode == HttpStatusCode.NoContent;
+            var isExpectedResponse = response.StatusCode == expectedStatus;
 
             if (isOriginalTarget && isExpectedResponse)
             {
-                // A 204 normally has no body. Keep the measured header time if cleanup itself times out.
+                // A canary normally has a small or empty body. Keep the measured header time if cleanup itself times out.
                 try
                 {
                     if (response.Content is not null)
@@ -182,7 +235,7 @@ internal static class RouteLatencyProbe
                 }
                 catch (IOException)
                 {
-                    // The valid 204 headers are the latency sample; disposing the response cancels its body.
+                    // The validated headers are the latency sample; disposing the response cancels its body.
                 }
 
                 return new RouteLatencyProbeAttempt(target, elapsedMilliseconds, RouteLatencyProbeFailure.None);
@@ -235,7 +288,8 @@ internal static class RouteLatencyProbe
     {
         RouteLatencyProbeFailure.AttemptTimedOut or RouteLatencyProbeFailure.OverallTimedOut or
             RouteLatencyProbeFailure.RequestFailed or RouteLatencyProbeFailure.DnsFailed => true,
-        RouteLatencyProbeFailure.InvalidResponse => attempt.StatusCode == (HttpStatusCode)429 || (int?)attempt.StatusCode >= 500,
+        RouteLatencyProbeFailure.InvalidResponse => attempt.StatusCode is { } status &&
+            (status == (HttpStatusCode)429 || (int)status >= 500),
         _ => false,
     };
 
@@ -289,18 +343,17 @@ internal sealed record RouteLatencyProbeObservation(
 
 internal sealed record RouteLatencyProbeResult(
     long? LatencyMilliseconds,
-    string? Failure,
-    bool UsedColdFallback);
+    string? Failure);
 
 internal readonly record struct RouteLatencyProbeTimeouts(TimeSpan Overall, TimeSpan Individual)
 {
     internal void Validate()
     {
-        if (Overall <= TimeSpan.Zero || Overall > TimeSpan.FromSeconds(12))
-            throw new ArgumentOutOfRangeException(nameof(Overall), "Overall timeout must be between 0 and 12 seconds.");
+        if (Overall <= TimeSpan.Zero || Overall > TimeSpan.FromSeconds(30))
+            throw new ArgumentOutOfRangeException(nameof(Overall), "Overall timeout must be between 0 and 30 seconds.");
 
-        if (Individual <= TimeSpan.Zero || Individual > TimeSpan.FromSeconds(6))
-            throw new ArgumentOutOfRangeException(nameof(Individual), "Individual timeout must be between 0 and 6 seconds.");
+        if (Individual <= TimeSpan.Zero || Individual > TimeSpan.FromSeconds(15))
+            throw new ArgumentOutOfRangeException(nameof(Individual), "Individual timeout must be between 0 and 15 seconds.");
 
         if (Individual > Overall)
             throw new ArgumentException("Individual timeout cannot exceed overall timeout.", nameof(Individual));

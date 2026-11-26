@@ -9,17 +9,60 @@ internal static class Program
     [STAThread]
     private static int Main(string[] args)
     {
-        if (!OperatingSystem.IsWindows() || args.Length != 1 || args[0] != "--service")
-            return 2;
-
-        var serviceMain = new ServiceMainDelegate(ServiceMain);
-        var table = new[]
+        if (OperatingSystem.IsWindows() && args.Length == 1 && args[0] == "--service")
         {
-            new ServiceTableEntry { ServiceName = ServiceName, ServiceProc = serviceMain },
-            new ServiceTableEntry { ServiceName = null, ServiceProc = null },
+            var serviceMain = new ServiceMainDelegate(ServiceMain);
+            var table = new[]
+            {
+                new ServiceTableEntry { ServiceName = ServiceName, ServiceProc = serviceMain },
+                new ServiceTableEntry { ServiceName = null, ServiceProc = null },
+            };
+
+            return StartServiceCtrlDispatcher(table) ? 0 : Marshal.GetLastWin32Error();
+        }
+
+        // Linux daemon / console service mode
+        Console.WriteLine("deytt./connect VPN service starting...");
+        Console.CancelKeyPress += (_, e) =>
+        {
+            e.Cancel = true;
+            StopToken.Cancel();
+            Engine.Stop();
+        };
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            StopToken.Cancel();
+            Engine.Stop();
         };
 
-        return StartServiceCtrlDispatcher(table) ? 0 : Marshal.GetLastWin32Error();
+        try
+        {
+            if (OperatingSystem.IsLinux())
+            {
+                using var shutdown = PosixSignalRegistration.Create(PosixSignal.SIGTERM, signal =>
+                {
+                    signal.Cancel = true;
+                    StopToken.Cancel();
+                });
+                PipeServer.RunLinuxAsync(Engine, StopToken.Token).GetAwaiter().GetResult();
+            }
+            else if (OperatingSystem.IsWindows())
+            {
+                PipeServer.RunAsync(ReadAllowedUserSid(), Engine, StopToken.Token).GetAwaiter().GetResult();
+            }
+            else
+            {
+                return 1;
+            }
+            Engine.Stop();
+            return 0;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"VPN service fatal error: {ex.Message}");
+            Engine.Stop();
+            return 1;
+        }
     }
 
     private static readonly CancellationTokenSource StopToken = new();
@@ -28,6 +71,7 @@ internal static class Program
     private static ServiceControlHandler? _controlHandler;
     private static ServiceStatus _status;
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static void ServiceMain(uint argumentCount, IntPtr arguments)
     {
         _controlHandler = HandleControl;
@@ -51,6 +95,7 @@ internal static class Program
         }
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     private static string ReadAllowedUserSid()
     {
         using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(

@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Avalonia;
@@ -10,6 +12,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Microsoft.Win32;
 using DeyttConnect.Windows.Controls;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Protocol;
@@ -23,36 +26,35 @@ public partial class MainWindow : Window
     private const double WorkAreaHeightInset = 48;
 
     private enum MainTab { Home, Routes, Profile, Settings, Support, Setup }
+    private const string RouteOverviewProbe = "*";
     private enum RouteCountryProbeState { Queued, Running, Cancelled, NeedsDisconnect, ServiceUnavailable, Failed }
     private sealed record RouteCountryProbeRequest(string CountryCode, string[] RouteTags);
+    private sealed class PageViewCache(Grid view, int stateFingerprint)
+    {
+        public Grid View { get; } = view;
+        public int StateFingerprint { get; set; } = stateFingerprint;
+    }
 
-    private string _language = "ru";
-    private string _selectedRoute = "auto";
-    private string _probeMethod = "HEAD";
-    private bool _mapRegionEnabled;
-    private bool _mapRegionConsentGranted;
-    private bool _mapRegionConsentAsked;
-    private bool _reduceMotion;
-    private WindowsNetworkLocation? _mapOriginLocation;
-    private WindowsNetworkLocation? _mapEgressLocation;
+    private readonly ShellViewModel _shellViewModel = new();
+    private readonly HomeViewModel _homeViewModel = new();
+    private readonly RoutesViewModel _routesViewModel = new();
+    private readonly ProfileViewModel _profileViewModel = new();
+    private readonly SettingsViewModel _settingsViewModel = new();
+    private readonly DispatcherTimer _systemThemeTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private bool _systemThemeWatcherAttached;
     private CancellationTokenSource? _mapLocationCancellation;
     private bool _mapLocationStateInitialized;
     private bool _mapOriginLookupAttempted;
     private bool _mapEgressLookupAttempted;
     private bool _mapLocationRequestIsEgress;
-    private string? _mapLocationIssue;
     private readonly TelegramApiClient _telegramApi = new();
     private readonly WindowsTunnelClient _tunnelClient = new();
     private readonly DispatcherTimer _vpnStatusTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private string? _sessionToken;
-    private TelegramAccount? _account;
     private Bitmap? _telegramAvatarBitmap;
     private Image? _profileAvatarImage;
     private string? _telegramAvatarSessionToken;
-    private TelegramKeysSnapshot? _keysSnapshot;
-    private IReadOnlyList<TelegramAppSession> _sessions = [];
-    private IReadOnlyList<WindowsRoute> _routes = [];
-    private readonly HashSet<string> _expandedRouteCountries = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Action> _routeOptionRefreshActions = new(StringComparer.Ordinal);
     private readonly LinkedList<RouteCountryProbeRequest> _pendingRouteProbeQueue = new();
     private readonly Dictionary<string, LinkedListNode<RouteCountryProbeRequest>> _pendingRouteProbeNodes =
         new(StringComparer.Ordinal);
@@ -60,29 +62,16 @@ public partial class MainWindow : Window
         new(StringComparer.Ordinal);
     private string? _activeRouteProbeCountry;
     private long _routeCountryProbeGeneration;
-    private string? _profileLoadIssue;
-    private string? _sessionLoadIssue;
-    private string? _preferencesIssue;
-    private string? _profileActionStatus;
-    private Func<Task>? _profileActionRetry;
-    private bool _profileRefreshInProgress;
-    private bool _profileDevicesExpanded;
-    private bool _profileHelpExpanded;
-    private readonly WindowsPaymentFlowState _paymentFlow = new();
     private MainTab _activeTab = MainTab.Home;
-    private WindowsTunnelSnapshot _vpnSnapshot = new("disconnected", "VPN выключен");
-    private IReadOnlyDictionary<string, WindowsRouteProbeResult> _routeProbeResults =
-        new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal);
-    private bool _vpnServiceAvailable;
-    private bool _vpnActionInProgress;
+    private readonly Dictionary<MainTab, Vector> _pageScrollOffsets = new();
+    private readonly Dictionary<MainTab, PageViewCache> _pageViews = new();
     private bool _vpnCancelRequested;
     private bool _vpnCancelInProgress;
     private Task<WindowsTunnelSnapshot>? _vpnConnectTask;
+    private Task<bool>? _activeRefreshTask;
     private long _vpnOperationVersion;
-    private bool _routeProbeInProgress;
-    private HashSet<string> _activeRouteProbeTags = new(StringComparer.Ordinal);
-    private bool _routeProbeCancelRequested;
     private readonly string? _initialImportUrl;
+    private string? _pendingExternalImportUrl;
     private bool _supportViewActivated;
     private bool _homeMapInitializationAllowed;
     private bool _disableNativeMapInitialization;
@@ -90,13 +79,15 @@ public partial class MainWindow : Window
     private bool _startupFlowStarted;
     private bool _sessionRestoreComplete;
     private bool _qaFixture;
-    private bool _compactLayout;
-    private bool _shortCompactLayout;
     private bool _responsiveLayoutInitialized;
+    private bool _mapImmersive;
+    private Avalonia.Controls.WindowState _windowStateBeforeMapImmersive = Avalonia.Controls.WindowState.Normal;
     private Border? _homeConnectionCard;
     private Grid? _homeConnectionLayout;
     private Border? _homeConnectionPrimaryAction;
     private RouteGlobeWebView? _routeGlobe;
+    private bool UseNativeDesktopShell => _disableNativeMapInitialization ||
+        (OperatingSystem.IsLinux() && _routeGlobe?.IsAtlasReady != true);
 
     public MainWindow() : this((string?)null)
     {
@@ -105,21 +96,60 @@ public partial class MainWindow : Window
     public MainWindow(string? initialImportUrl)
     {
         InitializeComponent();
-        _initialImportUrl = initialImportUrl;
-        if (OperatingSystem.IsWindows())
+        try
         {
-            var preferences = WindowsPreferencesStore.Load();
-            _language = preferences.Language;
-            _selectedRoute = preferences.SelectedRoute;
-            _probeMethod = preferences.ProbeMethod;
-            _mapRegionConsentGranted = preferences.MapRegionConsentGranted;
-            _mapRegionConsentAsked = preferences.MapRegionConsentAsked;
-            _mapRegionEnabled = preferences.MapRegionEnabled && _mapRegionConsentGranted;
-            _reduceMotion = preferences.ReduceMotion;
+            var iconUri = new Uri("avares://DeyttConnect.Windows/Assets/deyttconnect.ico");
+            if (Avalonia.Platform.AssetLoader.Exists(iconUri))
+            {
+                using var stream = Avalonia.Platform.AssetLoader.Open(iconUri);
+                Icon = new WindowIcon(stream);
+            }
+            else
+            {
+                var localIco = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "deyttconnect.ico");
+                if (System.IO.File.Exists(localIco))
+                    Icon = new WindowIcon(localIco);
+            }
         }
+        catch { }
+        WorkspaceHeader.PointerPressed += OnWorkspaceHeaderPointerPressed;
+        HeaderContentGrid.PointerPressed += OnWorkspaceHeaderPointerPressed;
+        HeaderDragRegion.PointerPressed += OnWorkspaceHeaderPointerPressed;
+        WorkspaceBrand.PointerPressed += OnWorkspaceHeaderPointerPressed;
+        MinimizeWindowButton.Click += (_, _) => WindowState = Avalonia.Controls.WindowState.Minimized;
+        MaximizeWindowButton.Click += (_, _) =>
+        {
+            WindowState = WindowState == Avalonia.Controls.WindowState.Maximized
+                ? Avalonia.Controls.WindowState.Normal
+                : Avalonia.Controls.WindowState.Maximized;
+        };
+        CloseWindowButton.Click += (_, _) => Close();
+        _initialImportUrl = initialImportUrl;
+        _systemDarkTheme = IsSystemDarkTheme();
+        var preferences = WindowsPreferencesStore.Load();
+        _language = preferences.Language;
+        _selectedRoute = preferences.SelectedRoute;
+        _probeMethod = preferences.ProbeMethod;
+        _mapRegionConsentGranted = preferences.MapRegionConsentGranted;
+        _mapRegionConsentAsked = preferences.MapRegionConsentAsked;
+        _mapRegionEnabled = preferences.MapRegionEnabled && _mapRegionConsentGranted;
+        _reduceMotion = preferences.ReduceMotion;
+        _themePreference = preferences.ThemePreference;
+        _windowChromePreference = preferences.WindowChromePreference;
+        _customMapPoint = preferences.MapPoint;
+        _useSystemWindowChrome = _windowChromePreference == "system";
+        WindowDecorations = _useSystemWindowChrome
+            ? Avalonia.Controls.WindowDecorations.Full
+            : Avalonia.Controls.WindowDecorations.None;
         ApplyVisualPreferences();
         ConfigureNavigation();
+        PropertyChanged += (_, args) =>
+        {
+            if (args.Property == Window.WindowStateProperty)
+                UpdateWindowControlState();
+        };
         ShowTab(MainTab.Home);
+        SplashOverlay.Start(_reduceMotion);
         SizeChanged += (_, _) => UpdateResponsiveLayout();
         PageScroll.SizeChanged += (_, _) =>
         {
@@ -128,13 +158,23 @@ public partial class MainWindow : Window
         };
         Opened += async (_, _) =>
         {
+            ApplyNativeWindowIcon();
+            InitializeTray();
+            AttachSystemThemeWatcher();
             FitInitialWindowToWorkArea();
             await RunStartupFlowAsync();
+            await CheckForStartupUpdateAsync();
         };
         _vpnStatusTimer.Tick += (_, _) => _ = RefreshVpnStatusAsync();
+        Closing += OnTrayWindowClosing;
         Closed += (_, _) =>
         {
+            _trayIcon?.Dispose();
+            _trayIcon = null;
+            DetachSystemThemeWatcher();
             _vpnStatusTimer.Stop();
+            _activeSetupView?.Abort();
+            _homeProbeCancellation?.Cancel();
             CancelMapLocationLookup();
             _telegramAvatarBitmap?.Dispose();
             _telegramAvatarBitmap = null;
@@ -147,12 +187,16 @@ public partial class MainWindow : Window
         _startupFlowStarted = true;
         _sessionRestoreComplete = true;
         _language = fixture.Language;
+        if (fixture.ThemePreference is "system" or "light" or "dark" or "legacy")
+            _themePreference = fixture.ThemePreference;
+        ApplyVisualPreferences();
         _selectedRoute = fixture.SelectedRoute;
         // A synthetic fixture must not inherit the real user's IP-region privacy choice.
         _mapRegionEnabled = false;
         _mapRegionConsentGranted = false;
         _mapRegionConsentAsked = false;
         _mapOriginLocation = null;
+        _customMapPoint = null;
         _mapEgressLocation = null;
         _mapLocationStateInitialized = false;
         _sessionToken = fixture.SignedIn ? "QA synthetic session marker" : null;
@@ -170,6 +214,10 @@ public partial class MainWindow : Window
         _vpnServiceAvailable = true;
         _homeMapInitializationAllowed = true;
         _disableNativeMapInitialization = fixture.DisableNativeMapInitialization;
+        _manualUpdateLookup = fixture.ManualUpdateLookup;
+        _manualUpdateDownload = fixture.ManualUpdateDownload;
+        if (_disableNativeMapInitialization)
+            PageScroll.VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto;
         _routeProbeInProgress = fixture.RouteProbeInProgress;
         _routeProbeCancelRequested = fixture.RouteProbeCancelRequested;
         if (!string.IsNullOrWhiteSpace(fixture.ExpandedRouteCountry))
@@ -217,12 +265,13 @@ public partial class MainWindow : Window
         if (_startupFlowStarted)
             return;
         _startupFlowStarted = true;
+        _homeMapInitializationAllowed = true;
         UpdateResponsiveLayout();
+
+        await Task.Delay(200);
 
         if (OperatingSystem.IsWindows())
             await ShowStartupExternalVpnNoticeAsync();
-        if (!IsVisible)
-            return;
 
         using var startupRestoreTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         try
@@ -234,13 +283,16 @@ public partial class MainWindow : Window
             _sessionRestoreComplete = true;
             if (IsVisible)
                 ShowTab(_activeTab);
+            RefreshTrayMenu();
         }
         if (!IsVisible)
             return;
 
-        if (_initialImportUrl is { Length: > 0 } importUrl)
+        var startupImportUrl = _pendingExternalImportUrl ?? _initialImportUrl;
+        _pendingExternalImportUrl = null;
+        if (startupImportUrl is { Length: > 0 } importUrl)
             await ShowSetupWindowAsync(importUrl);
-        else if (_sessionToken is null || _keysSnapshot is { HappAvailable: false })
+        else if (string.IsNullOrWhiteSpace(_keysSnapshot?.ProfileJson) || _routes.Count == 0)
             await ShowSetupWindowAsync();
         if (!IsVisible)
             return;
@@ -250,7 +302,7 @@ public partial class MainWindow : Window
             return;
 
         await RefreshVpnStatusAsync();
-        if (OperatingSystem.IsWindows() && IsVisible)
+        if (IsVisible)
             _vpnStatusTimer.Start();
 
         // Resolve the initial account/setup flow before creating the Windows WebView2
@@ -258,10 +310,16 @@ public partial class MainWindow : Window
         _homeMapInitializationAllowed = true;
         if (OperatingSystem.IsWindows() && IsVisible && _activeTab == MainTab.Home)
             ShowTab(MainTab.Home);
+        SplashOverlay.RequestDismiss();
     }
 
     private void ConfigureNavigation()
     {
+        TopHomeNav.Click += (_, _) => RequestNavigation(MainTab.Home);
+        TopRoutesNav.Click += (_, _) => RequestNavigation(MainTab.Routes);
+        TopProfileNav.Click += (_, _) => RequestNavigation(MainTab.Profile);
+        TopSettingsNav.Click += (_, _) => RequestNavigation(MainTab.Settings);
+        ThemeToggleButton.Click += (_, _) => ToggleTheme();
         HomeNav.Click += (_, _) => RequestNavigation(MainTab.Home);
         RoutesNav.Click += (_, _) => RequestNavigation(MainTab.Routes);
         ProfileNav.Click += (_, _) => RequestNavigation(MainTab.Profile);
@@ -272,20 +330,132 @@ public partial class MainWindow : Window
         BottomSettingsNav.Click += (_, _) => RequestNavigation(MainTab.Settings);
     }
 
+    private void UpdateWindowControlState()
+    {
+        var maximized = WindowState == Avalonia.Controls.WindowState.Maximized;
+        MaximizeWindowButton.Content = new NavigationIcon(
+            maximized ? NavigationIconKind.WindowRestore : NavigationIconKind.WindowMaximize, selected: false);
+        var label = maximized ? Copy("восстановить", "restore") : Copy("развернуть", "maximize");
+        ToolTip.SetTip(MaximizeWindowButton, label);
+        AutomationProperties.SetName(MaximizeWindowButton, label);
+        if (WindowState == Avalonia.Controls.WindowState.Minimized)
+        {
+            if (_routeGlobe != null) _routeGlobe.HostActive = false;
+        }
+        else if (IsVisible && (_activeTab == MainTab.Home || !UseNativeDesktopShell))
+        {
+            if (_routeGlobe != null) _routeGlobe.ResumeHost();
+        }
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr ExtractIcon(IntPtr hInst, string lpszExeFileName, int nIconIndex);
+
+    [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr LoadImage(IntPtr hInst, string lpszName, uint uType, int cxDesired, int cyDesired, uint fuLoad);
+
+    private const int WmSetIcon = 0x0080;
+    private const uint ImageIcon = 1;
+    private const uint LrLoadFromFile = 0x0010;
+    private static readonly IntPtr IconSmall = (IntPtr)0;
+    private static readonly IntPtr IconBig = (IntPtr)1;
+
+    private void ApplyNativeWindowIcon()
+    {
+        if (!OperatingSystem.IsWindows() || TryGetPlatformHandle()?.Handle is not { } hwnd || hwnd == IntPtr.Zero)
+            return;
+        try
+        {
+            var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "deyttconnect.ico");
+            if (File.Exists(iconPath))
+            {
+                var bigIcon = LoadImage(IntPtr.Zero, iconPath, ImageIcon, 32, 32, LrLoadFromFile);
+                var smallIcon = LoadImage(IntPtr.Zero, iconPath, ImageIcon, 16, 16, LrLoadFromFile);
+                if (bigIcon != IntPtr.Zero) SendMessage(hwnd, WmSetIcon, IconBig, bigIcon);
+                if (smallIcon != IntPtr.Zero) SendMessage(hwnd, WmSetIcon, IconSmall, smallIcon);
+                if (bigIcon != IntPtr.Zero || smallIcon != IntPtr.Zero)
+                    return;
+            }
+
+            var exePath = Environment.ProcessPath ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrEmpty(exePath) && File.Exists(exePath))
+            {
+                var hIcon = ExtractIcon(IntPtr.Zero, exePath, 0);
+                if (hIcon != IntPtr.Zero)
+                {
+                    SendMessage(hwnd, WmSetIcon, IconBig, hIcon);
+                    SendMessage(hwnd, WmSetIcon, IconSmall, hIcon);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private const int WmNcLButtonDown = 0x00A1;
+    private const int HtCaption = 0x0002;
+
+    private void OnWorkspaceHeaderPointerPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (e.Source is Avalonia.Controls.Button ||
+            (e.Source as Avalonia.Visual)?.FindAncestorOfType<Avalonia.Controls.Button>() != null)
+            return;
+
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        if (e.ClickCount == 2)
+        {
+            WindowState = WindowState == Avalonia.Controls.WindowState.Maximized
+                ? Avalonia.Controls.WindowState.Normal
+                : Avalonia.Controls.WindowState.Maximized;
+            e.Handled = true;
+            return;
+        }
+
+        e.Handled = true;
+        if (OperatingSystem.IsWindows() && TryGetPlatformHandle()?.Handle is { } hwnd && hwnd != IntPtr.Zero)
+        {
+            ReleaseCapture();
+            SendMessage(hwnd, WmNcLButtonDown, (IntPtr)HtCaption, IntPtr.Zero);
+        }
+        else
+        {
+            BeginMoveDrag(e);
+        }
+    }
+
     private void RequestNavigation(MainTab destination)
     {
+        if (_activeTab == destination)
+        {
+            if (destination == MainTab.Home)
+                RenderActiveTabPreservingScroll();
+            return;
+        }
         if (_activeTab == MainTab.Setup)
         {
             _activeSetupView?.Cancel();
             return;
         }
 
-        ShowTab(destination);
+        ShowTab(destination, reuseCachedPage: true);
     }
 
-    private void ShowTab(MainTab tab)
+    private void ShowTab(MainTab tab, bool reuseCachedPage = false)
     {
+        if (_mapImmersive && tab != MainTab.Home)
+            SetMapImmersive(false);
         var previousTab = _activeTab;
+        var previousScroll = PageScroll.Offset;
+        if (previousTab != tab)
+            _pageScrollOffsets[previousTab] = previousScroll;
         if (previousTab == MainTab.Routes && tab != MainTab.Routes)
             SuspendRouteCountryProbes();
         if (previousTab == MainTab.Support && tab != MainTab.Support)
@@ -295,22 +465,64 @@ public partial class MainWindow : Window
         }
 
         _activeTab = tab;
-        _profileAvatarImage = null;
-        PageHost.Children.Clear();
-        PageHost.Children.Add(tab switch
+        _shellViewModel.ActivePage = tab.ToString();
+        if (tab == MainTab.Routes)
+            Dispatcher.UIThread.Post(StartRouteOverviewProbe, DispatcherPriority.Background);
+        var pageFingerprint = GetPageStateFingerprint(tab);
+        Control page;
+        if (IsPersistentPage(tab) && _pageViews.TryGetValue(tab, out var cachedPage))
         {
-            MainTab.Home => BuildHomePage(),
-            MainTab.Routes => BuildRoutesPage(),
-            MainTab.Profile => BuildProfilePage(),
-            MainTab.Settings => BuildSettingsPage(),
-            MainTab.Support => BuildSupportPage(),
-            MainTab.Setup => BuildSetupPage(),
-            _ => BuildHomePage(),
-        });
+            page = cachedPage.View;
+            if (tab == MainTab.Home && _homeMapInitializationAllowed && _routeGlobe is null)
+            {
+                // The page may have been created as a native startup placeholder.
+                // Materialize the atlas once it is allowed to initialize.
+                cachedPage.View.Children.Clear();
+                cachedPage.View.Children.Add(BuildPage(tab));
+            }
+            else if (tab == MainTab.Home)
+                RefreshHomePageInPlace();
+            else if (!reuseCachedPage || cachedPage.StateFingerprint != pageFingerprint)
+            {
+                if (tab == MainTab.Profile)
+                    _profileAvatarImage = null;
+                cachedPage.View.Children.Clear();
+                cachedPage.View.Children.Add(BuildPage(tab));
+            }
+            cachedPage.StateFingerprint = GetPageStateFingerprint(tab);
+        }
+        else
+        {
+            if (tab == MainTab.Profile)
+                _profileAvatarImage = null;
+            var pageContent = BuildPage(tab);
+            if (IsPersistentPage(tab))
+            {
+                var persistentPage = new Grid { DataContext = GetPageViewModel(tab) };
+                persistentPage.Children.Add(pageContent);
+                page = persistentPage;
+                _pageViews[tab] = new PageViewCache(persistentPage, GetPageStateFingerprint(tab));
+            }
+            else
+            {
+                page = pageContent;
+                _pageViews.Remove(tab);
+            }
+        }
+
+        ShowPageInHost(tab, page);
+        if (!_qaFixture && previousTab != tab && tab == MainTab.Routes && _sessionToken is not null)
+            _ = RefreshSignedInAccountAsync();
+        EnsureInitialNetherlandsRouteProbe();
+        if (previousTab != tab)
+            _pageEntranceCancellation?.Cancel();
+        if (previousTab != tab && tab != MainTab.Home)
+            _ = PlayEntranceAsync(page);
         SetNavigation(HomeNav, NavigationIconKind.Home, Copy("Главная", "Home"), tab == MainTab.Home);
         SetNavigation(RoutesNav, NavigationIconKind.Routes, Copy("Маршруты", "Routes"), tab == MainTab.Routes);
         SetNavigation(ProfileNav, NavigationIconKind.Profile, Copy("Профиль", "Profile"), tab is MainTab.Profile or MainTab.Support);
         SetNavigation(SettingsNav, NavigationIconKind.Settings, Copy("Настройки", "Settings"), tab == MainTab.Settings);
+        UpdateTopNavigation();
         UpdateBottomNavigation();
         UpdateShellStatus();
         if (tab == MainTab.Support && _supportView is not null &&
@@ -322,7 +534,219 @@ public partial class MainWindow : Window
             _supportActivatedSessionToken = _sessionToken;
         }
         UpdateResponsiveLayout();
-        PageScroll.Offset = new Vector(0, 0);
+        PageScroll.Offset = previousTab == tab
+            ? previousScroll
+            : _pageScrollOffsets.GetValueOrDefault(tab, new Vector(0, 0));
+    }
+
+    private Control BuildPage(MainTab tab) => tab switch
+    {
+        MainTab.Home => BuildHomePage(),
+        MainTab.Routes => BuildRoutesPage(),
+        MainTab.Profile => BuildProfilePage(),
+        MainTab.Settings => BuildSettingsPage(),
+        MainTab.Support => BuildSupportPage(),
+        MainTab.Setup => BuildSetupPage(),
+        _ => BuildHomePage(),
+    };
+
+    private static bool IsPersistentPage(MainTab tab) => tab is
+        MainTab.Home or MainTab.Routes or MainTab.Profile or MainTab.Settings;
+
+    private void ShowPageInHost(MainTab tab, Control page)
+    {
+        if (!UseNativeDesktopShell && _routeGlobe is not null)
+        {
+            if (tab is MainTab.Home or MainTab.Routes or MainTab.Profile or MainTab.Settings)
+            {
+                _routeGlobe.HostActive = true;
+                var stageName = tab switch
+                {
+                    MainTab.Routes => "routes",
+                    MainTab.Profile => "profile",
+                    MainTab.Settings => "settings",
+                    _ => "home"
+                };
+                _routeGlobe.SetActiveTab(stageName);
+
+                var homeView = _pageViews.TryGetValue(MainTab.Home, out var cachedH) ? cachedH.View : null;
+                if (homeView is not null)
+                {
+                    if (homeView.Parent is Panel oldP && !ReferenceEquals(oldP, PageHost))
+                        oldP.Children.Remove(homeView);
+                    if (!PageHost.Children.Contains(homeView))
+                        PageHost.Children.Add(homeView);
+                    homeView.IsVisible = true;
+                    homeView.IsHitTestVisible = true;
+                }
+
+                foreach (var child in PageHost.Children.OfType<Control>().ToArray())
+                {
+                    if (!ReferenceEquals(child, homeView))
+                        PageHost.Children.Remove(child);
+                }
+                return;
+            }
+        }
+
+        var homePage = _pageViews.TryGetValue(MainTab.Home, out var cachedHome)
+            ? cachedHome.View
+            : null;
+
+        if (tab == MainTab.Home)
+        {
+            foreach (var child in PageHost.Children.OfType<Control>().ToArray())
+            {
+                if (!ReferenceEquals(child, page))
+                    PageHost.Children.Remove(child);
+            }
+            if (page.Parent is Panel oldParent && !ReferenceEquals(oldParent, PageHost))
+                oldParent.Children.Remove(page);
+            if (!PageHost.Children.Contains(page))
+                PageHost.Children.Add(page);
+            page.IsVisible = true;
+            page.IsHitTestVisible = true;
+            _routeGlobe?.ResumeHost();
+            return;
+        }
+
+        if (_routeGlobe is not null)
+            _routeGlobe.HostActive = false;
+        if (homePage is not null)
+        {
+            if (homePage.Parent is Panel oldParent && !ReferenceEquals(oldParent, PageHost))
+                oldParent.Children.Remove(homePage);
+            if (!PageHost.Children.Contains(homePage))
+                PageHost.Children.Insert(0, homePage);
+            homePage.IsVisible = false;
+            homePage.IsHitTestVisible = false;
+        }
+
+        foreach (var child in PageHost.Children.OfType<Control>().ToArray())
+        {
+            if (!ReferenceEquals(child, homePage) && !ReferenceEquals(child, page))
+                PageHost.Children.Remove(child);
+        }
+        if (page.Parent is Panel pageParent && !ReferenceEquals(pageParent, PageHost))
+            pageParent.Children.Remove(page);
+        if (!PageHost.Children.Contains(page))
+            PageHost.Children.Add(page);
+        page.IsVisible = true;
+        page.IsHitTestVisible = true;
+    }
+
+    private object GetPageViewModel(MainTab tab) => tab switch
+    {
+        MainTab.Home => _homeViewModel,
+        MainTab.Routes => _routesViewModel,
+        MainTab.Profile => _profileViewModel,
+        MainTab.Settings => _settingsViewModel,
+        _ => _shellViewModel,
+    };
+
+    private int GetPageStateFingerprint(MainTab tab)
+    {
+        // The regular pages stay mounted across user navigation. Rebuild only when
+        // their presentation inputs changed, so cached pages cannot show stale data.
+        var state = new HashCode();
+        state.Add(_language, StringComparer.Ordinal);
+        state.Add(DeyttTheme.IsDark);
+        state.Add(_compactLayout);
+        state.Add(_mediumLayout);
+        state.Add(_shortCompactLayout);
+
+        switch (tab)
+        {
+            case MainTab.Home:
+                // The map receives changing tunnel and route data through its bridge.
+                // Only initialization capabilities affect the constructed visual tree.
+                state.Add(_homeMapInitializationAllowed);
+                state.Add(_disableNativeMapInitialization);
+                state.Add(_routeGlobe is not null);
+                break;
+            case MainTab.Routes:
+                state.Add(_selectedRoute, StringComparer.Ordinal);
+                state.Add(_routeProbeInProgress);
+                state.Add(_routeProbeCancelRequested);
+                state.Add(_vpnActionInProgress);
+                state.Add(_vpnServiceAvailable);
+                state.Add(_vpnSnapshot.State, StringComparer.Ordinal);
+                state.Add(_vpnSnapshot.Detail, StringComparer.Ordinal);
+                foreach (var route in _routes)
+                {
+                    state.Add(route.Id, StringComparer.Ordinal);
+                    state.Add(route.Tag, StringComparer.Ordinal);
+                    state.Add(route.CountryCode, StringComparer.Ordinal);
+                    state.Add(route.CountryName, StringComparer.Ordinal);
+                    state.Add(route.Protocol, StringComparer.Ordinal);
+                    state.Add(route.ProtocolName, StringComparer.Ordinal);
+                    state.Add(route.ProfileId, StringComparer.Ordinal);
+                    state.Add(route.ProfileName, StringComparer.Ordinal);
+                }
+                foreach (var result in _routeProbeResults.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+                {
+                    state.Add(result.Key, StringComparer.Ordinal);
+                    state.Add(result.Value.LatencyMilliseconds);
+                    state.Add(result.Value.BytesPerSecond);
+                    state.Add(result.Value.Error, StringComparer.Ordinal);
+                    state.Add(result.Value.Stage, StringComparer.Ordinal);
+                    state.Add(result.Value.Attempt);
+                    state.Add(result.Value.BytesReceived);
+                    state.Add(result.Value.TotalBytes);
+                }
+                foreach (var country in _expandedRouteCountries.OrderBy(value => value, StringComparer.Ordinal))
+                    state.Add(country, StringComparer.Ordinal);
+                foreach (var country in _routeCountryProbeStates.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+                {
+                    state.Add(country.Key, StringComparer.Ordinal);
+                    state.Add(country.Value);
+                }
+                break;
+            case MainTab.Profile:
+                state.Add(_account?.Username, StringComparer.Ordinal);
+                state.Add(_account?.FirstName, StringComparer.Ordinal);
+                state.Add(_account?.LastName, StringComparer.Ordinal);
+                state.Add(_account?.Blocked);
+                state.Add(_account?.Subscription?.GetHashCode());
+                state.Add(_keysSnapshot?.HappAvailable);
+                state.Add(_keysSnapshot?.AmneziaActive);
+                state.Add(_keysSnapshot?.AmneziaClients);
+                foreach (var device in _keysSnapshot?.HappDevices ?? [])
+                {
+                    state.Add(device.Id);
+                    state.Add(device.Blocked);
+                    state.Add(device.Os, StringComparer.Ordinal);
+                    state.Add(device.Model, StringComparer.Ordinal);
+                    state.Add(device.LastSeen, StringComparer.Ordinal);
+                    state.Add(device.OsVersion, StringComparer.Ordinal);
+                }
+                state.Add(_profileLoadIssue, StringComparer.Ordinal);
+                state.Add(_profileRefreshInProgress);
+                state.Add(_profileActionStatus, StringComparer.Ordinal);
+                state.Add(_profileActionRetry is not null);
+                state.Add(_profileDevicesExpanded);
+                state.Add(_profileHelpExpanded);
+                state.Add(_paymentFlow.PendingPaymentId?.GetHashCode(StringComparison.Ordinal));
+                state.Add(_paymentFlow.CanRetry);
+                state.Add(_paymentFlow.RetryUsesConfirmedQuote);
+                break;
+            case MainTab.Settings:
+                state.Add(_themePreference, StringComparer.Ordinal);
+                state.Add(_windowChromePreference, StringComparer.Ordinal);
+                state.Add(_useSystemWindowChrome);
+                state.Add(_reduceMotion);
+                state.Add(_probeMethod, StringComparer.Ordinal);
+                state.Add(_mapRegionEnabled);
+                state.Add(_mapRegionConsentGranted);
+                state.Add(_preferencesIssue, StringComparer.Ordinal);
+                state.Add(_settingsAppearanceExpanded);
+                state.Add(_settingsConnectionExpanded);
+                state.Add(_settingsPrivacyExpanded);
+                state.Add(_settingsSubscriptionExpanded);
+                break;
+        }
+
+        return state.ToHashCode();
     }
 
     private void SetNavigation(Button button, NavigationIconKind icon, string label, bool selected)
@@ -338,27 +762,33 @@ public partial class MainWindow : Window
         glyph.HorizontalAlignment = _compactLayout
             ? Avalonia.Layout.HorizontalAlignment.Center
             : Avalonia.Layout.HorizontalAlignment.Left;
-        glyph.Margin = new Thickness(0, 0, _compactLayout ? 0 : 12, 0);
+        glyph.Margin = new Thickness(0, 0, _compactLayout ? 0 : 8, 0);
         content.Children.Add(glyph);
         if (!_compactLayout)
         {
-            var title = DeyttTheme.TextBlock(label, 14,
-                selected ? DeyttTheme.Text : DeyttTheme.Muted,
+            var title = DeyttTheme.TextBlock(label.ToLowerInvariant(), 13.5,
+                selected ? Colors.White : Color.Parse("#94A3B8"),
                 selected ? FontWeight.SemiBold : FontWeight.Medium, wrap: false);
             title.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-        Grid.SetColumn(title, 1);
+            Grid.SetColumn(title, 1);
             content.Children.Add(title);
         }
 
-        button.MinWidth = _compactLayout ? 52 : 0;
-        button.MinHeight = _compactLayout ? 52 : 0;
+        button.MinWidth = _compactLayout ? 40 : 0;
+        button.MinHeight = 36;
+        button.CornerRadius = new CornerRadius(14);
         var navigationSurface = new Border
         {
-            Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : Colors.Transparent),
-            BorderBrush = DeyttTheme.Brush(selected ? DeyttTheme.SelectedLine : Colors.Transparent),
+            Background = selected
+                ? new SolidColorBrush(Color.FromArgb(38, 255, 255, 255))
+                : Brushes.Transparent,
+            BorderBrush = selected
+                ? new SolidColorBrush(Color.FromArgb(64, 255, 255, 255))
+                : Brushes.Transparent,
             BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            Padding = _compactLayout ? new Thickness(0, 8) : new Thickness(13, 11),
+            CornerRadius = new CornerRadius(14),
+            Padding = _compactLayout ? new Thickness(8, 6) : new Thickness(16, 7),
+            BoxShadow = selected ? new BoxShadows(new BoxShadow { OffsetX = 0, OffsetY = 2, Blur = 8, Color = Color.FromArgb(40, 0, 0, 0) }) : default,
             Child = content,
         };
         navigationSurface.Classes.Add("nav-surface");
@@ -444,8 +874,9 @@ public partial class MainWindow : Window
             MainTab.Setup => Copy("Настройка подключения", "Connection setup"),
             _ => Copy("Ваше подключение", "Your connection"),
         };
-        WorkspaceHeader.IsVisible = false;
+        WorkspaceHeader.IsVisible = UseNativeDesktopShell && !_mapImmersive;
         NavSectionTitle.Text = Copy("РАЗДЕЛЫ", "WORKSPACE");
+        UpdateHomeGlobePresentation();
     }
 
     private bool IsVpnDisplayConnected() =>
@@ -456,10 +887,18 @@ public partial class MainWindow : Window
 
     private void UpdateResponsiveLayout()
     {
-        var compact = Bounds.Width < 1040;
+        var compact = Bounds.Width < 900;
+        var medium = Bounds.Width < 1180;
         var shortCompact = compact && Bounds.Height < 700;
-        if (_responsiveLayoutInitialized && _compactLayout == compact && _shortCompactLayout == shortCompact)
+        PageScroll.VerticalScrollBarVisibility = UseNativeDesktopShell || _activeTab is MainTab.Setup or MainTab.Support
+            ? Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
+            : Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+        if (_responsiveLayoutInitialized && _compactLayout == compact && _mediumLayout == medium &&
+            _shortCompactLayout == shortCompact)
         {
+            WorkspaceHeader.IsVisible = UseNativeDesktopShell && !_mapImmersive;
+            WorkspaceHeader.Height = UseNativeDesktopShell ? 68 : 0;
+            if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = UseNativeDesktopShell ? (_mapImmersive ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
             UpdatePageHostWidth();
             UpdateHomeColumns();
             return;
@@ -469,11 +908,10 @@ public partial class MainWindow : Window
         var homeLayoutChanged = _responsiveLayoutInitialized && _shortCompactLayout != shortCompact;
         _responsiveLayoutInitialized = true;
         _compactLayout = compact;
+        _mediumLayout = medium;
         _shortCompactLayout = shortCompact;
-        if (ShellGrid.ColumnDefinitions.Count > 0)
-            ShellGrid.ColumnDefinitions[0].Width = new GridLength(0);
         SidebarPanel.IsVisible = false;
-        BottomNavigationPanel.IsVisible = true;
+        BottomNavigationPanel.IsVisible = false;
         SidebarPanel.Padding = compact
             ? new Thickness(11, 14, 11, 12)
             : new Thickness(20, 23, 18, 18);
@@ -482,17 +920,28 @@ public partial class MainWindow : Window
         NavSectionHeader.IsVisible = !compact;
         SidebarNavPanel.Spacing = compact ? 7 : 5;
         SidebarStatusCard.IsVisible = !compact;
-        WorkspaceHeader.Padding = compact ? new Thickness(16, 0) : new Thickness(30, 0);
-        WorkspaceEyebrow.IsVisible = !compact;
-        PageHost.Margin = compact
-            ? new Thickness(14, 12, 14, 14)
-            : new Thickness(20, 14, 20, 16);
+        WorkspaceHeader.Padding = compact ? new Thickness(16, 0) : medium
+            ? new Thickness(24, 0) : new Thickness(36, 0);
+        WorkspaceHeader.Height = UseNativeDesktopShell ? 68 : 0;
+        if (WorkspaceColumn.RowDefinitions.Count > 0)
+            WorkspaceColumn.RowDefinitions[0].Height = UseNativeDesktopShell ? (_mapImmersive ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
+        HeaderContentGrid.ColumnSpacing = compact ? 8 : medium ? 16 : 24;
+        WindowChromeActions.Spacing = 8;
+        HeaderNavigation.Spacing = 4;
+        WorkspaceBrand.FontSize = 23;
+        WorkspaceEyebrow.IsVisible = false;
+        MinimizeWindowButton.IsVisible = !_useSystemWindowChrome;
+        MaximizeWindowButton.IsVisible = !_useSystemWindowChrome;
+        CloseWindowButton.IsVisible = !_useSystemWindowChrome;
+        PageHost.Margin = !UseNativeDesktopShell || _mapImmersive || _activeTab == MainTab.Home ? new Thickness(0) : compact
+            ? new Thickness(20, 24)
+            : medium ? new Thickness(32, 28) : new Thickness(64, 32);
+        WorkspaceHeader.IsVisible = UseNativeDesktopShell && !_mapImmersive;
 
-        SetNavigation(HomeNav, NavigationIconKind.Home, Copy("Главная", "Home"), _activeTab == MainTab.Home);
-        SetNavigation(RoutesNav, NavigationIconKind.Routes, Copy("Маршруты", "Routes"), _activeTab == MainTab.Routes);
-        SetNavigation(ProfileNav, NavigationIconKind.Profile, Copy("Профиль", "Profile"), _activeTab is MainTab.Profile or MainTab.Support);
-        SetNavigation(SettingsNav, NavigationIconKind.Settings, Copy("Настройки", "Settings"), _activeTab == MainTab.Settings);
-        UpdateBottomNavigation();
+        PageScroll.HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled;
+
+        UpdateTopNavigation();
+        UpdateWindowControlState();
         UpdatePageHostWidth();
         UpdateHomeColumns();
         if (switchedLayout && _activeTab is (MainTab.Routes or MainTab.Profile or MainTab.Settings))
@@ -501,8 +950,67 @@ public partial class MainWindow : Window
             RenderActiveTabPreservingScroll();
     }
 
+    private void SetMapImmersive(bool enabled)
+    {
+        if (enabled && _activeTab != MainTab.Home)
+            enabled = false;
+        if (_mapImmersive == enabled)
+            return;
+
+        if (enabled)
+        {
+            _windowStateBeforeMapImmersive = WindowState == Avalonia.Controls.WindowState.Maximized
+                ? Avalonia.Controls.WindowState.Maximized
+                : Avalonia.Controls.WindowState.Normal;
+        }
+
+        _mapImmersive = enabled;
+        if (_routeGlobe is not null)
+            _routeGlobe.ImmersiveMode = enabled;
+
+        if (enabled)
+            WindowState = Avalonia.Controls.WindowState.FullScreen;
+        else if (WindowState == Avalonia.Controls.WindowState.FullScreen)
+            WindowState = _windowStateBeforeMapImmersive;
+
+        WorkspaceHeader.IsVisible = UseNativeDesktopShell && !enabled;
+        if (WorkspaceColumn.RowDefinitions.Count > 0) WorkspaceColumn.RowDefinitions[0].Height = UseNativeDesktopShell ? (enabled ? new GridLength(0) : GridLength.Auto) : new GridLength(0);
+        UpdateResponsiveLayout();
+        UpdatePageHostWidth();
+        UpdateHomeColumns();
+    }
+
     private void UpdatePageHostWidth()
     {
+        if (!_disableNativeMapInitialization)
+        {
+            PageHost.MaxWidth = double.PositiveInfinity;
+            PageHost.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+            PageHost.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Stretch;
+            PageHost.Margin = new Thickness(0);
+            PageHost.Width = double.NaN;
+            return;
+        }
+
+        if (_mapImmersive)
+        {
+            PageHost.MaxWidth = double.PositiveInfinity;
+            PageHost.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+            PageHost.Margin = new Thickness(0);
+            var immersiveWidth = PageScroll.Bounds.Width;
+            if (double.IsFinite(immersiveWidth) && immersiveWidth > 0)
+                PageHost.Width = immersiveWidth;
+            return;
+        }
+
+        PageHost.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        PageHost.MaxWidth = _activeTab == MainTab.Home ? 1920 : 1360;
+        if (_activeTab == MainTab.Home)
+            PageHost.Margin = new Thickness(0);
+        else
+            PageHost.Margin = _compactLayout
+                ? new Thickness(20, 24)
+                : _mediumLayout ? new Thickness(32, 28) : new Thickness(64, 32);
         var availableWidth = PageScroll.Bounds.Width - PageHost.Margin.Left - PageHost.Margin.Right;
         if (!double.IsFinite(availableWidth) || availableWidth <= 0)
             return;
@@ -519,19 +1027,124 @@ public partial class MainWindow : Window
 
         _homeConnectionLayout.ColumnDefinitions = new ColumnDefinitions("*");
         _homeConnectionLayout.RowDefinitions = new RowDefinitions("Auto,Auto,Auto");
-        _homeConnectionLayout.RowSpacing = _compactLayout ? 10 : 12;
+        _homeConnectionLayout.RowSpacing = _compactLayout ? 18 : 28;
         Grid.SetColumn(_homeConnectionPrimaryAction, 0);
         Grid.SetRow(_homeConnectionPrimaryAction, 2);
-        _homeConnectionPrimaryAction.Height = _compactLayout ? 76 : 84;
-        _homeConnectionCard.Padding = _compactLayout
-            ? new Thickness(18, 18)
-            : new Thickness(22, 22);
-        _homeConnectionCard.CornerRadius = new CornerRadius(24);
+        _homeConnectionPrimaryAction.Height = 64;
+        _homeConnectionCard.Padding = new Thickness(0);
+        _homeConnectionCard.CornerRadius = new CornerRadius(0);
     }
 
     private void ApplyVisualPreferences()
     {
-        AppStarfield.Opacity = _reduceMotion ? 0 : 0.24;
+        var dark = _themePreference switch
+        {
+            "light" => false,
+            "dark" or "legacy" => true,
+            _ => _systemDarkTheme,
+        };
+        DeyttTheme.SetDark(dark, _themePreference == "legacy");
+        DeyttTheme.ReduceMotion = _reduceMotion;
+        RequestedThemeVariant = dark
+            ? Avalonia.Styling.ThemeVariant.Dark
+            : Avalonia.Styling.ThemeVariant.Light;
+        if (Application.Current is { } application)
+        {
+            application.Resources["AppTextBrush"] = DeyttTheme.Brush(DeyttTheme.Text);
+            application.Resources["AppFocusBrush"] = DeyttTheme.Brush(DeyttTheme.Blue);
+        }
+        Background = DeyttTheme.Brush(DeyttTheme.Background);
+        ShellGrid.Background = DeyttTheme.Brush(DeyttTheme.Background);
+        WorkspaceHeader.Background = DeyttTheme.Brush(DeyttTheme.Header);
+        WorkspaceHeader.BorderBrush = Brushes.Transparent;
+        WorkspaceHeader.BorderThickness = new Thickness(0);
+        WorkspaceBrand.Foreground = Brushes.White;
+
+        ThemeToggleButton.Content = new NavigationIcon(
+            dark ? NavigationIconKind.ThemeLight : NavigationIconKind.ThemeDark, selected: false);
+        MinimizeWindowButton.Content = new NavigationIcon(NavigationIconKind.WindowMinimize, selected: false);
+        CloseWindowButton.Content = new NavigationIcon(NavigationIconKind.WindowClose, selected: false);
+        ThemeToggleButton.IsVisible = false;
+        foreach (var control in new[] { MinimizeWindowButton, MaximizeWindowButton, CloseWindowButton })
+        {
+            control.Background = new SolidColorBrush(Color.FromArgb(18, 255, 255, 255));
+            control.BorderBrush = new SolidColorBrush(Color.FromArgb(36, 255, 255, 255));
+            control.BorderThickness = new Thickness(1);
+            control.CornerRadius = new CornerRadius(12);
+            control.Foreground = DeyttTheme.Brush(DeyttTheme.Text);
+        }
+        CloseWindowButton.Foreground = DeyttTheme.Brush(DeyttTheme.Muted);
+        TopHomeNav.InvalidateVisual();
+        TopRoutesNav.InvalidateVisual();
+        TopProfileNav.InvalidateVisual();
+        TopSettingsNav.InvalidateVisual();
+    }
+
+    private static bool IsSystemDarkTheme()
+    {
+        if (!OperatingSystem.IsWindows())
+            return Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant != Avalonia.Platform.PlatformThemeVariant.Light;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return Convert.ToInt32(key?.GetValue("AppsUseLightTheme", 0) ?? 0) == 0;
+        }
+        catch (Exception error) when (error is System.Security.SecurityException or IOException)
+        {
+            return true;
+        }
+    }
+
+    private void AttachSystemThemeWatcher()
+    {
+        if (_systemThemeWatcherAttached)
+            return;
+
+        _systemDarkTheme = IsSystemDarkTheme();
+        _systemThemeTimer.Tick += OnSystemThemeTimerTick;
+        _systemThemeTimer.Start();
+        _systemThemeWatcherAttached = true;
+    }
+
+    private void DetachSystemThemeWatcher()
+    {
+        if (!_systemThemeWatcherAttached)
+            return;
+
+        _systemThemeTimer.Stop();
+        _systemThemeTimer.Tick -= OnSystemThemeTimerTick;
+        _systemThemeWatcherAttached = false;
+    }
+
+    private void OnSystemThemeTimerTick(object? sender, EventArgs e)
+    {
+        var dark = IsSystemDarkTheme();
+        if (_systemDarkTheme == dark)
+            return;
+
+        _systemDarkTheme = dark;
+        if (_themePreference != "system")
+            return;
+
+        ApplyVisualPreferences();
+        RenderActiveTabPreservingScroll();
+    }
+
+    private void ToggleTheme()
+    {
+        _themePreference = DeyttTheme.IsDark ? "light" : "dark";
+        ApplyVisualPreferences();
+        SavePreferences();
+        RenderActiveTabPreservingScroll();
+    }
+
+    private void UpdateTopNavigation()
+    {
+        SetNavigation(TopHomeNav, NavigationIconKind.Home, Copy("главная", "home"), _activeTab == MainTab.Home);
+        SetNavigation(TopRoutesNav, NavigationIconKind.Routes, Copy("маршруты", "routes"), _activeTab == MainTab.Routes);
+        SetNavigation(TopProfileNav, NavigationIconKind.Profile, Copy("профиль", "profile"), _activeTab is MainTab.Profile or MainTab.Support);
+        SetNavigation(TopSettingsNav, NavigationIconKind.Settings, Copy("настройки", "settings"), _activeTab == MainTab.Settings);
     }
 
     private string GetMapOriginLabel()
@@ -603,7 +1216,7 @@ public partial class MainWindow : Window
 
     private Control BuildConnectionCard()
     {
-        var signedIn = _sessionToken is not null;
+        var signedIn = _sessionToken is not null || _keysSnapshot?.HappAvailable == true;
         var restoringSession = !_sessionRestoreComplete && !_qaFixture;
         var subscriptionReady = _keysSnapshot?.HappAvailable == true;
         var profileReady = !string.IsNullOrWhiteSpace(_keysSnapshot?.ProfileJson);
@@ -685,36 +1298,18 @@ public partial class MainWindow : Window
                         ? Copy("Настроить VPN", "Set up VPN")
                         : Copy("Подключиться", "Connect");
 
-        var actionIsPrimary = !connected && !starting && !isError;
-        var actionForeground = connected || actionIsPrimary ? DeyttTheme.Background : DeyttTheme.Text;
-        var statusDot = new Ellipse
-        {
-            Width = 8,
-            Height = 8,
-            Fill = DeyttTheme.Brush(connected ? DeyttTheme.Mint :
-                starting ? DeyttTheme.Amber : isError ? DeyttTheme.Coral : DeyttTheme.Muted),
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 9, 0),
-        };
-        var stateCopy = new StackPanel { Spacing = 3 };
-        var stateTitleText = DeyttTheme.TextBlock(stateTitle, _compactLayout ? 16 : 18,
+        var stateCopy = new StackPanel { Spacing = 8 };
+        var stateTitleText = DeyttTheme.TextBlock(stateTitle, _compactLayout ? 32 : _mediumLayout ? 44 : 56,
             isError ? DeyttTheme.Coral : DeyttTheme.Text,
-            FontWeight.SemiBold, wrap: false);
+            FontWeight.Bold, DeyttTheme.Unbounded, wrap: false);
         stateCopy.Children.Add(stateTitleText);
-        var connectionDetailText = DeyttTheme.TextBlock(connectionDetail, 11, DeyttTheme.Muted,
-            wrap: isError || healthUnknown);
-        connectionDetailText.TextTrimming = isError || healthUnknown
-            ? TextTrimming.None
-            : TextTrimming.CharacterEllipsis;
-        ToolTip.SetTip(connectionDetailText, connectionDetail);
-        stateCopy.Children.Add(connectionDetailText);
-        var status = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        status.Children.Add(statusDot);
-        Grid.SetColumn(stateCopy, 1);
-        status.Children.Add(stateCopy);
+        if (isError || healthUnknown)
+            stateCopy.Children.Add(DeyttTheme.TextBlock(connectionDetail, 14,
+                isError ? DeyttTheme.Coral : DeyttTheme.Muted));
+        var status = stateCopy;
 
-        var actionLabel = DeyttTheme.TextBlock(primaryLabel, _compactLayout ? 19 : 21,
-            actionForeground, FontWeight.Bold, DeyttTheme.InterTight, wrap: false);
+        var actionLabel = DeyttTheme.TextBlock(primaryLabel, 18,
+            Colors.White, FontWeight.SemiBold, DeyttTheme.InterTight, wrap: false);
         actionLabel.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         actionLabel.TextAlignment = TextAlignment.Center;
         AutomationProperties.SetAutomationId(actionLabel, "HomeConnectionActionLabel");
@@ -730,7 +1325,9 @@ public partial class MainWindow : Window
             }
             if (starting && !healthUnknown)
                 return;
-            if (!signedIn)
+            if (tunnelActive)
+                _ = ToggleVpnAsync();
+            else if (!signedIn)
                 ShowSignInDialog();
             else if (!subscriptionReady || !profileReady)
                 ShowTab(MainTab.Profile);
@@ -746,40 +1343,26 @@ public partial class MainWindow : Window
         primary.VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center;
         primary.Padding = new Thickness(16, 12, 16, 12);
         AutomationProperties.SetAutomationId(primary, "HomeConnectionAction");
-        status.IsVisible = connected || starting || isError || healthUnknown;
+        status.IsVisible = true;
         status.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
         status.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
-        status.Margin = new Thickness(2, 0);
+        status.Margin = new Thickness(0);
         status.IsHitTestVisible = false;
         AutomationProperties.SetAutomationId(status, "HomeConnectionStatus");
         Grid.SetColumn(status, 0);
-        Grid.SetRow(status, 1);
+        Grid.SetRow(status, 0);
         contents.Children.Add(status);
 
         var actionTile = new Border
         {
             IsVisible = !restoringSession,
-            Height = _compactLayout ? 76 : 84,
+            Height = 64,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
-            BorderThickness = new Thickness(1),
-            BorderBrush = DeyttTheme.Brush(connected ? DeyttTheme.Mint : isError ? DeyttTheme.Coral :
-                starting ? DeyttTheme.Line : DeyttTheme.Sky),
-            CornerRadius = new CornerRadius(20),
-            Background = connected
-                ? DeyttTheme.Brush(DeyttTheme.Mint)
-                : actionIsPrimary
-                    ? new LinearGradientBrush
-                    {
-                        StartPoint = new RelativePoint(0, 0.5, RelativeUnit.Relative),
-                        EndPoint = new RelativePoint(1, 0.5, RelativeUnit.Relative),
-                        GradientStops =
-                        {
-                            new GradientStop(DeyttTheme.Sky, 0),
-                            new GradientStop(DeyttTheme.Mint, 1),
-                        },
-                    }
-                    : DeyttTheme.Brush(DeyttTheme.Surface2),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(12),
+            Background = DeyttTheme.Brush(isError ? DeyttTheme.Coral :
+                starting ? DeyttTheme.Surface2 : DeyttTheme.BlueDeep),
             Child = primary,
         };
         AutomationProperties.SetAutomationId(actionTile, "HomeConnectionActionTile");
@@ -788,11 +1371,15 @@ public partial class MainWindow : Window
         contents.Children.Add(actionTile);
         var routeDetails = BuildHomeRouteDetails();
         Grid.SetColumn(routeDetails, 0);
-        Grid.SetRow(routeDetails, 0);
+        Grid.SetRow(routeDetails, 1);
         contents.Children.Add(routeDetails);
 
-        _homeConnectionCard = DeyttTheme.Card(contents, DeyttTheme.Surface2, DeyttTheme.Line, 23,
-            new Thickness(19));
+        _homeConnectionCard = new Border
+        {
+            Background = DeyttTheme.Brush(Colors.Transparent),
+            Padding = new Thickness(0),
+            Child = contents,
+        };
         _homeConnectionLayout = contents;
         _homeConnectionPrimaryAction = actionTile;
         UpdateHomeConnectionLayout();
@@ -801,15 +1388,8 @@ public partial class MainWindow : Window
 
     private Control BuildRoutesPage()
     {
-        var page = NewPage(Copy("ВЫХОДЫ · ВЫБОР · ДИАГНОСТИКА", "EXITS · SELECTION · DIAGNOSTICS"), Copy("Маршруты", "Routes"));
-        page.Children.Add(DeyttTheme.TextBlock(
-            HasProbeSpeedToken()
-                ? Copy("Выберите выход. Проверка покажет пинг и скорость каждого маршрута.",
-                    "Choose an exit. Diagnostics show each route's latency and speed.")
-                : Copy("Выберите выход. Войдите через Telegram для проверки скорости.",
-                    "Choose an exit. Sign in with Telegram to measure speed."),
-            13, DeyttTheme.Muted));
-        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 14 : 24));
+        _routeOptionRefreshActions.Clear();
+        var page = NewPage(Copy("МАРШРУТЫ", "ROUTES"), Copy("Маршруты", "Routes"));
 
         var columns = new Grid
         {
@@ -823,33 +1403,30 @@ public partial class MainWindow : Window
         };
 
         var autoRoute = _routes.FirstOrDefault(route => route.Id == "auto");
-        var chainRoute = _routes.FirstOrDefault(route => route.Id == "ru-de");
+        var chainRoute = _routes.FirstOrDefault(route => route.Protocol == "LTE" || route.Id == DeyttConnect.Protocol.CdnLteProfile.RouteTag || route.Id == "ru-de");
         if (autoRoute is not null || chainRoute is not null)
         {
-            AddSection(routeColumn, Copy("БЫСТРЫЙ ВЫБОР", "QUICK SELECT"));
-            var quick = new StackPanel { Spacing = 0 };
+            var quick = new StackPanel { Spacing = 0, Margin = new Thickness(0, 0, 0, 14) };
             if (autoRoute is not null)
                 quick.Children.Add(QuickOption(autoRoute, "✦", Copy("Автоподбор", "Auto-select"),
-                    Copy("Подберём быстрый доступный узел", "Choose a fast available node")));
+                    Copy("автоматический выбор маршрута", "automatic route selection")));
             if (autoRoute is not null && chainRoute is not null)
                 quick.Children.Add(new Border { Height = 1, Margin = new Thickness(68, 0, 10, 0),
                     Background = DeyttTheme.Brush(DeyttTheme.Line) });
             if (chainRoute is not null)
                 quick.Children.Add(QuickOption(chainRoute, "🇷🇺🇩🇪",
-                    Copy("LTE + белые списки", "LTE + whitelist"),
-                    Copy("Россия → Германия · двойной маршрут", "Russia → Germany · double route")));
+                    Copy("LTE · белые списки", "LTE · allowlist"),
+                    Copy("россия → германия", "russia → germany")));
             routeColumn.Children.Add(quick);
         }
 
         var hasAmneziaRoute = _routes.Any(route => IsAwgProtocol(route.Protocol));
         var hasSession = _sessionToken is not null;
         var hasActiveSubscription = _account?.Subscription?.Active == true;
+        if (!hasAmneziaRoute)
         {
             var keys = _keysSnapshot;
-            var message = hasAmneziaRoute
-                ? Copy("Профиль AmneziaWG доступен в списке маршрутов ниже.",
-                    "The AmneziaWG profile is available in the route list below.")
-                : _profileRefreshInProgress
+            var message = _profileRefreshInProgress
                     ? Copy("Проверяю доступность профилей AmneziaWG…", "Checking AmneziaWG profile availability…")
                 : !hasSession
                     ? Copy("Войдите через Telegram, чтобы получить профиль AmneziaWG.",
@@ -882,13 +1459,25 @@ public partial class MainWindow : Window
                 Spacing = 9,
                 Children =
                 {
-                    DeyttTheme.TextBlock("AmneziaWG", 17, DeyttTheme.Text, FontWeight.SemiBold),
+                DeyttTheme.TextBlock(Copy("профиль amneziawg", "amneziawg profile"), 17, DeyttTheme.Text, FontWeight.SemiBold),
                     DeyttTheme.TextBlock(message, 13, DeyttTheme.Muted),
                     refreshAmnezia,
                 },
             }, DeyttTheme.Surface2, DeyttTheme.Line, 18, new Thickness(16)));
         }
         AddSection(routeColumn, Copy("СТРАНЫ", "COUNTRIES"));
+        if (_routes.Count > 0)
+        {
+            var refreshRoutes = DeyttTheme.PrimaryButton(Copy("Обновить список", "Refresh routes"),
+                () => _ = RefreshSignedInAccountAsync());
+            refreshRoutes.Width = 210;
+            refreshRoutes.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+            refreshRoutes.IsEnabled = hasSession && !_profileRefreshInProgress;
+            if (refreshRoutes.Child is Button refreshButton)
+                AutomationProperties.SetAutomationId(refreshButton, "RefreshRoutes");
+            routeColumn.Children.Add(refreshRoutes);
+            routeColumn.Children.Add(DeyttTheme.Spacer(8));
+        }
 
         if (_routes.Count == 0 && _sessionToken is null)
         {
@@ -947,7 +1536,17 @@ public partial class MainWindow : Window
             var countryOrder = new[] { "NL", "DE", "RU", "FI", "IT", "AWG_UNKNOWN" };
             var countries = _routes.Where(route => route.CountryCode is "NL" or "RU" or "DE" or "FI" or "IT" or "AWG_UNKNOWN")
                 .GroupBy(route => route.CountryCode)
-                .OrderBy(country => Array.IndexOf(countryOrder, country.Key));
+                .OrderBy(country => Array.IndexOf(countryOrder, country.Key)).ToArray();
+            if (!_routeExpansionInitialized && countries.Length > 0)
+            {
+                var selectedCountry = countries.FirstOrDefault(group => group.Any(route => route.Id == _selectedRoute));
+                var initialCountry = selectedCountry?.Key == "AUTO"
+                    ? null
+                    : selectedCountry?.Key ?? countries.FirstOrDefault(group => group.Key == "NL")?.Key ?? countries[0].Key;
+                if (initialCountry is not null)
+                    _expandedRouteCountries.Add(initialCountry);
+                _routeExpansionInitialized = true;
+            }
             foreach (var country in countries)
             {
                 var countryRoutes = country.DistinctBy(route => route.Id)
@@ -956,24 +1555,22 @@ public partial class MainWindow : Window
                 var quality = CountryRouteQuality(countryRoutes);
                 var expanded = _expandedRouteCountries.Contains(country.Key);
                 var selectedCountry = countryRoutes.Any(route => route.Id == _selectedRoute);
-                var summary = string.Join(" · ", countryRoutes
-                    .Select(route => IsAwgProtocol(route.Protocol) ? AwgProtocolTitle(route.Protocol) : route.ProtocolName)
-                    .Distinct(StringComparer.Ordinal));
                 var headerLabels = new StackPanel { Spacing = 3 };
+                var countryName = country.Key == "IT"
+                    ? Copy("Италия", "Italy")
+                    : RouteCountryName(first);
                 headerLabels.Children.Add(DeyttTheme.TextBlock(
-                    RouteCountryName(first), 17,
-                    selectedCountry ? DeyttTheme.Sky : DeyttTheme.Text, FontWeight.SemiBold));
-                headerLabels.Children.Add(DeyttTheme.TextBlock(summary, 11,
-                    DeyttTheme.Muted));
+                    countryName, 20,
+                    selectedCountry ? DeyttTheme.Blue : DeyttTheme.Text, FontWeight.Bold));
                 if (!expanded && RouteCountryProbeStatus(country.Key) is { } probeStatus)
-                    headerLabels.Children.Add(DeyttTheme.TextBlock(probeStatus, 10,
+                    headerLabels.Children.Add(DeyttTheme.TextBlock(probeStatus, 13,
                         _routeCountryProbeStates.GetValueOrDefault(country.Key) == RouteCountryProbeState.Failed
                             ? DeyttTheme.Coral : DeyttTheme.Muted));
                 var header = new Grid
                 {
                     ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
                     ColumnSpacing = 12,
-                    MinHeight = 54,
+                    MinHeight = 64,
                 };
                 var flag = RouteFlagVisual.Create(country.Key, 42, 28);
                 header.Children.Add(flag);
@@ -1011,19 +1608,36 @@ public partial class MainWindow : Window
                 {
                     countryContents.Children.Add(DeyttTheme.Hairline());
                     var options = new StackPanel { Spacing = 4, Margin = new Thickness(0, 9, 0, 2) };
+                    if (!_compactLayout)
+                    {
+                    var metricsHeader = new Grid
+                        {
+                            ColumnDefinitions = new ColumnDefinitions("40,2*,1,*,1,*,Auto"),
+                            ColumnSpacing = 24,
+                        Margin = new Thickness(12, 0),
+                            MinHeight = 24,
+                        };
+                        var latencyHeading = DeyttTheme.TextBlock(Copy("ОТКЛИК", "LATENCY"), 10,
+                            DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false);
+                        var speedHeading = DeyttTheme.TextBlock(Copy("СКОРОСТЬ", "SPEED"), 10,
+                            DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false);
+                        Grid.SetColumn(latencyHeading, 3);
+                        Grid.SetColumn(speedHeading, 5);
+                        metricsHeader.Children.Add(latencyHeading);
+                        metricsHeader.Children.Add(speedHeading);
+                        options.Children.Add(metricsHeader);
+                    }
                     foreach (var route in countryRoutes)
-                        options.Children.Add(RouteOption(route, quality));
+                        options.Children.Add(RouteOption(route, quality, countryRoutes));
                     countryContents.Children.Add(options);
 
                     if (RouteCountryProbeStatus(country.Key) is { } expandedProbeStatus)
                     {
                         var statusColor = _routeCountryProbeStates.GetValueOrDefault(country.Key) ==
                             RouteCountryProbeState.Failed ? DeyttTheme.Coral : DeyttTheme.Muted;
-                    {
-                        var expandedStatus = DeyttTheme.TextBlock(expandedProbeStatus, 11, statusColor);
+                        var expandedStatus = DeyttTheme.TextBlock(expandedProbeStatus, 13, statusColor);
                         expandedStatus.Margin = new Thickness(4, 5, 4, 0);
                         countryContents.Children.Add(expandedStatus);
-                    }
                     }
 
                     var countryRouteTags = countryRoutes.Select(route => route.Tag)
@@ -1041,7 +1655,7 @@ public partial class MainWindow : Window
                                 ? Copy("Повторить замеры", "Retry measurements")
                                 : Copy("Обновить замеры", "Refresh measurements");
                     var countryProbeAction = DeyttTheme.Action(DeyttTheme.TextBlock(countryProbeLabel,
-                        12, DeyttTheme.Sky, FontWeight.SemiBold, wrap: false), () =>
+                        13, DeyttTheme.Sky, FontWeight.SemiBold, wrap: false), () =>
                     {
                         if (_qaFixture)
                             return;
@@ -1073,7 +1687,7 @@ public partial class MainWindow : Window
                 countryList.Children.Add(DeyttTheme.Card(countryContents,
                     selectedCountry ? DeyttTheme.Surface2 : DeyttTheme.Surface,
                     selectedCountry ? DeyttTheme.SelectedLine : DeyttTheme.Line,
-                    18, new Thickness(12, 8)));
+                    16, new Thickness(20, 12)));
             }
             routeColumn.Children.Add(countryList);
         }
@@ -1085,11 +1699,13 @@ public partial class MainWindow : Window
 
     private static int RouteProtocolSortOrder(WindowsRoute route) => route.Protocol switch
     {
-        "VLESS" => 0,
+        "LTE" => 0,
+        "VLESS" => 1,
         "TROJAN" => 1,
         "HYSTERIA2" => 2,
-        "AWG31" => 3,
-        _ => 4,
+        "TUIC" => 3,
+        "AWG31" => 4,
+        _ => 5,
     };
 
     private enum RouteQualityGrade { Unrated, Good, Medium, Poor }
@@ -1100,7 +1716,7 @@ public partial class MainWindow : Window
     {
         var measured = routes
             .Select(route => _routeProbeResults.GetValueOrDefault(route.Tag))
-            .Where(sample => sample?.LatencyMilliseconds is >= 0 and <= 8_000)
+            .Where(sample => sample?.LatencyMilliseconds is > 0 and <= 8_000)
             .Select(sample => sample!)
             .ToArray();
         var grades = new Dictionary<string, RouteQualityGrade>(StringComparer.Ordinal);
@@ -1120,23 +1736,12 @@ public partial class MainWindow : Window
         }
 
         var complete = measured.Where(sample => sample.BytesPerSecond is > 0).ToArray();
-        string? bestTag = complete.Length == 1 ? complete[0].RouteTag : null;
-        if (complete.Length >= 2)
+        var bestTag = SelectBestMeasuredRoute(complete);
+        if (complete.Length > 1)
         {
-            var minLatency = complete.Min(sample => sample.LatencyMilliseconds!.Value);
-            var maxLatency = complete.Max(sample => sample.LatencyMilliseconds!.Value);
-            var minSpeed = complete.Min(sample => sample.BytesPerSecond!.Value);
-            var maxSpeed = complete.Max(sample => sample.BytesPerSecond!.Value);
-            var ranked = complete.Select(sample =>
-            {
-                var latencyScore = minLatency == maxLatency ? 0.5 :
-                    (maxLatency - sample.LatencyMilliseconds!.Value) / (double)(maxLatency - minLatency);
-                var speedScore = minSpeed == maxSpeed ? 0.5 :
-                    (sample.BytesPerSecond!.Value - minSpeed) / (double)(maxSpeed - minSpeed);
-                return (sample.RouteTag, Score: (latencyScore + speedScore) / 2);
-            }).OrderByDescending(item => item.Score)
-                .ThenBy(item => item.RouteTag, StringComparer.Ordinal).ToArray();
-            bestTag = ranked[0].RouteTag;
+            var ranked = complete.OrderByDescending(sample => sample.BytesPerSecond)
+                .ThenBy(sample => sample.LatencyMilliseconds)
+                .ThenBy(sample => sample.RouteTag, StringComparer.Ordinal).ToArray();
             for (var index = 0; index < ranked.Length; index++)
                 grades[ranked[index].RouteTag] = index == 0 ? RouteQualityGrade.Good
                     : index / (double)ranked.Length >= 2d / 3d
@@ -1145,91 +1750,99 @@ public partial class MainWindow : Window
 
         var average = (long)Math.Round(measured.Average(sample => (double)sample.LatencyMilliseconds!.Value),
             MidpointRounding.AwayFromZero);
-        var summary = Copy($"Пинг · лучший {fastest} · средний {average} · худший {slowest} мс",
-            $"Ping · best {fastest} · avg {average} · worst {slowest} ms");
+        var summary = Copy($"HTTPS · лучший отклик {fastest} · средний {average} · худший {slowest} мс",
+            $"HTTPS · fastest {fastest} · avg {average} · slowest {slowest} ms");
         return new RouteCountryQuality(summary, grades, bestTag);
     }
 
-    private Control RouteOption(WindowsRoute route, RouteCountryQuality quality)
+    internal static string? SelectBestMeasuredRoute(IReadOnlyList<WindowsRouteProbeResult> samples)
+    {
+        var complete = samples.Where(sample => sample.LatencyMilliseconds is > 0 and <= 8_000 &&
+                                                sample.BytesPerSecond is > 0).ToArray();
+        if (complete.Length == 0)
+            return null;
+        if (complete.Length == 1)
+            return complete[0].RouteTag;
+
+        var fastestLatency = complete.Min(sample => sample.LatencyMilliseconds!.Value);
+        var latencyTolerance = Math.Max(5L, (long)Math.Ceiling(fastestLatency * 0.10));
+        return complete
+            .Where(sample => sample.LatencyMilliseconds!.Value <= fastestLatency + latencyTolerance)
+            .OrderByDescending(sample => sample.BytesPerSecond)
+            .ThenBy(sample => sample.LatencyMilliseconds)
+            .ThenBy(sample => sample.RouteTag, StringComparer.Ordinal)
+            .First().RouteTag;
+    }
+
+    private Control RouteOption(WindowsRoute route, RouteCountryQuality quality,
+        IReadOnlyList<WindowsRoute> countryRoutes)
     {
         var selected = _selectedRoute == route.Id;
         var body = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("3,2*,1,*,1,*,Auto"),
-            ColumnSpacing = 11,
-            MinHeight = 56,
+            ColumnDefinitions = new ColumnDefinitions(_compactLayout ? "40,*,Auto" : "40,2*,1,*,1,*,Auto"),
+            RowDefinitions = new RowDefinitions(_compactLayout ? "Auto,Auto" : "Auto"),
+            ColumnSpacing = _compactLayout ? 8 : 24,
+            RowSpacing = 6,
+            MinHeight = 76,
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
         };
-        var protocolColor = route.Protocol switch
+        var protocolLogo = new ProtocolLogo(route.Protocol)
         {
-            "VLESS" => DeyttTheme.Sky,
-            "TROJAN" => DeyttTheme.Blue,
-            "HYSTERIA2" => DeyttTheme.Mint,
-            "AWG31" => DeyttTheme.Amber,
-            _ => DeyttTheme.Muted,
-        };
-        var protocolMark = new Border
-        {
-            Width = 3,
-            Height = 40,
-            CornerRadius = new CornerRadius(2),
-            Background = DeyttTheme.Brush(protocolColor),
+            Width = 36,
+            Height = 36,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
         };
-        body.Children.Add(protocolMark);
+        AutomationProperties.SetName(protocolLogo, route.ProtocolName);
+        body.Children.Add(protocolLogo);
+        if (_compactLayout)
+            Grid.SetRowSpan(protocolLogo, 2);
         var labels = new StackPanel
         {
             Spacing = 2,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
-        labels.Children.Add(DeyttTheme.TextBlock(route.ProfileName ??
-            (IsAwgProtocol(route.Protocol) ? AwgProtocolTitle(route.Protocol) : route.ProtocolName),
-            14, DeyttTheme.Text, FontWeight.SemiBold));
-        var detail = route.Protocol switch
-        {
-            "VLESS" or "TROJAN" => "WebSocket + TLS",
-            "HYSTERIA2" => "QUIC · UDP",
-            "AWG31" => AwgProtocolTitle(route.Protocol),
-            _ => route.ProtocolName,
-        };
-        labels.Children.Add(DeyttTheme.TextBlock(detail, 10, DeyttTheme.Muted));
+        var protocolTitle = WindowsRouteCatalog.FormatRouteTitle(route);
+        var protocolTitleText = DeyttTheme.RawTextBlock(protocolTitle, 14,
+            DeyttTheme.Text, FontWeight.SemiBold, wrap: false);
+        protocolTitleText.TextTrimming = TextTrimming.CharacterEllipsis;
+        labels.Children.Add(protocolTitleText);
+        var detail = WindowsRouteCatalog.FormatRouteDetail(route, _language == "en");
+        var protocolDetail = DeyttTheme.RawTextBlock(detail, 13, DeyttTheme.Muted, wrap: false);
+        protocolDetail.TextTrimming = TextTrimming.CharacterEllipsis;
+        ToolTip.SetTip(protocolDetail, detail);
+        AutomationProperties.SetHelpText(protocolDetail, detail);
+        labels.Children.Add(protocolDetail);
         var measured = _routeProbeResults.GetValueOrDefault(route.Tag);
-        var probeStatus = measured is null ? null : measured.Stage switch
-        {
-            "latency" => Copy("Проверяем пинг", "Measuring latency"),
-            "retry" => Copy("Повторяем замер", "Retrying measurement"),
-            "waiting_speed" => Copy("Пинг получен · измеряем скорость", "Ping received · measuring speed"),
-            "download" => FormatProbeDownloadProgress(measured),
-            "error" => measured.Error ?? Copy("Не удалось проверить маршрут", "Could not check this route"),
-            "cancelled" => Copy("Замер остановлен", "Measurement stopped"),
-            "complete" when measured.LatencyMilliseconds is null => measured.Error ?? Copy("Нет ответа", "No response"),
-            "complete" when quality.BestTag == route.Tag => Copy("Лучший результат", "Best result"),
-            _ => null,
-        };
-        if (probeStatus is not null)
-        {
-            var status = DeyttTheme.TextBlock(probeStatus, 9,
-                measured?.Stage is "error" or "cancelled" ? DeyttTheme.Coral : DeyttTheme.Muted);
-            labels.Children.Add(status);
-        }
+        var status = DeyttTheme.RawTextBlock(Copy("не измерено", "not measured"),
+            13, DeyttTheme.Muted, wrap: false);
+        status.TextTrimming = TextTrimming.CharacterEllipsis;
+        labels.Children.Add(status);
         Grid.SetColumn(labels, 1);
         body.Children.Add(labels);
+        if (_compactLayout)
+            Grid.SetRow(labels, 0);
 
-        var latencyText = measured?.LatencyMilliseconds is { } probeLatency ? $"{probeLatency} ms" : "— ms";
+        var latencyText = PositiveLatency(measured?.LatencyMilliseconds) is { } probeLatency
+            ? $"{probeLatency} {Copy("мс", "ms")}" : Copy("не измерено", "not measured");
         var speedText = measured?.BytesPerSecond is { } bytesPerSecond && bytesPerSecond > 0
-            ? $"{(bytesPerSecond * 8d / 1_000_000d).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)} mbps"
-            : "— mbps";
-        var firstDivider = new Border
+                    ? $"{(bytesPerSecond * 8d / 1_000_000d).ToString("0.#", UiCulture)} {LocalizedSpeedUnit(_language)}"
+            : Copy("не измерено", "not measured");
+        if (!_compactLayout)
         {
-            Width = 1,
-            Height = 30,
-            Background = DeyttTheme.Brush(DeyttTheme.Line),
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
-        Grid.SetColumn(firstDivider, 2);
-        body.Children.Add(firstDivider);
+            var firstDivider = new Border
+            {
+                Width = 1,
+                Height = 30,
+                Background = DeyttTheme.Brush(DeyttTheme.Line),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+            };
+            Grid.SetColumn(firstDivider, 2);
+            body.Children.Add(firstDivider);
+        }
 
-        var latencyMetric = RouteMeasurement(Copy("ОТКЛИК", "RESPONSE"), latencyText,
+        var latencyMetric = RouteMeasurement(_compactLayout ? Copy("ОТКЛИК", "RESPONSE") : "", latencyText,
             quality.Grades.GetValueOrDefault(route.Tag) switch
             {
                 RouteQualityGrade.Good => DeyttTheme.Mint,
@@ -1240,54 +1853,101 @@ public partial class MainWindow : Window
         var latencyHelpText = Copy(
             "Время до первого ответа по HTTPS через выбранный маршрут. Это не ICMP-пинг.",
             "Time to the first HTTPS response through the selected route. This is not an ICMP ping.");
-        var latencyMetricLabel = latencyMetric.Children.OfType<TextBlock>().First();
-        ToolTip.SetTip(latencyMetricLabel, latencyHelpText);
-        AutomationProperties.SetHelpText(latencyMetricLabel, latencyHelpText);
-        Grid.SetColumn(latencyMetric, 3);
-        body.Children.Add(latencyMetric);
+        ToolTip.SetTip(latencyMetric, latencyHelpText);
+        AutomationProperties.SetHelpText(latencyMetric, latencyHelpText);
 
-        var secondDivider = new Border
+        if (!_compactLayout)
         {
-            Width = 1,
-            Height = 30,
-            Background = DeyttTheme.Brush(DeyttTheme.Line),
-            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        };
-        Grid.SetColumn(secondDivider, 4);
-        body.Children.Add(secondDivider);
-
-        var speedMetric = RouteMeasurement(Copy("СКОРОСТЬ", "SPEED"), speedText,
-            quality.BestTag == route.Tag ? DeyttTheme.Mint : DeyttTheme.Text,
-              measured?.Stage is "latency" or "retry" or "waiting_speed" or "download", _reduceMotion);
-        Grid.SetColumn(speedMetric, 5);
-        body.Children.Add(speedMetric);
-
-        Control action = selected
-            ? DeyttTheme.TextBlock("✓", 16, DeyttTheme.Mint, FontWeight.SemiBold, wrap: false)
-            : DeyttTheme.TextBlock("›", 16, DeyttTheme.Muted, FontWeight.Medium, wrap: false);
-        if (selected)
-            action = new Border
+            var secondDivider = new Border
             {
-                Width = 26,
-                Height = 26,
-                Background = DeyttTheme.Brush(DeyttTheme.MintSurface),
-                CornerRadius = new CornerRadius(9),
-                Child = action,
+                Width = 1,
+                Height = 30,
+                Background = DeyttTheme.Brush(DeyttTheme.Line),
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             };
-        Grid.SetColumn(action, 6);
+            Grid.SetColumn(secondDivider, 4);
+            body.Children.Add(secondDivider);
+        }
+
+        var speedMetric = RouteMeasurement(_compactLayout ? Copy("СКОРОСТЬ", "SPEED") : "", speedText,
+            quality.BestTag == route.Tag ? DeyttTheme.Mint : DeyttTheme.Text,
+              measured?.Stage is "waiting_speed" or "download", _reduceMotion);
+        if (_compactLayout)
+        {
+            var metricGroup = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 14 };
+            Grid.SetColumn(speedMetric, 1);
+            metricGroup.Children.Add(latencyMetric);
+            metricGroup.Children.Add(speedMetric);
+            Grid.SetColumn(metricGroup, 1);
+            Grid.SetRow(metricGroup, 1);
+            body.Children.Add(metricGroup);
+        }
+        else
+        {
+            Grid.SetColumn(latencyMetric, 3);
+            body.Children.Add(latencyMetric);
+            Grid.SetColumn(speedMetric, 5);
+            body.Children.Add(speedMetric);
+        }
+
+        void RefreshRow()
+        {
+            var current = _routeProbeResults.GetValueOrDefault(route.Tag);
+            var currentQuality = CountryRouteQuality(countryRoutes);
+            var routeStatus = current is null
+                ? Copy("не измерено", "not measured")
+                : RouteProbeStatus(route, currentQuality, current);
+            status.Text = routeStatus.Length > 0
+                ? routeStatus
+                : Copy("замер выполнен", "measured");
+            status.IsVisible = true;
+            status.Foreground = DeyttTheme.Brush(current?.Stage is "error" or "cancelled"
+                ? DeyttTheme.Coral : DeyttTheme.Muted);
+            ToolTip.SetTip(status, status.Text);
+            AutomationProperties.SetHelpText(status, status.Text);
+            var latencyValue = current?.LatencyMilliseconds is { } ping
+                ? $"{ping} {Copy("мс", "ms")}" : Copy("не измерено", "not measured");
+            var speedValue = current?.BytesPerSecond is { } bytes && bytes > 0
+                ? $"{(bytes * 8d / 1_000_000d).ToString("0.#", UiCulture)} {LocalizedSpeedUnit(_language)}"
+                : Copy("не измерено", "not measured");
+            var grade = currentQuality.Grades.GetValueOrDefault(route.Tag);
+            var latencyColor = grade switch
+            {
+                RouteQualityGrade.Good => DeyttTheme.Mint,
+                RouteQualityGrade.Medium => DeyttTheme.Amber,
+                RouteQualityGrade.Poor => DeyttTheme.Coral,
+                _ => DeyttTheme.Text,
+            };
+            var speedColor = currentQuality.BestTag == route.Tag ? DeyttTheme.Mint : DeyttTheme.Text;
+            UpdateRouteMeasurement(latencyMetric, _compactLayout ? Copy("ОТКЛИК", "RESPONSE") : "", latencyValue,
+                latencyColor, current?.Stage is "latency" or "retry", _reduceMotion);
+            UpdateRouteMeasurement(speedMetric, _compactLayout ? Copy("СКОРОСТЬ", "SPEED") : "", speedValue,
+                speedColor, current?.Stage is "waiting_speed" or "download", _reduceMotion);
+        }
+        _routeOptionRefreshActions[route.Tag] = RefreshRow;
+        RefreshRow();
+
+        Control action = new Border
+        {
+            Width = 26,
+            Height = 26,
+            Background = DeyttTheme.Brush(selected ? DeyttTheme.MintSurface : Colors.Transparent),
+            CornerRadius = new CornerRadius(9),
+            Child = DeyttTheme.TextBlock(selected ? "✓" : "›", 16,
+                selected ? DeyttTheme.Mint : DeyttTheme.Muted,
+                selected ? FontWeight.SemiBold : FontWeight.Medium, wrap: false),
+        };
+        Grid.SetColumn(action, _compactLayout ? 2 : 6);
         action.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
         body.Children.Add(action);
         var button = DeyttTheme.Action(body, () =>
         {
-            if (IsAwgProtocol(route.Protocol))
-                _ = ShowAwgRouteChoicesAsync(route);
-            else
-                SelectRoute(route.Id);
+            SelectRoute(route.Id);
         });
         button.Padding = new Thickness(0);
         button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
         AutomationProperties.SetAutomationId(button, $"RouteOption-{route.Id}");
-        AutomationProperties.SetName(button, $"{route.ProfileName ?? route.ProtocolName} · {route.CountryName}");
+        AutomationProperties.SetName(button, $"{protocolTitle} · {RouteCountryName(route)}");
         return new Border
         {
             Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : Colors.Transparent),
@@ -1310,9 +1970,10 @@ public partial class MainWindow : Window
             HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
-        cell.Children.Add(DeyttTheme.TextBlock(label, 9, DeyttTheme.Muted,
-            FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
-        if (active && value.StartsWith('—'))
+        if (!string.IsNullOrWhiteSpace(label))
+            cell.Children.Add(DeyttTheme.TextBlock(label, 9, DeyttTheme.Muted,
+                FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
+        if (active && (value.StartsWith('—') || value is "не измерено" or "not measured"))
         {
             var dots = DeyttTheme.TextBlock(reducedMotion ? "···" : "·", 14,
                 DeyttTheme.Sky, FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false);
@@ -1328,10 +1989,38 @@ public partial class MainWindow : Window
             }
         }
         else
-            cell.Children.Add(DeyttTheme.TextBlock(value, 14, valueColor,
+            cell.Children.Add(DeyttTheme.RawTextBlock(value, 14, valueColor,
                 FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false));
         return cell;
     }
+
+    private static void UpdateRouteMeasurement(StackPanel cell, string label, string value,
+        Color valueColor, bool active, bool reducedMotion)
+    {
+        var replacement = RouteMeasurement(label, value, valueColor, active, reducedMotion);
+        cell.Children.Clear();
+        while (replacement.Children.Count > 0)
+        {
+            var child = replacement.Children[0];
+            replacement.Children.RemoveAt(0);
+            cell.Children.Add(child);
+        }
+    }
+
+    private string RouteProbeStatus(WindowsRoute route, RouteCountryQuality quality,
+        WindowsRouteProbeResult? measured) => measured is null ? string.Empty : measured.Stage switch
+        {
+            "queued" => Copy("в очереди", "queued"),
+            "latency" => Copy("проверяем отклик", "measuring latency"),
+            "retry" => Copy("повторяем замер", "retrying measurement"),
+            "waiting_speed" => Copy("отклик получен · измеряем скорость", "latency received · measuring speed"),
+            "download" => FormatProbeDownloadProgress(measured),
+            "error" => measured.Error ?? Copy("не удалось проверить маршрут", "could not check this route"),
+            "cancelled" => Copy("замер остановлен", "measurement stopped"),
+            "complete" when measured.LatencyMilliseconds is null => measured.Error ?? Copy("нет ответа", "no response"),
+            "complete" when quality.BestTag == route.Tag => Copy("лучший результат", "best result"),
+            _ => string.Empty,
+        };
 
     private async Task ShowAwgRouteChoicesAsync(WindowsRoute route)
     {
@@ -1364,33 +2053,67 @@ public partial class MainWindow : Window
     private Control QuickOption(WindowsRoute route, string glyph, string title, string subtitle)
     {
         var selected = _selectedRoute == route.Id;
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 60 };
-        Control icon;
-        if (route.CountryCode == "RU-DE")
+        var body = new Grid
         {
-            icon = RouteFlagVisual.Create("RU-DE", 48, 30);
+            ColumnDefinitions = new ColumnDefinitions("48,*,Auto"),
+            MinHeight = 72,
+            ColumnSpacing = 12,
+        };
+        Control icon;
+        if (route.Protocol == "LTE")
+        {
+            icon = RouteFlagVisual.Create("EU", 48, 30);
+        }
+        else if (route.CountryCode == "RU-DE")
+        {
+            icon = new NavigationIcon(NavigationIconKind.Routes, selected: true);
         }
         else
         {
-            var glyphIcon = DeyttTheme.TextBlock(glyph, 23, DeyttTheme.Sky, wrap: false);
-            glyphIcon.Width = 36;
+            var glyphIcon = DeyttTheme.RawTextBlock(glyph, 23, DeyttTheme.Sky,
+                FontWeight.SemiBold, wrap: false);
+            glyphIcon.Width = 34;
+            glyphIcon.Height = 34;
             glyphIcon.TextAlignment = TextAlignment.Center;
+            glyphIcon.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
             icon = glyphIcon;
         }
-        body.Children.Add(icon);
-        var labels = new StackPanel { Spacing = 3, Margin = new Thickness(12, 0, 8, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        labels.Children.Add(DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
-        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 11, DeyttTheme.Muted));
+        icon.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        icon.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+        var iconCell = new Border
+        {
+            Width = 40,
+            Height = 40,
+            Background = DeyttTheme.Brush(DeyttTheme.SkySurface),
+            CornerRadius = new CornerRadius(12),
+            Child = icon,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        body.Children.Add(iconCell);
+        var labels = new StackPanel
+        {
+            Spacing = 3,
+            VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        var titleText = DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold, wrap: false);
+        titleText.TextTrimming = TextTrimming.CharacterEllipsis;
+        labels.Children.Add(titleText);
+        var subtitleText = DeyttTheme.TextBlock(subtitle, 13, DeyttTheme.Muted, wrap: false);
+        subtitleText.TextTrimming = TextTrimming.CharacterEllipsis;
+        labels.Children.Add(subtitleText);
         Grid.SetColumn(labels, 1);
         body.Children.Add(labels);
         var action = DeyttTheme.TextBlock(selected ? Copy("ВЫБРАН", "SELECTED") : Copy("выбрать", "select"),
-            12, selected ? DeyttTheme.Mint : DeyttTheme.Muted,
+            13, selected ? DeyttTheme.Mint : DeyttTheme.Muted,
             FontWeight.SemiBold, wrap: false);
+        action.Width = 72;
+        action.TextAlignment = TextAlignment.Right;
         Grid.SetColumn(action, 2);
         body.Children.Add(action);
         var button = DeyttTheme.Action(body, () => SelectRoute(route.Id));
         button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
-        button.Padding = new Thickness(6, 6);
+        button.Padding = new Thickness(12, 8);
         return button;
     }
 
@@ -1399,8 +2122,8 @@ public partial class MainWindow : Window
         var received = probe.BytesReceived ?? 0;
         var total = probe.TotalBytes ?? 0;
         var progress = total > 0
-            ? $"{received / (1024d * 1024d):0.#}/{total / (1024d * 1024d):0.#} mb"
-            : $"{received / (1024d * 1024d):0.#} mb";
+            ? $"{FormatBytes(received)}/{FormatBytes(total)}"
+            : FormatBytes(received);
         return Copy($"Скорость · получено {progress}", $"Speed · received {progress}");
     }
 
@@ -1413,59 +2136,136 @@ public partial class MainWindow : Window
             (_keysSnapshot is null && _profileLoadIssue is null));
         var accountError = signedIn && !loading &&
             (account is null || (_keysSnapshot is null && _profileLoadIssue is not null));
-        var compact = _compactLayout;
         var columns = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "1.02*,0.98*"),
-            RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto"),
+            ColumnDefinitions = new ColumnDefinitions("*"),
+            RowDefinitions = new RowDefinitions("Auto,Auto"),
         };
         var accountColumn = new StackPanel
         {
             Spacing = 0,
-            Margin = compact ? new Thickness(0) : new Thickness(0, 0, 10, 0),
+            Margin = new Thickness(0),
         };
         var managementColumn = new StackPanel
         {
             Spacing = 10,
-              Margin = compact ? new Thickness(0, 8, 0, 0) : new Thickness(10, 0, 0, 0),
+            Margin = new Thickness(0, 16, 0, 0),
         };
 
         accountColumn.Children.Add(BuildProfileIdentityCard(account, signedIn, loading));
-        var planPaymentEntry = SettingsEntry("₽", Copy("Тарифы и оплата", "Plans and payment"),
-            Copy("Стоимость подтвердит сервер до оформления", "The server confirms the total before checkout"),
-            Copy("открыть", "open"), () => _ = ShowPlanPickerAsync(), emphasis: compact && signedIn);
-        if (compact && signedIn)
-        {
-            // Keep the account's main billing action beside its identity on short windows.
-            accountColumn.Children.Add(DeyttTheme.Spacer(8));
-            accountColumn.Children.Add(planPaymentEntry);
-        }
-        AddSection(accountColumn, Copy("ПОДПИСКА", "SUBSCRIPTION"));
+        accountColumn.Children.Add(DeyttTheme.Spacer(14));
+        var planPaymentEntry = DeyttTheme.PrimaryButton(Copy("тарифы и оплата", "plans and payment"),
+            () => _ = ShowPlanPickerAsync());
+        planPaymentEntry.Width = _compactLayout ? double.NaN : 240;
+        planPaymentEntry.HorizontalAlignment = _compactLayout
+            ? Avalonia.Layout.HorizontalAlignment.Stretch
+            : Avalonia.Layout.HorizontalAlignment.Right;
         var subscription = account?.Subscription;
-        var subscriptionTitle = !signedIn
-            ? Copy("Подключите Telegram", "Connect Telegram")
+        var subscriptionStatus = !signedIn
+            ? Copy("не подключена", "not connected")
             : loading
-                ? Copy("Загружаем данные подписки…", "Loading subscription…")
+                ? Copy("загрузка…", "loading…")
                 : accountError
-                    ? Copy("Не удалось загрузить данные аккаунта.", "Could not load account data.")
+                    ? Copy("не удалось обновить", "refresh failed")
                     : subscription is null
-                        ? Copy("Данные подписки недоступны", "Subscription details unavailable")
+                        ? Copy("нет данных", "unavailable")
                         : subscription.Active
-                            ? subscription.TariffName ?? Copy("Подписка активна", "Subscription active")
-                            : Copy("Нет активной подписки", "No active subscription");
-        var subscriptionDetail = !signedIn
-            ? Copy("Войдите, чтобы увидеть тариф и срок действия.",
-                "Sign in to see your plan and expiry date.")
-            : loading
-                ? Copy("Проверяем тариф и доступ…", "Checking your plan and access…")
-                : accountError
-                    ? _profileLoadIssue ?? Copy("Проверьте соединение и повторите загрузку.",
-                        "Check your connection and retry.")
-                    : SubscriptionSummary(subscription);
-        var subscriptionCard = new StackPanel { Spacing = 7 };
-        subscriptionCard.Children.Add(DeyttTheme.TextBlock(subscriptionTitle, 18,
-            accountError ? DeyttTheme.Coral : DeyttTheme.Text, FontWeight.SemiBold));
-        subscriptionCard.Children.Add(DeyttTheme.TextBlock(subscriptionDetail, 13, DeyttTheme.Muted));
+                            ? Copy("активна", "active")
+                            : Copy("неактивна", "inactive");
+        var subscriptionCard = new StackPanel { Spacing = 16 };
+        var subscriptionHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        subscriptionHeader.Children.Add(DeyttTheme.TextBlock(Copy("подписка", "subscription"),
+            18, DeyttTheme.Text, FontWeight.SemiBold));
+        var subscriptionStatusColor = accountError ? DeyttTheme.Coral :
+            subscription?.Active == true ? DeyttTheme.Mint : DeyttTheme.Muted;
+        var subscriptionStatusText = DeyttTheme.TextBlock(subscriptionStatus, 13,
+            subscriptionStatusColor, FontWeight.SemiBold, wrap: false);
+        subscriptionStatusText.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+        Grid.SetColumn(subscriptionStatusText, 1);
+        subscriptionHeader.Children.Add(subscriptionStatusText);
+        subscriptionCard.Children.Add(subscriptionHeader);
+        if (!string.IsNullOrWhiteSpace(subscription?.TariffName))
+            subscriptionCard.Children.Add(DeyttTheme.RawTextBlock(NormalizeTariffDisplayName(subscription.TariffName), 16,
+                DeyttTheme.Muted, FontWeight.Medium));
+        if (subscription is { Active: true } activeSubscription && !loading && !accountError)
+        {
+            var metrics = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions(_compactLayout ? "*" : "*,*,*"),
+                RowDefinitions = _compactLayout ? new RowDefinitions("Auto,Auto,Auto") : new RowDefinitions("Auto"),
+                ColumnSpacing = 16,
+                RowSpacing = 14,
+            };
+            DateTimeOffset? expiryInstant = !activeSubscription.UnlimitedTime &&
+                DateTimeOffset.TryParse(activeSubscription.ExpiresAt, out var parsedExpiry)
+                    ? parsedExpiry : null;
+            var expiryNeedsHighlight = SubscriptionExpiryNeedsHighlight(expiryInstant, DateTimeOffset.Now);
+            var expiryValue = activeSubscription.UnlimitedTime
+                ? Copy("без ограничения", "unlimited")
+                : expiryInstant is DateTimeOffset expiry
+                    ? expiry.ToLocalTime().ToString("d MMM yyyy", UiCulture)
+                    : "—";
+            var deviceLimitReached = SubscriptionDeviceLimitReached(
+                activeSubscription.DevicesUsed, activeSubscription.DeviceLimit);
+            var deviceValue = activeSubscription.DeviceLimit is int limit
+                ? activeSubscription.DevicesUsed is int used
+                    ? $"{used.ToString(UiCulture)} {Copy("из", "of")} {limit.ToString(UiCulture)}"
+                    : $"— {Copy("из", "of")} {limit.ToString(UiCulture)}"
+                : activeSubscription.DevicesUsed is int usedOnly
+                    ? usedOnly.ToString(UiCulture)
+                    : "—";
+            var trafficUsed = Math.Max(0, activeSubscription.TrafficUsedBytes ?? 0);
+            var trafficValue = activeSubscription.TrafficLimitBytes is > 0 and long trafficLimit
+                ? $"{Copy("использовано", "used")} {FormatBytes(trafficUsed)} {Copy("из", "of")} {FormatBytes(trafficLimit)}"
+                : activeSubscription.TrafficUsedBytes is not null
+                    ? $"{Copy("использовано", "used")} {FormatBytes(trafficUsed)}"
+                    : "—";
+            var metricsData = new[]
+            {
+                (Copy("срок", "term"), expiryValue,
+                    activeSubscription.UnlimitedTime ? "" : expiryNeedsHighlight
+                        ? Copy("скоро истекает", "expires soon")
+                        : expiryInstant is null ? "" : Copy("действует до", "valid until"),
+                    expiryNeedsHighlight ? DeyttTheme.Coral : DeyttTheme.Text),
+                (Copy("устройства", "devices"), deviceValue,
+                    deviceLimitReached
+                        ? Copy("лимит устройств достигнут", "device limit reached")
+                        : activeSubscription.DeviceLimit is null && activeSubscription.DevicesUsed is not null
+                            ? Copy("лимит не указан", "limit not provided") : "",
+                    deviceLimitReached ? DeyttTheme.Coral : DeyttTheme.Text),
+                (Copy("трафик", "traffic"), trafficValue,
+                    activeSubscription.TrafficLimitBytes is > 0
+                        ? "" : Copy("без лимита", "no limit"), DeyttTheme.Text),
+            };
+            for (var index = 0; index < metricsData.Length; index++)
+            {
+                var (label, value, detail, valueColor) = metricsData[index];
+                var metric = new StackPanel { Spacing = 4 };
+                metric.Children.Add(DeyttTheme.TextBlock(label, 13, DeyttTheme.Muted));
+                metric.Children.Add(DeyttTheme.TextBlock(value, 18, valueColor, FontWeight.SemiBold));
+                if (detail.Length > 0)
+                    metric.Children.Add(DeyttTheme.TextBlock(detail, 13,
+                        valueColor == DeyttTheme.Text ? DeyttTheme.Muted : valueColor,
+                        valueColor == DeyttTheme.Text ? null : FontWeight.SemiBold));
+                if (_compactLayout)
+                    Grid.SetRow(metric, index);
+                else
+                    Grid.SetColumn(metric, index);
+                metrics.Children.Add(metric);
+            }
+            subscriptionCard.Children.Add(metrics);
+        }
+        else
+        {
+            var unavailableDetail = !signedIn
+                ? Copy("войдите, чтобы увидеть тариф и срок действия", "sign in to see your plan and expiry")
+                : loading
+                    ? Copy("проверяем тариф и доступ…", "checking your plan and access…")
+                    : _profileLoadIssue ?? Copy("данные подписки недоступны", "subscription details unavailable");
+            subscriptionCard.Children.Add(DeyttTheme.TextBlock(unavailableDetail, 13, DeyttTheme.Muted));
+        }
+        subscriptionCard.Children.Add(DeyttTheme.Spacer(4));
+        subscriptionCard.Children.Add(planPaymentEntry);
         if (signedIn && !loading && (accountError || subscription is null))
         {
             var retry = DeyttTheme.Action(
@@ -1482,11 +2282,6 @@ public partial class MainWindow : Window
         }
         accountColumn.Children.Add(DeyttTheme.Card(subscriptionCard,
             DeyttTheme.Surface, DeyttTheme.Line, 22, new Thickness(18)));
-        if (!compact || !signedIn)
-        {
-            accountColumn.Children.Add(DeyttTheme.Spacer(8));
-            accountColumn.Children.Add(planPaymentEntry);
-        }
         if (_paymentFlow.PendingPaymentId is not null)
         {
             accountColumn.Children.Add(DeyttTheme.Spacer(6));
@@ -1515,13 +2310,13 @@ public partial class MainWindow : Window
                 DeyttTheme.Surface2, DeyttTheme.Line, 14, new Thickness(13, 10)));
         }
 
-        managementColumn.Children.Add(BuildProfileDisclosure("▣",
+        managementColumn.Children.Add(BuildProfileDisclosure(NavigationIconKind.Devices,
             Copy("Устройства и сессии", "Devices and sessions"),
             Copy("Подключения и управление доступом", "Connections and access"),
             _profileDevicesExpanded,
             () => { _profileDevicesExpanded = !_profileDevicesExpanded; RenderActiveTabPreservingScroll(); },
             _profileDevicesExpanded ? BuildProfileDevicesContent(signedIn, loading, accountError) : null));
-        managementColumn.Children.Add(BuildProfileDisclosure("◇",
+        managementColumn.Children.Add(BuildProfileDisclosure(NavigationIconKind.Help,
             Copy("Помощь и документы", "Help and documents"),
             Copy("Поддержка, условия и конфиденциальность", "Support, terms and privacy"),
             _profileHelpExpanded,
@@ -1532,8 +2327,7 @@ public partial class MainWindow : Window
                 () => _ = ShowHelpAndDocumentsAsync()) : null));
 
         columns.Children.Add(accountColumn);
-        Grid.SetColumn(managementColumn, compact ? 0 : 1);
-        Grid.SetRow(managementColumn, compact ? 1 : 0);
+        Grid.SetRow(managementColumn, 1);
         columns.Children.Add(managementColumn);
         page.Children.Add(columns);
         return page;
@@ -1557,11 +2351,14 @@ public partial class MainWindow : Window
         }
         else
         {
-            avatar.Child = DeyttTheme.TextBlock("•", 23, DeyttTheme.Text, FontWeight.Bold, wrap: false);
+            avatar.Child = new Grid
+            {
+                Children = { new NavigationIcon(NavigationIconKind.Profile, selected: false) },
+            };
         }
         var labels = new StackPanel { Spacing = 3, Margin = new Thickness(14, 0, 6, 0),
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        labels.Children.Add(DeyttTheme.TextBlock(AccountDisplayName(account, signedIn), 18,
+        labels.Children.Add(DeyttTheme.RawTextBlock(AccountDisplayName(account, signedIn), 22,
             DeyttTheme.Text, FontWeight.SemiBold));
         var subtitle = !signedIn
             ? Copy("Войти в аккаунт", "Sign in to your account")
@@ -1572,7 +2369,7 @@ public partial class MainWindow : Window
                     : string.IsNullOrWhiteSpace(account.Username)
                         ? Copy("Telegram подключён", "Telegram connected")
                         : $"@{account.Username}";
-        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 12, DeyttTheme.Muted));
+        labels.Children.Add(DeyttTheme.RawTextBlock(subtitle, 16, DeyttTheme.Muted));
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 60 };
         row.Children.Add(avatar);
         Grid.SetColumn(labels, 1);
@@ -1594,7 +2391,7 @@ public partial class MainWindow : Window
         return DeyttTheme.Card(action, DeyttTheme.Surface, DeyttTheme.Line, 20, new Thickness(0));
     }
 
-    private Control BuildProfileDisclosure(string glyph, string title, string subtitle, bool expanded,
+    private Control BuildProfileDisclosure(NavigationIconKind iconKind, string title, string subtitle, bool expanded,
         Action onToggle, Control? details)
     {
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
@@ -1605,8 +2402,7 @@ public partial class MainWindow : Window
             Height = 36,
             Background = DeyttTheme.Brush(DeyttTheme.Surface2),
             CornerRadius = new CornerRadius(11),
-            Child = DeyttTheme.TextBlock(glyph, 17, DeyttTheme.Sky, FontWeight.SemiBold,
-                DeyttTheme.JetBrainsMono, wrap: false),
+            Child = new NavigationIcon(iconKind, selected: true),
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
         header.Children.Add(icon);
@@ -1663,42 +2459,8 @@ public partial class MainWindow : Window
                     : Copy("доступ разрешён", "access allowed");
                 content.Children.Add(SettingsEntry("H", deviceName,
                     $"{state} · {FormatLastSeen(device.LastSeen)}", Copy("подробнее", "details"),
-                    () => ShowHappDeviceDetails(device)));
+                    () => ShowHappDeviceDetails(device), preserveCase: true));
             }
-        }
-        content.Children.Add(DeyttTheme.Spacer(5));
-        content.Children.Add(DeyttTheme.TextBlock(Copy("СЕАНСЫ ПРИЛОЖЕНИЯ", "APP SESSIONS"),
-            9, DeyttTheme.Muted, FontWeight.SemiBold, DeyttTheme.JetBrainsMono));
-        if (!signedIn)
-        {
-            content.Children.Add(SettingsEntry("↗", Copy("Войти, чтобы управлять сеансами", "Sign in to manage sessions"),
-                Copy("Можно завершить старые входы на других устройствах", "End old app sessions on other devices"),
-                "›", ShowSignInDialog));
-        }
-        else if (loading)
-        {
-            content.Children.Add(DeyttTheme.TextBlock(Copy("Загружаем сеансы…", "Loading sessions…"),
-                12, DeyttTheme.Muted));
-        }
-        else if (_sessionLoadIssue is not null)
-        {
-            content.Children.Add(SettingsEntry("↻", Copy("Сеансы не загружены", "Sessions unavailable"),
-                _sessionLoadIssue, Copy("повторить", "retry"), () => _ = RefreshSignedInAccountAsync()));
-        }
-        else if (_sessions.Count == 0)
-        {
-            content.Children.Add(DeyttTheme.TextBlock(Copy("Активных сеансов приложения нет.",
-                "There are no active app sessions."), 12, DeyttTheme.Muted));
-        }
-        else
-        {
-            foreach (var session in _sessions)
-                content.Children.Add(SettingsEntry("D", session.Label,
-                    session.Current
-                        ? Copy("Это устройство · текущий сеанс", "This device · current session")
-                        : $"{Copy("Вход", "Signed in")}: {FormatLastSeen(session.CreatedAt)}",
-                    session.Current ? Copy("текущий", "current") : Copy("управлять", "manage"),
-                    () => _ = ManageSessionAsync(session)));
         }
         content.Children.Add(SettingsEntry("+", Copy("Обновить список", "Refresh list"),
             Copy("Заново загрузить устройства и доступ", "Reload devices and access"), "↻", () =>
@@ -1716,125 +2478,206 @@ public partial class MainWindow : Window
     private Control BuildSettingsPage()
     {
         var page = NewPage(Copy("ПОД ВАС", "MAKE IT YOURS"), Copy("Настройки", "Settings"));
-        var compact = _compactLayout;
-        var columns = new Grid
+        page.Spacing = 12;
+
+        var appearance = new StackPanel { Spacing = 8 };
+        appearance.Children.Add(DeyttTheme.RawTextBlock(Copy("тема", "theme"), 14,
+            DeyttTheme.Muted, FontWeight.SemiBold));
+        appearance.Children.Add(BuildThemeSelector());
+        appearance.Children.Add(SettingsEntry("Aa", Copy("Язык", "Language"),
+            _language == "ru" ? "Русский" : "English", "›", () => _ = ShowLanguagePickerAsync()));
+        var chromeRestart = _windowChromePreference != (_useSystemWindowChrome ? "system" : "deytt");
+        appearance.Children.Add(ToggleEntry(Copy("Системные кнопки Windows", "Windows system buttons"),
+            chromeRestart ? Copy("Применится после перезапуска", "Applies after restart") :
+                Copy("Использовать стандартную рамку Windows", "Use the standard Windows frame"),
+            _windowChromePreference == "system", value =>
+            {
+                _windowChromePreference = value ? "system" : "deytt";
+                return Task.CompletedTask;
+            }));
+        appearance.Children.Add(ToggleEntry(Copy("Уменьшить движение", "Reduce motion"),
+            Copy("Отключить перспективу и движение карты", "Turn off perspective and map motion"),
+            _reduceMotion, value =>
+            {
+                _reduceMotion = value;
+                DeyttTheme.ReduceMotion = value;
+                return Task.CompletedTask;
+            }));
+
+        var connection = new StackPanel { Spacing = 4 };
+        var splitStoreConfig = WindowsSplitTunnelStore.Load();
+        var customCount = (splitStoreConfig.CustomDomains?.Count ?? 0) + (splitStoreConfig.CustomProcesses?.Count ?? 0);
+        var activePreset = splitStoreConfig.Presets?.FirstOrDefault(p => string.Equals(p.Id, splitStoreConfig.ActivePresetId, StringComparison.OrdinalIgnoreCase));
+        var presetPrefix = activePreset is not null ? $"{activePreset.Name} · " : string.Empty;
+        string splitSubtitle;
+        if (splitStoreConfig.IsVpnOnly)
         {
-            ColumnDefinitions = new ColumnDefinitions(compact ? "*" : "*,*"),
-            RowDefinitions = new RowDefinitions(compact ? "Auto,Auto" : "Auto"),
-        };
-        var generalColumn = new StackPanel
+            splitSubtitle = customCount > 0
+                ? Copy($"{presetPrefix}VPN только для списка · {customCount} правил", $"{presetPrefix}VPN only for list · {customCount} rules")
+                : Copy($"{presetPrefix}VPN только для списка · список пуст", $"{presetPrefix}VPN only for list · empty list");
+        }
+        else
         {
-            Spacing = 0,
-            Margin = compact ? new Thickness(0) : new Thickness(0, 0, 10, 0),
-        };
-        var privacyColumn = new StackPanel
-        {
-            Spacing = 0,
-            Margin = compact ? new Thickness(0, 4, 0, 0) : new Thickness(10, 0, 0, 0),
-        };
-        AddSection(generalColumn, Copy("ЯЗЫК И АККАУНТ", "LANGUAGE AND ACCOUNT"));
+            splitSubtitle = customCount > 0
+                ? Copy($"{presetPrefix}Обход VPN для списка · {customCount} правил", $"{presetPrefix}Bypass VPN for list · {customCount} rules")
+                : Copy($"{presetPrefix}Обход VPN для списка · базовые правила", $"{presetPrefix}Bypass VPN for list · base rules");
+        }
+        connection.Children.Add(SettingsEntry("↗", Copy("Раздельное туннелирование", "Split tunneling"),
+            splitSubtitle, "›",
+            ShowSplitTunnelingInfo));
+        connection.Children.Add(SettingsEntry("↻", Copy("Проверка маршрута", "Route check"),
+            $"HTTP {_probeMethod} · {Copy("быстрая проверка, загрузка 1 с", "fast check, 1 s download")}", "›",
+            () => _ = ShowProbeMethodPickerAsync()));
+        connection.Children.Add(SettingsEntry("↗", Copy("Служба VPN", "VPN service"),
+            _vpnServiceAvailable
+                ? Copy("Служба установлена · нажмите для проверки", "Service installed · click to repair")
+                : Copy("Требуются права администратора", "Administrator approval required"), "›",
+            () => _ = InstallVpnServiceAsync()));
+
+        var privacy = new StackPanel { Spacing = 4 };
+        privacy.Children.Add(ToggleEntry(Copy("Показывать мой регион", "Show my region"),
+            Copy("примерное местоположение по IP · не GPS", "Approximate location by IP · not GPS"),
+            _mapRegionEnabled, UpdateMapRegionEnabledAsync));
+
+        var subscription = new StackPanel { Spacing = 4 };
         var accountDetail = _sessionToken is null
             ? Copy("Подписка и устройства", "Subscription and devices")
             : string.IsNullOrWhiteSpace(_account?.Username)
                 ? Copy("Аккаунт подключён", "Account connected")
                 : $"@{_account!.Username}";
-        var accountEntry = SettingsEntry("✓", _sessionToken is null
-                ? Copy("Войти через Telegram", "Sign in with Telegram")
-                : Copy("Telegram подключён", "Telegram connected"),
-            accountDetail,
-            "›", () =>
+        subscription.Children.Add(SettingsEntry("✓", _sessionToken is null
+                ? Copy("Войти через Telegram", "Sign in through Telegram")
+                : Copy("Telegram подключён", "Telegram connected"), accountDetail, "›", () =>
             {
                 if (_sessionToken is null)
                     ShowSignInDialog();
                 else
                     ShowTab(MainTab.Profile);
-            }, emphasis: true);
-        var accountEntryShownFirst = compact && _sessionToken is null;
-        if (accountEntryShownFirst)
-            generalColumn.Children.Add(accountEntry);
-        generalColumn.Children.Add(SettingsEntry("Aa", Copy("Язык приложения", "App language"),
-            _language == "ru" ? "Русский" : "English", "›", () => _ = ShowLanguagePickerAsync()));
-        if (!accountEntryShownFirst)
-        {
-            generalColumn.Children.Add(DeyttTheme.Spacer(6));
-            generalColumn.Children.Add(accountEntry);
-        }
-        generalColumn.Children.Add(DeyttTheme.Spacer(4));
-        generalColumn.Children.Add(SettingsEntry("↓", Copy("Импорт подписки", "Import subscription"),
-            Copy("Вставить ссылку или подключить аккаунт", "Paste a link or connect your account"), "›",
+            }, preserveCase: true));
+        subscription.Children.Add(SettingsEntry("↓", Copy("Импорт подписки", "Import subscription"),
+            Copy("Вставить ссылку или подключить аккаунт", "Paste a link or connect an account"), "›",
             () => _ = ShowSetupWindowAsync()));
-        generalColumn.Children.Add(DeyttTheme.Spacer(4));
-        generalColumn.Children.Add(SettingsEntry("↗", Copy("Ссылки подписки", "Subscription links"),
+        subscription.Children.Add(SettingsEntry("↗", Copy("Ссылки подписки", "Subscription links"),
             WindowsImportLinkProtocol.IsRegistered()
-                ? Copy("Открывать ссылки DEYTT в этом приложении", "Open DEYTT links in this app")
-                : Copy("Назначить приложению ссылки DEYTT", "Open DEYTT links with this app"),
-            WindowsImportLinkProtocol.IsRegistered()
-                ? Copy("включено", "enabled")
-                : Copy("включить", "enable"),
+                ? Copy("Открывать ссылки deytt в приложении", "Open deytt links in this app")
+                : Copy("Назначить приложению ссылки deytt", "Use this app for deytt links"),
+            WindowsImportLinkProtocol.IsRegistered() ? Copy("включено", "enabled") : Copy("включить", "enable"),
             ToggleImportLinkProtocol));
-
-        AddSection(generalColumn, Copy("ПОДКЛЮЧЕНИЕ", "CONNECTION"));
-        generalColumn.Children.Add(SettingsEntry("↗", Copy("Раздельное туннелирование", "Split tunneling"),
-            Copy("Сайты из подписки · все протоколы", "Subscription sites · all protocols"), "›",
-            ShowSplitTunnelingInfo));
-        generalColumn.Children.Add(DeyttTheme.Spacer(4));
-        generalColumn.Children.Add(SettingsEntry("↻", Copy("Проверка маршрута", "Route check"),
-            $"HTTP {_probeMethod} · {Copy("быстрая проверка, загрузка 1 с", "fast check, 1 s download")}", "›",
-            () => _ = ShowProbeMethodPickerAsync()));
-        generalColumn.Children.Add(DeyttTheme.Spacer(4));
-        generalColumn.Children.Add(SettingsEntry("↗", Copy("Служба VPN", "VPN service"),
-            _vpnServiceAvailable
-                ? Copy("Служба установлена · нажмите для проверки", "Service installed · click to repair")
-                : Copy("Требуются права администратора", "Administrator approval required"), "›",
-            () => _ = InstallVpnServiceAsync()));
-        generalColumn.Children.Add(DeyttTheme.Spacer(4));
-        generalColumn.Children.Add(SettingsEntry("↗", Copy("Бот DEYTT", "DEYTT bot"),
+        subscription.Children.Add(SettingsEntry("↗", Copy("Бот deytt", "deytt bot"),
             Copy("Другие действия в Telegram", "More actions in Telegram"), "›", () => OpenExternal("https://t.me/deyttbot")));
 
-        AddSection(privacyColumn, Copy("ВИД И ПРИВАТНОСТЬ", "APPEARANCE AND PRIVACY"));
-        privacyColumn.Children.Add(ToggleEntry(Copy("Показывать мой регион", "Show my region"),
-            Copy("IP · ipinfo.io · не GPS · только в памяти",
-                "IP via ipinfo.io · no GPS · memory only"),
-            _mapRegionEnabled, UpdateMapRegionEnabledAsync));
-        privacyColumn.Children.Add(DeyttTheme.Spacer(8));
-        privacyColumn.Children.Add(ToggleEntry(Copy("Уменьшить движение", "Reduce motion"),
-            Copy("Скрыть звёздный фон и анимации",
-                "Hide the starfield and animations"),
-            _reduceMotion, value =>
-            {
-                _reduceMotion = value;
-                return Task.CompletedTask;
-            }));
-
-        AddSection(privacyColumn, Copy("ОБНОВЛЕНИЯ", "UPDATES"));
-        privacyColumn.Children.Add(SettingsEntry("↻", Copy("Проверить обновления", "Check for updates"),
-            Copy("Текущая версия приложения", "Current application version"), "›",
-            () => _ = ShowUpdateDialogAsync()));
+        page.Children.Add(SettingsAccordion(Copy("оформление", "appearance"), appearance,
+            _settingsAppearanceExpanded, () => _settingsAppearanceExpanded = !_settingsAppearanceExpanded));
+        page.Children.Add(SettingsAccordion(Copy("подключение", "connection"), connection,
+            _settingsConnectionExpanded, () => _settingsConnectionExpanded = !_settingsConnectionExpanded));
+        page.Children.Add(SettingsAccordion(Copy("приватность", "privacy"), privacy,
+            _settingsPrivacyExpanded, () => _settingsPrivacyExpanded = !_settingsPrivacyExpanded));
+        page.Children.Add(SettingsAccordion(Copy("подписка", "subscription"), subscription,
+            _settingsSubscriptionExpanded, () => _settingsSubscriptionExpanded = !_settingsSubscriptionExpanded));
+        page.Children.Add(SettingsEntry("↻", Copy("Проверить обновления", "Check for updates"),
+            Copy("Текущая версия приложения", "Current app version"), "›", () => _ = ShowUpdateDialogAsync()));
         if (_preferencesIssue is not null)
-        {
-            privacyColumn.Children.Add(DeyttTheme.Spacer(10));
-            privacyColumn.Children.Add(DeyttTheme.TextBlock(_preferencesIssue, 12, DeyttTheme.Coral));
-        }
-        columns.Children.Add(generalColumn);
-        Grid.SetColumn(privacyColumn, compact ? 0 : 1);
-        Grid.SetRow(privacyColumn, compact ? 1 : 0);
-        columns.Children.Add(privacyColumn);
-        page.Children.Add(columns);
+            page.Children.Add(DeyttTheme.TextBlock(_preferencesIssue, 12, DeyttTheme.Coral));
         return page;
     }
 
-    private Control SettingsEntry(string glyph, string title, string subtitle, string trailing,
-        Action onClick, bool emphasis = false)
+    private Control BuildThemeSelector()
     {
-        var content = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 58 };
-        var icon = DeyttTheme.TextBlock(glyph, 19, DeyttTheme.Sky,
+        var options = new (string Value, string Label)[]
+        {
+            ("light", Copy("светлая", "light")), ("dark", Copy("тёмная", "dark")),
+            ("system", Copy("система", "system")),
+        };
+        var selector = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 6 };
+        for (var index = 0; index < options.Length; index++)
+        {
+            var option = options[index];
+            var selected = _themePreference == option.Value;
+            var label = DeyttTheme.TextBlock(option.Label, 14,
+                selected ? DeyttTheme.Text : DeyttTheme.Muted,
+                selected ? FontWeight.SemiBold : FontWeight.Medium, wrap: false);
+            var iconKind = option.Value switch
+            {
+                "light" => NavigationIconKind.ThemeLight,
+                "dark" => NavigationIconKind.ThemeDark,
+                _ => NavigationIconKind.ThemeSystem,
+            };
+            var content = new StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                Spacing = 7,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Children = { new NavigationIcon(iconKind, selected), label },
+            };
+            AutomationProperties.SetName(content, option.Label);
+            var button = DeyttTheme.Action(content, () =>
+            {
+                _themePreference = option.Value;
+                ApplyVisualPreferences();
+                SavePreferences();
+                RenderActiveTabPreservingScroll();
+            });
+            AutomationProperties.SetName(button, option.Label);
+            button.MinHeight = 48;
+            button.CornerRadius = new CornerRadius(10);
+            var surface = new Border
+            {
+                Background = DeyttTheme.Brush(selected ? DeyttTheme.Selected : DeyttTheme.Surface2),
+                BorderBrush = DeyttTheme.Brush(selected ? DeyttTheme.SelectedLine : DeyttTheme.Line),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Child = button,
+            };
+            Grid.SetColumn(surface, index);
+            selector.Children.Add(surface);
+        }
+        return selector;
+    }
+
+    private Control SettingsAccordion(string title, Control body, bool expanded, Action toggle)
+    {
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), MinHeight = 58 };
+        header.Children.Add(DeyttTheme.TextBlock(title, 18, DeyttTheme.Text, FontWeight.SemiBold));
+        var arrow = DeyttTheme.TextBlock(expanded ? "⌄" : "›", 20, DeyttTheme.Muted,
+            FontWeight.SemiBold, wrap: false);
+        Grid.SetColumn(arrow, 1);
+        header.Children.Add(arrow);
+        var button = DeyttTheme.Action(header, () => { toggle(); RenderActiveTabPreservingScroll(); });
+        button.Padding = new Thickness(12, 4);
+        button.CornerRadius = new CornerRadius(12);
+        button.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Stretch;
+        var stack = new StackPanel { Spacing = expanded ? 8 : 0 };
+        stack.Children.Add(button);
+        if (expanded)
+            stack.Children.Add(body);
+        return new Border
+        {
+            Background = DeyttTheme.Brush(DeyttTheme.Surface),
+            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(16),
+            Padding = new Thickness(16, 8),
+            Child = stack,
+        };
+    }
+
+    private Control SettingsEntry(string glyph, string title, string subtitle, string trailing,
+        Action onClick, bool emphasis = false, bool preserveCase = false)
+    {
+        var content = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), MinHeight = 72 };
+        var icon = DeyttTheme.TextBlock(glyph, 20, emphasis ? DeyttTheme.Blue : DeyttTheme.Muted,
             FontWeight.SemiBold, DeyttTheme.JetBrainsMono, wrap: false);
-        icon.Width = 28;
+        icon.Width = 32;
         icon.TextAlignment = TextAlignment.Center;
         content.Children.Add(icon);
-        var labels = new StackPanel { Spacing = 3, Margin = new Thickness(12, 0, 6, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
-        labels.Children.Add(DeyttTheme.TextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
-        labels.Children.Add(DeyttTheme.TextBlock(subtitle, 11, DeyttTheme.Muted));
+        var labels = new StackPanel { Spacing = 3, Margin = new Thickness(16, 0, 8, 0), VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center };
+        var titleText = preserveCase ? DeyttTheme.RawTextBlock(title, 17, DeyttTheme.Text, FontWeight.SemiBold)
+            : DeyttTheme.TextBlock(title, 17, DeyttTheme.Text, FontWeight.SemiBold);
+        var subtitleText = preserveCase ? DeyttTheme.RawTextBlock(subtitle, 13, DeyttTheme.Muted)
+            : DeyttTheme.TextBlock(subtitle, 13, DeyttTheme.Muted);
+        labels.Children.Add(titleText);
+        labels.Children.Add(subtitleText);
         Grid.SetColumn(labels, 1);
         content.Children.Add(labels);
         var arrow = DeyttTheme.TextBlock(trailing, 13, emphasis ? DeyttTheme.Sky : DeyttTheme.Muted,
@@ -1848,13 +2691,15 @@ public partial class MainWindow : Window
         button.CornerRadius = new CornerRadius(12);
         var row = new Border
         {
-            Background = DeyttTheme.Brush(DeyttTheme.Surface2),
+            Background = DeyttTheme.Brush(Colors.Transparent),
             BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(14),
-            Padding = new Thickness(4),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            CornerRadius = new CornerRadius(0),
+            Padding = new Thickness(0),
             Child = button,
         };
+        button.PointerEntered += (_, _) => row.Background = DeyttTheme.Brush(DeyttTheme.Surface2);
+        button.PointerExited += (_, _) => row.Background = DeyttTheme.Brush(Colors.Transparent);
         button.GotFocus += (_, _) => row.BringIntoView();
         return row;
     }
@@ -1868,14 +2713,14 @@ public partial class MainWindow : Window
         grid.Children.Add(labels);
         var knob = new Grid
         {
-            Width = 46,
-            Height = 25,
+            Width = 52,
+            Height = 28,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
         knob.Children.Add(new Ellipse
         {
-            Width = 19,
-            Height = 19,
+            Width = 22,
+            Height = 22,
             Fill = DeyttTheme.Brush(value ? DeyttTheme.Mint : DeyttTheme.Text),
             HorizontalAlignment = value ? Avalonia.Layout.HorizontalAlignment.Right : Avalonia.Layout.HorizontalAlignment.Left,
             VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
@@ -1884,8 +2729,8 @@ public partial class MainWindow : Window
         var toggle = new Border
         {
             Child = knob,
-            Width = 48,
-            Height = 27,
+            Width = 52,
+            Height = 28,
             Background = DeyttTheme.Brush(value ? DeyttTheme.MintSurface : DeyttTheme.Surface2),
             BorderBrush = DeyttTheme.Brush(value ? DeyttTheme.Mint : DeyttTheme.Line),
             BorderThickness = new Thickness(1),
@@ -1924,12 +2769,17 @@ public partial class MainWindow : Window
             var accepted = await ConfirmMapRegionConsentAsync();
             _mapRegionConsentAsked = true;
             if (!accepted)
+            {
+                SavePreferences();
+                UpdateHomeGlobePresentation();
                 return;
+            }
             _mapRegionConsentGranted = true;
         }
 
         _mapRegionEnabled = enabled;
         _mapLocationIssue = null;
+        SavePreferences();
         if (!enabled)
         {
             CancelMapLocationLookup();
@@ -1938,6 +2788,7 @@ public partial class MainWindow : Window
             _mapOriginLookupAttempted = false;
             _mapEgressLookupAttempted = false;
             _mapLocationStateInitialized = false;
+            UpdateHomeGlobePresentation();
             return;
         }
 
@@ -1945,11 +2796,12 @@ public partial class MainWindow : Window
         _mapEgressLookupAttempted = false;
         _mapLocationStateInitialized = true;
         StartMapLocationLookup(IsVpnDisplayConnected());
+        UpdateHomeGlobePresentation();
     }
 
     private async Task ShowInitialMapConsentIfNeededAsync()
     {
-        if (!OperatingSystem.IsWindows() || _mapRegionConsentAsked)
+        if (_mapRegionConsentAsked)
             return;
 
         var accepted = await ConfirmMapRegionConsentAsync();
@@ -1973,9 +2825,9 @@ public partial class MainWindow : Window
     private StackPanel NewPage(string kicker, string title)
     {
         var page = new StackPanel { Spacing = 0 };
-        page.Children.Add(DeyttTheme.TextBlock(title, _compactLayout ? 29 : 36, DeyttTheme.Text,
-            FontWeight.Bold, DeyttTheme.InterTight));
-        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 14 : 22));
+        page.Children.Add(DeyttTheme.TextBlock(title, _compactLayout ? 32 : _mediumLayout ? 44 : 56,
+            DeyttTheme.Text, FontWeight.Bold, DeyttTheme.Unbounded));
+        page.Children.Add(DeyttTheme.Spacer(_compactLayout ? 18 : 28));
         return page;
     }
 
@@ -2019,14 +2871,15 @@ public partial class MainWindow : Window
         "DE" => Copy("Германия", "Germany"),
         "FI" => Copy("Финляндия", "Finland"),
         "IT" => Copy("италия", "italy"),
+        "EU" => Copy("Европа", "Europe"),
         "AWG_UNKNOWN" => Copy("Другие регионы", "Other regions"),
-        "RU-DE" => Copy("LTE + белые списки", "LTE + whitelist"),
+        "RU-DE" => Copy("lte белые списки", "lte allowlist"),
         _ => route.CountryName,
     };
 
     private void SelectRoute(string routeId)
     {
-        if (_vpnActionInProgress)
+        if (_vpnActionInProgress || _quitInProgress || _exitAuthorized)
             return;
         var route = _routes.FirstOrDefault(value => value.Id == routeId);
         if (route is null)
@@ -2042,7 +2895,11 @@ public partial class MainWindow : Window
         }
 
         if (_selectedRoute == routeId)
+        {
+            if (_activeTab == MainTab.Routes)
+                ShowTab(MainTab.Home);
             return;
+        }
 
         if (WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
@@ -2055,20 +2912,23 @@ public partial class MainWindow : Window
 
     private async Task ConfirmAndSelectRouteAsync(WindowsRoute route)
     {
+        if (_quitInProgress || _exitAuthorized) return;
         var confirmed = await ConfirmDialogAsync(
             Copy("Изменить точку выхода?", "Change exit node?"),
             Copy("Текущее соединение завершится. После выбора подключитесь снова, чтобы применить новый маршрут.",
                 "The current connection will end. Connect again after choosing to apply the new route."),
             Copy("Остановить и сменить", "Stop and change"),
             Copy("Оставить подключение", "Keep connection"));
-        if (!confirmed || _vpnActionInProgress)
+        if (!confirmed || _vpnActionInProgress || _quitInProgress || _exitAuthorized)
             return;
 
+        var operationVersion = ++_vpnOperationVersion;
         _vpnActionInProgress = true;
         RenderActiveTabPreservingScroll();
         try
         {
             var disconnected = await _tunnelClient.DisconnectAsync();
+            if (operationVersion != _vpnOperationVersion || _quitInProgress || _exitAuthorized) return;
             if (disconnected.State != "disconnected")
             {
                 _vpnSnapshot = disconnected;
@@ -2083,15 +2943,19 @@ public partial class MainWindow : Window
         }
         catch (Exception error) when (IsTunnelTransportError(error))
         {
+            if (operationVersion != _vpnOperationVersion || _quitInProgress || _exitAuthorized) return;
             ShowInfoDialog(Copy("Не удалось остановить VPN", "Could not stop the VPN"),
                 Copy("Служба VPN не ответила. Проверьте её состояние и повторите попытку.",
                     "The VPN service did not respond. Check its status and try again."));
         }
         finally
         {
-            _vpnActionInProgress = false;
-            UpdateMapLocationAfterVpnAction(wasConnected: true);
-            RenderActiveTabPreservingScroll();
+            if (operationVersion == _vpnOperationVersion)
+            {
+                _vpnActionInProgress = false;
+                UpdateMapLocationAfterVpnAction(wasConnected: true);
+                RenderActiveTabPreservingScroll();
+            }
         }
     }
 
@@ -2099,24 +2963,27 @@ public partial class MainWindow : Window
     {
         _selectedRoute = route.Id;
         SavePreferences();
-        ShowTab(MainTab.Home);
+        if (_activeTab == MainTab.Routes)
+            ShowTab(MainTab.Home);
+        else
+            RenderActiveTabPreservingScroll();
+        if (!IsVisible || WindowState == Avalonia.Controls.WindowState.Minimized)
+            ShowFromTray();
     }
 
     private async Task ShowLanguagePickerAsync()
     {
-        var choices = new StackPanel { Spacing = 8 };
+        var choices = new StackPanel { Spacing = 10 };
+        choices.Children.Add(DeyttTheme.TextBlock(Copy("Выберите язык интерфейса.", "Choose your interface language."), 14, DeyttTheme.Muted));
         var buttons = new List<(string Language, Button Button)>();
         foreach (var (language, title) in new[] { ("ru", "Русский"), ("en", "English") })
         {
             var selected = _language == language;
-            var choice = DeyttTheme.Action(
-                DeyttTheme.Card(DeyttTheme.TextBlock(
-                        $"{(selected ? "✓  " : string.Empty)}{title}", 16,
-                        selected ? DeyttTheme.Sky : DeyttTheme.Text, FontWeight.SemiBold),
-                    selected ? DeyttTheme.Selected : DeyttTheme.Surface,
-                    selected ? DeyttTheme.SelectedLine : DeyttTheme.Line,
-                    16, new Thickness(16, 13)),
-                () => { });
+            var labels = new StackPanel { Spacing = 4 };
+            labels.Children.Add(DeyttTheme.RawTextBlock(title, 16, DeyttTheme.Text, FontWeight.SemiBold));
+            labels.Children.Add(DeyttTheme.RawTextBlock(language == "ru" ? "Russian" : "Английский", 13, DeyttTheme.Muted));
+            var choice = DeyttTheme.DialogChoice(labels, selected, () => { });
+            AutomationProperties.SetName(choice, title);
             choices.Children.Add(choice);
             buttons.Add((language, choice));
         }
@@ -2124,6 +2991,7 @@ public partial class MainWindow : Window
             Copy("Язык приложения", "App language"), choices, 390,
             modal =>
             {
+                modal.InitialFocusTarget = buttons.First(pair => pair.Language == _language).Button;
                 foreach (var (language, button) in buttons)
                     button.Click += (_, _) => modal.Close(language);
             });
@@ -2137,7 +3005,7 @@ public partial class MainWindow : Window
 
     private async Task ShowProbeMethodPickerAsync()
     {
-        var options = new StackPanel { Spacing = 8 };
+        var options = new StackPanel { Spacing = 10 };
         var optionButtons = new List<(string Method, Button Button)>();
         foreach (var option in new[]
         {
@@ -2152,38 +3020,35 @@ public partial class MainWindow : Window
             var selected = _probeMethod == option.Method;
             var labels = new StackPanel { Spacing = 4 };
             labels.Children.Add(DeyttTheme.TextBlock(
-                $"{(selected ? "✓  " : string.Empty)}{option.Title}", 15,
-                selected ? DeyttTheme.Sky : DeyttTheme.Text, FontWeight.SemiBold));
-            labels.Children.Add(DeyttTheme.TextBlock(option.Detail, 12, DeyttTheme.Muted));
-            var choice = DeyttTheme.Action(
-                DeyttTheme.Card(labels, selected ? DeyttTheme.Selected : DeyttTheme.Surface,
-                    selected ? DeyttTheme.SelectedLine : DeyttTheme.Line, 16, new Thickness(14, 11)), () => { });
+                option.Title, 15, DeyttTheme.Text, FontWeight.SemiBold));
+            labels.Children.Add(DeyttTheme.TextBlock(option.Detail, 14, DeyttTheme.Muted));
+            var choice = DeyttTheme.DialogChoice(labels, selected, () => { });
+            AutomationProperties.SetName(choice, option.Title);
             options.Children.Add(choice);
             optionButtons.Add((option.Method, choice));
         }
         var close = DeyttTheme.Action(DeyttTheme.TextBlock(Copy("Отмена", "Cancel"), 14,
             DeyttTheme.Muted, FontWeight.SemiBold), () => { });
+        DeyttTheme.StyleDialogButton(close);
         var content = new StackPanel
         {
-            Spacing = 13,
+            Spacing = 18,
             Children =
             {
-                DeyttTheme.TextBlock(Copy("Способ проверки", "Check method"), 21,
-                    DeyttTheme.Text, FontWeight.Bold),
                 DeyttTheme.TextBlock(Copy("Проверка идёт через выбранный VPN-маршрут.",
-                    "Checks run through the selected VPN route."), 13, DeyttTheme.Muted),
+                    "Checks run through the selected VPN route."), 14, DeyttTheme.Muted),
                 options,
-                close,
             },
         };
         var selectedMethod = await ShowContentInShellAsync(
             Copy("Проверка маршрута", "Route check"), content, 600,
             modal =>
             {
+                modal.InitialFocusTarget = optionButtons.First(pair => pair.Method == _probeMethod).Button;
                 foreach (var (method, button) in optionButtons)
                     button.Click += (_, _) => modal.Close(method);
                 close.Click += (_, _) => modal.Close();
-            });
+            }, close);
         if (selectedMethod is not string method)
             return;
 
@@ -2194,8 +3059,15 @@ public partial class MainWindow : Window
 
     private async Task ToggleVpnAsync()
     {
-        if (_vpnActionInProgress || _vpnCancelInProgress || _routeProbeInProgress)
+        if (_vpnActionInProgress || _vpnCancelInProgress || _quitInProgress || _exitAuthorized)
             return;
+
+        if (_routeProbeInProgress)
+        {
+            _ = CancelRouteProbeAsync(renderProgress: false);
+            SuspendRouteCountryProbes();
+            _routeProbeInProgress = false;
+        }
 
         var wasConnected = IsVpnTunnelActive(_vpnSnapshot.State);
         var operationVersion = ++_vpnOperationVersion;
@@ -2206,7 +3078,11 @@ public partial class MainWindow : Window
         {
             if (IsVpnTunnelActive(_vpnSnapshot.State))
             {
-                _vpnSnapshot = await _tunnelClient.DisconnectAsync();
+                _vpnSnapshot = new WindowsTunnelSnapshot("stopping", Copy("Отключаем VPN…", "Disconnecting VPN…"));
+                RenderActiveTabPreservingScroll();
+                var stopped = await _tunnelClient.DisconnectAsync();
+                if (operationVersion != _vpnOperationVersion || _quitInProgress || _exitAuthorized) return;
+                _vpnSnapshot = stopped;
                 _vpnServiceAvailable = true;
                 RenderActiveTabPreservingScroll();
                 return;
@@ -2234,12 +3110,15 @@ public partial class MainWindow : Window
                 RenderActiveTabPreservingScroll();
                 return;
             }
-            _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig);
+            var splitConfig = WindowsSplitTunnelStore.Load();
+            _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig,
+                splitConfig.CustomDomains, splitConfig.CustomProcesses, splitConfig.Mode);
             var result = await _vpnConnectTask;
             if (operationVersion == _vpnOperationVersion && !_vpnCancelRequested)
             {
                 _vpnSnapshot = result;
                 _vpnServiceAvailable = true;
+                RefreshHomeConnectionMeasurement();
                 RenderActiveTabPreservingScroll();
             }
         }
@@ -2265,17 +3144,100 @@ public partial class MainWindow : Window
         }
 
         if (operationVersion == _vpnOperationVersion && _vpnSnapshot.State is ("starting" or "checking"))
-            _ = MonitorVpnConnectionAsync();
+            _ = MonitorVpnConnectionAsync(operationVersion);
+        else if (operationVersion == _vpnOperationVersion && IsVpnDisplayConnected() &&
+                 _selectedRoute == "auto" && string.IsNullOrWhiteSpace(_vpnSnapshot.ActiveRouteTag))
+            _ = PollAutoSelectActiveRouteAsync(operationVersion);
+    }
+
+    private async Task PollAutoSelectActiveRouteAsync(long operationVersion)
+    {
+        for (var attempt = 0; attempt < 15; attempt++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(400));
+            if (operationVersion != _vpnOperationVersion || _vpnCancelRequested ||
+                _quitInProgress || _exitAuthorized || !IsVpnDisplayConnected() ||
+                !string.IsNullOrWhiteSpace(_vpnSnapshot.ActiveRouteTag))
+                return;
+            await RefreshVpnStatusAsync();
+        }
+    }
+
+    internal async Task ApplySplitTunnelRulesAsync()
+    {
+        if (!IsVpnTunnelActive(_vpnSnapshot.State) ||
+            _vpnActionInProgress || _vpnCancelInProgress || _routeProbeInProgress || _quitInProgress || _exitAuthorized)
+        {
+            RenderActiveTabPreservingScroll();
+            return;
+        }
+
+        if (_keysSnapshot?.ProfileJson is not { Length: > 0 } profile ||
+            _routes.FirstOrDefault(route => route.Id == _selectedRoute) is not { } route)
+        {
+            RenderActiveTabPreservingScroll();
+            return;
+        }
+
+        var operationVersion = ++_vpnOperationVersion;
+        _vpnCancelRequested = false;
+        _vpnActionInProgress = true;
+        _vpnSnapshot = new WindowsTunnelSnapshot("starting",
+            Copy("Обновляем правила раздельного туннелирования…", "Updating split tunneling rules…"), route.Tag);
+        RenderActiveTabPreservingScroll();
+
+        try
+        {
+            var awgConfig = GetAwgConfig(route);
+            if (IsAwgProtocol(route.Protocol) && awgConfig is null)
+                return;
+
+            var splitConfig = WindowsSplitTunnelStore.Load();
+            _vpnConnectTask = _tunnelClient.ConnectAsync(profile, route.Tag, awgConfig,
+                splitConfig.CustomDomains, splitConfig.CustomProcesses, splitConfig.Mode);
+            var result = await _vpnConnectTask;
+            if (operationVersion == _vpnOperationVersion && !_vpnCancelRequested)
+            {
+                _vpnSnapshot = result;
+                _vpnServiceAvailable = true;
+                RefreshHomeConnectionMeasurement();
+                RenderActiveTabPreservingScroll();
+            }
+        }
+        catch (Exception error) when (IsTunnelTransportError(error))
+        {
+            if (operationVersion == _vpnOperationVersion && !_vpnCancelRequested)
+            {
+                _vpnSnapshot = VpnServiceUnavailableSnapshot();
+                _vpnServiceAvailable = false;
+                RenderActiveTabPreservingScroll();
+            }
+        }
+        finally
+        {
+            if (operationVersion == _vpnOperationVersion)
+            {
+                _vpnActionInProgress = false;
+                _vpnConnectTask = null;
+            }
+            RenderActiveTabPreservingScroll();
+        }
+
+        if (operationVersion == _vpnOperationVersion && _vpnSnapshot.State is ("starting" or "checking"))
+            _ = MonitorVpnConnectionAsync(operationVersion);
+        else if (operationVersion == _vpnOperationVersion && IsVpnDisplayConnected() &&
+                 _selectedRoute == "auto" && string.IsNullOrWhiteSpace(_vpnSnapshot.ActiveRouteTag))
+            _ = PollAutoSelectActiveRouteAsync(operationVersion);
     }
 
     private async Task CancelVpnConnectionAsync()
     {
-        if (_vpnCancelInProgress || _vpnSnapshot.State is not ("starting" or "checking"))
+        if (_quitInProgress || _exitAuthorized || _vpnCancelInProgress || _vpnSnapshot.State is not ("starting" or "checking"))
             return;
 
         _vpnCancelRequested = true;
         _vpnCancelInProgress = true;
-        ++_vpnOperationVersion;
+        var operationVersion = ++_vpnOperationVersion;
         var pendingConnect = _vpnConnectTask;
         _vpnSnapshot = new WindowsTunnelSnapshot("stopping",
             Copy("Останавливаем подключение…", "Stopping the connection…"));
@@ -2295,32 +3257,40 @@ public partial class MainWindow : Window
                     // A failed connect still needs a final disconnect.
                 }
             }
-            _vpnSnapshot = await _tunnelClient.DisconnectAsync();
+            var stopped = await _tunnelClient.DisconnectAsync();
+            if (operationVersion != _vpnOperationVersion || _quitInProgress || _exitAuthorized) return;
+            _vpnSnapshot = stopped;
             _vpnServiceAvailable = true;
             UpdateMapLocationAfterVpnAction(wasConnected: false);
         }
         catch (Exception error) when (IsTunnelTransportError(error))
         {
+            if (operationVersion != _vpnOperationVersion || _quitInProgress || _exitAuthorized) return;
             _vpnSnapshot = VpnServiceUnavailableSnapshot();
             _vpnServiceAvailable = false;
         }
         finally
         {
-            _vpnCancelInProgress = false;
-            _vpnActionInProgress = false;
-            _vpnConnectTask = null;
-            RenderActiveTabPreservingScroll();
+            if (operationVersion == _vpnOperationVersion)
+            {
+                _vpnCancelInProgress = false;
+                _vpnActionInProgress = false;
+                _vpnConnectTask = null;
+                RenderActiveTabPreservingScroll();
+            }
         }
     }
 
-    private async Task MonitorVpnConnectionAsync()
+    private async Task MonitorVpnConnectionAsync(long operationVersion)
     {
-        for (var attempt = 0; attempt < 45; attempt++)
+        for (var attempt = 0; attempt < 200; attempt++)
         {
-            await Task.Delay(TimeSpan.FromSeconds(1));
-            if (_vpnSnapshot.State is not ("starting" or "checking"))
+            if (operationVersion != _vpnOperationVersion || _vpnSnapshot.State is not ("starting" or "checking"))
                 return;
             await RefreshVpnStatusAsync();
+            if (operationVersion != _vpnOperationVersion || _vpnSnapshot.State is not ("starting" or "checking"))
+                return;
+            await Task.Delay(TimeSpan.FromMilliseconds(attempt < 30 ? 60 : 200));
         }
     }
 
@@ -2337,9 +3307,9 @@ public partial class MainWindow : Window
         {
             RouteCountryProbeState.Queued => Copy("Диагностика в очереди…", "Route checks queued…"),
             RouteCountryProbeState.Running => HasProbeSpeedToken()
-                ? Copy("Пинг проверяется · скорость в очереди", "Checking latency · speed queued")
-                : Copy("Проверяем пинг · скорость после входа в Telegram",
-                    "Checking latency · sign in to measure speed"),
+                ? Copy("HTTPS-отклик проверяется · скорость в очереди", "Checking HTTPS response · speed queued")
+                : Copy("Проверяем HTTPS-отклик · скорость после входа в Telegram",
+                    "Checking HTTPS response · sign in to measure speed"),
             RouteCountryProbeState.Cancelled => Copy("Замеры остановлены · можно повторить",
                 "Measurements stopped · retry when ready"),
             RouteCountryProbeState.NeedsDisconnect => Copy("Отключите VPN для проверки маршрутов",
@@ -2354,37 +3324,55 @@ public partial class MainWindow : Window
 
     private void QueueRouteCountryProbe(string countryCode, string[] routeTags)
     {
+        Services.UiDiagnostics.Log($"queue probe: {countryCode} tags={routeTags.Length}");
         if (routeTags.Length == 0)
             return;
 
         if (_activeRouteProbeCountry == countryCode)
         {
             if (!_routeProbeCancelRequested)
+            {
+                Services.UiDiagnostics.Log($"queue probe: {countryCode} skipped (already active)");
                 return;
+            }
         }
         else if (_pendingRouteProbeNodes.ContainsKey(countryCode))
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} skipped (already queued)");
             return;
         }
 
         if (_keysSnapshot?.ProfileJson is not { Length: > 0 } || _routes.Count == 0)
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} blocked (no profile/routes)");
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Failed;
+            MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
             RenderActiveTabPreservingScroll();
             return;
         }
         if (!_vpnServiceAvailable)
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} blocked (service unavailable)");
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.ServiceUnavailable;
+            MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
+            PushRouteProbeHint(RouteCountryProbeState.ServiceUnavailable);
             RenderActiveTabPreservingScroll();
             return;
         }
         if (_vpnActionInProgress || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
+            Services.UiDiagnostics.Log($"queue probe: {countryCode} blocked (tunnel={_vpnSnapshot.State} actionInProgress={_vpnActionInProgress})");
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.NeedsDisconnect;
+            MarkRouteProbeFailure(routeTags, RouteCountryProbeStatus(countryCode));
+            PushRouteProbeHint(RouteCountryProbeState.NeedsDisconnect);
             RenderActiveTabPreservingScroll();
             return;
         }
+
+        if (_activeRouteProbeCountry == RouteOverviewProbe &&
+            routeTags.All(tag => _activeRouteProbeTags.Contains(tag) ||
+                _routeProbeResults.GetValueOrDefault(tag)?.Stage == "complete"))
+            return;
 
         var availableTags = _routes.Select(route => route.Tag).ToHashSet(StringComparer.Ordinal);
         var request = new RouteCountryProbeRequest(countryCode,
@@ -2399,12 +3387,32 @@ public partial class MainWindow : Window
         foreach (var routeTag in request.RouteTags)
             freshResults.Remove(routeTag);
         _routeProbeResults = freshResults;
+        _routeGlobe?.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
         var node = _pendingRouteProbeQueue.AddLast(request);
         _pendingRouteProbeNodes[countryCode] = node;
+        Services.UiDiagnostics.Log($"queue probe: {countryCode} queued (queue={_pendingRouteProbeQueue.Count})");
         _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Queued;
         RenderActiveTabPreservingScroll();
         StartNextCountryProbe();
     }
+
+    /// <summary>Surfaces the truthful reason why route measurements are not running.</summary>
+    private void PushRouteProbeHint(RouteCountryProbeState state)
+    {
+        var text = state switch
+        {
+            RouteCountryProbeState.NeedsDisconnect => Copy(
+                "подключён vpn — отключи его, чтобы замерить маршруты",
+                "vpn is connected — disconnect it to measure routes"),
+            RouteCountryProbeState.ServiceUnavailable => Copy(
+                "служба vpn недоступна — установи её в настройках",
+                "vpn service is unavailable — install it in settings"),
+            _ => null,
+        };
+        _routeGlobe?.PushProbeHint(text);
+    }
+
+    private void ClearRouteProbeHint() => _routeGlobe?.PushProbeHint(null);
 
     private void CollapseRouteCountryProbe(string countryCode)
     {
@@ -2434,14 +3442,42 @@ public partial class MainWindow : Window
 
     private void SuspendRouteCountryProbes()
     {
+        _initialNetherlandsRouteProbeStarted = false;
         _routeCountryProbeGeneration++;
         _pendingRouteProbeQueue.Clear();
         _pendingRouteProbeNodes.Clear();
-        _expandedRouteCountries.Clear();
         _routeCountryProbeStates.Clear();
-        if (_activeRouteProbeCountry is not null && _routeProbeInProgress &&
-            !_routeProbeCancelRequested)
-            _ = CancelRouteProbeAsync();
+        if (_routeProbeInProgress && !_routeProbeCancelRequested)
+            _ = CancelRouteProbeAsync(renderProgress: false);
+    }
+
+    private void StartRouteOverviewProbe()
+    {
+        if (_qaFixture || _activeTab != MainTab.Routes || _routeProbeInProgress || _vpnActionInProgress ||
+            _activeRouteProbeCountry is not null || _keysSnapshot?.ProfileJson is not { Length: > 0 })
+            return;
+
+        if (!_vpnServiceAvailable || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
+        {
+            PushRouteProbeHint(!_vpnServiceAvailable
+                ? RouteCountryProbeState.ServiceUnavailable : RouteCountryProbeState.NeedsDisconnect);
+            return;
+        }
+
+        var tags = _routes.Where(route => route.CountryCode is not ("AUTO" or "EU" or "RU-DE") &&
+                route.Tag != DeyttConnect.Protocol.CdnLteProfile.RouteTag &&
+                _routeProbeResults.GetValueOrDefault(route.Tag)?.Stage != "complete")
+            .OrderBy(route => route.CountryCode switch { "NL" => 0, "DE" => 1, "RU" => 2, "FI" => 3, "IT" => 4, _ => 5 })
+            .Select(route => route.Tag).Distinct(StringComparer.Ordinal)
+            .Take(WindowsPipeProtocol.MaximumProbeRouteCount).ToArray();
+        if (tags.Length == 0)
+        {
+            StartNextCountryProbe();
+            return;
+        }
+
+        _activeRouteProbeCountry = RouteOverviewProbe;
+        _ = ProbeRoutesAsync(tags, RouteOverviewProbe);
     }
 
     private void StartNextCountryProbe()
@@ -2449,17 +3485,24 @@ public partial class MainWindow : Window
         if (_activeTab != MainTab.Routes || _routeProbeInProgress || _vpnActionInProgress ||
             _activeRouteProbeCountry is not null ||
             _pendingRouteProbeQueue.Count == 0)
+        {
+            Services.UiDiagnostics.Log($"start probe: idle (tab={_activeTab} running={_routeProbeInProgress} action={_vpnActionInProgress} active={_activeRouteProbeCountry ?? "-"} queue={_pendingRouteProbeQueue.Count})");
             return;
+        }
 
         if (!_vpnServiceAvailable || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
         {
             var blockedState = !_vpnServiceAvailable
                 ? RouteCountryProbeState.ServiceUnavailable
                 : RouteCountryProbeState.NeedsDisconnect;
-            foreach (var request in _pendingRouteProbeQueue)
+            var blockedRequests = _pendingRouteProbeQueue.ToArray();
+            foreach (var request in blockedRequests)
                 _routeCountryProbeStates[request.CountryCode] = blockedState;
+            PushRouteProbeHint(blockedState);
             _pendingRouteProbeQueue.Clear();
             _pendingRouteProbeNodes.Clear();
+            MarkRouteProbeFailure(blockedRequests.SelectMany(request => request.RouteTags),
+                RouteCountryProbeStatus(blockedRequests[0].CountryCode));
             RenderActiveTabPreservingScroll();
             return;
         }
@@ -2476,6 +3519,7 @@ public partial class MainWindow : Window
 
             _activeRouteProbeCountry = node.Value.CountryCode;
             _routeCountryProbeStates[node.Value.CountryCode] = RouteCountryProbeState.Running;
+            Services.UiDiagnostics.Log($"start probe: {node.Value.CountryCode} tags={node.Value.RouteTags.Length}");
             _ = ProbeRoutesAsync(node.Value.RouteTags, node.Value.CountryCode);
             return;
         }
@@ -2487,7 +3531,12 @@ public partial class MainWindow : Window
         var countryProbeGeneration = _routeCountryProbeGeneration;
         if (_routeProbeInProgress || _vpnActionInProgress ||
             WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State))
+        {
+            Services.UiDiagnostics.Log($"probe async: skipped (running={_routeProbeInProgress} action={_vpnActionInProgress} tunnel={_vpnSnapshot.State})");
+            if (WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) && !_routeProbeInProgress && !_vpnActionInProgress)
+                PushRouteProbeHint(RouteCountryProbeState.NeedsDisconnect);
             return;
+        }
         if (_keysSnapshot?.ProfileJson is not { Length: > 0 } profile || _routes.Count == 0)
             return;
         if (!_vpnServiceAvailable)
@@ -2495,21 +3544,30 @@ public partial class MainWindow : Window
             if (countryCode is null)
                 ShowTab(MainTab.Settings);
             else
+            {
                 _routeCountryProbeStates[countryCode] = RouteCountryProbeState.ServiceUnavailable;
+                MarkRouteProbeFailure(requestedRouteTags ?? [], RouteCountryProbeStatus(countryCode));
+            }
             return;
         }
 
         _routeProbeInProgress = true;
         _routeProbeCancelRequested = false;
-        RenderProbeProgressPreservingFocus();
+        ClearRouteProbeHint();
         string[]? activeRouteTags = null;
         var previousRouteResults = new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal);
         try
         {
+            RenderProbeProgressPreservingFocus();
             var availableTags = _routes.Select(route => route.Tag).ToHashSet(StringComparer.Ordinal);
+            // The CDN LTE route is a local socks placeholder that only works through the
+            // tunnel's own Xray port; including it in a probe batch makes the service
+            // reject the whole request, so it never takes part in measurements.
+            var probeableTags = new HashSet<string>(availableTags, StringComparer.Ordinal);
+            probeableTags.Remove(DeyttConnect.Protocol.CdnLteProfile.RouteTag);
             var routeTags = requestedRouteTags is { Count: > 0 }
-                ? requestedRouteTags.Where(availableTags.Contains).Distinct(StringComparer.Ordinal).ToArray()
-                : availableTags.ToArray();
+                ? requestedRouteTags.Where(probeableTags.Contains).Distinct(StringComparer.Ordinal).ToArray()
+                : probeableTags.ToArray();
             if (routeTags.Length == 0)
                 return;
             activeRouteTags = routeTags;
@@ -2550,19 +3608,31 @@ public partial class MainWindow : Window
                 RestoreProbeResults(routeTags, previousRouteResults);
                 return;
             }
+            Services.UiDiagnostics.Log($"probe async: service returned state={result.State} detail={(result.Detail ?? "-")}");
             if (result.State == "probe_complete" && result.ProbeResults is { } probes)
             {
                 var updatedResults = requestedRouteTags is null
                     ? new Dictionary<string, WindowsRouteProbeResult>(StringComparer.Ordinal)
                     : new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal);
                 foreach (var probe in probes)
-                    updatedResults[probe.RouteTag] = probe;
+                {
+                    var existing = previousRouteResults.GetValueOrDefault(probe.RouteTag);
+                    var latency = PositiveLatency(probe.LatencyMilliseconds) ?? PositiveLatency(existing?.LatencyMilliseconds);
+                    var speed = probe.BytesPerSecond ?? existing?.BytesPerSecond;
+                    updatedResults[probe.RouteTag] = probe with
+                    {
+                        LatencyMilliseconds = latency,
+                        BytesPerSecond = speed,
+                        Error = latency is not null ? null : probe.Error
+                    };
+                }
                 foreach (var routeTag in routeTags)
                     if (!updatedResults.ContainsKey(routeTag))
                         updatedResults[routeTag] = new WindowsRouteProbeResult(routeTag, null, null,
                             Copy("Служба не вернула результат. Повторите замер.",
                                 "The service returned no result. Retry the measurement."), "error");
                 _routeProbeResults = updatedResults;
+                _routeGlobe?.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
             }
             else if (result.State == "probe_cancelled")
             {
@@ -2609,16 +3679,17 @@ public partial class MainWindow : Window
             }
             RenderProbeProgressPreservingFocus();
             StartNextCountryProbe();
+            RefreshTrayMenu();
         }
     }
 
-    private async Task CancelRouteProbeAsync()
+    private async Task CancelRouteProbeAsync(bool renderProgress = true)
     {
         if (!_routeProbeInProgress || _routeProbeCancelRequested)
             return;
         if (_activeRouteProbeCountry is { } countryCode)
             _routeCountryProbeStates[countryCode] = RouteCountryProbeState.Cancelled;
-        MarkProbeCancellationRequested();
+        MarkProbeCancellationRequested(renderProgress);
         try
         {
             await _tunnelClient.CancelProbeAsync();
@@ -2628,12 +3699,13 @@ public partial class MainWindow : Window
         }
     }
 
-    internal void MarkProbeCancellationRequested()
+    internal void MarkProbeCancellationRequested(bool renderProgress = true)
     {
         if (!_routeProbeInProgress || _routeProbeCancelRequested)
             return;
         _routeProbeCancelRequested = true;
-        RenderProbeProgressPreservingFocus();
+        if (renderProgress)
+            RenderProbeProgressPreservingFocus();
     }
 
     internal bool ApplyProbeProgress(IReadOnlyList<WindowsRouteProbeResult> progress,
@@ -2641,20 +3713,35 @@ public partial class MainWindow : Window
     {
         var updated = new Dictionary<string, WindowsRouteProbeResult>(_routeProbeResults, StringComparer.Ordinal);
         var changed = false;
-        foreach (var item in progress)
+        foreach (var sample in progress)
         {
+            var item = sample with { LatencyMilliseconds = PositiveLatency(sample.LatencyMilliseconds) };
             if (!requestedRouteTags.Contains(item.RouteTag, StringComparer.Ordinal))
+            {
+                Services.UiDiagnostics.Log($"apply probe: dropped {item.RouteTag} (not in requested set)");
                 continue;
-            if (updated.TryGetValue(item.RouteTag, out var previous) && previous == item)
+            }
+            updated.TryGetValue(item.RouteTag, out var previous);
+            item = item with { LatencyMilliseconds = item.LatencyMilliseconds ?? previous?.LatencyMilliseconds, BytesPerSecond = item.BytesPerSecond ?? previous?.BytesPerSecond };
+            if (previous == item)
                 continue;
             updated[item.RouteTag] = item;
             changed = true;
+            _routeGlobe?.PushRouteProbeProgress(item);
         }
 
         if (!changed)
             return false;
         _routeProbeResults = updated;
-        RenderProbeProgressPreservingFocus();
+        if (_activeTab == MainTab.Routes && _routeOptionRefreshActions.Count > 0)
+        {
+            foreach (var action in _routeOptionRefreshActions.Values.ToArray())
+                action();
+        }
+        else
+        {
+            RenderProbeProgressPreservingFocus();
+        }
         return true;
     }
 
@@ -2680,10 +3767,21 @@ public partial class MainWindow : Window
         foreach (var routeTag in routeTags)
             updated[routeTag] = new WindowsRouteProbeResult(routeTag, null, null, message, "error");
         _routeProbeResults = updated;
+        _routeGlobe?.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
     }
 
     private void RenderProbeProgressPreservingFocus()
     {
+        if (_activeTab == MainTab.Home &&
+            _routeGlobe is { } map &&
+            _pageViews.TryGetValue(MainTab.Home, out var homePage) &&
+            ReferenceEquals(map.Parent, homePage.View) &&
+            homePage.View.Children.Contains(map) &&
+            PageHost.Children.Contains(homePage.View))
+        {
+            UpdateShellStatus();
+            return;
+        }
         var focused = FocusManager?.GetFocusedElement() as Control;
         var focusableButtons = PageHost.GetVisualDescendants().OfType<Button>()
             .Where(button => button.Focusable && button.IsEffectivelyVisible).ToArray();
@@ -2699,12 +3797,12 @@ public partial class MainWindow : Window
         if (focusIndex < 0)
             return;
         var renderedTab = _activeTab;
-        var renderedPage = PageHost.Children.OfType<Control>().SingleOrDefault();
+        var renderedPage = PageHost.Children.OfType<Control>().FirstOrDefault(page => page.IsVisible);
 
         Dispatcher.UIThread.Post(() =>
         {
-            if (_activeTab != renderedTab || renderedPage is null || PageHost.Children.Count != 1 ||
-                !ReferenceEquals(PageHost.Children[0], renderedPage))
+            if (_activeTab != renderedTab || renderedPage is null || !renderedPage.IsVisible ||
+                !PageHost.Children.Contains(renderedPage))
                 return;
 
             var buttons = PageHost.GetVisualDescendants().OfType<Button>()
@@ -2727,22 +3825,26 @@ public partial class MainWindow : Window
         }, DispatcherPriority.Input);
     }
 
-    private async Task RefreshVpnStatusAsync()
+    internal async Task RefreshVpnStatusAsync(Func<Task<WindowsTunnelSnapshot>>? statusReader = null)
     {
-        if (!OperatingSystem.IsWindows() || _vpnActionInProgress || _vpnCancelInProgress || _vpnStatusRefreshRunning)
+        if (_vpnActionInProgress || _vpnCancelInProgress || _vpnStatusRefreshRunning || _quitInProgress || _exitAuthorized)
             return;
 
         _vpnStatusRefreshRunning = true;
+        var statusOperationVersion = _vpnOperationVersion;
         try
         {
             var previousSnapshot = _vpnSnapshot;
             var previousDisplayConnected = IsVpnDisplayConnected();
             var wasAvailable = _vpnServiceAvailable;
-            var currentSnapshot = await _tunnelClient.GetStatusAsync();
-            if (_vpnActionInProgress || _vpnCancelInProgress)
+            var currentSnapshot = await (statusReader?.Invoke() ?? _tunnelClient.GetStatusAsync());
+            if (_vpnActionInProgress || _vpnCancelInProgress || _quitInProgress || _exitAuthorized || statusOperationVersion != _vpnOperationVersion)
                 return;
             _vpnSnapshot = currentSnapshot;
             _vpnServiceAvailable = true;
+            if (!WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) && !_routeProbeInProgress)
+                ClearRouteProbeHint();
+            RefreshHomeConnectionMeasurement();
             UpdateMapLocationForVpnState(previousSnapshot.State, _vpnSnapshot.State);
             if (previousSnapshot != _vpnSnapshot || wasAvailable != _vpnServiceAvailable ||
                 previousDisplayConnected != IsVpnDisplayConnected())
@@ -2750,7 +3852,7 @@ public partial class MainWindow : Window
         }
         catch (Exception error) when (IsTunnelTransportError(error))
         {
-            if (_vpnActionInProgress || _vpnCancelInProgress)
+            if (_vpnActionInProgress || _vpnCancelInProgress || _quitInProgress || _exitAuthorized || statusOperationVersion != _vpnOperationVersion)
                 return;
             var wasAvailable = _vpnServiceAvailable;
             var previousSnapshot = _vpnSnapshot;
@@ -2766,8 +3868,8 @@ public partial class MainWindow : Window
     }
 
     private WindowsTunnelSnapshot VpnServiceUnavailableSnapshot() => new("error",
-        Copy("Не удалось узнать состояние VPN: служба не отвечает. Проверьте её в настройках и состояние VPN в Windows.",
-            "VPN status is unknown: the service is not responding. Check it in settings and verify VPN status in Windows."));
+        Copy("служба vpn не отвечает. проверьте её в настройках приложения.",
+            "the vpn service is not responding. check it in the app settings."));
 
     private void UpdateMapLocationForVpnState(string previousState, string currentState)
     {
@@ -2888,14 +3990,20 @@ public partial class MainWindow : Window
 
     private async Task InstallVpnServiceAsync()
     {
-        if (!OperatingSystem.IsWindows())
+        if (_vpnActionInProgress)
+            return;
+        if (OperatingSystem.IsLinux())
         {
-            ShowInfoDialog(Copy("Только для Windows", "Windows only"),
-                Copy("Установка VPN-службы доступна после запуска полного Windows-пакета.",
-                    "VPN service setup is available in the full Windows package."));
+            await RefreshVpnStatusAsync();
+            var message = _vpnServiceAvailable
+                ? Copy("служба отвечает. можно подключиться с главного экрана.",
+                    "the service is running. you can connect from the home screen.")
+                : Copy("проверьте службу командой sudo systemctl enable --now deytt-connect.socket. если доступ ещё не выдан, администратор может добавить ваш аккаунт в группу deytt-connect. затем войдите в систему заново.",
+                    "check the service with sudo systemctl enable --now deytt-connect.socket. if you do not have access yet, an administrator can add your account to the deytt-connect group. then sign out and back in.");
+            ShowInfoDialog(Copy("служба vpn", "vpn service"), message);
             return;
         }
-        if (_vpnActionInProgress)
+        if (!OperatingSystem.IsWindows())
             return;
 
         var installerPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Install-VpnService.ps1");
@@ -2922,10 +4030,22 @@ public partial class MainWindow : Window
             var start = new ProcessStartInfo
             {
                 FileName = powerShellPath,
-                Arguments = $"-NoProfile -NonInteractive -ExecutionPolicy Bypass -File \"{installerPath}\" -AllowedUserSid \"{sid}\" -BundleRoot \"{bundleRoot}\"",
                 UseShellExecute = true,
                 Verb = "runas",
                 WindowStyle = ProcessWindowStyle.Hidden,
+                ArgumentList =
+                {
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    installerPath,
+                    "-AllowedUserSid",
+                    sid,
+                    "-BundleRoot",
+                    bundleRoot,
+                },
             };
             using var installer = Process.Start(start)
                                   ?? throw new InvalidOperationException("The VPN installer did not start.");
@@ -2967,10 +4087,20 @@ public partial class MainWindow : Window
             OperationCanceledException or System.ComponentModel.Win32Exception or
             System.Text.Json.JsonException;
 
-    private void RenderActiveTabPreservingScroll()
+    private void RenderActiveTabPreservingScroll(bool reuseCachedPage = false)
     {
+        if (_activeTab == MainTab.Home && _activeShellContentDialog is not null)
+        {
+            UpdateHomeGlobePresentation();
+            return;
+        }
+        if (!UseNativeDesktopShell && _activeTab == MainTab.Home && _routeGlobe?.Parent is not null)
+        {
+            UpdateShellStatus();
+            return;
+        }
         var offset = PageScroll.Offset;
-        ShowTab(_activeTab);
+        ShowTab(_activeTab, reuseCachedPage);
         PageScroll.Offset = offset;
     }
 
@@ -2978,9 +4108,6 @@ public partial class MainWindow : Window
 
     private async Task RestoreSessionAsync(CancellationToken cancellationToken = default)
     {
-        if (!OperatingSystem.IsWindows())
-            return;
-
         string? token;
         try
         {
@@ -3015,6 +4142,7 @@ public partial class MainWindow : Window
             _account = null;
             _keysSnapshot = null;
             _routes = [];
+            ClearAwgTraffic("error");
             _profileLoadIssue = Copy("Не удалось загрузить данные аккаунта.", "Could not load account data.");
         }
 
@@ -3031,21 +4159,40 @@ public partial class MainWindow : Window
         TelegramAccount? verifiedAccount = null,
         IProgress<string>? progress = null)
     {
+        Services.UiDiagnostics.Log("RefreshAccountDataAsync started");
+        if (_sessionToken == token)
+        {
+            ClearAwgTraffic("loading");
+            if (IsVisible)
+                RenderActiveTabPreservingScroll();
+        }
         var accountTask = verifiedAccount is null
             ? _telegramApi.GetAccountAsync(token, cancellationToken)
             : Task.FromResult(verifiedAccount);
         var subscriptionTask = _telegramApi.GetSubscriptionAsync(token, cancellationToken, progress);
+        var awgTrafficTask = LoadAwgTrafficForRefreshAsync(token, cancellationToken);
+        var proxyTrafficTask = LoadProxyTrafficForRefreshAsync(token, cancellationToken);
         var avatarTask = RefreshTelegramAvatarAsync(token, cancellationToken);
-        var sessionsTask = LoadSessionsForRefreshAsync(token, cancellationToken);
         if (verifiedAccount is not null)
+        {
             _account = verifiedAccount;
+            if (_sessionToken == token && IsVisible)
+                RenderActiveTabPreservingScroll();
+        }
 
         try
         {
-            await Task.WhenAll(accountTask, subscriptionTask, avatarTask, sessionsTask);
+            await Task.WhenAll(accountTask, subscriptionTask, awgTrafficTask, proxyTrafficTask, avatarTask);
+            if (_sessionToken != token)
+                return false;
             _account = await accountTask;
             _keysSnapshot = await subscriptionTask;
-            _sessions = await sessionsTask ?? [];
+            var awgTraffic = await awgTrafficTask;
+            _awgTraffic = awgTraffic.Traffic;
+            _awgTrafficState = awgTraffic.State;
+            var proxyTraffic = await proxyTrafficTask;
+            _proxyTraffic = proxyTraffic.Traffic;
+            _proxyTrafficState = proxyTraffic.State;
             _routes = _keysSnapshot.Routes;
             _profileLoadIssue = _keysSnapshot.HappAvailable
                 ? null
@@ -3055,18 +4202,35 @@ public partial class MainWindow : Window
                 _selectedRoute = "auto";
                 SavePreferences();
             }
+            if (_activeTab == MainTab.Routes)
+                Dispatcher.UIThread.Post(StartRouteOverviewProbe, DispatcherPriority.Background);
+            Services.UiDiagnostics.Log($"RefreshAccountDataAsync success (happAvailable={_keysSnapshot.HappAvailable}, routes={_routes.Count})");
             return _keysSnapshot.HappAvailable;
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
+            if (_sessionToken != token)
+                return false;
             throw;
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
+            if (_sessionToken != token)
+                return false;
+            if (_sessionToken == token)
+                ClearAwgTraffic("error");
             throw;
         }
         catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
+            if (_sessionToken != token)
+                return false;
+            if (_sessionToken == token && awgTrafficTask.IsCompletedSuccessfully)
+            {
+                var awgTraffic = awgTrafficTask.Result;
+                _awgTraffic = awgTraffic.Traffic;
+                _awgTrafficState = awgTraffic.State;
+            }
             if (accountTask.IsCompletedSuccessfully)
                 _account = accountTask.Result;
             _keysSnapshot = null;
@@ -3081,15 +4245,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<IReadOnlyList<TelegramAppSession>?> LoadSessionsForRefreshAsync(
+    private async Task<(string State, TelegramAwgTraffic? Traffic)> LoadProxyTrafficForRefreshAsync(
         string token,
         CancellationToken cancellationToken)
     {
         try
         {
-            var sessions = await _telegramApi.GetSessionsAsync(token, cancellationToken);
-            _sessionLoadIssue = null;
-            return sessions;
+            var traffic = await _telegramApi.GetProxyTrafficAsync(token, cancellationToken);
+            return (traffic is null ? "absent" : "ready", traffic);
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
@@ -3097,48 +4260,129 @@ public partial class MainWindow : Window
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            throw;
+            throw new OperationCanceledException(cancellationToken);
         }
         catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
-            _sessionLoadIssue = Copy("Проверь интернет и повтори обновление.",
-                "Check your connection and refresh again.");
-            return null;
+            return ("error", null);
+        }
+    }
+
+    private async Task<(string State, TelegramAwgTraffic? Traffic)> LoadAwgTrafficForRefreshAsync(
+        string token,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var traffic = await _telegramApi.GetAwgTrafficAsync(token, cancellationToken);
+            return (traffic is null ? "absent" : "ready", traffic);
+        }
+        catch (TelegramApiException error) when (error.IsUnauthorized)
+        {
+            throw;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(cancellationToken);
+        }
+        catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
+        {
+            return ("error", null);
         }
     }
 
     private async Task RefreshSignedInAccountAsync()
     {
+        Services.UiDiagnostics.Log($"subscription refresh requested (inProgress={_profileRefreshInProgress})");
+        if (_profileRefreshInProgress)
+        {
+            if (_activeRefreshTask is not null)
+            {
+                try
+                {
+                    var existingSuccess = await _activeRefreshTask;
+                    var successMsg = _routes.Count > 0
+                        ? Copy($"✓ Маршруты обновлены ({_routes.Count})", $"✓ Routes updated ({_routes.Count})")
+                        : Copy("✓ Маршруты обновлены", "✓ Routes updated");
+                    _routeGlobe?.SetSubscriptionRefreshState(existingSuccess ? "success" : "error", existingSuccess ? successMsg : _profileLoadIssue);
+                }
+                catch
+                {
+                    _routeGlobe?.SetSubscriptionRefreshState("error", Copy("Не удалось обновить профиль", "Could not refresh profile"));
+                }
+            }
+            return;
+        }
+
         var token = _sessionToken;
         if (token is null)
         {
+            Services.UiDiagnostics.Log("subscription refresh blocked (no session)");
+            _routeGlobe?.SetSubscriptionRefreshState("error", Copy("Войдите в аккаунт", "Sign in first"));
             ShowSignInDialog();
             return;
         }
 
         _profileRefreshInProgress = true;
+        _routeGlobe?.SetSubscriptionRefreshState("refreshing", Copy("Проверяем сессию и ключи…", "Checking session and keys…"));
         if (IsVisible)
             RenderActiveTabPreservingScroll();
+
+        bool success = false;
+        string? failureReason = null;
         try
         {
-            await RefreshAccountDataAsync(token);
+            var progress = new Progress<string>(stage =>
+            {
+                var msg = stage switch
+                {
+                    "metadata" => Copy("Проверяем сессию и ключи…", "Checking session and keys…"),
+                    "profile" => Copy("Загружаем профиль маршрутов…", "Loading routes profile…"),
+                    "optional" => Copy("Обновляем AmneziaWG…", "Updating AmneziaWG…"),
+                    _ => Copy("Обновляем подписку и маршруты…", "Refreshing subscription and routes…")
+                };
+                _routeGlobe?.SetSubscriptionRefreshState("refreshing", msg);
+            });
+            var task = RefreshAccountDataAsync(token, progress: progress);
+            _activeRefreshTask = task;
+            success = await task;
+            if (!success)
+            {
+                failureReason = _profileLoadIssue ?? Copy("Активная подписка не найдена", "No active subscription found");
+            }
         }
         catch (TelegramApiException error) when (error.IsUnauthorized)
         {
             ClearLocalSession();
+            failureReason = Copy("Сеанс истёк", "Session expired");
             ShowInfoDialog(Copy("Сеанс истёк", "Session expired"),
                 Copy("Войди через Telegram ещё раз.", "Sign in with Telegram again."));
         }
         catch (Exception error) when (error is TelegramApiException or HttpRequestException or OperationCanceledException or IOException)
         {
+            failureReason = Copy("Не удалось обновить профиль", "Could not refresh profile");
             ShowInfoDialog(Copy("Не удалось обновить профиль", "Could not refresh profile"),
                 Copy("Проверь интернет и повтори попытку.", "Check your connection and try again."));
         }
         finally
         {
             _profileRefreshInProgress = false;
+            _activeRefreshTask = null;
+            UpdateHomeGlobePresentation();
             if (IsVisible)
                 RenderActiveTabPreservingScroll();
+
+            if (success)
+            {
+                var successMsg = _routes.Count > 0
+                    ? Copy($"✓ Маршруты обновлены ({_routes.Count})", $"✓ Routes updated ({_routes.Count})")
+                    : Copy("✓ Маршруты обновлены", "✓ Routes updated");
+                _routeGlobe?.SetSubscriptionRefreshState("success", successMsg);
+            }
+            else
+            {
+                _routeGlobe?.SetSubscriptionRefreshState("error", failureReason);
+            }
         }
     }
 
@@ -3508,7 +4752,24 @@ public partial class MainWindow : Window
         }
     }
 
+    private bool _keyResetInFlight;
+
     private async Task ShowResetChoicesAsync()
+    {
+        if (_keyResetInFlight)
+            return;
+        _keyResetInFlight = true;
+        try
+        {
+            await RunResetChoicesAsync();
+        }
+        finally
+        {
+            _keyResetInFlight = false;
+        }
+    }
+
+    private async Task RunResetChoicesAsync()
     {
         var token = _sessionToken;
         if (token is null)
@@ -3721,75 +4982,9 @@ public partial class MainWindow : Window
         string? cancelLabel = null) =>
         ConfirmInShellAsync(title, message, confirmLabel, cancelLabel);
 
-    private async Task ManageSessionAsync(TelegramAppSession session)
-    {
-        var sessionToken = _sessionToken;
-        if (_sessionRevokesInFlight.Contains(session.Id))
-            return;
-        var detail = session.Current
-            ? Copy("Это текущий сеанс на этом устройстве.", "This is the current session on this device.")
-            : Copy("Этот сеанс можно завершить. VPN-ключи останутся действительными.",
-                "You can end this session. VPN keys will remain valid.");
-        detail += $"\n{Copy("Вход", "Signed in")}: {FormatLastSeen(session.CreatedAt)}";
-        if (!string.IsNullOrWhiteSpace(session.ExpiresAt))
-            detail += $"\n{Copy("Действует до", "Valid until")}: {FormatLastSeen(session.ExpiresAt)}";
-
-        if (session.Current)
-        {
-            ShowInfoDialog(session.Label, detail);
-            return;
-        }
-        if (string.IsNullOrWhiteSpace(session.Id))
-        {
-            ShowInfoDialog(session.Label, detail);
-            return;
-        }
-        var confirmation = detail + "\n" + Copy(
-            "На другом устройстве потребуется снова войти через Telegram. VPN-ключи останутся действительными.",
-            "The other device will need to sign in through Telegram again. VPN keys will remain valid.");
-        if (!await ConfirmDialogAsync(Copy("Завершить сеанс?", "End this session?"), confirmation,
-                Copy("Завершить", "End session")))
-            return;
-
-        var token = _sessionToken;
-        if (token is null)
-        {
-            ShowSignInDialog();
-            return;
-        }
-        if (token != sessionToken)
-            return;
-        if (!_sessionRevokesInFlight.Add(session.Id))
-            return;
-        try
-        {
-            await _telegramApi.RevokeSessionAsync(token, session.Id);
-            if (_sessionToken != token)
-                return;
-            await RefreshAccountDataAsync(token);
-            ShowTab(MainTab.Profile);
-        }
-        catch (TelegramApiException error) when (error.IsUnauthorized)
-        {
-            ClearLocalSession();
-            ShowTab(MainTab.Profile);
-            ShowInfoDialog(Copy("Сеанс истёк", "Session expired"),
-                Copy("Войди через Telegram ещё раз.", "Sign in with Telegram again."));
-        }
-        catch (Exception error) when (error is TelegramApiException or HttpRequestException or TaskCanceledException or IOException)
-        {
-            ShowInfoDialog(Copy("Не удалось завершить сеанс", "Could not end session"),
-                Copy("Сервер не подтвердил действие. Обнови список и повтори попытку.",
-                    "The server did not confirm the action. Refresh the list and try again."));
-        }
-        finally
-        {
-            _sessionRevokesInFlight.Remove(session.Id);
-        }
-    }
-
     private bool ClearLocalSession()
     {
+        ResetRouteViewState();
         var cleared = true;
         try
         {
@@ -3806,28 +5001,34 @@ public partial class MainWindow : Window
         _account = null;
         ClearTelegramAvatar();
         _keysSnapshot = null;
-        _sessions = [];
+        ClearAwgTraffic();
         _routes = [];
         _selectedRoute = "auto";
         _paymentFlow.Reset();
         _profileActionStatus = null;
         _profileActionRetry = null;
-        _sessionLoadIssue = null;
         if (cleared)
             _profileLoadIssue = null;
         SavePreferences();
         return cleared;
     }
 
+    private void ResetRouteViewState()
+    {
+        _expandedRouteCountries.Clear();
+        _routeExpansionInitialized = false;
+        _pageScrollOffsets.Remove(MainTab.Routes);
+    }
+
     private void SavePreferences()
     {
-        if (!OperatingSystem.IsWindows())
+        if (_qaFixture)
             return;
         try
         {
             WindowsPreferencesStore.Save(new WindowsPreferences(
                 _language, _selectedRoute, _probeMethod, _mapRegionEnabled, _reduceMotion,
-                _mapRegionConsentGranted, _mapRegionConsentAsked));
+                _mapRegionConsentGranted, _mapRegionConsentAsked, _themePreference, _windowChromePreference, _customMapPoint));
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
@@ -3840,19 +5041,11 @@ public partial class MainWindow : Window
     {
         if (!DateTimeOffset.TryParse(value, out var lastSeen))
             return Copy("дата неизвестна", "date unknown");
-        return lastSeen.ToLocalTime().ToString("dd MMM yyyy HH:mm");
+        return lastSeen.ToLocalTime().ToString("dd MMM yyyy HH:mm", UiCulture);
     }
 
     private async Task ShowTelegramPairingDialogAsync()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            ShowInfoDialog(Copy("Вход через Telegram", "Sign in with Telegram"),
-                Copy("Сохранение сеанса защищено средствами Windows. Завершите вход в версии для Windows.",
-                    "Session storage uses Windows protection. Complete sign-in in the Windows build."));
-            return;
-        }
-
         var title = DeyttTheme.TextBlock(Copy("Добавить приложение", "Add this app"), 22,
             DeyttTheme.Text, FontWeight.Bold);
         var detail = DeyttTheme.TextBlock(
@@ -3990,6 +5183,11 @@ public partial class MainWindow : Window
                     var pairing = await _telegramApi.VerifyPairingAsync(challenge, code, pairingCancellation.Token);
                     if (pairingCancellation.IsCancellationRequested || pairingDialog?.Completion.IsCompleted == true)
                         return;
+                    if (_sessionToken is not null && !string.Equals(_sessionToken, pairing.Token, StringComparison.Ordinal))
+                    {
+                        ResetRouteViewState();
+                        ClearAwgTraffic();
+                    }
                     WindowsSessionStore.Save(pairing.Token);
                     _sessionToken = pairing.Token;
                     _account = pairing.Account;
@@ -4159,43 +5357,13 @@ public partial class MainWindow : Window
         };
     }
 
-    private string SubscriptionSummary(TelegramSubscription? subscription)
-    {
-        if (subscription is null)
-            return Copy("Профиль загружен. Нет данных о подписке.", "Profile loaded. Subscription details are unavailable.");
-        if (!subscription.Active)
-            return Copy("Подписка не активна", "Subscription is inactive");
-
-        var details = new List<string>();
-        if (subscription.UnlimitedTime)
-            details.Add(Copy("Без ограничения по времени", "No time limit"));
-        else if (DateTimeOffset.TryParse(subscription.ExpiresAt, out var expiresAt))
-            details.Add($"{Copy("до", "until")} {expiresAt.ToLocalTime():d MMM yyyy}");
-        if (subscription.DeviceLimit is int deviceLimit)
-            details.Add($"{Copy("устройства", "devices")}: {subscription.DevicesUsed?.ToString() ?? "0"}/{deviceLimit}");
-        if (subscription.TrafficLimitBytes is > 0 and long trafficLimit)
-            details.Add($"{FormatBytes(subscription.TrafficUsedBytes ?? 0)} / {FormatBytes(trafficLimit)}");
-        if (subscription.TrafficLimitBytes is > 0)
-        {
-            if (subscription.TrafficTotalBytes is >= 0 and long trafficTotal)
-                details.Add($"{Copy("всего передано", "total transferred")}: {FormatBytes(trafficTotal)}");
-        }
-        else
-        {
-            var trafficUsed = Math.Max(0, subscription.TrafficUsedBytes ?? 0);
-            var trafficTotal = Math.Max(0, subscription.TrafficTotalBytes ?? 0);
-            var transferred = trafficTotal > 0 ? trafficTotal : trafficUsed;
-            if (transferred > 0)
-                details.Add($"{Copy("передано", "transferred")}: {FormatBytes(transferred)} · {Copy("без установленного лимита", "no quota limit")}");
-        }
-        return details.Count > 0 ? string.Join(" · ", details) : Copy("Подписка активна", "Subscription active");
-    }
-
-    private static string FormatBytes(long bytes)
+    private string FormatBytes(long bytes)
     {
         if (bytes < 1024)
-            return $"{bytes} b";
-        var units = new[] { "kb", "mb", "gb", "tb" };
+            return $"{bytes} {(_language == "ru" ? "б" : "B")}";
+        var units = _language == "ru"
+            ? new[] { "кб", "мб", "гб", "тб" }
+            : new[] { "KB", "MB", "GB", "TB" };
         double value = bytes;
         var unit = -1;
         do
@@ -4203,7 +5371,7 @@ public partial class MainWindow : Window
             value /= 1024;
             unit++;
         } while (value >= 1024 && unit < units.Length - 1);
-        return $"{value:0.#} {units[unit]}";
+        return $"{value.ToString("0.#", UiCulture)} {units[unit]}";
     }
 
     private async void SignOut()
@@ -4248,6 +5416,12 @@ public partial class MainWindow : Window
         }
     }
 
+    private CultureInfo UiCulture => CultureInfo.GetCultureInfo(_language == "ru" ? "ru-RU" : "en-US");
+
+    internal static string LocalizedSpeedUnit(string language) => language == "ru" ? "Мбит/с" : "Mbit/s";
+
     private string Copy(string russian, string english) => (_language == "ru" ? russian : english).ToLowerInvariant();
+
+    private string CopyExact(string russian, string english) => _language == "ru" ? russian : english;
 }
 

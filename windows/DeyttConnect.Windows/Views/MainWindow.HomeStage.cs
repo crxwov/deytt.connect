@@ -1,11 +1,15 @@
 using Avalonia;
+using System.Globalization;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
+using Avalonia.Input.Platform;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using DeyttConnect.Windows.Controls;
+using DeyttConnect.Protocol;
 using DeyttConnect.Windows.Services;
 using DeyttConnect.Windows.UI;
 
@@ -13,27 +17,289 @@ namespace DeyttConnect.Windows.Views;
 
 public partial class MainWindow
 {
-    private Grid? _homeOverviewGrid;
     private Control? _homeMapPanel;
+    private ContentControl? _linuxHomeActions;
+    private CancellationTokenSource? _homeProbeCancellation;
+    private WindowsRouteProbeResult? _homeLiveProbe;
+    private DateTimeOffset _homeProbeUpdatedAt;
+    private string? _homeMeasurementSession;
+    // Последние успешно измеренные значения по маршрутам. Перезаписываются только
+    // новым успешным замером и никогда не сбрасываются — прочерк вместо уже
+    // полученных данных запрещён.
+    private readonly Dictionary<string, WindowsRouteProbeResult> _homeLastMeasuredByRoute = new(StringComparer.Ordinal);
+    private bool _initialNetherlandsRouteProbeStarted;
+
+    internal static long? PositiveLatency(long? latency) => latency is > 0 ? latency : null;
+
+    internal static string? InitialProbeCountry(IReadOnlyList<WindowsRoute> routes) =>
+        routes.Any(route => route.CountryCode == "DE") ? "DE" :
+        routes.Any(route => route.CountryCode == "NL") ? "NL" :
+        routes.FirstOrDefault(route => route.CountryCode != "AUTO")?.CountryCode;
+    private TelegramAwgTraffic? _awgTraffic;
+    private string _awgTrafficState = "absent";
+    private TelegramAwgTraffic? _proxyTraffic;
+    private string _proxyTrafficState = "absent";
+
+    private void RefreshHomeConnectionMeasurement(bool forceRefresh = false)
+    {
+        if (_qaFixture) return;
+        var routeTag = _vpnSnapshot.RouteTag;
+        if (!IsVpnDisplayConnected() || string.IsNullOrEmpty(routeTag))
+        {
+            _homeProbeCancellation?.Cancel();
+            // Уже измеренные значения остаются на экране до перезамера: прочерк
+            // вместо них запрещён, поэтому _homeLiveProbe здесь не обнуляется.
+            _homeMeasurementSession = null;
+            return;
+        }
+        var session = routeTag + "|" + _vpnSnapshot.ConnectedAt?.ToString("O", CultureInfo.InvariantCulture);
+        if (_homeMeasurementSession != session)
+        {
+            _homeProbeCancellation?.Cancel();
+            // Прежние значения маршрута остаются видимыми, пока не завершится
+            // перезамер нового подключения.
+            _homeMeasurementSession = session;
+            _homeProbeUpdatedAt = default;
+        }
+        if (_homeLiveProbe?.RouteTag == routeTag && _homeProbeCancellation is null)
+        {
+            // Неудачный замер туннеля (null в снапшоте) не должен стирать уже
+            // показанное значение — прочерк вместо измеренного запрещён.
+            _homeLiveProbe = _homeLiveProbe with
+            {
+                LatencyMilliseconds = PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds)
+                    ?? PositiveLatency(_homeLiveProbe.LatencyMilliseconds)
+                    ?? _homeLastMeasuredByRoute.GetValueOrDefault(routeTag)?.LatencyMilliseconds,
+                Error = _homeLiveProbe.Stage == "latency" ? null : _vpnSnapshot.TunnelLatencyError is null
+                    ? _homeLiveProbe.Error
+                    : Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."),
+            };
+        }
+        else if (_homeLiveProbe is null)
+        {
+            _homeLiveProbe = new(routeTag, PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds), null,
+                _vpnSnapshot.TunnelLatencyError is null ? null : Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.",
+                    "Could not measure the HTTPS response through the selected route."), "complete");
+        }
+        if (_homeProbeCancellation is not null || !forceRefresh && _homeLiveProbe?.RouteTag == routeTag && DateTimeOffset.UtcNow - _homeProbeUpdatedAt < TimeSpan.FromSeconds(30)) return;
+        _ = MeasureHomeConnectionAsync(routeTag);
+    }
+
+    private async Task MeasureHomeConnectionAsync(string routeTag)
+    {
+        using var cancellation = new CancellationTokenSource();
+        _homeProbeCancellation = cancellation;
+        // Пока идёт перезамер, прежние значения маршрута остаются на экране;
+        // спиннер показывается только когда измерять ещё нечего.
+        var previous = _homeLiveProbe?.RouteTag == routeTag ? _homeLiveProbe : null;
+        var storedLatency = previous?.LatencyMilliseconds
+            ?? _homeLastMeasuredByRoute.GetValueOrDefault(routeTag)?.LatencyMilliseconds;
+        var previousSpeed = previous?.BytesPerSecond
+            ?? _homeLastMeasuredByRoute.GetValueOrDefault(routeTag)?.BytesPerSecond;
+        long? latency = storedLatency;
+        string? latencyError = null;
+        _homeLiveProbe = new(routeTag, latency, previousSpeed, null, "latency");
+        UpdateHomeGlobePresentation();
+        void Apply(WindowsRouteProbeResult sample) => Dispatcher.UIThread.Post(() =>
+        {
+            if (!ReferenceEquals(_homeProbeCancellation, cancellation) || cancellation.IsCancellationRequested || _vpnSnapshot.RouteTag != routeTag || !IsVpnDisplayConnected()) return;
+            latency = PositiveLatency(latency);
+            if (latency is not null) latencyError = null;
+            _homeLiveProbe = sample with
+            {
+                LatencyMilliseconds = latency,
+                Error = latencyError ?? sample.Error,
+                Stage = latency is null ? "latency" : sample.Stage,
+                BytesPerSecond = sample.BytesPerSecond ?? previousSpeed,
+            };
+            UpdateHomeGlobePresentation();
+        });
+        try
+        {
+            try
+            {
+                var measuredTunnel = await _tunnelClient.MeasureTunnelLatencyAsync(cancellation.Token);
+                if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
+                {
+                    _vpnSnapshot = _vpnSnapshot with
+                    {
+                        TunnelLatencyMilliseconds = PositiveLatency(measuredTunnel.TunnelLatencyMilliseconds),
+                        TunnelLatencyError = measuredTunnel.TunnelLatencyError,
+                        HealthCheckedAt = measuredTunnel.HealthCheckedAt,
+                    };
+                    latency = PositiveLatency(measuredTunnel.TunnelLatencyMilliseconds) ?? latency ?? storedLatency;
+                    latencyError = latency is not null ? null : (measuredTunnel.TunnelLatencyError is null ? null :
+                        Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."));
+                    if (latency is not null) StoreHomeMeasuredValues(routeTag, latency, null);
+                    UpdateHomeGlobePresentation();
+                }
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
+            {
+                latencyError = Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route.");
+            }
+            var result = await HomeConnectionProbe.MeasureSpeedAsync(
+                routeTag, _sessionToken, measureSpeed: true, Apply, cancellation.Token);
+            if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && IsVpnDisplayConnected())
+            {
+                latency = PositiveLatency(latency) ?? storedLatency;
+                if (latency is not null) latencyError = null;
+                _homeLiveProbe = result with
+                {
+                    LatencyMilliseconds = latency,
+                    Error = latencyError ?? result.Error,
+                    BytesPerSecond = result.BytesPerSecond ?? previousSpeed,
+                };
+                StoreHomeMeasuredValues(routeTag, latency, _homeLiveProbe.BytesPerSecond);
+            }
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { }
+        catch (Exception error) when (error is HttpRequestException or IOException or OperationCanceledException)
+        {
+            if (!cancellation.IsCancellationRequested && _vpnSnapshot.RouteTag == routeTag && _homeLiveProbe is { } sample)
+                _homeLiveProbe = sample with { Stage = "error", Error = Copy("Не удалось измерить подключение. Повторите замер.", "Could not measure the connection. Retry.") };
+        }
+        finally
+        {
+            _homeProbeUpdatedAt = DateTimeOffset.UtcNow;
+            if (ReferenceEquals(_homeProbeCancellation, cancellation)) _homeProbeCancellation = null;
+            UpdateHomeGlobePresentation();
+        }
+    }
+
+    private void StoreHomeMeasuredValues(string routeTag, long? latencyMilliseconds, long? bytesPerSecond)
+    {
+        var existing = _homeLastMeasuredByRoute.GetValueOrDefault(routeTag);
+        var latency = latencyMilliseconds is { } latencyValue && latencyValue > 0
+            ? latencyValue : existing?.LatencyMilliseconds;
+        var speed = bytesPerSecond is { } speedValue && speedValue > 0
+            ? speedValue : existing?.BytesPerSecond;
+        if (latency is null && speed is null) return;
+        _homeLastMeasuredByRoute[routeTag] = new WindowsRouteProbeResult(routeTag, latency, speed, null, "complete");
+    }
 
     private Control BuildHomePage()
     {
-        var overview = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,*"),
-            ColumnSpacing = 24,
-            RowDefinitions = new RowDefinitions("*"),
-        };
-        _homeOverviewGrid = overview;
-        _homeMapPanel = BuildMapPanel();
-        overview.Children.Add(_homeMapPanel);
+        if (OperatingSystem.IsWindows() && !_homeMapInitializationAllowed)
+            return BuildMapLoadingView();
 
-        var connectionPanel = BuildConnectionCard();
-        Grid.SetColumn(connectionPanel, 1);
-        overview.Children.Add(connectionPanel);
+        var map = _routeGlobe ??= CreateRouteGlobe();
+        ConfigureHomeMap(map);
+        if (map.Parent is Panel oldHost)
+            oldHost.Children.Remove(map);
+        _homeMapPanel = map;
         UpdateHomeColumns();
-        return overview;
+        if (!OperatingSystem.IsLinux())
+            return map;
+
+        _linuxHomeActions = new ContentControl
+        {
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Stretch,
+            HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            MaxWidth = 680,
+            Margin = new Thickness(24),
+        };
+        RefreshLinuxHomeActions(map);
+        Grid.SetRow(map, 1);
+        return new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,*"),
+            Children = { _linuxHomeActions, map },
+        };
     }
+
+    private void RefreshLinuxHomeActions(RouteGlobeWebView map)
+    {
+        if (_linuxHomeActions is null)
+            return;
+        _linuxHomeActions.IsVisible = UseNativeDesktopShell;
+        if (UseNativeDesktopShell)
+            _linuxHomeActions.Content = BuildConnectionCard();
+        map.MinHeight = UseNativeDesktopShell ? 380 : 0;
+    }
+
+    private void RefreshHomePageInPlace()
+    {
+        if (_routeGlobe is not { } map)
+            return;
+
+        ConfigureHomeMap(map);
+        _homeMapPanel = map;
+        if (OperatingSystem.IsLinux() && _linuxHomeActions is not null)
+        {
+            RefreshLinuxHomeActions(map);
+            return;
+        }
+
+        if (_pageViews.TryGetValue(MainTab.Home, out var homePage) &&
+            !homePage.View.Children.Contains(map))
+        {
+            if (map.Parent is Panel oldHost)
+                oldHost.Children.Remove(map);
+
+            foreach (var child in homePage.View.Children.OfType<Control>().ToArray())
+            {
+                if (!ReferenceEquals(child, map))
+                    homePage.View.Children.Remove(child);
+            }
+
+            homePage.View.Children.Add(map);
+        }
+
+        UpdateHomeColumns();
+    }
+
+    private void ConfigureHomeMap(RouteGlobeWebView map)
+    {
+        map.SelectedRoute = RouteGlobeWebView.RouteKeyFor(_selectedRoute, _routes);
+        AutomationProperties.SetName(map,
+            Copy("Интерактивный глобус маршрута deytt.", "Interactive deytt route globe"));
+        AutomationProperties.SetHelpText(map, BuildHomeRouteAccessibilityDescription());
+        map.Language = _language;
+        map.AvailableLocations = GetAvailableMapLocations();
+        map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
+        map.OriginLocation = _mapOriginLocation;
+        map.CustomMapPoint = _customMapPoint;
+        map.TrafficActive = IsVpnDisplayConnected();
+        map.ReducedMotion = _reduceMotion;
+        map.DarkTheme = DeyttTheme.IsDark;
+        map.LegacyTheme = _themePreference == "legacy";
+        // A normal IP lookup follows the machine's upstream VPN; it cannot prove
+        // which exit the DEYTT tunnel selected.
+        map.EgressCountryCode = null;
+        map.ActiveAutoRouteKey = IsVpnDisplayConnected()
+            ? ConfirmedHomeRouteKey()
+            : null;
+        var presentation = BuildHomePresentation();
+        map.HomePresentation = presentation;
+        AutomationProperties.SetHelpText(map, string.Join(" · ", new[]
+        {
+            presentation.Status,
+            presentation.Country,
+            presentation.City,
+            presentation.Protocol,
+        }.Where(value => !string.IsNullOrWhiteSpace(value))));
+    }
+
+    private CustomMapPoint? _customMapPoint;
+
+    private string[] GetAvailableMapLocations() => _routes
+        .SelectMany(route => route.CountryCode.ToUpperInvariant() switch
+        {
+            "NL" => new[] { "nl" },
+            "DE" => new[] { "de" },
+            "FI" => new[] { "fi" },
+            "RU" => new[] { "ru" },
+            "IT" => new[] { "it" },
+            "RU-DE" or "EU" => new[] { "de" },
+            _ => Array.Empty<string>(),
+        })
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
 
     private Control BuildMapPanel()
     {
@@ -50,7 +316,7 @@ public partial class MainWindow
                     "FI" => new[] { "fi" },
                     "RU" => new[] { "ru" },
                     "IT" => new[] { "it" },
-                    "RU-DE" => new[] { "ru", "de" },
+                    "RU-DE" or "EU" => new[] { "de" },
                     _ => Array.Empty<string>(),
                 })
                 .Distinct(StringComparer.Ordinal)
@@ -60,13 +326,14 @@ public partial class MainWindow
             map.AvailableLocations = availableLocations;
             map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
             map.OriginLocation = _mapOriginLocation;
+            map.CustomMapPoint = _customMapPoint;
             map.TrafficActive = IsVpnDisplayConnected();
             map.ReducedMotion = _reduceMotion;
             // A normal IP lookup follows the machine's upstream VPN (for example Happ).
             // It cannot prove which exit the DEYTT tunnel selected.
             map.EgressCountryCode = null;
-            map.ActiveAutoRouteKey = _selectedRoute == "auto" && IsVpnDisplayConnected()
-                ? RouteGlobeWebView.RouteKeyFor(_vpnSnapshot.RouteTag, _routes)
+            map.ActiveAutoRouteKey = IsVpnDisplayConnected()
+                ? ConfirmedHomeRouteKey()
                 : null;
 
             if (map.Parent is Panel oldHost)
@@ -78,121 +345,45 @@ public partial class MainWindow
             layout.Children.Add(BuildMapLoadingView());
         }
 
-        return new Border
-        {
-            Background = DeyttTheme.Brush(DeyttTheme.MapSurface),
-            BorderBrush = DeyttTheme.Brush(DeyttTheme.Line),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(24),
-            ClipToBounds = true,
-            Child = layout,
-        };
+        return layout;
     }
 
     private Control BuildMapLoadingView()
     {
-        var orbit = new Canvas { Width = 228, Height = 228 };
-        foreach (var (inset, opacity) in new[] { (0d, 0.18d), (28d, 0.24d), (57d, 0.3d) })
+        // Clean transparent panel during startup: typewriter splash (./c) covers the window
+        // until the globe map is fully ready, preventing any radar/text flicker.
+        return new Panel
         {
-            var ring = new Ellipse
-            {
-                Width = 228 - inset * 2,
-                Height = 228 - inset * 2,
-                Stroke = DeyttTheme.Brush(DeyttTheme.Sky),
-                StrokeThickness = 1,
-                Opacity = opacity,
-            };
-            Canvas.SetLeft(ring, inset);
-            Canvas.SetTop(ring, inset);
-            orbit.Children.Add(ring);
-        }
-
-        var route = new Line
-        {
-            StartPoint = new Point(46, 159),
-            EndPoint = new Point(173, 73),
-            Stroke = DeyttTheme.Brush(DeyttTheme.Sky),
-            StrokeThickness = 1.5,
-            Opacity = 0.46,
+            Background = Brushes.Transparent,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch,
         };
-        orbit.Children.Add(route);
-        foreach (var (x, y, color) in new[]
-                 {
-                     (46d, 159d, DeyttTheme.Sky),
-                     (173d, 73d, DeyttTheme.Mint),
-                 })
-        {
-            var halo = new Ellipse
-            {
-                Width = 18, Height = 18,
-                Fill = DeyttTheme.Brush(color),
-                Opacity = 0.15,
-            };
-            Canvas.SetLeft(halo, x - 9);
-            Canvas.SetTop(halo, y - 9);
-            orbit.Children.Add(halo);
-            var node = new Ellipse
-            {
-                Width = 6, Height = 6,
-                Fill = DeyttTheme.Brush(color),
-            };
-            Canvas.SetLeft(node, x - 3);
-            Canvas.SetTop(node, y - 3);
-            orbit.Children.Add(node);
-        }
-
-        var label = DeyttTheme.TextBlock(Copy("Готовим атлас маршрутов", "Preparing route atlas"),
-            12, DeyttTheme.Muted, FontWeight.Medium, wrap: false);
-        label.HorizontalAlignment = HorizontalAlignment.Center;
-        var placeholder = new StackPanel
-        {
-            Spacing = 12,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            Children = { orbit, label },
-        };
-        return placeholder;
     }
 
     private Control BuildHomeRouteDetails()
     {
         var selected = _routes.FirstOrDefault(route => route.Id == _selectedRoute);
         var displayedRoute = IsVpnDisplayConnected()
-            ? _routes.FirstOrDefault(route => route.Tag == _vpnSnapshot.RouteTag) ?? selected
+            ? _routes.FirstOrDefault(route => route.Tag == (_vpnSnapshot.ActiveRouteTag ?? _vpnSnapshot.RouteTag)) ?? selected
             : selected;
-        var details = new Grid
-        {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
-            RowSpacing = _compactLayout ? 12 : 16,
-        };
-
-        var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*") };
-        var titleStack = new StackPanel { Spacing = 5 };
-        titleStack.Children.Add(DeyttTheme.TextBlock(ProtocolPath(displayedRoute),
-            _compactLayout ? 20 : 22, DeyttTheme.Text, FontWeight.SemiBold,
-            DeyttTheme.JetBrainsMono, wrap: false));
+        var details = new StackPanel { Spacing = _compactLayout ? 18 : 24 };
         var routeName = displayedRoute?.CountryCode switch
         {
-            "RU-DE" => Copy("LTE · RU+DE", "LTE · RU+DE"),
-            "AUTO" => Copy("Автоподбор", "Automatic route"),
-            _ => displayedRoute?.CountryName ?? RouteTitle(),
+            "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
+            "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
+            "AUTO" or null => Copy("автоподбор", "auto-select"),
+            _ => RouteCountryName(displayedRoute!),
         };
-        var routeContext = DeyttTheme.TextBlock(
-            $"{routeName} · {ProtocolDescriptor(displayedRoute)}", 12,
-            DeyttTheme.Muted, FontWeight.Medium, wrap: false);
-        routeContext.TextTrimming = TextTrimming.CharacterEllipsis;
-        titleStack.Children.Add(routeContext);
-        heading.Children.Add(titleStack);
-
-        details.Children.Add(heading);
-
-        var trafficPath = BuildHomeTrafficPath(displayedRoute);
-        Grid.SetRow(trafficPath, 1);
-        details.Children.Add(trafficPath);
-
-        var diagnostics = BuildHomeRouteDiagnostic(displayedRoute?.Tag);
-        Grid.SetRow(diagnostics, 2);
-        details.Children.Add(diagnostics);
+        var destination = GetHomeDestinationParts(displayedRoute);
+        var location = new StackPanel { Spacing = 4 };
+        location.Children.Add(DeyttTheme.TextBlock(routeName, 18, DeyttTheme.Muted,
+            FontWeight.SemiBold));
+        location.Children.Add(DeyttTheme.TextBlock(destination.Name, 32, DeyttTheme.Text,
+            FontWeight.Bold));
+        location.Children.Add(DeyttTheme.TextBlock(ProtocolDescriptor(displayedRoute), 18,
+            DeyttTheme.Text, FontWeight.SemiBold));
+        details.Children.Add(location);
+        details.Children.Add(BuildHomeRouteDiagnostic(displayedRoute?.Tag));
         return details;
     }
 
@@ -248,13 +439,25 @@ public partial class MainWindow
         return card;
     }
 
-    private string ProtocolDescriptor(WindowsRoute? route) => route?.Protocol switch
+    private string ProtocolDescriptor(WindowsRoute? route)
     {
-        "VLESS" or "TROJAN" => "WebSocket · TLS",
-        "HYSTERIA2" => Copy("QUIC · UDP", "QUIC · UDP"),
-        "AWG31" => AwgProtocolTitle(route?.Protocol),
-        _ => route?.ProtocolName ?? Copy("Автоматически", "Automatic"),
-    };
+        if (route is null || route.CountryCode == "AUTO")
+            return Copy("Автоматически", "Automatic");
+        return route.Protocol switch
+        {
+            "VLESS" => WindowsRouteCatalog.VlessTransportLabel(route.Detail) switch
+            {
+                "vless" => "./vless",
+                var transport => $"./vless+{transport}",
+            },
+            "TROJAN" => "./trojan",
+            "HYSTERIA2" => "./hysteria",
+            "TUIC" => "./tuic",
+            "AWG31" => "./amnezia3.1",
+            _ when !string.IsNullOrWhiteSpace(route.Protocol) => "./" + route.Protocol.ToLowerInvariant(),
+            _ => route.ProtocolName ?? Copy("Автоматически", "Automatic"),
+        };
+    }
 
     private (string Code, string Name, string Hint) GetHomeOriginParts()
     {
@@ -301,7 +504,9 @@ public partial class MainWindow
         "VLESS" => "./vless+ws",
         "TROJAN" => "./trojan+ws",
         "HYSTERIA2" => "./hysteria2",
+        "TUIC" => "./tuic",
         "AWG31" => "./amnezia3.1",
+        "LTE" => "./lte",
         "CHAIN" => "./lte ru+de",
         _ => "./auto",
     };
@@ -342,46 +547,765 @@ public partial class MainWindow
             Language = _language,
             ReducedMotion = _reduceMotion,
         };
+        if (OperatingSystem.IsLinux())
+        {
+            map.AtlasAvailabilityChanged += () => Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(_routeGlobe, map) && IsVisible)
+                    ShowTab(_activeTab, reuseCachedPage: true);
+            });
+        }
         map.NodeTapped += node => _ = ShowMapRoutePickerAsync(node);
+        map.HomeActionRequested += HandleHomeActionRequested;
+        map.ImmersiveModeRequested += SetMapImmersive;
+        map.TabChanged += OnMapTabChanged;
+        map.RouteSelected += OnMapRouteSelected;
+        map.SubscriptionRefreshRequested += () => _ = RefreshSignedInAccountAsync();
+        map.CountryProbeRequested += HandleCountryProbeRequested;
+        map.CheckUpdatesRequested += () => _ = ShowUpdateDialogAsync();
+        map.SettingToggled += (key, enabled) => HandleSettingToggledFromWeb(key, enabled);
+        map.ExitRequested += () => _ = ExitForVerifiedUpdateAsync(null);
+        map.HappDeviceManagementRequested += id =>
+        {
+            var device = _keysSnapshot?.HappDevices.FirstOrDefault(item => item.Id == id);
+            if (device is not null)
+                ShowHappDeviceDetails(device);
+        };
+        map.CustomMapPointChanged += point =>
+        {
+            _customMapPoint = point;
+            map.CustomMapPoint = point;
+            SavePreferences();
+        };
+        map.ThemeChanged += theme =>
+        {
+            if (_themePreference == theme) return;
+            _themePreference = theme;
+            ApplyVisualPreferences();
+            SavePreferences();
+            RenderActiveTabPreservingScroll();
+        };
+        map.SubscriptionKeyCopyRequested += () => _ = CopySubscriptionKeyToClipboardAsync();
+        map.SignInRequested += () => ShowSignInDialog();
+        map.RenewRequested += () => OpenExternal("https://t.me/deyttbot");
+        map.SupportRequested += () => _ = ShowSupportWindowAsync();
+        map.ImportRequested += () => _ = ShowSetupWindowAsync();
+        map.LanguagePickerRequested += () => _ = ShowLanguagePickerAsync();
+        map.LanguageChanged += lang =>
+        {
+            _language = lang;
+            SavePreferences();
+            UpdateTopNavigation();
+            UpdateWindowControlState();
+            UpdateHomeGlobePresentation();
+        };
+        map.SplitTunnelRequested += () => ShowSplitTunnelingInfo();
+        map.SplitTunnelModeChanged += mode =>
+        {
+            try
+            {
+                var splitStore = WindowsSplitTunnelStore.Load();
+                splitStore = splitStore with { Mode = mode };
+                if (!_qaFixture)
+                    WindowsSplitTunnelStore.Save(splitStore);
+                UpdateHomeGlobePresentation();
+                if (!_qaFixture && IsVpnTunnelActive(_vpnSnapshot.State))
+                    _ = ApplySplitTunnelRulesAsync();
+            }
+            catch { }
+        };
+        map.SplitTunnelConfigSaved += json =>
+        {
+            try
+            {
+                if (!WindowsSplitTunnelStore.TryParseConfigJson(json, out var parsed) || parsed is null)
+                    return;
+                if (!_qaFixture)
+                    WindowsSplitTunnelStore.Save(parsed);
+                UpdateHomeGlobePresentation();
+            }
+            catch { }
+        };
+        map.SplitTunnelRunningAppsRequested += () =>
+        {
+            _ = Task.Run(() =>
+            {
+                var apps = GetRunningApplications()
+                    .Select(a => (object)new
+                    {
+                        processName = a.ProcessName,
+                        displayName = a.DisplayName,
+                        hasWindow = a.HasWindow
+                    })
+                    .ToList();
+                Dispatcher.UIThread.Post(() => _routeGlobe?.PushSplitTunnelRunningApps(apps));
+            });
+        };
+        map.SplitTunnelBrowseExeRequested += () => _ = BrowseSplitTunnelExeFromWebAsync();
+        map.SplitTunnelApplyRequested += () =>
+        {
+            if (!_qaFixture && IsVpnTunnelActive(_vpnSnapshot.State))
+                _ = ApplySplitTunnelRulesAsync();
+        };
+        map.ProbeMethodRequested += () => _ = ShowProbeMethodPickerAsync();
+        map.ProbeMethodChanged += method =>
+        {
+            _probeMethod = method;
+            SavePreferences();
+            UpdateHomeGlobePresentation();
+        };
+        map.ServiceCheckRequested += () => _ = InstallVpnServiceAsync();
+        map.BotRequested += () => OpenExternal("https://t.me/deyttbot");
+        map.UpdateProfileAvatar(_telegramAvatarDataUrl);
         return map;
+    }
+
+    private void HandleSettingToggledFromWeb(string key, bool enabled)
+    {
+        switch (key.ToLowerInvariant())
+        {
+            case "reduce_motion":
+            case "motion":
+                _reduceMotion = enabled;
+                DeyttTheme.ReduceMotion = enabled;
+                SavePreferences();
+                UpdateHomeGlobePresentation();
+                break;
+            case "region":
+                _ = UpdateMapRegionEnabledAsync(enabled);
+                break;
+            case "bypass":
+                try
+                {
+                    var splitStore = WindowsSplitTunnelStore.Load();
+                    splitStore = splitStore with { Mode = enabled ? WindowsSplitTunnelConfig.ModeBypass : WindowsSplitTunnelConfig.ModeVpnOnly };
+                    WindowsSplitTunnelStore.Save(splitStore);
+                }
+                catch { }
+                SavePreferences();
+                break;
+            default:
+                SavePreferences();
+                break;
+        }
+    }
+
+    private void OnMapTabChanged(string tabName)
+    {
+        var targetTab = tabName switch
+        {
+            "routes" => MainTab.Routes,
+            "profile" => MainTab.Profile,
+            "settings" => MainTab.Settings,
+            _ => MainTab.Home
+        };
+        if (_activeTab != targetTab)
+        {
+            ShowTab(targetTab);
+        }
+        UpdateHomeGlobePresentation();
+    }
+
+    private void OnMapRouteSelected(string routeKey)
+    {
+        var route = _routes.FirstOrDefault(r => string.Equals(r.Id, routeKey, StringComparison.OrdinalIgnoreCase))
+                 ?? _routes.FirstOrDefault(r => string.Equals(r.Tag, routeKey, StringComparison.OrdinalIgnoreCase))
+                 ?? _routes.FirstOrDefault(r => string.Equals(r.CountryCode, routeKey, StringComparison.OrdinalIgnoreCase));
+        if (route is null && routeKey.Contains('-'))
+        {
+            var parts = routeKey.Split('-');
+            var cc = parts[0].ToUpperInvariant();
+            var proto = parts[1].ToUpperInvariant();
+            if (proto == "HY2") proto = "HYSTERIA2";
+            if (proto == "AWG") proto = "AWG31";
+            route = _routes.FirstOrDefault(r => string.Equals(r.CountryCode, cc, StringComparison.OrdinalIgnoreCase) &&
+                                                (r.Protocol.Contains(proto, StringComparison.OrdinalIgnoreCase) ||
+                                                 r.ProtocolName.Contains(proto, StringComparison.OrdinalIgnoreCase)));
+        }
+        if (route is not null)
+        {
+            SelectRoute(route.Id);
+            if (_routeGlobe is not null)
+            {
+                _routeGlobe.SelectedRoute = RouteGlobeWebView.RouteKeyFor(route.Id, _routes);
+                _routeGlobe.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
+            }
+            UpdateHomeGlobePresentation();
+        }
     }
 
     private void UpdateHomeColumns()
     {
-        UpdateHomeConnectionLayout();
-        if (_homeOverviewGrid is null || _homeMapPanel is null || _homeConnectionCard is null)
+        if (_routeGlobe is null)
             return;
+
+        if (!_disableNativeMapInitialization)
+        {
+            _routeGlobe.Width = double.NaN;
+            _routeGlobe.Height = double.NaN;
+            return;
+        }
 
         var availableWidth = PageHost.Width > 0 ? PageHost.Width : PageScroll.Bounds.Width;
         var availableHeight = PageScroll.Bounds.Height - PageHost.Margin.Top - PageHost.Margin.Bottom;
-        var split = availableWidth >= 800;
-        _homeOverviewGrid.ColumnDefinitions = new ColumnDefinitions(split ? "*,*" : "*");
-        _homeOverviewGrid.RowDefinitions = new RowDefinitions(split ? "*" : "Auto,Auto");
-        _homeOverviewGrid.ColumnSpacing = split ? 24 : 0;
-        _homeOverviewGrid.RowSpacing = split ? 0 : 16;
-        _homeOverviewGrid.Height = split ? Math.Clamp(availableHeight, 480, 520) : double.NaN;
-
-        Grid.SetColumn(_homeMapPanel, 0);
-        Grid.SetRow(_homeMapPanel, 0);
-        Grid.SetColumn(_homeConnectionCard, split ? 1 : 0);
-        Grid.SetRow(_homeConnectionCard, split ? 0 : 1);
-        _homeMapPanel.Margin = split ? new Thickness(0, 0, 12, 0) : new Thickness(0);
-        _homeConnectionCard.Margin = split ? new Thickness(12, 0, 0, 0) : new Thickness(0);
-        _homeConnectionCard.VerticalAlignment = split
-            ? VerticalAlignment.Center
-            : VerticalAlignment.Stretch;
-
-        if (_routeGlobe is not null)
-            _routeGlobe.Height = split ? double.NaN : Math.Clamp(availableWidth * 0.68, 320, 480);
+        if (_mapImmersive)
+            _routeGlobe.Height = Math.Max(1, availableHeight);
+        else if (availableWidth >= 1180)
+            _routeGlobe.Height = Math.Clamp(availableHeight, 520, 1000);
+        else
+            _routeGlobe.Height = Math.Clamp(Math.Max(availableHeight, availableWidth * .84), 720, 1100);
     }
+
+    private HomePresentationSnapshot BuildHomePresentation()
+    {
+        var connected = IsVpnDisplayConnected();
+        var tunnelActive = IsVpnTunnelActive(_vpnSnapshot.State);
+        var healthUnknown = tunnelActive && !connected;
+        var restoring = !_sessionRestoreComplete && !_qaFixture;
+        var connecting = _vpnSnapshot.State is "starting" or "checking";
+        var stopping = _vpnSnapshot.State == "stopping" || _vpnCancelInProgress;
+        var routeProbeActive = _routeProbeInProgress;
+        var canCancel = connecting && !_vpnCancelRequested && !routeProbeActive;
+        var failed = _vpnSnapshot.State == "error";
+        var displayedRoute = connected
+            ? _routes.FirstOrDefault(route => route.Tag == (_vpnSnapshot.ActiveRouteTag ?? _vpnSnapshot.RouteTag))
+            : null;
+        displayedRoute ??= _routes.FirstOrDefault(route => route.Id == _selectedRoute);
+        var destination = GetHomeDestinationParts(displayedRoute);
+        var automatic = _selectedRoute == "auto";
+        var country = automatic
+            ? Copy("автоподбор", "auto-select")
+            : displayedRoute?.CountryCode switch
+            {
+                "EU" when displayedRoute?.Protocol == "LTE" => "lte • белые списки",
+                "RU-DE" => Copy("lte · белые списки", "lte · allowlist"),
+                "AUTO" or null => Copy("автоподбор", "auto-select"),
+                _ => RouteCountryName(displayedRoute!).ToLowerInvariant(),
+            };
+        var protocol = displayedRoute?.CountryCode is null or "AUTO" ? "" : ProtocolDescriptor(displayedRoute).ToLowerInvariant();
+        var city = displayedRoute?.CountryCode is null or "AUTO"
+            ? connected ? Copy("уточняем выбранный выход…", "confirming the selected exit…")
+                : connecting || routeProbeActive ? Copy("выбираем выход…", "selecting an exit…")
+                : Copy("auto-select", "auto-select")
+            : displayedRoute?.Protocol == "AWG31" && !string.IsNullOrWhiteSpace(displayedRoute.ProfileName)
+                ? destination.Name
+                : automatic ? Copy($"{destination.Name} · {RouteCountryName(displayedRoute!)}", $"{destination.Name} · {RouteCountryName(displayedRoute!)}").ToLowerInvariant()
+                : destination.Name.ToLowerInvariant();
+        var status = restoring
+            ? Copy("подключаемся…", "preparing connection…")
+            : connected
+                ? Copy("подключено", "connected")
+                : stopping
+                    ? Copy("отключаемся…", "disconnecting…")
+                    : healthUnknown
+                        ? Copy("проверяем соединение…", "checking connection…")
+                        : connecting || _vpnActionInProgress || routeProbeActive
+                            ? routeProbeActive
+                                ? Copy("проверяем маршруты…", "checking routes…")
+                                : Copy("подключаемся…", "connecting…")
+                            : failed
+                                ? _vpnServiceAvailable
+                                    ? Copy("не удалось подключиться", "could not connect")
+                                    : Copy("служба vpn недоступна", "vpn service unavailable")
+                                : Copy("не подключено", "not connected");
+        var message = restoring
+            ? Copy("восстанавливаем сохранённую сессию", "restoring the saved session")
+            : failed
+                ? _vpnServiceAvailable
+                    ? string.IsNullOrWhiteSpace(_vpnSnapshot.Detail)
+                        ? Copy("проверьте маршрут и повторите подключение", "check the route and retry")
+                        : LocalizeHomeDiagnostic(_vpnSnapshot.Detail)
+                    : Copy("проверьте службу vpn в настройках", "check the vpn service in settings")
+                : healthUnknown
+                    ? Copy("туннель включён, выполняется проверка трафика", "the tunnel is on while traffic is being checked")
+                    : !connected && _sessionToken is null
+                        ? Copy("войдите через telegram, чтобы загрузить подписку", "sign in through telegram to load your subscription")
+                        : !connected && (_keysSnapshot?.HappAvailable != true || string.IsNullOrWhiteSpace(_keysSnapshot.ProfileJson))
+                            ? Copy("откройте профиль и обновите подписку", "open your profile and refresh the subscription")
+                            : null;
+        var action = tunnelActive ? "home-disconnect" : canCancel ? "home-cancel" : "home-connect";
+        var actionLabel = restoring
+            ? CopyExact("подготовка…", "preparing…")
+            : stopping
+                ? CopyExact("отключение…", "disconnecting…")
+                : canCancel
+                    ? CopyExact("отменить подключение", "cancel connection")
+                : tunnelActive
+                    ? CopyExact("подключено", "connected")
+                        : connecting || _vpnActionInProgress
+                            ? CopyExact("подключаемся…", "connecting…")
+                            : routeProbeActive
+                                ? CopyExact("подождите…", "please wait…")
+                                : _sessionToken is null
+                                    ? CopyExact("войти через telegram", "sign in through telegram")
+                                    : _keysSnapshot?.HappAvailable != true || string.IsNullOrWhiteSpace(_keysSnapshot.ProfileJson)
+                                        ? CopyExact("открыть профиль", "open profile")
+                                        : !_vpnServiceAvailable
+                                            ? CopyExact("проверить службу", "check service")
+                                            : failed ? CopyExact("ошибка подключения", "connection error") : CopyExact("подключиться", "connect");
+        if (!tunnelActive && !canCancel)
+        {
+            if (_sessionToken is null)
+                action = "home-connect";
+            else if (_keysSnapshot?.HappAvailable != true || string.IsNullOrWhiteSpace(_keysSnapshot.ProfileJson))
+                action = "home-profile";
+            else if (!_vpnServiceAvailable)
+                action = "home-settings";
+            else
+                action = "home-connect";
+        }
+        var actionEnabled = !restoring && (!stopping && (!connecting && !_vpnActionInProgress && !routeProbeActive || canCancel) || healthUnknown || tunnelActive);
+        if (failed && action is "home-connect") actionEnabled = true;
+
+        var probe = displayedRoute is null ? null : _routeProbeResults.GetValueOrDefault(displayedRoute.Tag);
+        var displayedTag = displayedRoute?.Tag;
+        var liveMeasurement = connected && _homeLiveProbe is not null &&
+            (_homeLiveProbe.RouteTag == displayedTag || _homeLiveProbe.RouteTag == _vpnSnapshot.RouteTag);
+        if (liveMeasurement)
+        {
+            probe = _homeLiveProbe! with
+            {
+                LatencyMilliseconds = _homeLiveProbe.Stage == "latency"
+                    ? PositiveLatency(_homeLiveProbe.LatencyMilliseconds) : PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds) ?? PositiveLatency(_homeLiveProbe.LatencyMilliseconds),
+                Error = _vpnSnapshot.TunnelLatencyError is null || PositiveLatency(_vpnSnapshot.TunnelLatencyMilliseconds) is not null || PositiveLatency(_homeLiveProbe.LatencyMilliseconds) is not null ? _homeLiveProbe.Error :
+                    Copy("Не удалось измерить HTTPS-отклик через выбранный маршрут.", "Could not measure the HTTPS response through the selected route."),
+            };
+        }
+        else if (!connected)
+        {
+            _homeLiveProbe = null;
+        }
+        // Данные, измеренные ранее на этом маршруте, остаются видимыми до перезамера:
+        // ни дисконнект, ни смена сессии не превращают их в прочерк.
+        if (probe is null || PositiveLatency(probe.LatencyMilliseconds) is null && probe.BytesPerSecond is not > 0)
+        {
+            var lastMeasured = (displayedTag is null ? null : _homeLastMeasuredByRoute.GetValueOrDefault(displayedTag))
+                ?? (_vpnSnapshot.RouteTag is null ? null : _homeLastMeasuredByRoute.GetValueOrDefault(_vpnSnapshot.RouteTag));
+            if (lastMeasured is not null)
+                probe = lastMeasured;
+        }
+        var probeQuality = displayedRoute is null ? RouteQualityGrade.Unrated : CountryRouteQuality(
+            _routes.Where(route => string.Equals(route.CountryCode, displayedRoute.CountryCode,
+                StringComparison.OrdinalIgnoreCase)).ToArray()).Grades.GetValueOrDefault(displayedRoute.Tag);
+        var latencyText = PositiveLatency(probe?.LatencyMilliseconds) is { } latency
+            ? latency.ToString(UiCulture) : probe?.Stage is "latency" or "retry" ? "…" : null;
+        var speedBytes = probe?.BytesPerSecond;
+        var speedText = speedBytes is > 0
+            ? (speedBytes.Value * 8d / 1_000_000d).ToString("0.#", UiCulture) : probe?.Stage is "waiting_speed" or "download" ? "…" : null;
+        var tone = probeQuality switch
+        {
+            RouteQualityGrade.Good => "good",
+            RouteQualityGrade.Poor => "warn",
+            _ => "normal",
+        };
+        var measured = probe is not null && (PositiveLatency(probe.LatencyMilliseconds) is not null || probe.BytesPerSecond is > 0);
+        var statusTone = connected ? "good" : failed ? "error" : startingTone(connecting, routeProbeActive, healthUnknown);
+        var countryCode = destination.Code is "NL" or "DE" or "RU" or "FI" or "IT" ? destination.Code : "";
+          var actionTone = connected ? "connected" : failed ? "error" :
+              connecting || stopping || _vpnActionInProgress || routeProbeActive ? "connecting" : "idle";
+          return new HomePresentationSnapshot(status, statusTone, message, country, city, protocol,
+              countryCode, actionLabel, action, actionEnabled, actionTone,
+            latencyText, tone, speedText, tone,
+            probe?.Error ?? (liveMeasurement
+                ? probe?.Stage is "waiting_speed" or "download" ? Copy("измеряем скорость подключения…", "measuring connection speed…")
+                    : probe?.Stage is "latency" ? Copy("проверяем HTTPS через VPN…", "checking HTTPS through the VPN…")
+                    : Copy("HTTPS-отклик через VPN", "HTTPS response through VPN")
+                : measured ? Copy("последний замер маршрута", "last route measurement") : Copy("запустите замер подключения", "measure the connection")),
+            _homeProbeCancellation is null && !_routeProbeInProgress && !_vpnActionInProgress && (!tunnelActive || connected),
+            Copy("обновить замер", "refresh measurement"),
+            connected ? (_vpnSnapshot.ConnectedAt ?? _vpnSnapshot.HealthCheckedAt)?.ToUnixTimeMilliseconds() : null);
+
+        static string startingTone(bool isConnecting, bool isProbing, bool isUnknown) =>
+            isConnecting || isProbing || isUnknown ? "warn" : "normal";
+    }
+
+    private string BuildHomeRouteAccessibilityDescription()
+    {
+        var presentation = BuildHomePresentation();
+        return string.Join(" · ", new[]
+        {
+            presentation.Status,
+            presentation.Country,
+            presentation.City,
+            presentation.Protocol,
+        }.Where(value => !string.IsNullOrWhiteSpace(value)));
+    }
+
+    private void HandleCountryProbeRequested(string countryCode)
+    {
+        countryCode = countryCode.ToUpperInvariant();
+        Services.UiDiagnostics.Log($"country probe requested: {countryCode} routes={_routes.Count} tab={_activeTab} service={_vpnServiceAvailable} tunnel={_vpnSnapshot.State}");
+        _expandedRouteCountries.Add(countryCode);
+        _activeTab = MainTab.Routes;
+
+        var tags = _routes.Where(route => string.Equals(route.CountryCode, countryCode, StringComparison.OrdinalIgnoreCase))
+            .Select(route => route.Tag).ToArray();
+        if (tags.Length == 0)
+        {
+            tags = _routes.Where(route => route.Id.StartsWith($"route:{countryCode}:", StringComparison.OrdinalIgnoreCase))
+                .Select(route => route.Tag).ToArray();
+        }
+        QueueRouteCountryProbe(countryCode, tags);
+    }
+
+    private void EnsureInitialNetherlandsRouteProbe()
+    {
+        if (_qaFixture || _initialNetherlandsRouteProbeStarted ||
+            !_vpnServiceAvailable || _vpnActionInProgress || WindowsTunnelHealth.IsTunnelActive(_vpnSnapshot.State) ||
+            _keysSnapshot?.ProfileJson is not { Length: > 0 })
+            return;
+
+        var countryCode = InitialProbeCountry(_routes);
+        if (countryCode is null) return;
+        var routeTags = _routes.Where(route => route.CountryCode == countryCode)
+            .Select(route => route.Tag).Distinct(StringComparer.Ordinal).ToArray();
+        if (routeTags.Length == 0)
+            return;
+
+        _initialNetherlandsRouteProbeStarted = true;
+        if (_activeTab == MainTab.Routes)
+            _expandedRouteCountries.Add(countryCode);
+        QueueRouteCountryProbe(countryCode, routeTags);
+    }
+
+    private void UpdateHomeGlobePresentation()
+    {
+        var map = _routeGlobe;
+        if (map is null)
+            return;
+        map.SelectedRoute = RouteGlobeWebView.RouteKeyFor(_selectedRoute, _routes);
+        map.Language = _language;
+        map.AvailableLocations = GetAvailableMapLocations();
+        map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
+        map.OriginLocation = _mapOriginLocation;
+        map.CustomMapPoint = _customMapPoint;
+        map.TrafficActive = IsVpnDisplayConnected();
+        map.ReducedMotion = _reduceMotion;
+        map.DarkTheme = DeyttTheme.IsDark;
+        map.LegacyTheme = _themePreference == "legacy";
+        map.EgressCountryCode = null;
+        map.ActiveAutoRouteKey = IsVpnDisplayConnected()
+            ? ConfirmedHomeRouteKey()
+            : null;
+        map.HomePresentation = BuildHomePresentation();
+        map.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
+
+        var signedIn = _sessionToken is not null;
+        var sub = _account?.Subscription;
+        var mainQuotaState = !signedIn
+            ? "absent"
+            : _account is null
+                ? _profileLoadIssue is null ? "loading" : "error"
+                : sub?.Active == true ? "ready" : "absent";
+        var mainQuota = new
+        {
+            state = mainQuotaState,
+            usedBytes = mainQuotaState == "ready" ? sub?.TrafficUsedBytes : null,
+            totalBytes = mainQuotaState == "ready" ? sub?.TrafficTotalBytes : null,
+            limitBytes = mainQuotaState == "ready" ? sub?.TrafficLimitBytes : null,
+            unlimitedTraffic = mainQuotaState == "ready" && sub?.UnlimitedTraffic == true,
+            expiresAt = mainQuotaState == "ready" ? ToUtcIso(sub?.ExpiresAt) : null,
+            unlimitedTime = mainQuotaState == "ready" && sub?.UnlimitedTime == true,
+        };
+        var awgQuota = new
+        {
+            state = signedIn ? _awgTrafficState : "absent",
+            usedBytes = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.UsedBytes : null,
+            limitBytes = signedIn && _awgTrafficState == "ready" ? _awgTraffic?.QuotaBytes : null,
+            unlimitedTraffic = signedIn && _awgTrafficState == "ready" && _awgTraffic?.QuotaBytes == 0,
+            expiresAt = signedIn && _awgTrafficState == "ready" ? ToUtcIso(_awgTraffic?.ExpiresAt) : null,
+            unlimitedTime = signedIn && _awgTrafficState == "ready" && _awgTraffic?.ExpiresAt is null,
+        };
+        var proxyQuota = new
+        {
+            state = signedIn ? _proxyTrafficState : "absent",
+            usedBytes = signedIn && _proxyTrafficState == "ready" ? _proxyTraffic?.UsedBytes : null,
+            limitBytes = signedIn && _proxyTrafficState == "ready" ? _proxyTraffic?.QuotaBytes : null,
+            unlimitedTraffic = signedIn && _proxyTrafficState == "ready" && _proxyTraffic?.QuotaBytes == 0,
+            expiresAt = signedIn && _proxyTrafficState == "ready" ? ToUtcIso(_proxyTraffic?.ExpiresAt) : null,
+            unlimitedTime = signedIn && _proxyTrafficState == "ready" && _proxyTraffic?.ExpiresAt is null,
+        };
+        string? expiresFormatted = null;
+        int? daysRemaining = null;
+        if (!string.IsNullOrEmpty(sub?.ExpiresAt) && DateTimeOffset.TryParse(ToUtcIso(sub.ExpiresAt), out var parsedExpiry))
+        {
+            expiresFormatted = parsedExpiry.ToLocalTime().ToString("d MMMM yyyy", UiCulture);
+            daysRemaining = Math.Max(0, (int)Math.Ceiling((parsedExpiry - DateTimeOffset.UtcNow).TotalDays));
+        }
+
+        var devices = (_keysSnapshot?.HappDevices ?? []).Select(d => new
+        {
+            id = d.Id,
+            isMobile = d.Os?.Contains("android", StringComparison.OrdinalIgnoreCase) == true ||
+                       d.Os?.Contains("ios", StringComparison.OrdinalIgnoreCase) == true,
+            name = string.IsNullOrWhiteSpace(d.Model) ? Copy("Устройство Happ", "Happ device") : d.Model,
+            detail = string.Join(" · ", new[]
+            {
+                string.Join(" ", new[] { d.Os, d.OsVersion }.Where(value => !string.IsNullOrWhiteSpace(value))),
+                d.LastSeen is not null
+                    ? $"{Copy("последнее подключение", "last connected")}: {FormatDeviceDate(d.LastSeen)}"
+                    : null,
+            }.Where(value => !string.IsNullOrWhiteSpace(value))),
+            isActive = !d.Blocked,
+            isBlocked = d.Blocked
+        }).Cast<object>().ToList();
+
+        var subKey = _keysSnapshot?.AwgProfiles.FirstOrDefault()?.Config
+                     ?? (!string.IsNullOrEmpty(_sessionToken) ? $"https://getmy.deytt.space/sub/token/{_sessionToken}" : null);
+
+        map.UpdateProfileData(
+            signedIn,
+            _account?.Username,
+            _account?.FirstName ?? _account?.Username,
+            null,
+            sub?.Active == true,
+            sub?.TariffName ?? (sub?.Active == true ? Copy("подписка активна", "subscription active") : Copy("без подписки", "no subscription")),
+            expiresFormatted,
+            daysRemaining,
+            sub?.DeviceLimit is > 0 ? sub.DeviceLimit : null,
+            subKey,
+            devices,
+            mainQuota,
+            awgQuota,
+            proxyQuota
+        );
+
+        if (!string.IsNullOrEmpty(_telegramAvatarDataUrl))
+        {
+            map.UpdateProfileAvatar(_telegramAvatarDataUrl);
+        }
+
+        var splitStore = WindowsSplitTunnelStore.Load();
+        var customCount = (splitStore.CustomDomains?.Count ?? 0) + (splitStore.CustomProcesses?.Count ?? 0);
+        var activePreset = splitStore.Presets?.FirstOrDefault(p => string.Equals(p.Id, splitStore.ActivePresetId, StringComparison.OrdinalIgnoreCase));
+        var presetPrefix = activePreset is not null && (splitStore.Presets?.Count ?? 0) > 1 ? $"{activePreset.Name.ToLowerInvariant()} · " : string.Empty;
+        var modeLabel = splitStore.IsVpnOnly
+            ? Copy("vpn только для списка", "vpn only for list")
+            : Copy("сайты из подписки", "subscription bypass");
+        var splitSummary = customCount > 0
+            ? Copy($"{presetPrefix}{modeLabel} + {customCount} своих правил", $"{presetPrefix}{modeLabel} + {customCount} custom rules")
+            : Copy($"{presetPrefix}{modeLabel} · все протоколы", $"{presetPrefix}{modeLabel} · all protocols");
+
+        var splitPayload = new
+        {
+            activePresetId = splitStore.ActivePresetId ?? "default",
+            mode = splitStore.Mode ?? WindowsSplitTunnelConfig.ModeBypass,
+            customDomains = splitStore.CustomDomains ?? [],
+            customProcesses = splitStore.CustomProcesses ?? [],
+            baseRules = ReadBypassSites() ?? [],
+            presets = (splitStore.Presets ?? []).Select(p => new
+            {
+                id = p.Id,
+                name = p.Name,
+                mode = p.Mode,
+                customDomains = p.CustomDomains ?? [],
+                customProcesses = p.CustomProcesses ?? []
+            }).ToList()
+        };
+
+        map.UpdateSettingsData(
+            _language,
+            _account?.Username,
+            splitSummary,
+            _probeMethod,
+            _vpnServiceAvailable,
+            _mapRegionEnabled,
+            _reduceMotion,
+            WindowsUpdateClient.GetInstalledVersion()?.ToString(3) ?? "—",
+            splitPayload
+        );
+        EnsureInitialNetherlandsRouteProbe();
+    }
+
+    private async Task BrowseSplitTunnelExeFromWebAsync()
+    {
+        try
+        {
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel is null)
+                return;
+
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = Copy("Выберите приложение для правила", "Select application for rule"),
+                AllowMultiple = false,
+                FileTypeFilter = OperatingSystem.IsWindows()
+                    ? [new FilePickerFileType("Executable (*.exe)") { Patterns = ["*.exe"] }]
+                    : null
+            });
+            if (files.Count == 0)
+                return;
+
+            var normalized = WindowsSplitTunnelStore.NormalizeProcess(files[0].Name);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return;
+
+            var store = WindowsSplitTunnelStore.Load();
+            var list = (store.CustomProcesses ?? []).ToList();
+            if (!list.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+            {
+                list.Add(normalized);
+                if (!_qaFixture)
+                    WindowsSplitTunnelStore.Save(store with { CustomProcesses = list });
+                UpdateHomeGlobePresentation();
+            }
+
+            _routeGlobe?.NotifySplitTunnelExePicked(normalized);
+        }
+        catch
+        {
+            // Ignored if file dialog canceled or unavailable.
+        }
+    }
+
+    private static string? ToUtcIso(string? value) =>
+        DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed)
+            ? parsed.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture)
+            : null;
+
+    private void ClearAwgTraffic(string state = "absent")
+    {
+        _awgTraffic = null;
+        _awgTrafficState = state;
+        _proxyTraffic = null;
+        _proxyTrafficState = state;
+    }
+
+    private async Task CopySubscriptionKeyToClipboardAsync()
+    {
+        var key = _keysSnapshot?.AwgProfiles.FirstOrDefault()?.Config
+                  ?? (!string.IsNullOrEmpty(_sessionToken)
+                      ? $"https://getmy.deytt.space/sub/token/{_sessionToken}"
+                      : null);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            ShowInfoDialog(Copy("Ссылка недоступна", "Subscription link unavailable"),
+                Copy("Войдите в аккаунт и обновите профиль.", "Sign in and refresh your profile."));
+            return;
+        }
+
+        var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+        if (clipboard is null)
+        {
+            ShowInfoDialog(Copy("Не удалось скопировать", "Could not copy"),
+                Copy("Буфер обмена недоступен в этом окне.", "The clipboard is unavailable in this window."));
+            return;
+        }
+
+        try
+        {
+            await clipboard.SetTextAsync(key);
+            ShowInfoDialog(Copy("Ссылка скопирована", "Link copied"),
+                Copy("Теперь её можно вставить на другом устройстве.", "You can now paste it on another device."));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or
+                                      InvalidOperationException or NotSupportedException or OperationCanceledException)
+        {
+            ShowInfoDialog(Copy("Не удалось скопировать", "Could not copy"),
+                Copy("Скопируйте ссылку вручную из поля ключа подписки.",
+                    "Copy the subscription link manually from the key field."));
+        }
+    }
+
+    private string? ConfirmedHomeRouteKey()
+    {
+        var activeTag = _vpnSnapshot.ActiveRouteTag;
+        if (string.IsNullOrWhiteSpace(activeTag) && _selectedRoute != "auto")
+            activeTag = _vpnSnapshot.RouteTag;
+        if (string.IsNullOrWhiteSpace(activeTag)) return null;
+        var route = _routes.FirstOrDefault(candidate => candidate.Tag == activeTag && candidate.CountryCode != "AUTO");
+        return route is null ? null : RouteGlobeWebView.RouteKeyFor(route.Id, _routes);
+    }
+
+    private void InstrumentProbeChain(string message) =>
+        Services.UiDiagnostics.Log(message);
+
+    private void HandleHomeActionRequested(string action)
+    {
+        switch (action)
+        {
+            case "home-connect":
+            case "home-disconnect":
+                HandleHomePrimaryAction();
+                break;
+            case "home-cancel":
+                _ = CancelVpnConnectionAsync();
+                break;
+            case "home-routes":
+                ShowTab(MainTab.Routes);
+                break;
+            case "home-profile":
+                ShowTab(MainTab.Profile);
+                break;
+            case "home-settings":
+                ShowTab(MainTab.Settings);
+                break;
+            case "home-measure":
+                if (IsVpnDisplayConnected()) RefreshHomeConnectionMeasurement(true);
+                else if (_routes.FirstOrDefault(route => route.Id == _selectedRoute) is { Id: not "auto" } route &&
+                         route.Tag != DeyttConnect.Protocol.CdnLteProfile.RouteTag)
+                    _ = ProbeRoutesAsync([route.Tag]);
+                else
+                {
+                    var candidateTags = _routes.Where(r => r.Id != "auto").Take(5).Select(r => r.Tag).ToArray();
+                    if (candidateTags.Length > 0)
+                        _ = ProbeRoutesAsync(candidateTags);
+                    else
+                        ShowTab(MainTab.Routes);
+                }
+                break;
+        }
+    }
+
+    private void HandleHomePrimaryAction()
+    {
+        if (_quitInProgress || _exitAuthorized) return;
+        var restoring = !_sessionRestoreComplete && !_qaFixture;
+        var tunnelActive = IsVpnTunnelActive(_vpnSnapshot.State);
+        var connected = IsVpnDisplayConnected();
+        var healthUnknown = tunnelActive && !connected;
+        var connecting = _vpnSnapshot.State is "starting" or "checking";
+        var canCancel = connecting && !_vpnCancelRequested && !_routeProbeInProgress;
+        if (_qaFixture || restoring)
+            return;
+        if (canCancel)
+        {
+            _ = CancelVpnConnectionAsync();
+            return;
+        }
+        if (_routeProbeInProgress)
+        {
+            _ = CancelRouteProbeAsync(renderProgress: false);
+            SuspendRouteCountryProbes();
+            _routeProbeInProgress = false;
+        }
+        if (_vpnActionInProgress || _vpnCancelInProgress)
+            return;
+        if (!tunnelActive && !_sessionRestoreComplete)
+            return;
+        if (!tunnelActive && _sessionToken is null)
+            ShowSignInDialog();
+        else if (!tunnelActive && (_keysSnapshot?.HappAvailable != true || string.IsNullOrWhiteSpace(_keysSnapshot.ProfileJson)))
+            ShowTab(MainTab.Profile);
+        else if (!tunnelActive && !_vpnServiceAvailable)
+            ShowTab(MainTab.Settings);
+        else
+            _ = ToggleVpnAsync();
+    }
+
+    private string LocalizeHomeDiagnostic(string detail) => _language == "en"
+        ? detail.Replace("Причина завершения ядра не получена.", "The VPN engine exited without a reported reason.", StringComparison.Ordinal)
+            .Replace("Код завершения:", "Exit code:", StringComparison.Ordinal)
+            .Replace("Ядро:", "Engine:", StringComparison.Ordinal)
+        : detail;
 
     private Control BuildHomeRouteDiagnostic(string? routeTag)
     {
         var result = routeTag is not null ? _routeProbeResults.GetValueOrDefault(routeTag) : null;
-        var latency = result?.LatencyMilliseconds is { } ping ? $"{ping} ms" : "— ms";
+        var latency = PositiveLatency(result?.LatencyMilliseconds) is { } ping ? $"{ping} {Copy("мс", "ms")}" : Copy("не измерено", "not measured");
         var speed = result?.BytesPerSecond is { } bytesPerSecond && bytesPerSecond > 0
-            ? $"{bytesPerSecond * 8d / 1_000_000d:0.#} mbps"
-            : "— mbps";
+            ? (bytesPerSecond * 8d / 1_000_000d).ToString("0.#", UiCulture) + " " + LocalizedSpeedUnit(_language)
+            : Copy("не измерено", "not measured");
         var routeProbeActive = routeTag is not null && _activeRouteProbeTags.Contains(routeTag) &&
             result?.Stage is "latency" or "retry" or "waiting_speed" or "download";
         var measurements = new Grid
@@ -404,10 +1328,8 @@ public partial class MainWindow
         measurements.Children.Add(speedMeasurement);
 
         var details = new StackPanel { Spacing = 8 };
-        var measurementCard = DeyttTheme.Card(measurements, DeyttTheme.Surface, DeyttTheme.Line,
-            14, new Thickness(12, 9));
-        AutomationProperties.SetAutomationId(measurementCard, "HomeRouteMeasurements");
-        details.Children.Add(measurementCard);
+        AutomationProperties.SetAutomationId(measurements, "HomeRouteMeasurements");
+        details.Children.Add(measurements);
         if (result is not null && result.Stage is not ("latency" or "retry" or "waiting_speed" or "download"))
             details.Children.Add(DeyttTheme.TextBlock(
                 Copy("Последний замер маршрута", "Last route measurement"),
