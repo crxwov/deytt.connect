@@ -31,6 +31,17 @@ internal class NetworkLocationCoordinator(
         private const val KEY_NETWORK_LOCATION_ENABLED = "network_location_enabled"
     }
 
+    private val mapPointStore = MapPointStore(host)
+    var customMapPoint: IpNetworkLocation? = mapPointStore.read()
+        private set
+    val mapOrigin: IpNetworkLocation? get() = customMapPoint ?: currentNetworkLocation
+
+    fun setCustomMapPoint(point: IpNetworkLocation?) {
+        mapPointStore.save(point)
+        customMapPoint = point
+        if (isGlobeInitialized()) getGlobe()?.setUserLocation(mapOrigin)
+    }
+
     var currentNetworkLocation: IpNetworkLocation? = OriginLocationMemory.location
         private set
     var currentEgressLocation: IpNetworkLocation? = null
@@ -71,7 +82,7 @@ internal class NetworkLocationCoordinator(
             currentEgressLocation = null
             IpNetworkLocationStore(host).clear()
             OriginLocationMemory.location = null
-            if (isGlobeInitialized()) getGlobe()?.setUserLocation(null)
+            if (isGlobeInitialized()) getGlobe()?.setUserLocation(mapOrigin)
         }
         updateNetworkLocationViews()
         if (enabled) refreshNetworkLocation(force = true)
@@ -254,7 +265,7 @@ internal class NetworkLocationCoordinator(
                         currentNetworkLocation = location
                         OriginLocationMemory.location = location
                         android.util.Log.i("DeyttIpLocation", "Approximate location is available in memory")
-                        if (isGlobeInitialized()) getGlobe()?.setUserLocation(location)
+                        if (isGlobeInitialized()) getGlobe()?.setUserLocation(mapOrigin)
                     }
                     result.onFailure { failure ->
                         locationLookupFailed = true
@@ -285,7 +296,7 @@ internal class NetworkLocationCoordinator(
                     result.onSuccess {
                         currentNetworkLocation = it
                         OriginLocationMemory.location = it
-                        if (isGlobeInitialized()) getGlobe()?.setUserLocation(it)
+                        if (isGlobeInitialized()) getGlobe()?.setUserLocation(mapOrigin)
                     }
                     locationLookupFailed = result.isFailure
                 }

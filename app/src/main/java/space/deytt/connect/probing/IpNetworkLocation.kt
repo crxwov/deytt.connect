@@ -14,6 +14,7 @@ internal data class IpNetworkLocation(
     val city: String,
     val region: String,
     val countryCode: String,
+    val custom: Boolean = false,
 ) {
     val placeLabel: String
         get() = listOf(city, region, countryCode).firstOrNull(String::isNotBlank) ?: "Неизвестный регион"

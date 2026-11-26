@@ -56,5 +56,20 @@ public sealed class XrayRouteProfileTests
             CancellationToken.None);
         Assert.Null(runtime);
     }
+
+    [Fact]
+    public async Task SkipsXrayForNonXrayRouteAndFiltersSingleXrayRoute()
+    {
+        var nonXray = await XrayRouteProfile.PrepareAsync(Profile,
+            (_, _) => throw new InvalidOperationException("Non-Xray route must not resolve Xray hosts."),
+            CancellationToken.None, "route:IT:VLESS");
+        Assert.Null(nonXray);
+
+        var singleXray = await XrayRouteProfile.PrepareAsync(Profile,
+            (_, _) => Task.FromResult(new[] { IPAddress.Parse("192.0.2.2") }),
+            CancellationToken.None, "route:DE:VLESS");
+        Assert.NotNull(singleXray);
+        Assert.Single(singleXray.Ports);
+    }
 }
 

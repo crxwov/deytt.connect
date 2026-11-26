@@ -11,7 +11,7 @@
   const ZOOM_EASE_MS = 120;
   const PAN_EASE_MS = 120;
   const NODE_TAP_CORE_RADIUS = 12;
-  const LOCATION_ORDER = ["ru", "fi", "nl", "de", "it"];
+  const LOCATION_ORDER = ["ru", "fi", "nl", "de", "it", "moscow"];
   const COUNTRY_ACCENTS = { nl: "#7AC6FF", de: "#F4C681", fi: "#86E4D4", ru: "#CFB4F7", it: "#F39D9C" };
   const CONNECTED_LABEL_SIDE_PENALTY = 10000;
   const LABEL_OFFSETS = {
@@ -31,6 +31,7 @@
     user: { x: 18, y: 50, align: "left" }
   };
   const LOCATIONS = {
+    moscow: { code: "moscow", city: "москва", country: "россия", countryId: "643", lat: 55.7558, lon: 37.6176 },
     nl: { code: "nl", city: "Амстердам", country: "Нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
     de: { code: "de", city: "Франкфурт-на-Майне", country: "Германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
     fi: { code: "fi", city: "Хельсинки", country: "Финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
@@ -85,12 +86,13 @@
     "ru-de": {
       title: "россия + германия",
       eyebrow: "двойной маршрут",
-      nodes: ["ru", "de"], links: [["ru", "de"]],
-      steps: [["вы", "устройство"], ["ru", "вход · петербург"], ["de", "выход · франкфурт"], ["web", "интернет"]],
-      description: "трафик сначала входит в точку в санкт-петербурге, затем идёт внутри сети во франкфурт и выходит в интернет из германии."
+      nodes: ["moscow", "de"], links: [["moscow", "de"]],
+      steps: [["вы", "устройство"], ["ru", "вход · москва"], ["de", "выход · франкфурт"], ["web", "интернет"]],
+      description: "трафик сначала входит в точку в москве, затем идёт внутри сети во франкфурт и выходит в интернет из германии."
     }
   };
   const EN_COPY = {
+    "москва": "Moscow",
     "амстердам": "Amsterdam",
     "нидерланды": "Netherlands",
     "франкфурт": "Frankfurt",
@@ -154,8 +156,8 @@
     "ru-de": {
       title: "Russia + Germany",
       eyebrow: "double route",
-      steps: [["you", "device"], ["ru", "entry · Saint Petersburg"], ["de", "exit · Frankfurt"], ["web", "internet"]],
-      description: "Traffic first enters through Saint Petersburg, then travels inside the network to Frankfurt and exits in Germany."
+      steps: [["you", "device"], ["ru", "entry · Moscow"], ["de", "exit · Frankfurt"], ["web", "internet"]],
+      description: "Traffic first enters through Moscow, then travels inside the network to Frankfurt and exits in Germany."
     }
   };
 
@@ -301,7 +303,7 @@
       this.labelPlacements = new Map();
       this.routeInitialized = false;
       this.lastFocusSignature = null;
-      this.availableLocationKeys = new Set(LOCATION_ORDER);
+      this.availableLocationKeys = new Set(LOCATION_ORDER.filter(key => key !== "moscow"));
       this.showcaseFocused = false;
       this.overviewMode = false;
       this.connected = false;
@@ -966,12 +968,20 @@
       return links;
     }
 
+    isLocationAvailable(key) {
+      if (key === "moscow" || key === "de") {
+        if (this.activeRouteNodeKeys().includes("moscow")) return true;
+        if (key === "moscow") return false;
+      }
+      return this.availableLocationKeys.has(key);
+    }
+
     routeLinks() {
       const activeRoute = this.activeRouteDefinition();
       const links = (activeRoute ? activeRoute.links : []).filter((link) =>
-        link.every((key) => this.availableLocationKeys.has(key))
+        link.every((key) => this.isLocationAvailable(key))
       );
-      const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
+      const firstHop = this.activeRouteNodeKeys().find((key) => this.isLocationAvailable(key));
       if (this.userLocation && firstHop) links.unshift(["user", firstHop]);
       return links;
     }
@@ -1039,7 +1049,7 @@
       if (!links.length) {
         // Without the location opt-in there is no truthful origin point for a
         // route line. Pulse the confirmed exit instead of inventing a source.
-        const exit = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
+        const exit = this.activeRouteNodeKeys().find((key) => this.isLocationAvailable(key));
         if (!exit) return;
         const point = this.projectLocation(LOCATIONS[exit], 1.018);
         if (point.z <= .015) return;
@@ -1418,7 +1428,7 @@
     drawNodes(colors) {
       this.projectedNodes = {};
       LOCATION_ORDER.forEach((key) => {
-        if (this.availableLocationKeys.has(key)) this.drawNode(key, LOCATIONS[key], colors, "server");
+        if (this.isLocationAvailable(key)) this.drawNode(key, LOCATIONS[key], colors, "server");
       });
       if (this.userLocation) this.drawNode("user", this.userLocation, colors, "user");
     }
@@ -1428,7 +1438,7 @@
       if (this.hovered) this.drawLabel(this.hovered, colors, occupied);
       if (this.userLocation && this.hovered !== "user") this.drawLabel("user", colors, occupied);
       LOCATION_ORDER.forEach((key) => {
-        if (this.availableLocationKeys.has(key) && this.hovered !== key) this.drawLabel(key, colors, occupied);
+        if (this.isLocationAvailable(key) && this.hovered !== key) this.drawLabel(key, colors, occupied);
       });
     }
 
@@ -1709,7 +1719,8 @@
         lat: clamp(Number(latitude), -85, 85),
         lon: ((Number(longitude) + 540) % 360) - 180,
         city: details && details.city,
-        country: details && details.country
+        country: details && details.country,
+        custom: !!details?.custom
       };
       if (JSON.stringify(this.userLocation) === JSON.stringify(nextLocation)) return;
       this.userLocation = nextLocation;
@@ -1717,7 +1728,7 @@
       // The first origin fix (or an explicit removal) may change the useful
       // framing. Later IP-location refreshes update the endpoint in place so
       // a small geolocation correction cannot make the whole atlas jump.
-      if (previousLocation == null || nextLocation == null) this.focusRoute();
+      if (previousLocation == null || nextLocation == null || previousLocation.custom || nextLocation.custom) this.focusRoute();
       this.staticDirty = true;
       this.start();
     }
@@ -1814,7 +1825,7 @@
       const reduce = this.reducedMotion.matches || window.deyttMapReducedMotion;
       const confirmedRoute = this.connectionTargetRoute || (isAuto ? this.autoExitRouteKey : this.route);
       const confirmedKey = confirmedRoute && (ROUTES[confirmedRoute]?.nodes || [confirmedRoute])
-        .find(key => LOCATIONS[key] && this.availableLocationKeys.has(key));
+        .find(key => LOCATIONS[key] && this.isLocationAvailable(key));
 
       // 1. Gentle, minimalist connection ripple on successful connect
       if (!reduce && phase === "CONNECTED" && this.connectionBurstAt && (time - this.connectionBurstAt < 800)) {
@@ -1841,7 +1852,7 @@
       context.save();
 
       if (isAuto) {
-        const candidateKeys = confirmedKey ? [confirmedKey] : LOCATION_ORDER.filter(key => this.availableLocationKeys.has(key));
+        const candidateKeys = confirmedKey ? [confirmedKey] : LOCATION_ORDER.filter(key => key !== "moscow" && this.availableLocationKeys.has(key));
         candidateKeys.forEach((key, index) => {
           const point = this.projectLocation(LOCATIONS[key], 1.010);
           if (point.z <= .015) return;
@@ -1870,7 +1881,7 @@
         // ============================================
         // MINIMALIST DIRECT ROUTE CONNECTION
         // ============================================
-        const targetKey = this.connectionTargetRoute || this.activeRouteNodeKeys()[0] || this.route;
+        const targetKey = confirmedKey || this.activeRouteNodeKeys()[0] || this.route;
         const targetLoc = LOCATIONS[targetKey];
 
         // Soft, calm breathing glow at the target node
@@ -1914,7 +1925,7 @@
           ? this.activeRouteNodeKeys()
           : ROUTES[this.route].nodes;
       const routeNodes = focusNodes
-        .filter((key) => this.availableLocationKeys.has(key));
+        .filter((key) => this.isLocationAvailable(key));
       const locations = routeNodes.map((key) => LOCATIONS[key]);
       if (this.userLocation) locations.push(this.userLocation);
       if (!locations.length) return;

@@ -8,6 +8,37 @@ public sealed class TunnelProfileBuilderTests
 {
     private const string AutoTag = "🌍 автоподбор";
 
+    [Fact]
+    public async Task CanStopAndReconnectWhileConnectionDnsIsPending()
+    {
+        const string routeTag = "route:NL:VLESS";
+        const string server = "reconnect.example.test";
+        var profile = JsonNode.Parse(Profile(routeTag))!.AsObject();
+        profile["outbounds"]!.AsArray().OfType<JsonObject>()
+            .Single(outbound => outbound["tag"]!.GetValue<string>() == routeTag)["server"] = server;
+        var dnsStarted = new SemaphoreSlim(0);
+        using var testDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        var engine = new EngineController(async (host, token) =>
+        {
+            if (host != server)
+                return [];
+            dnsStarted.Release();
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            return [];
+        });
+
+        for (var attempt = 0; attempt < 5; ++attempt)
+        {
+            var started = await engine.ConnectAsync(profile.ToJsonString(), routeTag, null, testDeadline.Token)
+                .WaitAsync(TimeSpan.FromSeconds(2));
+            Assert.Equal("starting", started.State);
+            await dnsStarted.WaitAsync(testDeadline.Token);
+            var stopped = await engine.StopAsync().WaitAsync(TimeSpan.FromSeconds(1.8));
+            Assert.Equal("disconnected", stopped.State);
+            Assert.Equal("disconnected", engine.Snapshot.State);
+        }
+    }
+
     [Theory]
     [InlineData("urltest")]
     [InlineData("selector")]

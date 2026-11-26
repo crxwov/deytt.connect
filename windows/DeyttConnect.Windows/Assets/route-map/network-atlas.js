@@ -6,7 +6,7 @@
   const MAX_ZOOM = 32;
   const ZOOM_EASE_MS = 115;
   const PAN_EASE_MS = 120;
-  const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it"];
+  const LOCATION_ORDER = ["nl", "de", "fi", "ru", "it", "moscow"];
   const LABEL_OFFSETS = {
     nl: { x: -28, y: -26, align: "right" },
     de: { x: -28, y: 30, align: "right" },
@@ -24,6 +24,7 @@
     user: { x: 22, y: -54, align: "left" }
   };
   const LOCATIONS = {
+    moscow: { code: "moscow", city: "москва", country: "россия", countryId: "643", lat: 55.7558, lon: 37.6176 },
     nl: { code: "nl", city: "амстердам", country: "нидерланды", countryId: "528", lat: 52.3676, lon: 4.9041 },
     de: { code: "de", city: "франкфурт-на-майне", country: "германия", countryId: "276", lat: 50.1109, lon: 8.6821 },
     fi: { code: "fi", city: "хельсинки", country: "финляндия", countryId: "246", lat: 60.1699, lon: 24.9384 },
@@ -78,12 +79,13 @@
     "ru-de": {
       title: "россия + германия",
       eyebrow: "двойной маршрут",
-      nodes: ["ru", "de"], links: [["ru", "de"]],
-      steps: [["вы", "устройство"], ["ru", "вход · петербург"], ["de", "выход · франкфурт"], ["web", "интернет"]],
-      description: "трафик сначала входит в точку в санкт-петербурге, затем идёт внутри сети во франкфурт и выходит в интернет из германии."
+      nodes: ["moscow", "de"], links: [["moscow", "de"]],
+      steps: [["вы", "устройство"], ["ru", "вход · москва"], ["de", "выход · франкфурт"], ["web", "интернет"]],
+      description: "трафик сначала входит в точку в москве, затем идёт внутри сети во франкфурт и выходит в интернет из германии."
     }
   };
   const EN_COPY = {
+    "москва": "Moscow",
     "уфа": "Ufa",
     "амстердам": "Amsterdam",
     "нидерланды": "Netherlands",
@@ -148,8 +150,8 @@
     "ru-de": {
       title: "Russia + Germany",
       eyebrow: "double route",
-      steps: [["you", "device"], ["ru", "entry · Saint Petersburg"], ["de", "exit · Frankfurt"], ["web", "internet"]],
-      description: "Traffic first enters through Saint Petersburg, then travels inside the network to Frankfurt and exits in Germany."
+      steps: [["you", "device"], ["ru", "entry · Moscow"], ["de", "exit · Frankfurt"], ["web", "internet"]],
+      description: "Traffic first enters through Moscow, then travels inside the network to Frankfurt and exits in Germany."
     }
   };
 
@@ -284,7 +286,7 @@
       this.labelPlacements = new Map();
       this.routeInitialized = false;
       this.lastFocusSignature = null;
-      this.availableLocationKeys = new Set(LOCATION_ORDER);
+      this.availableLocationKeys = new Set(LOCATION_ORDER.filter(key => key !== "moscow"));
       this.showcaseFocused = false;
       this.hovered = null;
       this.hoveredTrafficStream = null;
@@ -1124,6 +1126,14 @@
       context.restore();
     }
 
+    isLocationAvailable(key) {
+      if (key === "moscow" || key === "de") {
+        if (this.activeRouteNodeKeys().includes("moscow")) return true;
+        if (key === "moscow") return false;
+      }
+      return this.availableLocationKeys.has(key);
+    }
+
     routeLinks() {
       if (this.trafficActive && !this.autoExitRouteKey) return [];
       const route = ROUTES[this.route];
@@ -1131,9 +1141,9 @@
         ? ROUTES[this.autoExitRouteKey]
         : route;
       const links = (activeRoute || route).links.filter((link) =>
-        link.every((key) => this.availableLocationKeys.has(key))
+        link.every((key) => this.isLocationAvailable(key))
       );
-      const firstHop = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
+      const firstHop = this.activeRouteNodeKeys().find((key) => this.isLocationAvailable(key));
       if (this.userLocation && firstHop) links.unshift(["user", firstHop]);
       return links;
     }
@@ -1239,7 +1249,7 @@
       if (!links.length) {
         // Without location consent, keep the user's origin private. Show the
         // three stream types at the confirmed exit without inventing a map path.
-        const exit = this.activeRouteNodeKeys().find((key) => this.availableLocationKeys.has(key));
+        const exit = this.activeRouteNodeKeys().find((key) => this.isLocationAvailable(key));
         if (!exit) return;
         const point = this.projectLocation(LOCATIONS[exit], 1.018);
         if (point.z <= .015) return;
@@ -1786,7 +1796,7 @@
       this.projectedNodes = {};
       this.activeLabelsThisFrame = new Set();
       LOCATION_ORDER.forEach((key) => {
-        if (this.availableLocationKeys.has(key)) this.drawNode(key, LOCATIONS[key], colors, "server");
+        if (this.isLocationAvailable(key)) this.drawNode(key, LOCATIONS[key], colors, "server");
       });
       if (this.userLocation) this.drawNode("user", this.userLocation, colors, "user");
       this.labelBoxes = [];
@@ -1796,11 +1806,11 @@
       if (this.userLocation) addLabel("user");
       this.activeRouteNodeKeys().forEach(addLabel);
       LOCATION_ORDER.slice().sort((a, b) => (this.projectedNodes[a]?.y || 0) - (this.projectedNodes[b]?.y || 0)).forEach((key) => {
-        if (this.availableLocationKeys.has(key)) addLabel(key);
+        if (this.isLocationAvailable(key)) addLabel(key);
       });
       addLabel(this.hovered);
       labelOrder.forEach((key) => {
-        if (key === "user" ? this.userLocation : this.availableLocationKeys.has(key))
+        if (key === "user" ? this.userLocation : this.isLocationAvailable(key))
           this.drawLabel(key, colors, occupied);
       });
 
@@ -2155,7 +2165,8 @@
         lat: clamp(Number(latitude), -85, 85),
         lon: ((Number(longitude) + 540) % 360) - 180,
         city: details && details.city,
-        country: details && details.country
+        country: details && details.country,
+        custom: !!details?.custom
       };
       if (JSON.stringify(this.userLocation) === JSON.stringify(nextLocation)) return;
       this.userLocation = nextLocation;
@@ -2163,7 +2174,7 @@
       // The first origin fix (or an explicit removal) may change the useful
       // framing. Later IP-location refreshes update the endpoint in place so
       // a small geolocation correction cannot make the whole atlas jump.
-      if (previousLocation == null || nextLocation == null) this.focusRoute();
+      if (previousLocation == null || nextLocation == null || previousLocation.custom || nextLocation.custom) this.focusRoute();
       this.markMapDirty();
       this.start();
     }
@@ -2215,7 +2226,7 @@
           ? this.activeRouteNodeKeys()
           : ROUTES[this.route].nodes;
       const routeNodes = focusNodes
-        .filter((key) => this.availableLocationKeys.has(key));
+        .filter((key) => this.isLocationAvailable(key));
       const locations = routeNodes.map((key) => LOCATIONS[key]);
       if (this.userLocation) locations.push(this.userLocation);
       if (!locations.length) return;

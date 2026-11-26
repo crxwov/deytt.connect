@@ -327,7 +327,7 @@ object AppDialog {
                             createdDialog?.dismiss()
                         }
                     }
-                    val lp = if (hasPositive) {
+                    val lp = if (hasPositive || hasNeutral) {
                         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply {
                             marginEnd = host.dp(8)
                         }

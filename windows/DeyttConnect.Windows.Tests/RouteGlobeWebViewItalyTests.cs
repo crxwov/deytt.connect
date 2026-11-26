@@ -15,6 +15,15 @@ public sealed class RouteGlobeWebViewItalyTests
     {
         Assert.Equal(expected, RouteGlobeWebView.RouteKeyFor(routeId));
     }
+    [Fact]
+    public void LteUsesTheMoscowCascadeEvenWhenTheSubscriptionCountryIsEurope()
+    {
+        var route = new WindowsRoute("route:DE:LTE", "route:DE:LTE", "EU", "европа", "🇪🇺", "LTE", "xhttp");
+        Assert.Equal("ru-de", RouteGlobeWebView.RouteKeyFor(route.Id));
+        Assert.Equal("ru-de", RouteGlobeWebView.RouteKeyFor(route.Id, new[] { route }));
+        Assert.Equal("de", RouteGlobeWebView.RouteKeyFor("route:DE:VLESS"));
+    }
+
     [Theory]
     [InlineData("awg31:aXQ", "AWG31")]
     [InlineData("awg15:aXQ", "AWG15")]

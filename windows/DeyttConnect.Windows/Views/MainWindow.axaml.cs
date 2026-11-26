@@ -136,6 +136,7 @@ public partial class MainWindow : Window
         _reduceMotion = preferences.ReduceMotion;
         _themePreference = preferences.ThemePreference;
         _windowChromePreference = preferences.WindowChromePreference;
+        _customMapPoint = preferences.MapPoint;
         _useSystemWindowChrome = _windowChromePreference == "system";
         WindowDecorations = _useSystemWindowChrome
             ? Avalonia.Controls.WindowDecorations.Full
@@ -195,6 +196,7 @@ public partial class MainWindow : Window
         _mapRegionConsentGranted = false;
         _mapRegionConsentAsked = false;
         _mapOriginLocation = null;
+        _customMapPoint = null;
         _mapEgressLocation = null;
         _mapLocationStateInitialized = false;
         _sessionToken = fixture.SignedIn ? "QA synthetic session marker" : null;
@@ -3142,7 +3144,7 @@ public partial class MainWindow : Window
         }
 
         if (operationVersion == _vpnOperationVersion && _vpnSnapshot.State is ("starting" or "checking"))
-            _ = MonitorVpnConnectionAsync();
+            _ = MonitorVpnConnectionAsync(operationVersion);
         else if (operationVersion == _vpnOperationVersion && IsVpnDisplayConnected() &&
                  _selectedRoute == "auto" && string.IsNullOrWhiteSpace(_vpnSnapshot.ActiveRouteTag))
             _ = PollAutoSelectActiveRouteAsync(operationVersion);
@@ -3222,7 +3224,7 @@ public partial class MainWindow : Window
         }
 
         if (operationVersion == _vpnOperationVersion && _vpnSnapshot.State is ("starting" or "checking"))
-            _ = MonitorVpnConnectionAsync();
+            _ = MonitorVpnConnectionAsync(operationVersion);
         else if (operationVersion == _vpnOperationVersion && IsVpnDisplayConnected() &&
                  _selectedRoute == "auto" && string.IsNullOrWhiteSpace(_vpnSnapshot.ActiveRouteTag))
             _ = PollAutoSelectActiveRouteAsync(operationVersion);
@@ -3279,16 +3281,16 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task MonitorVpnConnectionAsync()
+    private async Task MonitorVpnConnectionAsync(long operationVersion)
     {
-        for (var attempt = 0; attempt < 160; attempt++)
+        for (var attempt = 0; attempt < 200; attempt++)
         {
-            if (_vpnSnapshot.State is not ("starting" or "checking"))
+            if (operationVersion != _vpnOperationVersion || _vpnSnapshot.State is not ("starting" or "checking"))
                 return;
             await RefreshVpnStatusAsync();
-            if (_vpnSnapshot.State is not ("starting" or "checking"))
+            if (operationVersion != _vpnOperationVersion || _vpnSnapshot.State is not ("starting" or "checking"))
                 return;
-            await Task.Delay(TimeSpan.FromMilliseconds(250));
+            await Task.Delay(TimeSpan.FromMilliseconds(attempt < 30 ? 60 : 200));
         }
     }
 
@@ -5026,7 +5028,7 @@ public partial class MainWindow : Window
         {
             WindowsPreferencesStore.Save(new WindowsPreferences(
                 _language, _selectedRoute, _probeMethod, _mapRegionEnabled, _reduceMotion,
-                _mapRegionConsentGranted, _mapRegionConsentAsked, _themePreference, _windowChromePreference));
+                _mapRegionConsentGranted, _mapRegionConsentAsked, _themePreference, _windowChromePreference, _customMapPoint));
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {

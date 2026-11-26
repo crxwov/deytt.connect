@@ -2,6 +2,13 @@ using System.Text.Json;
 
 namespace DeyttConnect.Windows.Services;
 
+public sealed record CustomMapPoint(string City, string Country, double Latitude, double Longitude)
+{
+    internal bool IsValid() => !string.IsNullOrWhiteSpace(City) && City.Length <= 80 && !City.Any(char.IsControl) &&
+        Country is { Length: 2 } && Country.All(char.IsAsciiLetter) &&
+        Latitude is >= -90 and <= 90 && Longitude is >= -180 and <= 180;
+}
+
 public sealed record WindowsPreferences(
     string Language = "ru",
     string SelectedRoute = "auto",
@@ -11,7 +18,8 @@ public sealed record WindowsPreferences(
     bool MapRegionConsentGranted = false,
     bool MapRegionConsentAsked = false,
     string ThemePreference = "dark",
-    string WindowChromePreference = "deytt");
+    string WindowChromePreference = "deytt",
+    CustomMapPoint? MapPoint = null);
 
 public static class WindowsPreferencesStore
 {
@@ -42,7 +50,8 @@ public static class WindowsPreferencesStore
                 value.MapRegionConsentGranted,
                 value.MapRegionConsentAsked,
                 value.ThemePreference is "system" or "light" or "dark" or "legacy" ? value.ThemePreference : "system",
-                value.WindowChromePreference is "deytt" or "system" ? value.WindowChromePreference : "deytt");
+                value.WindowChromePreference is "deytt" or "system" ? value.WindowChromePreference : "deytt",
+                value.MapPoint?.IsValid() == true ? value.MapPoint : null);
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -61,7 +70,8 @@ public static class WindowsPreferencesStore
             preferences.MapRegionConsentGranted,
             preferences.MapRegionConsentAsked,
             preferences.ThemePreference is "system" or "light" or "dark" or "legacy" ? preferences.ThemePreference : "system",
-            preferences.WindowChromePreference is "deytt" or "system" ? preferences.WindowChromePreference : "deytt");
+            preferences.WindowChromePreference is "deytt" or "system" ? preferences.WindowChromePreference : "deytt",
+            preferences.MapPoint?.IsValid() == true ? preferences.MapPoint : null);
         var path = PreferencesPath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";

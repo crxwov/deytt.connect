@@ -263,6 +263,7 @@ public partial class MainWindow
         map.AvailableLocations = GetAvailableMapLocations();
         map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
         map.OriginLocation = _mapOriginLocation;
+        map.CustomMapPoint = _customMapPoint;
         map.TrafficActive = IsVpnDisplayConnected();
         map.ReducedMotion = _reduceMotion;
         map.DarkTheme = DeyttTheme.IsDark;
@@ -284,6 +285,8 @@ public partial class MainWindow
         }.Where(value => !string.IsNullOrWhiteSpace(value))));
     }
 
+    private CustomMapPoint? _customMapPoint;
+
     private string[] GetAvailableMapLocations() => _routes
         .SelectMany(route => route.CountryCode.ToUpperInvariant() switch
         {
@@ -292,7 +295,7 @@ public partial class MainWindow
             "FI" => new[] { "fi" },
             "RU" => new[] { "ru" },
             "IT" => new[] { "it" },
-            "RU-DE" => new[] { "ru", "de" },
+            "RU-DE" or "EU" => new[] { "de" },
             _ => Array.Empty<string>(),
         })
         .Distinct(StringComparer.Ordinal)
@@ -313,7 +316,7 @@ public partial class MainWindow
                     "FI" => new[] { "fi" },
                     "RU" => new[] { "ru" },
                     "IT" => new[] { "it" },
-                    "RU-DE" => new[] { "ru", "de" },
+                    "RU-DE" or "EU" => new[] { "de" },
                     _ => Array.Empty<string>(),
                 })
                 .Distinct(StringComparer.Ordinal)
@@ -323,6 +326,7 @@ public partial class MainWindow
             map.AvailableLocations = availableLocations;
             map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
             map.OriginLocation = _mapOriginLocation;
+            map.CustomMapPoint = _customMapPoint;
             map.TrafficActive = IsVpnDisplayConnected();
             map.ReducedMotion = _reduceMotion;
             // A normal IP lookup follows the machine's upstream VPN (for example Happ).
@@ -567,6 +571,12 @@ public partial class MainWindow
             if (device is not null)
                 ShowHappDeviceDetails(device);
         };
+        map.CustomMapPointChanged += point =>
+        {
+            _customMapPoint = point;
+            map.CustomMapPoint = point;
+            SavePreferences();
+        };
         map.ThemeChanged += theme =>
         {
             if (_themePreference == theme) return;
@@ -717,7 +727,7 @@ public partial class MainWindow
             SelectRoute(route.Id);
             if (_routeGlobe is not null)
             {
-                _routeGlobe.SelectedRoute = RouteGlobeWebView.RouteKeyFor(route.CountryCode);
+                _routeGlobe.SelectedRoute = RouteGlobeWebView.RouteKeyFor(route.Id, _routes);
                 _routeGlobe.UpdateRoutesAndProbes(_routes, _routeProbeResults, _selectedRoute);
             }
             UpdateHomeGlobePresentation();
@@ -968,6 +978,7 @@ public partial class MainWindow
         map.AvailableLocations = GetAvailableMapLocations();
         map.OriginConsentGranted = _mapRegionEnabled && _mapRegionConsentGranted;
         map.OriginLocation = _mapOriginLocation;
+        map.CustomMapPoint = _customMapPoint;
         map.TrafficActive = IsVpnDisplayConnected();
         map.ReducedMotion = _reduceMotion;
         map.DarkTheme = DeyttTheme.IsDark;
@@ -1203,7 +1214,7 @@ public partial class MainWindow
             activeTag = _vpnSnapshot.RouteTag;
         if (string.IsNullOrWhiteSpace(activeTag)) return null;
         var route = _routes.FirstOrDefault(candidate => candidate.Tag == activeTag && candidate.CountryCode != "AUTO");
-        return route is null ? null : RouteGlobeWebView.RouteKeyFor(route.CountryCode);
+        return route is null ? null : RouteGlobeWebView.RouteKeyFor(route.Id, _routes);
     }
 
     private void InstrumentProbeChain(string message) =>

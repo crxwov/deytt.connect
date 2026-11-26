@@ -335,7 +335,7 @@ class MainActivity : Activity() {
             onMapNodeTapped = { mapRoutePickerSheet.show(it) }; onTrafficTapped = { homeMetricExplanationSheet.showTrafficExplanation(it) }
             focus(SelectedRouteStore(this@MainActivity).read().id, animate = false)
             setAvailableLocations(availableMapLocations().map { it.key }.toSet())
-            setUserLocation(networkLocationCoordinator.currentNetworkLocation)
+            setUserLocation(networkLocationCoordinator.mapOrigin)
             val sel = SelectedRouteStore(this@MainActivity).read(); val auto = sel.id == "auto"
             setConnectionPhase(VpnStateStore(this@MainActivity).read().phase.name, auto, if (auto) tunnelConnectionCoordinator.currentAutoRouteKey else sel.id)
         }
@@ -628,6 +628,10 @@ class MainActivity : Activity() {
         if (!::pageAdapter.isInitialized) return
         for (position in 0..3) pageAdapter.refresh(position)
     }
+
+    internal fun customMapPoint() = networkLocationCoordinator.customMapPoint
+
+    internal fun setCustomMapPoint(point: IpNetworkLocation?) = networkLocationCoordinator.setCustomMapPoint(point)
 
     internal fun isNetworkLocationEnabled(): Boolean = networkLocationCoordinator.isNetworkLocationEnabled()
 

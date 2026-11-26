@@ -159,6 +159,19 @@ public sealed class RouteGlobeWebView : ContentControl
     public event Action<string>? CountryProbeRequested;
 
     public event Action<long>? HappDeviceManagementRequested;
+    private CustomMapPoint? _customMapPoint;
+    public event Action<CustomMapPoint?>? CustomMapPointChanged;
+    public CustomMapPoint? CustomMapPoint
+    {
+        get => _customMapPoint;
+        set
+        {
+            if (_customMapPoint == value) return;
+            _customMapPoint = value;
+            QueueStateUpdate();
+        }
+    }
+
     public event Action<string>? ThemeChanged;
     public event Action? SubscriptionKeyCopyRequested;
     public event Action? SubscriptionRefreshRequested;
@@ -609,7 +622,7 @@ public sealed class RouteGlobeWebView : ContentControl
             .ToUpperInvariant()
             .Split(new[] { ' ', '-', '_', '/', '.', ':', '+', '\\' }, StringSplitOptions.RemoveEmptyEntries)
             .ToHashSet(StringComparer.Ordinal);
-        if (tokens.Contains("RU") && tokens.Contains("DE"))
+        if (tokens.Contains("DE") && (tokens.Contains("RU") || tokens.Contains("LTE")))
             return "ru-de";
         if (tokens.Contains("NL"))
             return "nl";
@@ -628,7 +641,7 @@ public sealed class RouteGlobeWebView : ContentControl
     {
         var route = routes.FirstOrDefault(item => item.Id == routeId || item.Tag == routeId);
         // AWG ids encode the server id; geography comes from subscription metadata.
-        return RouteKeyFor(route?.CountryCode ?? routeId);
+        return route?.Protocol == "LTE" ? "ru-de" : RouteKeyFor(route?.CountryCode ?? routeId);
     }
     private static string AtlasAssetDirectory => Path.Combine(AppContext.BaseDirectory, "Assets", "route-map");
 
@@ -1168,6 +1181,31 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
             Dispatcher.UIThread.Post(() => ImportRequested?.Invoke());
             return;
         }
+        const string mapPointPrefix = "settings:map_point:";
+        if (node.StartsWith(mapPointPrefix, StringComparison.Ordinal))
+        {
+            var payload = node[mapPointPrefix.Length..];
+            CustomMapPoint? point = null;
+            if (payload != "null")
+            {
+                if (payload.Length > 1024) return;
+                try
+                {
+                    point = JsonSerializer.Deserialize<CustomMapPoint>(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+                }
+                catch (JsonException)
+                {
+                    return;
+                }
+                if (point?.IsValid() != true) return;
+            }
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_atlasFailed && ReferenceEquals(sender, _webView))
+                    CustomMapPointChanged?.Invoke(point);
+            });
+            return;
+        }
         const string themePrefix = "settings:theme:";
         if (node.StartsWith(themePrefix, StringComparison.Ordinal))
         {
@@ -1506,7 +1544,18 @@ var qaUserDataFolder = Environment.GetEnvironmentVariable("DEYTT_QA_WEBVIEW2_USE
         script.Append("window.deyttSetMapLocations && window.deyttSetMapLocations(")
             .Append(JsonSerializer.Serialize(_availableLocations)).AppendLine(");");
 
-        if (_originConsentGranted && _originLocation is { } location)
+        var customPoint = _customMapPoint;
+        script.Append("window.deyttSetCustomMapPoint && window.deyttSetCustomMapPoint(")
+            .Append(JsonSerializer.Serialize(customPoint?.City)).AppendLine(");");
+        if (customPoint is not null)
+        {
+            var details = JsonSerializer.Serialize(new { city = customPoint.City, country = customPoint.Country, custom = true });
+            script.Append("window.deyttSetMapUserLocation && window.deyttSetMapUserLocation(")
+                .Append(JsonSerializer.Serialize(customPoint.Latitude)).Append(',')
+                .Append(JsonSerializer.Serialize(customPoint.Longitude)).Append(',')
+                .Append(details).AppendLine(");");
+        }
+        else if (_originConsentGranted && _originLocation is { } location)
         {
             var city = new string(location.City.Where(character => !char.IsControl(character)).Take(80).ToArray()).Trim();
             var country = new string(location.CountryCode.Where(char.IsAsciiLetterOrDigit).Take(3).ToArray())

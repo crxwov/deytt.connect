@@ -23,31 +23,43 @@ public static class XrayRouteProfile
             route => route.Tag, route => route.Stream["network"]!.GetValue<string>(), StringComparer.Ordinal);
 
     public static async Task<Runtime?> PrepareAsync(string profile,
-        Func<string, CancellationToken, Task<IPAddress[]>> resolve, CancellationToken cancellationToken)
+        Func<string, CancellationToken, Task<IPAddress[]>> resolve, CancellationToken cancellationToken,
+        string? selectedRouteTag = null)
     {
         var root = JsonNode.Parse(profile)!.AsObject();
         var routes = ReadRoutes(root);
         if (routes.Count == 0)
             return null;
+        if (!string.IsNullOrWhiteSpace(selectedRouteTag) &&
+            selectedRouteTag != AutoTag &&
+            !selectedRouteTag.Contains("автоподбор", StringComparison.OrdinalIgnoreCase))
+        {
+            routes = routes.Where(route => route.Tag == selectedRouteTag).ToList();
+            if (routes.Count == 0)
+                return null;
+        }
+
+        var uniqueHosts = routes.Select(route => route.Host).Distinct(StringComparer.Ordinal).ToArray();
+        var resolvedPairs = await Task.WhenAll(uniqueHosts.Select(async host =>
+        {
+            var resolved = await resolve(host, cancellationToken).ConfigureAwait(false);
+            var address = resolved.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork)
+                ?? throw new InvalidDataException("Xray endpoint has no IPv4 address.");
+            return (Host: host, Address: address);
+        })).ConfigureAwait(false);
+        var addresses = resolvedPairs.ToDictionary(pair => pair.Host, pair => pair.Address, StringComparer.Ordinal);
 
         var proxies = root["outbounds"]!.AsArray();
         var inbounds = new JsonArray();
         var outbounds = new JsonArray();
         var rules = new JsonArray();
         var reservations = new List<TcpListener>();
-        var addresses = new Dictionary<string, IPAddress>(StringComparer.Ordinal);
         var ports = new List<int>();
         try
         {
             foreach (var route in routes)
             {
-                if (!addresses.TryGetValue(route.Host, out var address))
-                {
-                    var resolved = await resolve(route.Host, cancellationToken).ConfigureAwait(false);
-                    address = resolved.FirstOrDefault(ip => ip.AddressFamily == AddressFamily.InterNetwork)
-                        ?? throw new InvalidDataException("Xray endpoint has no IPv4 address.");
-                    addresses.Add(route.Host, address);
-                }
+                var address = addresses[route.Host];
 
                 var listener = new TcpListener(IPAddress.Loopback, 0);
                 listener.Start();

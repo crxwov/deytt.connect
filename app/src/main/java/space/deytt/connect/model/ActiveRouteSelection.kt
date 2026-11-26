@@ -31,7 +31,7 @@ data class ActiveRouteSelection(
 
         fun fromOutboundTag(tag: String): ActiveRouteSelection? {
             val normalized = tag.trim()
-            if (normalized.startsWith("route:RU-DE:", ignoreCase = true)) {
+            if (normalized.equals("route:DE:LTE", ignoreCase = true) || normalized.startsWith("route:RU-DE:", ignoreCase = true)) {
                 return ActiveRouteSelection("DE", "ru-de", normalized)
             }
             val country = directRoute.find(normalized)?.groupValues?.get(1)?.uppercase() ?: return null

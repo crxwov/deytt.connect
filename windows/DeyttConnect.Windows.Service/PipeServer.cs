@@ -142,8 +142,7 @@ internal static class PipeServer
                 result = await engine.MeasureTunnelLatencyAsync(cancellationToken).ConfigureAwait(false);
                 break;
             case WindowsPipeCommand.Disconnect:
-                engine.Stop();
-                result = engine.Snapshot;
+                result = await engine.StopAsync().ConfigureAwait(false);
                 break;
             case WindowsPipeCommand.Connect:
                 if (request.Profile is null || request.RouteTag is null)

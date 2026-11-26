@@ -121,7 +121,7 @@ internal static class TunnelProfileBuilder
         // The shared profile includes an Android-only field that this engine rejects.
         tun.Remove("dns_mode");
         // A subscription's generic name can collide with other sing-box clients.
-        tun["interface_name"] = "deytt-connect";
+        tun["interface_name"] = EngineController.PrimaryTunInterfaceName;
         if (tun["address"] is JsonArray addresses &&
             !addresses.Any(node => node is JsonValue val && val.TryGetValue<string>(out var text) && text.Contains(':')))
         {

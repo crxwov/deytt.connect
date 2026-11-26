@@ -197,10 +197,11 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
     private var connectionTargetRoute: String? = null
 
     internal fun setConnectionPhase(phase: String, isAuto: Boolean, targetRoute: String?) {
-        if (connectionPhase == phase && connectionIsAuto == isAuto && connectionTargetRoute == targetRoute) return
+        val targetKey = targetRoute?.let(::routeKeyFor)
+        if (connectionPhase == phase && connectionIsAuto == isAuto && connectionTargetRoute == targetKey) return
         connectionPhase = phase
         connectionIsAuto = isAuto
-        connectionTargetRoute = targetRoute
+        connectionTargetRoute = targetKey
         if (pageLoaded) applyConnectionPhase()
     }
 
@@ -306,6 +307,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
         val details = JSONObject()
             .put("city", AppLanguage.locationLabel(context, location.city.take(80)))
             .put("country", location.countryCode.take(3))
+            .put("custom", location.custom)
             .toString()
         atlas.evaluateJavascript(
             "window.deyttSetMapUserLocation && window.deyttSetMapUserLocation(${location.latitude},${location.longitude},$details)",
@@ -378,11 +380,12 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                 "de" -> "The selected exit is Frankfurt, Germany"
                 "fi" -> "The selected exit is Helsinki, Finland"
                 "ru" -> "The selected exit is Saint Petersburg, Russia"
-                "ru-de" -> "The selected route is a double hop from Saint Petersburg to Frankfurt"
+                "ru-de" -> "The LTE route goes through Moscow and exits in Frankfurt"
                 else -> "Available exits are Amsterdam, Frankfurt, Helsinki, and Saint Petersburg"
             }
         val origin = networkLocation?.let {
-            " Entry point: ${it.placeLabel}, approximate by IP; the IP address is not stored."
+            if (it.custom) " Custom map point: ${it.placeLabel}."
+            else " Entry point: ${it.placeLabel}, approximate by IP; the IP address is not stored."
         }.orEmpty()
             val egress = if (route == "auto" && egressCountryCode != null) " Approximate active exit: $egressCountryCode." else ""
             return "DEYTT network map. $destination.$origin$egress Tap a point to choose an exit and protocol. Drag to rotate; pinch to zoom. Swipe horizontally to switch tabs."
@@ -392,10 +395,13 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
             "de" -> "выбрана точка Франкфурт, Германия"
             "fi" -> "выбрана точка Хельсинки, Финляндия"
             "ru" -> "выбрана точка Санкт-Петербург, Россия"
-            "ru-de" -> "показан двойной маршрут Санкт-Петербург — Франкфурт"
+            "ru-de" -> "маршрут lte проходит через москву с выходом во франкфурте"
             else -> "показаны точки Амстердам, Франкфурт, Хельсинки и Санкт-Петербург"
         }
-        val origin = networkLocation?.let { " Точка входа — ${it.placeLabel}, приблизительно по IP; адрес IP не сохраняется." }.orEmpty()
+        val origin = networkLocation?.let {
+            if (it.custom) " Своя точка на карте — ${it.placeLabel}."
+            else " Точка входа — ${it.placeLabel}, приблизительно по IP; адрес IP не сохраняется."
+        }.orEmpty()
         val egress = if (route == "auto" && egressCountryCode != null) {
             if (AppLanguage.current(context) == AppLanguage.EN) {
                 " Selected exit in ${countryName(egressCountryCode!!)} approximately by IP."
@@ -489,7 +495,7 @@ class RouteGlobeView(context: Context) : FrameLayout(context) {
                 .filter(String::isNotBlank)
                 .toSet()
             return when {
-                routeTokens.containsAll(setOf("RU", "DE")) -> "ru-de"
+                ("LTE" in routeTokens && "DE" in routeTokens) || routeTokens.containsAll(setOf("RU", "DE")) -> "ru-de"
                 "NL" in routeTokens -> "nl"
                 "DE" in routeTokens -> "de"
                 "FI" in routeTokens -> "fi"

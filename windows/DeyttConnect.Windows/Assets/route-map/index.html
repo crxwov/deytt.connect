@@ -4318,7 +4318,12 @@
     .settings-experimental { padding: 16px; display: grid; gap: 12px; }
     .settings-experimental h2 { font-size: 16px; }
     .settings-experimental label { color: var(--text-muted); }
-    .settings-experimental select { min-height: 40px; padding: 6px 10px; border-radius: 10px; }
+    .settings-experimental :is(select, input) { min-height: 40px; padding: 6px 10px; border-radius: 10px; }
+    .settings-experimental[hidden] { display: none; }
+    #map-point-form, #map-point-results { display: grid; gap: 8px; }
+    #map-point-form { border-top: 1px solid var(--text-muted); padding-top: 12px; }
+    #map-point-query { color: var(--text); background: var(--surface-raised); border: 1px solid var(--text-muted); font: inherit; }
+    #map-point-form :is(small, output) { color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -5178,6 +5183,18 @@
             <option value="legacy">классическая</option>
             <option value="light">светлая</option>
           </select>
+          <form id="map-point-form" aria-labelledby="map-point-label">
+            <label for="map-point-query" id="map-point-label">своя точка на карте</label>
+            <small id="map-point-hint">меняет только точку на карте</small>
+            <small id="map-point-current"></small>
+            <input id="map-point-query" name="city" type="search" required minlength="2" maxlength="100"
+              aria-describedby="map-point-hint" autocomplete="off" enterkeyhint="search">
+            <button class="home-measure" type="submit" id="map-point-search">найти город</button>
+            <div id="map-point-results"></div>
+            <output id="map-point-status" aria-live="polite"></output>
+            <button class="home-measure" type="button" id="map-point-reset" disabled>автоматически</button>
+            <small>Photon · © OpenStreetMap</small>
+          </form>
         </section>
 
       </div>
@@ -6701,6 +6718,11 @@
         setSelText('#experiment-theme option[value="dark"]', t("графитовая", "graphite"));
         setSelText('#experiment-theme option[value="legacy"]', t("классическая", "classic"));
         setSelText('#experiment-theme option[value="light"]', t("светлая", "light"));
+        setSelText('#map-point-label', t("своя точка на карте", "custom map point"));
+        setSelText('#map-point-hint', t("меняет только точку на карте", "only changes the point on the map"));
+        setSelText('#map-point-search', t("найти город", "find city"));
+        setSelText('#map-point-reset', t("автоматически", "automatic"));
+        renderCurrentMapPoint();
       }
 
       if (window.__currentSettings) window.deyttSetSettingsData(window.__currentSettings);
@@ -6739,6 +6761,83 @@
     const versionButton = document.getElementById("settings-app-version");
     const experimentPanel = document.getElementById("settings-experimental");
     const themePicker = document.getElementById("experiment-theme");
+    const mapPointForm = document.getElementById("map-point-form");
+    const mapPointQuery = document.getElementById("map-point-query");
+    const mapPointResults = document.getElementById("map-point-results");
+    const mapPointStatus = document.getElementById("map-point-status");
+    const mapPointSearch = document.getElementById("map-point-search");
+    const mapPointReset = document.getElementById("map-point-reset");
+    const mapPointCurrent = document.getElementById("map-point-current");
+    let currentMapPoint = null;
+    let mapPointSearching = false;
+    const pointCopy = (ru, en) => document.documentElement.lang === "en" ? en : ru;
+    function renderCurrentMapPoint() {
+      mapPointReset.disabled = !currentMapPoint;
+      mapPointCurrent.textContent = currentMapPoint
+        ? pointCopy("на карте · ", "on map · ") + currentMapPoint
+        : pointCopy("автоматическое определение", "automatic location");
+    }
+    window.deyttSetCustomMapPoint = (city) => {
+      currentMapPoint = city;
+      renderCurrentMapPoint();
+    };
+    renderCurrentMapPoint();
+    mapPointReset.addEventListener("click", () => {
+      postHost("settings:map_point:null");
+      mapPointStatus.textContent = "";
+    });
+    mapPointQuery.addEventListener("input", () => mapPointQuery.setCustomValidity(""));
+    mapPointForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (mapPointSearching) return;
+      const query = mapPointQuery.value.trim();
+      if (query.length < 2) {
+        mapPointQuery.setCustomValidity(pointCopy("введите хотя бы две буквы", "enter at least two letters"));
+        mapPointQuery.reportValidity();
+        return;
+      }
+      mapPointSearching = true;
+      mapPointSearch.disabled = true;
+      mapPointResults.replaceChildren();
+      mapPointStatus.textContent = pointCopy("поиск…", "searching…");
+      try {
+        const url = new URL("https://photon.komoot.io/api/");
+        url.search = new URLSearchParams({ q: query, limit: "6", lang: pointCopy("default", "en") });
+        url.searchParams.append("layer", "city");
+        const response = await fetch(url, { signal: AbortSignal.timeout(7000), referrerPolicy: "no-referrer" });
+        if (!response.ok) throw new Error("City search unavailable");
+        const { features } = await response.json();
+        const labels = new Set();
+        for (const feature of features) {
+          const { name, state, countrycode } = feature.properties;
+          const [longitude, latitude] = feature.geometry.coordinates;
+          const city = String(name || "").replace(/[\x00-\x1f\x7f]/g, "").trim().slice(0, 80);
+          if (!city || !/^[A-Za-z]{2}$/.test(countrycode) || !Number.isFinite(latitude) || !Number.isFinite(longitude)
+              || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) continue;
+          const label = [...new Set([city, state, countrycode].filter(Boolean))].join(" · ");
+          if (labels.has(label)) continue;
+          labels.add(label);
+          const button = document.createElement("button");
+          button.className = "home-measure";
+          button.type = "button";
+          button.textContent = label;
+          button.addEventListener("click", () => {
+            postHost("settings:map_point:" + JSON.stringify({ city, country: countrycode, latitude, longitude }));
+            mapPointResults.replaceChildren();
+            mapPointStatus.textContent = "";
+            mapPointQuery.focus();
+          });
+          mapPointResults.append(button);
+        }
+        mapPointStatus.textContent = labels.size ? "" : pointCopy(
+          "город не найден. уточните название или страну", "city not found. refine the name or country");
+      } catch {
+        mapPointStatus.textContent = pointCopy("поиск недоступен. попробуйте ещё раз", "search unavailable. try again");
+      } finally {
+        mapPointSearching = false;
+        mapPointSearch.disabled = false;
+      }
+    });
     let versionTaps = 0;
     versionButton.addEventListener("click", () => {
       if (!experimentPanel.hidden || ++versionTaps !== 7) return;

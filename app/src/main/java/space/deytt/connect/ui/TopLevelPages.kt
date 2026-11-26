@@ -9,6 +9,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -277,6 +278,26 @@ internal class PrimaryPages(
             ))
         })
 
+        val experimental = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            visibility = View.GONE
+            addView(spacer(16, host))
+            addView(host.sectionLabel(copy("экспериментальные настройки", "experimental settings")))
+            val group = routeGroup()
+            val title = copy("своя точка на карте", "custom map point")
+            fun pointSummary() = host.customMapPoint()?.city ?: copy("автоматически", "automatic")
+            appendToGroup(group, host.row(title, pointSummary(), "ROUTE_CHECK_ICON", "›").apply {
+                val summary = (getChildAt(1) as? LinearLayout)?.getChildAt(1) as? TextView
+                setOnClickListener {
+                    showCitySearch {
+                        summary?.text = pointSummary()
+                        contentDescription = "$title. ${pointSummary()}"
+                    }
+                }
+            })
+            addView(group)
+        }
+
         root.addView(spacer(16, host))
         root.addView(host.sectionLabel(copy("обновления", "updates")))
         root.addView(LinearLayout(host).apply {
@@ -284,7 +305,15 @@ internal class PrimaryPages(
             setPadding(host.dp(16), host.dp(13), host.dp(16), host.dp(13))
             background = host.cardSurface(radius = 18f)
             clipToOutline = true
-            addView(host.text("deytt.connect · ${BuildConfig.VERSION_NAME}", 13f, TEXT, android.graphics.Typeface.BOLD))
+            addView(host.text("deytt./connect · ${BuildConfig.VERSION_NAME}", 13f, TEXT, android.graphics.Typeface.BOLD).apply {
+                var versionTaps = 0
+                setOnClickListener {
+                    if (++versionTaps == 7) {
+                        experimental.visibility = View.VISIBLE
+                        experimental.announceForAccessibility(copy("экспериментальные настройки", "experimental settings"))
+                    }
+                }
+            })
             val updateStatus = host.text(inAppUpdateFlow.updateStatusText, 11f, MUTED).apply { setPadding(0, host.dp(5), 0, host.dp(10)) }
             addView(updateStatus)
             val updateButton = host.button(copy("Проверить обновления", "Check for updates"), secondary = true).apply {
@@ -293,6 +322,7 @@ internal class PrimaryPages(
             addView(updateButton, LinearLayout.LayoutParams(-1, host.dp(46)))
             inAppUpdateFlow.bindSettingsViews(updateStatus, updateButton)
         })
+        root.addView(experimental)
         root.addView(spacer(18, host))
         return ScrollView(host).apply {
             isFillViewport = true
@@ -300,6 +330,79 @@ internal class PrimaryPages(
             clipToPadding = false
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(root)
+        }
+    }
+
+    private fun showCitySearch(onChanged: () -> Unit) {
+        val title = copy("своя точка на карте", "custom map point")
+        val cityLabel = copy("город или город и страна", "city or city and country")
+        val input = EditText(host).apply {
+            setSingleLine()
+            setTextColor(TEXT)
+            setHintTextColor(MUTED)
+            hint = cityLabel
+            filters = arrayOf(android.text.InputFilter.LengthFilter(100))
+        }
+        val status = host.text("", 12f, MUTED).apply {
+            accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
+        }
+        val results = LinearLayout(host).apply { orientation = LinearLayout.VERTICAL }
+        val search = host.button(copy("найти город", "find city"), secondary = true)
+        val form = LinearLayout(host).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(host.text(copy("меняет только точку на карте", "only changes the point on the map"), 12f, MUTED))
+            addView(input)
+            addView(search)
+            addView(status)
+            addView(results)
+            addView(host.text("Photon · © OpenStreetMap", 11f, MUTED))
+        }
+        val dialog = AppDialog.Builder(host).setTitle(title)
+            .setView(ScrollView(host).apply { addView(form) })
+            .setNegativeButton(copy("закрыть", "close"), null)
+            .setNeutralButton(copy("автоматически", "automatic")) { _, _ ->
+                host.setCustomMapPoint(null)
+                onChanged()
+            }
+            .show()
+
+        val submit = View.OnClickListener {
+            val query = input.text.toString().trim()
+            if (query.length < 2) {
+                input.error = copy("введите хотя бы две буквы", "enter at least two letters")
+                return@OnClickListener
+            }
+            results.removeAllViews()
+            search.isEnabled = false
+            status.text = copy("поиск…", "searching…")
+            val language = AppLanguage.current(host)
+            Thread {
+                val response = runCatching { CitySearch.find(query, language) }
+                host.runOnUiThread {
+                    if (!dialog.isShowing || host.isFinishing || host.isDestroyed) return@runOnUiThread
+                    search.isEnabled = true
+                    status.text = response.fold(
+                        { if (it.isEmpty()) copy("город не найден. уточните название или страну", "city not found. refine the name or country") else "" },
+                        { copy("поиск недоступен. попробуйте ещё раз", "search unavailable. try again") },
+                    )
+                    response.getOrNull()?.forEach { point ->
+                        val label = listOf(point.city, point.region, point.countryCode).filter(String::isNotBlank).distinct().joinToString(" · ")
+                        results.addView(host.button(label, secondary = true).apply {
+                            setOnClickListener {
+                                host.setCustomMapPoint(point)
+                                onChanged()
+                                dialog.dismiss()
+                            }
+                        })
+                    }
+                }
+            }.start()
+        }
+        search.setOnClickListener(submit)
+        input.imeOptions = android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+        input.setOnEditorActionListener { _, action, _ ->
+            if (action != android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH || !search.isEnabled) false
+            else { search.performClick(); true }
         }
     }
 
