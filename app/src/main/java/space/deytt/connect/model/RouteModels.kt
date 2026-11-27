@@ -65,7 +65,7 @@ class SelectedRouteStore(context: Context) {
             putString("title", when (route.protocol) {
                 RouteProtocol.AUTO -> route.protocol.title
                 RouteProtocol.LTE -> "${route.flag} lte • белые списки"
-                else -> "${route.flag} ${route.country}"
+                else -> "${route.flag} ${route.profileName?.takeIf { route.engine == TunnelEngine.LIBBOX } ?: route.country}"
             })
             putString(
                 "subtitle",
@@ -211,8 +211,8 @@ object RouteCatalog {
                 val presentation = countries[parts[1]] ?: continue
                 val protocol = when (parts[2]) {
                     "VLESS" -> RouteProtocol.VLESS
-                    "TROJAN" -> RouteProtocol.TROJAN
-                    "HYSTERIA2" -> RouteProtocol.HYSTERIA2
+                    "TROJAN", "TRIAL_TROJAN" -> RouteProtocol.TROJAN
+                    "HYSTERIA2", "TRIAL_HYSTERIA2" -> RouteProtocol.HYSTERIA2
                     "TUIC" -> RouteProtocol.TUIC
                     else -> continue
                 }
@@ -221,6 +221,7 @@ object RouteCatalog {
                 } else protocol.title
                 routes += DeyttRoute(
                     tag, parts[1], presentation.second, presentation.first, protocol, TunnelEngine.LIBBOX, tag,
+                    profileName = if (tag.startsWith("route:DE:TRIAL_")) "de-2 · trial" else null,
                     transportLabel = transportLabel,
                 )
             }

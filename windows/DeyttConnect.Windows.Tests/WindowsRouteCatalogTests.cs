@@ -9,6 +9,29 @@ namespace DeyttConnect.Windows.Tests;
 public sealed class WindowsRouteCatalogTests
 {
     [Fact]
+    public void TrialRoutesAreSeparateSelectableDirectRoutes()
+    {
+        using var profile = JsonDocument.Parse("""
+            {"inbounds":[{"type":"tun","tag":"tun-in","address":["172.19.0.1/30"]}],"outbounds":[
+                {"type":"urltest","tag":"автоподбор","outbounds":["route:DE:HYSTERIA2"]},
+                {"type":"hysteria2","tag":"route:DE:HYSTERIA2"},
+                {"type":"hysteria2","tag":"route:DE:TRIAL_HYSTERIA2"},
+                {"type":"trojan","tag":"route:DE:TRIAL_TROJAN"}
+            ],"route":{"final":"автоподбор","rules":[{"protocol":"dns","action":"hijack-dns"}]}}
+            """);
+        var routes = WindowsRouteCatalog.Parse(profile.RootElement);
+        var trials = routes.Where(route => route.Id.Contains(":TRIAL_", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(new[] { "TROJAN", "HYSTERIA2" }, trials.Select(route => route.Protocol));
+        Assert.All(trials, route =>
+        {
+            Assert.Equal("DE", route.CountryCode);
+            Assert.Contains("de-2 · trial", WindowsRouteCatalog.FormatRouteTitle(route));
+            Assert.Equal("direct · trial", WindowsRouteCatalog.FormatRouteDetail(route, english: true));
+        });
+        Assert.Single(routes, route => route.Id == "route:DE:HYSTERIA2");
+    }
+
+    [Fact]
     public void PartialRouteCatalogLoadsLikeAndroid()
     {
         const string source = """

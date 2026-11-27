@@ -223,11 +223,12 @@ internal class RoutePageView(
                         rightMargin = host.dp(16)
                     })
                 val isAwg = route.engine == TunnelEngine.AMNEZIAWG
+                val isTrial = route.configTag.startsWith("route:DE:TRIAL_")
                 val isRu = route.countryCode.equals("RU", ignoreCase = true)
-                val isDirect = isRu || route.protocol == RouteProtocol.HYSTERIA2 || route.protocol == RouteProtocol.TUIC || isAwg
+                val isDirect = isRu || route.protocol == RouteProtocol.HYSTERIA2 || route.protocol == RouteProtocol.TUIC || isAwg || isTrial
                 val mark = if (isDirect) "[⚡]" else "[🛰️]"
                 val mode = if (isDirect) "(speed)" else "(stable)"
-                val cc = route.countryCode.lowercase()
+                val cc = if (isTrial) route.profileName ?: "de-2 · trial" else route.countryCode.lowercase()
                 val proto = when (route.protocol) {
                     RouteProtocol.VLESS -> route.transportLabel
                     RouteProtocol.TROJAN -> "trojan"
@@ -238,7 +239,9 @@ internal class RoutePageView(
                     else -> route.profileName ?: route.protocol.title.lowercase()
                 }
                 val rowTitle = if (route.protocol == RouteProtocol.LTE) "lte • белые списки" else "$mark  $cc • $proto $mode"
-                val rowSubtitle = if (isAwg) {
+                val rowSubtitle = if (isTrial) {
+                    copy("прямой · триальный", "direct · trial")
+                } else if (isAwg) {
                     copy("прямой · amneziawg", "direct · amneziawg")
                 } else when (route.protocol) {
                     RouteProtocol.VLESS, RouteProtocol.TROJAN -> if (isRu) copy("прямой маршрут", "direct route") else copy("каскадный маршрут", "cascade route")

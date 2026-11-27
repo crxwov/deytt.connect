@@ -46,10 +46,11 @@ public static class WindowsRouteCatalog
         if (route.Protocol == "LTE")
             return "🇪🇺 lte • белые списки";
         var isRu = string.Equals(route.CountryCode, "RU", StringComparison.OrdinalIgnoreCase);
-        var isDirect = isRu || route.Protocol is "HYSTERIA2" or "TUIC" || route.Protocol.StartsWith("AWG", StringComparison.OrdinalIgnoreCase);
+        var isTrial = route.Tag.StartsWith("route:DE:TRIAL_", StringComparison.Ordinal);
+        var isDirect = isRu || isTrial || route.Protocol is "HYSTERIA2" or "TUIC" || route.Protocol.StartsWith("AWG", StringComparison.OrdinalIgnoreCase);
         var mark = isDirect ? "[⚡]" : "[🛰️]";
         var mode = isDirect ? "(speed)" : "(stable)";
-        var cc = route.CountryCode.ToLowerInvariant();
+        var cc = isTrial ? route.ProfileName ?? "de-2 · trial" : route.CountryCode.ToLowerInvariant();
         var proto = route.Protocol switch
         {
             "VLESS" => VlessTransportLabel(route.Detail),
@@ -71,6 +72,8 @@ public static class WindowsRouteCatalog
 
     public static string FormatRouteDetail(WindowsRoute route, bool english = false)
     {
+        if (route.Tag.StartsWith("route:DE:TRIAL_", StringComparison.Ordinal))
+            return english ? "direct · trial" : "прямой · триальный";
         return route.Protocol switch
         {
             "AUTO" => english ? "Select an available exit automatically" : "Выбрать доступный выход автоматически",
@@ -158,6 +161,14 @@ public static class WindowsRouteCatalog
                     Detail: xrayTransports.TryGetValue(tag, out var xrayTransport)
                         ? xrayTransport
                         : outboundByTag.TryGetValue(tag, out var outbound) ? DescribeTransport(outbound) : null));
+        }
+
+        foreach (var protocol in Protocols.Where(value => value.Code is "TROJAN" or "HYSTERIA2"))
+        {
+            var tag = $"route:DE:TRIAL_{protocol.Code}";
+            if (outboundTags.Contains(tag))
+                routes.Add(new WindowsRoute(tag, tag, "DE", "Германия", "🇩🇪",
+                    protocol.Code, protocol.Name, ProfileName: "de-2 · trial"));
         }
 
         foreach (var awgProfile in (awgProfiles ?? []).Take(32))

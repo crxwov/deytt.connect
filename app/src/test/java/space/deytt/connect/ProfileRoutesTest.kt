@@ -6,6 +6,23 @@ import org.junit.Test
 import org.json.JSONObject
 
 class ProfileRoutesTest {
+    @Test
+    fun exposesSeparateTrialRoutesWithNormalProtocolsAndStableSelection() {
+        val root = JSONObject(config)
+        root.getJSONArray("outbounds")
+            .put(JSONObject().put("type", "hysteria2").put("tag", "route:DE:TRIAL_HYSTERIA2"))
+            .put(JSONObject().put("type", "trojan").put("tag", "route:DE:TRIAL_TROJAN"))
+        val source = root.toString()
+        val trials = RouteCatalog.from(source, emptyList()).filter { it.id.contains(":TRIAL_") }
+
+        assertEquals(listOf(RouteProtocol.HYSTERIA2, RouteProtocol.TROJAN), trials.map { it.protocol })
+        assertEquals(listOf("DE", "DE"), trials.map { it.countryCode })
+        assertEquals(listOf("de-2 · trial", "de-2 · trial"), trials.map { it.profileName })
+        assertEquals("route:DE:TRIAL_HYSTERIA2", ProfileRoutes.selected(
+            ProfileRoutes.select(source, "route:DE:TRIAL_HYSTERIA2")))
+        assertEquals(1, RouteCatalog.from(source, emptyList()).count { it.id == "route:DE:HYSTERIA2" })
+    }
+
     private val config = """
         {
           "outbounds": [
