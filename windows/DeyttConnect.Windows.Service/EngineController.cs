@@ -231,6 +231,9 @@ internal sealed class EngineController
                 return;
             }
             (runtimeProfile, _activeRouteTelemetry) = ActiveRouteTelemetry.Create(runtimeProfile, routeTag);
+            _tunInterfaceName = PrimaryTunInterfaceName;
+            if (OperatingSystem.IsWindows())
+                (runtimeProfile, _tunInterfaceName) = WithFreshTunInterface(runtimeProfile);
             _profilePath = WritePrivateProfile(runtimeProfile);
 
             if (lteSocksPort.HasValue || xrayRoutes is not null)
@@ -275,7 +278,6 @@ internal sealed class EngineController
             _canaryAddresses = canaryAddresses;
             _ = MonitorEngineAsync(process, runtimeDiagnostic);
 
-            _tunInterfaceName = PrimaryTunInterfaceName;
             SetSnapshot(new ServiceSnapshot("starting", "Запускаем туннель…", routeTag));
             _ = VerifyTunnelAsync(process, routeTag, tunAddresses, _tunInterfaceName,
                 runtimeDiagnostic, cancellationToken, canaryAddresses);
@@ -966,7 +968,9 @@ internal sealed class EngineController
 
     internal static bool IsOwnedTunInterface(string name) =>
         name.Equals(PrimaryTunInterfaceName, StringComparison.OrdinalIgnoreCase) ||
-        name.Equals(RecoveryTunInterfaceName, StringComparison.OrdinalIgnoreCase);
+        name.Equals(RecoveryTunInterfaceName, StringComparison.OrdinalIgnoreCase) ||
+        (name.StartsWith(PrimaryTunInterfaceName + "-", StringComparison.OrdinalIgnoreCase) &&
+         Guid.TryParseExact(name.AsSpan(PrimaryTunInterfaceName.Length + 1), "N", out _));
 
     private static string? FindActiveHappTunnel()
     {
@@ -1207,14 +1211,14 @@ internal sealed class EngineController
         {
             // Xray still owns the SOCKS ports used by the saved profile. Only restart the TUN engine.
             var savedProfile = await File.ReadAllTextAsync(profilePath, cancellationToken).ConfigureAwait(false);
-            var recoveredProfile = WithRecoveryTunInterface(savedProfile);
+            var (recoveredProfile, tunInterfaceName) = WithFreshTunInterface(savedProfile);
             await File.WriteAllTextAsync(profilePath, recoveredProfile, new System.Text.UTF8Encoding(false),
                 cancellationToken).ConfigureAwait(false);
             cancellationToken.ThrowIfCancellationRequested();
             var enginePath = GetEnginePath();
             var retryDiagnostic = new EngineRuntimeDiagnostic();
             var retryProcess = StartOwnedEngine(enginePath, profilePath, retryDiagnostic);
-            _tunInterfaceName = RecoveryTunInterfaceName;
+            _tunInterfaceName = tunInterfaceName;
             SetSnapshot(new ServiceSnapshot("checking", "Повторная подготовка VPN-интерфейса…", routeTag));
             _ = MonitorEngineAsync(retryProcess, retryDiagnostic);
             _ = VerifyTunnelAsync(retryProcess, routeTag, tunAddresses, _tunInterfaceName,
@@ -1245,15 +1249,17 @@ internal sealed class EngineController
         diagnostic.Contains("configure tun interface", StringComparison.OrdinalIgnoreCase) &&
         diagnostic.Contains("A device attached to the system is not functioning", StringComparison.OrdinalIgnoreCase);
 
-    internal static string WithRecoveryTunInterface(string profile)
+    internal static (string Profile, string InterfaceName) WithFreshTunInterface(string profile)
     {
         var root = JsonNode.Parse(profile)?.AsObject()
                    ?? throw new InvalidDataException("Windows tunnel profile is invalid.");
         var tun = (root["inbounds"] as JsonArray)?.OfType<JsonObject>()
             .SingleOrDefault(inbound => inbound["type"]?.GetValue<string>() == "tun")
                   ?? throw new InvalidDataException("Windows tunnel profile has no TUN.");
-        tun["interface_name"] = RecoveryTunInterfaceName;
-        return root.ToJsonString();
+        // Windows can retain a terminated Wintun adapter beyond process exit; never reuse its identity.
+        var interfaceName = $"{PrimaryTunInterfaceName}-{Guid.NewGuid():N}";
+        tun["interface_name"] = interfaceName;
+        return (root.ToJsonString(), interfaceName);
     }
 
     internal static async Task<ConnectionHostResolution> ResolveConnectionHostsAsync(string runtimeProfile,

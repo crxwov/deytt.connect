@@ -9,6 +9,9 @@ public sealed class EngineDiagnosticTests
     [Theory]
     [InlineData("deytt-connect", true)]
     [InlineData("DEYTT-CONNECT-RECOVERY", true)]
+    [InlineData("deytt-connect-0123456789abcdef0123456789abcdef", true)]
+    [InlineData("deytt-connect-other-client", false)]
+    [InlineData("deytt-connect-0123456789abcdef0123456789abcdef-extra", false)]
     [InlineData("sing-tun", false)]
     [InlineData("happ-tun", false)]
     public void TunnelCanaryDoesNotBindToAnotherClientsAdapter(string name, bool owned) =>
@@ -23,16 +26,23 @@ public sealed class EngineDiagnosticTests
         Assert.Equal(expected, EngineController.IsTunDeviceNotFunctioning(diagnostic));
 
     [Fact]
-    public void DeviceRecoveryChangesOnlyTheAppOwnedInterfaceIdentity()
+    public void ReconnectAndRecoveryUseFreshOwnedIdentitiesWithoutChangingTheRoute()
     {
         const string profile = """
             {"inbounds":[{"type":"tun","interface_name":"deytt-connect","address":["172.19.0.1/30"],"strict_route":true}],
              "route":{"final":"route:NL:VLESS"},"outbounds":[{"tag":"route:NL:VLESS","type":"vless"}]}
             """;
         var original = System.Text.Json.Nodes.JsonNode.Parse(profile)!;
-        var recovered = System.Text.Json.Nodes.JsonNode.Parse(EngineController.WithRecoveryTunInterface(profile))!;
-        Assert.Equal("deytt-connect-recovery", recovered["inbounds"]![0]!["interface_name"]!.GetValue<string>());
-        original["inbounds"]![0]!["interface_name"] = "deytt-connect-recovery";
+        var rewritten = EngineController.WithFreshTunInterface(profile);
+        var recovered = System.Text.Json.Nodes.JsonNode.Parse(rewritten.Profile)!;
+        var name = recovered["inbounds"]![0]!["interface_name"]!.GetValue<string>();
+        Assert.Equal(rewritten.InterfaceName, name);
+        Assert.StartsWith("deytt-connect-", name);
+        Assert.True(Guid.TryParseExact(name["deytt-connect-".Length..], "N", out _));
+        Assert.True(EngineController.IsOwnedTunInterface(name));
+        var next = System.Text.Json.Nodes.JsonNode.Parse(EngineController.WithFreshTunInterface(rewritten.Profile).Profile)!;
+        Assert.NotEqual(name, next["inbounds"]![0]!["interface_name"]!.GetValue<string>());
+        original["inbounds"]![0]!["interface_name"] = name;
         Assert.True(System.Text.Json.Nodes.JsonNode.DeepEquals(original, recovered));
     }
 
