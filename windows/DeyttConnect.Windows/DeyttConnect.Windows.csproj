@@ -25,7 +25,7 @@
     <AvaloniaResource Include="Assets\**" Exclude="Assets\route-map\**" />
     <Content Include="..\..\app\src\main\assets\route-map\**\*"
              Link="Assets\route-map\%(RecursiveDir)%(Filename)%(Extension)"
-             Exclude="..\..\app\src\main\assets\route-map\index.html;..\..\app\src\main\assets\route-map\network-atlas.css;..\..\app\src\main\assets\route-map\atlas-init.js;..\..\app\src\main\assets\route-map\network-atlas.js"
+             Exclude="..\..\app\src\main\assets\route-map\index.html;..\..\app\src\main\assets\route-map\network-atlas.css;..\..\app\src\main\assets\route-map\atlas-init.js;..\..\app\src\main\assets\route-map\network-atlas.js;..\..\app\src\main\assets\route-map\fonts\InterTight-*.ttf"
              CopyToOutputDirectory="PreserveNewest"
              CopyToPublishDirectory="PreserveNewest" />
     <Content Include="Assets\route-map\index.html;Assets\route-map\network-atlas.css;Assets\route-map\atlas-init.js;Assets\route-map\network-atlas.js;Assets\route-map\dock-optics.js"
