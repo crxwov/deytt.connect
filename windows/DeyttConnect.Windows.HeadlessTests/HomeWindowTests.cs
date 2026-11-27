@@ -332,7 +332,7 @@ public sealed class HomeWindowTests
     }
 
     [AvaloniaTheory]
-    [InlineData("vless", "./vless+ws")]
+    [InlineData("vless", "./vless")]
     [InlineData("trojan", "./trojan")]
     [InlineData("hysteria", "./hysteria")]
     [InlineData("awg31", "./amnezia3.1")]

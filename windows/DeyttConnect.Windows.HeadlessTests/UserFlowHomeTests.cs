@@ -57,7 +57,7 @@ public sealed class UserFlowHomeTests
     [AvaloniaTheory]
     [InlineData(null, "", "уточняем выбранный выход…", "")]
     [InlineData("unknown", "", "уточняем выбранный выход…", "")]
-    [InlineData("route:FI:VLESS", "FI", "хельсинки · финляндия", "./vless+ws")]
+    [InlineData("route:FI:VLESS", "FI", "хельсинки · финляндия", "./vless")]
     public void Automatic_connection_uses_confirmed_engine_exit_without_guessing(string? activeTag, string countryCode, string city, string protocol)
     {
         var routes = new WindowsRoute[]
